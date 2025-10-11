@@ -30,6 +30,16 @@ const CampaignCreatePage: React.FC = () => {
   const [triggerImageList, setTriggerImageList] = useState<UploadFile[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // 動作按鈕狀態
+  const [actionButton1Enabled, setActionButton1Enabled] = useState(false);
+  const [actionButton2Enabled, setActionButton2Enabled] = useState(false);
+  const [actionButton1Text, setActionButton1Text] = useState('');
+  const [actionButton2Text, setActionButton2Text] = useState('');
+  const [actionButton1InteractionType, setActionButton1InteractionType] = useState<InteractionType>('none');
+  const [actionButton2InteractionType, setActionButton2InteractionType] = useState<InteractionType>('none');
+  const [actionButton1Tag, setActionButton1Tag] = useState('');
+  const [actionButton2Tag, setActionButton2Tag] = useState('');
+
   const handleUploadChange = (info: any) => {
     setFileList(info.fileList);
     if (info.file.status === 'done') {
@@ -166,47 +176,211 @@ const CampaignCreatePage: React.FC = () => {
 
         {/* 表單區 */}
         <div className="form-section">
+          {/* 模板類型選擇 - 移到最上方 */}
           <div className="form-group">
             <label className="form-label">
-              上傳圖片<span className="required">*</span>
-            </label>
-            <Upload
-              listType="picture-card"
-              fileList={fileList}
-              onChange={handleUploadChange}
-              beforeUpload={() => false}
-              maxCount={1}
-            >
-              {fileList.length === 0 && (
-                <div>
-                  <UploadOutlined />
-                  <div style={{ marginTop: 8 }}>選取檔案</div>
-                </div>
-              )}
-            </Upload>
-            <div className="form-help">
-              • 圖片格式為 JPG、PNG，推薦尺寸為 1080 × 1080px，檔案大小不超過 1MB
-              <br />• 推薦使用高畫質圖片以確保顯示效果
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">
-              互動類型<span className="required">*</span>
-              <InfoCircleOutlined className="info-icon" />
+              模板類型<span className="required">*</span>
             </label>
             <Select
               className="form-select"
-              placeholder="選擇互動類型"
-              value={formData.interaction_type}
-              onChange={(value: InteractionType) => setFormData({ ...formData, interaction_type: value })}
+              value={templateType}
+              onChange={(value: string) => {
+                setTemplateType(value);
+                // 同步更新 formData 中的 template_type
+                const templateTypeMap: Record<string, TemplateType> = {
+                  'text': 'text',
+                  'image_text': 'image_card',
+                  'image': 'image_click',
+                };
+                setFormData({ ...formData, template_type: templateTypeMap[value] });
+              }}
             >
-              <Option value="none">無互動</Option>
-              <Option value="open_url">開啟網址連結</Option>
-              <Option value="trigger_message">觸發新訊息（須定義訊息文字）</Option>
-              <Option value="trigger_image">觸發新圖片</Option>
+              <Option value="text">文字型</Option>
+              <Option value="image_text">按鈕型（圖片輪播型）</Option>
+              <Option value="image">圖片點擊型</Option>
             </Select>
           </div>
+
+          {/* 按鈕型：顯示圖片上傳 */}
+          {templateType === 'image_text' && (
+            <div className="form-group">
+              <label className="form-label">
+                上傳圖片<span className="required">*</span>
+              </label>
+              <Upload
+                listType="picture-card"
+                fileList={fileList}
+                onChange={handleUploadChange}
+                beforeUpload={() => false}
+                maxCount={1}
+              >
+                {fileList.length === 0 && (
+                  <div>
+                    <UploadOutlined />
+                    <div style={{ marginTop: 8 }}>選取檔案</div>
+                  </div>
+                )}
+              </Upload>
+              <div className="form-help">
+                • 格式支援 JPG、JPEG、PNG
+                <br />• 每張圖片大小不超過 1 MB
+              </div>
+            </div>
+          )}
+
+          {/* 文字型：訊息文字在最上方 */}
+          {templateType === 'text' && (
+            <div className="form-group">
+              <label className="form-label">
+                訊息文字<span className="required">*</span>
+                <InfoCircleOutlined className="info-icon" />
+              </label>
+              <TextArea
+                className="form-textarea"
+                placeholder="輸入訊息文字將會傳送至聊天室"
+                rows={4}
+                value={formData.notification_text}
+                onChange={(e) => setFormData({ ...formData, notification_text: e.target.value })}
+              />
+            </div>
+          )}
+
+          {/* 動作按鈕一 */}
+          <div className="form-group">
+            <label className="form-label">
+              <input
+                type="checkbox"
+                style={{ marginRight: 8 }}
+                checked={actionButton1Enabled}
+                onChange={(e) => setActionButton1Enabled(e.target.checked)}
+              />
+              動作按鈕
+              <InfoCircleOutlined className="info-icon" style={{ marginLeft: 8 }} />
+            </label>
+            {actionButton1Enabled && (
+              <Input
+                className="form-input"
+                placeholder="輸入動作按鈕的說明"
+                style={{ marginTop: 8 }}
+                value={actionButton1Text}
+                onChange={(e) => setActionButton1Text(e.target.value)}
+              />
+            )}
+          </div>
+
+          {actionButton1Enabled && (
+            <>
+              {/* 互動類型 */}
+              <div className="form-group">
+                <label className="form-label">
+                  互動類型<span className="required">*</span>
+                </label>
+                <Select
+                  className="form-select"
+                  placeholder={templateType === 'text' ? '選擇互動類型' : '編號新訊息'}
+                  value={actionButton1InteractionType}
+                  onChange={(value: InteractionType) => setActionButton1InteractionType(value)}
+                >
+                  <Option value="none">無互動</Option>
+                  <Option value="trigger_message">編號新訊息</Option>
+                  <Option value="open_url">開啟網址連結</Option>
+                  <Option value="trigger_image">觸發新圖片</Option>
+                </Select>
+              </div>
+
+              {/* 互動標籤 */}
+              <div className="form-group">
+                <label className="form-label">
+                  互動標籤
+                  <InfoCircleOutlined className="info-icon" style={{ marginLeft: 8 }} />
+                </label>
+                <Input
+                  className="form-input"
+                  placeholder={templateType === 'text' ? '可依據會員互動結果自動貼上標籤' : '輸入互動標籤'}
+                  value={actionButton1Tag}
+                  onChange={(e) => setActionButton1Tag(e.target.value)}
+                />
+              </div>
+            </>
+          )}
+
+          {/* 文字型：第二個動作按鈕 */}
+          {templateType === 'text' && (
+            <>
+              <div className="form-group">
+                <label className="form-label">
+                  <input
+                    type="checkbox"
+                    style={{ marginRight: 8 }}
+                    checked={actionButton2Enabled}
+                    onChange={(e) => setActionButton2Enabled(e.target.checked)}
+                  />
+                  動作按鈕二
+                  <InfoCircleOutlined className="info-icon" style={{ marginLeft: 8 }} />
+                </label>
+                {actionButton2Enabled && (
+                  <Input
+                    className="form-input"
+                    placeholder="輸入動作按鈕的說明"
+                    style={{ marginTop: 8 }}
+                    value={actionButton2Text}
+                    onChange={(e) => setActionButton2Text(e.target.value)}
+                  />
+                )}
+              </div>
+
+              {actionButton2Enabled && (
+                <>
+                  <div className="form-group">
+                    <label className="form-label">
+                      互動類型<span className="required">*</span>
+                    </label>
+                    <Select
+                      className="form-select"
+                      placeholder="選擇互動類型"
+                      value={actionButton2InteractionType}
+                      onChange={(value: InteractionType) => setActionButton2InteractionType(value)}
+                    >
+                      <Option value="none">無互動</Option>
+                      <Option value="trigger_message">編號新訊息</Option>
+                      <Option value="open_url">開啟網址連結</Option>
+                      <Option value="trigger_image">觸發新圖片</Option>
+                    </Select>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">
+                      互動標籤
+                      <InfoCircleOutlined className="info-icon" style={{ marginLeft: 8 }} />
+                    </label>
+                    <Input
+                      className="form-input"
+                      placeholder="可依據會員互動結果自動貼上標籤"
+                      value={actionButton2Tag}
+                      onChange={(e) => setActionButton2Tag(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {/* 按鈕型：訊息文字在互動設定之後 */}
+          {templateType === 'image_text' && (
+            <div className="form-group">
+              <label className="form-label">
+                訊息文字<span className="required">*</span>
+                <InfoCircleOutlined className="info-icon" />
+              </label>
+              <TextArea
+                className="form-textarea"
+                placeholder="輸入訊息文字將會傳送至聊天室"
+                rows={4}
+                value={formData.notification_text}
+                onChange={(e) => setFormData({ ...formData, notification_text: e.target.value })}
+              />
+            </div>
+          )}
 
           {/* 根據互動類型顯示對應的輸入欄位 */}
           {formData.interaction_type === 'open_url' && (
@@ -261,22 +435,6 @@ const CampaignCreatePage: React.FC = () => {
             </div>
           )}
 
-          <div className="form-group">
-            <label className="form-label">
-              互動標籤<span className="required">*</span>
-            </label>
-            <Select
-              className="form-select"
-              placeholder="選擇互動標籤"
-              value={formData.interaction_tag}
-              onChange={(value) => setFormData({ ...formData, interaction_tag: value })}
-            >
-              <Option value="potential">開發潛在客戶標</Option>
-              <Option value="vip">VIP 客戶</Option>
-              <Option value="new">新會員</Option>
-            </Select>
-          </div>
-
           <div className="form-divider">
             <h3>建立群發訊息</h3>
 
@@ -295,20 +453,6 @@ const CampaignCreatePage: React.FC = () => {
 
             <div className="form-group">
               <label className="form-label">
-                通知訊息<span className="required">*</span>
-                <InfoCircleOutlined className="info-icon" />
-              </label>
-              <TextArea
-                className="form-textarea"
-                placeholder="輸入出現在發送者視窗的文字"
-                rows={3}
-                value={formData.notification_text}
-                onChange={(e) => setFormData({ ...formData, notification_text: e.target.value })}
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">
                 訊息預覽<span className="required">*</span>
                 <InfoCircleOutlined className="info-icon" />
               </label>
@@ -319,30 +463,6 @@ const CampaignCreatePage: React.FC = () => {
                 value={formData.preview_text}
                 onChange={(e) => setFormData({ ...formData, preview_text: e.target.value })}
               />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">
-                模板類型<span className="required">*</span>
-              </label>
-              <Select
-                className="form-select"
-                value={templateType}
-                onChange={(value: string) => {
-                  setTemplateType(value);
-                  // 同步更新 formData 中的 template_type
-                  const templateTypeMap: Record<string, TemplateType> = {
-                    'text': 'text',
-                    'image_text': 'image_card',
-                    'image': 'image_click',
-                  };
-                  setFormData({ ...formData, template_type: templateTypeMap[value] });
-                }}
-              >
-                <Option value="text">確認型（純文字）</Option>
-                <Option value="image_text">按鈕型（圖片+文字）</Option>
-                <Option value="image">圖片點擊型（純圖片）</Option>
-              </Select>
             </div>
 
             <div className="form-group">
