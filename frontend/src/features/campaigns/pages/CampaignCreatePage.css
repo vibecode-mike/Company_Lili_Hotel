@@ -1,0 +1,325 @@
+/**
+ * CampaignCreatePage 樣式
+ */
+
+.campaign-create-page {
+  /* 頁面容器 */
+}
+
+/* 標籤頁 */
+.campaign-tabs .ant-tabs-nav {
+  border-bottom: 1px solid #E5E7EB;
+  margin-bottom: 32px;
+}
+
+.campaign-tabs .ant-tabs-tab {
+  padding: 12px 0;
+  color: #6B7280;
+  font-size: 14px;
+}
+
+.campaign-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #3B82F6;
+  font-weight: 600;
+}
+
+.campaign-tabs .ant-tabs-ink-bar {
+  background: #3B82F6;
+  height: 2px;
+}
+
+/* 編輯區域 */
+.editor-container {
+  display: flex;
+  gap: 32px;
+}
+
+/* 預覽區 */
+.preview-section {
+  width: 400px;
+  background: linear-gradient(135deg, #7C9CBF, #93B5D8);
+  border-radius: 12px;
+  padding: 40px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 700px;
+  flex-shrink: 0;
+}
+
+.phone-indicator {
+  width: 32px;
+  height: 32px;
+  background-color: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  margin-bottom: 24px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.preview-card {
+  background-color: white;
+  border-radius: 12px;
+  width: 280px;
+  min-height: 350px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  padding: 20px;
+}
+
+/* 純文字模板 */
+.preview-text-template {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+}
+
+.preview-text-content {
+  font-size: 15px;
+  font-weight: 500;
+  color: #374151;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.preview-text-buttons {
+  display: flex;
+  gap: 24px;
+}
+
+.preview-text-buttons button {
+  font-size: 14px;
+  color: #374151;
+  background-color: #ffffff;
+  border: 1px solid #D1D5DB;
+  border-radius: 4px;
+  padding: 6px 16px;
+  cursor: pointer;
+}
+
+/* 圖片+文字模板 */
+.preview-image-text-template {
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-image {
+  width: 100%;
+  height: 160px;
+  background-color: #E5E7EB;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9CA3AF;
+  font-size: 14px;
+  overflow: hidden;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.preview-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.preview-image-placeholder {
+  font-size: 16px;
+  font-weight: 500;
+  color: #6B7280;
+}
+
+.preview-text-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.preview-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1F2937;
+}
+
+.preview-content {
+  font-size: 14px;
+  color: #6B7280;
+  line-height: 1.5;
+}
+
+.preview-cta-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.preview-cta-buttons button {
+  background-color: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 6px;
+  padding: 10px 16px;
+  font-size: 14px;
+  color: #374151;
+  cursor: pointer;
+  text-align: center;
+}
+
+/* 純圖片模板 */
+.preview-image-template {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+}
+
+.preview-image-template img {
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+.preview-image-placeholder-large {
+  font-size: 18px;
+  font-weight: 500;
+  color: #6B7280;
+}
+
+/* 表單區 */
+.form-section {
+  flex: 1;
+  background-color: white;
+  border-radius: 12px;
+  padding: 32px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.form-group {
+  margin-bottom: 24px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #374151;
+}
+
+.form-label .required {
+  color: #EF4444;
+  margin-left: 2px;
+}
+
+.form-label .info-icon {
+  margin-left: 6px;
+  color: #9CA3AF;
+  cursor: help;
+  font-size: 12px;
+}
+
+.form-help {
+  font-size: 12px;
+  color: #6B7280;
+  margin-top: 6px;
+  line-height: 1.6;
+}
+
+/* 上傳區域覆蓋 */
+.form-group .ant-upload-list-picture-card-container {
+  width: 100%;
+  height: auto;
+}
+
+.form-group .ant-upload-select {
+  width: 100% !important;
+  height: 150px !important;
+  margin: 0;
+}
+
+/* 輸入框、選擇器、文本域 */
+.form-input,
+.form-select,
+.form-textarea {
+  width: 100%;
+}
+
+.form-textarea {
+  resize: vertical;
+}
+
+/* 單選框組 */
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.radio-group .ant-radio-wrapper {
+  font-size: 14px;
+  color: #374151;
+}
+
+/* 日期時間輸入 */
+.datetime-input {
+  margin-top: 12px;
+}
+
+/* 表單分隔區 */
+.form-divider {
+  margin: 32px 0;
+  padding-top: 32px;
+  border-top: 1px solid #E5E7EB;
+}
+
+.form-divider h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1F2937;
+  margin-bottom: 24px;
+}
+
+/* 操作按鈕 */
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid #E5E7EB;
+}
+
+.btn-secondary {
+  padding: 10px 24px;
+  border: 1px solid #D1D5DB;
+  background-color: white;
+  color: #374151;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  height: auto;
+}
+
+.btn-secondary:hover {
+  background-color: #F9FAFB !important;
+  color: #374151 !important;
+  border-color: #D1D5DB !important;
+}
+
+/* 響應式設計 */
+@media (max-width: 1200px) {
+  .editor-container {
+    flex-direction: column;
+  }
+
+  .preview-section {
+    width: 100%;
+    min-height: 500px;
+  }
+}

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>診斷頁面</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body>
+    <h1>Campaign API 診斷</h1>
+    <button onclick="runDiagnosis()">運行診斷</button>
+    <pre id="output"></pre>
+
+    <script>
+        function log(msg) {
+            document.getElementById('output').textContent += msg + '\n';
+        }
+
+        async function runDiagnosis() {
+            document.getElementById('output').textContent = '';
+            log('========== 開始診斷 ==========\n');
+
+            // 測試 1: 直接 Fetch
+            log('測試 1: 使用 Fetch API');
+            try {
+                const response = await fetch('/api/v1/campaigns');
+                const data = await response.json();
+                log('✅ Fetch 成功');
+                log('  - 狀態: ' + response.status);
+                log('  - 數據筆數: ' + data.length);
+                log('  - 第一筆: ' + JSON.stringify(data[0]));
+            } catch (e) {
+                log('❌ Fetch 失敗: ' + e.message);
+            }
+
+            log('\n測試 2: 使用 Axios (模擬前端配置)');
+            const apiClient = axios.create({
+                baseURL: '/api/v1',
+                timeout: 30000,
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            // 添加響應攔截器（與前端一致）
+            apiClient.interceptors.response.use(
+                (response) => response.data,
+                (error) => {
+                    log('❌ 響應攔截器捕獲錯誤: ' + error.message);
+                    return Promise.reject(error);
+                }
+            );
+
+            try {
+                const data = await apiClient.get('/campaigns');
+                log('✅ Axios 成功');
+                log('  - 數據類型: ' + typeof data);
+                log('  - 是否為陣列: ' + Array.isArray(data));
+                log('  - 數據筆數: ' + (data.length || '無法取得'));
+                log('  - 數據內容: ' + JSON.stringify(data).substring(0, 200));
+            } catch (e) {
+                log('❌ Axios 失敗');
+                log('  - 錯誤訊息: ' + e.message);
+                log('  - 錯誤代碼: ' + e.code);
+                log('  - 請求URL: ' + (e.config?.url || '未知'));
+                log('  - BaseURL: ' + (e.config?.baseURL || '未知'));
+                log('  - 完整URL: ' + (e.config?.baseURL + e.config?.url));
+            }
+
+            log('\n========== 診斷完成 ==========');
+        }
+    </script>
+</body>
+</html>

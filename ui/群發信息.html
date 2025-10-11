@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>建立群發訊息 - 力麗飯店 LineOA CRM</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft JhengHei", sans-serif;
+            background-color: #F8F9FA;
+            color: #1F2937;
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* 側邊欄 */
+        .sidebar {
+            width: 240px;
+            background-color: #FFFFFF;
+            border-right: 1px solid #E5E7EB;
+            padding: 20px 0;
+            position: relative;
+        }
+
+        .logo {
+            padding: 0 20px 30px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo-icon {
+            width: 24px;
+            height: 24px;
+        }
+
+        .logo-icon svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .logo-text {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1F2937;
+        }
+
+        .logo-subtitle {
+            font-size: 10px;
+            color: #6B7280;
+            font-weight: 400;
+            letter-spacing: 2px;
+        }
+
+        .nav-section {
+            margin-bottom: 24px;
+        }
+
+        .nav-title {
+            padding: 8px 20px;
+            font-size: 12px;
+            color: #6B7280;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .nav-item {
+            padding: 12px 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: #4B5563;
+            transition: all 0.2s;
+        }
+
+        .nav-item:hover {
+            background-color: #F3F4F6;
+        }
+
+        .nav-item.active {
+            background-color: #EFF6FF;
+            color: #3B82F6;
+            border-left: 3px solid #3B82F6;
+            font-weight: 600;
+        }
+
+        .user-info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            background-color: #F9FAFB;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: #3B82F6;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        /* 主內容區 */
+        .main-content {
+            flex: 1;
+            padding: 32px 40px;
+        }
+
+        .breadcrumb {
+            color: #6B7280;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        .breadcrumb span {
+            margin: 0 8px;
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .page-description {
+            color: #6B7280;
+            font-size: 14px;
+            margin-bottom: 32px;
+        }
+
+        /* 標籤頁 */
+        .tabs {
+            display: flex;
+            gap: 24px;
+            border-bottom: 1px solid #E5E7EB;
+            margin-bottom: 32px;
+        }
+
+        .tab {
+            padding: 12px 0;
+            cursor: pointer;
+            color: #6B7280;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .tab.active {
+            color: #3B82F6;
+            border-bottom-color: #3B82F6;
+            font-weight: 600;
+        }
+
+        /* 編輯區域 */
+        .editor-container {
+            display: flex;
+            gap: 32px;
+        }
+
+        /* 預覽區 */
+        .preview-section {
+            width: 400px;
+            background: linear-gradient(135deg, #7C9CBF, #93B5D8);
+            border-radius: 12px;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 700px;
+        }
+
+        .phone-indicator {
+            width: 32px;
+            height: 32px;
+            background-color: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            margin-bottom: 24px;
+            font-size: 12px;
+        }
+
+        .preview-card {
+            background-color: white;
+            border-radius: 12px;
+            width: 280px;
+            min-height: 350px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .preview-image {
+            width: 100%;
+            height: 280px;
+            background-color: #E5E7EB;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #9CA3AF;
+            font-size: 14px;
+        }
+
+        .preview-content {
+            padding: 16px;
+        }
+
+        /* 表單區 */
+        .form-section {
+            flex: 1;
+            background-color: white;
+            border-radius: 12px;
+            padding: 32px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            color: #374151;
+        }
+
+        .required {
+            color: #EF4444;
+        }
+
+        .form-help {
+            font-size: 12px;
+            color: #6B7280;
+            margin-top: 4px;
+        }
+
+        .upload-area {
+            border: 2px dashed #D1D5DB;
+            border-radius: 8px;
+            padding: 32px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .upload-area:hover {
+            border-color: #3B82F6;
+            background-color: #F9FAFB;
+        }
+
+        .upload-btn {
+            background-color: #1F2937;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+
+        .file-info {
+            margin-top: 12px;
+            font-size: 12px;
+            color: #6B7280;
+        }
+
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #D1D5DB;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            outline: none;
+            border-color: #3B82F6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .form-textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        .radio-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .radio-option input {
+            width: 18px;
+            height: 18px;
+        }
+
+        .datetime-input {
+            display: flex;
+            gap: 12px;
+        }
+
+        .datetime-input input {
+            flex: 1;
+        }
+
+        /* 操作按鈕 */
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid #E5E7EB;
+        }
+
+        .btn-secondary {
+            padding: 10px 24px;
+            border: 1px solid #D1D5DB;
+            background-color: white;
+            color: #374151;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-secondary:hover {
+            background-color: #F9FAFB;
+        }
+
+        .btn-primary {
+            padding: 10px 24px;
+            border: none;
+            background-color: #1F2937;
+            color: white;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary:hover {
+            background-color: #111827;
+        }
+
+        .info-icon {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background-color: #D1D5DB;
+            color: white;
+            text-align: center;
+            line-height: 16px;
+            font-size: 10px;
+            margin-left: 4px;
+            cursor: help;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 側邊欄 -->
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="#3B82F6"/>
+                        <path d="M2 17L12 22L22 17V12L12 17L2 12V17Z" fill="#60A5FA"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="logo-text">STARBIT</div>
+                    <div class="logo-subtitle">MARKETING</div>
+                </div>
+            </div>
+
+            <nav>
+                <div class="nav-section">
+                    <div class="nav-title">群發訊息</div>
+                    <div class="nav-item">📊 活動與訊息推播</div>
+                    <div class="nav-item active">✉️ 建立群發訊息</div>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-title">標籤管理</div>
+                    <div class="nav-item">🏷️ 標籤管理</div>
+                    <div class="nav-item">📈 標籤追蹤</div>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-title">會員管理</div>
+                    <div class="nav-item">👥 會員列表</div>
+                    <div class="nav-item">💬 訊息紀錄</div>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-title">設定</div>
+                    <div class="nav-item">🤖 自動回應</div>
+                    <div class="nav-item">📊 數據分析</div>
+                    <div class="nav-item">⚙️ 系統設定</div>
+                </div>
+            </nav>
+
+            <div class="user-info">
+                <div class="user-avatar">管</div>
+                <span style="font-size: 14px;">管理員</span>
+            </div>
+        </aside>
+
+        <!-- 主內容區 -->
+        <main class="main-content">
+            <div class="breadcrumb">
+                群發訊息 <span>></span> 建立群發訊息
+            </div>
+
+            <h1 class="page-title">建立群發訊息</h1>
+            <p class="page-description">功能描述...</p>
+
+            <div class="tabs">
+                <div class="tab active">預覽</div>
+                <div class="tab">測試</div>
+            </div>
+
+            <div class="editor-container">
+                <!-- 預覽區 -->
+                <div class="preview-section">
+                    <div class="phone-indicator">A</div>
+                    <div class="preview-card">
+                        <div class="preview-image">純圖片</div>
+                    </div>
+                </div>
+
+                <!-- 表單區 -->
+                <div class="form-section">
+                    <div class="form-group">
+                        <label class="form-label">上傳圖片<span class="required">*</span></label>
+                        <div class="upload-area">
+                            <div style="color: #6B7280; margin-bottom: 8px;">001.jpg</div>
+                            <button class="upload-btn">選取檔案</button>
+                            <div class="file-info">
+                                • 圖片私藏型圖檔，推薦尺寸為 1080 * 1080px，檔案最好不大於 1MB
+                                <br>• 推薦照片檔案類型，推薦像素英數與縮寫
+                                <br>• 上傳照片上傳資料上傳檔案上傳資料上傳檔案上傳檔案上傳檔案上傳檔案上傳資料上傳檔案上傳檔案上傳檔案上傳資料上傳資料
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">互動標籤<span class="required">*</span></label>
+                        <select class="form-select">
+                            <option>開發潛在客戶標</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            URL<span class="required">*</span>
+                            <span class="info-icon">i</span>
+                        </label>
+                        <input type="text" class="form-input" placeholder="貼上網址或是開啟位置連結">
+                        <div class="form-help">Hint（推薦輸入有效網址或這裡填寫智慧型檢測器）</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            互動觸發<span class="info-icon">i</span>
+                        </label>
+                        <input type="text" class="form-input" placeholder="從近標籤區塊歸納或查詢">
+                    </div>
+
+                    <div style="margin: 32px 0; border-top: 1px solid #E5E7EB; padding-top: 32px;">
+                        <h3 style="font-size: 18px; margin-bottom: 24px;">建立群發訊息</h3>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                標題<span class="info-icon">i</span>
+                            </label>
+                            <input type="text" class="form-input" placeholder="輸入群發訊息標題">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                通知訊息<span class="required">*</span>
+                                <span class="info-icon">i</span>
+                            </label>
+                            <textarea class="form-textarea" placeholder="輸入出現在發送者視窗即時的文字"></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                訊息預覽<span class="required">*</span>
+                                <span class="info-icon">i</span>
+                            </label>
+                            <textarea class="form-textarea" placeholder="輸入出現在對話清單即顯示的文字"></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">模板類型<span class="required">*</span></label>
+                            <select class="form-select">
+                                <option>圖片點擊型</option>
+                                <option>純文字</option>
+                                <option>文字按鈕確認型</option>
+                                <option>圖卡按鈕型</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">發送對象<span class="required">*</span></label>
+                            <select class="form-select">
+                                <option>所有好友</option>
+                                <option>篩選目標對象</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                排程發送<span class="required">*</span>
+                                <span class="info-icon">i</span>
+                            </label>
+                            <div class="radio-group">
+                                <label class="radio-option">
+                                    <input type="radio" name="schedule" value="immediate">
+                                    <span>立即發送</span>
+                                </label>
+                                <label class="radio-option">
+                                    <input type="radio" name="schedule" value="scheduled" checked>
+                                    <span>自訂時間</span>
+                                </label>
+                            </div>
+                            <div class="datetime-input" style="margin-top: 12px;">
+                                <input type="text" class="form-input" placeholder="年-月-日時：分">
+                                <input type="text" class="form-input" placeholder="年-月-日時：分">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button class="btn-secondary">儲存草稿</button>
+                        <button class="btn-primary">立即推出訊</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

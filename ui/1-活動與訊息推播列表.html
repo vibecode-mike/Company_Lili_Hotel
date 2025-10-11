@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>活動與訊息推播 - 力麗飯店 LineOA CRM</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft JhengHei", sans-serif;
+            background-color: #F8F9FA;
+            color: #1F2937;
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* 側邊欄 */
+        .sidebar {
+            width: 240px;
+            background-color: #FFFFFF;
+            border-right: 1px solid #E5E7EB;
+            padding: 20px 0;
+        }
+
+        .logo {
+            padding: 0 20px 30px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo-icon {
+            width: 24px;
+            height: 24px;
+        }
+
+        .logo-icon svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .logo-text {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1F2937;
+        }
+
+        .logo-subtitle {
+            font-size: 10px;
+            color: #6B7280;
+            font-weight: 400;
+            letter-spacing: 2px;
+        }
+
+        .nav-section {
+            margin-bottom: 24px;
+        }
+
+        .nav-title {
+            padding: 8px 20px;
+            font-size: 12px;
+            color: #6B7280;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .nav-item {
+            padding: 12px 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: #4B5563;
+            transition: all 0.2s;
+        }
+
+        .nav-item:hover {
+            background-color: #F3F4F6;
+        }
+
+        .nav-item.active {
+            background-color: #EFF6FF;
+            color: #3B82F6;
+            border-left: 3px solid #3B82F6;
+            font-weight: 600;
+        }
+
+        .user-info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            background-color: #F9FAFB;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: #3B82F6;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        /* 主內容區 */
+        .main-content {
+            flex: 1;
+            padding: 32px 40px;
+        }
+
+        .breadcrumb {
+            color: #6B7280;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        .breadcrumb span {
+            margin: 0 8px;
+        }
+
+        .page-header {
+            margin-bottom: 32px;
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .page-description {
+            color: #6B7280;
+            font-size: 14px;
+        }
+
+        /* 工具列 */
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .search-filter {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .search-box {
+            position: relative;
+        }
+
+        .search-box input {
+            padding: 10px 40px 10px 16px;
+            border: 1px solid #D1D5DB;
+            border-radius: 8px;
+            width: 300px;
+            font-size: 14px;
+        }
+
+        .search-box::after {
+            content: "🔍";
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .filter-link {
+            color: #3B82F6;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            background-color: #1F2937;
+            color: white;
+            padding: 10px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary:hover {
+            background-color: #111827;
+        }
+
+        /* 統計卡片 */
+        .stats-info {
+            background-color: #F9FAFB;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #6B7280;
+        }
+
+        /* 表格 */
+        .table-container {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background-color: #F9FAFB;
+        }
+
+        th {
+            padding: 16px;
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+            color: #6B7280;
+            text-transform: uppercase;
+            border-bottom: 1px solid #E5E7EB;
+        }
+
+        td {
+            padding: 16px;
+            border-bottom: 1px solid #F3F4F6;
+            font-size: 14px;
+        }
+
+        tr:hover {
+            background-color: #F9FAFB;
+        }
+
+        .thumbnail {
+            width: 60px;
+            height: 60px;
+            border-radius: 8px;
+            background-color: #E5E7EB;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #9CA3AF;
+            font-size: 12px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-sent {
+            background-color: #D1FAE5;
+            color: #059669;
+        }
+
+        .status-scheduled {
+            background-color: #DBEAFE;
+            color: #2563EB;
+        }
+
+        .status-draft {
+            background-color: #FEF3C7;
+            color: #D97706;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 4px 8px;
+            background-color: #EFF6FF;
+            color: #3B82F6;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-right: 4px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .icon-btn {
+            color: #3B82F6;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .icon-btn:hover {
+            text-decoration: underline;
+        }
+
+        .percentage {
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 側邊欄 -->
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="#3B82F6"/>
+                        <path d="M2 17L12 22L22 17V12L12 17L2 12V17Z" fill="#60A5FA"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="logo-text">STARBIT</div>
+                    <div class="logo-subtitle">MARKETING</div>
+                </div>
+            </div>
+
+            <nav>
+                <div class="nav-section">
+                    <div class="nav-title">群發訊息</div>
+                    <div class="nav-item active">📊 活動與訊息推播</div>
+                    <div class="nav-item">✉️ 建立群發訊息</div>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-title">標籤管理</div>
+                    <div class="nav-item">🏷️ 標籤管理</div>
+                    <div class="nav-item">📈 標籤追蹤</div>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-title">會員管理</div>
+                    <div class="nav-item">👥 會員列表</div>
+                    <div class="nav-item">💬 訊息紀錄</div>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-title">設定</div>
+                    <div class="nav-item">🤖 自動回應</div>
+                    <div class="nav-item">📊 數據分析</div>
+                    <div class="nav-item">⚙️ 系統設定</div>
+                </div>
+            </nav>
+
+            <div class="user-info">
+                <div class="user-avatar">管</div>
+                <span style="font-size: 14px;">管理員</span>
+            </div>
+        </aside>
+
+        <!-- 主內容區 -->
+        <main class="main-content">
+            <div class="breadcrumb">
+                群發訊息 <span>></span> 活動與訊息推播
+            </div>
+
+            <div class="page-header">
+                <h1 class="page-title">活動與訊息推播</h1>
+                <p class="page-description">功能描述...</p>
+            </div>
+
+            <div class="toolbar">
+                <div class="search-filter">
+                    <div class="search-box">
+                        <input type="text" placeholder="輸入搜尋">
+                    </div>
+                    <a href="#" class="filter-link">清除全部條件</a>
+                </div>
+                <button class="btn-primary">+ 建立</button>
+            </div>
+
+            <div class="stats-info">
+                共 6 筆（已發送 2 筆、已排程 2 筆、草稿 2 筆、已封存 0 筆）
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>發送標題</th>
+                            <th>標籤</th>
+                            <th>平台</th>
+                            <th>狀態</th>
+                            <th>發送人數</th>
+                            <th>已開啟次數 📊</th>
+                            <th>點擊次數</th>
+                            <th>發送時間</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div class="thumbnail">首圖</div>
+                                    <div>
+                                        <div style="font-weight: 600;">中秋 送禮 KOL</div>
+                                        <div style="font-size: 12px; color: #6B7280;">首圖頭圖一 紀圖滾透</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="tag">中秋</span>
+                                <span class="tag">送禮</span>
+                                <span class="tag">KOL</span>
+                            </td>
+                            <td>LINE, Messenger</td>
+                            <td><span class="status-badge status-sent">已發送 ✓</span></td>
+                            <td>100 人</td>
+                            <td><span class="percentage">80 次</span></td>
+                            <td><span class="percentage">40 次</span></td>
+                            <td>2025-10-02 22:47</td>
+                            <td>
+                                <div class="actions">
+                                    <a href="#" class="icon-btn">📊</a>
+                                    <a href="#" class="icon-btn">詳細 ></a>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div class="thumbnail">首圖</div>
+                                    <div>
+                                        <div style="font-weight: 600;">聖誕住品 送享天倫</div>
+                                        <div style="font-size: 12px; color: #6B7280;">聖誕住品 送享天倫</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="tag">中秋</span>
+                                <span class="tag">活動</span>
+                            </td>
+                            <td>Facebook, WhatsApp</td>
+                            <td><span class="status-badge status-sent">已發送 ✓</span></td>
+                            <td>150 人</td>
+                            <td><span class="percentage">100 次</span></td>
+                            <td><span class="percentage">60 次</span></td>
+                            <td>2025-09-30 18:30</td>
+                            <td>
+                                <div class="actions">
+                                    <a href="#" class="icon-btn">📊</a>
+                                    <a href="#" class="icon-btn">詳細 ></a>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div class="thumbnail">首圖</div>
+                                    <div>
+                                        <div style="font-weight: 600;">月餅禮盒 精緻享受</div>
+                                        <div style="font-size: 12px; color: #6B7280;">月餅禮盒 精緻享受</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="tag">中秋</span>
+                                <span class="tag">促銷</span>
+                            </td>
+                            <td>Instagram, WhatsApp</td>
+                            <td><span class="status-badge status-draft">尚未發佈</span></td>
+                            <td>N/A</td>
+                            <td>N/A</td>
+                            <td>N/A</td>
+                            <td>尚未發佈</td>
+                            <td>
+                                <div class="actions">
+                                    <a href="#" class="icon-btn">✏️</a>
+                                    <a href="#" class="icon-btn">📊</a>
+                                    <a href="#" class="icon-btn">詳細 ></a>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div class="thumbnail">首圖</div>
+                                    <div>
+                                        <div style="font-weight: 600;">月購人圖 幸福共享</div>
+                                        <div style="font-size: 12px; color: #6B7280;">月購人圖 幸福共享</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="tag">中秋</span>
+                                <span class="tag">慶祝</span>
+                            </td>
+                            <td>LINE, Telegram</td>
+                            <td><span class="status-badge status-draft">尚未發佈</span></td>
+                            <td>N/A</td>
+                            <td>N/A</td>
+                            <td>N/A</td>
+                            <td>尚未發佈</td>
+                            <td>
+                                <div class="actions">
+                                    <a href="#" class="icon-btn">✏️</a>
+                                    <a href="#" class="icon-btn">📊</a>
+                                    <a href="#" class="icon-btn">詳細 ></a>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div class="thumbnail">首圖</div>
+                                    <div>
+                                        <div style="font-weight: 600;">與家人一起過中秋</div>
+                                        <div style="font-size: 12px; color: #6B7280;">與家人一起過中秋</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="tag">中秋</span>
+                                <span class="tag">文化</span>
+                            </td>
+                            <td>LINE, TikTok</td>
+                            <td><span class="status-badge status-scheduled">草稿 ✓</span></td>
+                            <td>N/A</td>
+                            <td>N/A</td>
+                            <td>N/A</td>
+                            <td>尚未發佈</td>
+                            <td>
+                                <div class="actions">
+                                    <a href="#" class="icon-btn">✏️</a>
+                                    <a href="#" class="icon-btn">📊</a>
+                                    <a href="#" class="icon-btn">詳細 ></a>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div class="thumbnail">首圖</div>
+                                    <div>
+                                        <div style="font-weight: 600;">與家人一起過中秋</div>
+                                        <div style="font-size: 12px; color: #6B7280;">與家人一起過中秋</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="tag">中秋</span>
+                                <span class="tag">文化</span>
+                            </td>
+                            <td>LINE, Messenger</td>
+                            <td><span class="status-badge status-scheduled">草稿 ✓</span></td>
+                            <td>N/A</td>
+                            <td>N/A</td>
+                            <td>N/A</td>
+                            <td>尚未發佈</td>
+                            <td>
+                                <div class="actions">
+                                    <a href="#" class="icon-btn">✏️</a>
+                                    <a href="#" class="icon-btn">📊</a>
+                                    <a href="#" class="icon-btn">詳細 ></a>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

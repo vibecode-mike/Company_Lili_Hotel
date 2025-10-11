@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>標籤管理 - 力麗飯店 LineOA CRM</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft JhengHei", sans-serif;
+            background-color: #F8F9FA;
+            color: #1F2937;
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* 側邊欄 */
+        .sidebar {
+            width: 240px;
+            background-color: #FFFFFF;
+            border-right: 1px solid #E5E7EB;
+            padding: 20px 0;
+            position: relative;
+        }
+
+        .logo {
+            padding: 0 20px 30px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo-icon {
+            width: 24px;
+            height: 24px;
+        }
+
+        .logo-icon svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .logo-text {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1F2937;
+        }
+
+        .logo-subtitle {
+            font-size: 10px;
+            color: #6B7280;
+            font-weight: 400;
+            letter-spacing: 2px;
+        }
+
+        .nav-section {
+            margin-bottom: 24px;
+        }
+
+        .nav-title {
+            padding: 8px 20px;
+            font-size: 12px;
+            color: #6B7280;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .nav-item {
+            padding: 12px 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: #4B5563;
+            transition: all 0.2s;
+        }
+
+        .nav-item:hover {
+            background-color: #F3F4F6;
+        }
+
+        .nav-item.active {
+            background-color: #EFF6FF;
+            color: #3B82F6;
+            border-left: 3px solid #3B82F6;
+            font-weight: 600;
+        }
+
+        .user-info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            background-color: #F9FAFB;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: #3B82F6;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        /* 主內容區 */
+        .main-content {
+            flex: 1;
+            padding: 32px 40px;
+        }
+
+        .breadcrumb {
+            color: #6B7280;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        .breadcrumb span {
+            margin: 0 8px;
+        }
+
+        .page-header {
+            margin-bottom: 32px;
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .page-description {
+            color: #6B7280;
+            font-size: 14px;
+        }
+
+        /* 工具列 */
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .search-box {
+            position: relative;
+        }
+
+        .search-box input {
+            padding: 10px 40px 10px 16px;
+            border: 1px solid #D1D5DB;
+            border-radius: 8px;
+            width: 300px;
+            font-size: 14px;
+        }
+
+        .search-box::after {
+            content: "🔍";
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .btn-primary {
+            background-color: #1F2937;
+            color: white;
+            padding: 10px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary:hover {
+            background-color: #111827;
+        }
+
+        /* 標籤卡片佈局 */
+        .tags-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+        }
+
+        .tag-section {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 24px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .section-count {
+            font-size: 14px;
+            color: #6B7280;
+        }
+
+        .tags-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .tag-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background-color: #EFF6FF;
+            color: #3B82F6;
+            border-radius: 20px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .tag-item:hover {
+            background-color: #DBEAFE;
+        }
+
+        .tag-item.tag-member {
+            background-color: #DBEAFE;
+            color: #2563EB;
+        }
+
+        .tag-item.tag-interaction {
+            background-color: #FEF3C7;
+            color: #D97706;
+        }
+
+        .tag-count {
+            background-color: rgba(255, 255, 255, 0.5);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .tag-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .tag-action-btn {
+            cursor: pointer;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+        }
+
+        .tag-action-btn:hover {
+            opacity: 1;
+        }
+
+        .add-tag-card {
+            border: 2px dashed #D1D5DB;
+            background-color: #F9FAFB;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .add-tag-card:hover {
+            border-color: #3B82F6;
+            background-color: #EFF6FF;
+        }
+
+        .add-tag-content {
+            text-align: center;
+            color: #6B7280;
+        }
+
+        .add-tag-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+
+        .add-tag-text {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        /* 統計卡片 */
+        .stats-cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+
+        .stat-card {
+            background-color: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #6B7280;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1F2937;
+        }
+
+        .stat-trend {
+            font-size: 12px;
+            color: #059669;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 側邊欄 -->
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="#3B82F6"/>
+                        <path d="M2 17L12 22L22 17V12L12 17L2 12V17Z" fill="#60A5FA"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="logo-text">STARBIT</div>
+                    <div class="logo-subtitle">MARKETING</div>
+                </div>
+            </div>
+
+            <nav>
+                <div class="nav-section">
+                    <div class="nav-title">群發訊息</div>
+                    <div class="nav-item">📊 活動與訊息推播</div>
+                    <div class="nav-item">✉️ 建立群發訊息</div>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-title">標籤管理</div>
+                    <div class="nav-item active">🏷️ 標籤管理</div>
+                    <div class="nav-item">📈 標籤追蹤</div>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-title">會員管理</div>
+                    <div class="nav-item">👥 會員列表</div>
+                    <div class="nav-item">💬 訊息紀錄</div>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-title">設定</div>
+                    <div class="nav-item">🤖 自動回應</div>
+                    <div class="nav-item">📊 數據分析</div>
+                    <div class="nav-item">⚙️ 系統設定</div>
+                </div>
+            </nav>
+
+            <div class="user-info">
+                <div class="user-avatar">管</div>
+                <span style="font-size: 14px;">管理員</span>
+            </div>
+        </aside>
+
+        <!-- 主內容區 -->
+        <main class="main-content">
+            <div class="breadcrumb">
+                標籤管理 <span>></span> 標籤管理
+            </div>
+
+            <div class="page-header">
+                <h1 class="page-title">標籤管理</h1>
+                <p class="page-description">管理會員標籤與互動標籤，精準分眾行銷</p>
+            </div>
+
+            <!-- 統計卡片 -->
+            <div class="stats-cards">
+                <div class="stat-card">
+                    <div class="stat-label">總標籤數</div>
+                    <div class="stat-value">42</div>
+                    <div class="stat-trend">↑ 8% 本月</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">會員標籤</div>
+                    <div class="stat-value">18</div>
+                    <div class="stat-trend">基礎屬性標籤</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">互動標籤</div>
+                    <div class="stat-value">24</div>
+                    <div class="stat-trend">行為互動標籤</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">最常用標籤</div>
+                    <div class="stat-value">VIP會員</div>
+                    <div class="stat-trend">128 位會員</div>
+                </div>
+            </div>
+
+            <div class="toolbar">
+                <div class="search-box">
+                    <input type="text" placeholder="搜尋標籤名稱">
+                </div>
+                <button class="btn-primary">+ 新增標籤</button>
+            </div>
+
+            <div class="tags-grid">
+                <!-- 會員標籤 -->
+                <div class="tag-section">
+                    <div class="section-header">
+                        <div class="section-title">會員標籤</div>
+                        <div class="section-count">18 個標籤</div>
+                    </div>
+                    <div class="tags-list">
+                        <div class="tag-item tag-member">
+                            <span>VIP 會員</span>
+                            <span class="tag-count">128</span>
+                            <div class="tag-actions">
+                                <span class="tag-action-btn">✏️</span>
+                                <span class="tag-action-btn">🗑️</span>
+                            </div>
+                        </div>
+                        <div class="tag-item tag-member">
+                            <span>一般會員</span>
+                            <span class="tag-count">85</span>
+                            <div class="tag-actions">
+                                <span class="tag-action-btn">✏️</span>
+                                <span class="tag-action-btn">🗑️</span>
+                            </div>
+                        </div>
+                        <div class="tag-item tag-member">
+                            <span>商務會員</span>
+                            <span class="tag-count">56</span>
+                            <div class="tag-actions">
+                                <span class="tag-action-btn">✏️</span>
+                                <span class="tag-action-btn">🗑️</span>
+                            </div>
+                        </div>
+                        <div class="tag-item tag-member">
+                            <span>台北地區</span>
+                            <span class="tag-count">92</span>
+                            <div class="tag-actions">
+                                <span class="tag-action-btn">✏️</span>
+                                <span class="tag-action-btn">🗑️</span>
+                            </div>
+                        </div>
+                        <div class="tag-item tag-member">
+                            <span>台中地區</span>
+                            <span class="tag-count">48</span>
+                            <div class="tag-actions">
+                                <span class="tag-action-btn">✏️</span>
+                                <span class="tag-action-btn">🗑️</span>
+                            </div>
+                        </div>
+                        <div class="tag-item tag-member">
+                            <span>高雄地區</span>
+                            <span class="tag-count">35</span>
+                            <div class="tag-actions">
+                                <span class="tag-action-btn">✏️</span>
+                                <span class="tag-action-btn">🗑️</span>
+                            </div>
+                        </div>
+                        <div class="tag-item tag-member">
+                            <span>25-34歲</span>
+                            <span class="tag-count">78</span>
+                            <div class="tag-actions">
+                                <span class="tag-action-btn">✏️</span>
+                                <span class="tag-action-btn">🗑️</span>
+                            </div>
+                        </div>
+                        <div class="tag-item tag-member">
+                            <span>35-44歲</span>
+                            <span class="tag-count">65</span>
+                            <div class="tag-actions">
+                                <span class="tag-action-btn">✏️</span>
+                                <span class="tag-action-btn">🗑️</span>
+                            </div>
+                        </div>
+                        <div class="tag-item tag-member">
+                            <span>45歲以上</span>
+                            <span class="tag-count">42</span>
+                            <div class="tag-actions">
+                                <span class="tag-action-btn">✏️</span>
+                                <span class="tag-action-btn">🗑️</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 互動標籤 -->
+                <div class="tag-section">
+                    <div class="section-header">
+                        <div class="section-title">互動標籤</div>
+                        <div class="section-count">24 個標籤</div>
+                    </div>
+                    <div class="tags-list">
+                        <div class="tag-item tag-interaction">
+                            <span>中秋活動</span>
+                            <span class="tag-count">156</span>
+                            <div class="tag-actions">
+                                <span class="tag-action-btn">✏️</span>
+                                <span class="tag-action-btn">🗑️</span>
+                            </div>
+                        </div>
+                        <div class="tag-item tag-interaction">
+                            <span>聖誕優惠</span>
+                            <span class="tag-count">132</span>
+                            <div class="tag-actions">
+                                <span class="tag-action-btn">✏️</span>
+                                <span class="tag-action-btn">🗑️</span>
+                            </div>
+                        </div>
+                        <div class="tag-item tag-interaction">
+                            <span>住宿優惠</span>
+                            <span class="tag-count">98</span>
+                            <div class="tag-actions">
+                                <span class="tag-action-btn">✏️</span>
+                                <span class="tag-action-btn">🗑️</span>
+                            </div>
+                        </div>
+                        <div class="tag-item tag-interaction">
+                            <span>KOL 活動</span>
+                            <span class="tag-count">76</span>
+                            <div class="tag-actions">
+                                <span class="tag-action-btn">✏️</span>
+                                <span class="tag-action-btn">🗑️</span>
+                            </div>
+                        </div>
+                        <div class="tag-item tag-interaction">
+                            <span>月餅禮盒</span>
+                            <span class="tag-count">64</span>
+                            <div class="tag-actions">
+                                <span class="tag-action-btn">✏️</span>
+                                <span class="tag-action-btn">🗑️</span>
+                            </div>
+                        </div>
+                        <div class="tag-item tag-interaction">
+                            <span>商務優惠</span>
+                            <span class="tag-count">52</span>
+                            <div class="tag-actions">
+                                <span class="tag-action-btn">✏️</span>
+                                <span class="tag-action-btn">🗑️</span>
+                            </div>
+                        </div>
+                        <div class="tag-item tag-interaction">
+                            <span>家庭旅遊</span>
+                            <span class="tag-count">45</span>
+                            <div class="tag-actions">
+                                <span class="tag-action-btn">✏️</span>
+                                <span class="tag-action-btn">🗑️</span>
+                            </div>
+                        </div>
+                        <div class="tag-item tag-interaction">
+                            <span>度假休閒</span>
+                            <span class="tag-count">38</span>
+                            <div class="tag-actions">
+                                <span class="tag-action-btn">✏️</span>
+                                <span class="tag-action-btn">🗑️</span>
+                            </div>
+                        </div>
+                        <div class="tag-item tag-interaction">
+                            <span>週年慶</span>
+                            <span class="tag-count">28</span>
+                            <div class="tag-actions">
+                                <span class="tag-action-btn">✏️</span>
+                                <span class="tag-action-btn">🗑️</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

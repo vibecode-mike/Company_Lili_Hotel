@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>配置調試</title>
+</head>
+<body>
+    <h1>前端配置調試</h1>
+    <button onclick="checkConfig()">檢查配置</button>
+    <pre id="info"></pre>
+
+    <script type="module">
+        window.checkConfig = function() {
+            const VITE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+            const API_BASE_URL = VITE_API_BASE_URL || '';
+            const API_V1_STR = '/api/v1';
+            const baseURL = API_BASE_URL + API_V1_STR;
+
+            const info = 'VITE_API_BASE_URL = ' + (VITE_API_BASE_URL || '(未設置)') + '\n' +
+                        'API_BASE_URL = "' + API_BASE_URL + '"\n' +
+                        'baseURL = "' + baseURL + '"\n' +
+                        '完整URL = "' + baseURL + '/campaigns"';
+
+            document.getElementById('info').textContent = info;
+        };
+    </script>
+</body>
+</html>
