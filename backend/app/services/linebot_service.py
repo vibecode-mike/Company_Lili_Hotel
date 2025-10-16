@@ -11,42 +11,38 @@ from typing import Dict, Any, List, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+# 設置 logger
+logger = logging.getLogger(__name__)
+
 # 確保可以導入 HotelBot - 添加項目根目錄到 sys.path
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-# 設置環境變量以避免 HotelBot 初始化失敗
-# 從 backend/.env 或系統環境中讀取
+# ⚠️ 重要: 必須在導入 HotelBot 之前加載環境變量
+# LINE credentials 位於 project_root/app/.env
+# 因為 app.py 模組級代碼會在導入時立即執行 os.getenv()
 from dotenv import load_dotenv
-backend_env = Path(__file__).parent.parent.parent / ".env"
-if backend_env.exists():
-    load_dotenv(backend_env)
-# 也嘗試加載項目根目錄的 .env
-root_env = project_root / ".env"
-if root_env.exists():
-    load_dotenv(root_env, override=True)
+app_env = project_root / "app" / ".env"
+if app_env.exists():
+    load_dotenv(app_env, override=True)
+    logger.info(f"✅ Loaded environment from {app_env}")
+    # 驗證環境變量已加載
+    if os.getenv("LINE_CHANNEL_ACCESS_TOKEN"):
+        logger.info("✅ LINE credentials loaded successfully")
+    else:
+        logger.warning("⚠️  LINE credentials not found in environment")
+else:
+    logger.error(f"❌ Environment file not found: {app_env}")
+    raise FileNotFoundError(f"Required environment file not found: {app_env}")
 
-# 現在導入 HotelBot (環境變量已設置)
-# 由於命名衝突 (backend/app 和 project_root/app)，需要特殊處理
-try:
-    # 嘗試從項目根目錄導入
-    import importlib.util
-    app_py_path = project_root / "app" / "app.py"
-    spec = importlib.util.spec_from_file_location("hotel_bot_module", app_py_path)
-    hotel_bot_module = importlib.util.module_from_spec(spec)
-
-    # 延遲執行模組，捕獲可能的初始化錯誤
-    try:
-        spec.loader.exec_module(hotel_bot_module)
-        HotelBot = hotel_bot_module.HotelBot
-    except Exception as e:
-        # 如果 HotelBot 初始化失敗（例如缺少 LINE 憑證），仍然導入類定義
-        logging.warning(f"⚠️  Failed to execute hotel_bot_module: {e}")
-        # 設置 HotelBot = None，稍後使用 Mock
-        HotelBot = None
-except Exception as e:
-    logging.error(f"❌ Failed to import HotelBot module: {e}")
-    HotelBot = None
+# 導入 HotelBot
+# 由於命名衝突 (backend/app 和 project_root/app)，使用 importlib 動態導入
+import importlib.util
+app_py_path = project_root / "app" / "app.py"
+spec = importlib.util.spec_from_file_location("hotel_bot_module", app_py_path)
+hotel_bot_module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(hotel_bot_module)
+HotelBot = hotel_bot_module.HotelBot
 
 from app.database import AsyncSessionLocal
 from app.models.campaign import Campaign, CampaignStatus
@@ -54,40 +50,19 @@ from app.models.survey import Survey, SurveyStatus
 from app.models.template import MessageTemplate
 from app.utils.image_handler import file_path_to_base64
 
-logger = logging.getLogger(__name__)
-
-
-class MockHotelBot:
-    """Mock HotelBot for testing without LINE credentials"""
-    def push_campaign(self, payload: dict) -> Dict[str, Any]:
-        logger.info(f"🧪 [MOCK] Would send campaign: {payload.get('name')}")
-        return {"ok": True, "sent": 5, "campaign_id": 999}
-
-    def create_and_send_survey_inline(self, payload: dict) -> Dict[str, Any]:
-        logger.info(f"🧪 [MOCK] Would send survey: {payload.get('name')}")
-        return {"ok": True, "sent": 5, "survey_id": 999}
-
 
 class LineBotService:
     """LINE Bot 服務"""
 
     def __init__(self):
         """初始化 LINE Bot"""
-        if HotelBot is None:
-            logger.warning("⚠️  HotelBot class not available")
-            logger.warning("⚠️  Using MockHotelBot for testing")
-            self.bot = MockHotelBot()
-            self.is_mock = True
-        else:
-            try:
-                self.bot = HotelBot()
-                self.is_mock = False
-                logger.info("✅ HotelBot initialized")
-            except Exception as e:
-                logger.warning(f"⚠️  HotelBot initialization failed: {e}")
-                logger.warning("⚠️  Using MockHotelBot for testing")
-                self.bot = MockHotelBot()
-                self.is_mock = True
+        try:
+            self.bot = HotelBot()
+            logger.info("✅ HotelBot initialized successfully")
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize HotelBot: {e}")
+            logger.error("Please check LINE credentials in /data2/lili_hotel/app/env.txt")
+            raise RuntimeError(f"HotelBot initialization failed: {e}") from e
 
     async def send_campaign(self, campaign_id: int) -> Dict[str, Any]:
         """
