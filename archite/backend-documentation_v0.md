@@ -135,114 +135,127 @@ backend/
 
 ### 3.1 ER 圖概述
 
+本系統包含 14 個核心資料表，分為四大模組：會員管理（Module 1）、消息模板（Module 2）、群發推播（Module 4）、問卷系統（Module 7）。
+
 ```
-┌─────────────────┐
-│     users       │ (系統用戶)
-│─────────────────│
-│ id (PK)         │
-│ username        │
-│ password_hash   │
-│ role            │
-└─────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                         會員管理模組 (Module 1)                    │
+└──────────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────┐         ┌─────────────────────┐
 │      members         │         │   member_tags       │
 │──────────────────────│         │─────────────────────│
 │ id (PK)              │◄───┐    │ id (PK)             │
-│ line_uid             │    │    │ name                │
+│ line_uid (UNIQUE)    │    │    │ name (UNIQUE)       │
 │ line_display_name    │    │    │ type (member)       │
-│ name                 │    │    │ source              │
-│ gender               │    │    │ member_count        │
+│ line_picture_url     │    │    │ source (api/manual) │
+│ first_name           │    │    │ description         │
+│ last_name            │    │    │ member_count        │
+│ gender               │    │    │ created_at          │
 │ birthday             │    │    └─────────────────────┘
 │ email                │    │              ▲
 │ phone                │    │              │
-│ id_number (unique)   │    │              │
-│ source               │    │    ┌─────────┴──────────────┐
-│ created_at           │    │    │ member_tag_relations   │
-│ last_interaction_at  │    └────┤────────────────────────│
-└──────────────────────┘         │ id (PK)                │
-         │                       │ member_id (FK)         │
-         │                       │ tag_id (FK)            │
-         │                       │ tagged_at              │
-         │                       └────────────────────────┘
-         │
-         │                       ┌─────────────────────┐
+│ id_number (UNIQUE)   │    │    ┌─────────┴──────────────┐
+│ source (line/system) │    │    │ member_tag_relations   │
+│ accept_marketing     │    └────┤────────────────────────│
+│ notes                │         │ id (PK)                │
+│ last_interaction_at  │         │ member_id (FK)         │
+│ created_at           │         │ tag_id (FK)            │
+│ updated_at           │         │ tag_type (enum)        │
+└──────────────────────┘         │ tagged_at              │
+         │                       └────────┬───────────────┘
+         │                                │
+         │                       ┌────────▼────────────┐
          │                       │ interaction_tags    │
          │                       │─────────────────────│
          └──────────────────────►│ id (PK)             │
                                  │ name                │
                                  │ type (interaction)  │
                                  │ campaign_id (FK)    │
+                                 │ description         │
                                  │ trigger_count       │
+                                 │ created_at          │
                                  └─────────────────────┘
 
-┌───────────────────────┐         ┌──────────────────────┐
-│     campaigns         │         │  message_templates   │
-│───────────────────────│         │──────────────────────│
-│ id (PK)               │◄────────│ id (PK)              │
-│ title                 │         │ type                 │
-│ template_id (FK)      │─────────►│ content              │
-│ target_audience       │         │ buttons              │
-│ scheduled_at          │         │ images               │
-│ status                │         │ notification_text    │
-│ sent_count            │         │ preview_text         │
-│ opened_count          │         └──────────────────────┘
-│ clicked_count         │
-└───────────────────────┘                  │
-         │                                 │
-         │                                 ▼
-         │                    ┌──────────────────────────┐
-         │                    │ template_carousel_items  │
-         │                    │──────────────────────────│
-         │                    │ id (PK)                  │
-         │                    │ template_id (FK)         │
-         │                    │ image_url                │
-         │                    │ title                    │
-         │                    │ description              │
-         │                    │ action_url               │
-         │                    │ interaction_tag_id (FK)  │
-         │                    │ sort_order               │
-         │                    └──────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│                    消息模板模組 (Module 2)                         │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────┐
+│   message_templates      │
+│──────────────────────────│
+│ id (PK)                  │
+│ type (enum)              │  ◄── text/text_button/image_click/image_card
+│ name                     │
+│ content (TEXT)           │
+│ buttons (JSON)           │
+│ notification_text        │
+│ preview_text             │
+│ interaction_tag_id (FK)  │
+│ interaction_result (JSON)│
+│ created_at               │
+│ updated_at               │
+└──────────┬───────────────┘
+           │
+           │ 1:N
+           ▼
+┌──────────────────────────┐
+│ template_carousel_items  │
+│──────────────────────────│
+│ id (PK)                  │
+│ template_id (FK)         │
+│ image_url                │
+│ title                    │
+│ description              │
+│ price (DECIMAL)          │
+│ action_url               │
+│ interaction_tag_id (FK)  │
+│ sort_order (INT)         │
+│ created_at               │
+└──────────────────────────┘
+
+
+┌──────────────────────────────────────────────────────────────────┐
+│                    群發推播模組 (Module 4)                         │
+└──────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────┐         ┌───────────────────────┐
+│     campaigns         │         │  campaign_recipients  │
+│───────────────────────│  1:N    │───────────────────────│
+│ id (PK)               │◄────────│ id (PK)               │
+│ title                 │         │ campaign_id (FK)      │
+│ template_id (FK)      │         │ member_id (FK)        │
+│ target_audience (JSON)│         │ sent_at               │
+│ trigger_condition     │         │ opened_at             │
+│ interaction_tag       │         │ clicked_at            │
+│ scheduled_at          │         │ status (enum)         │
+│ sent_at               │         │ error_message         │
+│ status (enum)         │         │ created_at            │
+│ sent_count            │         └───────────────────────┘
+│ opened_count          │                   ▲
+│ clicked_count         │                   │
+│ created_by            │                   │
+│ created_at            │         ┌─────────┴─────────────┐
+│ updated_at            │         │      members          │
+└───────────────────────┘         │  (參見會員管理模組)     │
+         │                        └───────────────────────┘
          │
+         │ 1:N
          ▼
-┌───────────────────────┐
-│  campaign_recipients  │
-│───────────────────────│
-│ id (PK)               │
-│ campaign_id (FK)      │
-│ member_id (FK)        │
-│ sent_at               │
-│ opened_at             │
-│ clicked_at            │
-│ status                │
-└───────────────────────┘
-
-┌───────────────────────┐         ┌──────────────────────────┐
-│   auto_responses      │         │ auto_response_keywords   │
-│───────────────────────│         │──────────────────────────│
-│ id (PK)               │◄────────│ id (PK)                  │
-│ name                  │         │ auto_response_id (FK)    │
-│ trigger_type          │         │ keyword                  │
-│ content               │         │ match_count              │
-│ is_active             │         └──────────────────────────┘
-│ trigger_time_start    │
-│ trigger_time_end      │
-│ trigger_count         │
-└───────────────────────┘
-
 ┌───────────────────────┐
 │      messages         │
 │───────────────────────│
 │ id (PK)               │
 │ member_id (FK)        │
 │ campaign_id (FK)      │
-│ content               │
-│ direction (in/out)    │
-│ message_type          │
-│ sender_type           │
+│ content (TEXT)        │
+│ direction (enum)      │  ◄── incoming/outgoing
+│ message_type (enum)   │  ◄── text/image/template
+│ sender_type (enum)    │  ◄── manual/auto/campaign
 │ sender_id             │
-│ created_at            │
 │ read_at               │
+│ created_at            │
 └───────────────────────┘
 
 ┌───────────────────────┐
@@ -250,31 +263,91 @@ backend/
 │───────────────────────│
 │ id (PK)               │
 │ member_id (FK)        │
-│ tag_id (FK)           │
+│ tag_id (FK)           │  ◄── interaction_tags.id
 │ campaign_id (FK)      │
+│ trigger_source (enum) │  ◄── click/interaction/manual
 │ triggered_at          │
-│ trigger_source        │
+│ created_at            │
 └───────────────────────┘
+
+
+┌──────────────────────────────────────────────────────────────────┐
+│                    問卷系統模組 (Module 7)                         │
+└──────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────┐
+│  survey_templates     │
+│───────────────────────│
+│ id (PK)               │
+│ name                  │
+│ description (TEXT)    │
+│ icon                  │
+│ category              │
+│ default_questions     │
+│ is_active (BOOL)      │
+│ created_at            │
+│ updated_at            │
+└───────────┬───────────┘
+            │
+            │ 1:N
+            ▼
+┌───────────────────────┐
+│       surveys         │
+│───────────────────────│
+│ id (PK)               │
+│ name                  │
+│ template_id (FK)      │
+│ description (TEXT)    │
+│ target_audience (enum)│  ◄── all/filtered
+│ target_tags (JSON)    │
+│ schedule_type (enum)  │  ◄── immediate/scheduled
+│ scheduled_at          │
+│ status (enum)         │  ◄── draft/published/archived
+│ response_count        │
+│ view_count            │
+│ created_by            │
+│ created_at            │
+│ updated_at            │
+└───────────┬───────────┘
+            │
+       ┌────┴────┐
+    1:N│         │1:N
+       ▼         ▼
+┌──────────────────┐    ┌───────────────────────┐
+│ survey_questions │    │  survey_responses     │
+│──────────────────│    │───────────────────────│
+│ id (PK)          │    │ id (PK)               │
+│ survey_id (FK)   │    │ survey_id (FK)        │
+│ question_type    │    │ member_id (FK)        │
+│ question_text    │    │ answers (JSON)        │
+│ font_size        │    │ is_completed (BOOL)   │
+│ description      │    │ completed_at          │
+│ options (JSON)   │    │ source                │
+│ is_required      │    │ ip_address            │
+│ min_length       │    │ user_agent            │
+│ max_length       │    │ created_at            │
+│ min_value        │    │ updated_at            │
+│ max_value        │    └───────────────────────┘
+│ order (INT)      │
+│ video_description│
+│ video_link       │
+│ image_description│
+│ image_link       │
+│ created_at       │
+│ updated_at       │
+└──────────────────┘
 ```
+
+**說明**：
+- 本系統實施 v0.1 版本，包含 Module 1、2、4、7
+- 未實施模組：Module 3 (PMS整合)、Module 5 (帳號權限)、Module 6 (自動回應)
+- 所有表都包含 Base Model 的 `id`, `created_at`, `updated_at` 欄位
 
 ### 3.2 表結構詳細設計
 
-#### 3.2.1 users (系統用戶表)
+#### 模組1：會員管理 (4個表)
 
-| 欄位名 | 類型 | 約束 | 說明 |
-|--------|------|------|------|
-| id | BIGINT | PK, AUTO_INCREMENT | 用戶ID |
-| username | VARCHAR(50) | UNIQUE, NOT NULL | 用戶名 |
-| email | VARCHAR(100) | UNIQUE, NOT NULL | 郵箱 |
-| password_hash | VARCHAR(255) | NOT NULL | 密碼雜湊 |
-| full_name | VARCHAR(100) | | 全名 |
-| role | ENUM | NOT NULL | 角色：admin/marketing/customer_service |
-| is_active | BOOLEAN | DEFAULT TRUE | 是否啟用 |
-| last_login_at | DATETIME | | 最後登入時間 |
-| created_at | DATETIME | NOT NULL | 創建時間 |
-| updated_at | DATETIME | | 更新時間 |
-
-#### 3.2.2 members (會員表)
+#### 3.2.1 members (會員表)
 
 | 欄位名 | 類型 | 約束 | 說明 |
 |--------|------|------|------|
@@ -296,7 +369,7 @@ backend/
 | last_interaction_at | DATETIME | | 最後互動時間 |
 | updated_at | DATETIME | | 更新時間 |
 
-#### 3.2.3 member_tags (會員標籤表)
+#### 3.2.2 member_tags (會員標籤表)
 
 | 欄位名 | 類型 | 約束 | 說明 |
 |--------|------|------|------|
@@ -309,7 +382,7 @@ backend/
 | created_at | DATETIME | NOT NULL | 創建時間 |
 | updated_at | DATETIME | | 更新時間 |
 
-#### 3.2.4 interaction_tags (互動標籤表)
+#### 3.2.3 interaction_tags (互動標籤表)
 
 | 欄位名 | 類型 | 約束 | 說明 |
 |--------|------|------|------|
@@ -322,7 +395,7 @@ backend/
 | created_at | DATETIME | NOT NULL | 創建時間 |
 | updated_at | DATETIME | | 更新時間 |
 
-#### 3.2.5 member_tag_relations (會員標籤關聯表)
+#### 3.2.4 member_tag_relations (會員標籤關聯表)
 
 | 欄位名 | 類型 | 約束 | 說明 |
 |--------|------|------|------|
@@ -334,26 +407,11 @@ backend/
 
 **索引**: UNIQUE(member_id, tag_id, tag_type)
 
-#### 3.2.6 campaigns (活動推播表)
+---
 
-| 欄位名 | 類型 | 約束 | 說明 |
-|--------|------|------|------|
-| id | BIGINT | PK, AUTO_INCREMENT | 活動ID |
-| title | VARCHAR(100) | NOT NULL | 活動標題 |
-| template_id | BIGINT | FK, NOT NULL | 消息模板ID |
-| target_audience | JSON | NOT NULL | 目標受眾條件 |
-| trigger_condition | JSON | | 觸發條件（如：加入好友7-29天） |
-| scheduled_at | DATETIME | | 排程時間 |
-| sent_at | DATETIME | | 實際發送時間 |
-| status | ENUM | NOT NULL | 狀態：draft/scheduled/sent/failed |
-| sent_count | INT | DEFAULT 0 | 發送人數 |
-| opened_count | INT | DEFAULT 0 | 開啟次數 |
-| clicked_count | INT | DEFAULT 0 | 點擊次數 |
-| created_by | BIGINT | FK | 創建者ID |
-| created_at | DATETIME | NOT NULL | 創建時間 |
-| updated_at | DATETIME | | 更新時間 |
+#### 模組2：消息模板 (2個表)
 
-#### 3.2.7 message_templates (消息模板表)
+#### 3.2.5 message_templates (消息模板表)
 
 | 欄位名 | 類型 | 約束 | 說明 |
 |--------|------|------|------|
@@ -364,95 +422,177 @@ backend/
 | buttons | JSON | | 按鈕配置 |
 | notification_text | VARCHAR(100) | | 通知訊息 |
 | preview_text | VARCHAR(100) | | 訊息預覽 |
-| interaction_tag_id | BIGINT | FK | 互動標籤ID |
+| interaction_tag_id | BIGINT | FK | 互動標籤ID (→ interaction_tags.id) |
 | interaction_result | JSON | | 互動結果配置 |
 | created_at | DATETIME | NOT NULL | 創建時間 |
 | updated_at | DATETIME | | 更新時間 |
 
-#### 3.2.8 template_carousel_items (輪播圖卡片表)
+#### 3.2.6 template_carousel_items (輪播圖卡片表)
 
 | 欄位名 | 類型 | 約束 | 說明 |
 |--------|------|------|------|
 | id | BIGINT | PK, AUTO_INCREMENT | ID |
-| template_id | BIGINT | FK, NOT NULL | 模板ID |
+| template_id | BIGINT | FK, NOT NULL | 模板ID (→ message_templates.id) |
 | image_url | VARCHAR(500) | NOT NULL | 圖片URL |
 | title | VARCHAR(100) | | 標題 |
 | description | VARCHAR(200) | | 描述 |
 | price | DECIMAL(10,2) | | 金額 |
 | action_url | VARCHAR(500) | | 動作URL |
-| interaction_tag_id | BIGINT | FK | 互動標籤ID |
+| interaction_tag_id | BIGINT | FK | 互動標籤ID (→ interaction_tags.id) |
 | sort_order | INT | DEFAULT 0 | 排序 |
 | created_at | DATETIME | NOT NULL | 創建時間 |
+| updated_at | DATETIME | | 更新時間 |
 
-#### 3.2.9 campaign_recipients (推播對象記錄表)
+---
+
+#### 模組4：群發推播 (4個表)
+
+#### 3.2.7 campaigns (活動推播表)
+
+| 欄位名 | 類型 | 約束 | 說明 |
+|--------|------|------|------|
+| id | BIGINT | PK, AUTO_INCREMENT | 活動ID |
+| title | VARCHAR(100) | NOT NULL | 活動標題 |
+| template_id | BIGINT | FK, NOT NULL | 消息模板ID (→ message_templates.id) |
+| target_audience | JSON | NOT NULL | 目標受眾條件 |
+| trigger_condition | JSON | | 觸發條件（如：加入好友7-29天） |
+| interaction_tag | VARCHAR(50) | | 互動標籤 |
+| scheduled_at | DATETIME | | 排程時間 |
+| sent_at | DATETIME | | 實際發送時間 |
+| status | ENUM | NOT NULL | 狀態：draft/scheduled/sent/failed |
+| sent_count | INT | DEFAULT 0 | 發送人數 |
+| opened_count | INT | DEFAULT 0 | 開啟次數 |
+| clicked_count | INT | DEFAULT 0 | 點擊次數 |
+| created_by | BIGINT | | 創建者ID |
+| created_at | DATETIME | NOT NULL | 創建時間 |
+| updated_at | DATETIME | | 更新時間 |
+
+#### 3.2.8 campaign_recipients (推播對象記錄表)
 
 | 欄位名 | 類型 | 約束 | 說明 |
 |--------|------|------|------|
 | id | BIGINT | PK, AUTO_INCREMENT | ID |
-| campaign_id | BIGINT | FK, NOT NULL | 活動ID |
-| member_id | BIGINT | FK, NOT NULL | 會員ID |
+| campaign_id | BIGINT | FK, NOT NULL | 活動ID (→ campaigns.id) |
+| member_id | BIGINT | FK, NOT NULL | 會員ID (→ members.id) |
 | sent_at | DATETIME | | 發送時間 |
 | opened_at | DATETIME | | 開啟時間 |
 | clicked_at | DATETIME | | 點擊時間 |
 | status | ENUM | NOT NULL | 狀態：pending/sent/opened/clicked/failed |
 | error_message | VARCHAR(500) | | 錯誤訊息 |
-
-**索引**: UNIQUE(campaign_id, member_id)
-
-#### 3.2.10 auto_responses (自動回應表)
-
-| 欄位名 | 類型 | 約束 | 說明 |
-|--------|------|------|------|
-| id | BIGINT | PK, AUTO_INCREMENT | ID |
-| name | VARCHAR(100) | NOT NULL | 規則名稱 |
-| trigger_type | ENUM | NOT NULL | 觸發類型：welcome/keyword/time |
-| content | TEXT | NOT NULL | 回應內容 |
-| template_id | BIGINT | FK | 模板ID（未來擴展） |
-| is_active | BOOLEAN | DEFAULT TRUE | 是否啟用 |
-| trigger_time_start | TIME | | 觸發時間開始 |
-| trigger_time_end | TIME | | 觸發時間結束 |
-| trigger_count | INT | DEFAULT 0 | 觸發次數 |
-| success_rate | DECIMAL(5,2) | DEFAULT 0 | 發送成功率 |
 | created_at | DATETIME | NOT NULL | 創建時間 |
 | updated_at | DATETIME | | 更新時間 |
 
-#### 3.2.11 auto_response_keywords (自動回應關鍵字表)
+**索引**: UNIQUE(campaign_id, member_id)
 
-| 欄位名 | 類型 | 約束 | 說明 |
-|--------|------|------|------|
-| id | BIGINT | PK, AUTO_INCREMENT | ID |
-| auto_response_id | BIGINT | FK, NOT NULL | 自動回應ID |
-| keyword | VARCHAR(50) | NOT NULL | 關鍵字 |
-| match_count | INT | DEFAULT 0 | 匹配次數 |
-| created_at | DATETIME | NOT NULL | 創建時間 |
-
-**索引**: UNIQUE(auto_response_id, keyword)
-
-#### 3.2.12 messages (消息記錄表)
+#### 3.2.9 messages (消息記錄表)
 
 | 欄位名 | 類型 | 約束 | 說明 |
 |--------|------|------|------|
 | id | BIGINT | PK, AUTO_INCREMENT | 消息ID |
-| member_id | BIGINT | FK, NOT NULL | 會員ID |
-| campaign_id | BIGINT | FK | 活動ID |
+| member_id | BIGINT | FK, NOT NULL | 會員ID (→ members.id) |
+| campaign_id | BIGINT | FK | 活動ID (→ campaigns.id) |
 | content | TEXT | NOT NULL | 消息內容 |
 | direction | ENUM | NOT NULL | 方向：incoming/outgoing |
 | message_type | ENUM | NOT NULL | 類型：text/image/template |
 | sender_type | ENUM | | 發送者類型：manual/auto/campaign |
-| sender_id | BIGINT | FK | 發送者ID (users.id) |
+| sender_id | BIGINT | | 發送者ID |
 | read_at | DATETIME | | 已讀時間 |
 | created_at | DATETIME | NOT NULL | 創建時間 |
+| updated_at | DATETIME | | 更新時間 |
 
-#### 3.2.13 tag_trigger_logs (標籤觸發日誌表)
+#### 3.2.10 tag_trigger_logs (標籤觸發日誌表)
 
 | 欄位名 | 類型 | 約束 | 說明 |
 |--------|------|------|------|
 | id | BIGINT | PK, AUTO_INCREMENT | 日誌ID |
-| member_id | BIGINT | FK, NOT NULL | 會員ID |
-| tag_id | BIGINT | FK, NOT NULL | 標籤ID |
-| campaign_id | BIGINT | FK | 活動ID |
+| member_id | BIGINT | FK, NOT NULL | 會員ID (→ members.id) |
+| tag_id | BIGINT | FK, NOT NULL | 標籤ID (→ interaction_tags.id) |
+| campaign_id | BIGINT | FK | 活動ID (→ campaigns.id) |
 | trigger_source | ENUM | NOT NULL | 觸發來源：click/interaction/manual |
 | triggered_at | DATETIME | NOT NULL | 觸發時間 |
+| created_at | DATETIME | NOT NULL | 創建時間 |
+| updated_at | DATETIME | | 更新時間 |
+
+---
+
+#### 模組7：問卷系統 (4個表)
+
+#### 3.2.11 survey_templates (問卷範本表)
+
+| 欄位名 | 類型 | 約束 | 說明 |
+|--------|------|------|------|
+| id | BIGINT | PK, AUTO_INCREMENT | 範本ID |
+| name | VARCHAR(100) | NOT NULL | 範本名稱 |
+| description | TEXT | | 範本描述 |
+| icon | VARCHAR(50) | | 範本圖標 |
+| category | VARCHAR(50) | NOT NULL | 範本類別 |
+| default_questions | JSON | | 預設題目 |
+| is_active | BOOLEAN | NOT NULL, DEFAULT TRUE | 是否啟用 |
+| created_at | DATETIME | NOT NULL | 創建時間 |
+| updated_at | DATETIME | | 更新時間 |
+
+#### 3.2.12 surveys (問卷主檔表)
+
+| 欄位名 | 類型 | 約束 | 說明 |
+|--------|------|------|------|
+| id | BIGINT | PK, AUTO_INCREMENT | 問卷ID |
+| name | VARCHAR(200) | NOT NULL | 問卷名稱 |
+| template_id | BIGINT | FK, NOT NULL | 範本ID (→ survey_templates.id) |
+| description | TEXT | | 問卷描述 |
+| target_audience | ENUM | NOT NULL, DEFAULT 'all' | 目標受眾：all/filtered |
+| target_tags | JSON | | 目標標籤 |
+| schedule_type | ENUM | NOT NULL, DEFAULT 'immediate' | 排程類型：immediate/scheduled |
+| scheduled_at | DATETIME | | 排程時間 |
+| status | ENUM | NOT NULL, DEFAULT 'draft' | 狀態：draft/published/archived |
+| response_count | INT | DEFAULT 0 | 回應數 |
+| view_count | INT | DEFAULT 0 | 瀏覽數 |
+| created_by | BIGINT | | 創建者ID |
+| created_at | DATETIME | NOT NULL | 創建時間 |
+| updated_at | DATETIME | | 更新時間 |
+
+#### 3.2.13 survey_questions (問卷題目表)
+
+| 欄位名 | 類型 | 約束 | 說明 |
+|--------|------|------|------|
+| id | BIGINT | PK, AUTO_INCREMENT | 題目ID |
+| survey_id | BIGINT | FK, NOT NULL | 問卷ID (→ surveys.id) |
+| question_type | ENUM | NOT NULL | 題目類型：name/phone/email/birthday/address/gender/id_number/link/video/image |
+| question_text | TEXT | NOT NULL | 題目文字 |
+| font_size | INT | | 字型大小 |
+| description | TEXT | | 題目描述 |
+| options | JSON | | 選項 |
+| is_required | BOOLEAN | NOT NULL, DEFAULT FALSE | 是否必填 |
+| min_length | INT | | 最小長度 |
+| max_length | INT | | 最大長度 |
+| min_value | INT | | 最小值 |
+| max_value | INT | | 最大值 |
+| order | INT | NOT NULL | 題目順序 |
+| video_description | TEXT | | 影片描述 |
+| video_link | VARCHAR(500) | | 影片超連結 |
+| image_description | TEXT | | 圖片描述 |
+| image_link | VARCHAR(500) | | 圖片超連結 |
+| created_at | DATETIME | NOT NULL | 創建時間 |
+| updated_at | DATETIME | | 更新時間 |
+
+**索引**: INDEX(survey_id)
+
+#### 3.2.14 survey_responses (問卷回應表)
+
+| 欄位名 | 類型 | 約束 | 說明 |
+|--------|------|------|------|
+| id | BIGINT | PK, AUTO_INCREMENT | 回應ID |
+| survey_id | BIGINT | FK, NOT NULL | 問卷ID (→ surveys.id) |
+| member_id | BIGINT | FK, NOT NULL | 會員ID (→ members.id) |
+| answers | JSON | NOT NULL | 答案（JSON格式儲存所有題目答案） |
+| is_completed | BOOLEAN | NOT NULL, DEFAULT FALSE | 是否完成 |
+| completed_at | DATETIME | | 完成時間 |
+| source | VARCHAR(50) | | 來源 |
+| ip_address | VARCHAR(50) | | IP地址 |
+| user_agent | VARCHAR(500) | | 用戶代理 |
+| created_at | DATETIME | NOT NULL | 創建時間 |
+| updated_at | DATETIME | | 更新時間 |
+
+**索引**: INDEX(survey_id), INDEX(member_id)
 
 ---
 

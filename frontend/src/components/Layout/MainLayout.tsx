@@ -29,6 +29,11 @@ const MainLayout: React.FC = () => {
           icon: <span>✉️</span>,
           label: '建立群發訊息',
         },
+        {
+          key: '/surveys',
+          icon: <span>📋</span>,
+          label: '問卷模板',
+        },
       ],
     },
     {

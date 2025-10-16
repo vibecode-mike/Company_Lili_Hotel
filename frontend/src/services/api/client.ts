@@ -31,7 +31,13 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401) {
       // Token 過期，跳轉登入頁
       localStorage.removeItem('token');
-      window.location.href = '/login';
+      // 暫時註釋掉跳轉，開發階段使用
+      // window.location.href = '/login';
+      console.warn('API 返回 401 未認證錯誤，請檢查後端認證設置');
+    }
+    // 如果有響應數據,也返回 data,保持一致性
+    if (error.response?.data) {
+      return Promise.reject(error.response.data);
     }
     return Promise.reject(error);
   }

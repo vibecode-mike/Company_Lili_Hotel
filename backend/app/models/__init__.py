@@ -10,6 +10,7 @@ from app.models.template import MessageTemplate, TemplateCarouselItem
 from app.models.auto_response import AutoResponse, AutoResponseKeyword
 from app.models.message import Message
 from app.models.tag_trigger_log import TagTriggerLog
+from app.models.survey import Survey, SurveyTemplate, SurveyQuestion, SurveyResponse
 
 __all__ = [
     "Base",
@@ -26,4 +27,8 @@ __all__ = [
     "AutoResponseKeyword",
     "Message",
     "TagTriggerLog",
+    "Survey",
+    "SurveyTemplate",
+    "SurveyQuestion",
+    "SurveyResponse",
 ]

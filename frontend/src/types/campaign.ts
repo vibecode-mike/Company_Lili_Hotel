@@ -49,6 +49,19 @@ export interface CampaignImage {
   size?: number;
 }
 
+export interface CarouselItemCreate {
+  image_path: string;
+  title?: string;
+  description?: string;
+  price?: number;
+  action_url?: string;
+  interaction_tag?: string;
+  action_button_enabled?: boolean;
+  action_button_text?: string;
+  action_button_interaction_type?: InteractionType;
+  sort_order?: number;
+}
+
 export interface CampaignCreate {
   // 圖片相關
   image?: CampaignImage;
@@ -71,6 +84,9 @@ export interface CampaignCreate {
   target_tags?: string[];
   schedule_type: ScheduleType;
   scheduled_at?: string;
+
+  // 輪播相關
+  carousel_items?: CarouselItemCreate[];
 }
 
 export interface CampaignListItem {

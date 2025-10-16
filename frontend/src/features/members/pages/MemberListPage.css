@@ -1,68 +1,375 @@
 /**
- * MemberListPage 樣式
+ * 會員管理列表頁面樣式 - v0.1 設計風格（僅內容區域）
  */
 
-.member-list-page {
-  /* 頁面容器 */
+.member-list-content-v01 {
+  padding: 48px;
+  background-color: #f6f9fd;
+  min-height: 100vh;
 }
 
-/* 麵包屑 */
-.breadcrumb {
-  color: #6B7280;
+/* Breadcrumb */
+.breadcrumb-v01 {
+  margin-bottom: 24px;
+}
+
+.breadcrumb-v01 span {
   font-size: 14px;
-  margin-bottom: 16px;
+  color: #383838;
 }
 
-.breadcrumb span {
-  margin: 0 8px;
+/* Page Header */
+.page-header-v01 {
+  margin-bottom: 24px;
 }
 
-/* 頁面標題 */
-.page-header {
-  margin-bottom: 32px;
-}
-
-.page-title {
-  font-size: 28px;
-  font-weight: 700;
+.page-title-v01 {
+  font-size: 32px;
+  color: #383838;
   margin-bottom: 8px;
-  color: #1F2937;
+  font-weight: 600;
 }
 
-.page-description {
-  color: #6B7280;
+.page-description-v01 {
+  color: #6e6e6e;
   font-size: 14px;
   margin: 0;
 }
 
-/* 工具列 */
-.toolbar {
+/* Toolbar */
+.toolbar-v01 {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 12px;
   margin-bottom: 24px;
 }
 
-.search-filter {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.search-box {
+.search-wrapper-v01 {
   position: relative;
+  flex: 0 0 auto;
+  max-width: 292px;
+  display: flex;
+  align-items: center;
+  background-color: white;
+  border-radius: 16px;
+  padding: 16px;
 }
 
-.search-input {
-  width: 300px;
+.search-icon-v01 {
+  width: 32px;
+  height: 32px;
+  color: #a8a8a8;
+  margin-right: 12px;
+  font-size: 20px;
+  flex-shrink: 0;
 }
 
-/* 統計資訊 */
-.stats-info {
-  background-color: #F9FAFB;
-  padding: 12px 16px;
-  border-radius: 8px;
-  margin-bottom: 20px;
+.search-input-v01 {
+  flex: 1;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  font-size: 20px;
+  color: #383838;
+  padding: 0 !important;
+}
+
+.search-input-v01::placeholder {
+  color: #dddddd;
+}
+
+.clear-search-btn-v01 {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #f5f5f5;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clear-filters-btn-v01 {
+  color: #0f6beb !important;
   font-size: 14px;
-  color: #6B7280;
+}
+
+.clear-filters-btn-v01:hover {
+  background-color: #f0f6ff !important;
+}
+
+.flex-spacer {
+  flex: 1;
+}
+
+.create-btn-v01 {
+  background-color: #242424 !important;
+  color: white !important;
+  border-radius: 16px !important;
+  padding: 12px 24px !important;
+  height: 48px !important;
+  font-size: 14px;
+  border: none;
+}
+
+.create-btn-v01:hover {
+  background-color: #383838 !important;
+}
+
+/* Results Count */
+.results-count-v01 {
+  margin-bottom: 8px;
+}
+
+.results-count-v01 p {
+  font-size: 12px;
+  color: #6e6e6e;
+  margin: 0;
+}
+
+/* Table Container */
+.table-container-v01 {
+  background-color: white;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.table-scroll-v01 {
+  overflow-x: auto;
+}
+
+/* Table Header */
+.table-header-v01 {
+  display: flex;
+  align-items: center;
+  min-width: 1400px;
+  padding: 16px 0;
+  border-bottom: 1px solid #dddddd;
+}
+
+.table-cell-v01 {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  flex-shrink: 0;
+}
+
+.table-cell-v01 span {
+  font-size: 14px;
+  color: #383838;
+}
+
+.sortable-v01 {
+  cursor: pointer;
+  background: none;
+  border: none;
+  gap: 4px;
+  transition: background-color 0.2s;
+}
+
+.sortable-v01:hover {
+  background-color: #f9fafb;
+}
+
+.sortable-v01.active {
+  color: #0f6beb;
+}
+
+.sortable-v01.active span {
+  color: #0f6beb;
+}
+
+.sort-icon-v01 {
+  width: 20px;
+  height: 20px;
+  color: #6e6e6e;
+  font-size: 12px;
+}
+
+.sortable-v01.active .sort-icon-v01 {
+  color: #0f6beb;
+}
+
+.cell-member-v01 {
+  width: 290px;
+  padding-left: 24px;
+}
+
+.cell-name-v01 {
+  width: 180px;
+}
+
+.cell-tags-v01 {
+  width: 240px;
+}
+
+.cell-email-v01 {
+  width: 200px;
+}
+
+.cell-phone-v01 {
+  width: 130px;
+}
+
+.cell-created-v01 {
+  width: 160px;
+}
+
+.cell-last-reply-v01 {
+  width: 160px;
+}
+
+.cell-actions-v01 {
+  width: 150px;
+  padding-right: 24px;
+}
+
+/* Dividers */
+.divider-v01 {
+  width: 1px;
+  height: 12px;
+  background-color: #dddddd;
+  flex-shrink: 0;
+}
+
+.divider-transparent-v01 {
+  width: 1px;
+  height: 12px;
+  background-color: transparent;
+  flex-shrink: 0;
+}
+
+/* Table Row */
+.table-row-v01 {
+  display: flex;
+  align-items: center;
+  min-width: 1400px;
+  padding: 12px 0;
+}
+
+.table-row-v01.with-border-v01 {
+  border-bottom: 1px solid #dddddd;
+}
+
+/* Member Avatar */
+.member-avatar-v01 {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background-color: #edf0f8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.member-avatar-v01 img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.member-avatar-v01 span {
+  color: #383838;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.member-username-v01 {
+  font-size: 14px;
+  color: #383838;
+}
+
+/* Tags */
+.tags-wrapper-v01 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tag-v01 {
+  background-color: #f0f6ff;
+  color: #0f6beb;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+/* Action Buttons */
+.action-icon-btn-v01 {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  flex-shrink: 0;
+}
+
+.action-icon-btn-v01:hover {
+  background-color: #f0f6ff;
+}
+
+.message-icon-v01 {
+  width: 24px;
+  height: 24px;
+  color: #0f6beb;
+}
+
+.action-detail-btn-v01 {
+  padding: 4px 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  flex-shrink: 0;
+}
+
+.action-detail-btn-v01:hover {
+  background-color: #f0f6ff;
+}
+
+.action-detail-btn-v01 span {
+  font-size: 14px;
+  color: #0f6beb;
+}
+
+.arrow-icon-v01 {
+  width: 16px;
+  height: 16px;
+  color: #0f6beb;
+  transform: rotate(180deg);
+  transition: transform 0.2s;
+}
+
+.action-detail-btn-v01:hover .arrow-icon-v01 {
+  transform: rotate(180deg) translateX(-2px);
+}
+
+/* Text Truncate */
+.truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Loading and Empty States */
+.loading-state-v01,
+.empty-state-v01 {
+  padding: 48px;
+  text-align: center;
+  color: #6e6e6e;
+  font-size: 14px;
 }

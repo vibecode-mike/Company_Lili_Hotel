@@ -1,213 +1,418 @@
 /**
- * TemplateSelectionModal 樣式
+ * TemplateSelectionModal 樣式 - v0.1 Design
  */
 
 .template-selection-modal .ant-modal-content {
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 0;
   max-width: 900px;
+  box-shadow: 0px 0px 4px 0px rgba(168, 168, 168, 0.25), 0px 1px 4px 0px rgba(221, 221, 221, 0.25);
 }
 
 .template-selection-modal .ant-modal-body {
-  padding: 24px;
+  padding: 32px;
 }
 
 .template-selection-modal .ant-modal-close {
-  top: 16px;
-  right: 16px;
+  top: 24px;
+  right: 24px;
 }
 
 .template-selection-modal .ant-modal-close-x {
-  width: 40px;
-  height: 40px;
-  line-height: 40px;
+  width: 32px;
+  height: 32px;
+  line-height: 32px;
   font-size: 16px;
-  color: #6B7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Modal Content */
+.modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 48px;
 }
 
 /* 模態框標題 */
 .modal-header {
-  margin-bottom: 32px;
+  margin-bottom: 0;
 }
 
 .modal-header h2 {
-  font-size: 24px;
-  font-weight: 700;
-  color: #1F2937;
+  font-size: 32px;
+  font-weight: 400;
+  color: #383838;
   margin-bottom: 8px;
+  font-family: 'Noto Sans TC', sans-serif;
 }
 
 .modal-description {
-  font-size: 14px;
-  color: #6B7280;
+  font-size: 16px;
+  color: #6e6e6e;
   margin: 0;
+  font-family: 'Noto Sans TC', sans-serif;
 }
 
-/* 模板網格 */
-.template-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+/* Template Carousel */
+.template-carousel-container {
+  position: relative;
+  padding: 0 48px;
+  margin-bottom: 0;
+}
+
+.template-carousel {
+  overflow: hidden;
+  width: 100%;
+}
+
+.template-carousel-track {
+  display: flex;
   gap: 24px;
-  margin-bottom: 32px;
-  justify-items: center;
+  transition: transform 0.3s ease;
+  width: 300%;
 }
 
-/* 模板卡片容器 */
-.template-card-wrapper {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: fit-content;
-}
-
-/* 模板卡片 */
-.template-card {
-  background-color: #EEF2F7;
-  border-radius: 8px;
-  padding: 24px;
-  cursor: pointer;
-  transition: all 0.2s;
-  min-height: 200px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  width: fit-content;
-  min-width: 180px;
-}
-
-.template-card:hover {
-  background-color: #D8E4F0;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
-}
-
-/* 模板預覽內容 */
-.template-preview-content {
+.template-carousel-item {
+  flex: 0 0 calc(33.333% - 16px);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 16px;
 }
 
-.preview-text-top {
-  font-size: 15px;
-  font-weight: 500;
-  color: #374151;
+/* Template Card Button */
+.template-card-button {
+  background: transparent;
+  border: 4px solid transparent;
+  border-radius: 24px;
+  padding: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+  max-width: 204px;
+}
+
+.template-card-button.selected {
+  border-color: #0f6beb;
+}
+
+.template-card-button:hover:not(.selected) {
+  border-color: rgba(15, 107, 235, 0.3);
+}
+
+.template-card-preview {
+  background-color: #f6f9fd;
+  border-radius: 20px;
+  overflow: hidden;
+  width: 100%;
+}
+
+/* Template Previews */
+.template-preview {
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Text Template */
+.template-preview.text-template {
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+}
+
+.template-preview-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #edf0f8;
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.text-content {
+  font-size: 16px;
+  color: #383838;
+  margin: 0;
+  font-family: 'Noto Sans TC', sans-serif;
+}
+
+.template-preview-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  width: 100%;
+}
+
+.preview-btn {
+  background-color: white;
+  border: none;
+  border-radius: 16px;
+  padding: 8px 12px;
+  font-size: 16px;
+  color: #383838;
+  cursor: pointer;
+  font-family: 'Noto Sans TC', sans-serif;
+}
+
+/* Image Text Template */
+.template-preview.image-text-template {
+  display: flex;
+  flex-direction: column;
+}
+
+.template-preview-image {
+  height: 136px;
+  background-color: #edf0f8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: #383838;
+  font-family: 'Noto Sans TC', sans-serif;
+}
+
+.template-preview-text {
+  padding: 8px 12px;
+}
+
+.preview-title {
+  font-size: 16px;
+  color: #383838;
+  margin: 0 0 4px 0;
+  font-family: 'Noto Sans TC', sans-serif;
+}
+
+.preview-content {
+  font-size: 16px;
+  color: #383838;
+  margin: 0 0 8px 0;
+  font-family: 'Noto Sans TC', sans-serif;
+}
+
+.template-preview-cta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+}
+
+.preview-cta-btn {
+  background-color: white;
+  border: none;
+  border-radius: 16px;
+  padding: 8px 12px;
+  font-size: 16px;
+  color: #383838;
+  cursor: pointer;
   text-align: center;
+  font-family: 'Noto Sans TC', sans-serif;
+}
+
+/* Image Template */
+.template-preview.image-template {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.template-preview-image-only {
+  font-size: 16px;
+  color: #383838;
+  font-family: 'Noto Sans TC', sans-serif;
+}
+
+/* Template Name */
+.template-name {
+  font-size: 16px;
+  color: #383838;
+  text-align: center;
+  margin: 0;
+  font-family: 'Noto Sans TC', sans-serif;
+}
+
+/* Carousel Navigation */
+.carousel-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  background-color: white;
+  border: 1px solid #dddddd;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.carousel-nav-btn:hover {
+  background-color: #f0f6ff;
+  border-color: #0f6beb;
+}
+
+.carousel-prev {
+  left: 0;
+}
+
+.carousel-next {
+  right: 0;
+}
+
+/* Recent Drafts Section */
+.recent-drafts-section {
+  margin-bottom: 0;
+}
+
+.section-title {
+  font-size: 16px;
+  color: #383838;
   margin-bottom: 16px;
+  font-family: 'Noto Sans TC', sans-serif;
+  font-weight: 400;
 }
 
-.preview-text-buttons {
+/* Drafts Table */
+.drafts-table-header,
+.drafts-table-row {
   display: flex;
-  gap: 24px;
-  margin-bottom: 8px;
+  gap: 12px;
+  align-items: center;
 }
 
-.preview-text-buttons button {
+.drafts-table-header {
+  margin-bottom: 12px;
+}
+
+.drafts-table-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.drafts-header-cell,
+.drafts-cell {
+  font-size: 16px;
+  font-family: 'Noto Sans TC', sans-serif;
+}
+
+.drafts-header-cell {
+  color: #6e6e6e;
+  font-weight: 400;
+}
+
+.drafts-cell {
+  color: #383838;
+}
+
+.title-col {
+  width: 200px;
+  flex-shrink: 0;
+}
+
+.type-col {
+  width: 100px;
+  flex-shrink: 0;
+}
+
+.status-col {
+  width: 60px;
+  flex-shrink: 0;
+}
+
+.time-col {
+  width: 152px;
+  flex-shrink: 0;
+}
+
+.action-col {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.edit-btn {
+  background: transparent;
+  border: none;
+  color: #0f6beb;
   font-size: 14px;
-  color: #374151;
-  background-color: #ffffff;
-  border: 1px solid #D1D5DB;
-  border-radius: 4px;
-  padding: 4px 12px;
   cursor: pointer;
-}
-
-.preview-image-section {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  width: 100%;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-family: 'Noto Sans TC', sans-serif;
+  transition: opacity 0.2s;
 }
 
-.preview-image-title {
-  font-size: 18px;
-  font-weight: 500;
-  color: #374151;
-  text-align: center;
-  margin-bottom: 24px;
+.edit-btn:hover {
+  opacity: 0.8;
+  text-decoration: underline;
 }
 
-.preview-text-lines {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  text-align: left;
-  color: #374151;
-  font-size: 14px;
-  width: 100%;
-}
-
-.preview-text-lines .title {
-  font-weight: 500;
-}
-
-.preview-text-lines .content {
-  color: #6B7280;
-}
-
-.preview-cta {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: fit-content;
-  margin-top: 8px;
-}
-
-.preview-cta button {
-  background-color: #F9FAFB;
-  border: 1px solid #E5E7EB;
-  border-radius: 6px;
-  padding: 8px 16px;
-  font-size: 14px;
-  color: #374151;
-  cursor: pointer;
-  width: fit-content;
-}
-
-.preview-text-bottom {
-  font-size: 14px;
-  color: #6B7280;
-  text-align: center;
-  margin-top: 12px;
+.edit-icon {
+  width: 16px;
+  height: 16px;
+  transform: rotate(180deg);
 }
 
 /* 模態框底部 */
 .modal-footer {
   display: flex;
-  justify-content: center;
-  padding-top: 24px;
-  border-top: 1px solid #E5E7EB;
+  justify-content: flex-end;
+  padding-top: 0;
+  border-top: none;
+  margin-bottom: 0;
 }
 
 .btn-start {
-  background-color: #1F2937;
+  background-color: #242424;
   color: white;
-  padding: 11px 28px;
+  padding: 12px 24px;
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
+  border-radius: 16px;
+  font-size: 16px;
+  font-weight: 400;
   cursor: pointer;
   transition: all 0.2s;
+  font-family: 'Noto Sans TC', sans-serif;
 }
 
-.btn-start:hover {
-  background-color: #111827;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+.btn-start:hover:not(:disabled) {
+  background-color: #383838;
+}
+
+.btn-start:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* 響應式設計 */
 @media (max-width: 768px) {
-  .template-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
+  .template-carousel-container {
+    padding: 0 24px;
   }
 
-  .template-card {
-    min-height: 220px;
+  .template-carousel-item {
+    flex: 0 0 calc(50% - 12px);
+  }
+
+  .drafts-table-header,
+  .drafts-table-row {
+    flex-wrap: wrap;
+  }
+
+  .title-col,
+  .type-col,
+  .status-col,
+  .time-col {
+    width: 100%;
   }
 }

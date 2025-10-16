@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Form Test</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+    <script>
+        const { useState } = React;
+
+        function TestForm() {
+            const [value, setValue] = useState('');
+
+            console.log('🎬 Rendering with value:', value);
+
+            return React.createElement('div', { style: { padding: '20px' } },
+                React.createElement('h1', null, 'Form Test'),
+                React.createElement('input', {
+                    type: 'text',
+                    value: value,
+                    onChange: (e) => {
+                        console.log('🔥 Input changed:', e.target.value);
+                        setValue(e.target.value);
+                    },
+                    placeholder: 'Type here...',
+                    style: { padding: '10px', fontSize: '16px', width: '300px' }
+                }),
+                React.createElement('div', { style: { marginTop: '20px', fontSize: '24px' } },
+                    'Preview: ', value || 'Empty'
+                )
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(React.createElement(TestForm));
+    </script>
+</body>
+</html>

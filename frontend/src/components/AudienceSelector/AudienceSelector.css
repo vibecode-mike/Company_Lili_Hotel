@@ -1,0 +1,54 @@
+.audience-selector {
+  margin: 16px 0;
+}
+
+.audience-selector-header {
+  margin-bottom: 12px;
+}
+
+.audience-selector-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.85);
+}
+
+.audience-selector-label .required {
+  color: #ff4d4f;
+  margin-left: 4px;
+}
+
+.audience-selector-label .info-icon {
+  margin-left: 8px;
+  color: rgba(0, 0, 0, 0.45);
+  cursor: help;
+}
+
+.audience-radio-group {
+  width: 100%;
+}
+
+.audience-tags-selector {
+  margin-top: 12px;
+}
+
+.audience-stats {
+  display: flex;
+  align-items: center;
+  margin-top: 24px;
+  padding: 20px;
+  background: #fafafa;
+  border-radius: 8px;
+  gap: 24px;
+}
+
+.audience-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.audience-count {
+  font-size: 16px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.85);
+}

@@ -31,7 +31,7 @@ async def get_members(
     params: MemberSearchParams = Depends(),
     page_params: PageParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    # current_user: User = Depends(get_current_user),  # 暫時移除認證，開發階段使用
 ):
     """獲取會員列表"""
     query = select(Member)
@@ -60,17 +60,20 @@ async def get_members(
             MemberTagRelation.tag_id.in_(tag_ids)
         )
 
-    # 排序
+    # 排序 (MySQL 兼容版本)
     if params.sort_by == "last_interaction_at":
         if params.order == "desc":
-            query = query.order_by(Member.last_interaction_at.desc().nullslast())
+            query = query.order_by(Member.last_interaction_at.desc())
         else:
-            query = query.order_by(Member.last_interaction_at.asc().nullsfirst())
+            query = query.order_by(Member.last_interaction_at.asc())
     elif params.sort_by == "created_at":
         if params.order == "desc":
             query = query.order_by(Member.created_at.desc())
         else:
             query = query.order_by(Member.created_at.asc())
+    else:
+        # 默認按創建時間倒序排列
+        query = query.order_by(Member.created_at.desc())
 
     # 計算總數
     count_query = select(func.count()).select_from(query.subquery())
@@ -85,31 +88,36 @@ async def get_members(
     # 獲取標籤信息
     items = []
     for member in members:
-        # 獲取會員標籤
-        tags_result = await db.execute(
-            select(MemberTag, InteractionTag)
-            .join(
-                MemberTagRelation,
-                or_(
-                    and_(
-                        MemberTagRelation.tag_id == MemberTag.id,
-                        MemberTagRelation.tag_type == TagType.MEMBER,
-                    ),
-                    and_(
-                        MemberTagRelation.tag_id == InteractionTag.id,
-                        MemberTagRelation.tag_type == TagType.INTERACTION,
-                    ),
-                ),
-            )
-            .where(MemberTagRelation.member_id == member.id)
-        )
-
+        # 獲取會員標籤 - 分兩次查詢避免 JOIN 歧義
         tags = []
-        for row in tags_result:
-            if row[0]:  # MemberTag
-                tags.append(TagInfo(id=row[0].id, name=row[0].name, type="member"))
-            if row[1]:  # InteractionTag
-                tags.append(TagInfo(id=row[1].id, name=row[1].name, type="interaction"))
+
+        # 查詢會員標籤
+        member_tags_result = await db.execute(
+            select(MemberTag)
+            .join(MemberTagRelation, MemberTag.id == MemberTagRelation.tag_id)
+            .where(
+                and_(
+                    MemberTagRelation.member_id == member.id,
+                    MemberTagRelation.tag_type == TagType.MEMBER
+                )
+            )
+        )
+        for tag in member_tags_result.scalars():
+            tags.append(TagInfo(id=tag.id, name=tag.name, type="member"))
+
+        # 查詢互動標籤
+        interaction_tags_result = await db.execute(
+            select(InteractionTag)
+            .join(MemberTagRelation, InteractionTag.id == MemberTagRelation.tag_id)
+            .where(
+                and_(
+                    MemberTagRelation.member_id == member.id,
+                    MemberTagRelation.tag_type == TagType.INTERACTION
+                )
+            )
+        )
+        for tag in interaction_tags_result.scalars():
+            tags.append(TagInfo(id=tag.id, name=tag.name, type="interaction"))
 
         member_dict = MemberListItem.model_validate(member).model_dump()
         member_dict["tags"] = tags
@@ -125,11 +133,39 @@ async def get_members(
     return SuccessResponse(data=page_response.model_dump())
 
 
+@router.get("/count", response_model=SuccessResponse)
+async def get_member_count(
+    target_audience: str = "all",
+    tag_ids: str = None,
+    db: AsyncSession = Depends(get_db),
+    # current_user: User = Depends(get_current_user),  # 暫時移除認證，開發階段使用
+):
+    """獲取符合條件的會員數量"""
+    query = select(func.count(Member.id))
+
+    # 如果是篩選目標對象且有標籤條件
+    if target_audience == "filtered" and tag_ids:
+        tag_id_list = [int(tid) for tid in tag_ids.split(",")]
+
+        # 加入標籤關聯表並篩選
+        query = (
+            select(func.count(func.distinct(Member.id)))
+            .select_from(Member)
+            .join(MemberTagRelation, Member.id == MemberTagRelation.member_id)
+            .where(MemberTagRelation.tag_id.in_(tag_id_list))
+        )
+
+    result = await db.execute(query)
+    count = result.scalar()
+
+    return SuccessResponse(data={"count": count or 0})
+
+
 @router.get("/{member_id}", response_model=SuccessResponse)
 async def get_member(
     member_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    # current_user: User = Depends(get_current_user),  # 暫時移除認證，開發階段使用
 ):
     """獲取會員詳情"""
     result = await db.execute(select(Member).where(Member.id == member_id))
@@ -138,36 +174,59 @@ async def get_member(
     if not member:
         raise HTTPException(status_code=404, detail="會員不存在")
 
-    # 獲取標籤
-    tags_result = await db.execute(
-        select(MemberTag, InteractionTag)
-        .join(
-            MemberTagRelation,
-            or_(
-                and_(
-                    MemberTagRelation.tag_id == MemberTag.id,
-                    MemberTagRelation.tag_type == TagType.MEMBER,
-                ),
-                and_(
-                    MemberTagRelation.tag_id == InteractionTag.id,
-                    MemberTagRelation.tag_type == TagType.INTERACTION,
-                ),
-            ),
-        )
-        .where(MemberTagRelation.member_id == member.id)
-    )
-
+    # 獲取標籤 - 分兩次查詢避免 JOIN 歧義
     tags = []
-    for row in tags_result:
-        if row[0]:
-            tags.append(TagInfo(id=row[0].id, name=row[0].name, type="member"))
-        if row[1]:
-            tags.append(TagInfo(id=row[1].id, name=row[1].name, type="interaction"))
 
-    member_dict = MemberDetail.model_validate(member).model_dump()
-    member_dict["tags"] = tags
+    # 查詢會員標籤
+    member_tags_result = await db.execute(
+        select(MemberTag)
+        .join(MemberTagRelation, MemberTag.id == MemberTagRelation.tag_id)
+        .where(
+            and_(
+                MemberTagRelation.member_id == member.id,
+                MemberTagRelation.tag_type == TagType.MEMBER
+            )
+        )
+    )
+    for tag in member_tags_result.scalars():
+        tags.append(TagInfo(id=tag.id, name=tag.name, type="member"))
 
-    return SuccessResponse(data=member_dict)
+    # 查詢互動標籤
+    interaction_tags_result = await db.execute(
+        select(InteractionTag)
+        .join(MemberTagRelation, InteractionTag.id == MemberTagRelation.tag_id)
+        .where(
+            and_(
+                MemberTagRelation.member_id == member.id,
+                MemberTagRelation.tag_type == TagType.INTERACTION
+            )
+        )
+    )
+    for tag in interaction_tags_result.scalars():
+        tags.append(TagInfo(id=tag.id, name=tag.name, type="interaction"))
+
+    # 處理 None 值的欄位
+    member_data = {
+        "id": member.id,
+        "line_uid": member.line_uid,
+        "line_display_name": member.line_display_name,
+        "line_picture_url": member.line_picture_url,
+        "first_name": member.first_name,
+        "last_name": member.last_name,
+        "email": member.email,
+        "phone": member.phone,
+        "gender": member.gender,
+        "birthday": member.birthday,
+        "id_number": member.id_number,
+        "source": member.source,
+        "accept_marketing": member.accept_marketing if member.accept_marketing is not None else True,
+        "notes": member.notes,
+        "created_at": member.created_at,
+        "last_interaction_at": member.last_interaction_at,
+        "tags": tags,
+    }
+
+    return SuccessResponse(data=member_data)
 
 
 @router.post("", response_model=SuccessResponse)

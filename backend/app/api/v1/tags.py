@@ -1,5 +1,5 @@
 """
-d� API
+標籤管理 API
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,9 +34,9 @@ async def get_tags(
     search: Optional[str] = None,
     page_params: PageParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    # current_user: User = Depends(get_current_user),  # 暫時移除認證，開發階段使用
 ):
-    """r�dh"""
+    """獲取標籤列表"""
     if type == TagType.MEMBER or type is None:
         query = select(MemberTag)
         if search:
@@ -100,7 +100,7 @@ async def create_tag(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """u�d"""
+    """新增標籤"""
     if tag_data.type == TagType.MEMBER:
         tag = MemberTag(**tag_data.model_dump())
     else:
@@ -121,7 +121,7 @@ async def update_tag(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """��d"""
+    """更新標籤"""
     if tag_type == TagType.MEMBER:
         result = await db.execute(select(MemberTag).where(MemberTag.id == tag_id))
     else:
@@ -129,13 +129,13 @@ async def update_tag(
 
     tag = result.scalar_one_or_none()
     if not tag:
-        raise HTTPException(status_code=404, detail="dX(")
+        raise HTTPException(status_code=404, detail="標籤不存在")
 
     for field, value in tag_data.model_dump(exclude_unset=True).items():
         setattr(tag, field, value)
 
     await db.commit()
-    return SuccessResponse(message="d���")
+    return SuccessResponse(message="標籤更新成功")
 
 
 @router.delete("/{tag_id}", response_model=SuccessResponse)
@@ -145,7 +145,7 @@ async def delete_tag(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """*dd"""
+    """刪除標籤"""
     if tag_type == TagType.MEMBER:
         result = await db.execute(select(MemberTag).where(MemberTag.id == tag_id))
     else:
@@ -153,12 +153,12 @@ async def delete_tag(
 
     tag = result.scalar_one_or_none()
     if not tag:
-        raise HTTPException(status_code=404, detail="dX(")
+        raise HTTPException(status_code=404, detail="標籤不存在")
 
     await db.delete(tag)
     await db.commit()
 
-    return SuccessResponse(message="d*d�")
+    return SuccessResponse(message="標籤刪除成功")
 
 
 @router.get("/statistics", response_model=SuccessResponse)
@@ -166,7 +166,7 @@ async def get_tag_statistics(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """r�dqx�"""
+    """獲取標籤統計資訊"""
     member_tags_count = await db.execute(select(func.count()).select_from(MemberTag))
     interaction_tags_count = await db.execute(select(func.count()).select_from(InteractionTag))
 

@@ -4,7 +4,23 @@
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 from datetime import datetime
+from decimal import Decimal
 from app.models.campaign import CampaignStatus, RecipientStatus
+
+
+class CarouselItemCreate(BaseModel):
+    """輪播項目創建"""
+
+    image_path: str
+    title: Optional[str] = None
+    description: Optional[str] = None
+    price: Optional[Decimal] = None
+    action_url: Optional[str] = None
+    interaction_tag: Optional[str] = None
+    action_button_enabled: bool = False
+    action_button_text: Optional[str] = None
+    action_button_interaction_type: Optional[str] = None
+    sort_order: int = 0
 
 
 class CampaignBase(BaseModel):
@@ -39,6 +55,9 @@ class CampaignCreate(BaseModel):
     target_tags: Optional[List[str]] = None
     schedule_type: str
     scheduled_at: Optional[datetime] = None
+
+    # 輪播相關
+    carousel_items: Optional[List[CarouselItemCreate]] = None
 
 
 class CampaignUpdate(CampaignBase):

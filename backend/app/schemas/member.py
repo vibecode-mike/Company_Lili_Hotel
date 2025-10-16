@@ -69,7 +69,7 @@ class MemberDetail(MemberListItem):
     birthday: Optional[date] = None
     id_number: Optional[str] = None
     source: MemberSource
-    accept_marketing: bool
+    accept_marketing: bool = True
     notes: Optional[str] = None
 
 

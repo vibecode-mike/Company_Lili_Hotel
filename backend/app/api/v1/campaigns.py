@@ -32,6 +32,22 @@ async def create_campaign(
         db.add(template)
         await db.flush()  # 獲取 template.id
 
+        # 1.1 處理輪播項目
+        if campaign_data.carousel_items:
+            from app.models.template import TemplateCarouselItem
+
+            for item in campaign_data.carousel_items:
+                carousel_item = TemplateCarouselItem(
+                    template_id=template.id,
+                    image_url=item.image_path,
+                    title=item.title,
+                    description=item.description,
+                    price=item.price,
+                    action_url=item.action_url,
+                    sort_order=item.sort_order,
+                )
+                db.add(carousel_item)
+
         # 2. 構建 trigger_condition JSON
         trigger_condition = None
         if campaign_data.interaction_type:
