@@ -9,6 +9,7 @@ from app.config import settings
 from app.database import init_db, close_db
 from app.api.v1 import api_router
 from app.core.exceptions import AppException
+from app.services.scheduler import scheduler
 from datetime import datetime
 import logging
 
@@ -42,19 +43,47 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     """應用啟動時執行"""
-    logger.info("Starting application...")
+    logger.info("🚀 Starting application...")
+
     # 初始化資料庫（可選，如果需要自動創建表）
     # await init_db()
-    logger.info("Application started successfully")
+
+    # 啟動排程器
+    try:
+        scheduler.start()
+        logger.info("✅ Scheduler started successfully")
+
+        # 顯示已排程的任務
+        jobs = scheduler.get_scheduled_jobs()
+        if jobs:
+            logger.info(f"📅 Found {len(jobs)} scheduled jobs:")
+            for job in jobs:
+                logger.info(f"  - {job['name']}: {job['next_run_time']}")
+        else:
+            logger.info("📅 No scheduled jobs found")
+
+    except Exception as e:
+        logger.error(f"❌ Failed to start scheduler: {e}")
+
+    logger.info("✅ Application started successfully")
 
 
 # 應用關閉事件
 @app.on_event("shutdown")
 async def shutdown_event():
     """應用關閉時執行"""
-    logger.info("Shutting down application...")
+    logger.info("⏹️  Shutting down application...")
+
+    # 關閉排程器
+    try:
+        scheduler.shutdown()
+        logger.info("✅ Scheduler shutdown successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to shutdown scheduler: {e}")
+
+    # 關閉資料庫連接
     await close_db()
-    logger.info("Application shut down successfully")
+    logger.info("✅ Application shut down successfully")
 
 
 # 全域異常處理

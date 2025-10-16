@@ -8,10 +8,17 @@ from app.database import get_db
 from app.models.campaign import Campaign, CampaignStatus
 from app.models.template import MessageTemplate, TemplateType
 from app.schemas.campaign import CampaignCreate
+from app.services.scheduler import scheduler
+from app.services.linebot_service import LineBotService
 from typing import List
 from datetime import datetime
+import logging
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+# 初始化服務
+linebot_service = LineBotService()
 
 
 @router.post("", response_model=dict)
@@ -105,11 +112,48 @@ async def create_campaign(
         await db.commit()
         await db.refresh(campaign)
 
+        # 6. 根據 schedule_type 處理發送
+        message = "活動創建成功"
+
+        if campaign_data.schedule_type == "immediate":
+            # 立即發送
+            logger.info(f"🚀 Sending campaign {campaign.id} immediately")
+            try:
+                result = await linebot_service.send_campaign(campaign.id)
+                if result.get("ok"):
+                    message = f"活動已發送給 {result.get('sent', 0)} 位用戶"
+                else:
+                    message = f"活動創建成功，但發送失敗: {result.get('error')}"
+            except Exception as e:
+                logger.error(f"❌ Failed to send campaign immediately: {e}")
+                message = f"活動創建成功，但發送失敗: {str(e)}"
+
+        elif campaign_data.schedule_type == "scheduled" and campaign_data.scheduled_at:
+            # 排程發送
+            if campaign_data.scheduled_at > now:
+                logger.info(f"⏰ Scheduling campaign {campaign.id} for {campaign_data.scheduled_at}")
+                try:
+                    await scheduler.schedule_campaign(campaign.id, campaign_data.scheduled_at)
+                    message = f"活動已排程於 {campaign_data.scheduled_at.strftime('%Y-%m-%d %H:%M')} 發送"
+                except Exception as e:
+                    logger.error(f"❌ Failed to schedule campaign: {e}")
+                    message = f"活動創建成功，但排程失敗: {str(e)}"
+            else:
+                # 排程時間已過，立即發送
+                logger.info(f"🚀 Scheduled time passed, sending campaign {campaign.id} immediately")
+                try:
+                    result = await linebot_service.send_campaign(campaign.id)
+                    if result.get("ok"):
+                        message = f"活動已發送給 {result.get('sent', 0)} 位用戶"
+                except Exception as e:
+                    logger.error(f"❌ Failed to send campaign: {e}")
+                    message = f"活動創建成功，但發送失敗: {str(e)}"
+
         return {
             "id": campaign.id,
             "title": campaign.title,
             "status": campaign.status.value,
-            "message": "活動創建成功"
+            "message": message
         }
 
     except Exception as e:

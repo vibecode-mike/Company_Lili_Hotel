@@ -24,10 +24,17 @@ from app.schemas.survey import (
     SurveyResponseAnswerResponse,
     SurveyStatistics,
 )
+from app.services.scheduler import scheduler
+from app.services.linebot_service import LineBotService
 from typing import List, Optional
 from datetime import datetime
+import logging
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+# 初始化服務
+linebot_service = LineBotService()
 
 
 # ============ Survey Template Routes ============
@@ -343,16 +350,54 @@ async def publish_survey(
                 detail="只能發布草稿狀態的問卷",
             )
 
-        # 更新狀態
+        # 更新狀態為已發布
         survey.status = SurveyStatus.PUBLISHED
         await db.commit()
         await db.refresh(survey)
+
+        # 根據 schedule_type 處理發送
+        now = datetime.now()
+        message = "問卷發布成功"
+
+        if survey.schedule_type.value == "immediate":
+            # 立即發送
+            logger.info(f"🚀 Sending survey {survey.id} immediately")
+            try:
+                result = await linebot_service.send_survey(survey.id)
+                if result.get("ok"):
+                    message = f"問卷已發送給 {result.get('sent', 0)} 位用戶"
+                else:
+                    message = f"問卷發布成功，但發送失敗: {result.get('error')}"
+            except Exception as e:
+                logger.error(f"❌ Failed to send survey immediately: {e}")
+                message = f"問卷發布成功，但發送失敗: {str(e)}"
+
+        elif survey.schedule_type.value == "scheduled" and survey.scheduled_at:
+            # 排程發送
+            if survey.scheduled_at > now:
+                logger.info(f"⏰ Scheduling survey {survey.id} for {survey.scheduled_at}")
+                try:
+                    await scheduler.schedule_survey(survey.id, survey.scheduled_at)
+                    message = f"問卷已排程於 {survey.scheduled_at.strftime('%Y-%m-%d %H:%M')} 發送"
+                except Exception as e:
+                    logger.error(f"❌ Failed to schedule survey: {e}")
+                    message = f"問卷發布成功，但排程失敗: {str(e)}"
+            else:
+                # 排程時間已過，立即發送
+                logger.info(f"🚀 Scheduled time passed, sending survey {survey.id} immediately")
+                try:
+                    result = await linebot_service.send_survey(survey.id)
+                    if result.get("ok"):
+                        message = f"問卷已發送給 {result.get('sent', 0)} 位用戶"
+                except Exception as e:
+                    logger.error(f"❌ Failed to send survey: {e}")
+                    message = f"問卷發布成功，但發送失敗: {str(e)}"
 
         return {
             "id": survey.id,
             "name": survey.name,
             "status": survey.status.value,
-            "message": "問卷發布成功",
+            "message": message,
         }
 
     except HTTPException:
