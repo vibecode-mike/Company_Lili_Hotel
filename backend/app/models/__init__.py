@@ -11,6 +11,7 @@ from app.models.auto_response import AutoResponse, AutoResponseKeyword
 from app.models.message import Message
 from app.models.tag_trigger_log import TagTriggerLog
 from app.models.survey import Survey, SurveyTemplate, SurveyQuestion, SurveyResponse
+from app.models.tracking import ComponentInteractionLog, InteractionType
 
 __all__ = [
     "Base",
@@ -31,4 +32,6 @@ __all__ = [
     "SurveyTemplate",
     "SurveyQuestion",
     "SurveyResponse",
+    "ComponentInteractionLog",
+    "InteractionType",
 ]

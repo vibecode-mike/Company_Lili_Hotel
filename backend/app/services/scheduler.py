@@ -197,13 +197,53 @@ class CampaignScheduler:
         try:
             logger.info(f"🚀 Executing scheduled campaign {campaign_id}")
 
-            # 動態導入避免循環依賴
             from app.services.linebot_service import LineBotService
 
             linebot_service = LineBotService()
-            await linebot_service.send_campaign(campaign_id)
+            result = await linebot_service.send_campaign(campaign_id)
 
-            logger.info(f"✅ Campaign {campaign_id} sent successfully")
+            sent_count = 0
+            failed_count = 0
+            ok = False
+            if isinstance(result, dict):
+                sent_count = result.get("sent", 0) or 0
+                failed_count = result.get("failed", 0) or 0
+                ok = bool(result.get("ok")) and sent_count > 0
+
+            from app.database import AsyncSessionLocal
+            from app.models.campaign import Campaign, CampaignStatus
+            from sqlalchemy import select
+
+            async with AsyncSessionLocal() as db:
+                stmt = select(Campaign).where(Campaign.id == campaign_id)
+                campaign_result = await db.execute(stmt)
+                campaign = campaign_result.scalar_one_or_none()
+
+                if not campaign:
+                    logger.error(f"❌ Campaign {campaign_id} not found when updating status")
+                    return
+
+                campaign.sent_count = sent_count
+
+                if ok:
+                    campaign.status = CampaignStatus.SENT
+                    campaign.sent_at = datetime.now()
+                    if failed_count:
+                        logger.warning(
+                            "⚠️ Campaign %s sent to %s users with %s failures",
+                            campaign_id,
+                            sent_count,
+                            failed_count,
+                        )
+                    else:
+                        logger.info(
+                            "✅ Campaign %s sent to %s users", campaign_id, sent_count
+                        )
+                else:
+                    campaign.status = CampaignStatus.FAILED
+                    logger.warning("⚠️ Campaign %s failed to send during schedule", campaign_id)
+
+                await db.commit()
 
         except Exception as e:
             logger.error(f"❌ Failed to send campaign {campaign_id}: {e}")

@@ -1,0 +1,49 @@
+{
+  "name": "入住資料確認",
+  "description": "請協助填寫入住基本資料，僅作為入住及聯絡使用。",
+  "category": "profile",
+  "target_audience": "ALL",
+  "questions": [
+    {
+      "question_type": "NAME",
+      "question_text": "姓名",
+      "is_required": true,
+      "order": 1
+    },
+    {
+      "question_type": "PHONE",
+      "question_text": "手機號碼",
+      "is_required": true,
+      "order": 2
+    },
+    {
+      "question_type": "EMAIL",
+      "question_text": "Email",
+      "is_required": false,
+      "order": 3
+    },
+    {
+      "question_type": "GENDER",
+      "question_text": "性別",
+      "is_required": false,
+      "order": 4,
+      "options": [
+        {"label": "男"},
+        {"label": "女"},
+        {"label": "不回答"}
+      ]
+    },
+    {
+      "question_type": "BIRTHDAY",
+      "question_text": "生日",
+      "is_required": false,
+      "order": 5
+    },
+    {
+      "question_type": "ADDRESS",
+      "question_text": "聯絡地址",
+      "is_required": false,
+      "order": 6
+    }
+  ]
+}

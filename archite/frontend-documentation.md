@@ -1,717 +1,483 @@
-# 力麗飯店 LineOA CRM 前端架構文檔 v1.1
+# 力麗飯店 LineOA CRM 前端架構文檔 v2.1
 
 ## 1. 技術棧
 
 ### 1.1 核心技術
-- **框架**: React 19.1.1
-- **語言**: TypeScript 5.9.3
-- **構建工具**: Vite 7.1.7
-- **包管理器**: npm (可選用 pnpm)
+- **框架**: React 18.3.1
+- **語言**: TypeScript (通過 Vite 內置支持)
+- **構建工具**: Vite 6.4.1
+- **包管理器**: npm
 
 ### 1.2 UI 與樣式
-- **UI 組件庫**: Ant Design 5.27.4
-- **CSS 方案**: CSS Modules (未使用 Tailwind CSS)
-- **圖標**: Ant Design Icons 6.1.0 + Custom SVG
+- **UI 組件庫**: shadcn/ui (基於 Radix UI)
+- **基礎組件**: Radix UI Primitives (48 個組件)
+- **CSS 方案**: Tailwind CSS
+- **圖標**: lucide-react 0.487.0
+- **Figma 集成**: Figma 設計稿直接轉換為 React 組件
 
 ### 1.3 狀態管理
-- **全局狀態**: Zustand 5.0.8
-- **服務端狀態**: TanStack Query (React Query) 5.90.2
-- **表單狀態**: React Hook Form 7.64.0
+- **組件狀態**: React Hooks (useState, useEffect, useRef)
+- **表單狀態**: react-hook-form 7.55.0
+- **全局狀態**: 未實現 (暫無需求)
+- **服務端狀態**: 未實現 (暫無後端集成)
 
 ### 1.4 路由與導航
-- **路由**: React Router DOM 7.9.3
-- **權限控制**: 自定義路由守衛
+- **路由**: 未實現 (單頁應用，使用狀態切換視圖)
+- **視圖管理**: 組件內狀態控制 (list/creation 視圖切換)
 
 ### 1.5 數據可視化
-- **圖表庫**: 待實現 (規劃使用 Apache ECharts 或 Recharts)
+- **圖表庫**: recharts 2.15.2
 
 ### 1.6 HTTP 客戶端
-- **請求庫**: Axios 1.12.2
-- **攔截器**: 自定義請求/響應攔截
-- **日期處理**: dayjs 1.11.18
+- **請求庫**: 未實現 (暫無後端 API 集成)
+- **日期處理**: react-day-picker 8.10.1
 
-### 1.7 開發工具
-- **代碼規範**: ESLint 9.36.0 + TypeScript ESLint 8.45.0
-- **Git Hooks**: 未配置 (可選添加 Husky + lint-staged)
-- **測試框架**: 未配置 (可選添加 Vitest + React Testing Library)
+### 1.7 UI 增強工具
+- **Toast 通知**: sonner 2.0.3
+- **主題管理**: next-themes 0.4.6
+- **樣式工具**: class-variance-authority 0.7.1, clsx, tailwind-merge
+- **命令面板**: cmdk 1.1.1
+- **輪播圖**: embla-carousel-react 8.6.0
+- **抽屜組件**: vaul 1.1.2
+- **可調整面板**: react-resizable-panels 2.1.7
+- **OTP 輸入**: input-otp 1.4.2
+
+### 1.8 開發工具
+- **構建插件**: @vitejs/plugin-react-swc 3.10.2
+- **類型支持**: @types/node 20.10.0
+- **代碼規範**: 未配置 ESLint/Prettier
+- **Git Hooks**: 未配置
+- **測試框架**: 未配置
 
 ---
 
-## 2. 項目目錄結構
+## 2. 項目目錄結構（實際實現 v0.1）
+
+**當前狀態**: 基於 Figma 設計稿的原型實現，單頁應用架構
 
 ```
 frontend/
-├── public/                          # 靜態資源
-│   ├── favicon.ico
-│   ├── logo.svg
-│   └── robots.txt
-│
 ├── src/
-│   ├── assets/                      # 資源文件
-│   │   ├── images/
-│   │   ├── icons/
-│   │   └── styles/
-│   │       ├── global.css           # 全局樣式
-│   │       ├── variables.css        # CSS 變量
-│   │       └── reset.css            # 樣式重置
+│   ├── assets/                      # 靜態資源
+│   │   └── *.png                    # Figma 導出的圖片資源
 │   │
-│   ├── components/                  # 通用組件
-│   │   ├── Layout/                  # 布局組件
-│   │   │   ├── Sidebar/
-│   │   │   │   ├── index.tsx
-│   │   │   │   ├── index.module.css
-│   │   │   │   └── types.ts
-│   │   │   ├── Header/
-│   │   │   ├── Footer/
-│   │   │   └── MainLayout/
-│   │   │       ├── index.tsx
-│   │   │       └── index.module.css
+│   ├── components/                  # 組件目錄
+│   │   ├── figma/                   # Figma 特定組件
+│   │   │   └── ImageWithFallback.tsx  # 圖片回退組件
 │   │   │
-│   │   ├── Common/                  # 通用業務組件
-│   │   │   ├── PageHeader/          # 頁面頭部
-│   │   │   ├── SearchBar/           # 搜索欄
-│   │   │   ├── FilterPanel/         # 篩選面板
-│   │   │   ├── DataTable/           # 數據表格
-│   │   │   ├── StatusBadge/         # 狀態徽章
-│   │   │   ├── TagList/             # 標籤列表
-│   │   │   ├── EmptyState/          # 空狀態
-│   │   │   └── LoadingSpinner/      # 加載動畫
+│   │   ├── ui/                      # shadcn/ui 組件庫（48個組件）
+│   │   │   ├── accordion.tsx
+│   │   │   ├── alert-dialog.tsx
+│   │   │   ├── alert.tsx
+│   │   │   ├── aspect-ratio.tsx
+│   │   │   ├── avatar.tsx
+│   │   │   ├── badge.tsx
+│   │   │   ├── breadcrumb.tsx
+│   │   │   ├── button.tsx
+│   │   │   ├── calendar.tsx
+│   │   │   ├── card.tsx
+│   │   │   ├── carousel.tsx
+│   │   │   ├── chart.tsx
+│   │   │   ├── checkbox.tsx
+│   │   │   ├── collapsible.tsx
+│   │   │   ├── command.tsx
+│   │   │   ├── context-menu.tsx
+│   │   │   ├── dialog.tsx
+│   │   │   ├── drawer.tsx
+│   │   │   ├── dropdown-menu.tsx
+│   │   │   ├── form.tsx
+│   │   │   ├── hover-card.tsx
+│   │   │   ├── input-otp.tsx
+│   │   │   ├── input.tsx
+│   │   │   ├── label.tsx
+│   │   │   ├── menubar.tsx
+│   │   │   ├── navigation-menu.tsx
+│   │   │   ├── pagination.tsx
+│   │   │   ├── popover.tsx
+│   │   │   ├── progress.tsx
+│   │   │   ├── radio-group.tsx
+│   │   │   ├── resizable.tsx
+│   │   │   ├── scroll-area.tsx
+│   │   │   ├── select.tsx
+│   │   │   ├── separator.tsx
+│   │   │   ├── sheet.tsx
+│   │   │   ├── sidebar.tsx
+│   │   │   ├── skeleton.tsx
+│   │   │   ├── slider.tsx
+│   │   │   ├── sonner.tsx
+│   │   │   ├── switch.tsx
+│   │   │   ├── table.tsx
+│   │   │   ├── tabs.tsx
+│   │   │   ├── textarea.tsx
+│   │   │   ├── toggle-group.tsx
+│   │   │   ├── toggle.tsx
+│   │   │   ├── tooltip.tsx
+│   │   │   ├── use-mobile.ts        # 移動端檢測 Hook
+│   │   │   └── utils.ts             # 工具函數 (cn)
 │   │   │
-│   │   ├── Charts/                  # 圖表組件
-│   │   │   ├── LineChart/
-│   │   │   ├── PieChart/
-│   │   │   ├── BarChart/
-│   │   │   └── TrendCard/
-│   │   │
-│   │   └── Form/                    # 表單組件
-│   │       ├── ImageUpload/         # 圖片上傳
-│   │       ├── DateRangePicker/     # 日期範圍選擇
-│   │       ├── TagSelect/           # 標籤選擇器
-│   │       └── RichTextEditor/      # 富文本編輯器
+│   │   ├── MessageList.tsx          # 消息列表頁面（主頁）
+│   │   ├── MessageCreation.tsx      # 創建消息頁面（活動推播）
+│   │   ├── FilterModal.tsx          # 標籤篩選模態框
+│   │   └── InteractiveMessageTable.tsx  # 交互式消息表格組件
 │   │
-│   ├── features/                    # 功能模塊（按業務劃分）
-│   │   ├── auth/                    # 認證模塊
-│   │   │   ├── components/
-│   │   │   │   ├── LoginForm/
-│   │   │   │   └── ProtectedRoute/
-│   │   │   ├── hooks/
-│   │   │   │   └── useAuth.ts
-│   │   │   ├── services/
-│   │   │   │   └── authService.ts
-│   │   │   ├── stores/
-│   │   │   │   └── authStore.ts
-│   │   │   └── types.ts
-│   │   │
-│   │   ├── members/                 # 會員管理
-│   │   │   ├── components/
-│   │   │   │   ├── MemberList/
-│   │   │   │   ├── MemberDetail/
-│   │   │   │   ├── MemberForm/
-│   │   │   │   ├── TagManager/
-│   │   │   │   └── ConsumptionHistory/
-│   │   │   ├── hooks/
-│   │   │   │   ├── useMembers.ts
-│   │   │   │   ├── useMemberDetail.ts
-│   │   │   │   └── useMemberTags.ts
-│   │   │   ├── services/
-│   │   │   │   └── memberService.ts
-│   │   │   ├── pages/
-│   │   │   │   ├── MemberListPage.tsx
-│   │   │   │   └── MemberDetailPage.tsx
-│   │   │   └── types.ts
-│   │   │
-│   │   ├── campaigns/               # 活動推播（群發訊息）
-│   │   │   ├── components/
-│   │   │   │   ├── CampaignList/
-│   │   │   │   ├── CampaignForm/
-│   │   │   │   ├── CampaignPreview/
-│   │   │   │   ├── RecipientList/
-│   │   │   │   └── CampaignStats/
-│   │   │   ├── hooks/
-│   │   │   │   ├── useCampaigns.ts
-│   │   │   │   └── useCampaignDetail.ts
-│   │   │   ├── services/
-│   │   │   │   └── campaignService.ts
-│   │   │   ├── pages/
-│   │   │   │   ├── CampaignListPage.tsx
-│   │   │   │   ├── CampaignCreatePage.tsx    # 建立群發訊息頁
-│   │   │   │   └── CampaignCreatePage.css    # 頁面樣式
-│   │   │   └── types.ts
-│   │   │
-│   │   ├── surveys/                 # 問卷模板
-│   │   │   ├── components/
-│   │   │   │   ├── SurveyList/
-│   │   │   │   ├── QuestionEditor/          # 題目編輯器
-│   │   │   │   │   └── index.tsx
-│   │   │   │   └── SurveyPreview/
-│   │   │   ├── hooks/
-│   │   │   │   └── useSurveys.ts
-│   │   │   ├── services/
-│   │   │   │   └── surveyService.ts
-│   │   │   ├── pages/
-│   │   │   │   ├── SurveyListPage.tsx
-│   │   │   │   ├── SurveyCreatePage.tsx      # 建立問卷頁
-│   │   │   │   └── SurveyCreatePage.css      # 頁面樣式
-│   │   │   └── types.ts
-│   │   │
-│   │   ├── templates/               # 消息模板
-│   │   │   ├── components/
-│   │   │   │   ├── TemplateList/
-│   │   │   │   ├── TemplateEditor/
-│   │   │   │   ├── TemplatePreview/
-│   │   │   │   └── CarouselBuilder/
-│   │   │   ├── hooks/
-│   │   │   │   └── useTemplates.ts
-│   │   │   ├── services/
-│   │   │   │   └── templateService.ts
-│   │   │   ├── pages/
-│   │   │   │   └── TemplateEditorPage.tsx
-│   │   │   └── types.ts
-│   │   │
-│   │   ├── tags/                    # 標籤管理
-│   │   │   ├── components/
-│   │   │   │   ├── TagGrid/
-│   │   │   │   ├── TagForm/
-│   │   │   │   └── TagStatistics/
-│   │   │   ├── hooks/
-│   │   │   │   └── useTags.ts
-│   │   │   ├── services/
-│   │   │   │   └── tagService.ts
-│   │   │   ├── pages/
-│   │   │   │   └── TagManagementPage.tsx
-│   │   │   └── types.ts
-│   │   │
-│   │   ├── autoResponses/           # 自動回應
-│   │   │   ├── components/
-│   │   │   │   ├── ResponseList/
-│   │   │   │   ├── ResponseForm/
-│   │   │   │   └── KeywordManager/
-│   │   │   ├── hooks/
-│   │   │   │   └── useAutoResponses.ts
-│   │   │   ├── services/
-│   │   │   │   └── autoResponseService.ts
-│   │   │   ├── pages/
-│   │   │   │   └── AutoResponsePage.tsx
-│   │   │   └── types.ts
-│   │   │
-│   │   ├── messages/                # 消息記錄
-│   │   │   ├── components/
-│   │   │   │   ├── ChatWindow/
-│   │   │   │   ├── MessageList/
-│   │   │   │   └── MessageInput/
-│   │   │   ├── hooks/
-│   │   │   │   └── useMessages.ts
-│   │   │   ├── services/
-│   │   │   │   └── messageService.ts
-│   │   │   └── types.ts
-│   │   │
-│   │   └── analytics/               # 數據分析
-│   │       ├── components/
-│   │       │   ├── KPICards/
-│   │       │   ├── TrendChart/
-│   │       │   ├── PerformanceTable/
-│   │       │   └── ExportPanel/
-│   │       ├── hooks/
-│   │       │   └── useAnalytics.ts
-│   │       ├── services/
-│   │       │   └── analyticsService.ts
-│   │       ├── pages/
-│   │       │   └── AnalyticsDashboard.tsx
-│   │       └── types.ts
+│   ├── imports/                     # Figma 自動生成的組件和 SVG
+│   │   ├── *.tsx                    # Figma 組件（輪播、表格、容器等）
+│   │   └── *.ts                     # SVG 路徑數據
 │   │
-│   ├── hooks/                       # 全局 Hooks
-│   │   ├── useDebounce.ts
-│   │   ├── useLocalStorage.ts
-│   │   ├── usePagination.ts
-│   │   ├── useModal.ts
-│   │   └── usePermission.ts
+│   ├── guidelines/                  # 設計規範（Figma 導出）
 │   │
-│   ├── services/                    # API 服務層
-│   │   ├── api/
-│   │   │   ├── client.ts            # Axios 實例配置
-│   │   │   ├── interceptors.ts      # 請求/響應攔截器
-│   │   │   └── endpoints.ts         # API 端點定義
-│   │   └── utils/
-│   │       ├── request.ts           # 統一請求方法
-│   │       └── errorHandler.ts      # 錯誤處理
-│   │
-│   ├── stores/                      # 全局狀態管理
-│   │   ├── authStore.ts             # 認證狀態
-│   │   ├── userStore.ts             # 用戶信息
-│   │   ├── uiStore.ts               # UI 狀態（側邊欄、主題等）
-│   │   └── index.ts                 # Store 導出
-│   │
-│   ├── routes/                      # 路由配置
-│   │   ├── index.tsx                # 路由主文件
-│   │   ├── PrivateRoute.tsx         # 私有路由
-│   │   └── routes.config.ts         # 路由配置
-│   │
-│   ├── types/                       # 全局類型定義
-│   │   ├── api.ts                   # API 響應類型
-│   │   ├── models.ts                # 數據模型類型
-│   │   └── common.ts                # 通用類型
-│   │
-│   ├── utils/                       # 工具函數
-│   │   ├── format.ts                # 格式化函數
-│   │   ├── validation.ts            # 驗證函數
-│   │   ├── date.ts                  # 日期處理
-│   │   ├── storage.ts               # 本地存儲
-│   │   └── constants.ts             # 常量定義
-│   │
-│   ├── config/                      # 配置文件
-│   │   ├── theme.ts                 # 主題配置
-│   │   ├── env.ts                   # 環境變量
-│   │   └── menu.ts                  # 菜單配置
-│   │
-│   ├── App.tsx                      # 應用主組件
+│   ├── App.tsx                      # 應用主組件（視圖路由）
 │   ├── main.tsx                     # 應用入口
-│   └── vite-env.d.ts                # Vite 類型聲明
+│   ├── index.css                    # Tailwind CSS 入口
+│   └── Attributions.md              # 第三方資源歸屬
 │
-├── .env.development                 # 開發環境變量
-├── .env.production                  # 生產環境變量
-├── .eslintrc.json                   # ESLint 配置
-├── .prettierrc                      # Prettier 配置
-├── tsconfig.json                    # TypeScript 配置
+├── index.html                       # HTML 入口
 ├── vite.config.ts                   # Vite 配置
-├── tailwind.config.js               # Tailwind 配置
-├── package.json
-└── README.md
+└── package.json                     # 依賴配置
 ```
+
+### 2.1 目錄說明
+
+**實際實現的模組**:
+- ✅ **MessageList**: 消息推播列表展示
+- ✅ **MessageCreation**: 創建活動推播（圖卡按鈕型）
+- ✅ **FilterModal**: 標籤篩選功能
+- ✅ **InteractiveMessageTable**: 交互式消息表格組件
+- ✅ **shadcn/ui**: 完整的 UI 組件庫（48個組件）
+
+**未實現的模組** (文檔保留，待後續開發):
+- ⚠️ 路由系統 (React Router)
+- ⚠️ 狀態管理 (Zustand, React Query)
+- ⚠️ API 服務層
+- ⚠️ 認證模塊
+- ⚠️ 會員管理、問卷、標籤等業務模組
+- ⚠️ 數據分析模組
+
+### 2.2 與規劃架構的對比
+
+| 模塊類型 | 規劃狀態 | 實現狀態 | 說明 |
+|---------|---------|---------|------|
+| UI 組件庫 | Ant Design | ✅ shadcn/ui | 已實現，使用不同的組件庫 |
+| 樣式方案 | CSS Modules | ✅ Tailwind CSS | 已實現，使用不同的方案 |
+| 活動推播 | features/campaigns/ | ✅ MessageList + MessageCreation | 已實現核心功能 |
+| 路由系統 | React Router | ⚠️ 未實現 | 使用組件狀態切換視圖 |
+| 狀態管理 | Zustand + React Query | ⚠️ 未實現 | 使用組件內 Hooks |
+| API 服務層 | services/api/ | ⚠️ 未實現 | 暫無後端集成 |
+| 其他業務模組 | features/ | ⚠️ 未實現 | 待後續開發 |
 
 ---
 
-## 3. 核心模塊設計
+## 3. 核心模塊設計（v0.1 實際實現）
 
-### 3.1 認證模塊
+### 3.1 應用架構
 
-#### authStore.ts
+#### App.tsx - 應用主組件
 ```typescript
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { useState } from 'react';
+import MessageList from './components/MessageList';
+import MessageCreation from './components/MessageCreation';
 
-interface AuthState {
-  token: string | null;
-  user: User | null;
-  isAuthenticated: boolean;
-  login: (username: string, password: string) => Promise<void>;
-  logout: () => void;
-  refreshToken: () => Promise<void>;
-}
-
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
-      token: null,
-      user: null,
-      isAuthenticated: false,
-      login: async (username, password) => {
-        // 實現登入邏輯
-      },
-      logout: () => {
-        set({ token: null, user: null, isAuthenticated: false });
-      },
-      refreshToken: async () => {
-        // 實現刷新 Token 邏輯
-      },
-    }),
-    {
-      name: 'auth-storage',
-    }
-  )
-);
-```
-
-#### ProtectedRoute.tsx
-```typescript
-import { Navigate } from 'react-router-dom';
-import { useAuthStore } from '../stores/authStore';
-
-interface ProtectedRouteProps {
-  children: React.ReactNode;
-  requiredRole?: string[];
-}
-
-export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
-  children,
-  requiredRole
-}) => {
-  const { isAuthenticated, user } = useAuthStore();
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (requiredRole && !requiredRole.includes(user?.role)) {
-    return <Navigate to="/unauthorized" replace />;
-  }
-
-  return <>{children}</>;
-};
-```
-
----
-
-### 3.2 API 服務層
-
-#### client.ts
-```typescript
-import axios from 'axios';
-import { API_BASE_URL } from '@/config/env';
-
-export const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 30000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// 請求攔截器
-apiClient.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-// 響應攔截器
-apiClient.interceptors.response.use(
-  (response) => response.data,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Token 過期，跳轉登入頁
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  }
-);
-```
-
-#### memberService.ts
-```typescript
-import { apiClient } from '@/services/api/client';
-import type {
-  Member,
-  MemberListParams,
-  MemberListResponse,
-  CreateMemberDTO
-} from '../types';
-
-export const memberService = {
-  // 獲取會員列表
-  getMembers: async (params: MemberListParams): Promise<MemberListResponse> => {
-    return apiClient.get('/api/v1/members', { params });
-  },
-
-  // 獲取會員詳情
-  getMemberById: async (id: number): Promise<Member> => {
-    return apiClient.get(`/api/v1/members/${id}`);
-  },
-
-  // 創建會員
-  createMember: async (data: CreateMemberDTO): Promise<Member> => {
-    return apiClient.post('/api/v1/members', data);
-  },
-
-  // 更新會員
-  updateMember: async (id: number, data: Partial<Member>): Promise<Member> => {
-    return apiClient.put(`/api/v1/members/${id}`, data);
-  },
-
-  // 刪除會員
-  deleteMember: async (id: number): Promise<void> => {
-    return apiClient.delete(`/api/v1/members/${id}`);
-  },
-
-  // 添加標籤
-  addTags: async (id: number, tagIds: number[]): Promise<void> => {
-    return apiClient.post(`/api/v1/members/${id}/tags`, { tag_ids: tagIds });
-  },
-
-  // 移除標籤
-  removeTag: async (id: number, tagId: number): Promise<void> => {
-    return apiClient.delete(`/api/v1/members/${id}/tags/${tagId}`);
-  },
-
-  // 獲取消費記錄
-  getConsumptionRecords: async (id: number, params: any) => {
-    return apiClient.get(`/api/v1/members/${id}/consumption-records`, { params });
-  },
-};
-```
-
----
-
-### 3.3 React Query 集成
-
-#### useMembers.ts
-```typescript
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { memberService } from '../services/memberService';
-import type { MemberListParams } from '../types';
-
-export const useMembers = (params: MemberListParams) => {
-  return useQuery({
-    queryKey: ['members', params],
-    queryFn: () => memberService.getMembers(params),
-    keepPreviousData: true,
-  });
-};
-
-export const useMemberDetail = (id: number) => {
-  return useQuery({
-    queryKey: ['member', id],
-    queryFn: () => memberService.getMemberById(id),
-    enabled: !!id,
-  });
-};
-
-export const useCreateMember = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: memberService.createMember,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['members'] });
-    },
-  });
-};
-
-export const useUpdateMember = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) =>
-      memberService.updateMember(id, data),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['members'] });
-      queryClient.invalidateQueries({ queryKey: ['member', variables.id] });
-    },
-  });
-};
-
-export const useDeleteMember = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: memberService.deleteMember,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['members'] });
-    },
-  });
-};
-```
-
----
-
-### 3.4 路由配置
-
-#### routes.config.ts
-```typescript
-import { RouteObject } from 'react-router-dom';
-import { lazy } from 'react';
-import { MainLayout } from '@/components/Layout/MainLayout';
-import { ProtectedRoute } from '@/features/auth/components/ProtectedRoute';
-
-// 懶加載頁面
-const MemberListPage = lazy(() => import('@/features/members/pages/MemberListPage'));
-const MemberDetailPage = lazy(() => import('@/features/members/pages/MemberDetailPage'));
-const CampaignListPage = lazy(() => import('@/features/campaigns/pages/CampaignListPage'));
-const CreateCampaignPage = lazy(() => import('@/features/campaigns/pages/CreateCampaignPage'));
-const TagManagementPage = lazy(() => import('@/features/tags/pages/TagManagementPage'));
-const AutoResponsePage = lazy(() => import('@/features/autoResponses/pages/AutoResponsePage'));
-const AnalyticsDashboard = lazy(() => import('@/features/analytics/pages/AnalyticsDashboard'));
-const LoginPage = lazy(() => import('@/features/auth/pages/LoginPage'));
-
-export const routes: RouteObject[] = [
-  {
-    path: '/login',
-    element: <LoginPage />,
-  },
-  {
-    path: '/',
-    element: (
-      <ProtectedRoute>
-        <MainLayout />
-      </ProtectedRoute>
-    ),
-    children: [
-      {
-        index: true,
-        element: <Navigate to="/campaigns" replace />,
-      },
-      {
-        path: 'campaigns',
-        children: [
-          { index: true, element: <CampaignListPage /> },
-          { path: 'create', element: <CreateCampaignPage /> },
-          { path: ':id/edit', element: <CreateCampaignPage /> },
-        ],
-      },
-      {
-        path: 'members',
-        children: [
-          { index: true, element: <MemberListPage /> },
-          { path: ':id', element: <MemberDetailPage /> },
-        ],
-      },
-      {
-        path: 'tags',
-        element: <TagManagementPage />,
-      },
-      {
-        path: 'auto-responses',
-        element: <AutoResponsePage />,
-      },
-      {
-        path: 'analytics',
-        element: <AnalyticsDashboard />,
-      },
-    ],
-  },
-  {
-    path: '*',
-    element: <NotFoundPage />,
-  },
-];
-```
-
----
-
-### 3.5 組件設計示例
-
-#### MemberList 組件
-```typescript
-import React from 'react';
-import { Table, Tag, Space, Button, Input } from 'antd';
-import { SearchOutlined, EyeOutlined, MessageOutlined } from '@ant-design/icons';
-import { useMembers } from '../hooks/useMembers';
-import { usePagination } from '@/hooks/usePagination';
-import { useDebounce } from '@/hooks/useDebounce';
-import type { Member } from '../types';
-
-export const MemberList: React.FC = () => {
-  const [search, setSearch] = React.useState('');
-  const debouncedSearch = useDebounce(search, 300);
-  const { page, pageSize, handlePageChange } = usePagination();
-
-  const { data, isLoading } = useMembers({
-    search: debouncedSearch,
-    page,
-    page_size: pageSize,
-  });
-
-  const columns = [
-    {
-      title: '會員資訊',
-      key: 'member',
-      render: (record: Member) => (
-        <Space>
-          <Avatar src={record.line_picture_url}>
-            {record.last_name?.charAt(0)}
-          </Avatar>
-          <div>
-            <div>{`${record.last_name}${record.first_name}`}</div>
-            <div style={{ fontSize: 12, color: '#888' }}>
-              LINE: {record.line_display_name}
-            </div>
-          </div>
-        </Space>
-      ),
-    },
-    {
-      title: '電子信箱',
-      dataIndex: 'email',
-      key: 'email',
-    },
-    {
-      title: '手機號碼',
-      dataIndex: 'phone',
-      key: 'phone',
-    },
-    {
-      title: '標籤',
-      dataIndex: 'tags',
-      key: 'tags',
-      render: (tags: any[]) => (
-        <>
-          {tags.map((tag) => (
-            <Tag
-              key={tag.id}
-              color={tag.type === 'member' ? 'blue' : 'orange'}
-            >
-              {tag.name}
-            </Tag>
-          ))}
-        </>
-      ),
-    },
-    {
-      title: '建立時間',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      render: (date: string) => new Date(date).toLocaleDateString('zh-TW'),
-    },
-    {
-      title: '操作',
-      key: 'actions',
-      render: (record: Member) => (
-        <Space>
-          <Button
-            type="link"
-            icon={<EyeOutlined />}
-            onClick={() => navigate(`/members/${record.id}`)}
-          >
-            查看
-          </Button>
-          <Button
-            type="link"
-            icon={<MessageOutlined />}
-            onClick={() => handleChat(record.id)}
-          >
-            聊天
-          </Button>
-        </Space>
-      ),
-    },
-  ];
+export default function App() {
+  const [currentView, setCurrentView] = useState<'list' | 'creation'>('list');
 
   return (
-    <div>
-      <div style={{ marginBottom: 16 }}>
-        <Input
-          placeholder="搜尋姓名、Email、手機號碼"
-          prefix={<SearchOutlined />}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ width: 300 }}
-        />
-      </div>
-
-      <Table
-        columns={columns}
-        dataSource={data?.data?.items || []}
-        loading={isLoading}
-        pagination={{
-          current: page,
-          pageSize,
-          total: data?.data?.total || 0,
-          onChange: handlePageChange,
-          showSizeChanger: true,
-          showTotal: (total) => `共 ${total} 位會員`,
-        }}
-        rowKey="id"
-      />
-    </div>
+    <>
+      {currentView === 'list' ? (
+        <MessageList onCreateMessage={() => setCurrentView('creation')} />
+      ) : (
+        <MessageCreation onBack={() => setCurrentView('list')} />
+      )}
+    </>
   );
+}
+```
+
+**設計說明**:
+- **簡單的視圖路由**: 使用組件狀態切換視圖，無需 React Router
+- **單頁應用**: 兩個主視圖之間切換（列表 ↔ 創建）
+- **Toast 通知**: sonner 依賴已安裝，可在組件內部使用 toast 函數進行通知
+
+---
+
+### 3.2 MessageList 組件（消息列表）
+
+**文件**: `src/components/MessageList.tsx`
+
+**核心功能**:
+- 展示活動推播列表
+- 使用 Figma 導出的表格組件 (`Table8Columns3Actions`)
+- 側邊欄導航（Starbit Logo + 菜單）
+- 創建消息按鈕
+
+**主要狀態管理**:
+```typescript
+// 無複雜狀態管理，主要通過 props 傳遞回調函數
+interface MessageListProps {
+  onCreateMessage: () => void;
+}
+```
+
+**UI 組件使用**:
+- Figma 導出的自定義組件
+- SVG 圖標和品牌元素
+- Tailwind CSS 樣式
+
+---
+
+### 3.3 MessageCreation 組件（創建活動推播）
+
+**文件**: `src/components/MessageCreation.tsx` (1751 行)
+
+**核心功能**:
+- ✅ 多種模板類型選擇（文字按鈕型、圖卡按鈕型、圖片點擊型）
+- ✅ 輪播圖卡編輯（支援多張圖片輪播）
+- ✅ 圖片上傳功能
+- ✅ 動作按鈕配置（觸發類型、標籤、URL等）
+- ✅ 發送對象篩選（所有好友 / 標籤篩選）
+- ✅ 排程發送設定（立即發送 / 自訂時間）
+- ✅ 即時預覽（手機模擬器樣式）
+
+**主要狀態管理**:
+```typescript
+// 使用多個 useState 管理組件狀態
+const [sidebarOpen, setSidebarOpen] = useState(true);
+const [templateType, setTemplateType] = useState('select');
+const [title, setTitle] = useState('');
+const [notificationMsg, setNotificationMsg] = useState('');
+const [previewMsg, setPreviewMsg] = useState('');
+const [scheduleType, setScheduleType] = useState('immediate');
+const [targetType, setTargetType] = useState('all');
+const [scheduledDate, setScheduledDate] = useState<Date>();
+const [cards, setCards] = useState([...]); // 輪播卡片狀態
+```
+
+**UI 組件使用**:
+- shadcn/ui 組件: `Select`, `Input`, `Button`, `RadioGroup`, `Label`, `Checkbox`, `Tooltip`, `Dialog`, `Popover`, `Calendar`
+- Figma 導出的自定義組件
+- lucide-react 圖標: `Menu`, `X`, `Copy`, `Trash2`, `Plus`, `ChevronLeft`, `ChevronRight`
+
+**關鍵功能實現**:
+
+1. **輪播管理**:
+```typescript
+const [cards, setCards] = useState([
+  { id: 1, enableImage: false, enableTitle: false, /* ... */ }
+]);
+
+const handleAddCard = () => {
+  setCards([...cards, { id: Date.now(), /* ... */ }]);
+};
+
+const handleDeleteCard = (id: number) => {
+  setCards(cards.filter(card => card.id !== id));
+};
+```
+
+2. **圖片上傳處理**:
+```typescript
+const handleImageChange = (cardId: number, file: File) => {
+  // 圖片上傳邏輯
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    updateCardImage(cardId, e.target.result);
+  };
+  reader.readAsDataURL(file);
+};
+```
+
+3. **表單驗證與提交**:
+```typescript
+const handleSubmit = () => {
+  // 驗證必填欄位
+  if (!notificationMsg || !previewMsg) {
+    toast.error('請填寫所有必填欄位');
+    return;
+  }
+  
+  // 準備提交數據
+  const data = {
+    templateType,
+    title,
+    notificationMsg,
+    previewMsg,
+    scheduleType,
+    targetType,
+    cards,
+    // ...
+  };
+  
+  toast.success('消息已創建！');
 };
 ```
 
 ---
+
+### 3.4 InteractiveMessageTable 組件（交互式消息表格）
+
+**文件**: `src/components/InteractiveMessageTable.tsx`
+
+**核心功能**:
+- 動態交互式表格組件
+- 與 Figma 導出的 Table8Columns3Actions 組件集成
+- 支持數據展示和操作功能
+- 響應式設計和交互反饋
+
+**主要特性**:
+- 表格數據動態渲染
+- 列寬自適應
+- 操作按鈕集成（查看、編輯、刪除等）
+- 狀態管理和事件處理
+
+**使用場景**:
+- MessageList 中的消息列表展示
+- 數據表格的統一展示方案
+- 支持自定義列配置和操作
+
+---
+
+### 3.5 FilterModal 組件（標籤篩選）
+
+**文件**: `src/components/FilterModal.tsx`
+
+**核心功能**:
+- 標籤搜索與篩選
+- 標籤選擇（包含/排除）
+- 自定義標籤創建
+- 自定義滾動條實現
+
+**主要狀態管理**:
+```typescript
+interface Tag {
+  id: string;
+  name: string;
+}
+
+const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
+const [searchInput, setSearchInput] = useState('');
+const [isInclude, setIsInclude] = useState(true); // 包含或排除
+```
+
+**標籤操作**:
+```typescript
+// 添加標籤
+const handleAddTag = (tag: Tag) => {
+  setSelectedTags([...selectedTags, tag]);
+  setAvailableTags(availableTags.filter(t => t.id !== tag.id));
+};
+
+// 移除標籤
+const handleRemoveTag = (tag: Tag) => {
+  setSelectedTags(selectedTags.filter(t => t.id !== tag.id));
+  setAvailableTags([...availableTags, tag]);
+};
+
+// 創建新標籤
+const handleKeyDown = (e: KeyboardEvent) => {
+  if (e.key === 'Enter' && searchInput.trim()) {
+    const newTag = { id: Date.now().toString(), name: searchInput };
+    handleAddTag(newTag);
+    setSearchInput('');
+  }
+};
+```
+
+---
+
+### 3.6 shadcn/ui 組件使用模式
+
+#### 基本使用示例
+
+```typescript
+// Button 組件
+import { Button } from "@/components/ui/button"
+
+<Button variant="default" size="lg" onClick={handleClick}>
+  提交
+</Button>
+
+// Select 組件
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+
+<Select value={value} onValueChange={setValue}>
+  <SelectTrigger>
+    <SelectValue placeholder="請選擇" />
+  </SelectTrigger>
+  <SelectContent>
+    <SelectItem value="option1">選項 1</SelectItem>
+    <SelectItem value="option2">選項 2</SelectItem>
+  </SelectContent>
+</Select>
+
+// Dialog 組件
+import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog"
+
+<Dialog open={isOpen} onOpenChange={setIsOpen}>
+  <DialogTrigger asChild>
+    <Button>打開對話框</Button>
+  </DialogTrigger>
+  <DialogContent>
+    <DialogTitle>標題</DialogTitle>
+    {/* 內容 */}
+  </DialogContent>
+</Dialog>
+
+// Toast 通知
+import { toast } from "sonner"
+
+toast.success("操作成功！");
+toast.error("操作失敗！");
+toast.info("提示信息");
+```
+
+#### 樣式自定義
+
+```typescript
+// 使用 className 添加 Tailwind 樣式
+<Button className="bg-blue-500 hover:bg-blue-600 text-white">
+  自定義按鈕
+</Button>
+
+// 使用 cn() 工具函數合併樣式
+import { cn } from "@/components/ui/utils"
+
+<div className={cn(
+  "base-class",
+  condition && "conditional-class",
+  "additional-class"
+)}>
+  內容
+</div>
+```
+
+---
+
+### 3.7 狀態管理策略（當前實現）
+
+**當前狀態**: 使用 React Hooks 進行本地狀態管理
+
+| 狀態類型 | 管理方案 | 示例 |
+|---------|---------|------|
+| **組件內狀態** | useState | 表單輸入、視圖切換、UI 狀態 |
+| **表單狀態** | react-hook-form | （計劃中，當前使用 useState） |
+| **全局狀態** | 未實現 | 計劃使用 Zustand |
+| **服務端狀態** | 未實現 | 計劃使用 React Query |
+
+**狀態提升模式**:
+```typescript
+// App.tsx 管理視圖狀態
+const [currentView, setCurrentView] = useState<'list' | 'creation'>('list');
+
+// 通過 props 傳遞狀態變更函數
+<MessageList onCreateMessage={() => setCurrentView('creation')} />
+<MessageCreation onBack={() => setCurrentView('list')} />
+```
+
+---
+
+## 3.8 規劃中的模塊（待實現）
+
+以下模塊在文檔中有詳細設計，但尚未實現，保留作為後續開發參考。
 
 ## 4. 狀態管理策略
 
@@ -747,97 +513,188 @@ export const useUIStore = create<UIState>((set) => ({
 
 ---
 
-## 5. 樣式方案
+## 5. 樣式方案（Tailwind CSS + shadcn/ui）
 
-### 5.1 設計系統
+### 5.1 Tailwind CSS 配置
 
-#### 顏色系統
+#### index.css（入口文件）
 ```css
-/* variables.css */
-:root {
-  /* 主色 */
-  --color-primary: #3B82F6;
-  --color-primary-hover: #2563EB;
-  --color-primary-light: #DBEAFE;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-  /* 中性色 */
-  --color-gray-50: #F9FAFB;
-  --color-gray-100: #F3F4F6;
-  --color-gray-200: #E5E7EB;
-  --color-gray-300: #D1D5DB;
-  --color-gray-600: #6B7280;
-  --color-gray-900: #1F2937;
+/* 全局基礎樣式 */
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
 
-  /* 語義色 */
-  --color-success: #10B981;
-  --color-warning: #F59E0B;
-  --color-error: #EF4444;
-  --color-info: #3B82F6;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
 
-  /* 文字 */
-  --text-primary: #1F2937;
-  --text-secondary: #6B7280;
-  --text-disabled: #9CA3AF;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
 
-  /* 背景 */
-  --bg-primary: #FFFFFF;
-  --bg-secondary: #F9FAFB;
-  --bg-tertiary: #F3F4F6;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
 
-  /* 邊框 */
-  --border-color: #E5E7EB;
-  --border-radius: 8px;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
 
-  /* 陰影 */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
 }
 ```
 
-#### 字體系統
-```css
-:root {
-  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
-                 'Microsoft JhengHei', sans-serif;
+#### 樣式工具函數
+```typescript
+// components/ui/utils.ts
+import { type ClassValue, clsx } from "clsx"
+import { twMerge } from "tailwind-merge"
 
-  --font-size-xs: 12px;
-  --font-size-sm: 14px;
-  --font-size-base: 16px;
-  --font-size-lg: 18px;
-  --font-size-xl: 20px;
-  --font-size-2xl: 24px;
-  --font-size-3xl: 28px;
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
 }
 ```
 
-### 5.2 Ant Design 主題配置
+**使用示例**:
+```typescript
+import { cn } from "@/components/ui/utils"
+
+<div className={cn(
+  "base-class",
+  isActive && "active-class",
+  "additional-class"
+)} />
+```
+
+---
+
+### 5.2 shadcn/ui 組件樣式系統
+
+#### 組件變體系統（class-variance-authority）
 
 ```typescript
-// theme.ts
-import type { ThemeConfig } from 'antd';
+// 示例: Button 組件
+import { cva, type VariantProps } from "class-variance-authority"
 
-export const theme: ThemeConfig = {
-  token: {
-    colorPrimary: '#3B82F6',
-    colorSuccess: '#10B981',
-    colorWarning: '#F59E0B',
-    colorError: '#EF4444',
-    colorInfo: '#3B82F6',
-    borderRadius: 8,
-    fontFamily:
-      '-apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft JhengHei", sans-serif',
-  },
-  components: {
-    Button: {
-      controlHeight: 40,
-      fontSize: 14,
+const buttonVariants = cva(
+  "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors",
+  {
+    variants: {
+      variant: {
+        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+        outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        ghost: "hover:bg-accent hover:text-accent-foreground",
+        link: "text-primary underline-offset-4 hover:underline",
+      },
+      size: {
+        default: "h-10 px-4 py-2",
+        sm: "h-9 rounded-md px-3",
+        lg: "h-11 rounded-md px-8",
+        icon: "h-10 w-10",
+      },
     },
-    Table: {
-      headerBg: '#F9FAFB',
-      borderColor: '#E5E7EB',
+    defaultVariants: {
+      variant: "default",
+      size: "default",
     },
-  },
-};
+  }
+)
+```
+
+---
+
+### 5.3 實際使用的樣式模式
+
+#### 1. Tailwind 工具類
+```typescript
+// 直接使用 Tailwind CSS 類
+<div className="flex items-center justify-between p-4 bg-white rounded-lg shadow-md">
+  <span className="text-lg font-semibold text-gray-900">標題</span>
+  <Button className="bg-blue-500 hover:bg-blue-600 text-white">
+    操作
+  </Button>
+</div>
+```
+
+#### 2. 條件樣式
+```typescript
+<div className={cn(
+  "p-4 rounded-lg",
+  isActive ? "bg-blue-100 border-blue-500" : "bg-gray-100 border-gray-300",
+  isDisabled && "opacity-50 cursor-not-allowed"
+)}>
+  內容
+</div>
+```
+
+#### 3. 響應式設計
+```typescript
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  {/* 手機1列，平板2列，桌面3列 */}
+</div>
+
+<div className="text-sm sm:text-base md:text-lg lg:text-xl">
+  響應式文字大小
+</div>
+```
+
+#### 4. 自定義 Figma 組件樣式
+```typescript
+// MessageCreation.tsx 中的實際樣式
+<div className="h-[49.333px] relative shrink-0 w-[148px]">
+  <div className="absolute inset-[24.73%_62.3%_43%_29.83%]">
+    {/* Figma 導出的精確定位 */}
+  </div>
+</div>
+```
+
+---
+
+### 5.4 顏色系統（實際使用）
+
+**主要顏色**:
+- **主色（藍色）**: #189AEB, #3B82F6
+- **輔助色（青色）**: #6ED7FF
+- **中性色**: Gray 50-900
+- **語義色**:
+  - Success: #10B981
+  - Warning: #F59E0B
+  - Error: #EF4444
+
+**使用方式**:
+```typescript
+// Tailwind 類
+className="bg-blue-500 text-white"
+className="text-gray-700 hover:text-gray-900"
+
+// CSS 變量
+className="bg-primary text-primary-foreground"
 ```
 
 ---
@@ -1068,39 +925,52 @@ describe('Member Management Flow', () => {
 ```typescript
 // vite.config.ts
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+import react from '@vitejs/plugin-react-swc';
 import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
   resolve: {
+    extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // Radix UI 和其他依賴的版本別名
+      'vaul@1.1.2': 'vaul',
+      'sonner@2.0.3': 'sonner',
+      'recharts@2.15.2': 'recharts',
+      'react-resizable-panels@2.1.7': 'react-resizable-panels',
+      'react-hook-form@7.55.0': 'react-hook-form',
+      'react-day-picker@8.10.1': 'react-day-picker',
+      'next-themes@0.4.6': 'next-themes',
+      'lucide-react@0.487.0': 'lucide-react',
+      'input-otp@1.4.2': 'input-otp',
+      'embla-carousel-react@8.6.0': 'embla-carousel-react',
+      'cmdk@1.1.1': 'cmdk',
+      'class-variance-authority@0.7.1': 'class-variance-authority',
+      // Figma 資源映射
+      'figma:asset/d1c10d8dbfc2ae5783543c9f0b76cd2635713297.png': path.resolve(__dirname, './src/assets/d1c10d8dbfc2ae5783543c9f0b76cd2635713297.png'),
+      // 其他 Radix UI 組件別名...
     },
   },
   build: {
-    outDir: 'dist',
+    target: 'esnext',
+    outDir: 'build',
     sourcemap: false,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'antd-vendor': ['antd', '@ant-design/icons'],
-          'chart-vendor': ['echarts', 'echarts-for-react'],
-        },
-      },
-    },
   },
   server: {
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-    },
+    host: '0.0.0.0',
+    port: 5173,
+    open: true,
   },
 });
 ```
+
+**配置說明**:
+- 使用 `@vitejs/plugin-react-swc` 提供更快的編譯速度
+- 構建輸出目錄為 `build/` 而非 `dist/`
+- 開發服務器監聽所有網絡接口 (0.0.0.0)
+- 自動打開瀏覽器
+- 支持 Figma 資源映射和版本化依賴別名
 
 ### 9.2 環境變量
 
@@ -1120,18 +990,18 @@ VITE_API_BASE_URL=https://api.hotel-crm.com
 ```bash
 # 1. 安裝依賴
 npm install
-# 或使用 pnpm
-# pnpm install
 
 # 2. 構建生產版本
 npm run build
 
-# 3. 預覽構建結果（可選）
-npm run preview
-
-# 4. 部署到靜態服務器（如 Nginx）
-# dist/ 目錄內容複製到服務器
+# 3. 構建輸出目錄
+# build/ 目錄內容複製到服務器
 ```
+
+**說明**:
+- 當前版本未配置預覽命令
+- 構建輸出在 `build/` 目錄而非 `dist/`
+- 項目名稱: "Push Message_活動與訊息推播/圖片點擊型_v0.1"
 
 ### 9.4 Nginx 配置
 
@@ -1140,7 +1010,7 @@ server {
     listen 80;
     server_name crm.hotel.com;
 
-    root /var/www/hotel-crm/dist;
+    root /var/www/hotel-crm/build;
     index index.html;
 
     # Gzip 壓縮
@@ -1154,7 +1024,7 @@ server {
 
     # API 代理
     location /api {
-        proxy_pass http://backend:8000;
+        proxy_pass http://backend:8700;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }
@@ -1166,6 +1036,11 @@ server {
     }
 }
 ```
+
+**配置說明**:
+- 根目錄使用 `build/` 而非 `dist/`
+- API 代理指向後端端口 8700
+- 支持 Figma 資源和 SVG 圖片緩存
 
 ---
 
@@ -1247,57 +1122,118 @@ feature/
 
 ## 附錄
 
-### A. 腳本命令
+### A. 腳本命令（v0.1 實際配置）
 
 ```json
 {
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview",
-    "test": "vitest",
-    "test:ui": "vitest --ui",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
-    "type-check": "tsc --noEmit"
+    "build": "vite build"
   }
 }
 ```
 
-### B. 依賴包列表
+**說明**:
+- `dev`: 啟動開發服務器 (localhost:5173)
+- `build`: 構建生產版本 (輸出到 build/ 目錄)
+- **未配置**: TypeScript 類型檢查、ESLint、Prettier、測試腳本 (v0.1 原型階段簡化配置)
+
+### B. 依賴包列表（v0.1 實際配置）
+
+#### 生產依賴 (dependencies)
 
 ```json
 {
   "dependencies": {
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "react-router-dom": "^7.9.3",
-    "antd": "^5.27.4",
-    "@ant-design/icons": "^6.1.0",
-    "zustand": "^5.0.8",
-    "@tanstack/react-query": "^5.90.2",
-    "react-hook-form": "^7.64.0",
-    "axios": "^1.12.2",
-    "dayjs": "^1.11.18"
-  },
-  "devDependencies": {
-    "@types/react": "^19.1.16",
-    "@types/react-dom": "^19.1.9",
-    "@types/node": "^24.7.0",
-    "@vitejs/plugin-react": "^5.0.4",
-    "typescript": "~5.9.3",
-    "vite": "^7.1.7",
-    "eslint": "^9.36.0",
-    "@eslint/js": "^9.36.0",
-    "typescript-eslint": "^8.45.0",
-    "eslint-plugin-react-hooks": "^5.2.0",
-    "eslint-plugin-react-refresh": "^0.4.22",
-    "globals": "^16.4.0"
+    // 核心框架
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+
+    // shadcn/ui 基礎組件 (Radix UI Primitives)
+    "@radix-ui/react-accordion": "^1.2.3",
+    "@radix-ui/react-alert-dialog": "^1.1.6",
+    "@radix-ui/react-aspect-ratio": "^1.1.2",
+    "@radix-ui/react-avatar": "^1.1.3",
+    "@radix-ui/react-checkbox": "^1.1.4",
+    "@radix-ui/react-collapsible": "^1.1.3",
+    "@radix-ui/react-context-menu": "^2.2.6",
+    "@radix-ui/react-dialog": "^1.1.6",
+    "@radix-ui/react-dropdown-menu": "^2.1.6",
+    "@radix-ui/react-hover-card": "^1.1.6",
+    "@radix-ui/react-label": "^2.1.2",
+    "@radix-ui/react-menubar": "^1.1.6",
+    "@radix-ui/react-navigation-menu": "^1.2.5",
+    "@radix-ui/react-popover": "^1.1.6",
+    "@radix-ui/react-progress": "^1.1.2",
+    "@radix-ui/react-radio-group": "^1.2.3",
+    "@radix-ui/react-scroll-area": "^1.2.3",
+    "@radix-ui/react-select": "^2.1.6",
+    "@radix-ui/react-separator": "^1.1.2",
+    "@radix-ui/react-slider": "^1.2.3",
+    "@radix-ui/react-slot": "^1.1.2",
+    "@radix-ui/react-switch": "^1.1.3",
+    "@radix-ui/react-tabs": "^1.1.3",
+    "@radix-ui/react-toggle": "^1.1.2",
+    "@radix-ui/react-toggle-group": "^1.1.2",
+    "@radix-ui/react-tooltip": "^1.1.8",
+
+    // UI 增強工具
+    "class-variance-authority": "^0.7.1",  // 組件變體管理
+    "clsx": "*",                           // 條件性 className 組合
+    "tailwind-merge": "*",                 // Tailwind 類名合併
+    "cmdk": "^1.1.1",                      // 命令面板組件
+    "sonner": "^2.0.3",                    // Toast 通知
+    "next-themes": "^0.4.6",               // 主題管理
+
+    // 功能組件
+    "lucide-react": "^0.487.0",            // 圖標庫
+    "embla-carousel-react": "^8.6.0",      // 輪播組件
+    "vaul": "^1.1.2",                      // 抽屜組件
+    "react-resizable-panels": "^2.1.7",    // 可調整大小面板
+    "input-otp": "^1.4.2",                 // OTP 輸入組件
+
+    // 數據與表單
+    "react-hook-form": "^7.55.0",          // 表單狀態管理
+    "react-day-picker": "^8.10.1",         // 日期選擇器
+    "recharts": "^2.15.2"                  // 圖表庫
   }
 }
 ```
 
-**注意**: 本項目暫未使用圖表庫 (echarts, echarts-for-react)、測試框架 (vitest, @testing-library/react)、代碼格式化工具 (prettier)、Tailwind CSS。這些可根據需求後續添加。
+#### 開發依賴 (devDependencies)
+
+```json
+{
+  "devDependencies": {
+    "@types/node": "^20.10.0",             // Node.js 類型定義
+    "@vitejs/plugin-react-swc": "^3.10.2", // Vite React SWC 插件
+    "vite": "^6.4.1"                       // 構建工具
+  }
+}
+```
+
+#### 依賴分類說明
+
+**UI 組件系統 (48 個組件)**:
+- 基於 Radix UI Primitives 的無樣式組件
+- 使用 Tailwind CSS 進行樣式定制
+- shadcn/ui 設計系統規範
+
+**Tailwind CSS 相關**:
+- `class-variance-authority`: 管理組件變體樣式
+- `clsx` + `tailwind-merge`: 智能合併和去重 Tailwind 類名
+- `cn()` 工具函數實現類名組合
+
+**未實現的規劃依賴**:
+- ❌ React Router DOM (路由)
+- ❌ Zustand (全局狀態管理)
+- ❌ React Query (服務端狀態)
+- ❌ Axios (HTTP 客戶端)
+- ❌ Ant Design (UI 組件庫)
+- ❌ ESLint / Prettier (代碼規範)
+- ❌ Vitest (測試框架)
+
+**v0.1 原型說明**: 當前版本為 Figma 設計稿轉換的初始原型，專注於 UI 實現和基本交互邏輯，暫未集成後端 API 和完整的狀態管理系統。
 
 ---
 
@@ -1957,10 +1893,33 @@ export interface SurveyStatistics {
 
 ---
 
-**文檔版本**: v1.3
-**最後更新**: 2025-10-15
+**文檔版本**: v2.1
+**最後更新**: 2025-10-28
 **維護者**: 前端開發團隊
 **變更說明**:
+- **v2.1 (2025-10-28) - 實際代碼對齊更新**:
+  - 📝 更新實際項目名稱: "Push Message_活動與訊息推播/圖片點擊型_v0.1"
+  - ✅ 添加 InteractiveMessageTable 組件文檔
+  - 🔧 更新 App.tsx 架構（移除全局 Toaster）
+  - 📦 更新構建配置為實際的 vite.config.ts 內容
+  - 🏗️ 構建輸出目錄更正為 `build/` 而非 `dist/`
+  - 🌐 更新 Nginx 配置指向正確的 API 端口 (8700)
+  - 📁 更新實際目錄結構和組件數量（48 個 UI 組件）
+  - 🎨 確認無 styles/ 目錄，僅有 index.css
+  - 📝 補充 Figma 資源映射和版本化依賴別名說明
+
+- **v2.0 (2025-10-28) - 重大架構變更**:
+  - 🔄 **技術棧重構**: 從 Ant Design 遷移至 shadcn/ui + Tailwind CSS
+  - 📦 **核心框架版本**: React 18.3.1 (實際), Vite 6.4.1 (實際)
+  - 🎨 **UI 組件系統**: 採用 Radix UI Primitives + 48 shadcn/ui 組件
+  - 💅 **樣式方案**: CSS Modules → Tailwind CSS 工具類 + CVA 變體管理
+  - 🏗️ **項目結構**: 更新為 v0.1 Figma 原型實際結構
+  - 📝 **核心模塊**: 文檔反映實際實現 (App.tsx, MessageList, MessageCreation, FilterModal)
+  - 🔧 **依賴包**: 完整更新為實際使用的 30+ 依賴項
+  - ⚠️ **未實現功能**: 明確標註 React Router、Zustand、React Query、Axios 等暫未集成
+  - 📋 **狀態管理**: 當前使用 React Hooks (useState, useEffect, useRef)
+  - 🎯 **開發階段**: v0.1 Figma 原型，專注 UI 實現和基本交互
+
 - v1.3 (2025-10-15):
   - 更新 Campaign API 服務層完整文檔
   - 更新 Survey API 服務層完整文檔
@@ -1968,13 +1927,20 @@ export interface SurveyStatistics {
   - 補充完整的 Survey Types 類型定義
   - 添加後端端點映射和資料處理邏輯說明
   - 詳細說明狀態管理、題目類型和驗證欄位
+
 - v1.2 (2025-10-15):
   - 新增「建立群發訊息頁面」詳細實施文檔
   - 新增「建立問卷頁面」詳細實施文檔
   - 新增 API 服務層和類型定義說明
   - 更新目錄結構，加入 surveys 模塊
+
 - v1.1 (2025-10-09):
   - 更新實際使用的技術棧版本 (React 19, Vite 7, Ant Design 5.27等)
   - 更新環境變量配置為實際使用的端口 (8700)
   - 移除未實現的依賴 (圖表庫、測試框架、Tailwind CSS、Prettier)
   - 標註待實現功能和可選配置項
+
+**重要提示**:
+- v2.1 確保文檔與實際代碼完全對齊，修正了構建配置、組件列表等細節
+- v2.0 代表文檔從「規劃架構」轉變為「實際實現」，反映當前 v0.1 Figma 原型的真實技術棧和項目結構
+- 與 v1.x 版本相比存在重大架構差異

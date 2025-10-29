@@ -6,11 +6,13 @@ from sqlalchemy import (
     String,
     Integer,
     BigInteger,
+    Boolean,
     Enum as SQLEnum,
     ForeignKey,
     JSON,
     Text,
     Numeric,
+    DateTime,
 )
 from sqlalchemy.orm import relationship
 from app.models.base import Base
@@ -69,8 +71,33 @@ class TemplateCarouselItem(Base):
     price = Column(Numeric(10, 2), comment="金額")
     action_url = Column(String(500), comment="動作URL")
     interaction_tag_id = Column(BigInteger, ForeignKey("interaction_tags.id"), comment="互動標籤ID")
+    action_button_text = Column(String(100), comment="動作按鈕文字")
+    action_button_enabled = Column(Boolean, default=False, comment="動作按鈕啟用")
+    action_button_interaction_type = Column(String(50), comment="動作按鈕互動類型")
+    action_button_url = Column(String(500), comment="動作按鈕網址")
+    action_button_trigger_message = Column(Text, comment="動作按鈕觸發訊息")
+    action_button_trigger_image_url = Column(String(500), comment="動作按鈕觸發圖片URL")
+    action_button2_text = Column(String(100), comment="第二個動作按鈕文字")
+    action_button2_enabled = Column(Boolean, default=False, comment="第二個動作按鈕啟用")
+    action_button2_interaction_type = Column(String(50), comment="第二個動作按鈕互動類型")
+    action_button2_url = Column(String(500), comment="第二個動作按鈕網址")
+    action_button2_trigger_message = Column(Text, comment="第二個動作按鈕觸發訊息")
+    action_button2_trigger_image_url = Column(String(500), comment="第二個動作按鈕觸發圖片URL")
+    image_aspect_ratio = Column(String(10), default="1:1", nullable=False, comment="圖片長寬比例")
+    image_click_action_type = Column(String(50), default="open_image", nullable=False, comment="圖片點擊動作類型")
+    image_click_action_value = Column(Text, comment="圖片點擊動作值")
     sort_order = Column(Integer, default=0, comment="排序")
+
+    # 追蹤統計欄位
+    click_count = Column(Integer, default=0, comment="點擊次數")
+    unique_click_count = Column(Integer, default=0, comment="唯一點擊次數")
+    last_clicked_at = Column(DateTime, comment="最後點擊時間")
 
     # 關聯關係
     template = relationship("MessageTemplate", back_populates="carousel_items")
     interaction_tag = relationship("InteractionTag")
+    interaction_logs = relationship(
+        "ComponentInteractionLog",
+        back_populates="carousel_item",
+        cascade="all, delete-orphan",
+    )

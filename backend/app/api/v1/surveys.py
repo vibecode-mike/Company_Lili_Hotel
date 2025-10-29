@@ -29,6 +29,7 @@ from app.services.linebot_service import LineBotService
 from typing import List, Optional
 from datetime import datetime
 import logging
+import os
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -79,7 +80,10 @@ async def get_surveys(
     db: AsyncSession = Depends(get_db),
 ):
     """獲取問卷列表"""
-    query = select(Survey).options(selectinload(Survey.template))
+    query = select(Survey).options(
+        selectinload(Survey.template),
+        selectinload(Survey.questions)
+    )
 
     # 應用狀態篩選
     if status_filter:
@@ -126,7 +130,7 @@ async def get_survey(
     return survey
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=SurveyResponse)
 async def create_survey(
     survey_data: SurveyCreate,
     db: AsyncSession = Depends(get_db),
@@ -183,14 +187,18 @@ async def create_survey(
             db.add(question)
 
         await db.commit()
-        await db.refresh(survey)
 
-        return {
-            "id": survey.id,
-            "name": survey.name,
-            "status": survey.status.value,
-            "message": "問卷創建成功",
-        }
+        # 重新查詢以獲取完整的 Survey 對象（包含關聯資料）
+        query = (
+            select(Survey)
+            .options(selectinload(Survey.template), selectinload(Survey.questions))
+            .where(Survey.id == survey.id)
+        )
+        result = await db.execute(query)
+        survey = result.scalar_one()
+
+        # 返回完整的 Survey 對象
+        return survey
 
     except HTTPException:
         await db.rollback()
@@ -326,78 +334,62 @@ async def delete_survey(
         )
 
 
-@router.post("/{survey_id}/publish")
-async def publish_survey(
+# ============ Survey Response Routes ============
+# 注意：問卷不提供主動推播功能，用戶透過 LIFF 連結填寫
+# Campaign（群發訊息）才有主動推播功能
+@router.post("/{survey_id}/responses", status_code=status.HTTP_201_CREATED)
+async def submit_survey_response(
     survey_id: int,
+    response_data: SurveyResponseAnswerCreate,
+    x_line_user_id: str = None,
     db: AsyncSession = Depends(get_db),
 ):
-    """發布問卷"""
+    """提交問卷回應（LIFF 表單使用）"""
     try:
-        # 獲取問卷
-        query = select(Survey).where(Survey.id == survey_id)
-        result = await db.execute(query)
-        survey = result.scalar_one_or_none()
+        # 驗證問卷是否存在
+        survey_query = select(Survey).where(Survey.id == survey_id)
+        survey_result = await db.execute(survey_query)
+        survey = survey_result.scalar_one_or_none()
 
         if not survey:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="問卷不存在"
             )
 
-        # 檢查問卷狀態
-        if survey.status != SurveyStatus.DRAFT:
+        # 檢查問卷是否已發布
+        if survey.status != SurveyStatus.PUBLISHED:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="只能發布草稿狀態的問卷",
+                detail="此問卷尚未發布或已結束",
             )
 
-        # 更新狀態為已發布
-        survey.status = SurveyStatus.PUBLISHED
+        # TODO: 根據 LINE User ID 查詢 member_id
+        # 目前暫時使用 response_data.member_id
+        # 實際應用需要整合 LINE 用戶與會員系統的映射
+
+        # 創建問卷回應
+        response = SurveyResponseModel(
+            survey_id=survey_id,
+            member_id=response_data.member_id,
+            answers=response_data.answers,
+            is_completed=response_data.is_completed,
+            completed_at=datetime.now() if response_data.is_completed else None,
+            source=response_data.source or "liff",
+            ip_address=response_data.ip_address,
+            user_agent=response_data.user_agent,
+        )
+        db.add(response)
+
+        # 更新問卷統計
+        if response_data.is_completed:
+            survey.response_count += 1
+
         await db.commit()
-        await db.refresh(survey)
-
-        # 根據 schedule_type 處理發送
-        now = datetime.now()
-        message = "問卷發布成功"
-
-        if survey.schedule_type.value == "immediate":
-            # 立即發送
-            logger.info(f"🚀 Sending survey {survey.id} immediately")
-            try:
-                result = await linebot_service.send_survey(survey.id)
-                if result.get("ok"):
-                    message = f"問卷已發送給 {result.get('sent', 0)} 位用戶"
-                else:
-                    message = f"問卷發布成功，但發送失敗: {result.get('error')}"
-            except Exception as e:
-                logger.error(f"❌ Failed to send survey immediately: {e}")
-                message = f"問卷發布成功，但發送失敗: {str(e)}"
-
-        elif survey.schedule_type.value == "scheduled" and survey.scheduled_at:
-            # 排程發送
-            if survey.scheduled_at > now:
-                logger.info(f"⏰ Scheduling survey {survey.id} for {survey.scheduled_at}")
-                try:
-                    await scheduler.schedule_survey(survey.id, survey.scheduled_at)
-                    message = f"問卷已排程於 {survey.scheduled_at.strftime('%Y-%m-%d %H:%M')} 發送"
-                except Exception as e:
-                    logger.error(f"❌ Failed to schedule survey: {e}")
-                    message = f"問卷發布成功，但排程失敗: {str(e)}"
-            else:
-                # 排程時間已過，立即發送
-                logger.info(f"🚀 Scheduled time passed, sending survey {survey.id} immediately")
-                try:
-                    result = await linebot_service.send_survey(survey.id)
-                    if result.get("ok"):
-                        message = f"問卷已發送給 {result.get('sent', 0)} 位用戶"
-                except Exception as e:
-                    logger.error(f"❌ Failed to send survey: {e}")
-                    message = f"問卷發布成功，但發送失敗: {str(e)}"
+        await db.refresh(response)
 
         return {
-            "id": survey.id,
-            "name": survey.name,
-            "status": survey.status.value,
-            "message": message,
+            "id": response.id,
+            "message": "問卷提交成功",
         }
 
     except HTTPException:
@@ -405,13 +397,13 @@ async def publish_survey(
         raise
     except Exception as e:
         await db.rollback()
+        logger.error(f"提交問卷回應失敗: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"發布問卷失敗: {str(e)}",
+            detail=f"提交問卷失敗: {str(e)}",
         )
 
 
-# ============ Survey Response Routes ============
 @router.get("/{survey_id}/responses", response_model=List[SurveyResponseAnswerResponse])
 async def get_survey_responses(
     survey_id: int,
@@ -725,4 +717,54 @@ async def reorder_questions(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"重新排序失敗: {str(e)}",
+        )
+
+
+@router.get("/{survey_id}/url")
+async def get_survey_url(
+    survey_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    取得問卷 LIFF 網址
+
+    Args:
+        survey_id: 問卷 ID
+
+    Returns:
+        Dict: {"url": "LIFF 網址", "survey_id": 問卷ID}
+    """
+    try:
+        # 驗證問卷是否存在
+        query = select(Survey).where(Survey.id == survey_id)
+        result = await db.execute(query)
+        survey = result.scalar_one_or_none()
+
+        if not survey:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="問卷不存在"
+            )
+
+        # 從環境變數讀取 LIFF_ID_OPEN
+        liff_id_open = os.getenv("LIFF_ID_OPEN", "2008259921-07X8vMaQ")
+
+        # 產生 LIFF 網址
+        liff_url = f"https://liff.line.me/{liff_id_open}?sid={survey_id}"
+
+        logger.info(f"📎 Generated LIFF URL for survey {survey_id}: {liff_url}")
+
+        return {
+            "url": liff_url,
+            "survey_id": survey_id,
+            "survey_name": survey.name,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to generate survey URL: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"產生網址失敗: {str(e)}",
         )

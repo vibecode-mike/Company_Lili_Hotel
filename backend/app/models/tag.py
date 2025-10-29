@@ -46,6 +46,7 @@ class MemberTag(Base):
     source = Column(SQLEnum(TagSource), nullable=False, comment="來源")
     description = Column(String(200), comment="描述")
     member_count = Column(Integer, default=0, comment="會員數量")
+    last_triggered_at = Column(DateTime, comment="最後觸發時間")
 
     # 關聯關係
     member_relations = relationship(
@@ -72,9 +73,11 @@ class InteractionTag(Base):
     campaign_id = Column(BigInteger, ForeignKey("campaigns.id"), comment="關聯活動ID")
     description = Column(String(200), comment="描述")
     trigger_count = Column(Integer, default=0, comment="觸發次數")
+    member_count = Column(Integer, default=0, comment="觸發會員數")
+    last_triggered_at = Column(DateTime, comment="最後觸發時間")
 
     # 關聯關係
-    campaign = relationship("Campaign", back_populates="interaction_tags")
+    campaign = relationship("Campaign", back_populates="interaction_tag_records")
     member_relations = relationship(
         "MemberTagRelation",
         back_populates="interaction_tag",
@@ -84,6 +87,9 @@ class InteractionTag(Base):
     )
     tag_trigger_logs = relationship(
         "TagTriggerLog", back_populates="tag", cascade="all, delete-orphan"
+    )
+    interaction_logs = relationship(
+        "ComponentInteractionLog", back_populates="interaction_tag"
     )
 
 

@@ -1,0 +1,7 @@
+[2025-10-03T17:20:11] 林錦泰 Nick → bot: 聯絡資訊
+[2025-10-03T17:20:12] bot → 林錦泰 Nick: ☎️ 電話：07-xxx-xxxx｜Email：hotel@example.com｜飯店提供中文與英文服務｜櫃檯 24 小時服務
+[2025-10-03T17:20:20] 林錦泰 Nick → bot: 給我網站
+[2025-10-03T17:20:22] bot → 林錦泰 Nick: 很抱歉，我無法回答您這個問題，歡迎致電讓我們為您服務：電話：07-xxx-xxxx。
+[2025-10-03T17:20:33] 林錦泰 Nick → bot: 會員設定
+[2025-10-03T17:20:34] bot → 林錦泰 Nick: 請點此完成會員資料設定：https://liff.line.me/2008225227-JOBdZGxg
+[2025-10-03T17:25:29] PROFILE U3d8c96761d9f65cae90af908b5fbbdb7: {'gender': 'male', 'birth_year': 1994, 'age_bucket': '30-34', 'area': '台北市'}

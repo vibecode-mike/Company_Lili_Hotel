@@ -127,12 +127,14 @@ class SurveyListItem(BaseModel):
     target_audience: TargetAudience
     schedule_type: ScheduleType
     scheduled_at: Optional[datetime] = None
+    sent_at: Optional[datetime] = None
     status: SurveyStatus
     response_count: int
     view_count: int
     created_at: datetime
     updated_at: datetime
     created_by: Optional[int] = None
+    questions: Optional[List[SurveyQuestionResponse]] = None
 
     class Config:
         from_attributes = True

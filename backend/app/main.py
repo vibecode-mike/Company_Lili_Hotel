@@ -5,12 +5,14 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.database import init_db, close_db
 from app.api.v1 import api_router
 from app.core.exceptions import AppException
 from app.services.scheduler import scheduler
 from datetime import datetime
+from pathlib import Path
 import logging
 
 # 配置日誌
@@ -150,6 +152,11 @@ async def health_check():
 
 # 註冊 API 路由
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+# 掛載靜態文件目錄（上傳的圖片）
+UPLOAD_DIR = Path("/data2/lili_hotel/backend/public/uploads")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 
 if __name__ == "__main__":

@@ -51,7 +51,7 @@ class Campaign(Base):
     )
     target_audience = Column(JSON, nullable=False, comment="目標受眾條件")
     trigger_condition = Column(JSON, comment="觸發條件")
-    interaction_tag = Column(String(50), comment="互動標籤")
+    interaction_tags = Column(JSON, comment="互動標籤數組")
     scheduled_at = Column(DateTime, comment="排程時間")
     sent_at = Column(DateTime, comment="實際發送時間")
     status = Column(
@@ -71,9 +71,12 @@ class Campaign(Base):
     recipients = relationship(
         "CampaignRecipient", back_populates="campaign", cascade="all, delete-orphan"
     )
-    interaction_tags = relationship("InteractionTag", back_populates="campaign")
+    interaction_tag_records = relationship("InteractionTag", back_populates="campaign")
     messages = relationship("Message", back_populates="campaign")
     tag_trigger_logs = relationship("TagTriggerLog", back_populates="campaign")
+    interaction_logs = relationship(
+        "ComponentInteractionLog", back_populates="campaign", cascade="all, delete-orphan"
+    )
 
 
 class CampaignRecipient(Base):

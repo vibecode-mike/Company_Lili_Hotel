@@ -1,0 +1,58 @@
+{
+  "type": "bubble",
+  "body": {
+    "type": "box",
+    "layout": "vertical",
+    "paddingAll": "0px",
+    "contents": [
+      {
+        "type": "image", #圖片點擊型
+        "url": f"{image_url}",
+        "size": "full",
+        "aspectMode": "cover", #依據比例填滿
+        "aspectRatio": "1:1" #比例固定
+      },
+      {
+        "type": "box",
+        "layout": "horizontal",
+        "position": "absolute",
+        "offsetBottom": "20px",
+        "offsetStart": "0px",
+        "offsetEnd": "0px",
+        "width": "100%",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "contents": [
+          {
+            "type": "box",
+            "layout": "vertical",
+            "backgroundColor": "#00000077",
+            "cornerRadius": "999px",
+            "paddingTop": "8px",
+            "paddingBottom": "8px",
+            "paddingStart": "20px",
+            "paddingEnd": "20px",
+            "width": "180px",
+            "alignItems": "center",
+            "justifyContent": "center",
+            "contents": [
+              {
+                "type": "text", #動作按鈕
+                "text": f"{action_button_text}", #輸入動作按鈕的文字
+                "weight": "bold",
+                "size": "sm",
+                "align": "center",
+                "color": "#FFFFFF"
+              }
+            ],
+            "action": {
+              "type": "uri", #選擇互動類型：觸發圖片
+              "label": "action", #點擊回傳：互動標籤
+              "uri": f"{interaction_image_url}" #設定點擊傳送新的圖片網址
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

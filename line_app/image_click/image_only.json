@@ -1,0 +1,14 @@
+{
+  "type": "bubble",
+  "hero": {
+    "type": "image", #圖片點擊型
+    "url": f"{image_url}", #上傳時的圖片網址
+    "size": "full",
+    "aspectRatio": "1:1", #比例固定
+    "aspectMode": "cover", #依據比例填滿
+    "action": {
+      "type": "uri",
+      "uri": f"{image_url}" #點開後打開圖片網址
+    }
+  }
+}

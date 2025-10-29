@@ -1,42 +1,17 @@
-/**
- * 應用主組件
- */
-import { RouterProvider } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ConfigProvider } from 'antd';
-import zhTW from 'antd/locale/zh_TW';
-import { router } from './routes';
+import { useState } from 'react';
+import MessageList from './components/MessageList';
+import MessageCreation from './components/MessageCreation';
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
+export default function App() {
+  const [currentView, setCurrentView] = useState<'list' | 'creation'>('list');
 
-const theme = {
-  token: {
-    colorPrimary: '#3B82F6',
-    colorSuccess: '#10B981',
-    colorWarning: '#F59E0B',
-    colorError: '#EF4444',
-    colorInfo: '#3B82F6',
-    borderRadius: 8,
-    fontFamily:
-      '-apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft JhengHei", sans-serif',
-  },
-};
-
-function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ConfigProvider locale={zhTW} theme={theme}>
-        <RouterProvider router={router} />
-      </ConfigProvider>
-    </QueryClientProvider>
+    <>
+      {currentView === 'list' ? (
+        <MessageList onCreateMessage={() => setCurrentView('creation')} />
+      ) : (
+        <MessageCreation onBack={() => setCurrentView('list')} />
+      )}
+    </>
   );
 }
-
-export default App;

@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "uploads"
     MAX_FILE_SIZE: int = 10485760  # 10MB
     ALLOWED_IMAGE_TYPES: str = "jpg,jpeg,png,webp"
+    PUBLIC_BASE: str = "http://localhost:8700"  # 公開訪問的基礎URL
 
     # CORS
     ALLOWED_ORIGINS: str = "*"

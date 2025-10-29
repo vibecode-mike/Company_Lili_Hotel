@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>发布按钮调试工具</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #242424;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #6e6e6e;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            border-left: 4px solid #0f6beb;
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #383838;
+            font-size: 18px;
+        }
+        .instruction {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .instruction strong {
+            color: #856404;
+        }
+        .error-box {
+            background: #fee;
+            border: 1px solid #fcc;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+            display: none;
+        }
+        .error-box.show {
+            display: block;
+        }
+        .error-box h3 {
+            margin-top: 0;
+            color: #c33;
+        }
+        .success-box {
+            background: #efe;
+            border: 1px solid #cfc;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+            display: none;
+        }
+        .success-box.show {
+            display: block;
+        }
+        .success-box h3 {
+            margin-top: 0;
+            color: #3c3;
+        }
+        button {
+            background: #0f6beb;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:hover {
+            background: #0d5cc9;
+            transform: translateY(-1px);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .log {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid transparent;
+        }
+        .log-error {
+            border-left-color: #f44336;
+            color: #ff6b6b;
+        }
+        .log-success {
+            border-left-color: #4caf50;
+            color: #69db7c;
+        }
+        .log-info {
+            border-left-color: #2196f3;
+            color: #74c0fc;
+        }
+        .log-warning {
+            border-left-color: #ff9800;
+            color: #ffd43b;
+        }
+        .checklist {
+            list-style: none;
+            padding: 0;
+        }
+        .checklist li {
+            padding: 10px;
+            margin: 8px 0;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #e0e0e0;
+        }
+        .checklist li:before {
+            content: "☐ ";
+            font-size: 20px;
+            margin-right: 10px;
+            color: #999;
+        }
+        .checklist li.checked:before {
+            content: "☑ ";
+            color: #4caf50;
+        }
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 发布按钮调试工具</h1>
+        <p class="subtitle">帮助诊断"发布"按钮点击后没有反应的问题</p>
+
+        <div class="instruction">
+            <strong>📋 使用说明：</strong>
+            <ol>
+                <li>在主应用中填写完整的活动表单（标题、通知訊息、上传图片等）</li>
+                <li>点击"发布"按钮</li>
+                <li>立即切换到这个页面</li>
+                <li>点击下方的"开始诊断"按钮</li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h2>第1步：检查服务器连接</h2>
+            <button onclick="checkBackend()">测试后端连接</button>
+            <div id="backendStatus"></div>
+        </div>
+
+        <div class="section">
+            <h2>第2步：测试简单请求</h2>
+            <button onclick="testSimpleRequest()">发送测试请求</button>
+            <div id="simpleTestResult"></div>
+        </div>
+
+        <div class="section">
+            <h2>第3步：查看浏览器控制台</h2>
+            <p>按 <code>F12</code> 打开开发者工具，切换到 <strong>Console</strong> 标签页</p>
+            <p>查找以下标记的日志：</p>
+            <ul class="checklist">
+                <li>🔵 handlePublish called</li>
+                <li>📤 Starting image upload...</li>
+                <li>🏗️ Building form data...</li>
+                <li>🔍 Validating form...</li>
+                <li>📡 Sending request to backend:</li>
+                <li>❌ 如果看到红色错误，请记录错误信息</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>第4步：检查网络请求</h2>
+            <p>在开发者工具中切换到 <strong>Network</strong> 标签页</p>
+            <ol class="checklist">
+                <li>找到 <code>POST /api/v1/campaigns</code> 请求</li>
+                <li>查看 <strong>Status Code</strong> (应该是 200，如果是 400 则有错误)</li>
+                <li>点击该请求，查看 <strong>Preview</strong> 或 <strong>Response</strong> 标签</li>
+                <li>如果有错误，复制完整的响应内容</li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h2>第5步：常见问题检查</h2>
+            <ul class="checklist" id="commonIssues">
+                <li>是否填写了活动标题？</li>
+                <li>是否填写了通知訊息？</li>
+                <li>是否选择了模板类型（不是"請選擇"）？</li>
+                <li>是否上传了图片？</li>
+                <li>如果启用了动作按钮，是否填写了对应的URL/文字？</li>
+                <li>浏览器是否清除了缓存？(按 Ctrl+Shift+R 硬刷新)</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>诊断日志</h2>
+            <div id="diagnosticLog" class="log">
+                <div class="log-entry log-info">等待开始诊断...</div>
+            </div>
+        </div>
+
+        <div class="error-box" id="errorDisplay">
+            <h3>❌ 发现问题</h3>
+            <div id="errorContent"></div>
+        </div>
+
+        <div class="success-box" id="successDisplay">
+            <h3>✅ 测试成功</h3>
+            <div id="successContent"></div>
+        </div>
+    </div>
+
+    <script>
+        let logEntries = [];
+
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            logEntries.push({ timestamp, message, type });
+            updateLogDisplay();
+        }
+
+        function updateLogDisplay() {
+            const logDiv = document.getElementById('diagnosticLog');
+            logDiv.innerHTML = logEntries.map(entry =>
+                `<div class="log-entry log-${entry.type}">[${entry.timestamp}] ${entry.message}</div>`
+            ).join('');
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function showError(message) {
+            document.getElementById('errorContent').textContent = message;
+            document.getElementById('errorDisplay').classList.add('show');
+            document.getElementById('successDisplay').classList.remove('show');
+        }
+
+        function showSuccess(message) {
+            document.getElementById('successContent').textContent = message;
+            document.getElementById('successDisplay').classList.add('show');
+            document.getElementById('errorDisplay').classList.remove('show');
+        }
+
+        async function checkBackend() {
+            addLog('正在检查后端服务器...', 'info');
+            const statusDiv = document.getElementById('backendStatus');
+
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+
+                if (response.ok) {
+                    addLog('✅ 后端服务器正常运行', 'success');
+                    addLog(`版本: ${data.version}, 环境: ${data.environment}`, 'info');
+                    statusDiv.innerHTML = `
+                        <div class="success-box show">
+                            <h3>✅ 后端连接正常</h3>
+                            <p>状态: ${data.status}</p>
+                            <p>版本: ${data.version}</p>
+                            <p>环境: ${data.environment}</p>
+                        </div>
+                    `;
+                    return true;
+                } else {
+                    throw new Error(`后端返回错误: ${response.status}`);
+                }
+            } catch (error) {
+                addLog(`❌ 后端连接失败: ${error.message}`, 'error');
+                statusDiv.innerHTML = `
+                    <div class="error-box show">
+                        <h3>❌ 后端连接失败</h3>
+                        <p>${error.message}</p>
+                        <p>请确保后端服务器正在运行 (端口 8700)</p>
+                    </div>
+                `;
+                return false;
+            }
+        }
+
+        async function testSimpleRequest() {
+            addLog('发送测试活动请求...', 'info');
+            const resultDiv = document.getElementById('simpleTestResult');
+
+            const testData = {
+                title: "【调试工具】测试活动",
+                notification_text: "测试通知",
+                preview_text: "测试预览",
+                template_type: "image_click",
+                schedule_type: "immediate",
+                target_audience: {
+                    type: "all"
+                },
+                carousel_items: [{
+                    image_url: "https://dummyimage.com/1200x800/4a90e2/ffffff&text=Debug+Test",
+                    action_button_enabled: false,
+                    sort_order: 0
+                }]
+            };
+
+            addLog('发送的数据: ' + JSON.stringify(testData, null, 2), 'info');
+
+            try {
+                const response = await fetch('/api/v1/campaigns', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(testData)
+                });
+
+                const data = await response.json();
+                addLog(`收到响应: ${response.status} ${response.statusText}`,
+                    response.ok ? 'success' : 'error');
+                addLog('响应数据: ' + JSON.stringify(data, null, 2),
+                    response.ok ? 'success' : 'error');
+
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="success-box show">
+                            <h3>✅ 测试请求成功！</h3>
+                            <p>活动ID: ${data.data?.id}</p>
+                            <p>状态: ${data.data?.status}</p>
+                            <p>发送数量: ${data.data?.sent_count || 0}</p>
+                            <p><strong>结论：</strong>后端API正常工作。如果主应用的"发布"按钮无效，问题可能在于：</p>
+                            <ol>
+                                <li>前端发送的数据格式不正确</li>
+                                <li>前端验证逻辑阻止了请求</li>
+                                <li>浏览器缓存了旧版本的代码</li>
+                            </ol>
+                        </div>
+                    `;
+                    showSuccess('后端API测试通过！问题可能在前端数据格式或验证逻辑。');
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="error-box show">
+                            <h3>❌ 测试请求失败</h3>
+                            <p>状态码: ${response.status}</p>
+                            <p>错误信息: ${data.message || data.detail || '未知错误'}</p>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                    showError(`后端返回错误: ${data.message || data.detail || '未知错误'}`);
+                }
+            } catch (error) {
+                addLog(`❌ 请求异常: ${error.message}`, 'error');
+                resultDiv.innerHTML = `
+                    <div class="error-box show">
+                        <h3>❌ 请求异常</h3>
+                        <p>${error.message}</p>
+                        <p>可能的原因：</p>
+                        <ul>
+                            <li>网络连接问题</li>
+                            <li>后端服务器未运行</li>
+                            <li>CORS 配置问题</li>
+                        </ul>
+                    </div>
+                `;
+                showError(`请求失败: ${error.message}`);
+            }
+        }
+
+        // 自动检查后端
+        window.addEventListener('load', () => {
+            addLog('调试工具已加载', 'success');
+            addLog('建议：先在主应用点击"发布"，然后切换回来这里进行诊断', 'warning');
+        });
+
+        // 添加点击检查项的功能
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.checklist li').forEach(item => {
+                item.addEventListener('click', function() {
+                    this.classList.toggle('checked');
+                });
+            });
+        });
+    </script>
+</body>
+</html>

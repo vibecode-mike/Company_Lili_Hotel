@@ -22,37 +22,37 @@ class SurveyStatus(str, enum.Enum):
     """問卷狀態"""
 
     DRAFT = "draft"
+    SCHEDULED = "scheduled"
     PUBLISHED = "published"
-    ARCHIVED = "archived"
 
 
 class QuestionType(str, enum.Enum):
     """題目類型"""
 
-    NAME = "name"
-    PHONE = "phone"
-    EMAIL = "email"
-    BIRTHDAY = "birthday"
-    ADDRESS = "address"
-    GENDER = "gender"
-    ID_NUMBER = "id_number"
-    LINK = "link"
-    VIDEO = "video"
-    IMAGE = "image"
+    NAME = "NAME"
+    PHONE = "PHONE"
+    EMAIL = "EMAIL"
+    BIRTHDAY = "BIRTHDAY"
+    ADDRESS = "ADDRESS"
+    GENDER = "GENDER"
+    ID_NUMBER = "ID_NUMBER"
+    LINK = "LINK"
+    VIDEO = "VIDEO"
+    IMAGE = "IMAGE"
 
 
 class TargetAudience(str, enum.Enum):
     """目標受眾"""
 
-    ALL = "all"
-    FILTERED = "filtered"
+    ALL = "ALL"
+    FILTERED = "FILTERED"
 
 
 class ScheduleType(str, enum.Enum):
     """排程類型"""
 
-    IMMEDIATE = "immediate"
-    SCHEDULED = "scheduled"
+    IMMEDIATE = "IMMEDIATE"
+    SCHEDULED = "SCHEDULED"
 
 
 class SurveyTemplate(Base):
@@ -98,8 +98,9 @@ class Survey(Base):
         comment="排程類型",
     )
     scheduled_at = Column(DateTime, comment="排程時間")
+    sent_at = Column(DateTime, comment="實際發送時間")
     status = Column(
-        SQLEnum(SurveyStatus),
+        SQLEnum(SurveyStatus, native_enum=False, length=20, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=SurveyStatus.DRAFT,
         comment="狀態",

@@ -2,7 +2,7 @@
 API v1 路由
 """
 from fastapi import APIRouter
-from app.api.v1 import auth, members, campaigns, surveys, tags
+from app.api.v1 import auth, members, campaigns, surveys, tags, upload, tracking
 
 api_router = APIRouter()
 
@@ -12,3 +12,5 @@ api_router.include_router(members.router, prefix="/members", tags=["會員管理
 api_router.include_router(campaigns.router, prefix="/campaigns", tags=["活動推播"])
 api_router.include_router(surveys.router, prefix="/surveys", tags=["問卷管理"])
 api_router.include_router(tags.router, prefix="/tags", tags=["標籤管理"])
+api_router.include_router(upload.router, prefix="/upload", tags=["文件上傳"])
+api_router.include_router(tracking.router, prefix="/tracking", tags=["追蹤統計"])
