@@ -499,89 +499,63 @@ def make_image_click_bubble(item: dict, tracked_uri: Optional[str]):
             }
         }
 
-    # 場景 2-5: 有動作按鈕 → 使用 body 結構 + 浮動按鈕
+    # 場景 2-5: 有動作按鈕 → 使用 hero + footer 結構（LINE 標準格式）
     action_button_text = item.get("action_button_text", "點擊查看")
     interaction_type = item.get("action_button_interaction_type", "none")
 
-    # 構建浮動按鈕的 action（根據互動類型）
-    button_box = {
-        "type": "box",
-        "layout": "vertical",
-        "backgroundColor": "#00000077",
-        "cornerRadius": "999px",
-        "paddingTop": "8px",
-        "paddingBottom": "8px",
-        "paddingStart": "20px",
-        "paddingEnd": "20px",
-        "width": "180px",
-        "alignItems": "center",
-        "justifyContent": "center",
-        "contents": [
-            {
-                "type": "text",
-                "text": action_button_text,
-                "weight": "bold",
-                "size": "sm",
-                "align": "center",
-                "color": "#FFFFFF"
-            }
-        ]
-    }
-
-    # 根據互動類型添加 action
-    if interaction_type == "trigger_message":
-        # 場景 3: interaction_text.json（觸發訊息）
-        button_box["action"] = {
-            "type": "message",
-            "label": "action",
-            "text": item.get("action_button_trigger_message", "")
-        }
-    elif interaction_type == "open_url":
-        # 場景 4: interaction_uri.json（開啟網址）
-        button_box["action"] = {
-            "type": "uri",
-            "label": "action",
-            "uri": item.get("action_button_url", "")
-        }
-    elif interaction_type == "trigger_image":
-        # 場景 5: interaction_image.json（觸發圖片）
-        button_box["action"] = {
-            "type": "uri",
-            "label": "action",
-            "uri": item.get("action_button_trigger_image_url", "")
-        }
-    # else: 場景 2: interaction_no.json（無互動，不添加 action）
-
-    # 返回帶浮動按鈕的格式
-    return {
+    # 構建基礎 bubble 結構，圖片使用 hero（LINE 要求）
+    bubble = {
         "type": "bubble",
-        "body": {
-            "type": "box",
-            "layout": "vertical",
-            "paddingAll": "0px",
-            "contents": [
-                {
-                    "type": "image",
-                    "url": image_url,
-                    "size": "full",
-                    "aspectMode": "cover",
-                    "aspectRatio": aspect_ratio
-                },
-                {
-                    "type": "box",
-                    "layout": "horizontal",
-                    "position": "absolute",
-                    "offsetBottom": "20px",
-                    "offsetStart": "0px",
-                    "offsetEnd": "0px",
-                    "width": "100%",
-                    "alignItems": "center",
-                    "justifyContent": "center",
-                    "contents": [button_box]
-                }
-            ]
+        "hero": {
+            "type": "image",
+            "url": image_url,
+            "size": "full",
+            "aspectMode": "cover",
+            "aspectRatio": aspect_ratio
         }
     }
+
+    # 根據互動類型添加 footer 按鈕
+    if interaction_type != "none":
+        button_action = None
+
+        if interaction_type == "trigger_message":
+            # 場景 3: interaction_text.json（觸發訊息）
+            button_action = {
+                "type": "message",
+                "label": action_button_text,
+                "text": item.get("action_button_trigger_message", "")
+            }
+        elif interaction_type == "open_url":
+            # 場景 4: interaction_uri.json（開啟網址）
+            button_action = {
+                "type": "uri",
+                "label": action_button_text,
+                "uri": tracked_uri or item.get("action_button_url") or item.get("action_url") or item.get("url") or f"{PUBLIC_BASE}/"
+            }
+        elif interaction_type == "trigger_image":
+            # 場景 5: interaction_image.json（觸發圖片）
+            button_action = {
+                "type": "uri",
+                "label": action_button_text,
+                "uri": item.get("action_button_trigger_image_url", "")
+            }
+
+        # 添加 footer 按鈕
+        if button_action:
+            bubble["footer"] = {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "sm",
+                "contents": [{
+                    "type": "button",
+                    "style": "primary",
+                    "action": button_action
+                }]
+            }
+    # else: 場景 2: interaction_no.json（無互動，不添加 footer）
+
+    return bubble
 
 def build_user_messages_from_payload(payload: dict, campaign_id: int, line_user_id: str) -> List[FlexMessage]:
     # 添加調試日誌
