@@ -24,7 +24,7 @@ import TriggerImagePreview from '../imports/Container-32-2033';
 import TriggerTextPreview from '../imports/Container-37-43';
 import { campaignService } from '../services/campaignService';
 import { uploadService } from '../services/uploadService';
-import { transformFormToCreateRequest, validateForm } from '../utils/dataTransform';
+import { transformFormToCreateRequest, validateForm, validateFormWithFieldErrors, type FieldErrors } from '../utils/dataTransform';
 import { TemplateTypeDisplay } from '../types/campaign';
 import type { MessageCreationForm, TemplateType, TargetType } from '../types/campaign';
 
@@ -193,7 +193,8 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
   const [scheduledTime, setScheduledTime] = useState({ hours: '12', minutes: '00' });
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [errorCount, setErrorCount] = useState<number>(0);
   const [estimatedCount, setEstimatedCount] = useState<number>(0);
   const [loadingEstimate, setLoadingEstimate] = useState(false);
   const cardRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
@@ -610,8 +611,17 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
   };
 
   const handleSaveDraft = async () => {
-    setValidationErrors([]);
+    setFieldErrors({});
+    setErrorCount(0);
     if (submitting) return;
+
+    if (!templateType) {
+      toast.error('請選擇模板類型');
+      setFieldErrors({ templateType: '請選擇模板類型' });
+      setErrorCount(1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -619,13 +629,15 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
       const assets = await uploadCardAssets();
 
       // Build form data
-      const formData = buildFormData(assets);
+      const formData = buildFormData(assets, templateType);
 
-      // Validate
-      const validation = validateForm(formData);
+      // Validate with field-level errors
+      const validation = validateFormWithFieldErrors(formData);
       if (!validation.isValid) {
-        setValidationErrors(validation.errors);
-        toast.error(validation.errors[0]);
+        setFieldErrors(validation.fieldErrors);
+        setErrorCount(validation.errorCount);
+        toast.error(`請修正 ${validation.errorCount} 個驗證問題`);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
         setSubmitting(false);
         return;
       }
@@ -638,10 +650,10 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
         const errorMsg = typeof response.error.detail === 'string'
           ? response.error.detail
           : '儲存草稿失敗';
-        setValidationErrors([errorMsg]);
         toast.error(errorMsg);
       } else {
-        setValidationErrors([]);
+        setFieldErrors({});
+        setErrorCount(0);
         toast.success('草稿已儲存');
         if (onBack) {
           setTimeout(() => onBack(), 1000);
@@ -650,7 +662,6 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
     } catch (error) {
       console.error('儲存草稿失敗:', error);
       const errorMsg = error instanceof Error ? error.message : '儲存失敗，請稍後再試';
-      setValidationErrors([errorMsg]);
       toast.error(errorMsg);
     } finally {
       setSubmitting(false);
@@ -660,7 +671,8 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
   const handlePublish = async () => {
     console.log('🔵 handlePublish called');
     // Clear previous validation errors
-    setValidationErrors([]);
+    setFieldErrors({});
+    setErrorCount(0);
 
     if (submitting) {
       console.log('⚠️ Already submitting, returning');
@@ -670,17 +682,29 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
     // Basic validation - before setting submitting
     if (!title || !notificationMsg) {
       console.log('❌ Missing title or notificationMsg');
-      const error = '請填寫活動標題和通知訊息';
-      setValidationErrors([error]);
-      toast.error(error);
+      const errors: FieldErrors = {
+        title: !title ? '請輸入活動標題' : undefined,
+        notificationMsg: !notificationMsg ? '請輸入通知訊息' : undefined
+      };
+      const count = ((!title ? 1 : 0) + (!notificationMsg ? 1 : 0));
+      console.log('🔴 Setting fieldErrors:', errors);
+      console.log('🔴 Setting errorCount:', count);
+      setFieldErrors(errors);
+      setErrorCount(count);
+      toast.error('請填寫活動標題和通知訊息');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
     if (!templateType) {
       console.log('❌ Template type not selected');
-      const error = '請選擇模板類型';
-      setValidationErrors([error]);
-      toast.error(error);
+      const errors: FieldErrors = { templateType: '請選擇模板類型' };
+      console.log('🔴 Setting fieldErrors for templateType:', errors);
+      console.log('🔴 Setting errorCount: 1');
+      setFieldErrors(errors);
+      setErrorCount(1);
+      toast.error('請選擇模板類型');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
@@ -697,18 +721,21 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
       const formData = buildFormData(assets, templateType);
       console.log('✅ Form data built:', formData);
 
-      // Validate
+      // Validate with field-level errors
       console.log('🔍 Validating form...');
-      const validation = validateForm(formData);
+      const validation = validateFormWithFieldErrors(formData);
       if (!validation.isValid) {
-        console.log('❌ Validation failed:', validation.errors);
-        setValidationErrors(validation.errors);
-        toast.error(validation.errors[0]);
+        console.log('❌ Validation failed:', validation.fieldErrors);
+        setFieldErrors(validation.fieldErrors);
+        setErrorCount(validation.errorCount);
+        toast.error(`請修正 ${validation.errorCount} 個驗證問題`);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
         setSubmitting(false); // Reset state on validation failure
         return;
       }
       console.log('✅ Validation passed');
-      setValidationErrors([]); // Clear errors on successful validation
+      setFieldErrors({}); // Clear errors on successful validation
+      setErrorCount(0);
 
       // Transform and create campaign (後端會自動發送)
       console.log('🔄 Transforming request data...');
@@ -739,7 +766,6 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
     } catch (error) {
       console.error('❌ Exception caught:', error);
       const errorMsg = error instanceof Error ? error.message : '發佈失敗，請稍後再試';
-      setValidationErrors([errorMsg]);
       toast.error(errorMsg);
     } finally {
       console.log('🔚 Finally block, setting submitting to false');
@@ -912,25 +938,8 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
                     </span>
                   </button>
                 </div>
-                {validationErrors.length > 0 && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 max-w-md">
-                    <div className="flex items-start gap-2">
-                      <svg className="size-5 text-red-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-red-800 mb-1">請修正以下問題：</p>
-                        <ul className="text-sm text-red-700 space-y-1">
-                          {validationErrors.map((error, index) => (
-                            <li key={index} className="flex items-start gap-1">
-                              <span className="mt-1">•</span>
-                              <span>{error}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
+                {errorCount > 0 && (
+                  <p className="text-sm text-[#dc2626] mt-1">還有必填項未填</p>
                 )}
               </div>
             </div>
@@ -942,21 +951,37 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
                   <span className="text-[16px] text-[#383838]">模板類型</span>
                   <span className="text-[16px] text-[#f44336]">*</span>
                 </Label>
-                <Select
-                  value={templateType ?? undefined}
-                  onValueChange={(value) => setTemplateType(value as TemplateType)}
-                >
-                  <SelectTrigger className={`flex-1 !h-[48px] rounded-[8px] border-neutral-100 bg-white ${!templateType ? 'text-[#717182]' : ''}`}>
-                    <SelectValue placeholder="選擇模板類型" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TEMPLATE_TYPE_OPTIONS.map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {TemplateTypeDisplay[option]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex-1 flex flex-col gap-[2px]">
+                  <Select
+                    value={templateType ?? undefined}
+                    onValueChange={(value) => {
+                      console.log('🔵 Template type changed to:', value);
+                      setTemplateType(value as TemplateType);
+                      if (fieldErrors.templateType) {
+                        console.log('🟢 Clearing templateType error');
+                        setFieldErrors(prev => ({ ...prev, templateType: undefined }));
+                        setErrorCount(prev => Math.max(0, prev - 1));
+                      }
+                    }}
+                  >
+                    <SelectTrigger
+                      className={`flex-1 !h-[48px] rounded-[8px] bg-white ${!templateType ? 'text-[#717182]' : ''}`}
+                      style={{
+                        borderColor: '#e5e5e5',
+                        borderWidth: '1px'
+                      }}
+                    >
+                      <SelectValue placeholder="選擇模板類型" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TEMPLATE_TYPE_OPTIONS.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {TemplateTypeDisplay[option]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className="flex-1 flex flex-col sm:flex-row items-start gap-4 w-full">
@@ -975,12 +1000,28 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
                   </Tooltip>
                 </Label>
                 <div className="flex-1 flex flex-col gap-[2px]">
-                  <Input 
+                  <Input
                     value={title}
-                    onChange={(e) => setTitle(e.target.value)}
+                    onChange={(e) => {
+                      setTitle(e.target.value);
+                      if (fieldErrors.title) {
+                        setFieldErrors(prev => ({ ...prev, title: undefined }));
+                        setErrorCount(prev => Math.max(0, prev - 1));
+                      }
+                    }}
+                    onFocus={() => {
+                      if (fieldErrors.title) {
+                        setFieldErrors(prev => ({ ...prev, title: undefined }));
+                        setErrorCount(prev => Math.max(0, prev - 1));
+                      }
+                    }}
                     placeholder="輸入訊息"
                     maxLength={32}
-                    className="w-full h-[48px] rounded-[8px] border-neutral-100 bg-white"
+                    className="w-full h-[48px] rounded-[8px] bg-white"
+                    style={{
+                      borderColor: '#e5e5e5',
+                      borderWidth: '1px'
+                    }}
                   />
                   <div className="flex justify-end">
                     <p className="text-[12px] leading-[1.5]">
@@ -1010,12 +1051,28 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
                   </Tooltip>
                 </Label>
                 <div className="flex-1 flex flex-col gap-[2px] w-full">
-                  <Input 
+                  <Input
                     value={notificationMsg}
-                    onChange={(e) => setNotificationMsg(e.target.value)}
+                    onChange={(e) => {
+                      setNotificationMsg(e.target.value);
+                      if (fieldErrors.notificationMsg) {
+                        setFieldErrors(prev => ({ ...prev, notificationMsg: undefined }));
+                        setErrorCount(prev => Math.max(0, prev - 1));
+                      }
+                    }}
+                    onFocus={() => {
+                      if (fieldErrors.notificationMsg) {
+                        setFieldErrors(prev => ({ ...prev, notificationMsg: undefined }));
+                        setErrorCount(prev => Math.max(0, prev - 1));
+                      }
+                    }}
                     placeholder="顯示於裝置通知列的訊息內容"
                     maxLength={100}
-                    className="h-[48px] rounded-[8px] border-neutral-100 bg-white"
+                    className="h-[48px] rounded-[8px] bg-white"
+                    style={{
+                      borderColor: '#e5e5e5',
+                      borderWidth: '1px'
+                    }}
                   />
                   <div className="flex justify-end">
                     <p className="text-[12px] leading-[1.5]">
@@ -1042,12 +1099,28 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
                   </Tooltip>
                 </Label>
                 <div className="flex-1 flex flex-col gap-[2px]">
-                  <Input 
+                  <Input
                     value={previewMsg}
-                    onChange={(e) => setPreviewMsg(e.target.value)}
+                    onChange={(e) => {
+                      setPreviewMsg(e.target.value);
+                      if (fieldErrors.previewMsg) {
+                        setFieldErrors(prev => ({ ...prev, previewMsg: undefined }));
+                        setErrorCount(prev => Math.max(0, prev - 1));
+                      }
+                    }}
+                    onFocus={() => {
+                      if (fieldErrors.previewMsg) {
+                        setFieldErrors(prev => ({ ...prev, previewMsg: undefined }));
+                        setErrorCount(prev => Math.max(0, prev - 1));
+                      }
+                    }}
                     placeholder="顯示於聊天室過通知列的訊息內容"
                     maxLength={100}
-                    className="h-[48px] rounded-[8px] border-neutral-100 bg-white"
+                    className="h-[48px] rounded-[8px] bg-white"
+                    style={{
+                      borderColor: '#e5e5e5',
+                      borderWidth: '1px'
+                    }}
                   />
                   <div className="flex justify-end text-[12px] leading-[1.5]">
                     <span className="text-[#6e6e6e]">{previewMsg.length}</span>
@@ -1081,9 +1154,16 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
                 <div className="flex items-center gap-3">
                   <RadioGroupItem value="scheduled" id="scheduled" />
                   <Label htmlFor="scheduled" className="cursor-pointer text-[16px] text-[#383838]">自訂時間</Label>
-                  <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-                    <PopoverTrigger asChild disabled={scheduleType === 'immediate'}>
-                      <div className={`bg-white border border-neutral-100 rounded-[8px] px-[8px] py-[8px] w-[298px] flex items-center gap-6 transition-colors ${scheduleType === 'immediate' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-neutral-200'}`}>
+                  <div className="flex flex-col gap-1">
+                    <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+                      <PopoverTrigger asChild disabled={scheduleType === 'immediate'}>
+                        <div
+                          className={`bg-white rounded-[8px] px-[8px] py-[8px] w-[298px] flex items-center gap-6 transition-colors ${scheduleType === 'immediate' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-neutral-200'}`}
+                          style={{
+                            borderColor: '#e5e5e5',
+                            borderWidth: '1px'
+                          }}
+                        >
                         <span className={`text-[16px] ${scheduledDate ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>
                           {formatDate(scheduledDate)}
                         </span>
@@ -1095,9 +1175,9 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
                             <path d={svgPaths.p22990f00} fill="#0F6BEB" />
                           </svg>
                         </button>
-                      </div>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                        </div>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
                       <div className="flex flex-col gap-4 p-4">
                         <div className="space-y-2">
                           <Label className="text-[14px] text-[#383838]">選擇日期</Label>
@@ -1151,8 +1231,9 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
                           </Button>
                         </div>
                       </div>
-                    </PopoverContent>
-                  </Popover>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </div>
               </RadioGroup>
             </div>
@@ -1189,7 +1270,14 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
                       </div>
                     </div>
                     {targetType === 'filtered' && (
-                      <div className="bg-white max-w-[600px] min-w-[300px] rounded-[8px] shrink-0 w-full border border-neutral-100">
+                      <div className="flex flex-col gap-1">
+                        <div
+                          className="bg-white max-w-[600px] min-w-[300px] rounded-[8px] shrink-0 w-full"
+                          style={{
+                            borderColor: '#e5e5e5',
+                            borderWidth: '1px'
+                          }}
+                        >
                         <div className="flex flex-col justify-center max-w-inherit min-w-inherit size-full">
                           <div className="box-border content-stretch flex flex-col gap-[4px] items-start justify-center max-w-inherit min-w-inherit p-[8px] w-full">
                             {selectedFilterTags.length > 0 && (
@@ -1234,6 +1322,7 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
                           </div>
                         </div>
                       </div>
+                    </div>
                     )}
                   </div>
                 </RadioGroup>
@@ -1703,11 +1792,37 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
                       </Label>
                     </div>
                     <div className="flex-1 space-y-[2px]">
-                      <Input 
+                      <Input
                         value={currentCard.cardTitle}
-                        onChange={(e) => updateCard({ cardTitle: e.target.value })}
+                        onChange={(e) => {
+                          updateCard({ cardTitle: e.target.value });
+                          if (fieldErrors.cards?.[currentCard.id]?.title) {
+                            const newCards = { ...fieldErrors.cards };
+                            delete newCards[currentCard.id].title;
+                            if (Object.keys(newCards[currentCard.id]).length === 0) {
+                              delete newCards[currentCard.id];
+                            }
+                            setFieldErrors(prev => ({ ...prev, cards: newCards }));
+                            setErrorCount(prev => Math.max(0, prev - 1));
+                          }
+                        }}
+                        onFocus={() => {
+                          if (fieldErrors.cards?.[currentCard.id]?.title) {
+                            const newCards = { ...fieldErrors.cards };
+                            delete newCards[currentCard.id].title;
+                            if (Object.keys(newCards[currentCard.id]).length === 0) {
+                              delete newCards[currentCard.id];
+                            }
+                            setFieldErrors(prev => ({ ...prev, cards: newCards }));
+                            setErrorCount(prev => Math.max(0, prev - 1));
+                          }
+                        }}
                         placeholder="輸入標題文字"
-                        className="h-[48px] rounded-[8px] border-neutral-100 bg-white"
+                        className="h-[48px] rounded-[8px] bg-white"
+                        style={{
+                          borderColor: '#e5e5e5',
+                          borderWidth: '1px'
+                        }}
                         maxLength={20}
                       />
                       <p className="text-[12px] text-right text-[#6e6e6e]">
@@ -1964,7 +2079,7 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
                             </Label>
                           </div>
                           <div className="flex-1">
-                            <Input 
+                            <Input
                               value={currentCard.button1Url}
                               onChange={(e) => updateCard({ button1Url: e.target.value })}
                               placeholder="輸入網址"
@@ -2100,7 +2215,7 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
                                 </Label>
                               </div>
                               <div className="flex-1">
-                                <Input 
+                                <Input
                                   value={currentCard.button2Url}
                                   onChange={(e) => updateCard({ button2Url: e.target.value })}
                                   placeholder="輸入網址"

@@ -8,6 +8,8 @@ import { transformResponseListToMessages } from '../utils/dataTransform';
 
 interface MessageListProps {
   onCreateMessage: () => void;
+  onShowMembers?: () => void;
+  onShowMessages?: () => void;
 }
 
 // Starbit Logo Component
@@ -438,7 +440,11 @@ function MainContent({
   );
 }
 
-export default function MessageList({ onCreateMessage }: MessageListProps) {
+export default function MessageList({
+  onCreateMessage,
+  onShowMembers = () => {},
+  onShowMessages = () => {},
+}: MessageListProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [searchValue, setSearchValue] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -589,7 +595,11 @@ export default function MessageList({ onCreateMessage }: MessageListProps) {
                   </svg>
                   <p className="text-[14px] text-[#6e6e6e]">群發訊息</p>
                 </div>
-                <button className="bg-[#e1ebf9] box-border flex items-center px-[28px] py-[8px] rounded-[8px] w-full hover:bg-[#d0e0f5] transition-colors">
+                <button
+                  type="button"
+                  onClick={onShowMessages}
+                  className="bg-[#e1ebf9] box-border flex items-center px-[28px] py-[8px] rounded-[8px] w-full hover:bg-[#d0e0f5] transition-colors"
+                >
                   <p className="text-[16px] text-[#0f6beb]">活動與訊息推播</p>
                 </button>
                 <button className="box-border flex items-center px-[28px] py-[8px] rounded-[8px] w-full hover:bg-slate-200 transition-colors">
@@ -605,7 +615,11 @@ export default function MessageList({ onCreateMessage }: MessageListProps) {
                   </svg>
                   <p className="text-[14px] text-[#6e6e6e]">會員</p>
                 </div>
-                <button className="box-border flex items-center px-[28px] py-[8px] rounded-[8px] w-full hover:bg-slate-200 transition-colors">
+                <button
+                  type="button"
+                  onClick={onShowMembers}
+                  className="box-border flex items-center px-[28px] py-[8px] rounded-[8px] w-full hover:bg-slate-200 transition-colors"
+                >
                   <p className="text-[16px] text-[#383838]">會員管理</p>
                 </button>
               </div>

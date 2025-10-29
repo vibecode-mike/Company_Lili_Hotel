@@ -437,7 +437,157 @@ export function dateToISOString(date: Date): string {
 // ===== 数据验证 Data Validation =====
 
 /**
- * 验证表单数据是否完整
+ * 字段级错误状态接口
+ */
+export interface FieldErrors {
+  title?: string;
+  notificationMsg?: string;
+  previewMsg?: string;
+  templateType?: string;
+  scheduledTime?: string;
+  targetTags?: string;
+  cards?: {
+    [cardId: number]: {
+      image?: string;
+      title?: string;
+      messageText?: string;
+      button1Url?: string;
+      button1Text?: string;
+      button1TriggerMessage?: string;
+      button1TriggerImage?: string;
+      button2Url?: string;
+      button2Text?: string;
+      button2TriggerMessage?: string;
+      button2TriggerImage?: string;
+    };
+  };
+}
+
+/**
+ * 验证表单数据并返回字段级错误（新版）
+ */
+export function validateFormWithFieldErrors(form: MessageCreationForm): {
+  isValid: boolean;
+  fieldErrors: FieldErrors;
+  errorCount: number;
+} {
+  const fieldErrors: FieldErrors = {};
+  let errorCount = 0;
+
+  // 验证基本信息
+  if (!form.title || form.title.trim() === '') {
+    fieldErrors.title = '請輸入活動標題';
+    errorCount++;
+  }
+
+  if (!form.notificationMsg || form.notificationMsg.trim() === '') {
+    fieldErrors.notificationMsg = '請輸入通知訊息';
+    errorCount++;
+  }
+
+  if (!form.previewMsg || form.previewMsg.trim() === '') {
+    fieldErrors.previewMsg = '請輸入通知預覽';
+    errorCount++;
+  }
+
+  if (!form.templateType) {
+    fieldErrors.templateType = '請選擇模板類型';
+    errorCount++;
+  }
+
+  // 验证排程信息
+  if (form.scheduleType === 'scheduled' && !form.scheduledTime) {
+    fieldErrors.scheduledTime = '請選擇排程時間';
+    errorCount++;
+  }
+
+  // 验证目标受众
+  if ((form.targetType === 'tags' || form.targetType === 'filtered') && (!form.targetTags || form.targetTags.length === 0)) {
+    fieldErrors.targetTags = '請選擇目標標籤';
+    errorCount++;
+  }
+
+  // 验证卡片信息
+  if (form.cards && form.cards.length > 0) {
+    fieldErrors.cards = {};
+
+    form.cards.forEach((card, index) => {
+      const cardId = index + 1;
+      const cardErrors: any = {};
+
+      // 验证图片
+      if (!card.imageUrl || card.imageUrl.trim() === '') {
+        cardErrors.image = '請上傳圖片';
+        errorCount++;
+      }
+
+      // 验证标题（仅对 image_card 模板类型）
+      if (form.templateType === 'image_card' && (!card.title || card.title.trim() === '')) {
+        cardErrors.title = '請輸入標題文字';
+        errorCount++;
+      }
+
+      // 验证消息文字（仅对 text_button 模板类型）
+      if (form.templateType === 'text_button' && (!card.messageText || card.messageText.trim() === '')) {
+        cardErrors.messageText = '請輸入訊息文字';
+        errorCount++;
+      }
+
+      // 验证按钮 1
+      if (card.button1) {
+        if (card.button1.action === 'url' && (!card.button1.value || card.button1.value.trim() === '')) {
+          cardErrors.button1Url = '請輸入按鈕 1 URL';
+          errorCount++;
+        }
+        if ((card.button1.action === 'message' || card.button1.action === 'postback') && (!card.button1.value || card.button1.value.trim() === '')) {
+          cardErrors.button1TriggerMessage = '請輸入按鈕 1 觸發文字';
+          errorCount++;
+        }
+        if (card.button1.action === 'image' && (!card.button1.triggerImageUrl || card.button1.triggerImageUrl.trim() === '')) {
+          cardErrors.button1TriggerImage = '請上傳按鈕 1 觸發圖片';
+          errorCount++;
+        }
+        if (!card.button1.label || card.button1.label.trim() === '') {
+          cardErrors.button1Text = '請輸入按鈕 1 文字';
+          errorCount++;
+        }
+      }
+
+      // 验证按钮 2
+      if (card.button2) {
+        if (card.button2.action === 'url' && (!card.button2.value || card.button2.value.trim() === '')) {
+          cardErrors.button2Url = '請輸入按鈕 2 URL';
+          errorCount++;
+        }
+        if ((card.button2.action === 'message' || card.button2.action === 'postback') && (!card.button2.value || card.button2.value.trim() === '')) {
+          cardErrors.button2TriggerMessage = '請輸入按鈕 2 觸發文字';
+          errorCount++;
+        }
+        if (card.button2.action === 'image' && (!card.button2.triggerImageUrl || card.button2.triggerImageUrl.trim() === '')) {
+          cardErrors.button2TriggerImage = '請上傳按鈕 2 觸發圖片';
+          errorCount++;
+        }
+        if (!card.button2.label || card.button2.label.trim() === '') {
+          cardErrors.button2Text = '請輸入按鈕 2 文字';
+          errorCount++;
+        }
+      }
+
+      if (Object.keys(cardErrors).length > 0) {
+        fieldErrors.cards![cardId] = cardErrors;
+      }
+    });
+  }
+
+  return {
+    isValid: errorCount === 0,
+    fieldErrors,
+    errorCount,
+  };
+}
+
+/**
+ * 验证表单数据是否完整（旧版，保留向后兼容）
  */
 export function validateForm(form: MessageCreationForm): {
   isValid: boolean;
