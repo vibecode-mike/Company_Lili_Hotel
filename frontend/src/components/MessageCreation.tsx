@@ -540,7 +540,7 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
     return results;
   };
 
-  const buildFormData = (assets: CardAssetUploadResult[], selectedTemplateType: TemplateType): MessageCreationForm => {
+  const buildFormData = (assets: CardAssetUploadResult[], selectedTemplateType: TemplateType | null): MessageCreationForm => {
     // Convert scheduled time to Date if needed
     let scheduledDateTime: Date | undefined;
     if (scheduleType === 'scheduled' && scheduledDate) {
@@ -549,8 +549,10 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
       scheduledDateTime.setMinutes(parseInt(scheduledTime.minutes));
     }
 
+    const resolvedTemplateType: TemplateType = selectedTemplateType ?? 'image_card';
+
     return {
-      templateType: selectedTemplateType,
+      templateType: resolvedTemplateType,
       title,
       notificationMsg,
       previewMsg,
@@ -615,14 +617,6 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
     setErrorCount(0);
     if (submitting) return;
 
-    if (!templateType) {
-      toast.error('請選擇模板類型');
-      setFieldErrors({ templateType: '請選擇模板類型' });
-      setErrorCount(1);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-
     setSubmitting(true);
     try {
       // Upload images first
@@ -680,30 +674,19 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
     }
 
     // Basic validation - before setting submitting
-    if (!title || !notificationMsg) {
-      console.log('❌ Missing title or notificationMsg');
+    if (!title || !notificationMsg || !previewMsg) {
+      console.log('❌ Missing required fields');
       const errors: FieldErrors = {
         title: !title ? '請輸入活動標題' : undefined,
-        notificationMsg: !notificationMsg ? '請輸入通知訊息' : undefined
+        notificationMsg: !notificationMsg ? '請輸入通知訊息' : undefined,
+        previewMsg: !previewMsg ? '請輸入通知預覽' : undefined,
       };
-      const count = ((!title ? 1 : 0) + (!notificationMsg ? 1 : 0));
+      const count = ((!title ? 1 : 0) + (!notificationMsg ? 1 : 0) + (!previewMsg ? 1 : 0));
       console.log('🔴 Setting fieldErrors:', errors);
       console.log('🔴 Setting errorCount:', count);
       setFieldErrors(errors);
       setErrorCount(count);
-      toast.error('請填寫活動標題和通知訊息');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-
-    if (!templateType) {
-      console.log('❌ Template type not selected');
-      const errors: FieldErrors = { templateType: '請選擇模板類型' };
-      console.log('🔴 Setting fieldErrors for templateType:', errors);
-      console.log('🔴 Setting errorCount: 1');
-      setFieldErrors(errors);
-      setErrorCount(1);
-      toast.error('請選擇模板類型');
+      toast.error('請填寫訊息標題、通知訊息與通知預覽');
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
@@ -949,7 +932,6 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
               <div className="flex-1 flex flex-col sm:flex-row items-start gap-4 w-full">
                 <Label className="min-w-[120px] sm:min-w-[140px] lg:min-w-[160px] pt-3">
                   <span className="text-[16px] text-[#383838]">模板類型</span>
-                  <span className="text-[16px] text-[#f44336]">*</span>
                 </Label>
                 <div className="flex-1 flex flex-col gap-[2px]">
                   <Select
@@ -1134,7 +1116,6 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
             <div className="flex items-start gap-4 w-full">
               <Label className="min-w-[160px] pt-1 flex items-center gap-1">
                 <span className="text-[16px] text-[#383838]">排程發送</span>
-                <span className="text-[16px] text-[#f44336]">*</span>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <svg className="size-[24px]" fill="none" viewBox="0 0 24 24">
@@ -1242,7 +1223,6 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
             <div className="flex items-start gap-4 w-full">
               <Label className="min-w-[160px] pt-1 flex items-center gap-1">
                 <span className="text-[16px] text-[#383838]">發送對象</span>
-                <span className="text-[16px] text-[#f44336]">*</span>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <svg className="size-[24px]" fill="none" viewBox="0 0 24 24">
@@ -1676,7 +1656,6 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
                       </div>
                       <Label className="flex items-center">
                         <span className="text-[16px] text-[#383838]">訊息文字</span>
-                        <span className="text-[16px] text-[#f44336]">*</span>
                       </Label>
                     </div>
                     <Input
@@ -1695,9 +1674,8 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
                       </div>
                       <Label className="flex items-center">
                         <span className="text-[16px] text-[#383838]">選擇圖片</span>
-                        <span className="text-[16px] text-[#f44336]">*</span>
                       </Label>
-                    </div>
+                </div>
                     <div className="flex-1 space-y-[8px]">
                       <div
                         className="group bg-[#f6f9fd] hover:bg-[#e1ebf9] active:bg-[#e1ebf9] relative rounded-[8px] h-[180px] cursor-pointer transition-colors overflow-hidden"
@@ -1788,7 +1766,6 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
                       </div>
                       <Label className="flex items-center">
                         <span className="text-[16px] text-[#383838]">標題文字</span>
-                        <span className="text-[16px] text-[#f44336]">*</span>
                       </Label>
                     </div>
                     <div className="flex-1 space-y-[2px]">
@@ -1990,10 +1967,9 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
                         <div className="flex gap-[10px] items-center justify-center opacity-0 size-[24px]">
                           <Checkbox />
                         </div>
-                        <Label className="flex items-center">
-                          <span className="text-[16px] text-[#383838]">互動類型</span>
-                          <span className="text-[16px] text-[#f44336]">*</span>
-                        </Label>
+                      <Label className="flex items-center">
+                        <span className="text-[16px] text-[#383838]">互動類型</span>
+                      </Label>
                       </div>
                       <Select value={currentCard.button1Action} onValueChange={(value) => updateCard({ button1Action: value })}>
                         <SelectTrigger className={`flex-1 h-[48px] py-1 rounded-[8px] border-neutral-100 bg-white ${currentCard.button1Action === 'select' ? 'text-[#717182]' : ''}`}>
@@ -2016,7 +1992,6 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
                           </div>
                           <Label className="flex items-center gap-[2px]">
                             <span className="text-[16px] text-[#383838]">觸發文字</span>
-                            <span className="text-[16px] text-[#f44336]">*</span>
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <svg className="size-[24px]" fill="none" viewBox="0 0 24 24">
@@ -2063,10 +2038,9 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
                             <div className="flex gap-[10px] items-center justify-center opacity-0 size-[24px]">
                               <Checkbox />
                             </div>
-                            <Label className="flex items-center gap-[2px]">
-                              <span className="text-[16px] text-[#383838]">URL</span>
-                              <span className="text-[16px] text-[#f44336]">*</span>
-                              <Tooltip>
+                          <Label className="flex items-center gap-[2px]">
+                            <span className="text-[16px] text-[#383838]">URL</span>
+                            <Tooltip>
                                 <TooltipTrigger asChild>
                                   <svg className="size-[24px]" fill="none" viewBox="0 0 24 24">
                                     <path d={svgPaths.p2cd5ff00} fill="#0F6BEB" />
@@ -2176,7 +2150,6 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
                             </div>
                             <Label className="flex items-center">
                               <span className="text-[16px] text-[#383838]">互動類型</span>
-                              <span className="text-[16px] text-[#f44336]">*</span>
                             </Label>
                           </div>
                           <Select value={currentCard.button2Action} onValueChange={(value) => updateCard({ button2Action: value })}>
@@ -2201,7 +2174,6 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
                                 </div>
                                 <Label className="flex items-center gap-[2px]">
                                   <span className="text-[16px] text-[#383838]">URL</span>
-                                  <span className="text-[16px] text-[#f44336]">*</span>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <svg className="size-[24px]" fill="none" viewBox="0 0 24 24">
@@ -2235,7 +2207,6 @@ export default function MessageCreation({ onBack }: MessageCreationProps = {}) {
                                 </div>
                                 <Label className="flex items-center gap-[2px]">
                                   <span className="text-[16px] text-[#383838]">觸發文字</span>
-                                  <span className="text-[16px] text-[#f44336]">*</span>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <svg className="size-[24px]" fill="none" viewBox="0 0 24 24">

@@ -79,6 +79,12 @@ async def get_campaigns(
             limit=limit
         )
 
+        # 獲取 ryan_click_demo 的點擊計數
+        campaign_ids = [c.id for c in campaigns]
+        ryan_click_counts = await campaign_service.get_click_counts_from_ryan_demo(
+            db, campaign_ids
+        )
+
         return [
             {
                 "id": c.id,
@@ -88,7 +94,7 @@ async def get_campaigns(
                 "interaction_tags": c.interaction_tags or [],  # 多標籤數組
                 "target_count": c.sent_count,
                 "open_count": c.opened_count,
-                "click_count": c.clicked_count,
+                "click_count": ryan_click_counts.get(c.id, 0),  # 使用 ryan_click_demo 的計數
                 "sent_at": c.sent_at.strftime("%Y-%m-%d %H:%M") if c.sent_at else None,
                 "scheduled_at": c.scheduled_at.strftime("%Y-%m-%d %H:%M") if c.scheduled_at else None,
             }

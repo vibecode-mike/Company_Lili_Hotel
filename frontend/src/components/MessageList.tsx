@@ -183,59 +183,23 @@ function Breadcrumb() {
   );
 }
 
-function TitleTextContainer() {
-  return (
-    <div className="content-stretch flex gap-[10px] items-center justify-center relative shrink-0" data-name="Title Text Container">
-      <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[32px] text-center text-nowrap whitespace-pre">活動與訊息推播</p>
-    </div>
-  );
-}
-
-function TitleWrapper() {
-  return (
-    <div className="box-border content-stretch flex items-center pl-[4px] pr-0 py-0 relative shrink-0" data-name="Title Wrapper">
-      <TitleTextContainer />
-    </div>
-  );
-}
-
 function TitleContainer() {
   return (
-    <div className="content-stretch flex gap-[12px] items-center relative shrink-0 w-full" data-name="Title Container">
-      <TitleWrapper />
-    </div>
-  );
-}
-
-function DescriptionTextContainer() {
-  return (
-    <div className="content-stretch flex gap-[10px] items-center justify-center relative shrink-0" data-name="Description Text Container">
-      <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#6e6e6e] text-[16px] text-center text-nowrap whitespace-pre">建立單一圖文或多頁輪播內容，打造引人注目的品牌訊息</p>
-    </div>
-  );
-}
-
-function DescriptionWrapper() {
-  return (
-    <div className="box-border content-stretch flex items-center pl-[4px] pr-0 py-0 relative shrink-0" data-name="Description Wrapper">
-      <DescriptionTextContainer />
-    </div>
-  );
-}
-
-function DescriptionContainer() {
-  return (
-    <div className="content-stretch flex gap-[12px] items-center relative shrink-0 w-full" data-name="Description Container">
-      <DescriptionWrapper />
+    <div className="flex w-full flex-col items-start gap-2" data-name="Title Container">
+      <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] text-left text-[#383838] text-[32px] whitespace-pre">
+        活動與訊息推播
+      </p>
+      <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] text-left text-[#6e6e6e] text-[16px] whitespace-pre">
+        建立單一圖文或多頁輪播內容，打造引人注目的品牌訊息
+      </p>
     </div>
   );
 }
 
 function HeaderContainer() {
   return (
-    <div className="content-stretch flex flex-col gap-[8px] items-start relative shrink-0 w-full" data-name="Header Container">
+    <div className="content-stretch flex flex-col gap-[8px] items-start relative shrink-0 w-full text-left" data-name="Header Container">
       <TitleContainer />
-      <DescriptionContainer />
     </div>
   );
 }

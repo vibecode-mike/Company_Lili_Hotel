@@ -18,7 +18,7 @@ interface MemberDashboardProps {
 
 function StarbitLogo() {
   return (
-    <div className="h-[49.333px] overflow-clip relative shrink-0 w-[148px]">
+    <div className="h-[49.333px] overflow-visible relative shrink-0 w-[148px]">
       <div className="absolute inset-[24.73%_62.3%_43%_29.83%]">
         <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 16">
           <path clipRule="evenodd" d={sidebarPaths.p7342f80} fill="#189AEB" fillRule="evenodd" />
@@ -108,6 +108,71 @@ function StarbitLogo() {
       >
         <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 18 21">
           <path d={sidebarPaths.p1df19600} fill="#6ED7FF" />
+        </svg>
+      </div>
+      <div className="absolute inset-[23.55%_79.27%_61.17%_10.06%]">
+        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 16 8">
+          <path d={sidebarPaths.peae5a00} fill="#189AEB" />
+        </svg>
+      </div>
+      <div className="absolute inset-[38.83%_76.47%_42.23%_10.06%]">
+        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 20 10">
+          <path d={sidebarPaths.p56e0200} fill="#6ED7FF" />
+        </svg>
+      </div>
+      <div className="absolute inset-[23.57%_76.37%_58.34%_18.22%]">
+        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 8 9">
+          <path d={sidebarPaths.p3047d700} fill="#6ED7FF" />
+        </svg>
+      </div>
+      <div className="absolute inset-[53.48%_84.18%_26.93%_9.37%]">
+        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 10 10">
+          <path d={sidebarPaths.p38a8ff00} fill="#6ED7FF" />
+        </svg>
+      </div>
+      <div className="absolute inset-[57.77%_76.47%_26.91%_12.72%]">
+        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 16 8">
+          <path d={sidebarPaths.p29639800} fill="#189AEB" />
+        </svg>
+      </div>
+      <div className="absolute inset-[22.41%_72.4%_67.66%_24.12%]">
+        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 6 5">
+          <path d={sidebarPaths.p29088600} fill="#6ED7FF" />
+        </svg>
+      </div>
+      <div className="absolute inset-[63.59%_64.96%_25.62%_31.17%]">
+        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 6 6">
+          <path d={sidebarPaths.p1b016f00} fill="#189AEB" />
+        </svg>
+      </div>
+      <div className="absolute inset-[63%_56.2%_25.28%_40.09%]">
+        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 6 6">
+          <path d={sidebarPaths.p3d5c5b00} fill="#189AEB" />
+        </svg>
+      </div>
+      <div className="absolute inset-[63.13%_47.23%_25.2%_48.93%]">
+        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 6 6">
+          <path d={sidebarPaths.p32938000} fill="#189AEB" />
+        </svg>
+      </div>
+      <div className="absolute inset-[62.93%_38.59%_25.16%_57.81%]">
+        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 6 6">
+          <path d={sidebarPaths.p2e055800} fill="#189AEB" />
+        </svg>
+      </div>
+      <div className="absolute inset-[62.96%_29.55%_25.22%_66.71%]">
+        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 6 6">
+          <path d={sidebarPaths.p1c98d3b0} fill="#189AEB" />
+        </svg>
+      </div>
+      <div className="absolute inset-[62.9%_20.63%_25.25%_75.58%]">
+        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 6 6">
+          <path d={sidebarPaths.p664e180} fill="#189AEB" />
+        </svg>
+      </div>
+      <div className="absolute inset-[63.18%_11.74%_25.36%_84.49%]">
+        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 6 6">
+          <path d={sidebarPaths.p7d2500} fill="#189AEB" />
         </svg>
       </div>
     </div>
@@ -215,11 +280,13 @@ export default function MemberDashboard({ onShowMessages, onShowMembers = () => 
       </aside>
 
       <main
-        className={`flex-1 overflow-auto bg-slate-50 transition-all duration-300 ${
+        className={`flex-1 bg-slate-50 transition-all duration-300 ${
           sidebarOpen ? 'ml-[330px] lg:ml-[280px] md:ml-[250px]' : 'ml-[72px]'
         }`}
       >
-        <MemberManagementPage />
+        <div className="h-screen overflow-y-auto">
+          <MemberManagementPage />
+        </div>
       </main>
     </div>
   );

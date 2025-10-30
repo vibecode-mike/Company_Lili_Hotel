@@ -1,5 +1,5 @@
 import React from 'react';
-import svgPaths from './svgPaths';
+import svgPaths from './svg-2wnb18j5t0';
 
 interface SearchBarProps {
   value: string;

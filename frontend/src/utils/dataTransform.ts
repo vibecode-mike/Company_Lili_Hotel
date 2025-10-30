@@ -490,95 +490,6 @@ export function validateFormWithFieldErrors(form: MessageCreationForm): {
     errorCount++;
   }
 
-  if (!form.templateType) {
-    fieldErrors.templateType = '請選擇模板類型';
-    errorCount++;
-  }
-
-  // 验证排程信息
-  if (form.scheduleType === 'scheduled' && !form.scheduledTime) {
-    fieldErrors.scheduledTime = '請選擇排程時間';
-    errorCount++;
-  }
-
-  // 验证目标受众
-  if ((form.targetType === 'tags' || form.targetType === 'filtered') && (!form.targetTags || form.targetTags.length === 0)) {
-    fieldErrors.targetTags = '請選擇目標標籤';
-    errorCount++;
-  }
-
-  // 验证卡片信息
-  if (form.cards && form.cards.length > 0) {
-    fieldErrors.cards = {};
-
-    form.cards.forEach((card, index) => {
-      const cardId = index + 1;
-      const cardErrors: any = {};
-
-      // 验证图片
-      if (!card.imageUrl || card.imageUrl.trim() === '') {
-        cardErrors.image = '請上傳圖片';
-        errorCount++;
-      }
-
-      // 验证标题（仅对 image_card 模板类型）
-      if (form.templateType === 'image_card' && (!card.title || card.title.trim() === '')) {
-        cardErrors.title = '請輸入標題文字';
-        errorCount++;
-      }
-
-      // 验证消息文字（仅对 text_button 模板类型）
-      if (form.templateType === 'text_button' && (!card.messageText || card.messageText.trim() === '')) {
-        cardErrors.messageText = '請輸入訊息文字';
-        errorCount++;
-      }
-
-      // 验证按钮 1
-      if (card.button1) {
-        if (card.button1.action === 'url' && (!card.button1.value || card.button1.value.trim() === '')) {
-          cardErrors.button1Url = '請輸入按鈕 1 URL';
-          errorCount++;
-        }
-        if ((card.button1.action === 'message' || card.button1.action === 'postback') && (!card.button1.value || card.button1.value.trim() === '')) {
-          cardErrors.button1TriggerMessage = '請輸入按鈕 1 觸發文字';
-          errorCount++;
-        }
-        if (card.button1.action === 'image' && (!card.button1.triggerImageUrl || card.button1.triggerImageUrl.trim() === '')) {
-          cardErrors.button1TriggerImage = '請上傳按鈕 1 觸發圖片';
-          errorCount++;
-        }
-        if (!card.button1.label || card.button1.label.trim() === '') {
-          cardErrors.button1Text = '請輸入按鈕 1 文字';
-          errorCount++;
-        }
-      }
-
-      // 验证按钮 2
-      if (card.button2) {
-        if (card.button2.action === 'url' && (!card.button2.value || card.button2.value.trim() === '')) {
-          cardErrors.button2Url = '請輸入按鈕 2 URL';
-          errorCount++;
-        }
-        if ((card.button2.action === 'message' || card.button2.action === 'postback') && (!card.button2.value || card.button2.value.trim() === '')) {
-          cardErrors.button2TriggerMessage = '請輸入按鈕 2 觸發文字';
-          errorCount++;
-        }
-        if (card.button2.action === 'image' && (!card.button2.triggerImageUrl || card.button2.triggerImageUrl.trim() === '')) {
-          cardErrors.button2TriggerImage = '請上傳按鈕 2 觸發圖片';
-          errorCount++;
-        }
-        if (!card.button2.label || card.button2.label.trim() === '') {
-          cardErrors.button2Text = '請輸入按鈕 2 文字';
-          errorCount++;
-        }
-      }
-
-      if (Object.keys(cardErrors).length > 0) {
-        fieldErrors.cards![cardId] = cardErrors;
-      }
-    });
-  }
-
   return {
     isValid: errorCount === 0,
     fieldErrors,
@@ -604,60 +515,8 @@ export function validateForm(form: MessageCreationForm): {
     errors.push('請輸入通知訊息');
   }
 
-  if (!form.templateType) {
-    errors.push('請選擇模板類型');
-  }
-
-  // 验证排程信息
-  if (form.scheduleType === 'scheduled' && !form.scheduledTime) {
-    errors.push('請選擇排程時間');
-  }
-
-  // 验证目标受众
-  if ((form.targetType === 'tags' || form.targetType === 'filtered') && (!form.targetTags || form.targetTags.length === 0)) {
-    errors.push('請選擇目標標籤');
-  }
-
-  // 验证卡片信息
-  if (!form.cards || form.cards.length === 0) {
-    errors.push('請至少添加一張卡片');
-  } else {
-    form.cards.forEach((card, index) => {
-      if (!card.imageUrl || card.imageUrl.trim() === '') {
-        errors.push(`卡片 ${index + 1}: 請上傳圖片`);
-      }
-
-      // 验证标题（仅对 image_card 模板类型）
-      if (form.templateType === 'image_card' && (!card.title || card.title.trim() === '')) {
-        errors.push(`卡片 ${index + 1}: 請輸入標題文字`);
-      }
-
-      // 验证按钮 1
-      if (card.button1) {
-        if (card.button1.action === 'url' && (!card.button1.value || card.button1.value.trim() === '')) {
-          errors.push(`卡片 ${index + 1}: 請輸入按鈕 1 URL`);
-        }
-        if ((card.button1.action === 'message' || card.button1.action === 'postback') && (!card.button1.value || card.button1.value.trim() === '')) {
-          errors.push(`卡片 ${index + 1}: 請輸入按鈕 1 觸發文字`);
-        }
-        if (card.button1.action === 'image' && (!card.button1.triggerImageUrl || card.button1.triggerImageUrl.trim() === '')) {
-          errors.push(`卡片 ${index + 1}: 請上傳按鈕 1 觸發圖片`);
-        }
-      }
-
-      // 验证按钮 2
-      if (card.button2) {
-        if (card.button2.action === 'url' && (!card.button2.value || card.button2.value.trim() === '')) {
-          errors.push(`卡片 ${index + 1}: 請輸入按鈕 2 URL`);
-        }
-        if ((card.button2.action === 'message' || card.button2.action === 'postback') && (!card.button2.value || card.button2.value.trim() === '')) {
-          errors.push(`卡片 ${index + 1}: 請輸入按鈕 2 觸發文字`);
-        }
-        if (card.button2.action === 'image' && (!card.button2.triggerImageUrl || card.button2.triggerImageUrl.trim() === '')) {
-          errors.push(`卡片 ${index + 1}: 請上傳按鈕 2 觸發圖片`);
-        }
-      }
-    });
+  if (!form.previewMsg || form.previewMsg.trim() === '') {
+    errors.push('請輸入通知預覽');
   }
 
   return {

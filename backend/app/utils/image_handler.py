@@ -260,12 +260,31 @@ def file_path_to_base64(file_path: str) -> Optional[str]:
             return url_to_base64(file_path)
 
         # 處理本地檔案路徑
-        # 處理相對路徑
-        if file_path.startswith("/"):
-            file_path = file_path.lstrip("/")
+        normalized_path = file_path.strip()
 
-        # 構建完整路徑
-        full_path = PROJECT_ROOT / "public" / file_path
+        # 優先處理實際存在的絕對路徑
+        absolute_candidate = Path(normalized_path)
+        if absolute_candidate.is_absolute() and absolute_candidate.exists():
+            full_path = absolute_candidate
+        else:
+            # 移除開頭的斜線，並剔除預設的 uploads 前綴
+            relative_path = normalized_path.lstrip("/")
+            relative_parts = Path(relative_path).parts
+            if relative_parts and relative_parts[0] == "uploads":
+                relative_path = Path(*relative_parts[1:]) if len(relative_parts) > 1 else Path("")
+            else:
+                relative_path = Path(relative_path)
+
+            full_path = UPLOAD_DIR / relative_path
+
+        # 若主要位置不存在，再嘗試舊版的 backend/public/* 位置
+        if not full_path.exists():
+            legacy_path = PROJECT_ROOT / "backend" / "public" / normalized_path.lstrip("/")
+            if legacy_path.exists():
+                full_path = legacy_path
+            else:
+                logger.error(f"❌ File not found: {full_path}")
+                return None
 
         if not full_path.exists():
             logger.error(f"❌ File not found: {full_path}")
