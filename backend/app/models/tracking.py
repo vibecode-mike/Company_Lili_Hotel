@@ -5,10 +5,13 @@ from sqlalchemy import (
     Column,
     String,
     BigInteger,
+    Integer,
     DateTime,
     Enum as SQLEnum,
     ForeignKey,
     Text,
+    Boolean,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from app.models.base import Base
@@ -96,3 +99,33 @@ class ComponentInteractionLog(Base):
         "TemplateCarouselItem", back_populates="interaction_logs"
     )
     interaction_tag = relationship("InteractionTag", back_populates="interaction_logs")
+
+
+class RyanClickDemo(Base):
+    """Ryan 點擊追蹤示範表 - 簡化的點擊計數表"""
+
+    __tablename__ = "ryan_click_demo"
+    __table_args__ = (
+        UniqueConstraint('line_id', 'source_campaign_id', name='uq_line_source_campaign'),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    line_id = Column(String(64), nullable=False, comment="LINE 用戶 UID")
+    source_campaign_id = Column(
+        Integer, nullable=False, default=0, index=True, comment="來源活動 ID"
+    )
+    line_display_name = Column(String(128), nullable=True, comment="LINE 顯示名稱")
+    total_clicks = Column(
+        Integer, nullable=False, default=0, comment="總點擊次數"
+    )
+    last_clicked_at = Column(DateTime, nullable=True, comment="最後點擊時間")
+    created_at = Column(
+        DateTime, default=datetime.utcnow, nullable=False, comment="建立時間"
+    )
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+        comment="更新時間",
+    )

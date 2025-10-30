@@ -293,6 +293,14 @@ class LineBotService:
         interaction_tags = campaign.interaction_tags or []
         interaction_tags_json = json.dumps(interaction_tags, ensure_ascii=False) if isinstance(interaction_tags, list) else interaction_tags
 
+        # 驗證 campaign.id 必須存在
+        if campaign.id is None:
+            error_msg = f"❌ Campaign ID is None when building payload for campaign '{campaign.title}'"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        logger.debug(f"✅ Building payload with source_campaign_id={campaign.id} for campaign '{campaign.title}'")
+
         payload = {
             "name": campaign.title,
             "title": campaign.title,
@@ -301,6 +309,7 @@ class LineBotService:
             "preview_text": template.preview_text or "",
             "template_id": template.id,
             "interaction_tags": interaction_tags_json,
+            "source_campaign_id": campaign.id,
         }
 
         # 處理目標對象 - 確保格式正確 (字串 "all" 或 "tags")

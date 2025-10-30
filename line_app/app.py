@@ -152,6 +152,37 @@ def fetch_line_profile(user_id: str) -> tuple[Optional[str], Optional[str]]:
         pass
     return None, None
 
+# 補使用者line資料
+def maybe_update_member_profile(uid: str) -> None:
+    """
+    若 members 裡 display_name / picture_url 有缺，就向 LINE 抓一次並補寫。
+    抓不到（None）時不覆蓋，以避免把舊值清空。
+    """
+    try:
+        row = fetchone("""
+            SELECT line_display_name, line_picture_url
+            FROM members
+            WHERE line_uid = :uid
+        """, {"uid": uid})
+
+        has_name = bool(row and row.get("line_display_name"))
+        has_pic  = bool(row and row.get("line_picture_url"))
+        if has_name and has_pic:
+            return  # 都有就不打 API
+
+        # 打 LINE Profile API（你專案已有 fetch_line_profile，就直接用）
+        display_name, picture_url = fetch_line_profile(uid)
+
+        # 有抓到才更新，避免用空值覆蓋
+        if display_name or picture_url:
+            upsert_member(uid,
+                          display_name if display_name else None,
+                          picture_url  if picture_url  else None)
+            logging.info(f"[PROFILE] backfilled member uid={uid} "
+                         f"name={display_name!r} pic={'Y' if picture_url else 'N'}")
+    except Exception as e:
+        logging.warning(f"[PROFILE] maybe_update_member_profile failed uid={uid}: {e}")
+
 
 # 將 DB 題型映成 LIFF 前端支援的題型
 def _map_question_for_liff(q: dict) -> dict:
@@ -376,12 +407,6 @@ def image_url_from_item(item: dict) -> Optional[str]:
 # -------------------------------------------------
 # Flex builders（推廣）
 # -------------------------------------------------
-def format_price(price, currency='NT$'):
-    """格式化价格显示，添加千分位分隔符"""
-    if price is None:
-        return None
-    return f"{currency} {price:,.0f}"
-
 def make_image_button_bubble(item: dict, tracked_uri: Optional[str]):
     body = []
     if item.get("title"):
@@ -389,68 +414,26 @@ def make_image_button_bubble(item: dict, tracked_uri: Optional[str]):
     if item.get("description"):
         body.append({"type":"text","text":str(item["description"]),"wrap":True,"margin":"sm"})
     if item.get("price") is not None:
-        formatted_price = format_price(item['price'])
-        if formatted_price:
-            body.append({"type":"text","text":formatted_price, "weight":"bold","margin":"sm"})
+        body.append({"type":"text","text":f"$ {item['price']}", "weight":"bold","margin":"sm"})
 
     hero = {"type":"image","url": image_url_from_item(item) or "https://dummyimage.com/1200x800/eeeeee/333333&text=No+Image",
-            "size":"full","aspectMode":"cover","aspectRatio":"3:4"}
+            "size":"full","aspectMode":"cover","aspectRatio":"1:1"}
 
     # 無論如何 hero 直接可點
     action_uri = tracked_uri or item.get("action_url") or item.get("url") or f"{PUBLIC_BASE}/"
     hero["action"] = {"type":"uri","uri": action_uri}
 
-    # 構建 footer（支持 button1 和 button2）
-    footer_buttons = []
-
-    # Button 1
-    if item.get("action_button_enabled"):
-        btn1_type = (item.get("action_button_interaction_type") or "").lower()
-        btn1_text = item.get("action_button_text") or "查看詳情"
-
-        if btn1_type == "open_url":
-            btn1_action = {"type": "uri", "label": btn1_text, "uri": item.get("action_button_url") or action_uri}
-        elif btn1_type == "trigger_message":
-            btn1_action = {"type": "message", "label": btn1_text, "text": item.get("action_button_trigger_message") or ""}
-        elif btn1_type == "trigger_image":
-            btn1_action = {"type": "uri", "label": btn1_text, "uri": item.get("action_button_trigger_image_url") or ""}
-        else:
-            btn1_action = {"type": "uri", "label": btn1_text, "uri": action_uri}
-
-        footer_buttons.append({"type": "button", "style": "primary", "action": btn1_action})
-
-    # Button 2
-    if item.get("action_button2_enabled"):
-        btn2_type = (item.get("action_button2_interaction_type") or "").lower()
-        btn2_text = item.get("action_button2_text") or "更多資訊"
-
-        if btn2_type == "open_url":
-            btn2_action = {"type": "uri", "label": btn2_text, "uri": item.get("action_button2_url") or action_uri}
-        elif btn2_type == "trigger_message":
-            btn2_action = {"type": "message", "label": btn2_text, "text": item.get("action_button2_trigger_message") or ""}
-        elif btn2_type == "trigger_image":
-            btn2_action = {"type": "uri", "label": btn2_text, "uri": item.get("action_button2_trigger_image_url") or ""}
-        else:
-            btn2_action = {"type": "uri", "label": btn2_text, "uri": action_uri}
-
-        footer_buttons.append({"type": "button", "style": "link", "action": btn2_action})
-
-    bubble = {
+    return {
         "type":"bubble",
         "hero": hero,
         "body":{"type":"box","layout":"vertical","spacing":"sm","contents": body or [{"type":"text","text":" "}]},
+        **({
+            "footer":{
+                "type":"box","layout":"vertical","spacing":"sm",
+                "contents":[{"type":"button","style":"primary","action":{"type":"uri","label": item.get("action_button_text") or "詳情","uri": action_uri}}]
+            }
+        } if action_uri else {})
     }
-
-    # 如果有按鈕，添加 footer
-    if footer_buttons:
-        bubble["footer"] = {
-            "type":"box",
-            "layout":"vertical",
-            "spacing":"sm",
-            "contents": footer_buttons
-        }
-
-    return bubble
 
 def make_image_click_bubble(item: dict, tracked_uri: Optional[str]):
     """
@@ -499,104 +482,116 @@ def make_image_click_bubble(item: dict, tracked_uri: Optional[str]):
             }
         }
 
-    # 場景 2-5: 有動作按鈕 → 使用 hero + footer 結構（LINE 標準格式）
+    # 場景 2-5: 有動作按鈕 → 使用 body 結構 + 浮動按鈕
     action_button_text = item.get("action_button_text", "點擊查看")
     interaction_type = item.get("action_button_interaction_type", "none")
 
-    # 構建基礎 bubble 結構，圖片使用 hero（LINE 要求）
-    bubble = {
+    # 構建浮動按鈕的 action（根據互動類型）
+    button_box = {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#00000077",
+        "cornerRadius": "999px",
+        "paddingTop": "8px",
+        "paddingBottom": "8px",
+        "paddingStart": "20px",
+        "paddingEnd": "20px",
+        "width": "180px",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "contents": [
+            {
+                "type": "text",
+                "text": action_button_text,
+                "weight": "bold",
+                "size": "sm",
+                "align": "center",
+                "color": "#FFFFFF"
+            }
+        ]
+    }
+
+    # 根據互動類型添加 action
+    if interaction_type == "trigger_message":
+        # 場景 3: interaction_text.json（觸發訊息）
+        button_box["action"] = {
+            "type": "message",
+            "label": "action",
+            "text": item.get("action_button_trigger_message", "")
+        }
+    elif interaction_type == "open_url":
+        # 場景 4: interaction_uri.json（開啟網址）
+        button_box["action"] = {
+            "type": "uri",
+            "label": "action",
+            "uri": tracked_uri or item.get("action_button_url") or item.get("action_url") or item.get("url") or f"{PUBLIC_BASE}/"
+        }
+    elif interaction_type == "trigger_image":
+        # 場景 5: interaction_image.json（觸發圖片）
+        button_box["action"] = {
+            "type": "uri",
+            "label": "action",
+            "uri": item.get("action_button_trigger_image_url", "")
+        }
+    # else: 場景 2: interaction_no.json（無互動，不添加 action）
+
+    # 返回帶浮動按鈕的格式
+    return {
         "type": "bubble",
-        "hero": {
-            "type": "image",
-            "url": image_url,
-            "size": "full",
-            "aspectMode": "cover",
-            "aspectRatio": aspect_ratio
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "paddingAll": "0px",
+            "contents": [
+                {
+                    "type": "image",
+                    "url": image_url,
+                    "size": "full",
+                    "aspectMode": "cover",
+                    "aspectRatio": aspect_ratio
+                },
+                {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "position": "absolute",
+                    "offsetBottom": "20px",
+                    "offsetStart": "0px",
+                    "offsetEnd": "0px",
+                    "width": "100%",
+                    "alignItems": "center",
+                    "justifyContent": "center",
+                    "contents": [button_box]
+                }
+            ]
         }
     }
 
-    # 根據互動類型添加 footer 按鈕
-    if interaction_type != "none":
-        button_action = None
-
-        if interaction_type == "trigger_message":
-            # 場景 3: interaction_text.json（觸發訊息）
-            button_action = {
-                "type": "message",
-                "label": action_button_text,
-                "text": item.get("action_button_trigger_message", "")
-            }
-        elif interaction_type == "open_url":
-            # 場景 4: interaction_uri.json（開啟網址）
-            button_action = {
-                "type": "uri",
-                "label": action_button_text,
-                "uri": tracked_uri or item.get("action_button_url") or item.get("action_url") or item.get("url") or f"{PUBLIC_BASE}/"
-            }
-        elif interaction_type == "trigger_image":
-            # 場景 5: interaction_image.json（觸發圖片）
-            button_action = {
-                "type": "uri",
-                "label": action_button_text,
-                "uri": item.get("action_button_trigger_image_url", "")
-            }
-
-        # 添加 footer 按鈕
-        if button_action:
-            bubble["footer"] = {
-                "type": "box",
-                "layout": "vertical",
-                "spacing": "sm",
-                "contents": [{
-                    "type": "button",
-                    "style": "primary",
-                    "action": button_action
-                }]
-            }
-    # else: 場景 2: interaction_no.json（無互動，不添加 footer）
-
-    return bubble
-
 def build_user_messages_from_payload(payload: dict, campaign_id: int, line_user_id: str) -> List[FlexMessage]:
-    # 添加調試日誌
-    logging.info(f"=== BUILD MESSAGES DEBUG (Campaign {campaign_id}) ===")
-    logging.info(f"Template type: {payload.get('template_type')}")
-    logging.info(f"Has carousel_items: {bool(payload.get('carousel_items'))}")
-    logging.info(f"Interaction type: {payload.get('interaction_type')}")
-    logging.info(f"Image URL: {payload.get('image_url')}")
-    logging.info(f"Action button URL: {payload.get('action_button_url')}")
-    logging.info(f"Trigger message: {payload.get('action_button_trigger_message')}")
-    logging.info(f"Trigger image URL: {payload.get('action_button_trigger_image_url')}")
-
-    ttype = (payload.get("template_type") or "").strip().lower()
+    ttype = (payload.get("template_type") or payload.get("type") or "").strip().lower()
     title = payload.get("title") or "活動通知"
     messages = []
 
+    # 準備項目內容
     if payload.get("carousel_items"):
         items = sorted(payload["carousel_items"], key=lambda x: x.get("sort_order") or 0)
     else:
-        # 檢查是否真的有動作按鈕配置
-        interaction_type = payload.get("interaction_type")
-        has_action = bool(interaction_type and interaction_type not in ("none", "", None))
-
         items = [{
             "image_base64": payload.get("image_base64"),
             "image_url": payload.get("image_url"),
             "title": payload.get("title"),
             "description": payload.get("notification_text"),
             "price": payload.get("price"),
+            "action_url": payload.get("url"),
             "interaction_tags": payload.get("interaction_tags"),
-            # 修正：根據實際配置決定是否有按鈕
-            "action_button_enabled": has_action,
+            "action_button_enabled": True if payload.get("interaction_type") == "open_url" else False,
             "action_button_text": payload.get("action_button_text") or "查看詳情",
-            "action_button_interaction_type": interaction_type or "none",
-            # 直接讀取各互動類型的字段
-            "action_button_url": payload.get("action_button_url"),
-            "action_button_trigger_message": payload.get("action_button_trigger_message"),
-            "action_button_trigger_image_url": payload.get("action_button_trigger_image_url"),
+            "action_button_interaction_type": payload.get("interaction_type") or "open_url",
             "sort_order": 0
         }]
 
+    # ==============================
+    # 產生追蹤連結（追蹤網址含活動 ID）
+    # ==============================
     def tracked_uri(item) -> Optional[str]:
         target_url = (
             item.get("action_url")
@@ -608,40 +603,100 @@ def build_user_messages_from_payload(payload: dict, campaign_id: int, line_user_
         btn_enabled = item.get("action_button_enabled", False)
         btn_type = (item.get("action_button_interaction_type") or "").lower()
 
-        # 按鈕且開網址 → 記 button_url，其他（含主圖）→ 記 image_click
+        # 按鈕開網址 → button_url，其餘（含圖片）→ image_click
         interaction_type = "button_url" if (btn_enabled and btn_type == "open_url") else "image_click"
 
-        return f"{PUBLIC_BASE}/__track?cid={campaign_id}&uid={line_user_id}&type={interaction_type}&to={quote(target_url, safe='')}"
+        # 統一數據源：嚴格從 payload 提取 source_campaign_id
+        src = payload.get("source_campaign_id")
 
-    bubbles=[]
+        # 驗證 source_campaign_id 是否存在
+        if src is None:
+            logging.error(
+                f"[TRACKED_URI] Missing source_campaign_id in payload! "
+                f"campaign_id={campaign_id}, payload_keys={list(payload.keys())}"
+            )
+            # 不使用備援值，保持 src=None 以便追蹤問題根源
+            src_q = ""
+        else:
+            src_q = f"&src={src}"
+
+        # 加上 &src=xxx 到追蹤網址裡
+        return f"{PUBLIC_BASE}/__track?cid={campaign_id}&uid={line_user_id}&type={interaction_type}&to={quote(target_url, safe='')}{src_q}"
+
+    # ==============================
+    # 建立氣泡內容
+    # ==============================
+    bubbles = []
     for it in items:
         uri = tracked_uri(it)
+        # ✅ 改成圖片預設也會走 open_url（即會打 /__track）
+        it["image_click_action_type"] = it.get("image_click_action_type", "open_url")
         if ttype == "image_card":
             bubbles.append(make_image_button_bubble(it, uri))
-        elif ttype in ("image_click","carousel",""):
+        elif ttype in ("image_click", "carousel", ""):
             bubbles.append(make_image_click_bubble(it, uri))
         else:
             bubbles.append(make_image_button_bubble(it, uri))
 
+    # ==============================
+    # 合併成 Flex 結構
+    # ==============================
     if len(bubbles) > 1 or ttype == "carousel":
-        flex = {"type":"carousel","contents": bubbles}
+        flex = {"type": "carousel", "contents": bubbles}
     else:
         flex = bubbles[0]
 
-    # Debug Flex
+    # Debug 輸出
     logging.error("=== FLEX DEBUG OUTPUT ===\n%s", json.dumps(flex, ensure_ascii=False, indent=2))
 
-    # ✅ 將 dict 轉為 FlexContainer
+    # ✅ 將 dict 轉成 FlexContainer 再包進 FlexMessage
     fc = FlexContainer.from_dict(flex)
-
-    # ✅ 再包進 FlexMessage
     messages.append(FlexMessage(alt_text=title, contents=fc))
     return messages
 
-# -------------------------------------------------
+
+
 # 活動推播 (Campaign Push)
-# -------------------------------------------------
 def _create_campaign_row(payload: dict) -> int:
+    # 先決定 template_id
+    tid = payload.get("template_id")
+    if not tid:
+        raw_type = payload.get("type") or payload.get("template_type") or ""
+        ttype = raw_type.strip().upper()
+
+        # 容錯對應（例如傳 image_card、image_click）
+        ALIAS = {
+            "IMAGE_CARD": "IMAGE_CARD",
+            "IMAGE_CLICK": "IMAGE_CLICK",
+            "IMAGE": "IMAGE_CARD",
+            "CARD": "IMAGE_CARD",
+            "CLICK": "IMAGE_CLICK",
+        }
+        ttype = ALIAS.get(ttype, ttype)
+
+        if not ttype:
+            raise ValueError("payload 需要 type 或 template_id")
+
+        # 從 message_templates 找出對應類型的最新一筆 id
+        row = fetchone("""
+            SELECT id
+            FROM message_templates
+            WHERE type = :t
+            ORDER BY id DESC
+            LIMIT 1
+        """, {"t": ttype})
+        if not row:
+            raise ValueError(f"message_templates 找不到 type={ttype} 的模板")
+        tid = row["id"]
+
+    now = utcnow()
+    sat = utcnow()
+    title = payload.get("title") or payload.get("name") or "未命名活動"
+    audience = payload.get("target_audience") or "all"
+    interaction_tags = payload.get("interaction_tags")
+
+    status = "sent" if (payload.get("schedule_type") or "immediate") == "immediate" else "scheduled"
+
     with engine.begin() as conn:
         conn.execute(text("""
             INSERT INTO campaigns
@@ -651,15 +706,16 @@ def _create_campaign_row(payload: dict) -> int:
             VALUES
                 (:title, :tid, :aud, NULL, :itag, :sat, :now, :status, 0, 0, 0, :now, :now)
         """), {
-            "title": payload.get("title") or payload.get("name") or "未命名活動",
-            "tid": payload.get("template_id"),
-            "aud": json.dumps(payload.get("target_audience") or "all", ensure_ascii=False),
-            "itag": payload.get("interaction_tags"),
-            "sat": utcnow(),
-            "now": utcnow(),
-            "status": "sent" if (payload.get("schedule_type") or "immediate")=="immediate" else "scheduled",
+            "title": title,
+            "tid": tid,
+            "aud": json.dumps(audience, ensure_ascii=False),
+            "itag": interaction_tags,
+            "sat": sat,
+            "now": now,
+            "status": status,
         })
         rid = conn.execute(text("SELECT LAST_INSERT_ID()")).scalar()
+
     return int(rid)
 
 def _add_campaign_recipients(campaign_id: int, mids: List[int]):
@@ -1426,38 +1482,141 @@ def __click():
 
 @app.get("/__track")
 def __track():
+    # 1) 取參數
     try:
         cid = int(request.args.get("cid", "0"))
     except Exception:
         cid = 0
-    uid  = request.args.get("uid", "") or request.headers.get("X-Line-UserId", "") or "broadcast"
-    ityp = request.args.get("type", "")   # image_click / button_url ...
-    to   = request.args.get("to", "")
+    
+    src = int(request.args.get("src", "0") or "0")
 
-    # ---- 加強：把實際使用中的 DB 名稱與參數打 log
+    # 驗證 source_campaign_id 是否有效
+    if src == 0:
+        logging.warning(
+            f"[TRACK] Missing or invalid source_campaign_id in URL: "
+            f"cid={cid}, src={src}, url={request.url}"
+        )
+        # 注意：即使 src=0 也繼續處理，但會記錄警告以便追蹤問題
+
+    uid   = request.args.get("uid", "") or request.headers.get("X-Line-UserId", "")
+    ityp  = request.args.get("type", "") or "image_click"   # image_click / button_url ...
+    to    = request.args.get("to", "")                      # 目標跳轉網址
+    debug = request.args.get("debug", "0") == "1"
+
+    # broadcast/舊訊息沒有 uid 的情況，給預設值，避免 NULL 入庫
+    if not uid:
+        uid = "broadcast"
+
+    # 2) 印出目前使用的 DB 與參數（方便排查）
+    dbname = None
     try:
         r = fetchone("SELECT DATABASE() AS db")
         dbname = (r or {}).get("db")
-        app.logger.error(f"[TRACK] db={dbname} cid={cid} uid={uid} type={ityp} to={to}")
+        logging.info(f"[TRACK] db={dbname} cid={cid} uid={uid} type={ityp} to={to}")
     except Exception:
-        app.logger.exception("[TRACK] read DATABASE() failed")
+        logging.exception("[TRACK] read DATABASE() failed")
 
-    # ---- 無論如何都嘗試寫一筆（至少存得到你剛測的 uid）
+    # 2.5) 先補會員 profile（讓只有「點擊」也能補上暱稱/頭像）
+    try:
+        if uid != "broadcast" and uid.startswith("U"):  # 避免對 broadcast / 測試值打 API
+            maybe_update_member_profile(uid)
+    except Exception as e:
+        logging.warning(f"[TRACK] maybe_update_member_profile ignored: {e}")
+
+    # 3) 寫互動紀錄（主表）
+    cil_ok, cil_err = False, None
     try:
         execute("""
             INSERT INTO component_interaction_logs
               (line_id, campaign_id, interaction_type, interaction_value, triggered_at)
             VALUES (:uid, :cid, :itype, :to, NOW())
-        """, {"uid": uid, "cid": cid, "itype": ityp or "image_click", "to": to})
-        app.logger.error("[TRACK] insert OK")
+        """, {"uid": uid, "cid": cid, "itype": ityp, "to": to})
+        cil_ok = True
     except Exception as e:
-        app.logger.exception(f"[TRACK] insert failed: {e}")
+        cil_err = str(e)
+        logging.exception(f"[TRACK] insert component_interaction_logs failed: {e}")
 
-    # 照常 302 轉跳
+    # 4) 取 LINE 的 display name（保險：若沒抓到就回退到 members.name）
+    display_name = None
+    try:
+        row = fetchone(
+            "SELECT COALESCE(line_display_name, name) AS line_display_name "
+            "FROM members WHERE line_uid = :uid",
+            {"uid": uid}
+        )
+        display_name = row["line_display_name"] if row and row.get("line_display_name") else None
+    except Exception as e:
+        logging.warning(f"[TRACK] fetch member display name failed (ignore): {e}")
+
+    # 5) upsert ryan_click_demo（※ 欄位名已是 line_display_name；total_clicks 當布林 0/1）
+    rcd_ok, rcd_err = False, None
+    try:
+        execute(f"""
+            INSERT INTO `{MYSQL_DB}`.`ryan_click_demo`
+                (line_id, source_campaign_id, line_display_name, total_clicks, last_clicked_at)
+            VALUES
+                (
+                    :uid,
+                    :src,
+                    COALESCE(:dname, (SELECT m.line_display_name FROM `{MYSQL_DB}`.`members` m WHERE m.line_uid = :uid LIMIT 1)),
+                    1,
+                    NOW()
+                )
+            ON DUPLICATE KEY UPDATE
+                total_clicks = 1,  -- 只要點過就是 1（布林）
+                line_display_name = COALESCE(
+                    :dname,
+                    (SELECT m.line_display_name FROM `{MYSQL_DB}`.`members` m WHERE m.line_uid = :uid LIMIT 1),
+                    line_display_name
+                ),
+                last_clicked_at = NOW();
+        """, {"uid": uid, "src": src, "dname": display_name})
+
+        rcd_ok = True
+        logging.info(f"[TRACK] upsert ryan_click_demo ok: uid={uid} dname={display_name!r} src={src}")
+
+    except Exception as e:
+        rcd_err = str(e)
+        logging.exception(f"[TRACK] upsert ryan_click_demo failed: {e}")
+
+
+
+    # 6) debug 模式：直接回傳診斷
+    if debug:
+        import json
+        try:
+            last_rcd = fetchall(f"""
+                SELECT id,line_id,source_campaign_id,line_display_name,total_clicks,last_clicked_at,created_at,updated_at
+                FROM `{MYSQL_DB}`.`ryan_click_demo`
+                ORDER BY updated_at DESC
+                LIMIT 5
+            """)
+        except Exception as e:
+            last_rcd = [{"error": str(e)}]
+        try:
+            last_cil = fetchall("""
+                SELECT id,campaign_id,line_id,interaction_type,interaction_value,triggered_at
+                FROM component_interaction_logs
+                ORDER BY id DESC
+                LIMIT 5
+            """)
+        except Exception as e:
+            last_cil = [{"error": str(e)}]
+        report = [
+            f"DB: {dbname}",
+            f"CIL insert: {'OK' if cil_ok else 'FAIL'}  err={cil_err}",
+            f"RCD upsert: {'OK' if rcd_ok else 'FAIL'}  err={rcd_err}",
+            "Last ryan_click_demo:",
+            json.dumps(last_rcd, ensure_ascii=False, default=str),
+            "Last component_interaction_logs:",
+            json.dumps(last_cil, ensure_ascii=False, default=str),
+        ]
+        return "\n".join(report), 200, {"Content-Type": "text/plain; charset=utf-8"}
+
+    # 7) 正常重導
     if not to:
         return redirect("/", code=302)
     return redirect(to, code=302)
-
 
 
 # 群發
