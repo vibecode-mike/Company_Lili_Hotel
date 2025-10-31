@@ -1,45 +1,31 @@
-import { useState } from 'react';
 import MessageCreation from './components/MessageCreation';
 import MessageList from './components/MessageList';
 import MemberDashboard from './components/MemberDashboard';
 import AutoResponseList from './components/AutoResponseList';
+import { NavigationProvider, useNavigation } from './contexts/NavigationContext';
 
-type ViewState = 'messages' | 'messageCreation' | 'members' | 'autoResponse';
-
-export default function App() {
-  const [currentView, setCurrentView] = useState<ViewState>('messages');
+function AppContent() {
+  const { currentView } = useNavigation();
 
   if (currentView === 'messageCreation') {
-    return <MessageCreation onBack={() => setCurrentView('messages')} />;
+    return <MessageCreation />;
   }
 
   if (currentView === 'members') {
-    return (
-      <MemberDashboard
-        onShowMessages={() => setCurrentView('messages')}
-        onShowMembers={() => setCurrentView('members')}
-        onShowAutoResponse={() => setCurrentView('autoResponse')}
-      />
-    );
+    return <MemberDashboard />;
   }
 
   if (currentView === 'autoResponse') {
-    return (
-      <AutoResponseList
-        onBack={() => setCurrentView('messages')}
-        onShowMessages={() => setCurrentView('messages')}
-        onShowAutoResponse={() => setCurrentView('autoResponse')}
-        onShowMembers={() => setCurrentView('members')}
-      />
-    );
+    return <AutoResponseList />;
   }
 
+  return <MessageList />;
+}
+
+export default function App() {
   return (
-    <MessageList
-      onCreateMessage={() => setCurrentView('messageCreation')}
-      onShowMessages={() => setCurrentView('messages')}
-      onShowMembers={() => setCurrentView('members')}
-      onShowAutoResponse={() => setCurrentView('autoResponse')}
-    />
+    <NavigationProvider>
+      <AppContent />
+    </NavigationProvider>
   );
 }

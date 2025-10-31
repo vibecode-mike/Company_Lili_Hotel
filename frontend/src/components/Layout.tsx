@@ -1,13 +1,11 @@
 import { useState, ReactNode } from 'react';
 import sidebarPaths from '../imports/svg-jb10q6lg6b';
 import { imgGroup, imgGroup1, imgGroup2, imgGroup3, imgGroup4, imgGroup5, imgGroup6 } from "../imports/svg-zrjx6";
+import { useNavigation } from '../contexts/NavigationContext';
 
 interface LayoutProps {
   children: ReactNode;
   activeSection: 'messages' | 'autoResponse' | 'members' | 'tags';
-  onShowMessages?: () => void;
-  onShowAutoResponse?: () => void;
-  onShowMembers?: () => void;
 }
 
 // Starbit Logo Component
@@ -155,12 +153,10 @@ function StarbitLogo() {
 
 export default function Layout({
   children,
-  activeSection,
-  onShowMessages = () => {},
-  onShowAutoResponse = () => {},
-  onShowMembers = () => {}
+  activeSection
 }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const { navigate } = useNavigation();
 
   return (
     <div className="bg-slate-50 min-h-screen flex">
@@ -198,7 +194,7 @@ export default function Layout({
                 </div>
                 <button
                   type="button"
-                  onClick={onShowMessages}
+                  onClick={() => navigate('messages')}
                   className={`box-border flex items-center px-[28px] py-[8px] rounded-[8px] w-full transition-colors ${
                     activeSection === 'messages'
                       ? 'bg-[#e1ebf9] hover:bg-[#d0e0f5]'
@@ -211,7 +207,7 @@ export default function Layout({
                 </button>
                 <button
                   type="button"
-                  onClick={onShowAutoResponse}
+                  onClick={() => navigate('autoResponse')}
                   className={`box-border flex items-center px-[28px] py-[8px] rounded-[8px] w-full transition-colors ${
                     activeSection === 'autoResponse'
                       ? 'bg-[#e1ebf9] hover:bg-[#d0e0f5]'
@@ -234,7 +230,7 @@ export default function Layout({
                 </div>
                 <button
                   type="button"
-                  onClick={onShowMembers}
+                  onClick={() => navigate('members')}
                   className={`box-border flex items-center px-[28px] py-[8px] rounded-[8px] w-full transition-colors ${
                     activeSection === 'members'
                       ? 'bg-[#e1ebf9] hover:bg-[#d0e0f5]'
