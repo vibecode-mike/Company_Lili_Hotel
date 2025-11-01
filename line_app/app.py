@@ -85,13 +85,77 @@ os.makedirs(ASSET_LOCAL_DIR, exist_ok=True)
 # 固定 SYSTEM_PROMPT（**內嵌版**；不讀外部檔案）
 # -------------------------------------------------
 SYSTEM_PROMPT = (
-    "你是「水漾月明度假文旅（Hana Mizu Tsuki Hotel）」的智能客服，對方打招呼會熱情且專業的語氣接待並詢問需要什麼服務"
-    "請僅回答與本飯店直接相關的問題：房型與價格、訂房、交通與聯絡、優惠專案、設施服務、環保政策、周邊景點"
-    "若使用者詢問與上述無關的內容，請婉拒並引導回本飯店服務（婉拒用語："
-    "「抱歉，我只能協助提供水漾月明度假文旅相關資訊。如需其他服務，歡迎致電 037-255-358。」）。"
-    "基本資料：地址 362苗栗縣頭屋鄉明德路54號，電話 037-255-358，Email mizutsukihotel@gmail.com"
-    "若被問到地理/周邊，請以「明德水庫／頭屋鄉」周邊景點為優先。"
-    "回答請精簡、條列為主，必要時提供官方連結。"
+"""
+你是「水漾月明度假文旅（Hana Mizu Tsuki Hotel）」的智能客服。你只提供本飯店的官方且已知資訊；不得臆測或延伸至館外商家名單。若使用者需求超出已知資訊或需要館外名單，請婉拒並引導致電櫃檯（037-255-358）。
+
+【回答範圍（必遵守）】
+- 可回：房型與價格、訂房、交通與聯絡、優惠專案、館內設施、環保政策、周邊景點（僅提供清單，不提供第三方評價/營業資訊），與飯店相關的內容可回答。
+- 不可回：與本飯店不相關的內容。
+
+【語氣與格式】
+- 以精簡條列回覆；首行給出主題 emoji 與標題（如「🛏 房型定價」）。
+- 能提供官方連結就給官方連結。
+- 若使用者問到日期，務必用西元年或清楚表述（範例已內嵌於優惠專案）。
+
+一、基本資料 / 訂房
+- 飯店：水漾月明度假文旅（Hana Mizu Tsuki Hotel）
+- 地址：362苗栗縣頭屋鄉明德路54號
+- 電話：037-255-358
+- Email：mizutsukihotel@gmail.com
+- Google 地圖：https://www.google.com/maps?ll=24.585596,120.887298&z=17&t=m&hl=zh-TW&gl=US&mapclient=embed&cid=709365327370099103
+- 線上訂房：https://res.windsurfercrs.com/ibe/index.aspx?propertyID=17658&nono=1&lang=zh-tw&adults=2
+
+二、客房資訊（定價 / 晚）
+- 豪華雙人房（床型若需指定請來電洽詢）：$12,000｜日式軟墊・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/3
+- 湖景雙人房（側湖景）：$14,000｜一大床・兩小床｜http://www.younglake.com.tw/Home/ProductsDetail/5
+- 豪華三人房：$15,000｜一大一小床・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/6
+- 湖景四人房（床型若需指定請來電洽詢）：$22,000｜兩大床・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/7
+- 豪華四人房（床型若需指定請來電洽詢）：$18,000｜兩大床・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/9
+- 家庭四人房：$25,000｜兩大床・客廳・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/8
+- 蜜月雙人房：$13,000｜一大床・客廳・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/2
+- 水漾套房（正湖景）：$20,000｜一大床・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/1
+（備註：以上為定價；實際專案或加人加價以現場與官網公告為準。需指定床型請改以電話洽詢。）
+
+三、優惠方案 — 水上腳踏車住房專案
+- 合作：水漾月明 × 海棠島水域遊憩中心
+- 活動日期：114/8/28 ~ 114/10/30
+- 方案：一泊一食（含早餐）
+- 平日價格：豪華雙人 3,980｜湖景雙人 4,980｜豪華三人 5,300｜豪華四人 6,380
+- 週六價格：豪華雙人 4,880｜湖景雙人 7,280｜豪華三人 6,280｜豪華四人 7,380
+- 專案贈送：
+  1) 早餐（依房型人數） 2) 水上自行車兌換券（半小時，$350/張；雙人2張/三人3張/四人4張）
+  3) 7歲以下不佔床不收費（早餐另計） 4) 120cm 以上方可自行騎乘
+- 兌換券注意：
+  - 入住日1個月內使用；逾期/遺失不補發。
+  - 現場至海棠島兌換並遵守安全規範。
+  - 票券使用須先致電海棠島預約（非教練陪同券，如需教練需加價）。
+  - 加購 Span Outdoor（SUP/獨木舟/水上自行車）享9折優惠。
+- 暑假加碼：水漾環湖電動自行車 $250/台/2.5小時（贈飲料一瓶），騎至海棠島約15分鐘。
+- 訂房連結：同「線上訂房」。
+
+四、設施介紹（名稱｜連結｜備註）
+- 環湖電動自行車｜http://www.younglake.com.tw/Home/FacilityDetail/14｜可租借
+- 渡假會議｜http://www.younglake.com.tw/Home/FacilityDetail/4｜適合商務與活動
+- 汗蒸幕體驗｜http://www.younglake.com.tw/Home/FacilityDetail/11｜放鬆身心
+- 西餐廳｜http://www.younglake.com.tw/Home/FacilityDetail/7｜中式桌菜・客家風味・歐式百匯（訂位：037-255358）
+- 視聽室｜http://www.younglake.com.tw/Home/FacilityDetail/6｜影音娛樂空間
+- 水漾小賽車手俱樂部｜http://www.younglake.com.tw/Home/FacilityDetail/10｜兒童遊樂設施
+- 24SHOP 智能販賣機｜http://www.younglake.com.tw/Home/FacilityDetail/8｜無人販售服務
+- 清潔服務機器人｜http://www.younglake.com.tw/Home/FacilityDetail/12｜智能清潔體驗
+
+五、環保政策 — 一次性備品
+- 自 2025/01/01 起，客房不再提供一次性備品。建議旅客自備盥洗用品；如需可洽櫃檯。
+
+六、周邊景點（僅清單）
+【湖畔與水上活動】
+- 日新島（可步行或騎車前往）、海棠島水域遊憩中心（SUP/獨木舟/水上自行車，車程約9分鐘）、明德水庫環湖（部分路段設自行車道）
+【森林與花園】
+- 橙香森林、雅聞玫瑰園、葛瑞絲香草田（距離飯店約2分鐘車程）
+【其他推薦】
+- 皇家高爾夫球場、魯冰花休閒農莊、卓也小屋（藍染/在地料理/綠色旅遊）
+
+若任何資訊未在上表，請回答：「抱歉，我只能提供本館官方已知資訊。若需進一步協助，請洽櫃檯 037-255-358。」
+"""
 )
 # -------------------------------------------------
 # init
@@ -368,134 +432,6 @@ PRICE_TABLE = {
 PRICE_UNIT = "TWD/晚"
 PRICE_NOTES = "以上為定價；實際專案與加人加價以現場與官網公告為準。"
 BOOK_URL = "https://res.windsurfercrs.com/ibe/index.aspx?propertyID=17658&nono=1&lang=zh-tw&adults=2"
-
-# --- 設施（官網頁面 + 備註） ---
-AMENITIES = [
-    "環湖電動自行車｜http://www.younglake.com.tw/Home/FacilityDetail/14｜可租借",
-    "渡假會議｜http://www.younglake.com.tw/Home/FacilityDetail/4｜商務/活動",
-    "汗蒸幕體驗｜http://www.younglake.com.tw/Home/FacilityDetail/11｜放鬆身心",
-    "西餐廳｜http://www.younglake.com.tw/Home/FacilityDetail/7｜中式桌菜・客家風味・歐式百匯（訂位：037-255358）",
-    "視聽室｜http://www.younglake.com.tw/Home/FacilityDetail/6｜影音娛樂",
-    "水漾小賽車手俱樂部｜http://www.younglake.com.tw/Home/FacilityDetail/10｜兒童遊樂",
-    "24SHOP 智能販賣機｜http://www.younglake.com.tw/Home/FacilityDetail/8｜無人販售",
-    "清潔服務機器人｜http://www.younglake.com.tw/Home/FacilityDetail/12｜智能清潔體驗",
-]
-AMENITY_TRIGGERS = [
-    "設施","設備","有哪些設施","有什麼設施","餐廳","西餐廳","販賣機","汗蒸幕","會議","視聽室","電動自行車","小賽車","amenities"
-]
-def _is_amenity_query(t: str) -> bool:
-    return any(k in t for k in AMENITY_TRIGGERS)
-
-def build_amenities_text() -> str:
-    out = ["🏨 設施與服務"]
-    for row in AMENITIES:
-        name, url, note = row.split("｜")
-        out.append(f"• {name}\n  {note}\n  {url}")
-    return "\n".join(out)
-
-# 關鍵字擴充（使用者只要打到這些詞就會走房價輸出邏輯）
-PRICE_TRIGGERS = [
-    "房價","價格","費用","每晚","價目","定價","多少錢","多少/晚","多少／晚","rate","price",
-    "房型","雙人房","三人房","四人房","套房"
-]
-
-def _is_price_query(t: str) -> bool:
-    return any(k in t for k in PRICE_TRIGGERS)
-
-def build_price_text() -> str:
-    lines = ["💰 房型定價"]
-    # 依「客房資訊」順序輸出
-    order = [
-        "豪華雙人房（床型若需指定請來電洽詢）",
-        "湖景雙人房（側湖景）",
-        "豪華三人房",
-        "湖景四人房（床型若需指定請來電洽詢）",
-        "豪華四人房（床型若需指定請來電洽詢）",
-        "家庭四人房",
-        "蜜月雙人房",
-        "水漾套房（正湖景）",
-    ]
-    for name in order:
-        price = PRICE_TABLE.get(name)
-        if price:
-            lines.append(f"• {name}：{price:,} {PRICE_UNIT}")
-    lines += ["", f"🔗 線上訂房：{BOOK_URL}", "", f"※ {PRICE_NOTES}"]
-    return "\n".join(lines)
-
-# --- 優惠專案：水上腳踏車住房專案 ---
-PROMO_TRIGGERS = ["優惠","專案","活動","水上腳踏車","水上自行車","促銷","方案"]
-def _is_promo_query(t: str) -> bool:
-    return any(k in t for k in PROMO_TRIGGERS)
-
-def build_promo_text() -> str:
-    return (
-        "🎁 水上腳踏車住房專案（水漾月明 × 海棠島水域遊憩中心）\n"
-        "🗓 114/8/28 ~ 114/10/30｜方案：一泊一食（含早餐）\n\n"
-        "🍀 平日價格：\n"
-        "• 豪華雙人房 3,980｜湖景雙人房 4,980｜豪華三人房 5,300｜豪華四人房 6,380\n\n"
-        "🍀 週六價格：\n"
-        "• 豪華雙人房 4,880｜湖景雙人房 7,280｜豪華三人房 6,280｜豪華四人房 7,380\n\n"
-        "🎉 專案贈送：\n"
-        "1) 早餐（依房型人數）\n"
-        "2) 水上自行車兌換券（半小時）$350/張（雙人2張/三人3張/四人4張）\n"
-        "3) 7歲以下不佔床不收費（早餐另計）\n"
-        "4) 小孩身高須滿120公分以上方可自行騎乘\n\n"
-        "📌 兌換券注意：入住日起1個月內使用；逾期/遺失不補發；需於海棠島現場兌換並遵守安全規範；"
-        "票券使用需先致電海棠島預約（非教練陪同券，如需教練需加價）。\n"
-        "🔖 加購 Span Outdoor（SUP/獨木舟/水上自行車）享9折優惠。\n\n"
-        "🔥 暑假加碼：水漾環湖電動自行車 $250/台/2.5小時（贈飲料）— 騎至海棠島約15分鐘。\n"
-        f"🔗 訂房：{BOOK_URL}"
-    )
-
-TRANSPORT_TRIGGERS = ["交通","地址","怎麼去","導航","map","地圖","聯絡","電話","email","信箱"]
-def _is_transport_query(t: str) -> bool:
-    return any(k in t for k in TRANSPORT_TRIGGERS)
-
-def build_transport_text() -> str:
-    return (
-        "🗺 交通與聯絡\n"
-        "🏨 水漾月明度假文旅（Hana Mizu Tsuki Hotel）\n"
-        "📍 362苗栗縣頭屋鄉明德路54號\n"
-        "📞 037-255-358　✉️ mizutsukihotel@gmail.com\n"
-        "🗺 Google 地圖：https://www.google.com/maps?ll=24.585596,120.887298&z=17&t=m&hl=zh-TW&gl=US&mapclient=embed&cid=709365327370099103"
-    )
-
-BOOKING_TRIGGERS = ["訂房","預訂","預約","booking","book","線上訂房"]
-def _is_booking_query(t: str) -> bool:
-    return any(k in t for k in BOOKING_TRIGGERS)
-
-def build_booking_text() -> str:
-    return f"🛎 線上訂房：{BOOK_URL}\n建議先選擇房型與入住日期完成預訂，如需指定床型請改以電話洽詢（037-255-358）。"
-
-POLICY_TRIGGERS = ["環保","備品","一次性","盥洗用品","牙刷","刮鬍刀","浴帽"]
-def _is_policy_query(t: str) -> bool:
-    return any(k in t for k in POLICY_TRIGGERS)
-
-def build_policy_text() -> str:
-    return (
-        "♻️ 環保政策 — 一次性備品提供\n"
-        "自 2025/01/01 起，客房不再提供一次性備品。\n"
-        "建議旅客自備個人盥洗用品；如有需求可洽櫃檯，造成不便敬請見諒。"
-    )
-
-ATTRACTION_TRIGGERS = ["景點","周邊","附近","玩什麼","行程","水庫","日新島","海棠島","橙香森林","玫瑰園","葛瑞絲","高爾夫","魯冰花","卓也小屋"]
-def _is_attraction_query(t: str) -> bool:
-    return any(k in t for k in ATTRACTION_TRIGGERS)
-
-def build_attractions_text() -> str:
-    return (
-        "🧭 周邊景點建議（明德水庫/頭屋鄉）\n\n"
-        "【湖畔與水上活動】\n"
-        "• 日新島：全台唯一位於水庫中的島嶼，可步行或騎車前往。\n"
-        "• 海棠島水域遊憩中心：SUP、獨木舟、水上自行車（距離約 9 分鐘車程）。\n"
-        "• 明德水庫環湖：湖光山色，部分路段設有自行車道。\n\n"
-        "【森林與花園】\n"
-        "• 橙香森林：玻璃屋與橙香隧道，親子休閒。\n"
-        "• 雅聞玫瑰園：玫瑰主題休閒農場。\n"
-        "• 葛瑞絲香草田：距離飯店約 2 分鐘車程，欣賞各式香草植物。\n\n"
-        "【其他推薦】\n"
-        "• 皇家高爾夫球場｜• 魯冰花休閒農莊｜• 卓也小屋（藍染、在地料理、綠色旅遊）。"
-    )
 
 
 def _build_messages(user_key: str, user_text: str):
@@ -1795,9 +1731,8 @@ def _source_key(ev_source) -> str:
 @handler.add(FollowEvent)
 def on_follow(event: FollowEvent):
     welcome = (
-        "歡迎加入水漾月明度假文旅（Hana Mizu Tsuki Hotel）！\n"
-        "想查詢房價、優惠、設施、交通或周邊景點，直接輸入關鍵字即可，例如：\n"
-        "「房價」、「優惠」、「設施」、「交通」、「訂房」、「環保」、「景點」。"
+        "Hi~ 歡迎加入水漾月明度假文旅（Hana Mizu Tsuki Hotel）！\n"
+        "需要我協助什麼樣的服務呢?\n"
     )
     try:
         messaging_api.reply_message(ReplyMessageRequest(
@@ -1866,97 +1801,6 @@ def on_text(event: MessageEvent):
             insert_message(mid, "incoming", "text", {"text": text_in})
         except Exception:
             pass
-
-    # 關鍵字直出：房價
-    if _is_price_query(text_in):
-        msg = build_price_text()
-        try:
-            messaging_api.reply_message(ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[TextMessage(text=msg)]
-            ))
-        except Exception:
-            logging.exception("reply price failed")
-        user_memory[user_key].append(("user", text_in)); user_memory[user_key].append(("assistant", msg))
-        return
-
-    # 關鍵字直出：設施
-    if _is_amenity_query(text_in):
-        msg = build_amenities_text()
-        try:
-            messaging_api.reply_message(ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[TextMessage(text=msg)]
-            ))
-        except Exception:
-            logging.exception("reply amenity failed")
-        user_memory[user_key].append(("user", text_in)); user_memory[user_key].append(("assistant", msg))
-        return
-
-    # 關鍵字直出：優惠專案（新增）
-    if _is_promo_query(text_in):
-        msg = build_promo_text()
-        try:
-            messaging_api.reply_message(ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[TextMessage(text=msg)]
-            ))
-        except Exception:
-            logging.exception("reply promo failed")
-        user_memory[user_key].append(("user", text_in)); user_memory[user_key].append(("assistant", msg))
-        return
-
-    # 關鍵字直出：交通與聯絡（新增）
-    if _is_transport_query(text_in):
-        msg = build_transport_text()
-        try:
-            messaging_api.reply_message(ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[TextMessage(text=msg)]
-            ))
-        except Exception:
-            logging.exception("reply transport failed")
-        user_memory[user_key].append(("user", text_in)); user_memory[user_key].append(("assistant", msg))
-        return
-
-    # 關鍵字直出：訂房（新增）
-    if _is_booking_query(text_in):
-        msg = build_booking_text()
-        try:
-            messaging_api.reply_message(ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[TextMessage(text=msg)]
-            ))
-        except Exception:
-            logging.exception("reply booking failed")
-        user_memory[user_key].append(("user", text_in)); user_memory[user_key].append(("assistant", msg))
-        return
-
-    # 關鍵字直出：環保政策（新增）
-    if _is_policy_query(text_in):
-        msg = build_policy_text()
-        try:
-            messaging_api.reply_message(ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[TextMessage(text=msg)]
-            ))
-        except Exception:
-            logging.exception("reply policy failed")
-        user_memory[user_key].append(("user", text_in)); user_memory[user_key].append(("assistant", msg))
-        return
-
-    # 關鍵字直出：周邊景點（新增）
-    if _is_attraction_query(text_in):
-        msg = build_attractions_text()
-        try:
-            messaging_api.reply_message(ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[TextMessage(text=msg)]
-            ))
-        except Exception:
-            logging.exception("reply attraction failed")
-        user_memory[user_key].append(("user", text_in)); user_memory[user_key].append(("assistant", msg))
-        return
 
     # FAQ（包含 Rich Menu 四鍵）
     if text_in in FAQ:

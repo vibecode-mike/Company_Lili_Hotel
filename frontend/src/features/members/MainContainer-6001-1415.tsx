@@ -55,15 +55,15 @@ function formatDateTime(dateStr: string | null): string {
 }
 
 const COLUMN_WIDTH_CLASSES = {
-  username: "w-[360px]",
-  realName: "w-[216px]",
-  tags: "w-[504px]",
-  phone: "w-[264px]",
-  email: "w-[288px]",
-  createTime: "w-[216px]",
-  lastChatTime: "w-[264px]",
-  message: "w-[76px]",
-  detail: "w-[104px]",
+  username: "w-[320px]",
+  realName: "w-[180px]",
+  tags: "w-[440px]",
+  phone: "w-[160px]",
+  email: "w-[240px]",
+  createTime: "w-[180px]",
+  lastChatTime: "w-[180px]",
+  message: "w-[48px]",
+  detail: "w-[72px]",
 } as const;
 
 function BreadcrumbModule() {
@@ -222,7 +222,7 @@ function DetailButton() {
       className="flex items-center gap-1 text-[14px] leading-[1.5] text-[#0f6beb] transition-opacity hover:opacity-70"
     >
       詳細
-      <svg className="size-4 rotate-180" viewBox="0 0 8 5" fill="none" aria-hidden="true">
+      <svg className="size-4 -rotate-90" viewBox="0 0 8 5" fill="none" aria-hidden="true">
         <path d={svgPaths.p1c38d100} fill="#0F6BEB" />
       </svg>
     </button>
@@ -241,10 +241,10 @@ function MembersTableRow({ member }: { member: Member }) {
       <td className={`${COLUMN_WIDTH_CLASSES.realName} px-4 py-[22px] align-middle`} style={{ textAlign: 'left' }}>
         <span className="block truncate">{member.realName}</span>
       </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.tags} px-4 py-[22px] align-middle`} style={{ textAlign: 'left' }}>
+      <td className={`${COLUMN_WIDTH_CLASSES.tags} pl-4 pr-8 py-[22px] align-middle`} style={{ textAlign: 'left' }}>
         <MemberTags tags={member.tags} />
       </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.phone} px-4 py-[22px] align-middle whitespace-nowrap`} style={{ textAlign: 'left' }}>
+      <td className={`${COLUMN_WIDTH_CLASSES.phone} pl-8 pr-4 py-[22px] align-middle whitespace-nowrap`} style={{ textAlign: 'left' }}>
         <span className="block">{member.phone}</span>
       </td>
       <td className={`${COLUMN_WIDTH_CLASSES.email} px-4 py-[22px] align-middle`} style={{ textAlign: 'left' }}>
@@ -256,10 +256,10 @@ function MembersTableRow({ member }: { member: Member }) {
       <td className={`${COLUMN_WIDTH_CLASSES.lastChatTime} px-4 py-[22px] align-middle whitespace-nowrap`} style={{ textAlign: 'left' }}>
         <span className="block">{member.lastChatTime}</span>
       </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.message} px-4 py-[22px] align-middle whitespace-nowrap`} style={{ textAlign: 'left' }}>
+      <td className={`${COLUMN_WIDTH_CLASSES.message} pl-4 pr-1 py-[22px] align-middle whitespace-nowrap`} style={{ textAlign: 'left' }}>
         <MessageButton />
       </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.detail} px-4 py-[22px] align-middle whitespace-nowrap`} style={{ textAlign: 'left' }}>
+      <td className={`${COLUMN_WIDTH_CLASSES.detail} pl-1 pr-4 py-[22px] align-middle whitespace-nowrap`} style={{ textAlign: 'left' }}>
         <DetailButton />
       </td>
     </tr>
@@ -268,43 +268,59 @@ function MembersTableRow({ member }: { member: Member }) {
 
 function MembersTable({ members, onSortChange }: { members: Member[]; onSortChange: (field: SortField) => void }) {
   return (
-    <div className="bg-white rounded-[16px] overflow-hidden overflow-x-auto">
+    <div className="bg-white rounded-[14px] border-2 border-[#e5e7eb] overflow-hidden overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400">
+      <style>{`
+        .scrollbar-thin::-webkit-scrollbar {
+          height: 8px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-track {
+          background: #f3f4f6;
+          border-radius: 4px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+          background: #d1d5db;
+          border-radius: 4px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+          background: #9ca3af;
+        }
+      `}</style>
       <table className="border-collapse" style={{ textAlign: 'left', tableLayout: 'fixed' }}>
           <thead className="bg-white text-[16px] leading-[1.5] text-[#383838]">
             <tr className="border-b border-[#dddddd]">
-              <th className={`${COLUMN_WIDTH_CLASSES.username} px-4 py-5 font-normal whitespace-nowrap`} style={{ textAlign: 'left', fontSize: '18px' }}>會員</th>
-              <th className={`${COLUMN_WIDTH_CLASSES.realName} px-4 py-5 font-normal whitespace-nowrap`} style={{ textAlign: 'left', fontSize: '18px' }}>
+              <th className={`${COLUMN_WIDTH_CLASSES.username} px-4 py-5 font-normal whitespace-nowrap`} style={{ textAlign: 'left', fontSize: '16px' }}>會員</th>
+              <th className={`${COLUMN_WIDTH_CLASSES.realName} px-4 py-5 font-normal whitespace-nowrap`} style={{ textAlign: 'left', fontSize: '16px' }}>
                 <SortableHeader field="realName" onSortChange={onSortChange}>
                   <span>姓名</span>
                 </SortableHeader>
               </th>
-              <th className={`${COLUMN_WIDTH_CLASSES.tags} px-4 py-5 font-normal whitespace-nowrap`} style={{ textAlign: 'left', fontSize: '18px' }}>
+              <th className={`${COLUMN_WIDTH_CLASSES.tags} pl-4 pr-8 py-5 font-normal whitespace-nowrap`} style={{ textAlign: 'left', fontSize: '16px' }}>
                 <SortableHeader field="tags" onSortChange={onSortChange}>
                   <span>標籤</span>
                 </SortableHeader>
               </th>
-              <th className={`${COLUMN_WIDTH_CLASSES.phone} px-4 py-5 font-normal whitespace-nowrap`} style={{ textAlign: 'left', fontSize: '18px' }}>
+              <th className={`${COLUMN_WIDTH_CLASSES.phone} pl-8 pr-4 py-5 font-normal whitespace-nowrap`} style={{ textAlign: 'left', fontSize: '16px' }}>
                 <SortableHeader field="phone" onSortChange={onSortChange}>
                   <span>手機號碼</span>
                 </SortableHeader>
               </th>
-              <th className={`${COLUMN_WIDTH_CLASSES.email} px-4 py-5 font-normal whitespace-nowrap`} style={{ textAlign: 'left', fontSize: '18px' }}>
+              <th className={`${COLUMN_WIDTH_CLASSES.email} px-4 py-5 font-normal whitespace-nowrap`} style={{ textAlign: 'left', fontSize: '16px' }}>
                 <SortableHeader field="email" onSortChange={onSortChange}>
                   <span>Email</span>
                 </SortableHeader>
               </th>
-              <th className={`${COLUMN_WIDTH_CLASSES.createTime} px-4 py-5 font-normal whitespace-nowrap`} style={{ textAlign: 'left', fontSize: '18px' }}>
+              <th className={`${COLUMN_WIDTH_CLASSES.createTime} px-4 py-5 font-normal whitespace-nowrap`} style={{ textAlign: 'left', fontSize: '16px' }}>
                 <SortableHeader field="createTime" onSortChange={onSortChange}>
                   <span>建立時間</span>
                 </SortableHeader>
               </th>
-              <th className={`${COLUMN_WIDTH_CLASSES.lastChatTime} px-4 py-5 font-normal whitespace-nowrap`} style={{ textAlign: 'left', fontSize: '18px' }}>
+              <th className={`${COLUMN_WIDTH_CLASSES.lastChatTime} px-4 py-5 font-normal whitespace-nowrap`} style={{ textAlign: 'left', fontSize: '16px' }}>
                 <SortableHeader field="lastChatTime" onSortChange={onSortChange}>
                   <span>最近聊天時間</span>
                 </SortableHeader>
               </th>
-              <th className={`${COLUMN_WIDTH_CLASSES.message} px-4 py-5 font-normal whitespace-nowrap`} style={{ textAlign: 'left', fontSize: '18px' }} aria-label="訊息" />
-              <th className={`${COLUMN_WIDTH_CLASSES.detail} px-4 py-5 font-normal whitespace-nowrap`} style={{ textAlign: 'left', fontSize: '18px' }} aria-label="詳細" />
+              <th className={`${COLUMN_WIDTH_CLASSES.message} pl-4 pr-1 py-5 font-normal whitespace-nowrap`} style={{ textAlign: 'left', fontSize: '16px' }} aria-label="訊息" />
+              <th className={`${COLUMN_WIDTH_CLASSES.detail} pl-1 pr-4 py-5 font-normal whitespace-nowrap`} style={{ textAlign: 'left', fontSize: '16px' }} aria-label="詳細" />
             </tr>
           </thead>
           <tbody>

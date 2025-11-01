@@ -202,6 +202,8 @@ function MainContent({
           onClearAll={onClearAll}
           onCreate={onCreate}
         />
+      </div>
+      <div className="box-border px-[40px] pb-[40px] w-full">
         <AutoResponseTable
           responses={filteredResponses}
           onToggleStatus={onToggleStatus}

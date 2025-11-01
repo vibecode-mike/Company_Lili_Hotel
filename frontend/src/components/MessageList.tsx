@@ -248,11 +248,15 @@ function MainContent({
   onFilterChange: (status: string | null) => void;
 }) {
   return (
-    <div className="flex flex-col gap-[24px] items-start pb-[40px] pt-[16px] px-[40px] relative w-full" data-name="Main Content">
-      <HeaderContainer />
-      <Frame onCreateMessage={onCreateMessage} searchValue={searchValue} onSearchChange={onSearchChange} onClearAll={onClearAll} />
-      <Frame1 statusCounts={statusCounts} activeFilter={activeFilter} onFilterChange={onFilterChange} />
-      <InteractiveMessageTable messages={filteredMessages} onEdit={onEditMessage} onViewDetails={onViewDetails} />
+    <div className="relative w-full" data-name="Main Content">
+      <div className="box-border flex w-full flex-col gap-[24px] px-[40px] pt-[16px] pb-[12px]">
+        <HeaderContainer />
+        <Frame onCreateMessage={onCreateMessage} searchValue={searchValue} onSearchChange={onSearchChange} onClearAll={onClearAll} />
+        <Frame1 statusCounts={statusCounts} activeFilter={activeFilter} onFilterChange={onFilterChange} />
+      </div>
+      <div className="box-border px-[40px] pb-[40px] w-full">
+        <InteractiveMessageTable messages={filteredMessages} onEdit={onEditMessage} onViewDetails={onViewDetails} />
+      </div>
     </div>
   );
 }

@@ -185,7 +185,7 @@ function MessageRow({ message, onEdit, onViewDetails }: { message: Message; onEd
       <td className={`${COLUMN_WIDTH_CLASSES.tags} pl-6 pr-6 py-8 align-middle`} style={{ textAlign: 'left' }}>
         <MessageTags tags={message.tags} />
       </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.platform} pl-8 pr-8 py-8 align-middle`} style={{ textAlign: 'left' }}>
+      <td className={`${COLUMN_WIDTH_CLASSES.platform} pl-12 pr-8 py-8 align-middle`} style={{ textAlign: 'left' }}>
         <span className="block truncate">{message.platform}</span>
       </td>
       <td className={`${COLUMN_WIDTH_CLASSES.status} pl-8 pr-6 py-8 align-middle`} style={{ textAlign: 'left' }}>
@@ -203,7 +203,7 @@ function MessageRow({ message, onEdit, onViewDetails }: { message: Message; onEd
       <td className={`${COLUMN_WIDTH_CLASSES.sendTime} pl-8 pr-0 py-8 align-middle`} style={{ textAlign: 'left' }}>
         <span className="block whitespace-nowrap">{message.sendTime}</span>
       </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.edit} pl-3 pr-1 py-8 align-middle`} style={{ textAlign: 'left' }}>
+      <td className={`${COLUMN_WIDTH_CLASSES.edit} pl-2 pr-1 py-8 align-middle`} style={{ textAlign: 'left' }}>
         <EditButton onClick={onEdit} />
       </td>
       <td className={`${COLUMN_WIDTH_CLASSES.detail} pl-1 pr-2 py-8 align-middle`} style={{ textAlign: 'center' }}>
@@ -223,19 +223,35 @@ export default function InteractiveMessageTable({ messages, onEdit, onViewDetail
   }
 
   return (
-    <div className="bg-white rounded-[14px] border-2 border-[#dddddd] overflow-hidden overflow-x-auto">
+    <div className="bg-white rounded-[14px] border-2 border-[#dddddd] overflow-hidden overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400">
+      <style>{`
+        .scrollbar-thin::-webkit-scrollbar {
+          height: 8px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-track {
+          background: #f3f4f6;
+          border-radius: 4px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+          background: #d1d5db;
+          border-radius: 4px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+          background: #9ca3af;
+        }
+      `}</style>
       <table className="w-full border-collapse table-fixed" style={{ textAlign: 'left', minWidth: '1280px' }}>
         <thead className="bg-white text-[16px] leading-[1.6] text-[#383838]">
           <tr className="border-b border-[#dddddd]">
             <th className={`${COLUMN_WIDTH_CLASSES.title} pl-5 pr-6 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>訊息標題</th>
             <th className={`${COLUMN_WIDTH_CLASSES.tags} pl-6 pr-6 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>標籤</th>
-            <th className={`${COLUMN_WIDTH_CLASSES.platform} pl-8 pr-8 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>平台</th>
+            <th className={`${COLUMN_WIDTH_CLASSES.platform} pl-12 pr-8 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>平台</th>
             <th className={`${COLUMN_WIDTH_CLASSES.status} pl-8 pr-6 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>狀態</th>
             <th className={`${COLUMN_WIDTH_CLASSES.sentCount} pl-6 pr-3 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>發送人數</th>
             <th className={`${COLUMN_WIDTH_CLASSES.openCount} pl-3 pr-3 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>已開啟次數</th>
             <th className={`${COLUMN_WIDTH_CLASSES.clickCount} pl-3 pr-8 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>點擊次數</th>
             <th className={`${COLUMN_WIDTH_CLASSES.sendTime} pl-8 pr-0 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>發送時間</th>
-            <th className={`${COLUMN_WIDTH_CLASSES.edit} pl-3 pr-1 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }} aria-label="編輯" />
+            <th className={`${COLUMN_WIDTH_CLASSES.edit} pl-2 pr-1 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }} aria-label="編輯" />
             <th className={`${COLUMN_WIDTH_CLASSES.detail} pl-1 pr-2 py-6 font-normal`} style={{ textAlign: 'center', fontSize: '16px' }} aria-label="詳細" />
           </tr>
         </thead>
