@@ -19,16 +19,16 @@ interface InteractiveMessageTableProps {
 }
 
 const COLUMN_WIDTH_CLASSES = {
-  title: "min-w-[240px] max-w-[320px]",
-  tags: "min-w-[200px] max-w-[280px]",
-  platform: "min-w-[100px] w-[120px]",
-  status: "min-w-[120px] w-[140px]",
-  sentCount: "min-w-[100px] w-[120px]",
-  openCount: "min-w-[120px] w-[140px]",
-  clickCount: "min-w-[100px] w-[130px]",
-  sendTime: "min-w-[160px] w-[180px]",
-  edit: "w-[50px] shrink-0",
-  detail: "w-[70px] shrink-0",
+  title: "w-[28%] min-w-[280px]",
+  tags: "w-[18%] min-w-[200px]",
+  platform: "w-[8%] min-w-[100px]",
+  status: "w-[10%] min-w-[120px]",
+  sentCount: "w-[8%] min-w-[100px]",
+  openCount: "w-[10%] min-w-[120px]",
+  clickCount: "w-[8%] min-w-[100px]",
+  sendTime: "w-[10%] min-w-[120px]",
+  edit: "w-[60px] shrink-0",
+  detail: "w-[80px] shrink-0",
 } as const;
 
 const STATUS_STYLES: Record<string, { text: string; bg: string; border: string; icon?: "success" | "clock" | "draft" }> = {
@@ -148,7 +148,7 @@ function EditButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center justify-center rounded-[8px] p-2 text-[#0f6beb] transition-colors hover:bg-[#f0f6ff]"
+      className="flex items-center justify-start rounded-[8px] p-0 text-[#0f6beb] transition-colors hover:bg-[#f0f6ff]"
       aria-label="編輯訊息"
     >
       <svg className="block size-4" viewBox="0 0 17 17" fill="none" aria-hidden="true">
@@ -178,35 +178,35 @@ function DetailButton({ onClick }: { onClick: () => void }) {
 
 function MessageRow({ message, onEdit, onViewDetails }: { message: Message; onEdit: () => void; onViewDetails: () => void }) {
   return (
-    <tr className="border-b border-[#dddddd] text-[14px] leading-[1.5] text-[#383838] last:border-b-0 hover:bg-[#fafbfc] transition-colors">
-      <td className={`${COLUMN_WIDTH_CLASSES.title} px-4 py-5 align-top`} style={{ textAlign: 'left' }}>
+    <tr className="border-b border-[#dddddd] text-[16px] leading-[1.75] text-[#383838] last:border-b-0 hover:bg-[#fafbfc] transition-colors">
+      <td className={`${COLUMN_WIDTH_CLASSES.title} pl-5 pr-6 py-8 align-middle`} style={{ textAlign: 'left' }}>
         <span className="block break-words line-clamp-2">{message.title}</span>
       </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.tags} px-4 py-5 align-top`} style={{ textAlign: 'left' }}>
+      <td className={`${COLUMN_WIDTH_CLASSES.tags} pl-6 pr-6 py-8 align-middle`} style={{ textAlign: 'left' }}>
         <MessageTags tags={message.tags} />
       </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.platform} px-3 py-5 align-top`} style={{ textAlign: 'left' }}>
+      <td className={`${COLUMN_WIDTH_CLASSES.platform} pl-8 pr-8 py-8 align-middle`} style={{ textAlign: 'left' }}>
         <span className="block truncate">{message.platform}</span>
       </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.status} px-3 py-5 align-top`} style={{ textAlign: 'left' }}>
+      <td className={`${COLUMN_WIDTH_CLASSES.status} pl-8 pr-6 py-8 align-middle`} style={{ textAlign: 'left' }}>
         <StatusBadge status={message.status} />
       </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.sentCount} px-3 py-5 align-top`} style={{ textAlign: 'left' }}>
+      <td className={`${COLUMN_WIDTH_CLASSES.sentCount} pl-6 pr-3 py-8 align-middle`} style={{ textAlign: 'left' }}>
         <span className="block">{message.sentCount}</span>
       </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.openCount} px-3 py-5 align-top`} style={{ textAlign: 'left' }}>
+      <td className={`${COLUMN_WIDTH_CLASSES.openCount} pl-3 pr-3 py-8 align-middle`} style={{ textAlign: 'left' }}>
         <span className="block">{message.openCount}</span>
       </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.clickCount} px-3 py-5 align-top`} style={{ textAlign: 'left' }}>
+      <td className={`${COLUMN_WIDTH_CLASSES.clickCount} pl-3 pr-8 py-8 align-middle`} style={{ textAlign: 'left' }}>
         <span className="block">{message.clickCount}</span>
       </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.sendTime} px-3 py-5 align-top`} style={{ textAlign: 'left' }}>
+      <td className={`${COLUMN_WIDTH_CLASSES.sendTime} pl-8 pr-0 py-8 align-middle`} style={{ textAlign: 'left' }}>
         <span className="block whitespace-nowrap">{message.sendTime}</span>
       </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.edit} px-1 py-5 align-top`} style={{ textAlign: 'center' }}>
+      <td className={`${COLUMN_WIDTH_CLASSES.edit} pl-3 pr-1 py-8 align-middle`} style={{ textAlign: 'left' }}>
         <EditButton onClick={onEdit} />
       </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.detail} px-1 py-5 align-top`} style={{ textAlign: 'center' }}>
+      <td className={`${COLUMN_WIDTH_CLASSES.detail} pl-1 pr-2 py-8 align-middle`} style={{ textAlign: 'center' }}>
         <DetailButton onClick={onViewDetails} />
       </td>
     </tr>
@@ -223,35 +223,33 @@ export default function InteractiveMessageTable({ messages, onEdit, onViewDetail
   }
 
   return (
-    <div className="w-full overflow-y-hidden overflow-x-auto">
-      <div className="inline-block min-w-full rounded-[16px] border border-[#dddddd] bg-white shadow-sm">
-        <table className="w-full min-w-[1400px] border-collapse table-fixed" style={{ textAlign: 'left' }}>
-          <thead className="bg-[#fafbfc] text-[14px] leading-[1.5] text-[#383838]">
-            <tr className="border-b-2 border-[#e5e7eb]">
-              <th className={`${COLUMN_WIDTH_CLASSES.title} px-4 py-4 font-medium`} style={{ textAlign: 'left', fontSize: '16px' }}>訊息標題</th>
-              <th className={`${COLUMN_WIDTH_CLASSES.tags} px-4 py-4 font-medium`} style={{ textAlign: 'left', fontSize: '16px' }}>標籤</th>
-              <th className={`${COLUMN_WIDTH_CLASSES.platform} px-3 py-4 font-medium`} style={{ textAlign: 'left', fontSize: '16px' }}>平台</th>
-              <th className={`${COLUMN_WIDTH_CLASSES.status} px-3 py-4 font-medium`} style={{ textAlign: 'left', fontSize: '16px' }}>狀態</th>
-              <th className={`${COLUMN_WIDTH_CLASSES.sentCount} px-3 py-4 font-medium`} style={{ textAlign: 'left', fontSize: '16px' }}>發送人數</th>
-              <th className={`${COLUMN_WIDTH_CLASSES.openCount} px-3 py-4 font-medium`} style={{ textAlign: 'left', fontSize: '16px' }}>已開啟次數</th>
-              <th className={`${COLUMN_WIDTH_CLASSES.clickCount} px-3 py-4 font-medium`} style={{ textAlign: 'left', fontSize: '16px' }}>點擊次數</th>
-              <th className={`${COLUMN_WIDTH_CLASSES.sendTime} px-3 py-4 font-medium`} style={{ textAlign: 'left', fontSize: '16px' }}>發送時間</th>
-              <th className={`${COLUMN_WIDTH_CLASSES.edit} px-1 py-4 font-medium`} style={{ textAlign: 'center', fontSize: '16px' }} aria-label="編輯" />
-              <th className={`${COLUMN_WIDTH_CLASSES.detail} px-1 py-4 font-medium`} style={{ textAlign: 'center', fontSize: '16px' }} aria-label="詳細" />
-            </tr>
-          </thead>
-          <tbody className="bg-white">
-            {messages.map((message) => (
-              <MessageRow
-                key={message.id}
-                message={message}
-                onEdit={() => onEdit(message.id)}
-                onViewDetails={() => onViewDetails(message.id)}
-              />
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <div className="bg-white rounded-[14px] border-2 border-[#dddddd] overflow-hidden overflow-x-auto">
+      <table className="w-full border-collapse table-fixed" style={{ textAlign: 'left', minWidth: '1280px' }}>
+        <thead className="bg-white text-[16px] leading-[1.6] text-[#383838]">
+          <tr className="border-b border-[#dddddd]">
+            <th className={`${COLUMN_WIDTH_CLASSES.title} pl-5 pr-6 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>訊息標題</th>
+            <th className={`${COLUMN_WIDTH_CLASSES.tags} pl-6 pr-6 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>標籤</th>
+            <th className={`${COLUMN_WIDTH_CLASSES.platform} pl-8 pr-8 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>平台</th>
+            <th className={`${COLUMN_WIDTH_CLASSES.status} pl-8 pr-6 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>狀態</th>
+            <th className={`${COLUMN_WIDTH_CLASSES.sentCount} pl-6 pr-3 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>發送人數</th>
+            <th className={`${COLUMN_WIDTH_CLASSES.openCount} pl-3 pr-3 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>已開啟次數</th>
+            <th className={`${COLUMN_WIDTH_CLASSES.clickCount} pl-3 pr-8 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>點擊次數</th>
+            <th className={`${COLUMN_WIDTH_CLASSES.sendTime} pl-8 pr-0 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>發送時間</th>
+            <th className={`${COLUMN_WIDTH_CLASSES.edit} pl-3 pr-1 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }} aria-label="編輯" />
+            <th className={`${COLUMN_WIDTH_CLASSES.detail} pl-1 pr-2 py-6 font-normal`} style={{ textAlign: 'center', fontSize: '16px' }} aria-label="詳細" />
+          </tr>
+        </thead>
+        <tbody className="bg-white">
+          {messages.map((message) => (
+            <MessageRow
+              key={message.id}
+              message={message}
+              onEdit={() => onEdit(message.id)}
+              onViewDetails={() => onViewDetails(message.id)}
+            />
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
