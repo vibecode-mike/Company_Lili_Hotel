@@ -610,6 +610,11 @@ export default function MessageCreation() {
     setDatePickerOpen(false);
     if (scheduledDate) {
       toast.success(`已設定排程時間：${formatDate(scheduledDate)} ${scheduledTime.hours}:${scheduledTime.minutes}`);
+      // 清除排程時間的驗證錯誤
+      if (fieldErrors.scheduledTime) {
+        setFieldErrors(prev => ({ ...prev, scheduledTime: undefined }));
+        setErrorCount(prev => Math.max(0, prev - 1));
+      }
     }
   };
 
@@ -658,17 +663,15 @@ export default function MessageCreation() {
                     </span>
                   </button>
                 </div>
-                {errorCount > 0 && (
-                  <p className="text-sm text-[#dc2626] mt-1">還有必填項未填</p>
-                )}
               </div>
             </div>
 
             {/* Form Fields Row 1 */}
             <div className="flex flex-col xl:flex-row gap-[32px] xl:gap-[120px] items-start w-full">
               <div className="flex-1 flex flex-col sm:flex-row items-start gap-4 w-full">
-                <Label className="min-w-[120px] sm:min-w-[140px] lg:min-w-[160px] pt-3">
+                <Label className="min-w-[120px] sm:min-w-[140px] lg:min-w-[160px] pt-3 flex items-center gap-1">
                   <span className="text-[16px] text-[#383838]">模板類型</span>
+                  <span className="text-[16px] text-[#f44336]">*</span>
                 </Label>
                 <div className="flex-1 flex flex-col gap-[2px]">
                   <Select
@@ -871,7 +874,10 @@ export default function MessageCreation() {
                 </div>
                 <div className="flex items-center gap-3">
                   <RadioGroupItem value="scheduled" id="scheduled" />
-                  <Label htmlFor="scheduled" className="cursor-pointer text-[16px] text-[#383838]">自訂時間</Label>
+                  <Label htmlFor="scheduled" className="cursor-pointer text-[16px] text-[#383838] flex items-center gap-1">
+                    自訂時間
+                    <span className="text-[16px] text-[#f44336]">*</span>
+                  </Label>
                   <div className="flex flex-col gap-1">
                     <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
                       <PopoverTrigger asChild disabled={scheduleType === 'immediate'}>

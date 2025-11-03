@@ -490,6 +490,18 @@ export function validateFormWithFieldErrors(form: MessageCreationForm): {
     errorCount++;
   }
 
+  // 验证模板类型（必填）
+  if (!form.templateType) {
+    fieldErrors.templateType = '請選擇模板類型';
+    errorCount++;
+  }
+
+  // 验证排程发送：若选择自訂時間，时间字段为必填
+  if (form.scheduleType === 'scheduled' && !form.scheduledTime) {
+    fieldErrors.scheduledTime = '請選擇排程時間';
+    errorCount++;
+  }
+
   return {
     isValid: errorCount === 0,
     fieldErrors,
