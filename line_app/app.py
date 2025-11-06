@@ -19,9 +19,11 @@ import hashlib
 import logging
 import datetime
 import requests
+import uuid
 from collections import defaultdict, deque
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote_plus, quote
+from linebot.exceptions import InvalidSignatureError
 
 from dotenv import load_dotenv
 from flask import Flask, request, abort, jsonify, render_template_string, redirect, send_from_directory
@@ -50,9 +52,9 @@ from linebot.v3.messaging.models import FlexContainer
 from openai import OpenAI
 
 # SQLAlchemy Core
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text as sql_text
 from sqlalchemy.engine import Engine
-
+from sqlalchemy import text
 # -------------------------------------------------
 # env
 # -------------------------------------------------
@@ -176,7 +178,7 @@ app = Flask(__name__, static_url_path=ASSET_ROUTE_PREFIX, static_folder=ASSET_LO
 # LINE v3
 config = Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN)
 api_client = ApiClient(config)  
-handler = WebhookHandler(LINE_CHANNEL_SECRET)
+default_handler = WebhookHandler(LINE_CHANNEL_SECRET)   
 messaging_api = MessagingApi(api_client)
 
 # OpenAI
@@ -189,6 +191,42 @@ def utcnow():
     return datetime.datetime.utcnow()
 
 def jdump(x): return json.dumps(x, ensure_ascii=False)
+
+# ===== Multi-channel helpers (新增) =====
+def get_credentials(channel_id: str | None):
+    """
+    從資料表抓該 channel 的 access_token / secret / liff_id_open。
+    你之後建一張 ryan_line_channels 表即可（id, channel_name, channel_secret, channel_access_token, liff_id_open）。
+    若查不到就回 None，代表用預設 .env。
+    """
+    if not channel_id:
+        return None
+    try:
+        row = fetchone("""
+            SELECT channel_access_token AS token,
+                   channel_secret       AS secret,
+                   COALESCE(liff_id_open, '') AS liff_id_open
+              FROM ryan_line_channels
+             WHERE id = :cid AND is_active = 1
+             LIMIT 1
+        """, {"cid": channel_id})
+        return row if row else None
+    except Exception:
+        return None
+
+def get_messaging_api(channel_id: str | None = None):
+    """
+    有給 channel_id → 用該 token 建臨時 MessagingApi
+    沒給 → 回傳全域 messaging_api（= .env 預設）
+    """
+    if not channel_id:
+        return messaging_api  # 相容舊行為
+    cred = get_credentials(channel_id)
+    if not cred or not cred.get("token"):
+        return messaging_api  # 找不到就退回預設，避免出錯
+    cfg = Configuration(access_token=cred["token"])
+    return MessagingApi(ApiClient(cfg))
+
 
 # -------------------------------------------------
 # DB helpers
@@ -326,6 +364,58 @@ def execute(sql, p=None):
     with engine.begin() as conn:
         conn.execute(text(sql), p or {})
 
+# [新增] 依 LINE 使用者建立/取得 thread（用 userId 當 thread_id，簡單且穩定）
+def ensure_thread_for_user(line_uid: str) -> str:
+    """
+    以 LINE userId 直接當作 ryan_threads.id 來使用。
+    若不存在就建立一筆；存在則跳過。
+    """
+    if not line_uid:
+        return "anonymous"
+    try:
+        execute("""
+            INSERT IGNORE INTO ryan_threads (id, conversation_name, created_at, updated_at)
+            VALUES (:tid, :name, NOW(), NOW())
+        """, {"tid": line_uid, "name": f"LINE:{line_uid}"})
+    except Exception:
+        pass
+    return line_uid
+
+
+# [新增] 寫一筆 ryan_messages（共用的小工具）
+def insert_ryan_message(*, thread_id: str, role: str, direction: str,
+                        message_type: str = "chat",
+                        question: str | None = None,
+                        response: str | None = None,
+                        event_id: str | None = None,
+                        status: str = "received"):
+    """
+    只寫你新表 ryan_messages，不動既有 messages/ryan_chat_logs。
+    由呼叫端決定是 user 問（傳 question）或 assistant 回（傳 response）。
+    """
+    msg_id = uuid.uuid4().hex  # 36 VARCHAR 用 hex 最穩
+    try:
+        execute("""
+            INSERT INTO ryan_messages
+                (id, thread_id, role, direction, message_type,
+                 question, response, event_id, status, created_at, updated_at)
+            VALUES
+                (:id, :tid, :role, :dir, :mt, :q, :r, :eid, :st, NOW(), NOW())
+        """, {
+            "id":  msg_id,
+            "tid": thread_id,
+            "role": role,               # 'user' / 'assistant'
+            "dir":  direction,          # 'incoming' / 'outgoing'
+            "mt":  message_type,        # 預設 'chat'
+            "q":   question,
+            "r":   response,
+            "eid": event_id,
+            "st":  status
+        })
+    except Exception as e:
+        logging.warning(f"[ryan_messages insert] {e}")
+
+
 # -------------------------------------------------
 # Members / Messages
 # -------------------------------------------------
@@ -400,7 +490,7 @@ FAQ = {
         "• 豪華三人房：$15,000｜一大一小床・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/6\n"
         "• 豪華四人房（床型若需指定請來電洽詢）：$18,000｜兩大床・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/9\n"
         "• 湖景四人房（床型若需指定請來電洽詢）：$22,000｜兩大床・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/7\n"
-        "• 家庭四人房：$25,000｜兩大床・客廳・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/8\n"
+        "• 家庭四人房：$25,000｜兩大床・s客廳・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/8\n"
         "• 蜜月雙人房：$13,000｜一大床・客廳・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/2\n"
         "• 水漾套房（正湖景）：$20,000｜一大床・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/1\n"
         "🔗 立即訂房：https://res.windsurfercrs.com/ibe/index.aspx?propertyID=17658&nono=1&lang=zh-tw&adults=2\n"
@@ -491,242 +581,35 @@ def image_url_from_item(item: dict) -> Optional[str]:
 # -------------------------------------------------
 # Flex builders（推廣）
 # -------------------------------------------------
-def make_image_button_bubble(item: dict, tracked_uri: Optional[str]):
-    body = []
-    if item.get("title"):
-        body.append({"type":"text","text":str(item["title"]),"weight":"bold","size":"lg","wrap":True})
-    if item.get("description"):
-        body.append({"type":"text","text":str(item["description"]),"wrap":True,"margin":"sm"})
-    if item.get("price") is not None:
-        body.append({"type":"text","text":f"$ {item['price']}", "weight":"bold","margin":"sm"})
-
-    hero = {"type":"image","url": image_url_from_item(item) or "https://dummyimage.com/1200x800/eeeeee/333333&text=No+Image",
-            "size":"full","aspectMode":"cover","aspectRatio":"1:1"}
-
-    # 無論如何 hero 直接可點
-    action_uri = tracked_uri or item.get("action_url") or item.get("url") or f"{PUBLIC_BASE}/"
-    hero["action"] = {"type":"uri","uri": action_uri}
-
-    return {
-        "type":"bubble",
-        "hero": hero,
-        "body":{"type":"box","layout":"vertical","spacing":"sm","contents": body or [{"type":"text","text":" "}]},
-        **({
-            "footer":{
-                "type":"box","layout":"vertical","spacing":"sm",
-                "contents":[{"type":"button","style":"primary","action":{"type":"uri","label": item.get("action_button_text") or "詳情","uri": action_uri}}]
-            }
-        } if action_uri else {})
-    }
-
-def make_image_click_bubble(item: dict, tracked_uri: Optional[str]):
-    """
-    生成圖片點擊型 Flex Message Bubble
-
-    支援 5 種場景：
-    1. image_only.json - 純圖片（無動作按鈕）
-    2. interaction_no.json - 圖片 + 浮動按鈕（無互動）
-    3. interaction_text.json - 圖片 + 浮動按鈕（觸發訊息）
-    4. interaction_uri.json - 圖片 + 浮動按鈕（開啟網址）
-    5. interaction_image.json - 圖片 + 浮動按鈕（觸發圖片）
-    """
-    image_url = image_url_from_item(item) or "https://dummyimage.com/1200x800/eeeeee/333333&text=No+Image"
-    aspect_ratio = item.get("image_aspect_ratio", "1:1")
-
-    # 檢查是否啟用動作按鈕
-    action_button_enabled = item.get("action_button_enabled", False)
-
-    # 場景 1: 無動作按鈕 → 使用 hero 結構（Phase 1 格式，向後兼容）
-    if not action_button_enabled:
-        # 取得點擊圖片的動作類型
-        click_action_type = item.get("image_click_action_type", "open_image")
-        click_action_value = item.get("image_click_action_value")
-
-        # 決定點擊圖片的 URI
-        if click_action_type == "open_image":
-            action_uri = image_url
-        elif click_action_type == "open_url" and click_action_value:
-            action_uri = tracked_uri or click_action_value
-        else:
-            action_uri = tracked_uri or image_url
-
-        # 返回純圖片格式（image_only.json）
-        return {
-            "type": "bubble",
-            "hero": {
-                "type": "image",
-                "url": image_url,
-                "size": "full",
-                "aspectRatio": aspect_ratio,
-                "aspectMode": "cover",
-                "action": {
-                    "type": "uri",
-                    "uri": action_uri
-                }
-            }
-        }
-
-    # 場景 2-5: 有動作按鈕 → 使用 body 結構 + 浮動按鈕
-    action_button_text = item.get("action_button_text", "點擊查看")
-    interaction_type = item.get("action_button_interaction_type", "none")
-
-    # 構建浮動按鈕的 action（根據互動類型）
-    button_box = {
-        "type": "box",
-        "layout": "vertical",
-        "backgroundColor": "#00000077",
-        "cornerRadius": "999px",
-        "paddingTop": "8px",
-        "paddingBottom": "8px",
-        "paddingStart": "20px",
-        "paddingEnd": "20px",
-        "width": "180px",
-        "alignItems": "center",
-        "justifyContent": "center",
-        "contents": [
-            {
-                "type": "text",
-                "text": action_button_text,
-                "weight": "bold",
-                "size": "sm",
-                "align": "center",
-                "color": "#FFFFFF"
-            }
-        ]
-    }
-
-    # 根據互動類型添加 action
-    if interaction_type == "trigger_message":
-        # 場景 3: interaction_text.json（觸發訊息）
-        button_box["action"] = {
-            "type": "message",
-            "label": "action",
-            "text": item.get("action_button_trigger_message", "")
-        }
-    elif interaction_type == "open_url":
-        # 場景 4: interaction_uri.json（開啟網址）
-        button_box["action"] = {
-            "type": "uri",
-            "label": "action",
-            "uri": tracked_uri or item.get("action_button_url") or item.get("action_url") or item.get("url") or f"{PUBLIC_BASE}/"
-        }
-    elif interaction_type == "trigger_image":
-        # 場景 5: interaction_image.json（觸發圖片）
-        button_box["action"] = {
-            "type": "uri",
-            "label": "action",
-            "uri": item.get("action_button_trigger_image_url", "")
-        }
-    # else: 場景 2: interaction_no.json（無互動，不添加 action）
-
-    # 返回帶浮動按鈕的格式
-    return {
-        "type": "bubble",
-        "body": {
-            "type": "box",
-            "layout": "vertical",
-            "paddingAll": "0px",
-            "contents": [
-                {
-                    "type": "image",
-                    "url": image_url,
-                    "size": "full",
-                    "aspectMode": "cover",
-                    "aspectRatio": aspect_ratio
-                },
-                {
-                    "type": "box",
-                    "layout": "horizontal",
-                    "position": "absolute",
-                    "offsetBottom": "20px",
-                    "offsetStart": "0px",
-                    "offsetEnd": "0px",
-                    "width": "100%",
-                    "alignItems": "center",
-                    "justifyContent": "center",
-                    "contents": [button_box]
-                }
-            ]
-        }
-    }
-
 def build_user_messages_from_payload(payload: dict, campaign_id: int, line_user_id: str) -> List[FlexMessage]:
-    ttype = (payload.get("template_type") or payload.get("type") or "").strip().lower()
+    """
+    從 payload 構建 LINE Flex Message
+    只支援前端產生的 Flex Message JSON 格式
+    """
     title = payload.get("title") or "活動通知"
     messages = []
 
-    # 準備項目內容
-    if payload.get("carousel_items"):
-        items = sorted(payload["carousel_items"], key=lambda x: x.get("sort_order") or 0)
-    else:
-        items = [{
-            "image_base64": payload.get("image_base64"),
-            "image_url": payload.get("image_url"),
-            "title": payload.get("title"),
-            "description": payload.get("notification_text"),
-            "price": payload.get("price"),
-            "action_url": payload.get("url"),
-            "interaction_tags": payload.get("interaction_tags"),
-            "action_button_enabled": True if payload.get("interaction_type") == "open_url" else False,
-            "action_button_text": payload.get("action_button_text") or "查看詳情",
-            "action_button_interaction_type": payload.get("interaction_type") or "open_url",
-            "sort_order": 0
-        }]
+    # 使用 Flex Message JSON（前端產生）
+    flex_message_json = payload.get("flex_message_json")
+    if not flex_message_json:
+        logging.error("❌ Missing flex_message_json in payload")
+        raise ValueError("Campaign must include flex_message_json field")
 
-    # ==============================
-    # 產生追蹤連結（追蹤網址含活動 ID）
-    # ==============================
-    def tracked_uri(item) -> Optional[str]:
-        target_url = (
-            item.get("action_url")
-            or item.get("action_button_url")
-            or item.get("url")
-            or f"{PUBLIC_BASE}/"
-        )
+    try:
+        # 直接解析前端產生的 JSON
+        flex_data = json.loads(flex_message_json) if isinstance(flex_message_json, str) else flex_message_json
+        logging.info("✅ Using Flex Message JSON from payload (frontend generated)")
+        logging.debug("Flex Message structure: %s", json.dumps(flex_data, ensure_ascii=False, indent=2))
 
-        btn_enabled = item.get("action_button_enabled", False)
-        btn_type = (item.get("action_button_interaction_type") or "").lower()
+        # TODO: 未來可在此添加追蹤 URI 邏輯
+        # 遍歷 Flex Message 結構，替換 action.uri 為追蹤 URI
 
-        # 按鈕開網址 → button_url，其餘（含圖片）→ image_click
-        interaction_type = "button_url" if (btn_enabled and btn_type == "open_url") else "image_click"
-
-        # ✅ 新增：從 payload 帶出活動 ID
-        src = payload.get("source_campaign_id")
-        src_q = f"&src={src}" if src is not None else ""
-
-        # ✅ 加上 &src=xxx 到追蹤網址裡
-        return f"{PUBLIC_BASE}/__track?cid={campaign_id}&uid={line_user_id}&type={interaction_type}&to={quote(target_url, safe='')}{src_q}"
-
-    # ==============================
-    # 建立氣泡內容
-    # ==============================
-    bubbles = []
-    for it in items:
-        uri = tracked_uri(it)
-        # ✅ 改成圖片預設也會走 open_url（即會打 /__track）
-        it["image_click_action_type"] = it.get("image_click_action_type", "open_url")
-        if ttype == "image_card":
-            bubbles.append(make_image_button_bubble(it, uri))
-        elif ttype in ("image_click", "carousel", ""):
-            bubbles.append(make_image_click_bubble(it, uri))
-        else:
-            bubbles.append(make_image_button_bubble(it, uri))
-
-    # ==============================
-    # 合併成 Flex 結構
-    # ==============================
-    if len(bubbles) > 1 or ttype == "carousel":
-        flex = {"type": "carousel", "contents": bubbles}
-    else:
-        flex = bubbles[0]
-
-    # Debug 輸出
-    logging.error("=== FLEX DEBUG OUTPUT ===\n%s", json.dumps(flex, ensure_ascii=False, indent=2))
-
-    # ✅ 將 dict 轉成 FlexContainer 再包進 FlexMessage
-    fc = FlexContainer.from_dict(flex)
-    messages.append(FlexMessage(alt_text=title, contents=fc))
-    return messages
+        fc = FlexContainer.from_dict(flex_data)
+        messages.append(FlexMessage(alt_text=title, contents=fc))
+        return messages
+    except Exception as e:
+        logging.error(f"❌ Failed to parse flex_message_json: {e}")
+        raise ValueError(f"Invalid flex_message_json format: {e}")
 
 
 
@@ -737,8 +620,6 @@ def _create_campaign_row(payload: dict) -> int:
     if not tid:
         raw_type = payload.get("type") or payload.get("template_type") or ""
         ttype = raw_type.strip().upper()
-
-        # 容錯對應（例如傳 image_card、image_click）
         ALIAS = {
             "IMAGE_CARD": "IMAGE_CARD",
             "IMAGE_CLICK": "IMAGE_CLICK",
@@ -747,14 +628,10 @@ def _create_campaign_row(payload: dict) -> int:
             "CLICK": "IMAGE_CLICK",
         }
         ttype = ALIAS.get(ttype, ttype)
-
         if not ttype:
             raise ValueError("payload 需要 type 或 template_id")
-
-        # 從 message_templates 找出對應類型的最新一筆 id
         row = fetchone("""
-            SELECT id
-            FROM message_templates
+            SELECT id FROM message_templates
             WHERE type = :t
             ORDER BY id DESC
             LIMIT 1
@@ -763,11 +640,18 @@ def _create_campaign_row(payload: dict) -> int:
             raise ValueError(f"message_templates 找不到 type={ttype} 的模板")
         tid = row["id"]
 
+    # 主要欄位
     now = utcnow()
     sat = utcnow()
     title = payload.get("title") or payload.get("name") or "未命名活動"
     audience = payload.get("target_audience") or "all"
+
+    # 標籤正規化 → JSON
     interaction_tags = payload.get("interaction_tags")
+    if isinstance(interaction_tags, str):
+        interaction_tags = [x.strip() for x in interaction_tags.split(",") if x.strip()]
+    elif not interaction_tags:
+        interaction_tags = None  # 無標籤 → 存 NULL
 
     status = "sent" if (payload.get("schedule_type") or "immediate") == "immediate" else "scheduled"
 
@@ -778,12 +662,13 @@ def _create_campaign_row(payload: dict) -> int:
                  interaction_tags, scheduled_at, sent_at, status,
                  sent_count, opened_count, clicked_count, created_at, updated_at)
             VALUES
-                (:title, :tid, :aud, NULL, :itag, :sat, :now, :status, 0, 0, 0, :now, :now)
+                (:title, :tid, :aud, NULL, :itag, :sat, :now, :status,
+                 0, 0, 0, :now, :now)
         """), {
             "title": title,
             "tid": tid,
             "aud": json.dumps(audience, ensure_ascii=False),
-            "itag": interaction_tags,
+            "itag": json.dumps(interaction_tags, ensure_ascii=False) if interaction_tags is not None else None,
             "sat": sat,
             "now": now,
             "status": status,
@@ -791,6 +676,7 @@ def _create_campaign_row(payload: dict) -> int:
         rid = conn.execute(text("SELECT LAST_INSERT_ID()")).scalar()
 
     return int(rid)
+
 
 def _add_campaign_recipients(campaign_id: int, mids: List[int]):
     if not mids: return
@@ -852,8 +738,9 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
         try:
             msgs = build_user_messages_from_payload(payload, cid, uid)
 
-            # LINE v3 push
-            messaging_api.push_message(PushMessageRequest(to=uid, messages=msgs))
+            # LINE v3 push（改成會自動依 channel_id 選對應 token）
+            api = get_messaging_api(payload.get("channel_id"))  
+            api.push_message(PushMessageRequest(to=uid, messages=msgs))  
             sent += 1
 
             if mid is not None:
@@ -1369,7 +1256,7 @@ def _is_valid_line_user_id(uid: str) -> bool:
     # 真正的 LINE userId：U 開頭、長度 33
     return isinstance(uid, str) and uid.startswith("U") and len(uid) == 33
 
-def push_survey_entry(survey_id: int, title: Optional[str] = None, preview_text: Optional[str] = None) -> int:
+def push_survey_entry(survey_id: int, title: Optional[str] = None, preview_text: Optional[str] = None, channel_id: Optional[str] = None) -> int:
     """
     入口卡片推送(含三重保險):
       1) 只推給有效的 userId(U 開頭、長度 33)
@@ -1442,6 +1329,8 @@ def push_survey_entry(survey_id: int, title: Optional[str] = None, preview_text:
     for i, m in enumerate(msgs):
         logging.info(f"  [{i}] {type(m).__name__}")
 
+    api = get_messaging_api(channel_id)
+
     # --- 收件者名單 ---
     test_uids = [u.strip() for u in os.getenv("TEST_UIDS", "").split(",") if u.strip()]
     if test_uids:
@@ -1462,13 +1351,17 @@ def push_survey_entry(survey_id: int, title: Optional[str] = None, preview_text:
         """)
 
     sent = 0
+
+    # 依 channel_id 取對應的 MessagingApi；沒給就用預設
+    api = get_messaging_api(channel_id)
+
     for r in rs:
         uid = r["line_uid"]
         if not _is_valid_line_user_id(uid):
             continue
 
         try:
-            messaging_api.push_message(PushMessageRequest(to=uid, messages=msgs))
+            api.push_message(PushMessageRequest(to=uid, messages=msgs))
             insert_message(r.get("id"), "outgoing", "text",
                            {"survey_id": survey_id, "payload": {"liff_url": liff_url, "title": title}})
             sent += 1
@@ -1478,7 +1371,7 @@ def push_survey_entry(survey_id: int, title: Optional[str] = None, preview_text:
             # Fallback: 純文字
             try:
                 text_fallback = TextMessage(text=f"{title}\n\n開始填寫:{liff_url}")
-                messaging_api.push_message(PushMessageRequest(to=uid, messages=[text_fallback]))
+                api.push_message(PushMessageRequest(to=uid, messages=[text_fallback]))
                 sent += 1
                 logging.info(f"✅ Fallback text sent to {uid}")
             except Exception as e2:
@@ -1488,7 +1381,13 @@ def push_survey_entry(survey_id: int, title: Optional[str] = None, preview_text:
 
 def send_survey_via_liff(payload: dict) -> dict:
     ids = register_survey_from_json(payload)
-    pushed = push_survey_entry(ids["survey_id"], title=payload.get("name") or "問卷", preview_text=payload.get("description"))
+    pushed = push_survey_entry(
+    ids["survey_id"],
+    title=payload.get("name") or "問卷",
+    preview_text=payload.get("description"),
+    channel_id=payload.get("channel_id")  # ← 允許從後台 JSON 帶頻道
+    )
+
     return {"template_id": ids["template_id"], "survey_id": ids["survey_id"], "pushed": pushed}
 
 # -------------------------------------------------
@@ -1556,133 +1455,95 @@ def __click():
 
 @app.get("/__track")
 def __track():
-    # 1) 取參數
-    try:
-        cid = int(request.args.get("cid", "0"))
-    except Exception:
-        cid = 0
-    
-    src = int(request.args.get("src", "0") or "0")
+    uid  = request.args.get("uid", "")
+    cid  = request.args.get("cid", "")
+    ityp = request.args.get("type", "") or "image_click"
+    to   = request.args.get("to", "")
+    src  = request.args.get("src", None)
+    tag_str = (request.args.get("tag", "") or "").strip()  # 可能是 "優惠,萬聖節"
 
-    uid   = request.args.get("uid", "") or request.headers.get("X-Line-UserId", "")
-    ityp  = request.args.get("type", "") or "image_click"   # image_click / button_url ...
-    to    = request.args.get("to", "")                      # 目標跳轉網址
-    debug = request.args.get("debug", "0") == "1"
+    logging.warning("[TRACK_HIT] uid=%s cid=%s type=%s tag=%s", uid, cid, ityp, tag_str)
 
-    # broadcast/舊訊息沒有 uid 的情況，給預設值，避免 NULL 入庫
-    if not uid:
-        uid = "broadcast"
-
-    # 2) 印出目前使用的 DB 與參數（方便排查）
-    dbname = None
-    try:
-        r = fetchone("SELECT DATABASE() AS db")
-        dbname = (r or {}).get("db")
-        logging.info(f"[TRACK] db={dbname} cid={cid} uid={uid} type={ityp} to={to}")
-    except Exception:
-        logging.exception("[TRACK] read DATABASE() failed")
-
-    # 2.5) 先補會員 profile（讓只有「點擊」也能補上暱稱/頭像）
-    try:
-        if uid != "broadcast" and uid.startswith("U"):  # 避免對 broadcast / 測試值打 API
-            maybe_update_member_profile(uid)
-    except Exception as e:
-        logging.warning(f"[TRACK] maybe_update_member_profile ignored: {e}")
-
-    # 3) 寫互動紀錄（主表）
-    cil_ok, cil_err = False, None
-    try:
-        execute("""
-            INSERT INTO component_interaction_logs
-              (line_id, campaign_id, interaction_type, interaction_value, triggered_at)
-            VALUES (:uid, :cid, :itype, :to, NOW())
-        """, {"uid": uid, "cid": cid, "itype": ityp, "to": to})
-        cil_ok = True
-    except Exception as e:
-        cil_err = str(e)
-        logging.exception(f"[TRACK] insert component_interaction_logs failed: {e}")
-
-    # 4) 取 LINE 的 display name（保險：若沒抓到就回退到 members.name）
+    # 你既有的 display_name 查詢邏輯，如無可維持 None
     display_name = None
-    try:
-        row = fetchone(
-            "SELECT COALESCE(line_display_name, name) AS line_display_name "
-            "FROM members WHERE line_uid = :uid",
-            {"uid": uid}
-        )
-        display_name = row["line_display_name"] if row and row.get("line_display_name") else None
-    except Exception as e:
-        logging.warning(f"[TRACK] fetch member display name failed (ignore): {e}")
 
-    # 5) upsert ryan_click_demo（※ 欄位名已是 line_display_name；total_clicks 當布林 0/1）
-    rcd_ok, rcd_err = False, None
+    # ---- 1) 先把「新傳入的 tag 串」正規化成有序不重複的 list ----
+    def normalize_tags(s: str) -> list[str]:
+        out = []
+        for x in (s.split(",") if s else []):
+            t = str(x).strip()
+            if t and t not in out:
+                out.append(t)
+        return out
+
+    incoming = normalize_tags(tag_str)
+
+    # ---- 2) 查出 DB 目前已存的 tag，和 incoming 做「集合合併」 ----
+    existing_str = None
+    try:
+        row = fetchone(f"""
+            SELECT last_click_tag
+            FROM `{MYSQL_DB}`.`ryan_click_demo`
+            WHERE line_id = :uid AND source_campaign_id = :src
+            LIMIT 1
+        """, {"uid": uid, "src": src})
+        if row:
+            existing_str = row.get("last_click_tag")
+    except Exception as e:
+        logging.exception(e)
+
+    existing = normalize_tags(existing_str or "")
+    # 合併：保留「既有順序」，再把新出現的依 incoming 順序追加
+    merged = existing[:]  # copy
+    for t in incoming:
+        if t not in merged:
+            merged.append(t)
+    merged_str = ",".join(merged) if merged else None  # 無標籤則存 NULL
+
+    # ---- 3) upsert：不再用 FIND_IN_SET；直接寫入合併後的 merged_str ----
     try:
         execute(f"""
             INSERT INTO `{MYSQL_DB}`.`ryan_click_demo`
-                (line_id, source_campaign_id, line_display_name, total_clicks, last_clicked_at)
+                (line_id, source_campaign_id, line_display_name, total_clicks, last_clicked_at, last_click_tag)
             VALUES
                 (
                     :uid,
                     :src,
                     COALESCE(:dname, (SELECT m.line_display_name FROM `{MYSQL_DB}`.`members` m WHERE m.line_uid = :uid LIMIT 1)),
                     1,
-                    NOW()
+                    NOW(),
+                    :merged
                 )
             ON DUPLICATE KEY UPDATE
-                total_clicks = 1,  -- 只要點過就是 1（布林）
+                total_clicks = 1,
                 line_display_name = COALESCE(
                     :dname,
                     (SELECT m.line_display_name FROM `{MYSQL_DB}`.`members` m WHERE m.line_uid = :uid LIMIT 1),
                     line_display_name
                 ),
+                last_click_tag = :merged,
                 last_clicked_at = NOW();
-        """, {"uid": uid, "src": src, "dname": display_name})
-
-        rcd_ok = True
-        logging.info(f"[TRACK] upsert ryan_click_demo ok: uid={uid} dname={display_name!r} src={src}")
-
+        """, {"uid": uid, "src": src, "dname": display_name, "merged": merged_str})
     except Exception as e:
-        rcd_err = str(e)
-        logging.exception(f"[TRACK] upsert ryan_click_demo failed: {e}")
+        logging.exception(e)
 
+    # 互動明細紀錄（可保留你原來的邏輯）
+    try:
+        execute("""
+            INSERT INTO component_interaction_logs
+                (line_id, campaign_id, interaction_type, interaction_value, triggered_at)
+            VALUES (:uid, :cid, :itype, :to, NOW())
+        """, {"uid": uid, "cid": cid, "itype": ityp, "to": to})
+    except Exception as e:
+        logging.exception(e)
 
+    if request.args.get("debug") == "1":
+        return {"ok": True, "uid": uid, "cid": cid, "src": src, "merged": merged_str}
 
-    # 6) debug 模式：直接回傳診斷
-    if debug:
-        import json
-        try:
-            last_rcd = fetchall(f"""
-                SELECT id,line_id,source_campaign_id,line_display_name,total_clicks,last_clicked_at,created_at,updated_at
-                FROM `{MYSQL_DB}`.`ryan_click_demo`
-                ORDER BY updated_at DESC
-                LIMIT 5
-            """)
-        except Exception as e:
-            last_rcd = [{"error": str(e)}]
-        try:
-            last_cil = fetchall("""
-                SELECT id,campaign_id,line_id,interaction_type,interaction_value,triggered_at
-                FROM component_interaction_logs
-                ORDER BY id DESC
-                LIMIT 5
-            """)
-        except Exception as e:
-            last_cil = [{"error": str(e)}]
-        report = [
-            f"DB: {dbname}",
-            f"CIL insert: {'OK' if cil_ok else 'FAIL'}  err={cil_err}",
-            f"RCD upsert: {'OK' if rcd_ok else 'FAIL'}  err={rcd_err}",
-            "Last ryan_click_demo:",
-            json.dumps(last_rcd, ensure_ascii=False, default=str),
-            "Last component_interaction_logs:",
-            json.dumps(last_cil, ensure_ascii=False, default=str),
-        ]
-        return "\n".join(report), 200, {"Content-Type": "text/plain; charset=utf-8"}
-
-    # 7) 正常重導
-    if not to:
-        return redirect("/", code=302)
-    return redirect(to, code=302)
+    try:
+        return redirect(to, code=302)
+    except Exception:
+        return "OK"
 
 
 # 群發
@@ -1705,16 +1566,58 @@ def __survey_submit():
     except Exception as e:
         logging.exception(e)
         return jsonify({"ok": False, "error": str(e)[:200]}), 400
+    
 
 # -------------------------------------------------
 # LINE Webhook（v3）
 # -------------------------------------------------
+
+# 可重複註冊事件處理（新增）
+def register_handlers(h):
+    # 依事件型別把上面的函式掛到任何 handler h 上
+    h.add(FollowEvent)(on_follow)
+    h.add(PostbackEvent)(on_postback)
+    h.add(MessageEvent, message=TextMessageContent)(on_text)
+
+@app.route("/callback/<channel_id>", methods=['POST'])
+def callback_multi(channel_id):
+    # 1) 取該頻道的 secret
+    cred = get_credentials(channel_id)  # 你前面已經寫好的查表函式
+    if not cred or not cred.get("secret"):
+        logging.error(f"callback for {channel_id}: credentials not found")
+        return "channel not found", 404
+
+    # 2) 讀 LINE 簽章與 request body
+    signature = request.headers.get('X-Line-Signature')
+    if not signature:
+        return "missing signature", 400
+
+    body = request.get_data(as_text=True)
+    logging.info(f"[{channel_id}] callback body length={len(body)}")
+
+    # 3) 以該頻道的 secret 建立臨時 handler，並註冊同一組事件處理
+    h = WebhookHandler(cred["secret"])
+    register_handlers(h)
+
+    # 4) 驗章 + 分派事件
+    try:
+        h.handle(body, signature)
+    except InvalidSignatureError:
+        logging.exception(f"[{channel_id}] invalid signature")
+        return "invalid signature", 400
+    except Exception:
+        logging.exception(f"[{channel_id}] handler error")
+        return "handler error", 500
+
+    return "OK", 200
+
+
 @app.post("/callback")
 def callback():
     signature = request.headers.get("X-Line-Signature", "")
     body = request.get_data(as_text=True)
     try:
-        handler.handle(body, signature)
+        default_handler.handle(body, signature)
     except Exception as e:
         logging.exception(f"Webhook error: {e}")
         abort(400)
@@ -1728,7 +1631,7 @@ def _source_key(ev_source) -> str:
     if st == "room":   return f"room_{getattr(ev_source, 'room_id', 'unknown')}"
     return "anonymous"
 
-@handler.add(FollowEvent)
+
 def on_follow(event: FollowEvent):
     welcome = (
         "Hi~ 歡迎加入水漾月明度假文旅（Hana Mizu Tsuki Hotel）！\n"
@@ -1753,7 +1656,7 @@ def on_follow(event: FollowEvent):
         except Exception:
             pass
 
-@handler.add(PostbackEvent)
+
 def on_postback(event: PostbackEvent):
     uid = getattr(event.source, "user_id", None)
     data = getattr(event.postback, "data", "") if getattr(event, "postback", None) else ""
@@ -1773,10 +1676,50 @@ def on_postback(event: PostbackEvent):
             pass
 
 
-@handler.add(MessageEvent, message=TextMessageContent)
 def on_text(event: MessageEvent):
+    # 先取 user_key、text_in、uid
     user_key = _source_key(event.source)
-    text_in = event.message.text.strip()
+    text_in  = event.message.text.strip()
+    uid      = getattr(event.source, "user_id", None)
+    logging.info(f"[on_text] uid={uid} text={text_in[:80]}")
+
+    # === 新增：建立 thread 並寫入 ryan_messages（user/incoming） ===
+    try:
+        thread_id = ensure_thread_for_user(uid)
+        insert_ryan_message(
+            thread_id=thread_id,
+            role="user",
+            direction="incoming",
+            message_type="chat",
+            question=text_in,
+            event_id=event.message.id,
+            status="received"
+        )
+    except Exception:
+        logging.exception("[on_text] write ryan_messages(user) failed")
+
+    # === 寫入 ryan_chat_logs ===
+    try:
+        with engine.begin() as conn:
+            conn.execute(sql_text("""
+                INSERT INTO ryan_chat_logs
+                (platform, user_id, direction, message_type, text, content, event_id, status, created_at)
+                VALUES (:platform, :user_id, :direction, :message_type, :text, :content, :event_id, :status, NOW())
+            """), {
+                "platform": "LINE",
+                "user_id": getattr(event.source, "user_id", None),
+                "direction": "incoming",
+                "message_type": "text",
+                "text": text_in,
+                "content": json.dumps({
+                    "type": "text",
+                    "text": text_in
+                }, ensure_ascii=False),
+                "event_id": event.message.id,
+                "status": "received"
+            })
+    except Exception as e:
+        print(f"[chatlog insert error] {e}")
 
     uid = getattr(event.source, "user_id", None)
     mid = None
@@ -1825,7 +1768,21 @@ def on_text(event: MessageEvent):
         ))
     except Exception:
         logging.exception("reply gpt failed")
-    user_memory[user_key].append(("user", text_in)); user_memory[user_key].append(("assistant", answer))
+    user_memory[user_key].append(("user", text_in)); 
+
+    # 把 AI 回覆寫進 ryan_messages（role=assistant / outgoing）
+    insert_ryan_message(
+        thread_id=thread_id,
+        role="assistant",
+        direction="outgoing",
+        message_type="chat",
+        response=answer[:5000],
+        status="sent"
+    )
+    user_memory[user_key].append(("assistant", answer))
+
+# 啟動時，先把事件註冊到預設 handler（吃 .env 的 secret）
+register_handlers(default_handler)
 
 # -------------------------------------------------
 # 測試路由

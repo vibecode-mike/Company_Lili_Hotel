@@ -27,14 +27,11 @@ import { FlexMessageEditorWrapper } from './flex-message/FlexMessageEditorWrappe
 import { campaignService } from '../services/campaignService';
 import { uploadService } from '../services/uploadService';
 import { transformFormToCreateRequest, validateForm, validateFormWithFieldErrors, type FieldErrors } from '../utils/dataTransform';
-import { TemplateTypeDisplay } from '../types/campaign';
-import type { MessageCreationForm, TemplateType, TargetType } from '../types/campaign';
-
-const TEMPLATE_TYPE_OPTIONS: TemplateType[] = ['text_button', 'image_card', 'image_click', 'text'];
+import type { MessageCreationForm, TargetType } from '../types/campaign';
 
 export default function MessageCreation() {
   const { navigate } = useNavigation();
-  const [templateType, setTemplateType] = useState<TemplateType | null>(null);
+  // 移除 templateType 狀態
   const [title, setTitle] = useState('');
   const [notificationMsg, setNotificationMsg] = useState('');
   const [previewMsg, setPreviewMsg] = useState('');
@@ -52,88 +49,7 @@ export default function MessageCreation() {
   const [errorCount, setErrorCount] = useState<number>(0);
   const [estimatedCount, setEstimatedCount] = useState<number>(0);
   const [loadingEstimate, setLoadingEstimate] = useState(false);
-  const cardRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
-  const carouselContainerRef = useRef<HTMLDivElement>(null);
-  const button1TriggerImageInputRef = useRef<HTMLInputElement>(null);
-  const button2TriggerImageInputRef = useRef<HTMLInputElement>(null);
-  
-  // Card states
-  const [cards, setCards] = useState([
-    {
-      id: 1,
-      enableImage: true,
-      enableTitle: true,
-      enableContent: true,
-      enablePrice: false,
-      enableButton1: true,
-      enableButton2: false,
-      image: '',
-      imageFile: null as File | null,
-      cardTitle: '標題文字',
-      content: '內文文字說明',
-      price: '',
-      currency: 'ntd',
-      button1: '動作按鈕一',
-      button2: '',
-      button1Action: 'select',
-      button1Url: '',
-      button1Tag: '',
-      button1Text: '',
-      button1TriggerImage: null as File | string | null,
-      button2Action: 'select',
-      button2Url: '',
-      button2Tag: '',
-      button2Text: '',
-      button2TriggerImage: null as File | null,
-      imageUploadStatus: 'idle' as 'idle' | 'uploading' | 'success'
-    }
-  ]);
-
-  const currentCard = cards.find(c => c.id === activeTab) || cards[0];
-
-  const updateCard = (updates: Partial<typeof currentCard>) => {
-    setCards(prevCards => prevCards.map(card =>
-      card.id === activeTab ? { ...card, ...updates } : card
-    ));
-  };
-
-  // Create stable URLs for trigger images
-  const [triggerImageUrl, setTriggerImageUrl] = useState<string | undefined>();
   const [flexMessageJson, setFlexMessageJson] = useState<string>('');
-
-  useEffect(() => {
-    let objectUrl: string | undefined;
-
-    const resolveTriggerSource = (): File | string | null => {
-      if (currentCard.button1Action === 'image' && currentCard.button1TriggerImage) {
-        return currentCard.button1TriggerImage;
-      }
-      if (currentCard.button2Action === 'image' && currentCard.button2TriggerImage) {
-        return currentCard.button2TriggerImage;
-      }
-      return null;
-    };
-
-    const source = resolveTriggerSource();
-
-    if (!source) {
-      setTriggerImageUrl(undefined);
-      return;
-    }
-
-    if (source instanceof File) {
-      objectUrl = URL.createObjectURL(source);
-      setTriggerImageUrl(objectUrl);
-    } else {
-      setTriggerImageUrl(source);
-    }
-
-    return () => {
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
-    };
-  }, [currentCard.button1Action, currentCard.button1TriggerImage, currentCard.button2Action, currentCard.button2TriggerImage]);
 
   // Fetch estimated audience count when target changes
   useEffect(() => {
@@ -169,209 +85,8 @@ export default function MessageCreation() {
     fetchEstimate();
   }, [targetType, selectedFilterTags, filterCondition]);
 
-  const addCarousel = () => {
-    if (cards.length < 10) {
-      const newId = Math.max(...cards.map(c => c.id)) + 1;
-      // Copy the enabled state from the first card to maintain consistent structure
-      const firstCard = cards[0];
-      setCards([...cards, {
-        id: newId,
-        enableImage: firstCard.enableImage,
-        enableTitle: firstCard.enableTitle,
-        enableContent: firstCard.enableContent,
-        enablePrice: firstCard.enablePrice,
-        enableButton1: firstCard.enableButton1,
-        enableButton2: firstCard.enableButton2,
-        image: '',
-        imageFile: null as File | null,
-        cardTitle: '',
-        content: '',
-        price: '',
-        currency: firstCard.currency,
-        button1: '',
-        button2: '',
-        button1Action: firstCard.button1Action,
-        button1Url: '',
-        button1Tag: '',
-        button1Text: '',
-        button1TriggerImage: null as File | string | null,
-        button2Action: firstCard.button2Action,
-        button2Url: '',
-        button2Tag: '',
-        button2Text: '',
-        button2TriggerImage: null as File | null,
-        imageUploadStatus: 'idle' as 'idle' | 'uploading' | 'success'
-      }]);
-      setActiveTab(newId);
-      toast.success('已新增輪播');
-    } else {
-      toast.error('最多可新增10個輪播');
-    }
-  };
 
-  const deleteCard = () => {
-    if (cards.length > 1) {
-      const newCards = cards.filter(c => c.id !== activeTab);
-      setCards(newCards);
-      setActiveTab(newCards[0].id);
-      toast.success('已刪除輪播');
-    } else {
-      toast.error('至少需保留一個輪播');
-    }
-  };
-
-  const handleButton1TriggerImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Validate file type
-      const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
-      if (!validTypes.includes(file.type)) {
-        toast.error('檔案格式錯誤，請上傳 JPG、JPEG 或 PNG 格式的圖片');
-        return;
-      }
-      
-      // Validate file size (5MB = 5242880 bytes)
-      if (file.size > 5242880) {
-        toast.error('圖片大小超過 5 MB，請選擇較小的圖片');
-        return;
-      }
-
-      updateCard({ button1TriggerImage: file });
-      toast.success('已選擇觸發圖片');
-    }
-  };
-
-  const handleButton2TriggerImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Validate file type
-      const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
-      if (!validTypes.includes(file.type)) {
-        toast.error('檔案格式錯誤，請上傳 JPG、JPEG 或 PNG 格式的圖片');
-        return;
-      }
-      
-      // Validate file size (5MB = 5242880 bytes)
-      if (file.size > 5242880) {
-        toast.error('圖片大小超過 5 MB，請選擇較小的圖片');
-        return;
-      }
-
-      updateCard({ button2TriggerImage: file });
-      toast.success('已選擇觸發圖片');
-    }
-  };
-
-  const handlePreviewScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const container = e.currentTarget;
-    const containerRect = container.getBoundingClientRect();
-    const containerCenter = containerRect.left + containerRect.width / 2;
-
-    // Find which card is closest to the center
-    let closestCard = cards[0].id;
-    let closestDistance = Infinity;
-
-    cards.forEach((card) => {
-      const cardElement = cardRefs.current[card.id];
-      if (cardElement) {
-        const cardRect = cardElement.getBoundingClientRect();
-        const cardCenter = cardRect.left + cardRect.width / 2;
-        const distance = Math.abs(cardCenter - containerCenter);
-
-        if (distance < closestDistance) {
-          closestDistance = distance;
-          closestCard = card.id;
-        }
-      }
-    });
-
-    // Only update if the closest card has changed
-    if (closestCard !== activeTab) {
-      setActiveTab(closestCard);
-    }
-  };
-
-  const copyCard = () => {
-    if (cards.length < 4) {
-      const cardToCopy = cards.find(c => c.id === activeTab);
-      if (cardToCopy) {
-        const newId = Math.max(...cards.map(c => c.id)) + 1;
-        setCards([...cards, { ...cardToCopy, id: newId, imageUploadStatus: 'idle' as 'idle' | 'uploading' | 'success' }]);
-        setActiveTab(newId);
-        toast.success('已複製輪播');
-      }
-    } else {
-      toast.error('最多只能有 4 個輪播');
-    }
-  };
-
-  type CardAssetUploadResult = {
-    imageUrl: string;
-    button1TriggerImageUrl?: string;
-  };
-
-  const uploadCardAssets = async (): Promise<CardAssetUploadResult[]> => {
-    const results: CardAssetUploadResult[] = [];
-    const updatedCards = [...cards];
-
-    for (let index = 0; index < cards.length; index += 1) {
-      const card = cards[index];
-      let imageUrl = '';
-
-      if (card.imageFile instanceof File) {
-        const response = await uploadService.uploadImage(card.imageFile);
-        if (response.error) {
-          throw new Error(
-            typeof response.error.detail === 'string'
-              ? response.error.detail
-              : '圖片上傳失敗'
-          );
-        }
-        imageUrl = response.data?.data.url || '';
-      } else if (
-        typeof card.image === 'string' &&
-        card.image.trim() !== '' &&
-        /^https?:\/\//.test(card.image.trim())
-      ) {
-        imageUrl = card.image;
-      }
-
-      let button1TriggerImageUrl: string | undefined;
-      if (card.button1Action === 'image' && card.button1TriggerImage) {
-        if (card.button1TriggerImage instanceof File) {
-          const response = await uploadService.uploadImage(card.button1TriggerImage);
-          if (response.error) {
-            throw new Error(
-              typeof response.error.detail === 'string'
-                ? response.error.detail
-                : '觸發圖片上傳失敗'
-            );
-          }
-          button1TriggerImageUrl = response.data?.data.url || '';
-        } else if (typeof card.button1TriggerImage === 'string') {
-          button1TriggerImageUrl = card.button1TriggerImage;
-        }
-      }
-
-      results.push({
-        imageUrl,
-        button1TriggerImageUrl,
-      });
-
-      updatedCards[index] = {
-        ...card,
-        image: imageUrl || card.image,
-        imageFile: null,
-        button1TriggerImage: button1TriggerImageUrl || card.button1TriggerImage,
-      };
-    }
-
-    setCards(updatedCards);
-
-    return results;
-  };
-
-  const buildFormData = (assets: CardAssetUploadResult[], selectedTemplateType: TemplateType | null): MessageCreationForm => {
+  const buildFormData = (flexJson: string): MessageCreationForm => {
     // Convert scheduled time to Date if needed
     let scheduledDateTime: Date | undefined;
     if (scheduleType === 'scheduled' && scheduledDate) {
@@ -380,10 +95,8 @@ export default function MessageCreation() {
       scheduledDateTime.setMinutes(parseInt(scheduledTime.minutes));
     }
 
-    const resolvedTemplateType: TemplateType = selectedTemplateType ?? 'image_card';
-
     return {
-      templateType: resolvedTemplateType,
+      templateType: undefined, // 移除 templateType，改為可選
       title,
       notificationMsg,
       previewMsg,
@@ -392,54 +105,8 @@ export default function MessageCreation() {
       targetType: targetType as TargetType,
       targetCondition: filterCondition,
       targetTags: selectedFilterTags.map(tag => parseInt(tag.id, 10)),
-      cards: cards.map((card, index) => {
-        const asset = assets[index];
-        const buttonEnabled = card.enableButton1 && card.button1 && card.button1Action !== 'select';
-        let buttonAction: 'url' | 'message' | 'postback' | 'image' | undefined;
-        let buttonValue: string | undefined;
-        let triggerImageUrl: string | undefined;
-
-        if (buttonEnabled) {
-          if (card.button1Action === 'url') {
-            buttonAction = 'url';
-            buttonValue = card.button1Url;
-          } else if (card.button1Action === 'text') {
-            buttonAction = 'message';
-            buttonValue = card.button1Text;
-          } else if (card.button1Action === 'image') {
-            buttonAction = 'image';
-            triggerImageUrl =
-              asset?.button1TriggerImageUrl ||
-              (typeof card.button1TriggerImage === 'string' ? card.button1TriggerImage : undefined);
-          } else {
-            buttonAction = 'postback';
-            buttonValue = card.button1Tag;
-          }
-        }
-
-        const fallbackImageUrl =
-          typeof card.image === 'string' && /^https?:\/\//.test(card.image.trim())
-            ? card.image
-            : '';
-
-        return {
-          imageUrl: asset?.imageUrl || fallbackImageUrl,
-          title: card.cardTitle,
-          description: card.content,
-          button1: buttonEnabled && buttonAction ? {
-            text: card.button1,
-            action: buttonAction,
-            value: buttonValue,
-            triggerImageUrl,
-            tag: card.button1Tag || undefined,
-          } : undefined,
-          button2: card.enableButton2 && card.button2 ? {
-            text: card.button2,
-            action: card.button2Action === 'url' ? 'url' : (card.button2Action === 'text' ? 'message' : 'postback'),
-            value: card.button2Url || card.button2Text || card.button2Tag || '',
-          } : undefined,
-        };
-      }),
+      flexMessageJson: flexJson || undefined,  // 直接傳遞 Flex Message JSON
+      cards: [],  // 空陣列，向後兼容
     };
   };
 
@@ -450,11 +117,8 @@ export default function MessageCreation() {
 
     setSubmitting(true);
     try {
-      // Upload images first
-      const assets = await uploadCardAssets();
-
       // Build form data
-      const formData = buildFormData(assets, templateType);
+      const formData = buildFormData(flexMessageJson);
 
       // Validate with field-level errors
       const validation = validateFormWithFieldErrors(formData);
@@ -523,14 +187,9 @@ export default function MessageCreation() {
     console.log('✅ Validation passed, setting submitting to true');
     setSubmitting(true);
     try {
-      console.log('📤 Starting image upload...');
-      // Upload images first
-      const assets = await uploadCardAssets();
-      console.log('✅ Images uploaded:', assets);
-
       // Build form data
       console.log('🏗️ Building form data...');
-      const formData = buildFormData(assets, templateType);
+      const formData = buildFormData(flexMessageJson);
       console.log('✅ Form data built:', formData);
 
       // Validate with field-level errors
@@ -668,46 +327,8 @@ export default function MessageCreation() {
               </div>
             </div>
 
-            {/* Form Fields Row 1 */}
+            {/* Form Fields Row 1 - 移除模板類型欄位 */}
             <div className="flex flex-col xl:flex-row gap-[32px] xl:gap-[120px] items-start w-full">
-              <div className="flex-1 flex flex-col sm:flex-row items-start gap-4 w-full">
-                <Label className="min-w-[120px] sm:min-w-[140px] lg:min-w-[160px] pt-3 flex items-center gap-1">
-                  <span className="text-[16px] text-[#383838]">模板類型</span>
-                  <span className="text-[16px] text-[#f44336]">*</span>
-                </Label>
-                <div className="flex-1 flex flex-col gap-[2px]">
-                  <Select
-                    value={templateType ?? undefined}
-                    onValueChange={(value) => {
-                      console.log('🔵 Template type changed to:', value);
-                      setTemplateType(value as TemplateType);
-                      if (fieldErrors.templateType) {
-                        console.log('🟢 Clearing templateType error');
-                        setFieldErrors(prev => ({ ...prev, templateType: undefined }));
-                        setErrorCount(prev => Math.max(0, prev - 1));
-                      }
-                    }}
-                  >
-                    <SelectTrigger
-                      className={`flex-1 !h-[48px] rounded-[8px] bg-white ${!templateType ? 'text-[#717182]' : ''}`}
-                      style={{
-                        borderColor: '#e5e5e5',
-                        borderWidth: '1px'
-                      }}
-                    >
-                      <SelectValue placeholder="選擇模板類型" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TEMPLATE_TYPE_OPTIONS.map((option) => (
-                        <SelectItem key={option} value={option}>
-                          {TemplateTypeDisplay[option]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
               <div className="flex-1 flex flex-col sm:flex-row items-start gap-4 w-full">
                 <Label className="min-w-[120px] sm:min-w-[140px] lg:min-w-[160px] pt-3 flex items-center gap-1">
                   <span className="text-[16px] text-[#383838]">訊息標題</span>
@@ -1084,22 +705,6 @@ export default function MessageCreation() {
               />
             </div>
           </div>
-
-          {/* Hidden file inputs for trigger images */}
-          <input
-            ref={button1TriggerImageInputRef}
-            type="file"
-            accept="image/jpeg,image/jpg,image/png"
-            className="hidden"
-            onChange={handleButton1TriggerImageUpload}
-          />
-          <input
-            ref={button2TriggerImageInputRef}
-            type="file"
-            accept="image/jpeg,image/jpg,image/png"
-            className="hidden"
-            onChange={handleButton2TriggerImageUpload}
-          />
         </div>
       </TooltipProvider>
     </Layout>

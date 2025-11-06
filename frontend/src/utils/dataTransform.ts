@@ -94,12 +94,10 @@ export function transformFormToCreateRequest(
 ): CreateCampaignRequest {
   const isFiltered = form.targetType === 'tags' || form.targetType === 'filtered';
 
-  const collectedInteractionTags: string[] = [];
-
   // 基本信息
   const request: CreateCampaignRequest = {
     title: form.title,
-    template_type: TEMPLATE_TYPE_TO_API[form.templateType] || form.templateType,
+    template_type: form.templateType ? (TEMPLATE_TYPE_TO_API[form.templateType] || form.templateType) : undefined,
     notification_text: form.notificationMsg,
     preview_text: form.previewMsg || form.notificationMsg, // 预览文本，默认使用通知文本
 
@@ -111,114 +109,15 @@ export function transformFormToCreateRequest(
     target_condition: form.targetCondition || 'include',
     target_tags: isFiltered ? form.targetTags?.map((id) => id.toString()) || [] : [],
 
-    // 轮播项目（匹配后端 carousel_items 格式）
-    carousel_items: form.cards.map((card, index) => {
-      const apiCard: ApiCampaignCard & {
-        action_button_enabled?: boolean;
-        action_button_text?: string;
-        action_button_interaction_type?: string;
-        action_button_url?: string;
-        action_button_trigger_message?: string;
-        action_button_trigger_image_url?: string;
-        action_button2_enabled?: boolean;
-        action_button2_text?: string;
-        action_button2_interaction_type?: string;
-        action_button2_url?: string;
-        action_button2_trigger_message?: string;
-        action_button2_trigger_image_url?: string;
-        interaction_tag?: string;
-        image_aspect_ratio?: string;
-        image_click_action_type?: string;
-        image_click_action_value?: string;
-        sort_order?: number;
-      } = {
-        image_url: card.imageUrl || '',
-        title: card.title || '',
-        text: card.messageText || card.description || '',
-        image_aspect_ratio: '1:1',
-        image_click_action_type: 'open_image',
-        sort_order: index,
-      };
-
-      const button = card.button1;
-      if (button && button.action !== undefined) {
-        apiCard.action_button_enabled = true;
-        apiCard.action_button_text = button.text || '查看詳情';
-        apiCard.action_button_interaction_type = 'none';
-
-        if (button.tag) {
-          apiCard.interaction_tag = button.tag;
-          collectedInteractionTags.push(button.tag);
-        }
-
-        switch (button.action) {
-          case 'url':
-            apiCard.action_button_interaction_type = 'open_url';
-            apiCard.action_button_url = button.value || '';
-            break;
-          case 'message':
-          case 'postback':
-            apiCard.action_button_interaction_type = 'trigger_message';
-            apiCard.action_button_trigger_message = button.value || '';
-            break;
-          case 'image':
-            apiCard.action_button_interaction_type = 'trigger_image';
-            apiCard.action_button_trigger_image_url = button.triggerImageUrl || '';
-            break;
-          default:
-            apiCard.action_button_enabled = false;
-            apiCard.action_button_text = undefined;
-            break;
-        }
-      } else {
-        apiCard.action_button_enabled = false;
-      }
-
-      // Button 2 處理
-      const button2 = card.button2;
-      if (button2 && button2.action !== undefined) {
-        apiCard.action_button2_enabled = true;
-        apiCard.action_button2_text = button2.text || '更多資訊';
-        apiCard.action_button2_interaction_type = 'none';
-
-        if (button2.tag) {
-          // button2 也可以收集互動標籤
-          collectedInteractionTags.push(button2.tag);
-        }
-
-        switch (button2.action) {
-          case 'url':
-            apiCard.action_button2_interaction_type = 'open_url';
-            apiCard.action_button2_url = button2.value || '';
-            break;
-          case 'message':
-          case 'postback':
-            apiCard.action_button2_interaction_type = 'trigger_message';
-            apiCard.action_button2_trigger_message = button2.value || '';
-            break;
-          case 'image':
-            apiCard.action_button2_interaction_type = 'trigger_image';
-            apiCard.action_button2_trigger_image_url = button2.triggerImageUrl || '';
-            break;
-          default:
-            apiCard.action_button2_enabled = false;
-            apiCard.action_button2_text = undefined;
-            break;
-        }
-      } else {
-        apiCard.action_button2_enabled = false;
-      }
-
-      return apiCard;
-    }),
+    // 轮播项目（空陣列，向後兼容）
+    carousel_items: [],
 
     // 互动标签（如果有）
     interaction_tags: [],
-  };
 
-  if (collectedInteractionTags.length > 0) {
-    request.interaction_tags = Array.from(new Set(collectedInteractionTags));
-  }
+    // Flex Message JSON 支援（直接傳遞，僅改命名：駝峰 → 蛇形）
+    flex_message_json: form.flexMessageJson,
+  };
 
   // 排程时间（如果是排程发送）
   if (form.scheduleType === 'scheduled' && form.scheduledTime) {
@@ -490,11 +389,7 @@ export function validateFormWithFieldErrors(form: MessageCreationForm): {
     errorCount++;
   }
 
-  // 验证模板类型（必填）
-  if (!form.templateType) {
-    fieldErrors.templateType = '請選擇模板類型';
-    errorCount++;
-  }
+  // 移除模板類型驗證（現在使用 Flex Message JSON）
 
   // 验证排程发送：若选择自訂時間，时间字段为必填
   if (form.scheduleType === 'scheduled' && !form.scheduledTime) {

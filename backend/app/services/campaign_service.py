@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 import logging
+import json
 
 from app.models.campaign import Campaign, CampaignStatus, CampaignRecipient
 from app.models.template import MessageTemplate, TemplateCarouselItem, TemplateType
@@ -93,15 +94,23 @@ class CampaignService:
         else:
             status = CampaignStatus.DRAFT
 
-        # 6. 创建活动
+        # 6. 从 flex_message_json 解析互动标签
+        interaction_tags = []
+        if campaign_data.flex_message_json:
+            interaction_tags = self._extract_interaction_tags_from_flex_json(
+                campaign_data.flex_message_json
+            )
+
+        # 7. 创建活动
         campaign = Campaign(
             title=campaign_data.title or "未命名活动",
             template_id=template.id,
             target_audience=target_audience,
             trigger_condition=trigger_condition,
-            interaction_tags=campaign_data.interaction_tags or [],  # 多标签数组
+            interaction_tags=interaction_tags,  # 使用解析出的标签
             scheduled_at=scheduled_at,
             status=status,
+            flex_message_json=campaign_data.flex_message_json,  # Flex Message JSON
         )
         db.add(campaign)
         await db.flush()
@@ -352,14 +361,49 @@ class CampaignService:
 
     # ========== 私有辅助方法 ==========
 
+    def _extract_interaction_tags_from_flex_json(self, flex_json_str: str) -> List[str]:
+        """从 Flex Message JSON 的 _metadata 欄位提取互動標籤
+
+        Args:
+            flex_json_str: Flex Message JSON 字符串
+
+        Returns:
+            互動標籤列表（去重並排序）
+        """
+        try:
+            flex_data = json.loads(flex_json_str)
+            tags = []
+
+            # 處理單一 bubble 或 carousel
+            bubbles = [flex_data] if flex_data.get("type") == "bubble" else flex_data.get("contents", [])
+
+            for bubble in bubbles:
+                metadata = bubble.get("_metadata", {})
+
+                # Hero 圖片標籤
+                if metadata.get("heroActionLabel"):
+                    tags.append(metadata["heroActionLabel"])
+
+                # 按鈕標籤
+                button_labels = metadata.get("buttonLabels", {})
+                for label in button_labels.values():
+                    if label:
+                        tags.append(label)
+
+            # 去重並排序
+            return sorted(list(set(tags)))
+        except Exception as e:
+            logger.warning(f"Failed to extract interaction tags: {e}")
+            return []
+
     async def _create_template(
         self,
         db: AsyncSession,
         campaign_data: CampaignCreate
     ) -> MessageTemplate:
         """创建消息模板"""
+        # 移除 type 欄位處理，因為該欄位已從資料庫移除
         template = MessageTemplate(
-            type=TemplateType(campaign_data.template_type),
             name=campaign_data.title or "未命名模板",
             content=campaign_data.notification_text,
             notification_text=campaign_data.notification_text,
