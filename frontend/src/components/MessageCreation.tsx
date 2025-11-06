@@ -23,7 +23,7 @@ import ActionTriggerTextMessage from '../imports/ActionTriggerTextMessage';
 import ActionTriggerImageMessage from '../imports/ActionTriggerImageMessage';
 import TriggerImagePreview from '../imports/Container-32-2033';
 import TriggerTextPreview from '../imports/Container-37-43';
-import { FlexMessageEditorWrapper } from './FlexMessageEditorWrapper';
+import { FlexMessageEditorWrapper } from './flex-message/FlexMessageEditorWrapper';
 import { campaignService } from '../services/campaignService';
 import { uploadService } from '../services/uploadService';
 import { transformFormToCreateRequest, validateForm, validateFormWithFieldErrors, type FieldErrors } from '../utils/dataTransform';
@@ -49,7 +49,6 @@ export default function MessageCreation() {
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [flexMessageJson, setFlexMessageJson] = useState<string>('');
   const [errorCount, setErrorCount] = useState<number>(0);
   const [estimatedCount, setEstimatedCount] = useState<number>(0);
   const [loadingEstimate, setLoadingEstimate] = useState(false);
@@ -62,19 +61,19 @@ export default function MessageCreation() {
   const [cards, setCards] = useState([
     {
       id: 1,
-      enableImage: false,
-      enableTitle: false,
-      enableContent: false,
+      enableImage: true,
+      enableTitle: true,
+      enableContent: true,
       enablePrice: false,
-      enableButton1: false,
+      enableButton1: true,
       enableButton2: false,
       image: '',
       imageFile: null as File | null,
-      cardTitle: '',
-      content: '',
+      cardTitle: '標題文字',
+      content: '內文文字說明',
       price: '',
       currency: 'ntd',
-      button1: '',
+      button1: '動作按鈕一',
       button2: '',
       button1Action: 'select',
       button1Url: '',
@@ -100,6 +99,7 @@ export default function MessageCreation() {
 
   // Create stable URLs for trigger images
   const [triggerImageUrl, setTriggerImageUrl] = useState<string | undefined>();
+  const [flexMessageJson, setFlexMessageJson] = useState<string>('');
 
   useEffect(() => {
     let objectUrl: string | undefined;
