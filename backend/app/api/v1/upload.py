@@ -34,7 +34,7 @@ def generate_unique_filename(original_filename: str) -> str:
     return f"{timestamp}_{unique_id}{ext}"
 
 
-@router.post("/upload", summary="上传图片", description="上传图片文件，返回图片URL")
+@router.post("", summary="上传图片", description="上传图片文件，返回图片URL")
 async def upload_image(file: UploadFile = File(...)):
     """
     上传图片接口
