@@ -312,7 +312,7 @@ class MessageService:
             "campaign_id": message_id,
             "line_channel_id": line_channel_id,
             "flex_message_json": flex_message_json,  # 前端生成的 JSON
-            "alt_text": message.notification_text or "您收到一则新消息"
+            "alt_text": message.message_content or "您收到一则新消息"  # 使用 message_content 作為 alt_text
         }
 
         # 设置目标受众
