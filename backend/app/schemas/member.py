@@ -4,7 +4,6 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from datetime import datetime, date
-from app.models.member import Gender, MemberSource
 
 
 class TagInfo(BaseModel):
@@ -21,13 +20,13 @@ class TagInfo(BaseModel):
 class MemberBase(BaseModel):
     """會員基礎模型"""
 
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    gender: Optional[Gender] = None
+    name: Optional[str] = None  # 統一單欄位
+    gender: Optional[str] = None  # 0=不透漏/1=男/2=女
     birthday: Optional[date] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     id_number: Optional[str] = None
+    residence: Optional[str] = None  # 新增居住地
     accept_marketing: bool = True
 
 
@@ -40,7 +39,7 @@ class MemberCreate(MemberBase):
 class MemberUpdate(MemberBase):
     """更新會員"""
 
-    notes: Optional[str] = None
+    internal_note: Optional[str] = None  # 改名為 internal_note
 
 
 class MemberListItem(BaseModel):
@@ -48,10 +47,9 @@ class MemberListItem(BaseModel):
 
     id: int
     line_uid: Optional[str] = None
-    line_display_name: Optional[str] = None
-    line_picture_url: Optional[str] = None
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
+    line_name: Optional[str] = None  # 改名為 line_name
+    line_avatar: Optional[str] = None  # 改名為 line_avatar
+    name: Optional[str] = None  # 統一單欄位
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     tags: List[TagInfo] = []
@@ -65,12 +63,13 @@ class MemberListItem(BaseModel):
 class MemberDetail(MemberListItem):
     """會員詳情"""
 
-    gender: Optional[Gender] = None
+    gender: Optional[str] = None  # 0=不透漏/1=男/2=女
     birthday: Optional[date] = None
     id_number: Optional[str] = None
-    source: MemberSource
+    residence: Optional[str] = None  # 新增居住地
+    join_source: str = "LINE"  # 改名為 join_source
     accept_marketing: bool = True
-    notes: Optional[str] = None
+    internal_note: Optional[str] = None  # 改名為 internal_note
 
 
 class MemberSearchParams(BaseModel):
@@ -78,7 +77,7 @@ class MemberSearchParams(BaseModel):
 
     search: Optional[str] = None  # 姓名/Email/手機
     tags: Optional[str] = None  # 標籤ID列表（逗號分隔）
-    source: Optional[MemberSource] = None
+    join_source: Optional[str] = None  # LINE/CRM/PMS/ERP/系統
     sort_by: str = "last_interaction_at"
     order: str = "desc"
     page: int = 1
@@ -94,4 +93,4 @@ class AddTagsRequest(BaseModel):
 class UpdateNotesRequest(BaseModel):
     """更新備註請求"""
 
-    notes: str
+    internal_note: str  # 改名為 internal_note

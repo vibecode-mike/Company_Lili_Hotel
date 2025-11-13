@@ -17,7 +17,16 @@
         'next-themes@0.4.6': 'next-themes',
         'lucide-react@0.487.0': 'lucide-react',
         'input-otp@1.4.2': 'input-otp',
+        'figma:asset/e859f2896aa57670db9ed9933eb059d29ffaf7c7.png': path.resolve(__dirname, './src/assets/e859f2896aa57670db9ed9933eb059d29ffaf7c7.png'),
+        'figma:asset/e0079245ea67343450871e33ff689154160aa2bb.png': path.resolve(__dirname, './src/assets/e0079245ea67343450871e33ff689154160aa2bb.png'),
         'figma:asset/d1c10d8dbfc2ae5783543c9f0b76cd2635713297.png': path.resolve(__dirname, './src/assets/d1c10d8dbfc2ae5783543c9f0b76cd2635713297.png'),
+        'figma:asset/bf4ffd108c2e836b466874e959531fdf5c9bd8b1.png': path.resolve(__dirname, './src/assets/bf4ffd108c2e836b466874e959531fdf5c9bd8b1.png'),
+        'figma:asset/8e00ff5667a0201102bd7740decd474177a9f4ae.png': path.resolve(__dirname, './src/assets/8e00ff5667a0201102bd7740decd474177a9f4ae.png'),
+        'figma:asset/88076181b402df2ffcba98c51345afaaa2165468.png': path.resolve(__dirname, './src/assets/88076181b402df2ffcba98c51345afaaa2165468.png'),
+        'figma:asset/6b82043ca68632e4603c63153aae4828cae95e1b.png': path.resolve(__dirname, './src/assets/6b82043ca68632e4603c63153aae4828cae95e1b.png'),
+        'figma:asset/68b289cb927cef11d11501fd420bb560ad25c667.png': path.resolve(__dirname, './src/assets/68b289cb927cef11d11501fd420bb560ad25c667.png'),
+        'figma:asset/642ad615d8f518959bf63fad5c3e52059858fe77.png': path.resolve(__dirname, './src/assets/642ad615d8f518959bf63fad5c3e52059858fe77.png'),
+        'figma:asset/20122aaae7549f293a92fcf95360eb6d375d538b.png': path.resolve(__dirname, './src/assets/20122aaae7549f293a92fcf95360eb6d375d538b.png'),
         'embla-carousel-react@8.6.0': 'embla-carousel-react',
         'cmdk@1.1.1': 'cmdk',
         'class-variance-authority@0.7.1': 'class-variance-authority',
@@ -59,11 +68,5 @@
       port: 5173,
       open: true,
       allowedHosts: ['crmpoc.star-bit.io'],
-      proxy: {
-        '/api': {
-          target: 'http://127.0.0.1:8700',
-          changeOrigin: true,
-        },
-      },
     },
   });

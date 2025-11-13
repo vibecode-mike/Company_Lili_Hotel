@@ -1,5 +1,6 @@
 import { useState, KeyboardEvent, useRef, useEffect } from 'react';
 import svgPaths from '../imports/svg-er211vihwc';
+import toggleSvgPaths from '../imports/svg-eulbcts4ba';
 
 interface Tag {
   id: string;
@@ -9,6 +10,8 @@ interface Tag {
 interface FilterModalProps {
   onClose?: () => void;
   onConfirm?: (selectedTags: Tag[], isInclude: boolean) => void;
+  initialSelectedTags?: Tag[];
+  initialIsInclude?: boolean;
 }
 
 const initialTags: Tag[] = [
@@ -20,11 +23,11 @@ const initialTags: Tag[] = [
   // { id: '6', name: '有機' },
 ];
 
-export default function FilterModal({ onClose, onConfirm }: FilterModalProps) {
+export default function FilterModal({ onClose, onConfirm, initialSelectedTags, initialIsInclude }: FilterModalProps) {
   const [availableTags, setAvailableTags] = useState<Tag[]>(initialTags);
-  const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
+  const [selectedTags, setSelectedTags] = useState<Tag[]>(initialSelectedTags || []);
   const [searchInput, setSearchInput] = useState('');
-  const [isInclude, setIsInclude] = useState(true);
+  const [isInclude, setIsInclude] = useState(initialIsInclude || true);
   const [filteredTags, setFilteredTags] = useState<Tag[]>(initialTags);
   const [scrollTop, setScrollTop] = useState(0);
   const [isDraggingScrollbar, setIsDraggingScrollbar] = useState(false);
@@ -47,31 +50,37 @@ export default function FilterModal({ onClose, onConfirm }: FilterModalProps) {
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && searchInput.trim()) {
-      // Check if tag already exists
-      const existingTag = availableTags.find(t => t.name === searchInput.trim());
-      if (existingTag && !selectedTags.find(st => st.id === existingTag.id)) {
-        setSelectedTags([...selectedTags, existingTag]);
-      } else if (!existingTag) {
-        // Create new tag
-        const newTag: Tag = {
-          id: Date.now().toString(),
-          name: searchInput.trim()
-        };
-        // Add to both selected tags and available tags
-        setSelectedTags([...selectedTags, newTag]);
-        setAvailableTags([...availableTags, newTag]);
+    if (e.key === 'Enter') {
+      if (searchInput.trim()) {
+        // Check if tag already exists
+        const existingTag = availableTags.find(t => t.name === searchInput.trim());
+        if (existingTag && !selectedTags.find(st => st.id === existingTag.id)) {
+          setSelectedTags([...selectedTags, existingTag]);
+        } else if (!existingTag) {
+          // Create new tag
+          const newTag: Tag = {
+            id: Date.now().toString(),
+            name: searchInput.trim()
+          };
+          // Add to both selected tags and available tags
+          setSelectedTags([...selectedTags, newTag]);
+          setAvailableTags([...availableTags, newTag]);
+        }
+        setSearchInput('');
+        setFilteredTags(availableTags.filter(tag => !selectedTags.find(st => st.id === tag.id)));
+      } else {
+        // If input is empty, confirm the selection
+        onConfirm?.(selectedTags, isInclude);
       }
-      setSearchInput('');
-      setFilteredTags(availableTags.filter(tag => !selectedTags.find(st => st.id === tag.id)));
     }
   };
 
-  // Handle Enter key to confirm selection
+  // Handle Enter key to confirm selection when not in input field
   useEffect(() => {
     const handleGlobalKeyDown = (e: globalThis.KeyboardEvent) => {
-      // Only trigger confirm if Enter is pressed and not from the input field (which handles its own Enter)
-      if (e.key === 'Enter' && !searchInput.trim()) {
+      // Only trigger if Enter is pressed and the input field is not focused
+      const target = e.target as HTMLElement;
+      if (e.key === 'Enter' && target.tagName !== 'INPUT' && !searchInput.trim()) {
         onConfirm?.(selectedTags, isInclude);
       }
     };
@@ -93,7 +102,7 @@ export default function FilterModal({ onClose, onConfirm }: FilterModalProps) {
   };
 
   const isActionState = selectedTags.length > 0 || searchInput.trim().length > 0;
-  const showScrollbar = availableTags.length >= 5;
+  const showScrollbar = !isActionState && availableTags.length >= 6;
 
   // Handle scroll
   const handleScroll = () => {
@@ -106,32 +115,26 @@ export default function FilterModal({ onClose, onConfirm }: FilterModalProps) {
   // Calculate scrollbar position and height
   const updateScrollbarStyles = () => {
     if (!scrollContainerRef.current) {
-      setScrollbarStyles({ top: 200, height: 60 });
+      setScrollbarStyles({ top: 225, height: 60 });
       return;
     }
-
+    
     const container = scrollContainerRef.current;
     const scrollHeight = container.scrollHeight;
     const clientHeight = container.clientHeight;
     const scrollTop = container.scrollTop;
-
-    // Calculate the actual position of the scroll container from the top of the modal
-    const containerRect = container.getBoundingClientRect();
-    const modalElement = container.closest('.box-border.content-stretch');
-    const modalRect = modalElement?.getBoundingClientRect();
-    const scrollbarStartTop = modalRect ? containerRect.top - modalRect.top : 200;
-
+    
     if (scrollHeight <= clientHeight) {
-      setScrollbarStyles({ top: scrollbarStartTop, height: 60 });
+      setScrollbarStyles({ top: 225, height: 60 });
       return;
     }
-
+    
     const scrollbarTrackHeight = clientHeight;
     const scrollbarHeight = Math.max((clientHeight / scrollHeight) * scrollbarTrackHeight, 40);
     const maxScrollTop = scrollHeight - clientHeight;
     const scrollPercentage = maxScrollTop > 0 ? scrollTop / maxScrollTop : 0;
-    const scrollbarTop = scrollbarStartTop + scrollPercentage * (scrollbarTrackHeight - scrollbarHeight);
-
+    const scrollbarTop = 225 + scrollPercentage * (scrollbarTrackHeight - scrollbarHeight);
+    
     setScrollbarStyles({ top: scrollbarTop, height: scrollbarHeight });
   };
 
@@ -153,19 +156,19 @@ export default function FilterModal({ onClose, onConfirm }: FilterModalProps) {
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDraggingScrollbar || !scrollContainerRef.current) return;
-
+      
       const container = scrollContainerRef.current;
       const containerRect = container.getBoundingClientRect();
       const scrollbarTrackHeight = container.clientHeight;
       const scrollHeight = container.scrollHeight;
       const maxScrollTop = scrollHeight - container.clientHeight;
-
+      
       // Calculate relative position within the scrollable area
       const mouseY = e.clientY - containerRect.top;
       const scrollableRange = scrollbarTrackHeight - scrollbarStyles.height;
-      const scrollPercentage = Math.max(0, Math.min(1, mouseY / scrollableRange));
+      const scrollPercentage = Math.max(0, Math.min(1, (mouseY - 225) / scrollableRange));
       const newScrollTop = scrollPercentage * maxScrollTop;
-
+      
       container.scrollTop = Math.max(0, Math.min(newScrollTop, maxScrollTop));
     };
 
@@ -221,11 +224,11 @@ export default function FilterModal({ onClose, onConfirm }: FilterModalProps) {
   const showNewTagCreation = searchInput.trim() && !availableTags.find(t => t.name.toLowerCase() === searchInput.toLowerCase());
 
   return (
-    <div className="bg-white relative rounded-[16px] w-[700px] h-full overflow-hidden flex flex-col">
-      <div className="w-[700px] h-full flex flex-col">
-        <div className="box-border flex flex-col items-start p-[40px] relative flex-1 overflow-visible w-[700px]">
+    <div className="bg-white relative rounded-[16px] w-full h-full max-h-[90vh] flex flex-col">
+      <div className="flex flex-col h-full overflow-hidden">
+        <div className="box-border content-stretch flex flex-col items-start p-[32px] relative flex-1 overflow-hidden">
           {/* Main Content */}
-          <div className="flex flex-col gap-[20px] items-start w-full flex-1">
+          <div className="content-stretch flex flex-col gap-[32px] items-start relative shrink-0 w-full">
             {/* Title */}
             <div className="content-stretch flex items-center relative shrink-0 w-full">
               <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[32px]">
@@ -234,12 +237,12 @@ export default function FilterModal({ onClose, onConfirm }: FilterModalProps) {
             </div>
 
             {/* Search Bar and Toggle */}
-            <div className="flex gap-[60px] items-center relative shrink-0 w-full overflow-visible">
+            <div className="content-stretch flex gap-[36px] items-center relative shrink-0 w-full">
               {/* Search Bar */}
-              <div className="bg-white border border-neutral-200 min-h-px relative rounded-[16px] w-[280px]">
-                <div className="flex flex-row items-center size-full">
-                  <div className="box-border flex gap-[12px] items-center px-[12px] py-[8px] w-full">
-                    <div className="flex gap-[4px] items-center flex-wrap flex-1">
+              <div className="basis-0 bg-white grow min-h-px min-w-[292px] relative rounded-[16px] shrink-0">
+                <div className="flex flex-row items-center min-w-inherit size-full">
+                  <div className="box-border content-stretch flex gap-[28px] items-center min-w-inherit px-[12px] py-[8px] relative w-full">
+                    <div className="content-stretch flex gap-[4px] items-center relative shrink-0 flex-1">
                       <IconSearch />
                       {selectedTags.map(tag => (
                         <TagComponent key={tag.id} tag={tag} onRemove={() => handleRemoveTag(tag.id)} />
@@ -249,8 +252,8 @@ export default function FilterModal({ onClose, onConfirm }: FilterModalProps) {
                         value={searchInput}
                         onChange={(e) => handleSearchChange(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder={selectedTags.length === 0 ? "點擊 Enter 新增標籤" : ""}
-                        className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] flex-1 min-w-[150px] outline-none text-[#383838] text-[20px] placeholder:text-[#a8a8a8] bg-transparent"
+                        placeholder={selectedTags.length === 0 ? "輸入或按Enter 新增標籤" : ""}
+                        className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] flex-1 outline-none text-[#383838] text-[20px] placeholder:text-[#a8a8a8] bg-transparent"
                       />
                     </div>
                   </div>
@@ -258,104 +261,139 @@ export default function FilterModal({ onClose, onConfirm }: FilterModalProps) {
               </div>
 
               {/* Toggle Section */}
-              <div className="flex items-center gap-[28px] relative shrink-0 w-[220px]">
-                <div className="flex gap-[4px] items-center">
-                  <span className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal text-[#383838] text-[16px] leading-[1.5] whitespace-nowrap">條件</span>
-                  <span className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal text-[#f44336] text-[16px] leading-[1.5]">*</span>
+              <div className="content-stretch flex items-center relative shrink-0">
+                <div className="content-stretch flex gap-[2px] items-center min-w-[60px] relative shrink-0">
+                  <div className="content-stretch flex items-center relative shrink-0">
+                    <div className="flex flex-col font-['Noto_Sans_TC:Regular',_sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[16px] text-nowrap">
+                      <p className="leading-[1.5] whitespace-pre">條件</p>
+                    </div>
+                  </div>
+                  <div className="content-stretch flex items-center relative shrink-0">
+                    <div className="flex flex-col font-['Noto_Sans_TC:Regular',_sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#f44336] text-[16px] text-nowrap">
+                      <p className="leading-[1.5] whitespace-pre">*</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex gap-[16px] items-center whitespace-nowrap">
-                  <span className={`font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] text-[16px] whitespace-nowrap ${!isInclude ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>不包含</span>
+                <div className="content-stretch flex gap-[4px] items-center relative shrink-0">
+                  <p className={`font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[16px] text-nowrap whitespace-pre ${!isInclude ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>不包含</p>
                   <div className="relative shrink-0 size-[40px] cursor-pointer" onClick={() => setIsInclude(!isInclude)}>
-                    <svg className="block size-full transition-transform duration-200" fill="none" preserveAspectRatio="none" viewBox="0 0 40 40" style={{ transform: isInclude ? 'scaleX(1)' : 'scaleX(-1)' }}>
-                      <g clipPath="url(#clip0_15_501)">
-                        <path d={svgPaths.p13e42a00} fill="var(--fill-0, #0F6BEB)" />
+                    <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 40 40">
+                      <g clipPath="url(#clip0_8236_31)">
+                        <g id="Vector"></g>
+                        <path 
+                          d={isInclude ? toggleSvgPaths.p13e42a00 : "M28.3333 11.6667H11.6667C7.06667 11.6667 3.33333 15.4 3.33333 20C3.33333 24.6 7.06667 28.3333 11.6667 28.3333H28.3333C32.9333 28.3333 36.6667 24.6 36.6667 20C36.6667 15.4 32.9333 11.6667 28.3333 11.6667ZM11.6667 25C8.9 25 6.66667 22.7667 6.66667 20C6.66667 17.2333 8.9 15 11.6667 15C14.4333 15 16.6667 17.2333 16.6667 20C16.6667 22.7667 14.4333 25 11.6667 25Z"}
+                          fill="var(--fill-0, #0F6BEB)" 
+                          id="Vector_2"
+                          className="transition-all duration-300 ease-in-out"
+                        />
                       </g>
                       <defs>
-                        <clipPath id="clip0_15_501">
+                        <clipPath id="clip0_8236_31">
                           <rect fill="white" height="40" width="40" />
                         </clipPath>
                       </defs>
                     </svg>
                   </div>
-                  <span className={`font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] text-[16px] whitespace-nowrap ${isInclude ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>包含</span>
+                  <p className={`font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[16px] text-nowrap whitespace-pre ${isInclude ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>包含</p>
                 </div>
               </div>
             </div>
 
-            {/* Tags List */}
-            <div className="flex flex-col gap-[12px] items-start w-full flex-1 overflow-hidden">
-              <div className="flex flex-col font-['Noto_Sans_TC:Regular',_sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#6e6e6e] text-[14px]">
-                <p className="leading-[1.5]">選擇或建立標籤</p>
-              </div>
-
-              {/* Scrollable container */}
-              <div
-                ref={scrollContainerRef}
-                onScroll={handleScroll}
-                className={`flex gap-[10px] items-start justify-start w-full flex-1 overflow-y-auto pr-2`}
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-              >
-                <style>{`
-                  div::-webkit-scrollbar {
-                    display: none;
-                  }
-                `}</style>
-                {!isActionState && availableTags.length === 0 ? (
-                  // Blank state
-                  <div className="flex items-center justify-center w-full h-full">
-                    <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] text-[#a8a8a8] text-[20px] text-center text-nowrap whitespace-pre">
-                      尚無標<span className="tracking-[-0.2px]">籤，於上方輸入並</span>開始建立
-                    </p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-[12px] w-full min-h-full">
-                    {/* Show available tags or filtered results */}
-                    {!isActionState ? (
-                      // Normal state - show all available tags with dividers
-                      <>
-                        {availableTags.map((tag, index) => (
-                          <div key={tag.id}>
-                            <div className="content-stretch flex flex-col gap-[10px] items-start justify-center relative shrink-0 w-full cursor-pointer" onClick={() => handleTagClick(tag)}>
-                              <TagComponent tag={tag} />
-                            </div>
-                            {index < availableTags.length - 1 && (
-                              <div className="w-full h-[1px] bg-neutral-200 my-[8px]" />
-                            )}
-                          </div>
-                        ))}
-                      </>
-                    ) : (
-                      // Action state - show filtered results and create option
-                      <>
-                        {filteredTags.map(tag => (
-                          <div key={tag.id} className="content-stretch flex flex-col gap-[10px] items-start justify-center relative shrink-0 w-full cursor-pointer" onClick={() => handleTagClick(tag)}>
-                            <TagComponent tag={tag} />
-                          </div>
-                        ))}
-                        {showNewTagCreation && (
-                          <div className="bg-slate-50 relative rounded-[4px] shrink-0 w-full">
-                            <div className="flex flex-row items-center size-full">
-                              <div className="box-border content-stretch flex gap-[10px] items-center px-[8px] py-[4px] relative w-full">
-                                <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[20px] text-center text-nowrap whitespace-pre">建立</p>
-                                <div className="bg-[floralwhite] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0">
-                                  <p className="basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#eba20f] text-[16px] text-center">{searchInput}</p>
-                                </div>
-                                <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[20px] text-center text-nowrap whitespace-pre">的標籤</p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
+            {/* Tags List Label */}
+            <div className="flex flex-col font-['Noto_Sans_TC:Regular',_sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#6e6e6e] text-[14px] w-[410px]">
+              <p className="leading-[1.5]">選擇或建立標籤</p>
             </div>
           </div>
 
-          {/* Buttons */}
-          <div className="flex gap-[8px] items-center justify-end relative shrink-0 w-full mt-[24px]">
-            <div className="flex gap-[8px] items-center justify-end">
+          {/* Scrollable Tags Container - takes remaining space */}
+          <div className="flex-1 w-full mt-[12px] mb-[32px] overflow-hidden relative">
+            <div 
+              ref={scrollContainerRef}
+              onScroll={handleScroll}
+              className={`content-stretch flex gap-[10px] items-start justify-center w-full h-full ${showScrollbar ? 'overflow-y-auto pr-2' : 'overflow-y-auto'}`}
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+              <style>{`
+                div::-webkit-scrollbar {
+                  display: none;
+                }
+              `}</style>
+              {!isActionState && availableTags.length === 0 ? (
+                // Blank state
+                <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#a8a8a8] text-[20px] text-center text-nowrap whitespace-pre">
+                  尚無標<span className="tracking-[-0.2px]">籤，於上方輸入並</span>開始建立
+                </p>
+              ) : (
+                <div className="flex flex-col gap-[12px] w-full">
+                  {/* Show available tags or filtered results */}
+                  {!isActionState ? (
+                    // Normal state - show all available tags with dividers
+                    <>
+                      {availableTags.map((tag, index) => (
+                        <div key={tag.id}>
+                          <div className="content-stretch flex flex-col gap-[10px] items-start justify-center relative shrink-0 w-full cursor-pointer" onClick={() => handleTagClick(tag)}>
+                            <TagComponent tag={tag} />
+                          </div>
+                          {index < availableTags.length - 1 && (
+                            <div className="flex h-[calc(1px*((var(--transform-inner-width)*1)+(var(--transform-inner-height)*0)))] items-center justify-center relative shrink-0 w-[calc(1px*((var(--transform-inner-height)*1)+(var(--transform-inner-width)*0)))]" style={{ "--transform-inner-width": "0", "--transform-inner-height": "736" } as React.CSSProperties}>
+                              <div className="flex-none rotate-[270deg]">
+                                <div className="h-[736px] relative w-0">
+                                  <div className="absolute inset-[-0.05%_-0.4px]">
+                                    <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 737">
+                                      <path d="M0.4 0.4V736.4" stroke="var(--stroke-0, #DDDDDD)" strokeLinecap="round" strokeWidth="0.8" />
+                                    </svg>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    // Action state - show filtered results and create option
+                    <>
+                      {filteredTags.map(tag => (
+                        <div key={tag.id} className="content-stretch flex flex-col gap-[10px] items-start justify-center relative shrink-0 w-full cursor-pointer" onClick={() => handleTagClick(tag)}>
+                          <TagComponent tag={tag} />
+                        </div>
+                      ))}
+                      {showNewTagCreation && (
+                        <div className="bg-slate-50 relative rounded-[4px] shrink-0 w-full">
+                          <div className="flex flex-row items-center size-full">
+                            <div className="box-border content-stretch flex gap-[10px] items-center px-[8px] py-[4px] relative w-full">
+                              <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[20px] text-center text-nowrap whitespace-pre">建立</p>
+                              <div className="bg-[floralwhite] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0">
+                                <p className="basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#eba20f] text-[16px] text-center">{searchInput}</p>
+                              </div>
+                              <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[20px] text-center text-nowrap whitespace-pre">的標籤</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            {/* Scrollbar - only show when >= 6 tags */}
+            {showScrollbar && (
+              <div 
+                ref={scrollbarRef}
+                className="absolute bg-[#dddddd] right-0 rounded-[4px] w-[4px] cursor-pointer hover:bg-[#b8b8b8] transition-colors"
+                style={{ 
+                  top: `${scrollbarStyles.top - 225}px`, 
+                  height: `${scrollbarStyles.height}px` 
+                }}
+                onMouseDown={handleScrollbarMouseDown}
+              />
+            )}
+          </div>
+
+          {/* Buttons - Fixed at bottom */}
+          <div className="content-stretch flex gap-[8px] items-center justify-center relative shrink-0 w-full">
+            <div className="basis-0 content-stretch flex gap-[8px] grow items-center justify-end min-h-px min-w-px relative shrink-0">
               <div className="bg-neutral-100 box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer hover:bg-neutral-200 transition-colors" onClick={onClose}>
                 <p className="basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] text-center">取消</p>
               </div>
@@ -364,19 +402,6 @@ export default function FilterModal({ onClose, onConfirm }: FilterModalProps) {
               </div>
             </div>
           </div>
-
-          {/* Scrollbar - only show when >= 6 tags */}
-          {showScrollbar && (
-            <div 
-              ref={scrollbarRef}
-              className="absolute bg-[#dddddd] right-[32px] rounded-[4px] w-[4px] cursor-pointer hover:bg-[#b8b8b8] transition-colors"
-              style={{ 
-                top: `${scrollbarStyles.top}px`, 
-                height: `${scrollbarStyles.height}px` 
-              }}
-              onMouseDown={handleScrollbarMouseDown}
-            />
-          )}
         </div>
       </div>
     </div>

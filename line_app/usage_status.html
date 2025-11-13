@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>LINE 群發訊息用量</title>
+<style>
+  body {
+    font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    padding: 30px;
+    background: #fafafa;
+  }
+  .usage-card {
+    background: #fff;
+    padding: 24px;
+    border-radius: 12px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    max-width: 420px;
+  }
+  .usage-title {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 6px;
+  }
+  .usage-info {
+    font-size: 16px;
+    color: #333;
+    margin-bottom: 10px;
+  }
+  .usage-bar-container {
+    width: 100%;
+    height: 12px;
+    background-color: #eee;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+  .usage-bar {
+    height: 12px;
+    background-color: #4CAF50;
+    width: 0%;
+    transition: width 0.8s ease-in-out;
+  }
+  .usage-percent {
+    font-size: 13px;
+    color: #555;
+    margin-top: 4px;
+  }
+  .usage-note {
+    font-size: 12px;
+    color: #999;
+    margin-top: 12px;
+  }
+  button.refresh {
+    margin-top: 12px;
+    padding: 6px 12px;
+    font-size: 14px;
+    border: none;
+    border-radius: 6px;
+    background-color: #0078d7;
+    color: white;
+    cursor: pointer;
+  }
+  button.refresh:hover {
+    background-color: #005fa3;
+  }
+</style>
+</head>
+<body>
+
+<div class="usage-card">
+  <div class="usage-title">本月的訊息用量</div>
+  <div id="usage-info" class="usage-info">載入中...</div>
+  <div class="usage-bar-container">
+    <div id="usage-bar" class="usage-bar"></div>
+  </div>
+  <div id="usage-percent" class="usage-percent"></div>
+  <div class="usage-note">※ 已傳送的訊息則數資訊通常於每天上午更新。</div>
+  <button class="refresh" onclick="loadUsage()">重新整理</button>
+</div>
+
+<script>
+async function loadUsage() {
+  const info = document.getElementById('usage-info');
+  const bar = document.getElementById('usage-bar');
+  const percentText = document.getElementById('usage-percent');
+
+  info.innerText = '載入中...';
+  bar.style.width = '0%';
+  percentText.innerText = '';
+
+  try {
+    // 如果有多頻道，可在後面加 ?line_channel_id=xxxx
+    const res = await fetch('/api/usage');
+    const data = await res.json();
+
+    if (!data.ok) {
+      info.innerText = '讀取失敗：' + (data.error || 'unknown');
+      return;
+    }
+
+    const used = data.used || 0;
+    const total = data.monthly_limit || 0;
+    const remaining = data.remaining ?? '不限額';
+
+    let percent = 0;
+    if (total > 0) percent = Math.min(100, Math.round((used / total) * 100));
+
+    info.innerText = `已傳送的免費訊息則數：${used.toLocaleString()} / ${total.toLocaleString()}`;
+    bar.style.width = `${percent}%`;
+    percentText.innerText = percent + '%';
+  } catch (e) {
+    info.innerText = 'API 連線失敗';
+  }
+}
+
+// 頁面載入時自動呼叫
+loadUsage();
+</script>
+
+</body>
+</html>

@@ -1,246 +1,450 @@
-import { useState, useRef, useEffect } from 'react';
-import { useNavigation } from '../contexts/NavigationContext';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Menu, X, Copy, Trash2, Plus } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
-import { RadioGroup, RadioGroupItem } from './ui/radio-group';
+import { RadioGroup, RadioGroupItem } from './ui/radio-group'; 
 import { Label } from './ui/label';
 import { Checkbox } from './ui/checkbox';
 import { toast } from 'sonner@2.0.3';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription } from './ui/dialog';
+import { Dialog, DialogTrigger, DialogTitle, DialogDescription, DialogPortal, DialogOverlay } from './ui/dialog';
+import * as DialogPrimitive from '@radix-ui/react-dialog@1.1.6';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
+import svgPaths from '../imports/svg-jb10q6lg6b';
+import { imgGroup, imgGroup1, imgGroup2, imgGroup3, imgGroup4, imgGroup5, imgGroup6 } from "../imports/svg-zrjx6";
 import imgBackgroundImage from "figma:asset/d1c10d8dbfc2ae5783543c9f0b76cd2635713297.png";
-import Layout from './Layout';
 import FilterModal from './FilterModal';
-import svgPaths from '../imports/svg-gu16o9nwcc';
 import closeIconPaths from '../imports/svg-b62f9l13m2';
 import uploadIconPaths from '../imports/svg-wb8nmg8j6i';
-import Container7 from '../imports/Container';
+import messageTextSvgPaths from '../imports/svg-hbkooryl5v';
+import FlexMessageEditorNew from './flex-message/FlexMessageEditorNew';
+import CarouselMessageEditor from './CarouselMessageEditor';
+import { TriggerImagePreview, TriggerTextPreview, GradientPreviewContainer } from './common/PreviewContainers';
 import ActionTriggerTextMessage from '../imports/ActionTriggerTextMessage';
 import ActionTriggerImageMessage from '../imports/ActionTriggerImageMessage';
-import TriggerImagePreview from '../imports/Container-32-2033';
-import TriggerTextPreview from '../imports/Container-37-43';
-import { FlexMessageEditorWrapper } from './flex-message/FlexMessageEditorWrapper';
-import { campaignService } from '../services/campaignService';
-import { uploadService } from '../services/uploadService';
-import { transformFormToCreateRequest, validateForm, validateFormWithFieldErrors, type FieldErrors } from '../utils/dataTransform';
-import type { MessageCreationForm, TargetType } from '../types/campaign';
+import Sidebar from './Sidebar';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
+import { ScheduleSettings, TargetAudienceSelector, PreviewPanel } from './message-creation';
+import type { Tag } from './message-creation';
 
-export default function MessageCreation() {
-  const { navigate } = useNavigation();
-  // 移除 templateType 狀態
+// Custom DialogContent without close button
+function DialogContentNoClose({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Content>) {
+  const cn = (...classes: (string | undefined | null | false)[]) => {
+    return classes.filter(Boolean).join(' ');
+  };
+  
+  return (
+    <DialogPortal>
+      <DialogOverlay />
+      <DialogPrimitive.Content
+        data-slot="dialog-content"
+        className={cn(
+          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg",
+          className
+        )}
+        {...props}
+      >
+        {children}
+      </DialogPrimitive.Content>
+    </DialogPortal>
+  );
+}
+
+interface MessageCreationProps {
+  onBack?: () => void;
+  onNavigate?: (page: string) => void;
+}
+
+export default function MessageCreation({ onBack, onNavigate }: MessageCreationProps = {}) {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [templateType, setTemplateType] = useState('select');
   const [title, setTitle] = useState('');
   const [notificationMsg, setNotificationMsg] = useState('');
   const [previewMsg, setPreviewMsg] = useState('');
   const [scheduleType, setScheduleType] = useState('immediate');
   const [targetType, setTargetType] = useState('all');
+  const [messageText, setMessageText] = useState('');
   const [activeTab, setActiveTab] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
+  const [flexMessageJson, setFlexMessageJson] = useState<any>(null);
   const [selectedFilterTags, setSelectedFilterTags] = useState<Array<{ id: string; name: string }>>([]);
   const [filterCondition, setFilterCondition] = useState<'include' | 'exclude'>('include');
   const [scheduledDate, setScheduledDate] = useState<Date | undefined>();
   const [scheduledTime, setScheduledTime] = useState({ hours: '12', minutes: '00' });
   const [datePickerOpen, setDatePickerOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [errorCount, setErrorCount] = useState<number>(0);
-  const [estimatedCount, setEstimatedCount] = useState<number>(0);
-  const [loadingEstimate, setLoadingEstimate] = useState(false);
-  const [flexMessageJson, setFlexMessageJson] = useState<string>('');
+  const [validationDialogOpen, setValidationDialogOpen] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [isDirty, setIsDirty] = useState(false); // 追蹤是否有未儲存的變更
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false); // 顯示未儲存確認對話框
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null); // 待執行的導航
+  const cardRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
 
-  // Fetch estimated audience count when target changes
+  // Monitor flexMessageJson changes
   useEffect(() => {
-    const fetchEstimate = async () => {
-      setLoadingEstimate(true);
-      try {
-        const requestData: any = {
-          type: targetType === 'all' ? 'all' : 'filtered',
-          condition: filterCondition,
-          tags: targetType === 'filtered' && selectedFilterTags.length > 0
-            ? selectedFilterTags.map(tag => parseInt(tag.id))
-            : [],
-        };
+    // Flex Message JSON is ready for use
+  }, [flexMessageJson]);
+  const button1TriggerImageInputRef = useRef<HTMLInputElement>(null);
+  const button2TriggerImageInputRef = useRef<HTMLInputElement>(null);
+  
+  // Card states
+  const [cards, setCards] = useState([
+    { 
+      id: 1, 
+      enableImage: true,
+      enableTitle: true,
+      enableContent: true,
+      enablePrice: false,
+      enableButton1: false,
+      enableButton2: false,
+      enableButton3: false,
+      enableButton4: false,
+      image: '', 
+      cardTitle: '', 
+      content: '', 
+      price: '', 
+      currency: 'ntd',
+      button1: '', 
+      button2: '',
+      button3: '',
+      button4: '',
+      button1Action: 'select', 
+      button1Url: '', 
+      button1Tag: '', 
+      button1Text: '',
+      button1TriggerImage: null as File | null,
+      button1Mode: 'primary' as 'primary' | 'secondary' | 'link',
+      button2Action: 'select',
+      button2Url: '',
+      button2Tag: '',
+      button2Text: '',
+      button2TriggerImage: null as File | null,
+      button2Mode: 'secondary' as 'primary' | 'secondary' | 'link',
+      button3Action: 'select',
+      button3Url: '',
+      button3Tag: '',
+      button3Text: '',
+      button3TriggerImage: null as File | null,
+      button3Mode: 'secondary' as 'primary' | 'secondary' | 'link',
+      button4Action: 'select',
+      button4Url: '',
+      button4Tag: '',
+      button4Text: '',
+      button4TriggerImage: null as File | null,
+      button4Mode: 'secondary' as 'primary' | 'secondary' | 'link',
+      enableImageUrl: false,
+      imageUrl: '',
+      imageTag: ''
+    }
+  ]);
 
-        const response = await campaignService.estimateAudience(requestData);
+  const currentCard = cards.find(c => c.id === activeTab) || cards[0];
 
-        if (response.error) {
-          console.error('估算受众失败:', response.error);
-          setEstimatedCount(0);
-        } else if (response.data) {
-          // 后端返回 { code, data: { count } } 格式
-          const count = (response.data as any).data?.count || response.data.count || 0;
-          setEstimatedCount(count);
-        }
-      } catch (error) {
-        console.error('估算受众失败:', error);
-        setEstimatedCount(0);
-      } finally {
-        setLoadingEstimate(false);
+  const updateCard = (updates: Partial<typeof currentCard>) => {
+    setCards(cards.map(card => 
+      card.id === activeTab ? { ...card, ...updates } : card
+    ));
+  };
+
+  // 監聽表單變更，標記為未儲存
+  useEffect(() => {
+    if (
+      title || 
+      notificationMsg || 
+      previewMsg || 
+      messageText || 
+      targetType !== 'all' || 
+      scheduleType !== 'immediate' ||
+      selectedFilterTags.length > 0 ||
+      cards.some(card => 
+        card.enableImage || 
+        card.enableTitle || 
+        card.enableContent || 
+        card.enablePrice || 
+        card.enableButton1 || 
+        card.enableButton2 ||
+        card.enableButton3 ||
+        card.enableButton4 ||
+        card.image ||
+        card.cardTitle ||
+        card.content ||
+        card.price ||
+        card.button1 ||
+        card.button2 ||
+        card.button3 ||
+        card.button4
+      )
+    ) {
+      setIsDirty(true);
+    }
+  }, [title, notificationMsg, previewMsg, messageText, targetType, scheduleType, selectedFilterTags, cards]);
+
+  // Create stable URLs for trigger images
+  const triggerImageUrl = useMemo(() => {
+    if (currentCard.button1Action === 'image' && currentCard.button1TriggerImage) {
+      return URL.createObjectURL(currentCard.button1TriggerImage);
+    }
+    if (currentCard.button2Action === 'image' && currentCard.button2TriggerImage) {
+      return URL.createObjectURL(currentCard.button2TriggerImage);
+    }
+    return undefined;
+  }, [currentCard.button1Action, currentCard.button1TriggerImage, currentCard.button2Action, currentCard.button2TriggerImage]);
+
+  // Cleanup object URLs to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (triggerImageUrl) {
+        URL.revokeObjectURL(triggerImageUrl);
       }
     };
+  }, [triggerImageUrl]);
 
-    fetchEstimate();
-  }, [targetType, selectedFilterTags, filterCondition]);
-
-
-  const buildFormData = (flexJson: string): MessageCreationForm => {
-    // Convert scheduled time to Date if needed
-    let scheduledDateTime: Date | undefined;
-    if (scheduleType === 'scheduled' && scheduledDate) {
-      scheduledDateTime = new Date(scheduledDate);
-      scheduledDateTime.setHours(parseInt(scheduledTime.hours));
-      scheduledDateTime.setMinutes(parseInt(scheduledTime.minutes));
-    }
-
-    return {
-      templateType: undefined, // 移除 templateType，改為可選
-      title,
-      notificationMsg,
-      previewMsg,
-      scheduleType: scheduleType as 'immediate' | 'scheduled',
-      scheduledTime: scheduledDateTime,
-      targetType: targetType as TargetType,
-      targetCondition: filterCondition,
-      targetTags: selectedFilterTags.map(tag => parseInt(tag.id, 10)),
-      flexMessageJson: flexJson || undefined,  // 直接傳遞 Flex Message JSON
-      cards: [],  // 空陣列，向後兼容
-    };
-  };
-
-  const handleSaveDraft = async () => {
-    setFieldErrors({});
-    setErrorCount(0);
-    if (submitting) return;
-
-    setSubmitting(true);
-    try {
-      // Build form data
-      const formData = buildFormData(flexMessageJson);
-
-      // Validate with field-level errors
-      const validation = validateFormWithFieldErrors(formData);
-      if (!validation.isValid) {
-        setFieldErrors(validation.fieldErrors);
-        setErrorCount(validation.errorCount);
-        toast.error(`請修正 ${validation.errorCount} 個驗證問題`);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        setSubmitting(false);
-        return;
-      }
-
-      // Transform and create campaign
-      const requestData = transformFormToCreateRequest(formData, true);
-      const response = await campaignService.createCampaign(requestData);
-
-      if (response.error) {
-        const errorMsg = typeof response.error.detail === 'string'
-          ? response.error.detail
-          : '儲存草稿失敗';
-        toast.error(errorMsg);
-      } else {
-        setFieldErrors({});
-        setErrorCount(0);
-        toast.success('草稿已儲存');
-        setTimeout(() => navigate('messages'), 1000);
-      }
-    } catch (error) {
-      console.error('儲存草稿失敗:', error);
-      const errorMsg = error instanceof Error ? error.message : '儲存失敗，請稍後再試';
-      toast.error(errorMsg);
-    } finally {
-      setSubmitting(false);
+  const addCarousel = () => {
+    if (cards.length < 10) {
+      const newId = Math.max(...cards.map(c => c.id)) + 1;
+      // Copy the enabled state from the first card to maintain consistent structure
+      const firstCard = cards[0];
+      setCards([...cards, { 
+        id: newId, 
+        enableImage: firstCard.enableImage,
+        enableTitle: firstCard.enableTitle,
+        enableContent: firstCard.enableContent,
+        enablePrice: firstCard.enablePrice,
+        enableButton1: firstCard.enableButton1,
+        enableButton2: firstCard.enableButton2,
+        enableButton3: firstCard.enableButton3,
+        enableButton4: firstCard.enableButton4,
+        image: '', 
+        cardTitle: '', 
+        content: '', 
+        price: '', 
+        currency: firstCard.currency,
+        button1: '', 
+        button2: '',
+        button3: '',
+        button4: '',
+        button1Action: firstCard.button1Action, 
+        button1Url: '', 
+        button1Tag: '', 
+        button1Text: '',
+        button1TriggerImage: null as File | null,
+        button1Mode: firstCard.button1Mode,
+        button2Action: firstCard.button2Action,
+        button2Url: '',
+        button2Tag: '',
+        button2Text: '',
+        button2TriggerImage: null as File | null,
+        button2Mode: firstCard.button2Mode,
+        button3Action: firstCard.button3Action,
+        button3Url: '',
+        button3Tag: '',
+        button3Text: '',
+        button3TriggerImage: null as File | null,
+        button3Mode: firstCard.button3Mode,
+        button4Action: firstCard.button4Action,
+        button4Url: '',
+        button4Tag: '',
+        button4Text: '',
+        button4TriggerImage: null as File | null,
+        button4Mode: firstCard.button4Mode,
+        enableImageUrl: false,
+        imageUrl: '',
+        imageTag: ''
+      }]);
+      setActiveTab(newId);
+      toast.success('已新增輪播');
+    } else {
+      toast.error('最多可新增10個輪播');
     }
   };
 
-  const handlePublish = async () => {
-    console.log('🔵 handlePublish called');
-    // Clear previous validation errors
-    setFieldErrors({});
-    setErrorCount(0);
-
-    if (submitting) {
-      console.log('⚠️ Already submitting, returning');
-      return;
+  const deleteCard = () => {
+    if (cards.length > 1) {
+      const newCards = cards.filter(c => c.id !== activeTab);
+      setCards(newCards);
+      setActiveTab(newCards[0].id);
+      toast.success('已刪除輪播');
+    } else {
+      toast.error('至少需保留一個輪播');
     }
+  };
 
-    // Basic validation - before setting submitting
-    if (!title || !notificationMsg || !previewMsg) {
-      console.log('❌ Missing required fields');
-      const errors: FieldErrors = {
-        title: !title ? '請輸入活動標題' : undefined,
-        notificationMsg: !notificationMsg ? '請輸入通知訊息' : undefined,
-        previewMsg: !previewMsg ? '請輸入通知預覽' : undefined,
-      };
-      const count = ((!title ? 1 : 0) + (!notificationMsg ? 1 : 0) + (!previewMsg ? 1 : 0));
-      console.log('🔴 Setting fieldErrors:', errors);
-      console.log('🔴 Setting errorCount:', count);
-      setFieldErrors(errors);
-      setErrorCount(count);
-      toast.error('請填寫訊息標題、通知訊息與通知預覽');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
+  const scrollToCard = (cardId: number) => {
+    const cardElement = cardRefs.current[cardId];
+    if (cardElement) {
+      cardElement.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
     }
+  };
 
-    console.log('✅ Validation passed, setting submitting to true');
-    setSubmitting(true);
-    try {
-      // Build form data
-      console.log('🏗️ Building form data...');
-      const formData = buildFormData(flexMessageJson);
-      console.log('✅ Form data built:', formData);
-
-      // Validate with field-level errors
-      console.log('🔍 Validating form...');
-      const validation = validateFormWithFieldErrors(formData);
-      if (!validation.isValid) {
-        console.log('❌ Validation failed:', validation.fieldErrors);
-        setFieldErrors(validation.fieldErrors);
-        setErrorCount(validation.errorCount);
-        toast.error(`請修正 ${validation.errorCount} 個驗證問題`);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        setSubmitting(false); // Reset state on validation failure
+  const handleButton1TriggerImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+      if (!validTypes.includes(file.type)) {
+        toast.error('檔案格式錯誤，請上傳 JPG、JPEG 或 PNG 格式的圖片');
         return;
       }
-      console.log('✅ Validation passed');
-      setFieldErrors({}); // Clear errors on successful validation
-      setErrorCount(0);
+      
+      // Validate file size (1MB = 1048576 bytes)
+      if (file.size > 1048576) {
+        toast.error('圖片大小超過 1 MB，請選擇較小的圖片');
+        return;
+      }
+      
+      updateCard({ button1TriggerImage: file });
+      toast.success('已選擇觸發圖片');
+    }
+  };
 
-      // Transform and create campaign (後端會自動發送)
-      console.log('🔄 Transforming request data...');
-      const requestData = transformFormToCreateRequest(formData, false);
-      console.log('📡 Sending request to backend:', requestData);
-      const response = await campaignService.createCampaign(requestData);
-      console.log('📥 Response received:', response);
+  const handleButton2TriggerImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+      if (!validTypes.includes(file.type)) {
+        toast.error('檔案格式錯誤，請上傳 JPG、JPEG 或 PNG 格式的圖片');
+        return;
+      }
+      
+      // Validate file size (1MB = 1048576 bytes)
+      if (file.size > 1048576) {
+        toast.error('圖片大小超過 1 MB，請選擇較小的圖���');
+        return;
+      }
+      
+      updateCard({ button2TriggerImage: file });
+      toast.success('已選擇觸發圖片');
+    }
+  };
 
-      if (response.error) {
-        const errorMsg = typeof response.error.detail === 'string'
-          ? response.error.detail
-          : '發佈失敗';
-        console.log('❌ Error response:', errorMsg);
-        toast.error(errorMsg);
-      } else {
-        // 後端已自動發送，顯示發送結果
-        const sentCount = response.data?.data?.sent_count || 0;
-        console.log('✅ Success! Sent to', sentCount, 'users');
-        if (sentCount > 0) {
-          toast.success(`訊息已發送至 ${sentCount} 位用戶`);
-        } else {
-          toast.success('訊息已發佈');
+  const handlePreviewScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const container = e.currentTarget;
+    const containerRect = container.getBoundingClientRect();
+    const containerCenter = containerRect.left + containerRect.width / 2;
+
+    // Find which card is closest to the center
+    let closestCard = cards[0].id;
+    let closestDistance = Infinity;
+
+    cards.forEach((card) => {
+      const cardElement = cardRefs.current[card.id];
+      if (cardElement) {
+        const cardRect = cardElement.getBoundingClientRect();
+        const cardCenter = cardRect.left + cardRect.width / 2;
+        const distance = Math.abs(cardCenter - containerCenter);
+
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestCard = card.id;
         }
-        setTimeout(() => navigate('messages'), 1000);
       }
-    } catch (error) {
-      console.error('❌ Exception caught:', error);
-      const errorMsg = error instanceof Error ? error.message : '發佈失敗，請稍後再試';
-      toast.error(errorMsg);
-    } finally {
-      console.log('🔚 Finally block, setting submitting to false');
-      setSubmitting(false);
+    });
+
+    // Only update if the closest card has changed
+    if (closestCard !== activeTab) {
+      setActiveTab(closestCard);
     }
   };
+
+  const copyCard = () => {
+    if (cards.length < 4) {
+      const cardToCopy = cards.find(c => c.id === activeTab);
+      if (cardToCopy) {
+        const newId = Math.max(...cards.map(c => c.id)) + 1;
+        setCards([...cards, { ...cardToCopy, id: newId }]);
+        setActiveTab(newId);
+        toast.success('已複製輪播');
+      }
+    } else {
+      toast.error('最多只能有 4 個輪播');
+    }
+  };
+
+  const handleSaveDraft = () => {
+    setIsDirty(false); // 儲存後清除未儲存標記
+    toast.success('草稿已儲存');
+  };
+
+  const validateForm = () => {
+    const errors: string[] = [];
+
+    // Check basic required fields
+    if (!title) errors.push('訊息標題');
+    if (!notificationMsg) errors.push('通知推播');
+    if (!previewMsg) errors.push('通知預覽');
+    if (!messageText) errors.push('訊息文字');
+
+    // Check enabled buttons
+    cards.forEach((card, index) => {
+      const cardLabel = cards.length > 1 ? `輪播 ${index + 1} - ` : '';
+      
+      // Check card title for each card
+      if (!card.cardTitle) {
+        errors.push(`${cardLabel}標題文字`);
+      }
+      
+      // Check Button 1
+      if (card.enableButton1) {
+        if (!card.button1) {
+          errors.push(`${cardLabel}動作按鈕一 - 按鈕文字`);
+        }
+        if (card.button1Action === 'select') {
+          errors.push(`${cardLabel}動作按鈕一 - 互動類型`);
+        }
+        if (card.button1Action === 'url' && !card.button1Url) {
+          errors.push(`${cardLabel}動作按鈕一 - URL`);
+        }
+        if (card.button1Action === 'text' && !card.button1Text) {
+          errors.push(`${cardLabel}動作按鈕一 - 觸發文字`);
+        }
+        if (card.button1Action === 'image' && !card.button1TriggerImage) {
+          errors.push(`${cardLabel}動作按鈕一 - 觸發圖片`);
+        }
+      }
+
+      // Check Button 2
+      if (card.enableButton2) {
+        if (!card.button2) {
+          errors.push(`${cardLabel}動作按鈕二 - 按鈕文字`);
+        }
+        if (card.button2Action === 'select') {
+          errors.push(`${cardLabel}動作按鈕二 - 互動類型`);
+        }
+        if (card.button2Action === 'url' && !card.button2Url) {
+          errors.push(`${cardLabel}動作按鈕二 - URL`);
+        }
+        if (card.button2Action === 'text' && !card.button2Text) {
+          errors.push(`${cardLabel}動作按鈕二 - 觸發文字`);
+        }
+        if (card.button2Action === 'image' && !card.button2TriggerImage) {
+          errors.push(`${cardLabel}動作按鈕二 - 觸發圖片`);
+        }
+      }
+    });
+
+    return errors;
+  };
+
+  const handlePublish = () => {
+    const errors = validateForm();
+    
+    if (errors.length > 0) {
+      setValidationErrors(errors);
+      setValidationDialogOpen(true);
+      return;
+    }
+    
+    setIsDirty(false); // 發佈後清除未儲存標記
+    toast.success('發佈成功');
+  };
+
+
 
   const handleFilterConfirm = (tags: Array<{ id: string; name: string }>, isInclude: boolean) => {
     setSelectedFilterTags(tags);
@@ -271,24 +475,57 @@ export default function MessageCreation() {
     setDatePickerOpen(false);
     if (scheduledDate) {
       toast.success(`已設定排程時間：${formatDate(scheduledDate)} ${scheduledTime.hours}:${scheduledTime.minutes}`);
-      // 清除排程時間的驗證錯誤
-      if (fieldErrors.scheduledTime) {
-        setFieldErrors(prev => ({ ...prev, scheduledTime: undefined }));
-        setErrorCount(prev => Math.max(0, prev - 1));
-      }
     }
   };
 
+  // 處理導航攔截
+  const handleNavigationAttempt = (destination: string) => {
+    if (isDirty) {
+      setPendingNavigation(destination);
+      setShowUnsavedDialog(true);
+    } else {
+      onNavigate && onNavigate(destination);
+    }
+  };
+
+  // 確認離開（放棄未儲存的變更）
+  const handleConfirmLeave = () => {
+    setShowUnsavedDialog(false);
+    setIsDirty(false);
+    if (pendingNavigation && onNavigate) {
+      onNavigate(pendingNavigation);
+    }
+    setPendingNavigation(null);
+  };
+
+  // 取消離開
+  const handleCancelLeave = () => {
+    setShowUnsavedDialog(false);
+    setPendingNavigation(null);
+  };
+
   return (
-    <Layout activeSection="messages">
-      <TooltipProvider>
-        <div className="w-full min-h-screen">
+    <TooltipProvider>
+      <div className="bg-slate-50 min-h-screen flex">
+        {/* Sidebar */}
+        <Sidebar
+          currentPage="messages"
+          onNavigateToMessages={() => handleNavigationAttempt('message-list')}
+          onNavigateToAutoReply={() => handleNavigationAttempt('auto-reply')}
+          onNavigateToMembers={() => handleNavigationAttempt('member-management')}
+          onNavigateToSettings={() => handleNavigationAttempt('line-api-settings')}
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={setSidebarOpen}
+        />
+
+        {/* Main Content */}
+        <main className={`flex-1 overflow-auto bg-slate-50 transition-all duration-300 ${sidebarOpen ? 'ml-[330px] lg:ml-[280px] md:ml-[250px]' : 'ml-[72px]'}`}>
           {/* Breadcrumb */}
           <div className="box-border flex items-center pb-0 pt-[48px] px-[40px]">
             <div className="box-border flex gap-1 items-center p-1">
-              <p
-                className="text-[14px] text-[#6e6e6e] cursor-pointer hover:text-[#0f6beb] transition-colors"
-                onClick={() => navigate('messages')}
+              <p 
+                className="text-[14px] text-[#6e6e6e] cursor-pointer hover:text-[#0f6beb] active:text-[#0f6beb] transition-colors"
+                onClick={() => handleNavigationAttempt('message-list')}
               >
                 活動與訊息推播
               </p>
@@ -305,29 +542,23 @@ export default function MessageCreation() {
               <div className="flex gap-1 grow items-center">
                 <p className="text-[32px] text-[#383838]">群發訊息類型</p>
               </div>
-              <div className="flex flex-col items-end gap-2">
-                <div className="flex gap-[8px] items-center">
-                  <Button
-                    onClick={handleSaveDraft}
-                    disabled={submitting}
-                    className="bg-[#f0f6ff] text-[#0f6beb] hover:bg-[#e0ecff] h-[48px] px-3 min-w-[72px] rounded-[16px] disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {submitting ? '儲存中...' : '儲存草稿'}
-                  </Button>
-                  <button
-                    onClick={handlePublish}
-                    disabled={submitting}
-                    className="bg-[#242424] hover:bg-[#383838] transition-colors flex items-center justify-center min-h-[48px] min-w-[72px] px-[16px] py-[8px] rounded-[16px] disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <span className="text-white text-[16px] leading-[1.5] text-center">
-                      {submitting ? '發佈中...' : '發佈'}
-                    </span>
-                  </button>
-                </div>
+              <div className="flex gap-[8px] items-center">
+                <Button 
+                  onClick={handleSaveDraft}
+                  className="bg-[#f0f6ff] text-[#0f6beb] hover:bg-[#e0ecff] h-[48px] px-3 min-w-[72px] rounded-[16px]"
+                >
+                  儲存草稿
+                </Button>
+                <Button 
+                  onClick={handlePublish}
+                  className="bg-[#242424] hover:bg-[#383838] text-white h-[48px] px-3 min-w-[72px] rounded-[16px]"
+                >
+                  發佈
+                </Button>
               </div>
             </div>
 
-            {/* Form Fields Row 1 - 移除模板類型欄位 */}
+            {/* Form Fields Row 1 */}
             <div className="flex flex-col xl:flex-row gap-[32px] xl:gap-[120px] items-start w-full">
               <div className="flex-1 flex flex-col sm:flex-row items-start gap-4 w-full">
                 <Label className="min-w-[120px] sm:min-w-[140px] lg:min-w-[160px] pt-3 flex items-center gap-1">
@@ -345,28 +576,12 @@ export default function MessageCreation() {
                   </Tooltip>
                 </Label>
                 <div className="flex-1 flex flex-col gap-[2px]">
-                  <Input
+                  <Input 
                     value={title}
-                    onChange={(e) => {
-                      setTitle(e.target.value);
-                      if (fieldErrors.title) {
-                        setFieldErrors(prev => ({ ...prev, title: undefined }));
-                        setErrorCount(prev => Math.max(0, prev - 1));
-                      }
-                    }}
-                    onFocus={() => {
-                      if (fieldErrors.title) {
-                        setFieldErrors(prev => ({ ...prev, title: undefined }));
-                        setErrorCount(prev => Math.max(0, prev - 1));
-                      }
-                    }}
+                    onChange={(e) => setTitle(e.target.value)}
                     placeholder="輸入訊息"
                     maxLength={32}
-                    className="w-full h-[48px] rounded-[8px] bg-white"
-                    style={{
-                      borderColor: '#e5e5e5',
-                      borderWidth: '1px'
-                    }}
+                    className="w-full h-[48px] rounded-[8px] border-neutral-100 bg-white"
                   />
                   <div className="flex justify-end">
                     <p className="text-[12px] leading-[1.5]">
@@ -391,33 +606,17 @@ export default function MessageCreation() {
                       </svg>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>使用者接收通知時，顯示於裝置通知列的訊息文字</p>
+                      <p>使用者接收通知時，顯���於裝置通知列的訊息文字</p>
                     </TooltipContent>
                   </Tooltip>
                 </Label>
                 <div className="flex-1 flex flex-col gap-[2px] w-full">
-                  <Input
+                  <Input 
                     value={notificationMsg}
-                    onChange={(e) => {
-                      setNotificationMsg(e.target.value);
-                      if (fieldErrors.notificationMsg) {
-                        setFieldErrors(prev => ({ ...prev, notificationMsg: undefined }));
-                        setErrorCount(prev => Math.max(0, prev - 1));
-                      }
-                    }}
-                    onFocus={() => {
-                      if (fieldErrors.notificationMsg) {
-                        setFieldErrors(prev => ({ ...prev, notificationMsg: undefined }));
-                        setErrorCount(prev => Math.max(0, prev - 1));
-                      }
-                    }}
+                    onChange={(e) => setNotificationMsg(e.target.value)}
                     placeholder="顯示於裝置通知列的訊息內容"
                     maxLength={100}
-                    className="h-[48px] rounded-[8px] bg-white"
-                    style={{
-                      borderColor: '#e5e5e5',
-                      borderWidth: '1px'
-                    }}
+                    className="h-[48px] rounded-[8px] border-neutral-100 bg-white"
                   />
                   <div className="flex justify-end">
                     <p className="text-[12px] leading-[1.5]">
@@ -444,28 +643,12 @@ export default function MessageCreation() {
                   </Tooltip>
                 </Label>
                 <div className="flex-1 flex flex-col gap-[2px]">
-                  <Input
+                  <Input 
                     value={previewMsg}
-                    onChange={(e) => {
-                      setPreviewMsg(e.target.value);
-                      if (fieldErrors.previewMsg) {
-                        setFieldErrors(prev => ({ ...prev, previewMsg: undefined }));
-                        setErrorCount(prev => Math.max(0, prev - 1));
-                      }
-                    }}
-                    onFocus={() => {
-                      if (fieldErrors.previewMsg) {
-                        setFieldErrors(prev => ({ ...prev, previewMsg: undefined }));
-                        setErrorCount(prev => Math.max(0, prev - 1));
-                      }
-                    }}
+                    onChange={(e) => setPreviewMsg(e.target.value)}
                     placeholder="顯示於聊天室過通知列的訊息內容"
                     maxLength={100}
-                    className="h-[48px] rounded-[8px] bg-white"
-                    style={{
-                      borderColor: '#e5e5e5',
-                      borderWidth: '1px'
-                    }}
+                    className="h-[48px] rounded-[8px] border-neutral-100 bg-white"
                   />
                   <div className="flex justify-end text-[12px] leading-[1.5]">
                     <span className="text-[#6e6e6e]">{previewMsg.length}</span>
@@ -498,19 +681,10 @@ export default function MessageCreation() {
                 </div>
                 <div className="flex items-center gap-3">
                   <RadioGroupItem value="scheduled" id="scheduled" />
-                  <Label htmlFor="scheduled" className="cursor-pointer text-[16px] text-[#383838]">
-                    自訂時間
-                  </Label>
-                  <div className="flex flex-col gap-1">
-                    <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-                      <PopoverTrigger asChild disabled={scheduleType === 'immediate'}>
-                        <div
-                          className={`bg-white rounded-[8px] px-[8px] py-[8px] w-[298px] flex items-center gap-6 transition-colors ${scheduleType === 'immediate' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-neutral-200'}`}
-                          style={{
-                            borderColor: '#e5e5e5',
-                            borderWidth: '1px'
-                          }}
-                        >
+                  <Label htmlFor="scheduled" className="cursor-pointer text-[16px] text-[#383838]">自訂時間</Label>
+                  <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+                    <PopoverTrigger asChild disabled={scheduleType === 'immediate'}>
+                      <div className={`bg-white border border-neutral-100 rounded-[8px] px-[8px] py-[8px] w-[298px] flex items-center gap-6 transition-colors ${scheduleType === 'immediate' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-neutral-200'}`}>
                         <span className={`text-[16px] ${scheduledDate ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>
                           {formatDate(scheduledDate)}
                         </span>
@@ -522,9 +696,9 @@ export default function MessageCreation() {
                             <path d={svgPaths.p22990f00} fill="#0F6BEB" />
                           </svg>
                         </button>
-                        </div>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
+                      </div>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
                       <div className="flex flex-col gap-4 p-4">
                         <div className="space-y-2">
                           <Label className="text-[14px] text-[#383838]">選擇日期</Label>
@@ -578,9 +752,8 @@ export default function MessageCreation() {
                           </Button>
                         </div>
                       </div>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </RadioGroup>
             </div>
@@ -589,6 +762,7 @@ export default function MessageCreation() {
             <div className="flex items-start gap-4 w-full">
               <Label className="min-w-[160px] pt-1 flex items-center gap-1">
                 <span className="text-[16px] text-[#383838]">發送對象</span>
+                <span className="text-[16px] text-[#f44336]">*</span>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <svg className="size-[24px]" fill="none" viewBox="0 0 24 24">
@@ -615,98 +789,952 @@ export default function MessageCreation() {
                         </Label>
                       </div>
                     </div>
-                    {targetType === 'filtered' && (
-                      <div className="flex flex-col gap-1">
-                        <div
-                          className="bg-white max-w-[600px] min-w-[300px] rounded-[8px] shrink-0 w-full"
-                          style={{
-                            borderColor: '#e5e5e5',
-                            borderWidth: '1px'
-                          }}
-                        >
-                        <div className="flex flex-col justify-center max-w-inherit min-w-inherit size-full">
-                          <div className="box-border content-stretch flex flex-col gap-[4px] items-start justify-center max-w-inherit min-w-inherit p-[8px] w-full">
-                            {selectedFilterTags.length > 0 && (
-                              <>
-                                {selectedFilterTags.map(tag => (
-                                  <div key={tag.id} className="bg-[floralwhite] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0">
-                                    <p className="basis-0 font-normal grow leading-[1.5] min-h-px min-w-px shrink-0 text-[#eba20f] text-[16px]">{tag.name}</p>
-                                    <button 
-                                      onClick={() => setSelectedFilterTags(selectedFilterTags.filter(t => t.id !== tag.id))}
-                                      className="shrink-0 size-[16px] hover:opacity-70 transition-opacity"
-                                    >
-                                      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 16 16">
-                                        <g clipPath="url(#clip0_23_1462)">
-                                          <path d={closeIconPaths.p1f281200} fill="#A8A8A8" />
-                                        </g>
-                                        <defs>
-                                          <clipPath id="clip0_23_1462">
-                                            <rect fill="white" height="16" width="16" />
-                                          </clipPath>
-                                        </defs>
-                                      </svg>
-                                    </button>
-                                  </div>
-                                ))}
-                              </>
-                            )}
-                            <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-                              <DialogTrigger asChild>
-                                <button className="box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0 hover:bg-neutral-50 transition-colors">
-                                  <p className="basis-0 font-normal grow leading-[1.5] min-h-px min-w-px shrink-0 text-[#a8a8a8] text-[16px] text-center">＋ 新增標籤</p>
-                                </button>
-                              </DialogTrigger>
-                              <DialogContent className="!max-w-[700px] !w-[700px] sm:!max-w-[700px] sm:!w-[700px] h-[780px] p-0 bg-transparent border-0" style={{ width: '700px', maxWidth: '700px' }} hideClose>
-                                <DialogTitle className="sr-only">篩選目標對象</DialogTitle>
-                                <DialogDescription className="sr-only">選擇或建立標籤來篩選目標對象</DialogDescription>
-                                <FilterModal
-                                  onClose={() => setModalOpen(false)}
-                                  onConfirm={handleFilterConfirm}
-                                />
-                              </DialogContent>
-                            </Dialog>
-                          </div>
+                    <div className="bg-white max-w-[600px] min-w-[300px] rounded-[8px] shrink-0 w-full border border-neutral-100">
+                      <div className="flex flex-col justify-center max-w-inherit min-w-inherit size-full">
+                        <div className="box-border content-stretch flex flex-row flex-wrap gap-[4px] items-start justify-start max-w-inherit min-w-inherit p-[8px] w-full">
+                          {selectedFilterTags.length > 0 && (
+                            <>
+                              {selectedFilterTags.map(tag => (
+                                <div key={tag.id} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0">
+                                  <p className="basis-0 font-normal grow leading-[1.5] min-h-px min-w-px shrink-0 text-[#0f6beb] text-[16px]">{tag.name}</p>
+                                  <button 
+                                    onClick={() => setSelectedFilterTags(selectedFilterTags.filter(t => t.id !== tag.id))}
+                                    className="shrink-0 size-[16px] hover:opacity-70 transition-opacity"
+                                  >
+                                    <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 16 16">
+                                      <g clipPath="url(#clip0_23_1462)">
+                                        <path d={closeIconPaths.p1f281200} fill="#A8A8A8" />
+                                      </g>
+                                      <defs>
+                                        <clipPath id="clip0_23_1462">
+                                          <rect fill="white" height="16" width="16" />
+                                        </clipPath>
+                                      </defs>
+                                    </svg>
+                                  </button>
+                                </div>
+                              ))}
+                            </>
+                          )}
+                          <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+                            <DialogTrigger asChild>
+                              <button className="box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0 hover:bg-neutral-50 transition-colors">
+                                <p className="basis-0 font-normal grow leading-[1.5] min-h-px min-w-px shrink-0 text-[#a8a8a8] text-[16px] text-center">＋ 新增標籤</p>
+                              </button>
+                            </DialogTrigger>
+                            <DialogContentNoClose className="max-w-[800px] max-h-[90vh] p-0 bg-transparent border-0">
+                              <DialogTitle className="sr-only">篩選目標對象</DialogTitle>
+                              <DialogDescription className="sr-only">選擇或建立標籤來篩選目標對象</DialogDescription>
+                              <FilterModal 
+                                onClose={() => setModalOpen(false)}
+                                onConfirm={handleFilterConfirm}
+                                initialSelectedTags={selectedFilterTags}
+                                initialIsInclude={filterCondition === 'include'}
+                              />
+                            </DialogContentNoClose>
+                          </Dialog>
                         </div>
                       </div>
                     </div>
-                    )}
                   </div>
                 </RadioGroup>
-                <div className="flex items-center gap-[40px]">
-                  <div className="relative w-[158.824px] h-[158.824px]">
-                    <svg className="w-full h-full -rotate-90">
-                      <circle 
-                        cx="79.412" 
-                        cy="79.412" 
-                        r="75.412" 
-                        fill="none" 
-                        stroke="#00a81c" 
-                        strokeWidth="8"
-                      />
-                    </svg>
-                    <div className="basis-0 content-stretch flex grow items-center justify-center min-h-px min-w-px absolute inset-0 shrink-0">
-                      <p className="font-medium leading-[1.5] relative shrink-0 text-[#383838] text-[36px] text-nowrap whitespace-pre">100%</p>
-                    </div>
-                  </div>
-                  <p className="text-[16px] text-[#383838]">
-                    預計發送好友人數：{loadingEstimate ? '計算中...' : `${estimatedCount}人`}
-                  </p>
+                <div className="mt-[30px] -ml-[20px]">
+                  <p className="text-[16px] text-[#383838]">預計發送好友人數：60人</p>
+                  <p className="text-[16px] text-[#383838] mt-[10px]">可用訊息則數：5,937 則</p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Flex Message Editor Section */}
-          <div className="box-border flex flex-col gap-[32px] items-start p-[40px]">
-            <div className="w-full">
-              <FlexMessageEditorWrapper
-                initialJson={flexMessageJson}
-                onChange={setFlexMessageJson}
+          {/* Carousel Message Editor Section - Full Width */}
+          <div className="border-t-2 border-[#E5E5E5]">
+            {/* Carousel Message Editor - Full Height */}
+            <div className="h-[calc(100vh-300px)] min-h-[600px]">
+              <CarouselMessageEditor
+                cards={cards}
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+                onAddCarousel={addCarousel}
+                onUpdateCard={updateCard}
+                onCopyCard={() => {
+                  // Copy current card functionality
+                  const newId = Math.max(...cards.map(c => c.id)) + 1;
+                  const copiedCard = { ...currentCard, id: newId };
+                  setCards([...cards, copiedCard]);
+                  setActiveTab(newId);
+                  toast.success('已複製圖卡');
+                }}
               />
             </div>
           </div>
-        </div>
-      </TooltipProvider>
-    </Layout>
+        </main>
+      </div>
+      
+      {/* Keep the original structure hidden for now */}
+      <div className="hidden">
+            <div className="flex flex-col lg:flex-row gap-[32px] items-start w-full">
+              {/* Preview */}
+              {currentCard.button1Action === 'text' || currentCard.button2Action === 'text' ? (
+                <div className="overflow-hidden relative w-full max-w-[320px] sm:max-w-[380px] md:max-w-[420px] lg:max-w-[460px] rounded-[20px]" style={{
+                  background: 'linear-gradient(180deg, #a5d8ff 0%, #d0ebff 100%)'
+                }}>
+                  <div className="box-border flex gap-[20px] items-start pt-[24px] px-[24px] pb-[24px]">
+                    <div className="bg-white rounded-full w-[45px] h-[45px] flex items-center justify-center shrink-0">
+                      <p className="text-[12px] text-[#383838]">OA</p>
+                    </div>
+                    <div className="w-[288px]">
+                      <TriggerTextPreview 
+                        cardData={{
+                          cardTitle: currentCard.cardTitle,
+                          content: currentCard.content,
+                          price: currentCard.price,
+                          currency: currentCard.currency,
+                          button1: currentCard.button1,
+                          button2: currentCard.button2,
+                          imageUrl: currentCard.image
+                        }}
+                        triggerText={
+                          currentCard.button1Action === 'text' ? currentCard.button1Text : 
+                          currentCard.button2Action === 'text' ? currentCard.button2Text : 
+                          undefined
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : currentCard.button1Action === 'image' || currentCard.button2Action === 'image' ? (
+                <div className="overflow-hidden relative w-full max-w-[320px] sm:max-w-[380px] md:max-w-[420px] lg:max-w-[460px] rounded-[20px]">
+                  <TriggerImagePreview 
+                    cardData={{
+                      cardTitle: currentCard.cardTitle,
+                      content: currentCard.content,
+                      price: currentCard.price,
+                      currency: currentCard.currency,
+                      button1: currentCard.button1,
+                      button2: currentCard.button2,
+                      imageUrl: currentCard.image
+                    }}
+                    triggerImageUrl={triggerImageUrl}
+                  />
+                </div>
+              ) : (
+                <div 
+                  className="overflow-hidden relative w-full max-w-[320px] sm:max-w-[380px] md:max-w-[420px] lg:max-w-[460px] rounded-[20px]"
+                  style={{
+                    background: 'linear-gradient(180deg, #a5d8ff 0%, #d0ebff 100%)'
+                  }}
+                >
+                  <div className="box-border flex gap-[20px] items-start pt-[24px] px-[24px] pb-[24px]">
+                    <div className="bg-white rounded-full w-[45px] h-[45px] flex items-center justify-center shrink-0">
+                      <p className="text-[12px] text-[#383838]">OA</p>
+                    </div>
+                    
+                    {/* Show simplified preview for 文字按鈕確認型 */}
+                    {templateType === '文字按鈕確認型' ? (
+                      <div className="relative shrink-0 w-[288px]">
+                        <div className="bg-[#f6f9fd] relative rounded-[15px] w-[288px]">
+                          <div className="flex flex-col items-center overflow-clip relative rounded-[inherit] w-[288px]">
+                            {/* Card Description */}
+                            <div className="relative shrink-0 w-full">
+                              <div className="flex flex-row items-center size-full">
+                                <div className="box-border flex items-center p-[16px] relative w-full">
+                                  <p className="basis-0 font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px]">
+                                    {messageText || '文字訊息'}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Card Actions - show when button1 or button2 is enabled */}
+                            {(currentCard.enableButton1 || currentCard.enableButton2) && (
+                              <div className="relative shrink-0 w-full">
+                                <div className="flex flex-col justify-center size-full">
+                                  <div className="box-border content-stretch flex flex-col gap-[6px] items-start justify-center p-[9px] relative w-full">
+                                    {currentCard.enableButton1 && (
+                                      <div className="bg-white relative rounded-[15px] shrink-0 w-full">
+                                        <div className="flex flex-row items-center justify-center size-full">
+                                          <div className="box-border content-stretch flex items-center justify-center p-[15px] relative w-full">
+                                            <p className="basis-0 font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[18px] text-center">
+                                              {currentCard.button1 || '動作按鈕一'}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+                                    {currentCard.enableButton2 && (
+                                      <div className="bg-white relative rounded-[15px] shrink-0 w-full">
+                                        <div className="flex flex-row items-center justify-center size-full">
+                                          <div className="box-border content-stretch flex items-center justify-center p-[15px] relative w-full">
+                                            <p className="basis-0 font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[18px] text-center">
+                                              {currentCard.button2 || '動作按鈕二'}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div 
+                        className="flex gap-[15px] overflow-x-auto scroll-smooth snap-x snap-mandatory" 
+                        onScroll={handlePreviewScroll}
+                        style={{ scrollbarWidth: 'thin' }}
+                      >
+                        {cards.map((card) => (
+                          <div 
+                            key={card.id} 
+                            ref={(el) => cardRefs.current[card.id] = el}
+                            className="bg-white rounded-[12px] overflow-hidden w-[168px] sm:w-[216px] md:w-[252px] lg:w-[288px] shrink-0 snap-center"
+                          >
+                            {/* Image Area */}
+                            <div className="bg-[#edf0f8] content-stretch flex items-center justify-center relative h-[192px] overflow-hidden">
+                              {card.image ? (
+                                <img src={card.image} alt="預覽圖片" className="w-full h-full object-cover" />
+                              ) : (
+                                <p className="font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[19px] text-center text-nowrap whitespace-pre">選擇圖片</p>
+                              )}
+                            </div>
+                            
+                            {/* Title */}
+                            <div className="p-[16px]">
+                              <p className="text-[19px] text-[#383838] truncate">
+                                {card.cardTitle || '標題文字'}
+                              </p>
+                            </div>
+                            
+                            {/* Content - only show if enabled */}
+                            {card.enableContent && (
+                              <div className="px-[16px] pb-[16px]">
+                                <p className="text-[12px] text-[#383838] truncate">
+                                  {card.content || '內文文字'}
+                                </p>
+                              </div>
+                            )}
+                            
+                            {/* Price - only show if enabled */}
+                            {card.enablePrice && (
+                              <div className="px-[16px] pb-[16px] text-right">
+                                <p className="text-[24px] text-[#383838]">
+                                  {card.currency === 'ntd' ? 'NT $' : '$'} {card.price || '0'}
+                                </p>
+                              </div>
+                            )}
+                            
+                            {/* Buttons - only show if enabled */}
+                            {(card.enableButton1 || card.enableButton2) && (
+                              <div className="box-border flex flex-col gap-[5px] items-start px-[16px] pt-[7px] pb-[16px]">
+                                {card.enableButton1 && (
+                                  <div className="bg-white rounded-[12px] w-full p-[12px] text-center border border-gray-200">
+                                    <p className="text-[14px] text-[#383838] truncate">
+                                      {card.button1 || '動作按鈕一'}
+                                    </p>
+                                  </div>
+                                )}
+                                {card.enableButton2 && (
+                                  <div className="bg-white rounded-[12px] w-full p-[12px] text-center border border-gray-200">
+                                    <p className="text-[14px] text-[#383838] truncate">
+                                      {card.button2 || '動作按鈕二'}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Editor Form */}
+              <div className="flex-1 space-y-[32px] w-full">
+                <div className="flex justify-end gap-2">
+                  <Button 
+                    onClick={copyCard}
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-[48px] w-[48px] hover:bg-slate-100"
+                  >
+                    <svg className="size-[22px]" fill="none" viewBox="0 0 22 22">
+                      <path d={svgPaths.p20b8bb00} fill="#6E6E6E" />
+                    </svg>
+                  </Button>
+                  <Button 
+                    onClick={deleteCard}
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-[48px] w-[48px] hover:bg-slate-100"
+                    disabled={cards.length === 1}
+                  >
+                    <svg className="size-[32px]" fill="none" viewBox="0 0 32 32">
+                      <path d={svgPaths.pcbf700} fill="#6E6E6E" />
+                    </svg>
+                  </Button>
+                </div>
+
+                {/* Message Text */}
+                <div className="flex flex-col sm:flex-row items-start gap-4 w-full">
+                  <div className="flex gap-[2px] items-center min-w-[120px] sm:min-w-[140px] lg:min-w-[160px]">
+                    <div className="flex gap-[10px] items-center justify-center opacity-0 size-[24px]">
+                      <div className="relative shrink-0 size-[16px]">
+                        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 16 16">
+                          <g clipPath="url(#clip0_4004_285)">
+                            <g id="Vector"></g>
+                            <path d={messageTextSvgPaths.pcd62e00} fill="#0F6BEB" id="Vector_2" />
+                          </g>
+                          <defs>
+                            <clipPath id="clip0_4004_285">
+                              <rect fill="white" height="16" width="16" />
+                            </clipPath>
+                          </defs>
+                        </svg>
+                      </div>
+                    </div>
+                    <Label className="flex items-center">
+                      <span className="text-[16px] text-[#383838]">訊息文字</span>
+                      <span className="text-[16px] text-[#f44336]">*</span>
+                    </Label>
+                    <div className="relative shrink-0 size-[24px] opacity-0">
+                      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
+                        <g opacity="0">
+                          <path d={messageTextSvgPaths.p2cd5ff00} fill="#0F6BEB" />
+                        </g>
+                      </svg>
+                    </div>
+                  </div>
+                  <div className="flex-1 flex flex-col gap-[2px]">
+                    <div className="bg-white h-[48px] min-h-[48px] relative rounded-[8px] w-full">
+                      <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-[8px]" />
+                      <div className="flex flex-col justify-center min-h-inherit size-full">
+                        <div className="box-border flex flex-col gap-[4px] h-[48px] items-start justify-center min-h-inherit p-[8px] relative w-full">
+                          <input
+                            type="text"
+                            value={messageText}
+                            onChange={(e) => {
+                              if (e.target.value.length <= 100) {
+                                setMessageText(e.target.value);
+                              }
+                            }}
+                            placeholder="輸入訊息文字"
+                            className="w-full bg-transparent outline-none text-[16px] text-[#383838] placeholder:text-[#717182]"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-[10px] items-end w-full">
+                      <div className="h-[18px] w-full text-right">
+                        <p className="text-[12px] leading-[1.5]">
+                          <span className="text-[#6e6e6e]">{messageText.length}</span>
+                          <span className="text-[#383838]">/100</span>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Title */}
+                <div className="flex flex-col sm:flex-row items-start gap-4 w-full">
+                  <div className="flex gap-[2px] items-center min-w-[120px] sm:min-w-[140px] lg:min-w-[160px]">
+                    <div className="flex gap-[10px] items-center justify-center opacity-0 size-[24px]">
+                      <Checkbox />
+                    </div>
+                    <Label className="flex items-center">
+                      <span className="text-[16px] text-[#383838]">標題文字</span>
+                      <span className="text-[16px] text-[#f44336]">*</span>
+                    </Label>
+                  </div>
+                  <div className="flex-1 space-y-[2px]">
+                    <Input 
+                      value={currentCard.cardTitle}
+                      onChange={(e) => updateCard({ cardTitle: e.target.value })}
+                      placeholder="輸入標題文字"
+                      className="h-[48px] rounded-[8px] border-neutral-100 bg-white"
+                      maxLength={20}
+                    />
+                    <p className="text-[12px] text-right text-[#6e6e6e]">
+                      {currentCard.cardTitle.length}<span className="text-[#383838]">/20</span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Content */}
+                <div className="flex flex-col sm:flex-row items-start gap-4 w-full">
+                  <div className="flex gap-[2px] items-center min-w-[120px] sm:min-w-[140px] lg:min-w-[160px]">
+                    <div className="flex gap-[10px] items-center justify-center size-[24px]">
+                      <Checkbox 
+                        checked={currentCard.enableContent}
+                        onCheckedChange={(checked) => updateCard({ enableContent: checked as boolean })}
+                      />
+                    </div>
+                    <Label className="flex items-center">
+                      <span className="text-[16px] text-[#383838]">內文文字說明</span>
+                    </Label>
+                  </div>
+                  <div className="flex-1 space-y-[2px]">
+                    <Input 
+                      value={currentCard.content}
+                      onChange={(e) => updateCard({ content: e.target.value })}
+                      placeholder="輸入內文文字說明"
+                      className="h-[48px] rounded-[8px] border-neutral-100 bg-white"
+                      disabled={!currentCard.enableContent}
+                      maxLength={60}
+                    />
+                    <p className="text-[12px] text-right text-[#6e6e6e]">
+                      {currentCard.content.length}<span className="text-[#383838]">/60</span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Price */}
+                <div className="flex flex-col sm:flex-row items-start gap-4 w-full">
+                  <div className="flex gap-[2px] items-center min-w-[120px] sm:min-w-[140px] lg:min-w-[160px]">
+                    <div className="flex gap-[10px] items-center justify-center size-[24px]">
+                      <Checkbox 
+                        id="enable-price"
+                        checked={currentCard.enablePrice}
+                        onCheckedChange={(checked) => {
+                          updateCard({ enablePrice: checked as boolean });
+                        }}
+                      />
+                    </div>
+                    <Label htmlFor="enable-price" className="flex items-center cursor-pointer">
+                      <span className="text-[16px] text-[#383838]">金額</span>
+                    </Label>
+                  </div>
+                  <div className="flex-1 space-y-[2px]">
+                    <Input 
+                      value={currentCard.price ? `NT$ ${currentCard.price}` : 'NT$ 0'}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/NT\$\s*/g, '').replace(/\D/g, '');
+                        if (value.length <= 15) {
+                          updateCard({ price: value });
+                        }
+                      }}
+                      placeholder="NT$ 0"
+                      className="h-[48px] rounded-[8px] border-neutral-100 bg-white"
+                      disabled={!currentCard.enablePrice}
+                    />
+                    <p className="text-[12px] text-right text-[#6e6e6e]">
+                      {currentCard.price.length}<span className="text-[#383838]">/15</span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Button 1 */}
+                {!currentCard.enableButton1 ? (
+                  <div className="flex flex-col sm:flex-row items-start gap-4 w-full">
+                    <div className="flex gap-[2px] items-center min-w-[120px] sm:min-w-[140px] lg:min-w-[160px]">
+                      <div className="flex gap-[10px] items-center justify-center opacity-0 size-[24px]">
+                        <Checkbox />
+                      </div>
+                      <button
+                        onClick={() => updateCard({ enableButton1: true })}
+                        className="text-[16px] text-[#0f6beb] hover:underline"
+                      >
+                        ＋ 新增按鈕
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex flex-col sm:flex-row items-start gap-4 w-full">
+                      <div className="flex gap-[2px] items-center min-w-[120px] sm:min-w-[140px] lg:min-w-[160px]">
+                        <div className="flex gap-[10px] items-center justify-center size-[24px]">
+                          <button
+                            onClick={() => {
+                              // If button2 is enabled, move button2 data to button1
+                              if (currentCard.enableButton2) {
+                                updateCard({
+                                  enableButton1: true,
+                                  button1: currentCard.button2,
+                                  button1Tag: currentCard.button2Tag,
+                                  button1Action: currentCard.button2Action,
+                                  button1Url: currentCard.button2Url,
+                                  button1Text: currentCard.button2Text,
+                                  button1TriggerImage: currentCard.button2TriggerImage,
+                                  enableButton2: false,
+                                  button2: '',
+                                  button2Tag: '',
+                                  button2Action: 'select',
+                                  button2Url: '',
+                                  button2Text: '',
+                                  button2TriggerImage: null,
+                                });
+                              } else {
+                                updateCard({ 
+                                  enableButton1: false,
+                                  button1: '',
+                                  button1Tag: '',
+                                  button1Action: 'select',
+                                  button1Url: '',
+                                  button1Text: '',
+                                  button1TriggerImage: null,
+                                });
+                              }
+                            }}
+                            className="text-[#f44336] hover:text-[#d32f2f]"
+                          >
+                            <Trash2 className="size-[20px]" />
+                          </button>
+                        </div>
+                        <Label className="flex items-center gap-[2px]">
+                          <span className="text-[16px] text-[#383838]">動作按鈕一</span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <svg className="size-[24px]" fill="none" viewBox="0 0 24 24">
+                                <path d={svgPaths.p2cd5ff00} fill="#0F6BEB" />
+                              </svg>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>設定按鈕文字與觸發後的互動類型</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </Label>
+                      </div>
+                      <div className="flex-1 space-y-[2px]">
+                        <Input 
+                          value={currentCard.button1}
+                          onChange={(e) => updateCard({ button1: e.target.value })}
+                          placeholder="輸入動作按鈕"
+                          className="h-[48px] rounded-[8px] border-neutral-100 bg-white"
+                          maxLength={12}
+                        />
+                        <p className="text-[12px] text-right text-[#6e6e6e]">
+                          {currentCard.button1.length}<span className="text-[#383838]">/12</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Button 1 Interactive Type - 互動類型 */}
+                    <div className="flex flex-col sm:flex-row items-start gap-4 w-full">
+                      <div className="flex gap-[2px] items-center min-w-[120px] sm:min-w-[140px] lg:min-w-[160px]">
+                        <div className="flex gap-[10px] items-center justify-center opacity-0 size-[24px]">
+                          <Checkbox />
+                        </div>
+                        <Label className="flex items-center">
+                          <span className="text-[16px] text-[#383838]">互動類型</span>
+                          <span className="text-[16px] text-[#f44336]">*</span>
+                        </Label>
+                      </div>
+                      <Select value={currentCard.button1Action} onValueChange={(value) => updateCard({ button1Action: value })}>
+                        <SelectTrigger className={`flex-1 h-[48px] py-1 rounded-[8px] border-neutral-100 bg-white ${currentCard.button1Action === 'select' ? 'text-[#717182]' : ''}`}>
+                          <SelectValue placeholder="選擇互動類型" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="select" className="text-[#717182]">選擇互動類型</SelectItem>
+                          <SelectItem value="url">開啟網址</SelectItem>
+                          <SelectItem value="text">觸發文字</SelectItem>
+                          <SelectItem value="image">觸發圖片</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Button 1 Interactive Tag */}
+                    <div className="flex flex-col sm:flex-row items-start gap-4 w-full">
+                      <div className="flex gap-[2px] items-center min-w-[120px] sm:min-w-[140px] lg:min-w-[160px]">
+                        <div className="flex gap-[10px] items-center justify-center opacity-0 size-[24px]">
+                          <Checkbox />
+                        </div>
+                        <Label className="flex items-center gap-[2px]">
+                          <span className="text-[16px] text-[#383838]">互動標籤</span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <svg className="size-[24px]" fill="none" viewBox="0 0 24 24">
+                                <path d={svgPaths.p2cd5ff00} fill="#0F6BEB" />
+                              </svg>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>建立按鈕互動標籤，了解顧客偏好與輪廓</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </Label>
+                      </div>
+                      <div className="flex-1 space-y-[2px]">
+                        <Input 
+                          value={currentCard.button1Tag}
+                          onChange={(e) => updateCard({ button1Tag: e.target.value })}
+                          placeholder="點擊 Enter 即可新增互動標籤"
+                          className="h-[48px] rounded-[8px] border-neutral-100 bg-white"
+                          maxLength={20}
+                        />
+                        <p className="text-[12px] text-right text-[#6e6e6e]">
+                          {currentCard.button1Tag.length}<span className="text-[#383838]">/20</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {currentCard.button1Action === 'text' && (
+                      <div className="flex flex-col sm:flex-row items-start gap-4 w-full">
+                        <div className="flex gap-[2px] items-center min-w-[120px] sm:min-w-[140px] lg:min-w-[160px]">
+                          <div className="flex gap-[10px] items-center justify-center opacity-0 size-[24px]">
+                            <Checkbox />
+                          </div>
+                          <Label className="flex items-center gap-[2px]">
+                            <span className="text-[16px] text-[#383838]">觸發文字</span>
+                            <span className="text-[16px] text-[#f44336]">*</span>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <svg className="size-[24px]" fill="none" viewBox="0 0 24 24">
+                                  <path d={svgPaths.p2cd5ff00} fill="#0F6BEB" />
+                                </svg>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>輸入觸發文字</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </Label>
+                        </div>
+                        <div className="flex-1 space-y-[2px]">
+                          <div className="relative group">
+                            <input
+                              type="text"
+                              value={currentCard.button1Text || ''}
+                              onChange={(e) => {
+                                if (e.target.value.length <= 100) {
+                                  updateCard({ button1Text: e.target.value });
+                                }
+                              }}
+                              placeholder="輸入訊息文字"
+                              className="flex h-[48px] w-full rounded-[8px] border border-neutral-100 bg-white px-3 py-1 text-base transition-[color,box-shadow] placeholder:text-[#717182] focus-visible:outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] md:text-sm"
+                            />
+                          </div>
+                          <p className="text-[12px] text-right text-[#6e6e6e]">
+                            {currentCard.button1Text?.length || 0}<span className="text-[#383838]">/100</span>
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {currentCard.button1Action === 'image' && (
+                      <div className="flex flex-col sm:flex-row items-start gap-4 w-full" onClick={() => button1TriggerImageInputRef.current?.click()}>
+                        <ActionTriggerImageMessage />
+                      </div>
+                    )}
+
+                    {currentCard.button1Action === 'url' && (
+                      <>
+                        <div className="flex flex-col sm:flex-row items-start gap-4 w-full">
+                          <div className="flex gap-[2px] items-center min-w-[120px] sm:min-w-[140px] lg:min-w-[160px]">
+                            <div className="flex gap-[10px] items-center justify-center opacity-0 size-[24px]">
+                              <Checkbox />
+                            </div>
+                            <Label className="flex items-center gap-[2px]">
+                              <span className="text-[16px] text-[#383838]">URL</span>
+                              <span className="text-[16px] text-[#f44336]">*</span>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <svg className="size-[24px]" fill="none" viewBox="0 0 24 24">
+                                    <path d={svgPaths.p2cd5ff00} fill="#0F6BEB" />
+                                  </svg>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>輸入完整網址</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </Label>
+                          </div>
+                          <div className="flex-1">
+                            <Input 
+                              value={currentCard.button1Url}
+                              onChange={(e) => updateCard({ button1Url: e.target.value })}
+                              placeholder="輸入網址"
+                              className="h-[48px] rounded-[8px] border-neutral-100 bg-white"
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+
+                {/* Button 2 */}
+                {!currentCard.enableButton2 ? (
+                  <div className="flex flex-col sm:flex-row items-start gap-4 w-full">
+                    <div className="flex gap-[2px] items-center min-w-[120px] sm:min-w-[140px] lg:min-w-[160px]">
+                      <div className="flex gap-[10px] items-center justify-center opacity-0 size-[24px]">
+                        <Checkbox />
+                      </div>
+                      <button
+                        onClick={() => updateCard({ enableButton2: true })}
+                        className="text-[16px] text-[#0f6beb] hover:underline"
+                        disabled={!currentCard.enableButton1}
+                      >
+                        ＋ 新增按鈕
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex flex-col sm:flex-row items-start gap-4 w-full">
+                      <div className="flex gap-[2px] items-center min-w-[120px] sm:min-w-[140px] lg:min-w-[160px]">
+                        <div className="flex gap-[10px] items-center justify-center size-[24px]">
+                          <button
+                            onClick={() => {
+                              updateCard({ 
+                                enableButton2: false,
+                                button2: '',
+                                button2Tag: '',
+                                button2Action: 'select',
+                                button2Url: '',
+                                button2Text: '',
+                                button2TriggerImage: null,
+                              });
+                            }}
+                            className="text-[#f44336] hover:text-[#d32f2f]"
+                          >
+                            <Trash2 className="size-[20px]" />
+                          </button>
+                        </div>
+                        <Label className="flex items-center gap-[2px]">
+                          <span className="text-[16px] text-[#383838]">動作按鈕二</span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <svg className="size-[24px]" fill="none" viewBox="0 0 24 24">
+                                <path d={svgPaths.p2cd5ff00} fill="#0F6BEB" />
+                              </svg>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>設定按鈕文字與觸發後的互動類型</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </Label>
+                      </div>
+                      <div className="flex-1 space-y-[2px]">
+                        <Input 
+                          value={currentCard.button2}
+                          onChange={(e) => updateCard({ button2: e.target.value })}
+                          placeholder="輸入動作按鈕"
+                          className="h-[48px] rounded-[8px] border-neutral-100 bg-white"
+                          maxLength={12}
+                        />
+                        <p className="text-[12px] text-right text-[#6e6e6e]">
+                          {currentCard.button2.length}<span className="text-[#383838]">/12</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Button 2 Interactive Type - 互動類型 */}
+                    <div className="flex flex-col sm:flex-row items-start gap-4 w-full">
+                      <div className="flex gap-[2px] items-center min-w-[120px] sm:min-w-[140px] lg:min-w-[160px]">
+                        <div className="flex gap-[10px] items-center justify-center opacity-0 size-[24px]">
+                          <Checkbox />
+                        </div>
+                        <Label className="flex items-center">
+                          <span className="text-[16px] text-[#383838]">互動類型</span>
+                          <span className="text-[16px] text-[#f44336]">*</span>
+                        </Label>
+                      </div>
+                      <Select value={currentCard.button2Action} onValueChange={(value) => updateCard({ button2Action: value })}>
+                        <SelectTrigger className={`flex-1 h-[48px] py-1 rounded-[8px] border-neutral-100 bg-white ${currentCard.button2Action === 'select' ? 'text-[#717182]' : ''}`}>
+                          <SelectValue placeholder="選擇互動類型" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="select" className="text-[#717182]">選擇互動類型</SelectItem>
+                          <SelectItem value="url">開啟網址</SelectItem>
+                          <SelectItem value="text">觸發文字</SelectItem>
+                          <SelectItem value="image">觸發圖片</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Button 2 Interactive Tag */}
+                    <div className="flex flex-col sm:flex-row items-start gap-4 w-full">
+                      <div className="flex gap-[2px] items-center min-w-[120px] sm:min-w-[140px] lg:min-w-[160px]">
+                        <div className="flex gap-[10px] items-center justify-center opacity-0 size-[24px]">
+                          <Checkbox />
+                        </div>
+                        <Label className="flex items-center gap-[2px]">
+                          <span className="text-[16px] text-[#383838]">互動標籤</span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <svg className="size-[24px]" fill="none" viewBox="0 0 24 24">
+                                <path d={svgPaths.p2cd5ff00} fill="#0F6BEB" />
+                              </svg>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>建立按鈕互動標籤，了解顧客偏好與輪廓</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </Label>
+                      </div>
+                      <div className="flex-1 space-y-[2px]">
+                        <Input 
+                          value={currentCard.button2Tag}
+                          onChange={(e) => updateCard({ button2Tag: e.target.value })}
+                          placeholder="點擊 Enter 即可新增互動標籤"
+                          className="h-[48px] rounded-[8px] border-neutral-100 bg-white"
+                          maxLength={20}
+                        />
+                        <p className="text-[12px] text-right text-[#6e6e6e]">
+                          {currentCard.button2Tag.length}<span className="text-[#383838]">/20</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {currentCard.button2Action === 'url' && (
+                      <>
+                        <div className="flex flex-col sm:flex-row items-start gap-4 w-full">
+                          <div className="flex gap-[2px] items-center min-w-[120px] sm:min-w-[140px] lg:min-w-[160px]">
+                            <div className="flex gap-[10px] items-center justify-center opacity-0 size-[24px]">
+                              <Checkbox />
+                            </div>
+                            <Label className="flex items-center gap-[2px]">
+                              <span className="text-[16px] text-[#383838]">URL</span>
+                              <span className="text-[16px] text-[#f44336]">*</span>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <svg className="size-[24px]" fill="none" viewBox="0 0 24 24">
+                                    <path d={svgPaths.p2cd5ff00} fill="#0F6BEB" />
+                                  </svg>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>輸入完整網址</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </Label>
+                          </div>
+                          <div className="flex-1">
+                            <Input 
+                              value={currentCard.button2Url}
+                              onChange={(e) => updateCard({ button2Url: e.target.value })}
+                              placeholder="輸入網址"
+                              className="h-[48px] rounded-[8px] border-neutral-100 bg-white"
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {currentCard.button2Action === 'text' && (
+                      <>
+                        <div className="flex flex-col sm:flex-row items-start gap-4 w-full">
+                          <div className="flex gap-[2px] items-center min-w-[120px] sm:min-w-[140px] lg:min-w-[160px]">
+                            <div className="flex gap-[10px] items-center justify-center opacity-0 size-[24px]">
+                              <Checkbox />
+                            </div>
+                            <Label className="flex items-center gap-[2px]">
+                              <span className="text-[16px] text-[#383838]">觸發文字</span>
+                              <span className="text-[16px] text-[#f44336]">*</span>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <svg className="size-[24px]" fill="none" viewBox="0 0 24 24">
+                                    <path d={svgPaths.p2cd5ff00} fill="#0F6BEB" />
+                                  </svg>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>輸入觸發文字</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </Label>
+                          </div>
+                          <div className="flex-1 space-y-[2px]">
+                            <div className="relative group">
+                              <input
+                                type="text"
+                                value={currentCard.button2Text || ''}
+                                onChange={(e) => {
+                                  if (e.target.value.length <= 100) {
+                                    updateCard({ button2Text: e.target.value });
+                                  }
+                                }}
+                                placeholder="輸入訊息文字"
+                                className="flex h-[48px] w-full rounded-[8px] border border-neutral-100 bg-white px-3 py-1 text-base transition-[color,box-shadow] placeholder:text-[#717182] focus-visible:outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] md:text-sm"
+                              />
+                            </div>
+                            <p className="text-[12px] text-right text-[#6e6e6e]">
+                              {currentCard.button2Text?.length || 0}<span className="text-[#383838]">/100</span>
+                            </p>
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {currentCard.button2Action === 'image' && (
+                      <div className="flex flex-col sm:flex-row items-start gap-4 w-full" onClick={() => button2TriggerImageInputRef.current?.click()}>
+                        <ActionTriggerImageMessage />
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+      
+      {/* Hidden file inputs for trigger images */}
+      <input
+        ref={button1TriggerImageInputRef}
+        type="file"
+        accept="image/jpeg,image/jpg,image/png"
+        className="hidden"
+        onChange={handleButton1TriggerImageUpload}
+      />
+      <input
+        ref={button2TriggerImageInputRef}
+        type="file"
+        accept="image/jpeg,image/jpg,image/png"
+        className="hidden"
+        onChange={handleButton2TriggerImageUpload}
+      />
+
+      {/* Unsaved Changes Dialog */}
+      <AlertDialog open={showUnsavedDialog} onOpenChange={setShowUnsavedDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>內容未儲存</AlertDialogTitle>
+            <AlertDialogDescription>
+              您有尚未儲存的變更，是否確認離開？離開後未儲存的內容將會遺失。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelLeave}>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmLeave} className="bg-[#f44336] hover:bg-[#d32f2f]">
+              確認離開
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Validation Dialog */}
+      <Dialog open={validationDialogOpen} onOpenChange={setValidationDialogOpen}>
+        <DialogContentNoClose className="max-w-[480px]">
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-2">
+              <DialogTitle className="text-[20px] text-[#383838]">
+                請填寫必填欄位
+              </DialogTitle>
+              <DialogDescription className="text-[14px] text-[#6e6e6e]">
+                以下欄位為必填，請完成填寫後再發佈：
+              </DialogDescription>
+            </div>
+            
+            <div className="bg-[#fff5f5] border border-[#ffdddd] rounded-[8px] p-4 max-h-[300px] overflow-y-auto">
+              <ul className="space-y-2">
+                {validationErrors.map((error, index) => (
+                  <li key={index} className="flex items-start gap-2 text-[14px] text-[#f44336]">
+                    <span className="shrink-0 mt-[2px]">•</span>
+                    <span>{error}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <Button
+                onClick={() => setValidationDialogOpen(false)}
+                className="bg-[#0f6beb] hover:bg-[#0d5bc9] text-white h-[48px] px-6 rounded-[16px]"
+              >
+                知道了
+              </Button>
+            </div>
+          </div>
+        </DialogContentNoClose>
+      </Dialog>
+    </TooltipProvider>
   );
 }

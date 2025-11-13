@@ -462,18 +462,15 @@ async def get_tag_trends(
                 trend_item[f"{tag['name']}_trigger"] = trigger_count
                 trend_item[f"{tag['name']}_member"] = member_count
             else:
-                # 會員標籤：統計當天新增的會員數
-                from app.models.tag import MemberTagRelation
-
+                # 會員標籤：統計當天新增的會員數（使用新的單表設計）
                 member_count_result = await db.execute(
                     select(func.count())
-                    .select_from(MemberTagRelation)
+                    .select_from(MemberTag)
                     .where(
                         and_(
-                            MemberTagRelation.tag_id == tag['id'],
-                            MemberTagRelation.tag_type == TagType.MEMBER,
-                            MemberTagRelation.tagged_at >= date_start,
-                            MemberTagRelation.tagged_at <= date_end
+                            MemberTag.tag_name == tag['name'],
+                            MemberTag.tagged_at >= date_start,
+                            MemberTag.tagged_at <= date_end
                         )
                     )
                 )

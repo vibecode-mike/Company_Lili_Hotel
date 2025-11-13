@@ -187,3 +187,111 @@
 html {
   font-size: var(--font-size);
 }
+
+/* 聊天室輸入游標閃爍動畫 */
+@keyframes blink-cursor {
+  0%, 49% {
+    opacity: 1;
+  }
+  50%, 100% {
+    opacity: 0;
+  }
+}
+
+.blinking-cursor {
+  animation: blink-cursor 1s infinite;
+}
+
+/* 自訂 Scrollbar 樣式 - 適用於聊天消息區域 */
+.chat-messages-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-messages-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.chat-messages-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.chat-messages-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.chat-messages-scroll::-webkit-scrollbar-thumb:active {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* Firefox 支援 */
+.chat-messages-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
+}
+
+/* 隱藏 textarea 的 scrollbar */
+.chat-input-textarea::-webkit-scrollbar {
+  display: none;
+}
+
+.chat-input-textarea {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* 透明 scrollbar - 適用於會員備註區域 */
+.scrollbar-transparent::-webkit-scrollbar {
+  width: 8px;
+}
+
+.scrollbar-transparent::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-transparent::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.scrollbar-transparent::-webkit-scrollbar-thumb:hover {
+  background: transparent;
+}
+
+.scrollbar-transparent::-webkit-scrollbar-thumb:active {
+  background: transparent;
+}
+
+/* 表格專用 scrollbar - 白色半透明 */
+.table-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.table-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.table-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.table-scroll::-webkit-scrollbar-thumb:hover,
+.table-scroll::-webkit-scrollbar-thumb:active,
+.table-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+/* Firefox 支援 */
+.table-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.table-scroll:hover {
+  scrollbar-color: rgba(255, 255, 255, 0.8) transparent;
+}

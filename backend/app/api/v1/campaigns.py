@@ -1,7 +1,22 @@
 """
-活動推播 API
+群發訊息 API（向後兼容）
 職責：HTTP 請求處理、參數驗證、回應格式化
 業務邏輯委託給 CampaignService
+
+⚠️ 重要說明：資料庫重構後的語意變更
+===========================================
+在 v0.2 資料庫重構後：
+- 此 API 路由 (/campaigns) 實際操作的是「群發訊息」功能（對應 messages 表）
+- 新的「活動管理」功能請使用 /campaigns_new API（對應 campaigns 表）
+
+為了向後兼容，此 API 保持不變，但請注意：
+- Campaign 模型現在實際上是 Message 模型（群發訊息）
+- 建議新專案使用 /messages 端點（待實施）
+- 活動管理使用 /campaigns_new 端點
+
+資料表對應關係：
+- 原 campaigns 表 → 現 messages 表（群發訊息）
+- 新 campaigns 表 → 活動管理
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -128,7 +143,7 @@ async def get_campaign(
                 "status": campaign.status.value,
                 "template": {
                     "id": campaign.template.id,
-                    "type": campaign.template.type.value,
+                    # 移除 type 欄位，因為現在使用 Flex Message JSON
                     "notification_text": campaign.template.notification_text,
                     "preview_text": campaign.template.preview_text,
                 },

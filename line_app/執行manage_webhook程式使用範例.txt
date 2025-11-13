@@ -1,0 +1,5 @@
+python manage_webhook.py \
+  --channel-id 2005363092 \
+  --access-token "fdXzj0ilZuTHkHQ7O6CgsYgnDHbw50O40FhGYmqSziy9GIJwuODofKc8wAUy3SCeEhcLv3sfNohiruTY/EGMO2Z2EMpZURMJk1/10tRUAI6PhenWmvo+QPAYyzL1aSTsslSGFeDZaa2a1xWIUcoRZQdB04t89/1O/w1cDnyilFU=" \
+  --base "https://linebot.star-bit.io/callback" \
+  --with-id

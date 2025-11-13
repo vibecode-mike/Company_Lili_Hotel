@@ -21,6 +21,7 @@ class TagTriggerLog(Base):
 
     __tablename__ = "tag_trigger_logs"
 
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
     member_id = Column(
         BigInteger,
         ForeignKey("members.id", ondelete="CASCADE"),
@@ -35,11 +36,24 @@ class TagTriggerLog(Base):
         index=True,
         comment="標籤ID",
     )
-    campaign_id = Column(BigInteger, ForeignKey("campaigns.id"), index=True, comment="活動ID")
+    message_id = Column(
+        BigInteger,
+        ForeignKey("messages.id", ondelete="CASCADE"),
+        index=True,
+        comment="群發訊息ID",
+    )
+    campaign_id = Column(
+        BigInteger,
+        ForeignKey("campaigns.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="活動ID（選填）",
+    )
     trigger_source = Column(SQLEnum(TriggerSource), nullable=False, comment="觸發來源")
     triggered_at = Column(DateTime, default=datetime.utcnow, nullable=False, comment="觸發時間")
 
     # 關聯關係
     member = relationship("Member")
     tag = relationship("InteractionTag", back_populates="tag_trigger_logs")
-    campaign = relationship("Campaign", back_populates="tag_trigger_logs")
+    message = relationship("Message", back_populates="tag_trigger_logs")
+    campaign = relationship("Campaign")

@@ -1,32 +1,6 @@
 import svgPaths from "./svg-ckckvhq9os";
-
-function BreadcrumbAtomic() {
-  return (
-    <div className="content-stretch flex items-center justify-center relative shrink-0" data-name="Breadcrumb-atomic">
-      <p className="font-['Noto_Sans_TC:Medium',_sans-serif] font-medium leading-[1.5] relative shrink-0 text-[#383838] text-[14px] text-nowrap whitespace-pre">活動與訊息推播</p>
-    </div>
-  );
-}
-
-function BreadcrumbModule() {
-  return (
-    <div className="box-border content-stretch flex gap-[4px] items-center p-[4px] relative shrink-0" data-name="Breadcrumb Module">
-      <BreadcrumbAtomic />
-    </div>
-  );
-}
-
-function Breadcrumb() {
-  return (
-    <div className="relative shrink-0 w-full" data-name="Breadcrumb">
-      <div className="flex flex-row items-center size-full">
-        <div className="box-border content-stretch flex gap-[4px] items-center pb-0 pt-[48px] px-[40px] relative w-full">
-          <BreadcrumbModule />
-        </div>
-      </div>
-    </div>
-  );
-}
+import { TitleContainer as SharedTitleContainer, HeaderContainer as SharedHeaderContainer, DescriptionContainer as SharedDescriptionContainer } from "../components/common/Containers";
+import { SimpleBreadcrumb } from "../components/common/Breadcrumb";
 
 function TitleTextContainer() {
   return (
@@ -44,13 +18,7 @@ function TitleWrapper() {
   );
 }
 
-function TitleContainer() {
-  return (
-    <div className="content-stretch flex gap-[12px] items-center relative shrink-0 w-full" data-name="Title Container">
-      <TitleWrapper />
-    </div>
-  );
-}
+// 使用共享容器组件替代本地定义
 
 function DescriptionTextContainer() {
   return (
@@ -64,23 +32,6 @@ function DescriptionWrapper() {
   return (
     <div className="box-border content-stretch flex items-center pl-[4px] pr-0 py-0 relative shrink-0" data-name="Description Wrapper">
       <DescriptionTextContainer />
-    </div>
-  );
-}
-
-function DescriptionContainer() {
-  return (
-    <div className="content-stretch flex gap-[12px] items-center relative shrink-0 w-full" data-name="Description Container">
-      <DescriptionWrapper />
-    </div>
-  );
-}
-
-function HeaderContainer() {
-  return (
-    <div className="content-stretch flex flex-col gap-[8px] items-start relative shrink-0 w-full" data-name="Header Container">
-      <TitleContainer />
-      <DescriptionContainer />
     </div>
   );
 }
@@ -2074,7 +2025,14 @@ function MainContent() {
     <div className="relative shrink-0 w-full" data-name="Main Content">
       <div className="size-full">
         <div className="box-border content-stretch flex flex-col gap-[32px] items-start p-[40px] relative w-full">
-          <HeaderContainer />
+          <SharedHeaderContainer>
+            <SharedTitleContainer>
+              <TitleWrapper />
+            </SharedTitleContainer>
+            <SharedDescriptionContainer>
+              <DescriptionWrapper />
+            </SharedDescriptionContainer>
+          </SharedHeaderContainer>
           <Frame />
           <Frame1 />
           <Table8Columns3Actions />
@@ -2087,7 +2045,14 @@ function MainContent() {
 export default function MainContainer() {
   return (
     <div className="bg-slate-50 content-stretch flex flex-col items-start relative size-full" data-name="Main Container">
-      <Breadcrumb />
+      {/* Breadcrumb */}
+      <div className="relative shrink-0 w-full">
+        <div className="flex flex-row items-center size-full">
+          <div className="box-border content-stretch flex gap-[4px] items-center pb-0 pt-[48px] px-[40px] relative w-full">
+            <SimpleBreadcrumb items={[{ label: '活動與訊息推播', active: true }]} />
+          </div>
+        </div>
+      </div>
       <MainContent />
     </div>
   );

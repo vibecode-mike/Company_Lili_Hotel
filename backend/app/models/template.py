@@ -15,6 +15,7 @@ from sqlalchemy import (
     DateTime,
 )
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 from app.models.base import Base
 import enum
 
@@ -33,24 +34,57 @@ class MessageTemplate(Base):
 
     __tablename__ = "message_templates"
 
-    type = Column(SQLEnum(TemplateType), nullable=False, comment="類型")
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
     name = Column(String(100), comment="模板名稱")
-    content = Column(Text, comment="文字內容")
-    buttons = Column(JSON, comment="按鈕配置")
-    notification_text = Column(String(100), comment="通知訊息")
-    preview_text = Column(String(100), comment="訊息預覽")
-    interaction_tag_id = Column(BigInteger, ForeignKey("interaction_tags.id"), comment="互動標籤ID")
+    template_type = Column(
+        String(20), comment="模板類型：Template01/Template02/Template03/Template04"
+    )
+
+    # 內容欄位
+    text_content = Column(Text, comment="文字內容")
+    image_url = Column(String(500), comment="圖片 URL")
+    title = Column(String(100), comment="標題")
+    description = Column(Text, comment="內文描述")
+    amount = Column(Integer, comment="金額數值")
+
+    # 按鈕設定
+    button_text = Column(String(50), comment="按鈕文字")
+    button_count = Column(Integer, default=0, comment="顯示的文字按鈕數量")
+    buttons = Column(JSON, comment="按鈕配置（JSON）")
+
+    # 互動設定
+    interaction_tag = Column(String(50), comment="互動標籤")
+    interaction_tag_id = Column(
+        BigInteger, ForeignKey("interaction_tags.id", ondelete="SET NULL"), nullable=True
+    )
     interaction_result = Column(JSON, comment="互動結果配置")
 
+    # 動作設定
+    action_type = Column(String(20), comment="動作按鈕互動類型：開啟網址/觸發文字/觸發圖片")
+    action_url = Column(String(500), comment="URL 網址")
+    action_text = Column(Text, comment="觸發的訊息文字")
+    action_image = Column(String(500), comment="觸發的圖片檔案")
+
+    # 通知設定
+    notification_text = Column(String(100), comment="通知訊息")
+    preview_text = Column(String(100), comment="訊息預覽")
+
+    # 輪播設定
+    carousel_count = Column(Integer, comment="輪播圖卡數量（2-9張）")
+
+    # 系統欄位
+    created_at = Column(DateTime, server_default=func.now(), comment="建立時間")
+    updated_at = Column(DateTime, onupdate=func.now(), comment="更新時間")
+
     # 關聯關係
-    interaction_tag = relationship("InteractionTag")
+    interaction_tag_relation = relationship("InteractionTag")
     carousel_items = relationship(
         "TemplateCarouselItem",
         back_populates="template",
         cascade="all, delete-orphan",
         order_by="TemplateCarouselItem.sort_order",
     )
-    campaigns = relationship("Campaign", back_populates="template")
+    messages = relationship("Message", back_populates="template")
 
 
 class TemplateCarouselItem(Base):

@@ -5,7 +5,6 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from decimal import Decimal
-from app.models.template import TemplateType
 
 
 class CarouselItemBase(BaseModel):
@@ -38,7 +37,7 @@ class CarouselItemResponse(CarouselItemBase):
 class TemplateBase(BaseModel):
     """模板基礎模型"""
 
-    type: TemplateType
+    template_type: Optional[str] = None  # Template01/Template02/Template03/Template04
     name: Optional[str] = None
     content: Optional[str] = None
     buttons: Optional[Dict[str, Any]] = None
@@ -65,7 +64,7 @@ class TemplateListItem(BaseModel):
 
     id: int
     name: Optional[str] = None
-    type: TemplateType
+    template_type: Optional[str] = None  # Template01/Template02/Template03/Template04
     created_at: datetime
 
     class Config:
@@ -86,6 +85,6 @@ class TemplateDetail(TemplateBase):
 class TemplateSearchParams(BaseModel):
     """模板搜索參數"""
 
-    type: Optional[TemplateType] = None
+    # 移除 type 篩選，該欄位已廢棄
     page: int = 1
     page_size: int = 20

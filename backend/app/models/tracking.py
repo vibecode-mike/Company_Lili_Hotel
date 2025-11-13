@@ -41,12 +41,19 @@ class ComponentInteractionLog(Base):
         index=True,
         comment="LINE 用戶 UID",
     )
-    campaign_id = Column(
+    message_id = Column(
         BigInteger,
-        ForeignKey("campaigns.id", ondelete="CASCADE"),
+        ForeignKey("messages.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
-        comment="活動ID",
+        comment="群發訊息ID",
+    )
+    campaign_id = Column(
+        BigInteger,
+        ForeignKey("campaigns.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="活動ID（選填）",
     )
     template_id = Column(
         BigInteger,
@@ -93,7 +100,8 @@ class ComponentInteractionLog(Base):
     user_agent = Column(Text, comment="用戶代理")
 
     # 關聯關係
-    campaign = relationship("Campaign", back_populates="interaction_logs")
+    message = relationship("Message", back_populates="interaction_logs")
+    campaign = relationship("Campaign")
     template = relationship("MessageTemplate")
     carousel_item = relationship(
         "TemplateCarouselItem", back_populates="interaction_logs"

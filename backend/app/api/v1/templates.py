@@ -1,5 +1,5 @@
 """
-ˆo! API
+ï¿½o! API
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,11 +28,10 @@ async def get_templates(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """rÖ!h"""
+    """rï¿½!h"""
     query = select(MessageTemplate)
 
-    if params.type:
-        query = query.where(MessageTemplate.type == params.type)
+    # ç§»é™¤ type ç¯©é¸æ¢ä»¶ï¼Œå› ç‚ºè©²æ¬„ä½å·²å»¢æ£„
 
     query = query.order_by(MessageTemplate.created_at.desc())
 
@@ -59,7 +58,7 @@ async def get_template(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """rÖ!sÅ"""
+    """rï¿½!sï¿½"""
     result = await db.execute(select(MessageTemplate).where(MessageTemplate.id == template_id))
     template = result.scalar_one_or_none()
 
@@ -75,7 +74,7 @@ async def create_template(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """uú!"""
+    """uï¿½!"""
     carousel_items = template_data.carousel_items
     template_dict = template_data.model_dump(exclude={"carousel_items"})
 
@@ -101,7 +100,7 @@ async def update_template(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """ô°!"""
+    """ï¿½ï¿½!"""
     result = await db.execute(select(MessageTemplate).where(MessageTemplate.id == template_id))
     template = result.scalar_one_or_none()
 
@@ -134,4 +133,4 @@ async def delete_template(
     await db.delete(template)
     await db.commit()
 
-    return SuccessResponse(message="!*dŸ")
+    return SuccessResponse(message="!*dï¿½")

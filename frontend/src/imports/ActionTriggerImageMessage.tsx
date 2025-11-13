@@ -108,30 +108,26 @@ function Tag() {
   );
 }
 
-function UploadNormal({ onClick }: { onClick?: () => void }) {
+function UploadNormal() {
   return (
-    <div
-      className="bg-[#f6f9fd] hover:bg-[#e1ebf9] active:bg-[#e1ebf9] box-border content-stretch flex flex-col gap-[4px] h-[120px] items-center justify-center min-h-[120px] p-[8px] relative rounded-[8px] shrink-0 w-[558px] cursor-pointer transition-colors"
-      data-name="Upload#Normal"
-      onClick={onClick}
-    >
-      <div aria-hidden="true" className="absolute border-2 border-[#c3dffd] hover:border-[#7a9fff] active:border-[#7a9fff] border-dashed inset-[-1px] pointer-events-none rounded-[9px] transition-colors" />
+    <div className="bg-[#f6f9fd] box-border content-stretch flex flex-col gap-[4px] h-[120px] items-center justify-center min-h-[120px] p-[8px] relative rounded-[8px] shrink-0 w-[558px]" data-name="Upload#Normal">
+      <div aria-hidden="true" className="absolute border-2 border-[#c3dffd] border-dashed inset-[-1px] pointer-events-none rounded-[9px]" />
       <Tag />
     </div>
   );
 }
 
-function DropdownOptions({ onClick }: { onClick?: () => void }) {
+function DropdownOptions() {
   return (
     <div className="basis-0 content-stretch flex flex-col gap-[8px] grow items-start min-h-px min-w-px relative shrink-0" data-name="Dropdown Options">
-      <UploadNormal onClick={onClick} />
+      <UploadNormal />
       <div className="flex flex-col font-['Noto_Sans_TC:Regular',_sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#6e6e6e] text-[0px] w-[410px]">
         <ul className="list-disc">
           <li className="mb-0 ms-[calc(1.5*1*var(--list-marker-font-size,0))]">
             <span className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] text-[#6e6e6e] text-[14px]">限制格式為 JPG, JPEG, PNG</span>
           </li>
           <li className="ms-[calc(1.5*1*var(--list-marker-font-size,0))]">
-            <span className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] text-[14px]">每張圖片大小不超過 5 MB</span>
+            <span className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] text-[14px]">每張圖片大小不超過 1 MB</span>
           </li>
         </ul>
       </div>
@@ -139,11 +135,11 @@ function DropdownOptions({ onClick }: { onClick?: () => void }) {
   );
 }
 
-export default function ActionTriggerImageMessage({ onClick }: { onClick?: () => void }) {
+export default function ActionTriggerImageMessage() {
   return (
     <div className="content-stretch flex items-start relative size-full" data-name="Action#Trigger Image Message">
       <ModalTitleContent1 />
-      <DropdownOptions onClick={onClick} />
+      <DropdownOptions />
     </div>
   );
 }

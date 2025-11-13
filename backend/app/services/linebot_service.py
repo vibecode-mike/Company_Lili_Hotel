@@ -44,6 +44,11 @@ def _get_line_app_module():
     if line_app_env.exists():
         load_dotenv(line_app_env, override=True)
 
+    # 將 line_app 目錄添加到 sys.path，以便 app.py 可以導入同目錄下的模組（如 usage_monitor）
+    line_app_str = str(line_app_path)
+    if line_app_str not in sys.path:
+        sys.path.insert(0, line_app_str)
+
     # 使用 importlib 直接從文件路徑導入，避免 sys.modules['app'] 衝突
     spec = importlib.util.spec_from_file_location("line_app_module", line_app_py)
     line_app_module = importlib.util.module_from_spec(spec)
@@ -62,8 +67,8 @@ class LineBotService:
             hotel_bot_module = _get_line_app_module()
 
             # 驗證必要的函數存在
-            if not hasattr(hotel_bot_module, 'broadcast_message'):
-                raise RuntimeError("hotel_bot_module.broadcast_message function not found")
+            if not hasattr(hotel_bot_module, 'push_campaign'):
+                raise RuntimeError("hotel_bot_module.push_campaign function not found")
             if not hasattr(hotel_bot_module, 'push_survey_entry'):
                 raise RuntimeError("hotel_bot_module.push_survey_entry function not found")
 
@@ -108,9 +113,9 @@ class LineBotService:
                 target_tag_names = await self._resolve_member_tag_names(db, campaign.target_audience)
                 payload = self._build_campaign_payload(campaign, target_tag_names)
 
-                # 3. 獲取 line_app 模組並調用 broadcast_message
+                # 3. 獲取 line_app 模組並調用 push_campaign
                 hotel_bot_module = _get_line_app_module()
-                result = hotel_bot_module.broadcast_message(payload)
+                result = hotel_bot_module.push_campaign(payload)
 
                 # 4. 根據呼叫結果更新資料庫狀態
                 sent_count = 0
@@ -304,13 +309,17 @@ class LineBotService:
         payload = {
             "name": campaign.title,
             "title": campaign.title,
-            "template_type": template.type.value if hasattr(template.type, "value") else str(template.type),
+            # 移除 template_type，因為現在使用 Flex Message JSON
             "notification_text": template.notification_text or "",
             "preview_text": template.preview_text or "",
             "template_id": template.id,
             "interaction_tags": interaction_tags_json,
             "source_campaign_id": campaign.id,
         }
+
+        # 添加 Flex Message JSON（如果存在）
+        if campaign.flex_message_json:
+            payload["flex_message_json"] = campaign.flex_message_json
 
         # 處理目標對象 - 確保格式正確 (字串 "all" 或 "tags")
         audience_type = "all"

@@ -1,2364 +1,2036 @@
-# 力麗飯店 LineOA CRM 後端架構文檔 v0.3
+# 力麗飯店 LINE OA CRM 後端架構設計文檔
 
-## 更新歷史
-- **v0.3** (2025-10-27): 重構為標準三層架構，完整實現 Service 層，遵循 SOLID 原則
-- **v0.2** (2025-10-27): 更新實際數據庫字段和系統架構
-- **v0.1** (初始版本): 基礎架構設計
-
-## 1. 技術棧
-
-### 1.1 核心技術
-- **語言**: Python 3.11+
-- **Web框架**: FastAPI 0.104.1+
-- **ASGI服務器**: Uvicorn 0.24.0+ (with standard extras)
-- **ORM**: SQLAlchemy 2.0.23+ (使用 AsyncIO)
-- **數據庫**: MySQL 8.0+
-- **數據庫驅動**: aiomysql 0.2.0 + PyMySQL 1.1.0
-- **配置管理**: pydantic-settings 2.0+ (取代舊版 pydantic.BaseSettings)
-- **文件存儲**: 本地文件系統 (/data2/lili_hotel/backend/public/uploads)
-
-### 1.2 第三方服務集成
-- **LINE Messaging API**: line-bot-sdk 3.6.0
-- **OpenAI API**: openai 1.3.7
-- **後台任務調度**: APScheduler 3.10.4
-
-### 1.3 開發工具
-- **API文檔**: Swagger/OpenAPI 3.0 (FastAPI內建)
-- **代碼規範**: Black 23.11.0 + Flake8 6.1.0 + isort 5.12.0
-- **測試框架**: Pytest 7.4.3 + pytest-asyncio 0.21.1
-- **遷移工具**: Alembic 1.12.1
-- **密碼加密**: bcrypt 4.1.1 + passlib 1.7.4
-- **JWT認證**: python-jose 3.3.0
-- **環境變量**: python-dotenv 1.0.0
+**版本**: v0.2
+**日期**: 2025-11-12
+**文檔狀態**: 正式版
 
 ---
 
-## 2. 項目目錄結構
+## 目錄
+
+1. [項目概述](#1-項目概述)
+2. [技術架構](#2-技術架構)
+3. [系統架構設計](#3-系統架構設計)
+4. [數據庫設計](#4-數據庫設計)
+5. [API 接口設計](#5-api-接口設計)
+6. [核心業務模塊](#6-核心業務模塊)
+7. [安全設計](#7-安全設計)
+8. [性能優化策略](#8-性能優化策略)
+9. [部署架構](#9-部署架構)
+10. [附錄](#10-附錄)
+
+---
+
+## 1. 項目概述
+
+### 1.1 項目背景
+
+力麗飯店 LINE OA CRM 管理後台是一個為飯店行業打造的 SaaS 服務平台，旨在解決傳統飯店行銷中存在的精準分眾不足、人力成本高、客戶洞察缺乏等問題。系統通過整合 LINE 官方帳號與德安 PMS 系統，實現標籤化會員管理和精準行銷活動推播。
+
+### 1.2 核心目標
+
+- 建立可控 LINE OA 的 CRM 管理後台
+- 整合德安 PMS 會員管理系統資料
+- 支援排程訊息推送與活動上架
+- 提供點擊標籤追蹤與分析
+- 實現基於會員標籤的指向性行銷
+
+### 1.3 成功指標
+
+- PMS 與 LINE OA 整合完成，會員比對成功率 ≥ 95%
+- 排程與活動訊息推播成功率 ≥ 99%
+- 依標籤推播的行銷轉換率提升 ≥ 25%
+- 建立 3 種以上活動標籤自動化行銷場景
+
+### 1.4 用戶角色
+
+| 角色 | 職責 | 權限 |
+|------|------|------|
+| 管理員 (ADMIN) | 系統配置、用戶管理、全局數據查看 | 完整權限 |
+| 行銷人員 (MARKETING) | 活動創建、訊息推播、數據分析 | 讀取、編輯、推播 |
+| 客服人員 (CUSTOMER_SERVICE) | 會員溝通、標籤管理、訊息回覆 | 讀取、編輯 |
+
+---
+
+## 2. 技術架構
+
+### 2.1 技術棧
+
+#### 核心框架
+- **Python**: 3.11.13
+- **FastAPI**: 0.104.1 (現代異步 Web 框架)
+- **Uvicorn**: 0.24.0 (ASGI 服務器)
+- **Pydantic**: 2.5.0 (數據驗證與序列化)
+
+#### 數據庫與 ORM
+- **數據庫**: MySQL 8.0
+- **ORM**: SQLAlchemy 2.0.23 (異步支持)
+- **數據庫遷移**: Alembic 1.12.1
+- **異步驅動**: aiomysql 0.2.0
+
+#### 認證與安全
+- **JWT**: python-jose 3.3.0
+- **密碼加密**: passlib[bcrypt] 1.7.4, bcrypt 4.1.1
+- **加密算法**: HS256
+
+#### 第三方集成
+- **LINE Messaging API**: line-bot-sdk 3.6.0
+- **OpenAI**: openai 1.3.7 (GPT-4 智能客服)
+- **任務調度**: APScheduler 3.10.4
+
+#### 工具庫
+- **HTTP 客戶端**: httpx 0.25.2
+- **圖片處理**: Pillow 10.1.0
+- **文檔處理**: openpyxl 3.1.2, reportlab 4.0.7
+- **異步文件**: aiofiles 23.2.1
+
+### 2.2 架構原則
+
+1. **異步優先**: 全面採用 async/await 模式，提升並發性能
+2. **分層設計**: API Layer → Service Layer → Repository Layer
+3. **類型安全**: 使用 Pydantic 2.x 嚴格類型驗證
+4. **RESTful 規範**: 遵循 REST API 設計原則
+5. **向後兼容**: v0.2 重構保持 API 向後兼容性
+6. **可擴展性**: 模塊化設計，易於添加新功能
+
+---
+
+## 3. 系統架構設計
+
+### 3.1 整體架構圖
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    前端應用層                              │
+│              React + TypeScript + Vite                   │
+└─────────────────────────────────────────────────────────┘
+                          ↓ HTTPS
+┌─────────────────────────────────────────────────────────┐
+│                   Nginx 反向代理                          │
+│              (靜態資源 + API 路由轉發)                     │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│                  FastAPI 應用層                           │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │              API v1 路由層                        │   │
+│  │  ┌────────┬────────┬────────┬────────┬────────┐ │   │
+│  │  │ 會員   │ 訊息   │ 標籤   │ 自動   │ PMS    │ │   │
+│  │  │ API    │ API    │ API    │ 回應   │ API    │ │   │
+│  │  └────────┴────────┴────────┴────────┴────────┘ │   │
+│  └──────────────────────────────────────────────────┘   │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │              業務邏輯層 (Services)                │   │
+│  │  ┌────────┬────────┬────────┬────────┬────────┐ │   │
+│  │  │Member  │Campaign│ Tag    │ Auto   │ LINE   │ │   │
+│  │  │Service │Service │Service │Response│Bot     │ │   │
+│  │  └────────┴────────┴────────┴────────┴────────┘ │   │
+│  └──────────────────────────────────────────────────┘   │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │              數據訪問層 (Models)                  │   │
+│  │  ┌────────┬────────┬────────┬────────┬────────┐ │   │
+│  │  │Member  │Message │ Tag    │Template│ PMS    │ │   │
+│  │  │Model   │Model   │Model   │Model   │Model   │ │   │
+│  │  └────────┴────────┴────────┴────────┴────────┘ │   │
+│  └──────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│                   MySQL 數據庫                            │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │  會員表 │ 標籤表 │ 訊息表 │ 模板表 │ 追蹤表   │   │
+│  └──────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│                   外部系統集成                             │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐              │
+│  │  LINE    │  │  德安    │  │  OpenAI  │              │
+│  │Messaging │  │   PMS    │  │   GPT-4  │              │
+│  │   API    │  │  系統    │  │          │              │
+│  └──────────┘  └──────────┘  └──────────┘              │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│                   任務調度系統                             │
+│              APScheduler (排程推播)                       │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 3.2 項目目錄結構
 
 ```
 backend/
 ├── app/
 │   ├── __init__.py
-│   ├── main.py                      # FastAPI 應用入口
-│   ├── config.py                    # 配置管理（使用 pydantic-settings）
-│   ├── database.py                  # 數據庫連接（AsyncIO）
+│   ├── main.py                   # FastAPI 應用入口
+│   ├── config.py                 # 配置管理
+│   ├── database.py               # 數據庫連接
 │   │
-│   ├── api/                         # API路由層
-│   │   ├── __init__.py
-│   │   ├── v1/
-│   │   │   ├── __init__.py
-│   │   │   ├── auth.py              # 認證授權
-│   │   │   ├── members.py           # 會員管理
-│   │   │   ├── campaigns.py         # 活動推播
-│   │   │   ├── templates.py         # 消息模板（基本實現）
-│   │   │   ├── tags.py              # 標籤管理
-│   │   │   ├── surveys.py           # 問卷管理
-│   │   │   ├── upload.py            # 文件上傳
-│   │   │   ├── auto_responses.py    # 自動回應（部分實現）
-│   │   │   ├── analytics.py         # 數據分析（部分實現）
-│   │   │   └── messages.py          # 消息記錄（部分實現）
+│   ├── api/                      # API 路由層
+│   │   └── v1/
+│   │       ├── __init__.py       # 路由註冊
+│   │       ├── auth.py           # 認證授權
+│   │       ├── members.py        # 會員管理
+│   │       ├── campaigns.py      # 群發訊息(舊)
+│   │       ├── campaigns_new.py  # 活動管理(新)
+│   │       ├── tags.py           # 標籤管理
+│   │       ├── auto_responses.py # 自動回應
+│   │       ├── templates.py      # 模板管理
+│   │       ├── pms_integrations.py # PMS整合
+│   │       ├── consumption_records.py # 消費記錄
+│   │       ├── surveys.py        # 問卷管理
+│   │       ├── tracking.py       # 追蹤統計
+│   │       └── upload.py         # 文件上傳
 │   │
-│   ├── core/                        # 核心功能
-│   │   ├── __init__.py
-│   │   ├── security.py              # 安全相關（JWT、密碼加密）
-│   │   ├── pagination.py            # 分頁處理
-│   │   └── exceptions.py            # 自定義異常
-│   │
-│   ├── models/                      # 數據模型（SQLAlchemy Async）
-│   │   ├── __init__.py
-│   │   ├── base.py                  # Base Model
-│   │   ├── user.py                  # 用戶模型
-│   │   ├── member.py                # 會員模型
-│   │   ├── tag.py                   # 標籤模型（會員標籤 + 互動標籤）
-│   │   ├── campaign.py              # 活動模型 + 推播對象記錄
-│   │   ├── template.py              # 模板模型 + 輪播圖卡片
-│   │   ├── survey.py                # 問卷模型（範本、問卷、題目、回應）
-│   │   ├── auto_response.py         # 自動回應模型
-│   │   ├── message.py               # 消息模型
-│   │   └── tag_trigger_log.py       # 標籤觸發日誌
-│   │
-│   ├── schemas/                     # Pydantic Schemas（請求/響應）
-│   │   ├── __init__.py
-│   │   ├── auth.py
+│   ├── models/                   # 數據模型
+│   │   ├── base.py
 │   │   ├── member.py
+│   │   ├── campaign.py           # 群發訊息(messages表)
+│   │   ├── new_campaign.py       # 活動管理(campaigns表)
 │   │   ├── tag.py
+│   │   ├── template.py
+│   │   ├── auto_response.py
+│   │   ├── pms_integration.py
+│   │   ├── consumption_record.py
+│   │   └── ...
+│   │
+│   ├── schemas/                  # Pydantic Schemas
+│   │   ├── member.py
 │   │   ├── campaign.py
 │   │   ├── template.py
-│   │   ├── survey.py
-│   │   └── common.py                # 通用Schema
+│   │   ├── auth.py
+│   │   ├── common.py
+│   │   └── ...
 │   │
-│   ├── services/                    # 業務邏輯層（Service Layer）
-│   │   ├── __init__.py
-│   │   ├── campaign_service.py      # 活動推播業務邏輯
-│   │   ├── survey_service.py        # 問卷管理業務邏輯
-│   │   ├── member_service.py        # 會員管理業務邏輯
-│   │   ├── linebot_service.py       # LINE Bot 服務（封裝 line_app 調用）
-│   │   └── scheduler.py             # APScheduler 排程服務
+│   ├── services/                 # 業務邏輯層
+│   │   ├── campaign_service.py
+│   │   ├── member_service.py
+│   │   ├── linebot_service.py
+│   │   ├── survey_service.py
+│   │   ├── tracking_service.py
+│   │   └── scheduler.py
 │   │
-│   ├── integrations/                # 第三方集成
-│   │   ├── __init__.py
-│   │   ├── line_api.py              # LINE API 封裝
-│   │   └── openai_service.py        # OpenAI 服務
+│   ├── integrations/             # 第三方集成
+│   │   ├── line_api.py
+│   │   └── openai_service.py
 │   │
-│   ├── workers/                     # 後台任務目錄（預留）
-│   │   └── __init__.py
+│   ├── core/                     # 核心功能
+│   │   ├── security.py           # JWT、密碼加密
+│   │   ├── exceptions.py         # 自定義異常
+│   │   └── pagination.py         # 分頁功能
 │   │
-│   └── utils/                       # 工具函數
-│       ├── __init__.py
-│       └── image_handler.py         # 圖片處理工具
+│   └── utils/                    # 工具函數
+│       └── image_handler.py
 │
-├── public/                          # 靜態文件目錄
-│   └── uploads/                     # 上傳文件存儲
-│       └── images/                  # 圖片文件
+├── migrations/                   # Alembic 遷移
+│   ├── versions/
+│   └── env.py
 │
-├── scripts/                         # 腳本文件
-│   ├── init_db.py                   # 初始化數據庫
-│   ├── insert_sample_members.py     # 插入測試會員
-│   └── update_members.py            # 更新會員資料
+├── public/                       # 靜態資源
+│   └── uploads/                  # 上傳文件
 │
-├── .env                             # 環境變量配置（不入庫）
-├── .gitignore
-├── requirements.txt                 # 依賴列表
-└── README.md
+├── scripts/                      # 腳本文件
+├── requirements.txt              # Python 依賴
+├── alembic.ini                   # Alembic 配置
+└── .env                          # 環境配置
 ```
 
-**架構設計原則**：
-- **標準三層架構**: API Layer → Service Layer → ORM Layer
-- **SOLID 原則**: 單一職責、開放封閉、依賴反轉
-- **業務邏輯封裝**: 所有業務邏輯封裝在 Service 層，路由層僅處理 HTTP 請求
-- **依賴注入**: 通過參數傳遞依賴（如 database session），提高可測試性
-- **異步優先**: 全面使用 AsyncIO 提升性能
-- **外部集成**: LINE Bot 核心功能依賴外部 `line_app` 模組
-- **排程管理**: 使用 APScheduler 管理定時任務
-- **本地存儲**: 文件上傳存儲在 `/data2/lili_hotel/backend/public/uploads`
+### 3.3 分層架構說明
 
-**Service Layer 設計**：
-- **單一職責**: 每個 Service 負責一個業務領域（Campaign、Survey、Member）
-- **可測試性**: Service 可獨立測試，無需模擬 HTTP 路由
-- **可重用性**: Service 方法可在多個路由、排程任務、背景工作中重用
-- **錯誤處理**: 業務規則違反拋出 `ValueError`，系統錯誤拋出通用異常
+#### API Layer (控制層)
+- **職責**: HTTP 請求處理、參數驗證、響應格式化
+- **工具**: FastAPI Router, Pydantic Schema
+- **原則**: 薄控制層，不包含業務邏輯
+
+#### Service Layer (業務邏輯層)
+- **職責**: 業務流程編排、複雜邏輯處理、外部系統集成
+- **特點**: 事務管理、錯誤處理、數據轉換
+- **原則**: 單一職責，高內聚低耦合
+
+#### Repository Layer (數據訪問層)
+- **職責**: 數據庫 CRUD 操作、查詢優化
+- **工具**: SQLAlchemy ORM
+- **原則**: 封裝數據訪問邏輯
 
 ---
 
-## 3. 數據庫設計
+## 4. 數據庫設計
 
-### 3.1 ER 圖概述
-
-本系統包含 14 個核心資料表，分為四大模組：會員管理（Module 1）、消息模板（Module 2）、群發推播（Module 4）、問卷系統（Module 7）。
+### 4.1 數據庫 ER 圖（簡化版）
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                         會員管理模組 (Module 1)                    │
-└──────────────────────────────────────────────────────────────────┘
+┌─────────────┐       ┌──────────────┐       ┌─────────────┐
+│   Members   │◄──────│ Member_Tags  │──────►│Interaction  │
+│  (會員表)   │  1:N  │  (會員標籤)  │  N:1  │   Tags      │
+└─────────────┘       └──────────────┘       │(互動標籤定義)│
+       │                                       └─────────────┘
+       │ 1:N                                          │
+       │                                              │
+       ▼                                              ▼
+┌─────────────┐                              ┌──────────────┐
+│  Message    │                              │  Member      │
+│  Records    │                              │Interaction   │
+│(一對一訊息) │                              │  Records     │
+└─────────────┘                              │(互動記錄)    │
+                                              └──────────────┘
+┌─────────────┐       ┌──────────────┐
+│  Messages   │◄──────│  Message     │
+│ (群發訊息)  │  1:N  │ Recipients   │
+└─────────────┘       │(推播對象)    │
+       │              └──────────────┘
+       │ N:1
+       ▼
+┌─────────────┐       ┌──────────────┐
+│  Message    │◄──────│  Template    │
+│ Templates   │  1:N  │  Carousel    │
+│(訊息模板)   │       │   Items      │
+└─────────────┘       │(輪播圖卡)    │
+                      └──────────────┘
 
-┌──────────────────────┐         ┌─────────────────────┐
-│      members         │         │   member_tags       │
-│──────────────────────│         │─────────────────────│
-│ id (PK)              │◄───┐    │ id (PK)             │
-│ line_uid (UNIQUE)    │    │    │ name (UNIQUE)       │
-│ line_display_name    │    │    │ type (member)       │
-│ line_picture_url     │    │    │ source (api/manual) │
-│ first_name           │    │    │ description         │
-│ last_name            │    │    │ member_count        │
-│ gender               │    │    │ created_at          │
-│ birthday             │    │    └─────────────────────┘
-│ email                │    │              ▲
-│ phone                │    │              │
-│ id_number (UNIQUE)   │    │    ┌─────────┴──────────────┐
-│ source (line/system) │    │    │ member_tag_relations   │
-│ accept_marketing     │    └────┤────────────────────────│
-│ notes                │         │ id (PK)                │
-│ last_interaction_at  │         │ member_id (FK)         │
-│ created_at           │         │ tag_id (FK)            │
-│ updated_at           │         │ tag_type (enum)        │
-└──────────────────────┘         │ tagged_at              │
-         │                       └────────┬───────────────┘
-         │                                │
-         │                       ┌────────▼────────────┐
-         │                       │ interaction_tags    │
-         │                       │─────────────────────│
-         └──────────────────────►│ id (PK)             │
-                                 │ name                │
-                                 │ type (interaction)  │
-                                 │ campaign_id (FK)    │
-                                 │ description         │
-                                 │ trigger_count       │
-                                 │ created_at          │
-                                 └─────────────────────┘
+┌─────────────┐       ┌──────────────┐
+│  Campaigns  │       │     PMS      │
+│(活動管理-新)│       │ Integrations │
+└─────────────┘       │(PMS系統整合) │
+                      └──────────────┘
+                             │ N:1
+                             ▼
+                      ┌──────────────┐
+                      │ Consumption  │
+                      │   Records    │
+                      │(消費記錄)    │
+                      └──────────────┘
 
-
-┌──────────────────────────────────────────────────────────────────┐
-│                    消息模板模組 (Module 2)                         │
-└──────────────────────────────────────────────────────────────────┘
-
-┌──────────────────────────┐
-│   message_templates      │
-│──────────────────────────│
-│ id (PK)                  │
-│ type (enum)              │  ◄── text/text_button/image_click/image_card
-│ name                     │
-│ content (TEXT)           │
-│ buttons (JSON)           │
-│ notification_text        │
-│ preview_text             │
-│ interaction_tag_id (FK)  │
-│ interaction_result (JSON)│
-│ created_at               │
-│ updated_at               │
-└──────────┬───────────────┘
-           │
-           │ 1:N
-           ▼
-┌──────────────────────────┐
-│ template_carousel_items  │
-│──────────────────────────│
-│ id (PK)                  │
-│ template_id (FK)         │
-│ image_url                │
-│ title                    │
-│ description              │
-│ price (DECIMAL)          │
-│ action_url               │
-│ interaction_tag_id (FK)  │
-│ sort_order (INT)         │
-│ created_at               │
-└──────────────────────────┘
-
-
-┌──────────────────────────────────────────────────────────────────┐
-│                    群發推播模組 (Module 4)                         │
-└──────────────────────────────────────────────────────────────────┘
-
-┌───────────────────────┐         ┌───────────────────────┐
-│     campaigns         │         │  campaign_recipients  │
-│───────────────────────│  1:N    │───────────────────────│
-│ id (PK)               │◄────────│ id (PK)               │
-│ title                 │         │ campaign_id (FK)      │
-│ template_id (FK)      │         │ member_id (FK)        │
-│ target_audience (JSON)│         │ sent_at               │
-│ trigger_condition     │         │ opened_at             │
-│ interaction_tag       │         │ clicked_at            │
-│ scheduled_at          │         │ status (enum)         │
-│ sent_at               │         │ error_message         │
-│ status (enum)         │         │ created_at            │
-│ sent_count            │         └───────────────────────┘
-│ opened_count          │                   ▲
-│ clicked_count         │                   │
-│ created_by            │                   │
-│ created_at            │         ┌─────────┴─────────────┐
-│ updated_at            │         │      members          │
-└───────────────────────┘         │  (參見會員管理模組)     │
-         │                        └───────────────────────┘
-         │
-         │ 1:N
-         ▼
-┌───────────────────────┐
-│      messages         │
-│───────────────────────│
-│ id (PK)               │
-│ member_id (FK)        │
-│ campaign_id (FK)      │
-│ content (TEXT)        │
-│ direction (enum)      │  ◄── incoming/outgoing
-│ message_type (enum)   │  ◄── text/image/template
-│ sender_type (enum)    │  ◄── manual/auto/campaign
-│ sender_id             │
-│ read_at               │
-│ created_at            │
-└───────────────────────┘
-
-┌───────────────────────┐
-│  tag_trigger_logs     │
-│───────────────────────│
-│ id (PK)               │
-│ member_id (FK)        │
-│ tag_id (FK)           │  ◄── interaction_tags.id
-│ campaign_id (FK)      │
-│ trigger_source (enum) │  ◄── click/interaction/manual
-│ triggered_at          │
-│ created_at            │
-└───────────────────────┘
-
-
-┌──────────────────────────────────────────────────────────────────┐
-│                    問卷系統模組 (Module 7)                         │
-└──────────────────────────────────────────────────────────────────┘
-
-┌───────────────────────┐
-│  survey_templates     │
-│───────────────────────│
-│ id (PK)               │
-│ name                  │
-│ description (TEXT)    │
-│ icon                  │
-│ category              │
-│ default_questions     │
-│ is_active (BOOL)      │
-│ created_at            │
-│ updated_at            │
-└───────────┬───────────┘
-            │
-            │ 1:N
-            ▼
-┌───────────────────────┐
-│       surveys         │
-│───────────────────────│
-│ id (PK)               │
-│ name                  │
-│ template_id (FK)      │
-│ description (TEXT)    │
-│ target_audience (enum)│  ◄── all/filtered
-│ target_tags (JSON)    │
-│ schedule_type (enum)  │  ◄── immediate/scheduled
-│ scheduled_at          │
-│ status (enum)         │  ◄── draft/published/archived
-│ response_count        │
-│ view_count            │
-│ created_by            │
-│ created_at            │
-│ updated_at            │
-└───────────┬───────────┘
-            │
-       ┌────┴────┐
-    1:N│         │1:N
-       ▼         ▼
-┌──────────────────┐    ┌───────────────────────┐
-│ survey_questions │    │  survey_responses     │
-│──────────────────│    │───────────────────────│
-│ id (PK)          │    │ id (PK)               │
-│ survey_id (FK)   │    │ survey_id (FK)        │
-│ question_type    │    │ member_id (FK)        │
-│ question_text    │    │ answers (JSON)        │
-│ font_size        │    │ is_completed (BOOL)   │
-│ description      │    │ completed_at          │
-│ options (JSON)   │    │ source                │
-│ is_required      │    │ ip_address            │
-│ min_length       │    │ user_agent            │
-│ max_length       │    │ created_at            │
-│ min_value        │    │ updated_at            │
-│ max_value        │    └───────────────────────┘
-│ order (INT)      │
-│ video_description│
-│ video_link       │
-│ image_description│
-│ image_link       │
-│ created_at       │
-│ updated_at       │
-└──────────────────┘
+┌─────────────┐       ┌──────────────┐
+│    Auto     │◄──────│     Auto     │
+│  Responses  │  1:N  │   Response   │
+│(自動回應)   │       │   Keywords   │
+└─────────────┘       │(關鍵字配置)  │
+                      └──────────────┘
 ```
 
-**說明**：
-- 本系統實施 v0.1 版本，包含 Module 1、2、4、7
-- 未實施模組：Module 3 (PMS整合)、Module 5 (帳號權限)、Module 6 (自動回應)
-- 所有表都包含 Base Model 的 `id`, `created_at`, `updated_at` 欄位
+### 4.2 核心數據表詳細設計
 
-### 3.2 表結構詳細設計
+#### 4.2.1 Members (會員表)
 
-#### 模組1：會員管理 (4個表)
+```sql
+CREATE TABLE members (
+    -- 主鍵
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
 
-#### 3.2.1 members (會員表)
+    -- LINE 相關資訊
+    line_uid VARCHAR(100) UNIQUE NOT NULL COMMENT 'LINE UID',
+    line_avatar VARCHAR(500) COMMENT 'LINE 頭像 URL',
+    line_name VARCHAR(100) COMMENT 'LINE 顯示名稱',
 
-| 欄位名 | 類型 | 約束 | 說明 |
-|--------|------|------|------|
-| id | BIGINT | PK, AUTO_INCREMENT | 會員ID |
-| line_uid | VARCHAR(100) | UNIQUE | LINE UID |
-| line_display_name | VARCHAR(100) | | LINE 顯示名稱 |
-| line_picture_url | VARCHAR(500) | | LINE 頭像URL |
-| first_name | VARCHAR(50) | | 名 |
-| last_name | VARCHAR(50) | | 姓 |
-| gender | ENUM | | 性別：male/female/other |
-| birthday | DATE | | 生日 |
-| email | VARCHAR(100) | | 電子信箱 |
-| phone | VARCHAR(20) | | 手機號碼 |
-| id_number | VARCHAR(50) | UNIQUE | 身分證/護照號碼 |
-| source | ENUM | NOT NULL | 來源：line/system |
-| accept_marketing | BOOLEAN | DEFAULT TRUE | 是否接收優惠通知 |
-| notes | TEXT | | 內部備註 |
-| created_at | DATETIME | NOT NULL | 創建時間 |
-| last_interaction_at | DATETIME | | 最後互動時間 |
-| updated_at | DATETIME | | 更新時間 |
+    -- 基本資訊
+    name VARCHAR(32) COMMENT '會員姓名',
+    gender CHAR(1) COMMENT '性別：0=不透漏/1=男/2=女',
+    birthday DATE COMMENT '生日',
+    email VARCHAR(100) COMMENT '電子信箱',
+    phone VARCHAR(20) COMMENT '手機號碼',
+    id_number VARCHAR(50) UNIQUE COMMENT '身分證/護照號碼',
+    residence VARCHAR(100) COMMENT '居住地',
 
-#### 3.2.2 member_tags (會員標籤表)
+    -- 系統資訊
+    join_source VARCHAR(20) NOT NULL DEFAULT 'LINE'
+        COMMENT '加入來源：LINE/CRM/PMS/ERP/系統',
+    receive_notification BOOLEAN DEFAULT TRUE COMMENT '是否接收優惠通知',
+    internal_note TEXT COMMENT '內部備註',
+    last_interaction_at DATETIME COMMENT '最後互動時間',
 
-| 欄位名 | 類型 | 約束 | 說明 |
-|--------|------|------|------|
-| id | BIGINT | PK, AUTO_INCREMENT | 標籤ID |
-| name | VARCHAR(50) | UNIQUE, NOT NULL | 標籤名稱 |
-| type | ENUM | NOT NULL | 類型：member |
-| source | ENUM | NOT NULL | 來源：api/manual |
-| description | VARCHAR(200) | | 描述 |
-| member_count | INT | DEFAULT 0 | 會員數量 |
-| last_triggered_at | DATETIME | | 最後觸發時間（新增） |
-| created_at | DATETIME | NOT NULL | 創建時間 |
-| updated_at | DATETIME | | 更新時間 |
+    -- 時間戳
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME ON UPDATE CURRENT_TIMESTAMP,
 
-#### 3.2.3 interaction_tags (互動標籤表)
+    -- 索引
+    INDEX idx_line_uid (line_uid),
+    INDEX idx_email (email),
+    INDEX idx_phone (phone),
+    INDEX idx_id_number (id_number)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
 
-| 欄位名 | 類型 | 約束 | 說明 |
-|--------|------|------|------|
-| id | BIGINT | PK, AUTO_INCREMENT | 標籤ID |
-| name | VARCHAR(50) | NOT NULL | 標籤名稱 |
-| type | ENUM | NOT NULL | 類型：interaction |
-| campaign_id | BIGINT | FK | 關聯活動ID |
-| description | VARCHAR(200) | | 描述 |
-| trigger_count | INT | DEFAULT 0 | 觸發次數 |
-| member_count | INT | DEFAULT 0 | 觸發會員數（新增） |
-| last_triggered_at | DATETIME | | 最後觸發時間（新增） |
-| created_at | DATETIME | NOT NULL | 創建時間 |
-| updated_at | DATETIME | | 更新時間 |
+**字段說明**:
+- `line_uid`: LINE 官方帳號用戶唯一識別碼
+- `last_interaction_at`: 僅會員主動發送訊息時更新，被動接收推播不更新
+- `join_source`: 用於追蹤會員來源渠道
 
-#### 3.2.4 member_tag_relations (會員標籤關聯表)
+#### 4.2.2 Member_Tags (會員標籤表)
 
-| 欄位名 | 類型 | 約束 | 說明 |
-|--------|------|------|------|
-| id | BIGINT | PK, AUTO_INCREMENT | ID |
-| member_id | BIGINT | FK, NOT NULL | 會員ID |
-| tag_id | BIGINT | FK, NOT NULL | 標籤ID (member_tags/interaction_tags) |
-| tag_type | ENUM | NOT NULL | 標籤類型：member/interaction |
-| tagged_at | DATETIME | NOT NULL | 標記時間 |
+```sql
+CREATE TABLE member_tags (
+    -- 主鍵
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
 
-**索引**: UNIQUE(member_id, tag_id, tag_type)
+    -- 關聯
+    member_id BIGINT NOT NULL COMMENT '所屬會員',
+    message_id BIGINT COMMENT '觸發來源訊息ID',
+
+    -- 標籤資訊
+    tag_name VARCHAR(20) NOT NULL COMMENT '標籤名稱',
+    tag_source VARCHAR(20) NOT NULL COMMENT '標籤來源：CRM/PMS/問券/後台自訂',
+
+    -- 統計資訊
+    trigger_count INT DEFAULT 0 COMMENT '觸發次數',
+    trigger_member_count INT DEFAULT 0 COMMENT '觸發會員數',
+    last_triggered_at DATETIME COMMENT '最近觸發時間',
+
+    -- 時間戳
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    -- 外鍵
+    FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE,
+    FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE SET NULL,
+
+    -- 唯一約束（去重設計）
+    UNIQUE KEY unique_member_tag_trigger (member_id, tag_name, message_id),
+
+    -- 索引
+    INDEX idx_member_id (member_id),
+    INDEX idx_message_id (message_id),
+    INDEX idx_tag_name (tag_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+**去重邏輯**:
+- 同一會員對相同標籤在同一訊息中重複觸發僅計算一次
+- 不同訊息來源可累計觸發次數
+
+#### 4.2.3 Interaction_Tags (互動標籤定義表)
+
+```sql
+CREATE TABLE interaction_tags (
+    -- 主鍵
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+
+    -- 標籤資訊
+    tag_name VARCHAR(20) NOT NULL COMMENT '標籤名稱',
+    tag_source VARCHAR(20) NOT NULL COMMENT '標籤來源：訊息模板/問券模板',
+
+    -- 統計資訊
+    trigger_count INT DEFAULT 0 COMMENT '觸發次數',
+    trigger_member_count INT DEFAULT 0 COMMENT '觸發會員數',
+    last_triggered_at DATETIME COMMENT '最近觸發時間',
+
+    -- 時間戳
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME ON UPDATE CURRENT_TIMESTAMP,
+
+    -- 索引
+    UNIQUE KEY unique_tag_name (tag_name),
+    INDEX idx_tag_source (tag_source)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+#### 4.2.4 Messages (群發訊息表)
+
+```sql
+CREATE TABLE messages (
+    -- 主鍵
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+
+    -- 關聯
+    template_id BIGINT COMMENT '使用的訊息模板ID',
+    campaign_id BIGINT COMMENT '關聯的活動ID',
+
+    -- 訊息內容
+    message_content TEXT COMMENT '訊息內容',
+    flex_message_json JSON COMMENT 'Flex Message JSON',
+    interaction_tags JSON COMMENT '互動標籤',
+    thumbnail VARCHAR(500) COMMENT '縮圖 URL',
+
+    -- 發送配置
+    send_time DATETIME COMMENT '傳送時間',
+    send_status VARCHAR(20) DEFAULT '草稿'
+        COMMENT '發送狀態：草稿/排程發送/已發送/發送失敗',
+    scheduled_date DATE COMMENT '排程發送日期',
+    scheduled_time TIME COMMENT '排程發送時間',
+    failure_reason TEXT COMMENT '發送失敗原因',
+
+    -- 目標對象
+    target_type VARCHAR(20) DEFAULT '所有好友'
+        COMMENT '傳送對象類型：所有好友/篩選目標對象',
+    target_filter JSON COMMENT '篩選條件',
+    trigger_condition VARCHAR(100) COMMENT '特定觸發條件',
+
+    -- 統計資訊
+    send_count INT DEFAULT 0 COMMENT '傳送人數',
+    open_count INT DEFAULT 0 COMMENT '開啟次數',
+    click_count INT DEFAULT 0 COMMENT '點擊次數',
+    estimated_send_count INT DEFAULT 0 COMMENT '預計發送好友人數',
+    available_quota INT DEFAULT 0 COMMENT '可用訊息配額',
+
+    -- 時間戳
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME ON UPDATE CURRENT_TIMESTAMP,
+
+    -- 外鍵
+    FOREIGN KEY (template_id) REFERENCES message_templates(id) ON DELETE RESTRICT,
+    FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE SET NULL,
+
+    -- 索引
+    INDEX idx_send_status (send_status),
+    INDEX idx_send_time (send_time),
+    INDEX idx_campaign_id (campaign_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+**狀態轉換規則**:
+- 草稿 ⇄ 排程發送 (可雙向轉換)
+- 排程發送 → 已發送/發送失敗 (不可逆)
+
+**不變條件**:
+- `available_quota < estimated_send_count` 時，系統阻擋發送
+
+#### 4.2.5 Message_Templates (訊息模板表)
+
+```sql
+CREATE TABLE message_templates (
+    -- 主鍵
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+
+    -- 模板類型
+    template_type VARCHAR(20) NOT NULL
+        COMMENT '模板類型：text/text_button/image_click/image_card',
+
+    -- 文字內容
+    text_content TEXT COMMENT '文字內容',
+
+    -- 圖片資訊
+    image_url VARCHAR(500) COMMENT '圖片 URL',
+    image_aspect_ratio VARCHAR(10) DEFAULT '1:1' COMMENT '圖片比例',
+
+    -- 圖卡資訊
+    title VARCHAR(100) COMMENT '標題',
+    description TEXT COMMENT '內文描述',
+    amount INT COMMENT '金額數值',
+
+    -- 按鈕配置
+    buttons JSON COMMENT '按鈕配置（JSON數組）',
+    button_count INT DEFAULT 0 COMMENT '按鈕數量',
+
+    -- 互動標籤
+    interaction_tag_id BIGINT COMMENT '互動標籤ID',
+
+    -- 動作配置
+    action_type VARCHAR(20) COMMENT '動作類型：開啟網址/觸發文字/觸發圖片',
+    action_url VARCHAR(500) COMMENT 'URL 網址',
+    action_text TEXT COMMENT '觸發的訊息文字',
+    action_image VARCHAR(500) COMMENT '觸發的圖片',
+
+    -- 通知配置
+    notification_message VARCHAR(100) COMMENT '通知訊息',
+    preview_message VARCHAR(100) COMMENT '訊息預覽',
+
+    -- 輪播配置
+    carousel_count INT DEFAULT 1 COMMENT '輪播圖卡數量（2-9張）',
+
+    -- 時間戳
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME ON UPDATE CURRENT_TIMESTAMP,
+
+    -- 外鍵
+    FOREIGN KEY (interaction_tag_id) REFERENCES interaction_tags(id)
+        ON DELETE SET NULL,
+
+    -- 索引
+    INDEX idx_template_type (template_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+**模板類型**:
+- `text`: 純文字（Template01）
+- `text_button`: 文字按鈕確認型（Template02）
+- `image_click`: 圖片點擊型（Template03）
+- `image_card`: 圖卡按鈕型（Template04）
+
+#### 4.2.6 Template_Carousel_Items (輪播圖卡表)
+
+```sql
+CREATE TABLE template_carousel_items (
+    -- 主鍵
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+
+    -- 關聯
+    template_id BIGINT NOT NULL COMMENT '所屬模板ID',
+
+    -- 圖卡資訊
+    image_url VARCHAR(500) NOT NULL COMMENT '圖片 URL',
+    title VARCHAR(100) COMMENT '標題',
+    description TEXT COMMENT '內文描述',
+    amount INT COMMENT '金額',
+
+    -- 排序
+    order_index INT DEFAULT 0 COMMENT '排序順序',
+
+    -- 互動配置
+    image_click_action_type VARCHAR(20) COMMENT '圖片點擊動作類型',
+    image_click_action_value VARCHAR(500) COMMENT '圖片點擊動作值',
+    interaction_tag_id BIGINT COMMENT '互動標籤ID',
+
+    -- 按鈕配置
+    action_button JSON COMMENT '動作按鈕1',
+    action_button2 JSON COMMENT '動作按鈕2',
+
+    -- 統計
+    click_count INT DEFAULT 0 COMMENT '點擊次數',
+    unique_click_count INT DEFAULT 0 COMMENT '不重複點擊次數',
+
+    -- 時間戳
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME ON UPDATE CURRENT_TIMESTAMP,
+
+    -- 外鍵
+    FOREIGN KEY (template_id) REFERENCES message_templates(id)
+        ON DELETE CASCADE,
+    FOREIGN KEY (interaction_tag_id) REFERENCES interaction_tags(id)
+        ON DELETE SET NULL,
+
+    -- 索引
+    INDEX idx_template_id (template_id),
+    INDEX idx_order_index (order_index)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+#### 4.2.7 Campaigns (活動管理表 - 新)
+
+```sql
+CREATE TABLE campaigns (
+    -- 主鍵
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+
+    -- 活動資訊
+    campaign_name VARCHAR(100) NOT NULL COMMENT '活動名稱',
+    campaign_tag VARCHAR(50) COMMENT '活動標籤',
+    description TEXT COMMENT '活動描述',
+
+    -- 活動時間
+    campaign_date DATE COMMENT '活動日期',
+    start_date DATE COMMENT '開始日期',
+    end_date DATE COMMENT '結束日期',
+
+    -- 活動狀態
+    status VARCHAR(20) DEFAULT 'active'
+        COMMENT '活動狀態：active/inactive/completed',
+
+    -- 時間戳
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME ON UPDATE CURRENT_TIMESTAMP,
+
+    -- 索引
+    INDEX idx_campaign_date (campaign_date),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+#### 4.2.8 Auto_Responses (自動回應表)
+
+```sql
+CREATE TABLE auto_responses (
+    -- 主鍵
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+
+    -- 關聯
+    template_id BIGINT COMMENT '使用的訊息模板ID',
+
+    -- 觸發配置
+    trigger_type VARCHAR(20) NOT NULL
+        COMMENT '觸發類型：welcome/keyword/time',
+    response_content TEXT COMMENT '回應內容',
+
+    -- 關鍵字配置
+    keywords JSON COMMENT '關鍵字列表（最多20組）',
+
+    -- 時間配置
+    trigger_time_start TIME COMMENT '指定時間區間起始',
+    trigger_time_end TIME COMMENT '指定時間區間結束',
+    date_range_start DATE COMMENT '指定日期區間起始',
+    date_range_end DATE COMMENT '指定日期區間結束',
+
+    -- 狀態
+    is_active BOOLEAN DEFAULT TRUE COMMENT '啟用狀態',
+
+    -- 統計
+    trigger_count INT DEFAULT 0 COMMENT '觸發次數',
+    success_rate DECIMAL(5,2) DEFAULT 100.00 COMMENT '成功率',
+
+    -- 時間戳
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME ON UPDATE CURRENT_TIMESTAMP,
+
+    -- 外鍵
+    FOREIGN KEY (template_id) REFERENCES message_templates(id)
+        ON DELETE SET NULL,
+
+    -- 索引
+    INDEX idx_trigger_type (trigger_type),
+    INDEX idx_is_active (is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+#### 4.2.9 PMS_Integrations (PMS 系統整合表)
+
+```sql
+CREATE TABLE pms_integrations (
+    -- 主鍵
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+
+    -- 關聯
+    member_id BIGINT COMMENT '關聯的會員ID',
+
+    -- 身份識別
+    id_number VARCHAR(50) COMMENT '身分證字號',
+    phone VARCHAR(20) COMMENT '手機號碼',
+
+    -- 住宿資訊
+    stay_records JSON COMMENT '住宿紀錄資訊',
+    room_type VARCHAR(50) COMMENT '房型',
+    stay_date DATE COMMENT '住宿日期',
+
+    -- 匹配狀態
+    match_status VARCHAR(20) DEFAULT 'pending'
+        COMMENT '匹配狀態：matched/pending/failed',
+    match_rate DECIMAL(5,2) COMMENT '匹配率',
+
+    -- 時間戳
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME ON UPDATE CURRENT_TIMESTAMP,
+
+    -- 外鍵
+    FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE SET NULL,
+
+    -- 索引
+    INDEX idx_member_id (member_id),
+    INDEX idx_id_number (id_number),
+    INDEX idx_phone (phone),
+    INDEX idx_match_status (match_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+**匹配邏輯**:
+1. 優先使用 `id_number` 匹配
+2. 若失敗則使用 `phone` 匹配
+3. 目標匹配成功率 ≥ 95%
+
+#### 4.2.10 Consumption_Records (消費記錄表)
+
+```sql
+CREATE TABLE consumption_records (
+    -- 主鍵
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+
+    -- 關聯
+    member_id BIGINT NOT NULL COMMENT '所屬會員',
+    pms_integration_id BIGINT COMMENT 'PMS整合記錄ID',
+
+    -- 消費資訊
+    consumption_time DATETIME NOT NULL COMMENT '消費時間',
+    amount DECIMAL(10,2) NOT NULL COMMENT '消費金額',
+    room_type VARCHAR(50) COMMENT '房型或套餐',
+    stay_duration INT COMMENT '住宿天數',
+
+    -- 時間戳
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    -- 外鍵
+    FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE,
+    FOREIGN KEY (pms_integration_id) REFERENCES pms_integrations(id)
+        ON DELETE SET NULL,
+
+    -- 索引
+    INDEX idx_member_id (member_id),
+    INDEX idx_consumption_time (consumption_time),
+    INDEX idx_amount (amount)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+### 4.3 數據表統計
+
+| 類別 | 數據表 | 說明 |
+|------|--------|------|
+| 會員相關 | members, member_tags, member_interaction_records, message_records, consumption_records | 5張表 |
+| 訊息推播 | messages, message_recipients, message_templates, template_carousel_items | 4張表 |
+| 活動管理 | campaigns | 1張表 |
+| 標籤系統 | member_tags, interaction_tags, tag_trigger_logs | 3張表 |
+| 自動回應 | auto_responses, auto_response_keywords | 2張表 |
+| PMS 整合 | pms_integrations, consumption_records | 2張表 |
+| 問卷系統 | survey_templates, surveys, survey_questions, survey_responses | 4張表 |
+| 系統管理 | users | 1張表 |
+| **總計** | | **22張核心表** |
+
+### 4.4 索引策略
+
+#### 高頻查詢索引
+```sql
+-- 會員查詢
+CREATE INDEX idx_members_line_uid ON members(line_uid);
+CREATE INDEX idx_members_email_phone ON members(email, phone);
+CREATE INDEX idx_members_last_interaction ON members(last_interaction_at DESC);
+
+-- 標籤查詢
+CREATE INDEX idx_member_tags_member_tag ON member_tags(member_id, tag_name);
+CREATE INDEX idx_interaction_tags_name ON interaction_tags(tag_name);
+
+-- 訊息查詢
+CREATE INDEX idx_messages_status_time ON messages(send_status, send_time DESC);
+CREATE INDEX idx_message_recipients_member ON message_recipients(member_id, message_id);
+
+-- PMS 匹配
+CREATE INDEX idx_pms_id_phone ON pms_integrations(id_number, phone);
+```
+
+#### 複合索引優化
+```sql
+-- 會員搜索與篩選
+CREATE INDEX idx_members_search ON members(
+    line_name, name, email, phone, last_interaction_at DESC
+);
+
+-- 訊息統計查詢
+CREATE INDEX idx_messages_stats ON messages(
+    send_status, send_time, send_count, open_count, click_count
+);
+```
 
 ---
 
-#### 模組2：消息模板 (2個表)
+## 5. API 接口設計
 
-#### 3.2.5 message_templates (消息模板表)
+### 5.1 API 設計原則
 
-| 欄位名 | 類型 | 約束 | 說明 |
-|--------|------|------|------|
-| id | BIGINT | PK, AUTO_INCREMENT | 模板ID |
-| type | ENUM | NOT NULL | 類型：text/text_button/image_click/image_card |
-| name | VARCHAR(100) | | 模板名稱 |
-| content | TEXT | | 文字內容 |
-| buttons | JSON | | 按鈕配置 |
-| notification_text | VARCHAR(100) | | 通知訊息 |
-| preview_text | VARCHAR(100) | | 訊息預覽 |
-| interaction_tag_id | BIGINT | FK | 互動標籤ID (→ interaction_tags.id) |
-| interaction_result | JSON | | 互動結果配置 |
-| created_at | DATETIME | NOT NULL | 創建時間 |
-| updated_at | DATETIME | | 更新時間 |
+1. **RESTful 規範**: 使用標準 HTTP 方法 (GET, POST, PUT, PATCH, DELETE)
+2. **統一響應格式**: 成功/失敗響應結構一致
+3. **版本管理**: `/api/v1/` 前綴，支持多版本並存
+4. **分頁支持**: 所有列表接口支持分頁
+5. **過濾排序**: 支持靈活的篩選和排序參數
+6. **錯誤處理**: 清晰的錯誤碼和錯誤信息
 
-#### 3.2.6 template_carousel_items (輪播圖卡片表)
-
-| 欄位名 | 類型 | 約束 | 說明 |
-|--------|------|------|------|
-| id | BIGINT | PK, AUTO_INCREMENT | ID |
-| template_id | BIGINT | FK, NOT NULL | 模板ID (→ message_templates.id) |
-| image_url | VARCHAR(500) | NOT NULL | 圖片URL |
-| title | VARCHAR(100) | | 標題 |
-| description | VARCHAR(200) | | 描述 |
-| price | DECIMAL(10,2) | | 金額 |
-| action_url | VARCHAR(500) | | 動作URL |
-| interaction_tag_id | BIGINT | FK | 互動標籤ID (→ interaction_tags.id) |
-| action_button_text | VARCHAR(100) | | 動作按鈕文字（新增） |
-| action_button_enabled | BOOLEAN | DEFAULT FALSE | 動作按鈕啟用（新增） |
-| action_button_interaction_type | VARCHAR(50) | | 動作按鈕互動類型（新增） |
-| action_button_url | VARCHAR(500) | | 動作按鈕網址（新增） |
-| action_button_trigger_message | TEXT | | 動作按鈕觸發訊息（新增） |
-| action_button_trigger_image_url | VARCHAR(500) | | 動作按鈕觸發圖片URL（新增） |
-| image_aspect_ratio | VARCHAR(10) | DEFAULT '1:1' | 圖片長寬比例（新增） |
-| image_click_action_type | VARCHAR(50) | DEFAULT 'open_image' | 圖片點擊動作類型（新增） |
-| image_click_action_value | TEXT | | 圖片點擊動作值（新增） |
-| sort_order | INT | DEFAULT 0 | 排序 |
-| created_at | DATETIME | NOT NULL | 創建時間 |
-| updated_at | DATETIME | | 更新時間 |
-
----
-
-#### 模組4：群發推播 (4個表)
-
-#### 3.2.7 campaigns (活動推播表)
-
-| 欄位名 | 類型 | 約束 | 說明 |
-|--------|------|------|------|
-| id | BIGINT | PK, AUTO_INCREMENT | 活動ID |
-| title | VARCHAR(100) | NOT NULL | 活動標題 |
-| template_id | BIGINT | FK, NOT NULL | 消息模板ID (→ message_templates.id) |
-| target_audience | JSON | NOT NULL | 目標受眾條件 |
-| trigger_condition | JSON | | 觸發條件（如：加入好友7-29天） |
-| interaction_tag | VARCHAR(50) | | 互動標籤 |
-| scheduled_at | DATETIME | | 排程時間 |
-| sent_at | DATETIME | | 實際發送時間 |
-| status | ENUM | NOT NULL | 狀態：draft/scheduled/sent/failed |
-| sent_count | INT | DEFAULT 0 | 發送人數 |
-| opened_count | INT | DEFAULT 0 | 開啟次數 |
-| clicked_count | INT | DEFAULT 0 | 點擊次數 |
-| created_by | BIGINT | | 創建者ID |
-| created_at | DATETIME | NOT NULL | 創建時間 |
-| updated_at | DATETIME | | 更新時間 |
-
-#### 3.2.8 campaign_recipients (推播對象記錄表)
-
-| 欄位名 | 類型 | 約束 | 說明 |
-|--------|------|------|------|
-| id | BIGINT | PK, AUTO_INCREMENT | ID |
-| campaign_id | BIGINT | FK, NOT NULL | 活動ID (→ campaigns.id) |
-| member_id | BIGINT | FK, NOT NULL | 會員ID (→ members.id) |
-| sent_at | DATETIME | | 發送時間 |
-| opened_at | DATETIME | | 開啟時間 |
-| clicked_at | DATETIME | | 點擊時間 |
-| status | ENUM | NOT NULL | 狀態：pending/sent/opened/clicked/failed |
-| error_message | VARCHAR(500) | | 錯誤訊息 |
-| created_at | DATETIME | NOT NULL | 創建時間 |
-| updated_at | DATETIME | | 更新時間 |
-
-**索引**: UNIQUE(campaign_id, member_id)
-
-#### 3.2.9 messages (消息記錄表)
-
-| 欄位名 | 類型 | 約束 | 說明 |
-|--------|------|------|------|
-| id | BIGINT | PK, AUTO_INCREMENT | 消息ID |
-| member_id | BIGINT | FK, NOT NULL | 會員ID (→ members.id) |
-| campaign_id | BIGINT | FK | 活動ID (→ campaigns.id) |
-| content | TEXT | NOT NULL | 消息內容 |
-| direction | ENUM | NOT NULL | 方向：incoming/outgoing |
-| message_type | ENUM | NOT NULL | 類型：text/image/template |
-| sender_type | ENUM | | 發送者類型：manual/auto/campaign |
-| sender_id | BIGINT | | 發送者ID |
-| read_at | DATETIME | | 已讀時間 |
-| created_at | DATETIME | NOT NULL | 創建時間 |
-| updated_at | DATETIME | | 更新時間 |
-
-#### 3.2.10 tag_trigger_logs (標籤觸發日誌表)
-
-| 欄位名 | 類型 | 約束 | 說明 |
-|--------|------|------|------|
-| id | BIGINT | PK, AUTO_INCREMENT | 日誌ID |
-| member_id | BIGINT | FK, NOT NULL | 會員ID (→ members.id) |
-| tag_id | BIGINT | FK, NOT NULL | 標籤ID (→ interaction_tags.id) |
-| campaign_id | BIGINT | FK | 活動ID (→ campaigns.id) |
-| trigger_source | ENUM | NOT NULL | 觸發來源：click/interaction/manual |
-| triggered_at | DATETIME | NOT NULL | 觸發時間 |
-| created_at | DATETIME | NOT NULL | 創建時間 |
-| updated_at | DATETIME | | 更新時間 |
-
----
-
-#### 模組7：問卷系統 (4個表)
-
-#### 3.2.11 survey_templates (問卷範本表)
-
-| 欄位名 | 類型 | 約束 | 說明 |
-|--------|------|------|------|
-| id | BIGINT | PK, AUTO_INCREMENT | 範本ID |
-| name | VARCHAR(100) | NOT NULL | 範本名稱 |
-| description | TEXT | | 範本描述 |
-| icon | VARCHAR(50) | | 範本圖標 |
-| category | VARCHAR(50) | NOT NULL | 範本類別 |
-| default_questions | JSON | | 預設題目 |
-| is_active | BOOLEAN | NOT NULL, DEFAULT TRUE | 是否啟用 |
-| created_at | DATETIME | NOT NULL | 創建時間 |
-| updated_at | DATETIME | | 更新時間 |
-
-#### 3.2.12 surveys (問卷主檔表)
-
-| 欄位名 | 類型 | 約束 | 說明 |
-|--------|------|------|------|
-| id | BIGINT | PK, AUTO_INCREMENT | 問卷ID |
-| name | VARCHAR(200) | NOT NULL | 問卷名稱 |
-| template_id | BIGINT | FK, NOT NULL | 範本ID (→ survey_templates.id) |
-| description | TEXT | | 問卷描述 |
-| target_audience | ENUM | NOT NULL, DEFAULT 'ALL' | 目標受眾：ALL/FILTERED |
-| target_tags | JSON | | 目標標籤 |
-| schedule_type | ENUM | NOT NULL, DEFAULT 'IMMEDIATE' | 排程類型：IMMEDIATE/SCHEDULED |
-| scheduled_at | DATETIME | | 排程時間 |
-| sent_at | DATETIME | | 實際發送時間 |
-| status | ENUM | NOT NULL, DEFAULT 'draft' | 狀態：draft/scheduled/published |
-| response_count | INT | DEFAULT 0 | 回應數 |
-| view_count | INT | DEFAULT 0 | 瀏覽數 |
-| created_by | BIGINT | FK | 創建者ID (→ users.id) |
-| created_at | DATETIME | NOT NULL | 創建時間 |
-| updated_at | DATETIME | | 更新時間 |
-
-#### 3.2.13 survey_questions (問卷題目表)
-
-| 欄位名 | 類型 | 約束 | 說明 |
-|--------|------|------|------|
-| id | BIGINT | PK, AUTO_INCREMENT | 題目ID |
-| survey_id | BIGINT | FK, NOT NULL | 問卷ID (→ surveys.id) |
-| question_type | ENUM | NOT NULL | 題目類型：NAME/PHONE/EMAIL/BIRTHDAY/ADDRESS/GENDER/ID_NUMBER/LINK/VIDEO/IMAGE |
-| question_text | TEXT | NOT NULL | 題目文字 |
-| font_size | INT | | 字型大小 |
-| description | TEXT | | 題目描述 |
-| options | JSON | | 選項 |
-| is_required | BOOLEAN | NOT NULL, DEFAULT FALSE | 是否必填 |
-| min_length | INT | | 最小長度 |
-| max_length | INT | | 最大長度 |
-| min_value | INT | | 最小值 |
-| max_value | INT | | 最大值 |
-| order | INT | NOT NULL | 題目順序 |
-| video_description | TEXT | | 影片描述 |
-| video_link | VARCHAR(500) | | 影片超連結 |
-| image_description | TEXT | | 圖片描述 |
-| image_link | VARCHAR(500) | | 圖片連結（編輯使用） |
-| image_base64 | TEXT | | 圖片Base64（發送使用，新增） |
-| created_at | DATETIME | NOT NULL | 創建時間 |
-| updated_at | DATETIME | | 更新時間 |
-
-**索引**: INDEX(survey_id)
-
-#### 3.2.14 survey_responses (問卷回應表)
-
-| 欄位名 | 類型 | 約束 | 說明 |
-|--------|------|------|------|
-| id | BIGINT | PK, AUTO_INCREMENT | 回應ID |
-| survey_id | BIGINT | FK, NOT NULL | 問卷ID (→ surveys.id) |
-| member_id | BIGINT | FK, NOT NULL | 會員ID (→ members.id) |
-| answers | JSON | NOT NULL | 答案（JSON格式儲存所有題目答案） |
-| is_completed | BOOLEAN | NOT NULL, DEFAULT FALSE | 是否完成 |
-| completed_at | DATETIME | | 完成時間 |
-| source | VARCHAR(50) | | 來源 |
-| ip_address | VARCHAR(50) | | IP地址 |
-| user_agent | VARCHAR(500) | | 用戶代理 |
-| created_at | DATETIME | NOT NULL | 創建時間 |
-| updated_at | DATETIME | | 更新時間 |
-
-**索引**: INDEX(survey_id), INDEX(member_id)
-
----
-
-## 4. API 接口設計
-
-### 4.1 統一響應格式
+### 5.2 統一響應格式
 
 #### 成功響應
 ```json
 {
-  "code": 200,
-  "message": "success",
-  "data": { ... },
-  "timestamp": "2025-10-08T10:30:00Z"
-}
-```
-
-#### 失敗響應
-```json
-{
-  "code": 400,
-  "message": "Invalid request parameters",
-  "errors": [
-    {
-      "field": "email",
-      "message": "Invalid email format"
-    }
-  ],
-  "timestamp": "2025-10-08T10:30:00Z"
+    "code": 200,
+    "message": "操作成功",
+    "data": {
+        // 返回數據
+    },
+    "timestamp": "2025-11-12T10:30:00Z"
 }
 ```
 
 #### 分頁響應
 ```json
 {
-  "code": 200,
-  "message": "success",
-  "data": {
-    "items": [ ... ],
-    "total": 100,
-    "page": 1,
-    "page_size": 20,
-    "total_pages": 5
-  },
-  "timestamp": "2025-10-08T10:30:00Z"
-}
-```
-
-### 4.2 認證與授權
-
-#### POST /api/v1/auth/login
-**說明**: 用戶登入
-
-**請求體**:
-```json
-{
-  "username": "admin@hotel.com",
-  "password": "password123"
-}
-```
-
-**響應**:
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "token_type": "Bearer",
-    "expires_in": 3600,
-    "user": {
-      "id": 1,
-      "username": "admin",
-      "full_name": "系統管理員",
-      "role": "admin"
-    }
-  }
-}
-```
-
-#### POST /api/v1/auth/refresh
-**說明**: 刷新 Token
-
-**請求頭**: `Authorization: Bearer {token}`
-
-**響應**: 同登入響應
-
-#### GET /api/v1/auth/me
-**說明**: 獲取當前用戶信息
-
-**請求頭**: `Authorization: Bearer {token}`
-
-**響應**:
-```json
-{
-  "code": 200,
-  "data": {
-    "id": 1,
-    "username": "admin",
-    "email": "admin@hotel.com",
-    "full_name": "系統管理員",
-    "role": "admin",
-    "last_login_at": "2025-10-08T10:00:00Z"
-  }
-}
-```
-
----
-
-### 4.3 會員管理
-
-#### GET /api/v1/members
-**說明**: 獲取會員列表（支持搜索、篩選、分頁）
-
-**請求參數**:
-```
-?search=王小明             # 搜尋（姓名/Email/手機）
-&tags=1,2                 # 標籤ID（逗號分隔）
-&source=line              # 來源篩選
-&sort_by=last_interaction_at  # 排序欄位
-&order=desc               # 排序方向
-&page=1                   # 頁碼
-&page_size=20             # 每頁數量
-```
-
-**響應**:
-```json
-{
-  "code": 200,
-  "data": {
-    "items": [
-      {
-        "id": 1,
-        "line_uid": "U1234567890abcdef",
-        "line_display_name": "小明的日常",
-        "first_name": "小明",
-        "last_name": "王",
-        "email": "wang.ming@email.com",
-        "phone": "0912-345-678",
-        "tags": [
-          {"id": 1, "name": "VIP會員", "type": "member"},
-          {"id": 5, "name": "中秋活動", "type": "interaction"}
-        ],
-        "created_at": "2024-08-15T14:30:00Z",
-        "last_interaction_at": "2025-10-02T16:45:00Z"
-      }
-    ],
-    "total": 256,
-    "page": 1,
-    "page_size": 20,
-    "total_pages": 13
-  }
-}
-```
-
-#### GET /api/v1/members/{id}
-**說明**: 獲取會員詳情
-
-**響應**:
-```json
-{
-  "code": 200,
-  "data": {
-    "id": 1,
-    "line_uid": "U1234567890abcdef",
-    "line_display_name": "小明的日常",
-    "line_picture_url": "https://...",
-    "first_name": "小明",
-    "last_name": "王",
-    "gender": "male",
-    "birthday": "1988-05-20",
-    "email": "wang.ming@email.com",
-    "phone": "0912-345-678",
-    "id_number": "A123456789",
-    "source": "line",
-    "accept_marketing": true,
-    "notes": "常預訂商務房型...",
-    "tags": [
-      {"id": 1, "name": "VIP會員", "type": "member"},
-      {"id": 2, "name": "商務客", "type": "member"},
-      {"id": 5, "name": "中秋活動", "type": "interaction"}
-    ],
-    "created_at": "2024-08-15T14:30:00Z",
-    "last_interaction_at": "2025-10-02T16:45:00Z"
-  }
-}
-```
-
-#### POST /api/v1/members
-**說明**: 新增會員
-
-**請求體**:
-```json
-{
-  "email": "new.member@email.com",
-  "phone": "0987-654-321",
-  "first_name": "小華",
-  "last_name": "李",
-  "gender": "female",
-  "id_number": "B987654321"
-}
-```
-
-**響應**: 同會員詳情
-
-#### PUT /api/v1/members/{id}
-**說明**: 更新會員資料
-
-**請求體**: 同新增會員（部分欄位可選）
-
-**響應**: 同會員詳情
-
-#### DELETE /api/v1/members/{id}
-**說明**: 刪除會員
-
-**響應**:
-```json
-{
-  "code": 200,
-  "message": "Member deleted successfully"
-}
-```
-
-#### POST /api/v1/members/{id}/tags
-**說明**: 為會員添加標籤
-
-**請求體**:
-```json
-{
-  "tag_ids": [1, 2, 5]
-}
-```
-
-**響應**:
-```json
-{
-  "code": 200,
-  "message": "Tags added successfully",
-  "data": {
-    "member_id": 1,
-    "tags": [...]
-  }
-}
-```
-
-#### DELETE /api/v1/members/{id}/tags/{tag_id}
-**說明**: 移除會員標籤
-
-**響應**: 成功訊息
-
-#### PUT /api/v1/members/{id}/notes
-**說明**: 更新會員備註
-
-**請求體**:
-```json
-{
-  "notes": "常預訂商務房型，偏好高樓層..."
-}
-```
-
-**響應**: 成功訊息
-
----
-
-### 4.4 標籤管理
-
-#### GET /api/v1/tags
-**說明**: 獲取標籤列表
-
-**請求參數**:
-```
-?type=member              # 標籤類型：member/interaction
-&search=VIP               # 搜尋標籤名稱
-&page=1
-&page_size=50
-```
-
-**響應**:
-```json
-{
-  "code": 200,
-  "data": {
-    "items": [
-      {
-        "id": 1,
-        "name": "VIP會員",
-        "type": "member",
-        "source": "api",
-        "member_count": 128,
-        "created_at": "2024-01-01T00:00:00Z"
-      }
-    ],
-    "total": 42,
-    "page": 1,
-    "page_size": 50
-  }
-}
-```
-
-#### POST /api/v1/tags
-**說明**: 創建標籤
-
-**請求體**:
-```json
-{
-  "name": "新標籤",
-  "type": "member",
-  "source": "manual",
-  "description": "標籤描述"
-}
-```
-
-**響應**: 同標籤詳情
-
-#### PUT /api/v1/tags/{id}
-**說明**: 更新標籤
-
-**請求體**: 同創建標籤
-
-#### DELETE /api/v1/tags/{id}
-**說明**: 刪除標籤
-
-**響應**: 成功訊息
-
-#### GET /api/v1/tags/statistics
-**說明**: 獲取標籤統計數據
-
-**響應**:
-```json
-{
-  "code": 200,
-  "data": {
-    "total_tags": 42,
-    "member_tags": 18,
-    "interaction_tags": 24,
-    "most_used_tag": {
-      "id": 1,
-      "name": "VIP會員",
-      "member_count": 128
-    }
-  }
-}
-```
-
----
-
-### 4.5 消息模板
-
-#### GET /api/v1/templates
-**說明**: 獲取模板列表
-
-**請求參數**: `?type=image_card&page=1&page_size=20`
-
-**響應**:
-```json
-{
-  "code": 200,
-  "data": {
-    "items": [
-      {
-        "id": 1,
-        "name": "中秋優惠模板",
-        "type": "image_card",
-        "created_at": "2025-09-01T00:00:00Z"
-      }
-    ],
-    "total": 15,
-    "page": 1,
-    "page_size": 20
-  }
-}
-```
-
-#### GET /api/v1/templates/{id}
-**說明**: 獲取模板詳情
-
-**響應**:
-```json
-{
-  "code": 200,
-  "data": {
-    "id": 1,
-    "type": "image_card",
-    "name": "中秋優惠模板",
-    "content": null,
-    "notification_text": "中秋特別優惠來了！",
-    "preview_text": "點擊查看詳情",
-    "interaction_tag_id": 5,
-    "carousel_items": [
-      {
-        "id": 1,
-        "image_url": "https://cdn.hotel.com/001.jpg",
-        "title": "商務優惠方案",
-        "description": "週一至週四 8 折",
-        "price": 3200,
-        "action_url": "https://hotel.com/offers/business",
-        "interaction_tag_id": 6,
-        "sort_order": 1
-      }
-    ],
-    "created_at": "2025-09-01T00:00:00Z"
-  }
-}
-```
-
-#### POST /api/v1/templates
-**說明**: 創建消息模板
-
-**請求體**:
-```json
-{
-  "type": "image_card",
-  "name": "新模板",
-  "notification_text": "通知訊息",
-  "preview_text": "預覽文字",
-  "interaction_tag_id": 5,
-  "carousel_items": [
-    {
-      "image_url": "https://...",
-      "title": "標題",
-      "description": "描述",
-      "price": 1000,
-      "action_url": "https://...",
-      "interaction_tag_id": 6,
-      "sort_order": 1
-    }
-  ]
-}
-```
-
-**響應**: 同模板詳情
-
-#### PUT /api/v1/templates/{id}
-**說明**: 更新模板
-
-#### DELETE /api/v1/templates/{id}
-**說明**: 刪除模板
-
----
-
-### 4.6 活動與訊息推播
-
-#### GET /api/v1/campaigns
-**說明**: 獲取活動列表
-
-**請求參數**:
-```
-?status=sent              # 狀態篩選
-&start_date=2025-09-01    # 開始日期
-&end_date=2025-09-30      # 結束日期
-&page=1
-&page_size=20
-```
-
-**響應**:
-```json
-{
-  "code": 200,
-  "data": {
-    "items": [
-      {
-        "id": 1,
-        "title": "中秋送禮 KOL",
-        "template": {
-          "id": 1,
-          "type": "image_card",
-          "name": "中秋模板"
-        },
-        "status": "sent",
-        "sent_count": 100,
-        "opened_count": 80,
-        "clicked_count": 40,
-        "open_rate": 80.0,
-        "click_rate": 40.0,
-        "scheduled_at": "2025-10-02T22:47:00Z",
-        "sent_at": "2025-10-02T22:47:00Z",
-        "created_at": "2025-10-01T10:00:00Z"
-      }
-    ],
-    "total": 6,
-    "summary": {
-      "total": 6,
-      "sent": 2,
-      "scheduled": 2,
-      "draft": 2
-    }
-  }
-}
-```
-
-#### GET /api/v1/campaigns/{id}
-**說明**: 獲取活動詳情
-
-**響應**:
-```json
-{
-  "code": 200,
-  "data": {
-    "id": 1,
-    "title": "中秋送禮 KOL",
-    "template_id": 1,
-    "template": { ... },
-    "target_audience": {
-      "type": "tags",
-      "include_tags": [1, 2],
-      "exclude_tags": [3]
+    "code": 200,
+    "message": "查詢成功",
+    "data": {
+        "items": [...],
+        "total": 100,
+        "page": 1,
+        "limit": 20,
+        "pages": 5
     },
-    "trigger_condition": {
-      "type": "friend_days",
-      "days_range": [7, 29]
-    },
-    "scheduled_at": "2025-10-02T22:47:00Z",
-    "status": "sent",
-    "sent_count": 100,
-    "opened_count": 80,
-    "clicked_count": 40,
-    "created_by": {
-      "id": 1,
-      "username": "admin",
-      "full_name": "系統管理員"
-    },
-    "created_at": "2025-10-01T10:00:00Z"
-  }
+    "timestamp": "2025-11-12T10:30:00Z"
 }
 ```
 
-#### POST /api/v1/campaigns
-**說明**: 創建活動
-
-**請求體**:
+#### 錯誤響應
 ```json
 {
-  "title": "新活動標題",
-  "template_id": 1,
-  "target_audience": {
-    "type": "all"  // 或 "tags"
-  },
-  "trigger_condition": null,
-  "scheduled_at": "2025-10-10T10:00:00Z"
-}
-```
-
-**響應**: 同活動詳情
-
-#### PUT /api/v1/campaigns/{id}
-**說明**: 更新活動（僅草稿或排程狀態可修改）
-
-#### DELETE /api/v1/campaigns/{id}
-**說明**: 刪除活動（僅草稿可刪除）
-
-#### POST /api/v1/campaigns/{id}/send
-**說明**: 立即發送活動
-
-**響應**:
-```json
-{
-  "code": 200,
-  "message": "Campaign sent successfully",
-  "data": {
-    "campaign_id": 1,
-    "sent_count": 100,
-    "sent_at": "2025-10-08T10:30:00Z"
-  }
-}
-```
-
-#### GET /api/v1/campaigns/{id}/recipients
-**說明**: 獲取活動發送對象列表
-
-**請求參數**: `?status=opened&page=1&page_size=20`
-
-**響應**:
-```json
-{
-  "code": 200,
-  "data": {
-    "items": [
-      {
-        "member": {
-          "id": 1,
-          "name": "王小明",
-          "email": "wang.ming@email.com"
-        },
-        "sent_at": "2025-10-02T22:47:00Z",
-        "opened_at": "2025-10-03T08:15:00Z",
-        "clicked_at": "2025-10-03T08:20:00Z",
-        "status": "clicked"
-      }
-    ],
-    "total": 100,
-    "page": 1,
-    "page_size": 20
-  }
-}
-```
-
-#### GET /api/v1/campaigns/{id}/preview
-**說明**: 預覽活動發送效果
-
-**響應**: 返回渲染後的消息預覽內容
-
----
-
-### 4.7 自動回應
-
-#### GET /api/v1/auto-responses
-**說明**: 獲取自動回應列表
-
-**請求參數**: `?trigger_type=keyword&is_active=true`
-
-**響應**:
-```json
-{
-  "code": 200,
-  "data": [
-    {
-      "id": 1,
-      "name": "新好友歡迎訊息",
-      "trigger_type": "welcome",
-      "content": "歡迎加入力麗飯店...",
-      "is_active": true,
-      "trigger_count": 1248,
-      "success_rate": 98.5,
-      "created_at": "2025-09-20T00:00:00Z"
-    }
-  ]
-}
-```
-
-#### GET /api/v1/auto-responses/{id}
-**說明**: 獲取自動回應詳情
-
-**響應**:
-```json
-{
-  "code": 200,
-  "data": {
-    "id": 2,
-    "name": "優惠方案查詢",
-    "trigger_type": "keyword",
-    "content": "目前推出的優惠方案：...",
-    "keywords": [
-      {"id": 1, "keyword": "優惠", "match_count": 320},
-      {"id": 2, "keyword": "折扣", "match_count": 256}
-    ],
-    "is_active": true,
-    "trigger_count": 856,
-    "success_rate": 100.0,
-    "created_at": "2025-10-01T00:00:00Z"
-  }
-}
-```
-
-#### POST /api/v1/auto-responses
-**說明**: 創建自動回應
-
-**請求體**:
-```json
-{
-  "name": "新自動回應",
-  "trigger_type": "keyword",
-  "content": "回應內容",
-  "keywords": ["關鍵字1", "關鍵字2"],
-  "is_active": true
-}
-```
-
-**響應**: 同自動回應詳情
-
-#### PUT /api/v1/auto-responses/{id}
-**說明**: 更新自動回應
-
-#### DELETE /api/v1/auto-responses/{id}
-**說明**: 刪除自動回應
-
-#### PATCH /api/v1/auto-responses/{id}/toggle
-**說明**: 切換自動回應啟用狀態
-
-**請求體**:
-```json
-{
-  "is_active": false
-}
-```
-
----
-
-### 4.8 消息記錄
-
-#### GET /api/v1/messages
-**說明**: 獲取消息記錄列表
-
-**請求參數**:
-```
-?member_id=1              # 會員ID
-&direction=incoming       # 方向
-&start_date=2025-10-01
-&end_date=2025-10-08
-&page=1
-&page_size=50
-```
-
-**響應**:
-```json
-{
-  "code": 200,
-  "data": {
-    "items": [
-      {
-        "id": 1,
-        "member": {
-          "id": 1,
-          "name": "王小明"
-        },
-        "content": "您好，請問平日有商務房的優惠嗎？",
-        "direction": "incoming",
-        "message_type": "text",
-        "sender_type": null,
-        "read_at": "2025-10-02T14:32:00Z",
-        "created_at": "2025-10-02T14:30:00Z"
-      }
-    ],
-    "total": 156,
-    "page": 1,
-    "page_size": 50
-  }
-}
-```
-
-#### GET /api/v1/messages/conversation/{member_id}
-**說明**: 獲取與指定會員的對話記錄
-
-**請求參數**: `?page=1&page_size=50`
-
-**響應**: 同消息列表
-
-#### POST /api/v1/messages
-**說明**: 發送消息
-
-**請求體**:
-```json
-{
-  "member_id": 1,
-  "content": "感謝您的詢問...",
-  "message_type": "text",
-  "scheduled_at": null  // 可選：排程發送
-}
-```
-
-**響應**:
-```json
-{
-  "code": 200,
-  "message": "Message sent successfully",
-  "data": {
-    "id": 2,
-    "member_id": 1,
-    "content": "感謝您的詢問...",
-    "direction": "outgoing",
-    "created_at": "2025-10-08T10:30:00Z"
-  }
-}
-```
-
----
-
-### 4.9 數據分析
-
-#### GET /api/v1/analytics/overview
-**說明**: 獲取總覽數據
-
-**請求參數**: `?start_date=2025-10-01&end_date=2025-10-08`
-
-**響應**:
-```json
-{
-  "code": 200,
-  "data": {
-    "kpi": {
-      "total_messages_sent": 12458,
-      "average_open_rate": 68.5,
-      "average_click_rate": 42.3,
-      "conversion_rate": 18.7
-    },
-    "trends": {
-      "messages_sent_trend": 15.3,
-      "open_rate_trend": 8.2,
-      "click_rate_trend": -2.1,
-      "conversion_rate_trend": 12.5
-    }
-  }
-}
-```
-
-#### GET /api/v1/analytics/campaign-performance
-**說明**: 獲取活動成效數據
-
-**請求參數**: `?start_date=2025-10-01&end_date=2025-10-08&limit=10`
-
-**響應**:
-```json
-{
-  "code": 200,
-  "data": [
-    {
-      "campaign_id": 1,
-      "title": "中秋送禮 KOL",
-      "sent_count": 100,
-      "opened_count": 80,
-      "clicked_count": 40,
-      "conversion_count": 25,
-      "open_rate": 80.0,
-      "click_rate": 40.0,
-      "conversion_rate": 25.0
-    }
-  ]
-}
-```
-
-#### GET /api/v1/analytics/tag-distribution
-**說明**: 獲取標籤分布數據
-
-**響應**:
-```json
-{
-  "code": 200,
-  "data": [
-    {
-      "tag_id": 5,
-      "tag_name": "中秋活動",
-      "trigger_count": 156,
-      "percentage": 18.5
-    }
-  ]
-}
-```
-
-#### GET /api/v1/analytics/trends
-**說明**: 獲取趨勢數據（用於折線圖）
-
-**請求參數**: `?metric=sent,opened,clicked&start_date=2025-09-01&end_date=2025-10-01`
-
-**響應**:
-```json
-{
-  "code": 200,
-  "data": {
-    "dates": ["2025-09-01", "2025-09-02", "..."],
-    "series": [
-      {
-        "name": "sent",
-        "data": [120, 135, 128, "..."]
-      },
-      {
-        "name": "opened",
-        "data": [85, 92, 88, "..."]
-      },
-      {
-        "name": "clicked",
-        "data": [45, 52, 48, "..."]
-      }
-    ]
-  }
-}
-```
-
-#### POST /api/v1/analytics/export
-**說明**: 導出報表
-
-**請求體**:
-```json
-{
-  "report_type": "campaign_performance",
-  "format": "excel",  // 或 "pdf"
-  "start_date": "2025-09-01",
-  "end_date": "2025-10-01"
-}
-```
-
-**響應**:
-```json
-{
-  "code": 200,
-  "data": {
-    "download_url": "/static/uploads/reports/xxx.xlsx",
-    "expires_at": "2025-10-08T11:30:00Z"
-  }
-}
-```
-
----
-
-## 5. 系統架構
-
-### 5.1 標準三層架構
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│               Client (React Frontend)                       │
-└────────────────────────┬────────────────────────────────────┘
-                         │ HTTPS / REST API
-┌────────────────────────▼────────────────────────────────────┐
-│              FastAPI Application (Backend)                  │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  Layer 1: API Layer (路由層) - app/api/v1/         │   │
-│  │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │   │
-│  │  職責：                                              │   │
-│  │  ✓ HTTP 請求處理                                    │   │
-│  │  ✓ 參數驗證 (Pydantic)                             │   │
-│  │  ✓ 回應格式化                                       │   │
-│  │  ✓ 錯誤處理 (HTTPException)                        │   │
-│  │                                                      │   │
-│  │  ✗ 無業務邏輯                                       │   │
-│  │  ✗ 無直接數據庫訪問                                │   │
-│  │                                                      │   │
-│  │  範例：campaigns.py, surveys.py, members.py         │   │
-│  └──────────────────────┬──────────────────────────────┘   │
-│                         │ 委託業務邏輯
-│  ┌──────────────────────▼──────────────────────────────┐   │
-│  │  Layer 2: Service Layer (服務層) - app/services/   │   │
-│  │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │   │
-│  │  職責：                                              │   │
-│  │  ✓ 業務邏輯封裝                                     │   │
-│  │  ✓ 數據驗證（業務規則）                            │   │
-│  │  ✓ 跨表操作協調                                     │   │
-│  │  ✓ 外部服務調用                                     │   │
-│  │  ✓ 事務管理                                         │   │
-│  │                                                      │   │
-│  │  Services:                                           │   │
-│  │  - CampaignService    活動推播業務                 │   │
-│  │  - SurveyService      問卷管理業務                 │   │
-│  │  - MemberService      會員管理業務                 │   │
-│  │  - LineBotService     LINE Bot 集成                │   │
-│  │  - Scheduler          排程任務管理                  │   │
-│  └──────────────────────┬──────────────────────────────┘   │
-│                         │ 數據訪問
-│  ┌──────────────────────▼──────────────────────────────┐   │
-│  │  Layer 3: ORM Layer (數據訪問層) - SQLAlchemy      │   │
-│  │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │   │
-│  │  職責：                                              │   │
-│  │  ✓ 異步數據庫訪問 (AsyncIO)                        │   │
-│  │  ✓ ORM 模型定義                                     │   │
-│  │  ✓ 關聯關係管理                                     │   │
-│  │  ✓ 查詢構建                                         │   │
-│  │                                                      │   │
-│  │  Models: Member, Campaign, Survey, Template, Tag... │   │
-│  └──────────────────────┬──────────────────────────────┘   │
-└─────────────────────────┼──────────────────────────────────┘
-                          │
-              ┌───────────┴────────────┐
-              ▼                        ▼
-     ┌────────────────┐      ┌─────────────────┐
-     │  MySQL Database│      │   LINE App      │
-     │                │      │  (外部模組)      │
-     │  - members     │      │  - HotelBot     │
-     │  - campaigns   │      │  - broadcast    │
-     │  - surveys     │      │  - push_survey  │
-     │  - templates   │      └─────────────────┘
-     │  - tags        │
-     └────────────────┘
-
-┌─────────────────────────────────────────────────────────────┐
-│              External Services & Storage                    │
-│  - LINE Messaging API (via line_app)                        │
-│  - OpenAI API                                               │
-│  - Local Storage: /data2/lili_hotel/backend/public/uploads  │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**架構優勢**：
-1. **職責分離**: 路由、業務、數據三層清晰分離，符合 SOLID 原則
-2. **可測試性**: Service 層可獨立單元測試，無需模擬 HTTP 請求
-3. **可重用性**: Service 方法可在路由、排程、背景任務中共享
-4. **可維護性**: 業務邏輯集中管理，修改不影響路由層
-5. **可擴展性**: 新增功能只需添加 Service 方法，不影響現有代碼
-
-### 5.2 數據流
-
-#### 活動推播流程（使用 Service 層）
-```
-1. 前端創建活動
-   ↓
-2. POST /api/v1/campaigns (API Layer)
-   - 參數驗證（Pydantic）
-   - 委託給 CampaignService
-   ↓
-3. CampaignService.create_campaign() (Service Layer)
-   - 創建 MessageTemplate
-   - 創建 TemplateCarouselItems
-   - 創建 Campaign
-   - 處理排程（如需要）
-   - 事務提交
-   ↓
-4. 發送活動：POST /api/v1/campaigns/{id}/send (API Layer)
-   - 委託給 CampaignService
-   ↓
-5. CampaignService.send_campaign() (Service Layer)
-   - 讀取完整 Campaign 數據（含 template 和 carousel_items）
-   - 委託給 LineBotService
-   ↓
-6. LineBotService.send_campaign()
-   - 構建 LINE 消息 payload
-   - 調用 line_app.broadcast_message(payload)
-   - 更新發送狀態和統計
-   ↓
-7. LINE API 推播 → 會員接收消息
-8. (未來) 追蹤互動 → 自動打標
-
-優勢：
-✓ 業務邏輯集中在 Service 層
-✓ API 層保持簡潔（10-30 行/路由）
-✓ Service 方法可在排程任務中重用
-✓ 易於測試和維護
-```
-
-#### 問卷發送流程（使用 Service 層）
-```
-1. 前端創建問卷
-   ↓
-2. POST /api/v1/surveys (API Layer)
-   - 參數驗證（Pydantic）
-   - 委託給 SurveyService
-   ↓
-3. SurveyService.create_survey() (Service Layer)
-   - 驗證範本是否存在
-   - 創建 Survey
-   - 創建 SurveyQuestions
-   - 處理排程（如需要）
-   - 事務提交
-   ↓
-4. 發送問卷：POST /api/v1/surveys/{id}/send (API Layer)
-   - 委託給 SurveyService
-   ↓
-5. SurveyService.send_survey() (Service Layer)
-   - 讀取完整 Survey 數據（含 questions）
-   - 委託給 LineBotService
-   ↓
-6. LineBotService.send_survey()
-   - 構建問卷入口消息
-   - 調用 line_app.push_survey_entry()
-   - 更新發送狀態
-   ↓
-7. 會員點擊 → LIFF 開啟問卷頁面
-   ↓
-8. 填答完成 → POST /api/v1/surveys/{id}/response (API Layer)
-   - 委託給 SurveyService
-   ↓
-9. SurveyService.submit_response() (Service Layer)
-   - 創建 SurveyResponse
-   - 更新問卷統計
-   - 事務提交
-
-優勢：
-✓ 問卷創建、發送、回應處理邏輯集中
-✓ 範本驗證在 Service 層統一處理
-✓ 統計更新邏輯可重用
-```
-
-### 5.3 文件存儲策略
-
-#### 本地文件存儲結構
-```
-/data2/lili_hotel/backend/public/uploads/
-└── images/                    # 圖片文件
-    ├── templates/             # 模板圖片
-    ├── surveys/               # 問卷圖片
-    └── temp/                  # 臨時文件
-```
-
-#### 文件上傳處理
-- **API 端點**: POST /api/v1/upload/image
-- **圖片格式**: JPG, PNG, WebP
-- **大小限制**: 單個文件 ≤ 10MB (配置於 settings.MAX_FILE_SIZE)
-- **命名規則**: 由上傳 API 處理，返回公開 URL
-- **存儲路徑**: `/data2/lili_hotel/backend/public/uploads/images/`
-- **訪問方式**: `http://localhost:8700/uploads/images/{filename}` (掛載為靜態目錄)
-- **Base64 支持**: 問卷圖片支持 Base64 編碼存儲（用於 LINE 推播）
-
-#### 圖片處理工具
-- **工具類**: `app.utils.image_handler`
-- **主要功能**:
-  - `file_path_to_base64()`: 文件路徑轉 Base64
-  - 支持 LINE 圖片格式要求
-
-### 5.4 Service 層實現範例
-
-#### 5.4.1 Service 層代碼結構
-
-**CampaignService 範例** (`app/services/campaign_service.py`):
-
-```python
-class CampaignService:
-    """活動推播服務"""
-
-    async def create_campaign(
-        self,
-        db: AsyncSession,
-        campaign_data: CampaignCreate
-    ) -> Campaign:
-        """
-        創建活動推播
-
-        職責：
-        - 創建 MessageTemplate
-        - 創建 TemplateCarouselItems
-        - 創建 Campaign
-        - 處理排程邏輯
-        """
-        # 1. 創建消息模板
-        template = await self._create_template(db, campaign_data)
-
-        # 2. 創建輪播項目
-        if campaign_data.carousel_items:
-            await self._create_carousel_items(db, template, campaign_data.carousel_items)
-
-        # 3. 創建活動
-        campaign = Campaign(
-            title=campaign_data.title,
-            template_id=template.id,
-            target_audience=campaign_data.target_audience or {"type": "all"},
-            # ... 其他字段
-        )
-        db.add(campaign)
-        await db.flush()
-
-        # 4. 處理排程
-        if campaign_data.scheduled_at:
-            await self._schedule_campaign(campaign)
-
-        return campaign
-
-    async def send_campaign(
-        self,
-        db: AsyncSession,
-        campaign_id: int
-    ) -> Dict[str, Any]:
-        """發送活動推播"""
-        # 業務邏輯驗證
-        campaign = await self.get_campaign_by_id(db, campaign_id)
-        if not campaign:
-            raise ValueError(f"Campaign {campaign_id} not found")
-
-        if campaign.status == CampaignStatus.SENT:
-            raise ValueError("Campaign already sent")
-
-        # 調用外部服務
-        from app.services.linebot_service import LineBotService
-        linebot_service = LineBotService()
-        result = await linebot_service.send_campaign(campaign_id)
-
-        # 更新狀態
-        campaign.status = CampaignStatus.SENT
-        campaign.sent_at = datetime.now()
-        await db.commit()
-
-        return result
-```
-
-#### 5.4.2 API 層代碼結構
-
-**Campaigns 路由範例** (`app/api/v1/campaigns.py`):
-
-```python
-@router.post("", response_model=dict)
-async def create_campaign(
-    campaign_data: CampaignCreate,
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    創建活動推播
-
-    職責：
-    - 參數驗證（由 Pydantic 自動處理）
-    - 調用 Service 層
-    - 格式化回應
-    - 錯誤處理
-    """
-    try:
-        campaign = await campaign_service.create_campaign(db, campaign_data)
-        return {
-            "code": 200,
-            "message": "活動創建成功",
-            "data": {"id": campaign.id, "title": campaign.title}
+    "code": 400,
+    "message": "請求參數錯誤",
+    "errors": [
+        {
+            "field": "email",
+            "message": "郵箱格式不正確"
         }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Failed to create campaign: {e}")
-        raise HTTPException(status_code=500, detail="創建活動失敗")
+    ],
+    "timestamp": "2025-11-12T10:30:00Z"
+}
 ```
 
-#### 5.4.3 最佳實踐
+### 5.3 API 端點列表
 
-**1. 職責分離**
+#### 5.3.1 認證授權 API
+
+| 方法 | 端點 | 說明 | 權限 |
+|------|------|------|------|
+| POST | `/api/v1/auth/login` | 用戶登錄 | 公開 |
+| POST | `/api/v1/auth/logout` | 用戶登出 | 需認證 |
+| POST | `/api/v1/auth/refresh` | 刷新令牌 | 需認證 |
+| GET | `/api/v1/auth/me` | 獲取當前用戶信息 | 需認證 |
+
+**登錄接口示例**:
 ```
-✓ API Layer     → HTTP 請求處理、參數驗證、回應格式化
-✓ Service Layer → 業務邏輯、數據驗證、事務管理
-✓ ORM Layer     → 數據訪問、查詢構建
+POST /api/v1/auth/login
+Content-Type: application/json
+
+Request:
+{
+    "username": "admin",
+    "password": "password123"
+}
+
+Response:
+{
+    "code": 200,
+    "message": "登錄成功",
+    "data": {
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+        "token_type": "bearer",
+        "expires_in": 3600,
+        "user": {
+            "id": 1,
+            "username": "admin",
+            "role": "ADMIN"
+        }
+    }
+}
 ```
 
-**2. 依賴注入**
+#### 5.3.2 會員管理 API
+
+| 方法 | 端點 | 說明 | 參數 |
+|------|------|------|------|
+| GET | `/api/v1/members` | 獲取會員列表 | search, tags, source, sort_by, order, page, limit |
+| GET | `/api/v1/members/count` | 會員統計 | source, tags |
+| GET | `/api/v1/members/{id}` | 獲取會員詳情 | - |
+| POST | `/api/v1/members` | 創建會員 | 會員信息 |
+| PUT | `/api/v1/members/{id}` | 更新會員 | 會員信息 |
+| DELETE | `/api/v1/members/{id}` | 刪除會員 | - |
+| POST | `/api/v1/members/{id}/tags` | 添加標籤 | tag_ids[] |
+| DELETE | `/api/v1/members/{id}/tags/{tag_id}` | 移除標籤 | - |
+| PUT | `/api/v1/members/{id}/notes` | 更新備註 | internal_note |
+
+**會員列表接口示例**:
+```
+GET /api/v1/members?search=張三&tags=VIP,常客&page=1&limit=20&sort_by=last_interaction_at&order=desc
+
+Response:
+{
+    "code": 200,
+    "data": {
+        "items": [
+            {
+                "id": 1,
+                "line_uid": "U1234567890abcdef",
+                "line_name": "張三",
+                "line_avatar": "https://...",
+                "name": "張三",
+                "email": "zhang@example.com",
+                "phone": "0912345678",
+                "tags": [
+                    {"id": 1, "name": "VIP", "type": "member"},
+                    {"id": 2, "name": "常客", "type": "member"},
+                    {"id": 3, "name": "雙十優惠", "type": "interaction"}
+                ],
+                "created_at": "2025-01-01T10:00:00Z",
+                "last_interaction_at": "2025-11-10T15:30:00Z"
+            }
+        ],
+        "total": 150,
+        "page": 1,
+        "limit": 20,
+        "pages": 8
+    }
+}
+```
+
+**創建會員接口示例**:
+```
+POST /api/v1/members
+Content-Type: application/json
+
+Request:
+{
+    "name": "王小明",
+    "gender": "1",
+    "birthday": "1990-05-15",
+    "email": "wang@example.com",
+    "phone": "0987654321",
+    "id_number": "A123456789",
+    "residence": "台北市",
+    "receive_notification": true
+}
+
+Response:
+{
+    "code": 200,
+    "message": "會員創建成功",
+    "data": {
+        "id": 101,
+        "name": "王小明",
+        "created_at": "2025-11-12T10:30:00Z"
+    }
+}
+```
+
+#### 5.3.3 群發訊息 API (Messages)
+
+| 方法 | 端點 | 說明 | 參數 |
+|------|------|------|------|
+| GET | `/api/v1/campaigns` | 獲取訊息列表 | status, search, page, limit |
+| GET | `/api/v1/campaigns/{id}` | 獲取訊息詳情 | - |
+| POST | `/api/v1/campaigns` | 創建群發訊息 | 訊息配置 |
+| PUT | `/api/v1/campaigns/{id}` | 更新訊息 | 訊息配置 |
+| DELETE | `/api/v1/campaigns/{id}` | 刪除訊息 | - |
+| POST | `/api/v1/campaigns/{id}/send` | 立即發送 | - |
+| POST | `/api/v1/campaigns/{id}/schedule` | 排程發送 | scheduled_date, scheduled_time |
+
+**創建群發訊息接口示例**:
+```
+POST /api/v1/campaigns
+Content-Type: application/json
+
+Request:
+{
+    "template_id": 5,
+    "message_content": "雙十優惠活動開跑！",
+    "target_type": "篩選目標對象",
+    "target_filter": {
+        "tags": ["VIP", "常客"],
+        "exclude_tags": ["黑名單"]
+    },
+    "scheduled_date": "2025-11-20",
+    "scheduled_time": "10:00:00",
+    "interaction_tags": ["雙十優惠"],
+    "flex_message_json": {
+        "type": "bubble",
+        "hero": { ... }
+    }
+}
+
+Response:
+{
+    "code": 200,
+    "message": "訊息創建成功",
+    "data": {
+        "id": 50,
+        "status": "排程發送",
+        "estimated_send_count": 350,
+        "available_quota": 1000,
+        "scheduled_date": "2025-11-20",
+        "scheduled_time": "10:00:00"
+    }
+}
+```
+
+#### 5.3.4 活動管理 API (Campaigns New)
+
+| 方法 | 端點 | 說明 | 參數 |
+|------|------|------|------|
+| GET | `/api/v1/campaigns_new` | 獲取活動列表 | status, page, limit |
+| GET | `/api/v1/campaigns_new/{id}` | 獲取活動詳情 | - |
+| POST | `/api/v1/campaigns_new` | 創建活動 | 活動配置 |
+| PUT | `/api/v1/campaigns_new/{id}` | 更新活動 | 活動配置 |
+| DELETE | `/api/v1/campaigns_new/{id}` | 刪除活動 | - |
+
+#### 5.3.5 標籤管理 API
+
+| 方法 | 端點 | 說明 | 參數 |
+|------|------|------|------|
+| GET | `/api/v1/tags` | 獲取標籤列表 | type, source, page, limit |
+| GET | `/api/v1/tags/stats` | 標籤統計 | - |
+| GET | `/api/v1/tags/{id}` | 獲取標籤詳情 | - |
+| GET | `/api/v1/tags/{id}/members` | 獲取標籤會員列表 | page, limit |
+| POST | `/api/v1/tags` | 創建標籤 | 標籤配置 |
+| PUT | `/api/v1/tags/{id}` | 更新標籤 | 標籤配置 |
+| DELETE | `/api/v1/tags/{id}` | 刪除標籤 | - |
+
+#### 5.3.6 訊息模板 API
+
+| 方法 | 端點 | 說明 | 參數 |
+|------|------|------|------|
+| GET | `/api/v1/templates` | 獲取模板列表 | type, page, limit |
+| GET | `/api/v1/templates/{id}` | 獲取模板詳情 | - |
+| POST | `/api/v1/templates` | 創建模板 | 模板配置 |
+| PUT | `/api/v1/templates/{id}` | 更新模板 | 模板配置 |
+| DELETE | `/api/v1/templates/{id}` | 刪除模板 | - |
+
+**創建圖卡按鈕型模板示例**:
+```
+POST /api/v1/templates
+Content-Type: application/json
+
+Request:
+{
+    "template_type": "image_card",
+    "title": "雙十優惠住宿專案",
+    "description": "入住兩晚享8折優惠",
+    "amount": 5999,
+    "image_url": "https://example.com/room.jpg",
+    "button_count": 2,
+    "buttons": [
+        {
+            "text": "立即預訂",
+            "action_type": "開啟網址",
+            "action_url": "https://example.com/book"
+        },
+        {
+            "text": "查看詳情",
+            "action_type": "觸發文字",
+            "action_text": "查看雙十優惠詳情"
+        }
+    ],
+    "interaction_tag_id": 10,
+    "notification_message": "限時優惠通知",
+    "preview_message": "雙十優惠住宿專案",
+    "carousel_count": 3
+}
+
+Response:
+{
+    "code": 200,
+    "message": "模板創建成功",
+    "data": {
+        "id": 15,
+        "template_type": "image_card",
+        "title": "雙十優惠住宿專案",
+        "created_at": "2025-11-12T10:30:00Z"
+    }
+}
+```
+
+#### 5.3.7 自動回應 API
+
+| 方法 | 端點 | 說明 | 參數 |
+|------|------|------|------|
+| GET | `/api/v1/auto_responses` | 獲取自動回應列表 | trigger_type, is_active, page, limit |
+| GET | `/api/v1/auto_responses/{id}` | 獲取自動回應詳情 | - |
+| POST | `/api/v1/auto_responses` | 創建自動回應 | 自動回應配置 |
+| PUT | `/api/v1/auto_responses/{id}` | 更新自動回應 | 自動回應配置 |
+| PATCH | `/api/v1/auto_responses/{id}/toggle` | 切換啟用狀態 | - |
+| DELETE | `/api/v1/auto_responses/{id}` | 刪除自動回應 | - |
+
+**創建關鍵字自動回應示例**:
+```
+POST /api/v1/auto_responses
+Content-Type: application/json
+
+Request:
+{
+    "trigger_type": "keyword",
+    "keywords": ["訂房", "預訂", "住宿"],
+    "response_content": "感謝您的詢問！請點擊以下連結進行線上訂房",
+    "template_id": 8,
+    "is_active": true
+}
+
+Response:
+{
+    "code": 200,
+    "message": "自動回應創建成功",
+    "data": {
+        "id": 20,
+        "trigger_type": "keyword",
+        "keywords": ["訂房", "預訂", "住宿"],
+        "is_active": true
+    }
+}
+```
+
+#### 5.3.8 PMS 系統整合 API
+
+| 方法 | 端點 | 說明 | 參數 |
+|------|------|------|------|
+| GET | `/api/v1/pms_integrations` | 獲取 PMS 記錄列表 | match_status, page, limit |
+| GET | `/api/v1/pms_integrations/{id}` | 獲取 PMS 記錄詳情 | - |
+| POST | `/api/v1/pms_integrations` | 創建 PMS 記錄 | PMS 數據 |
+| POST | `/api/v1/pms_integrations/match` | 執行會員匹配 | batch_size |
+| PUT | `/api/v1/pms_integrations/{id}` | 更新 PMS 記錄 | PMS 數據 |
+| DELETE | `/api/v1/pms_integrations/{id}` | 刪除 PMS 記錄 | - |
+
+#### 5.3.9 消費記錄 API
+
+| 方法 | 端點 | 說明 | 參數 |
+|------|------|------|------|
+| GET | `/api/v1/consumption_records` | 獲取消費記錄列表 | member_id, start_date, end_date, page, limit |
+| GET | `/api/v1/consumption_records/{id}` | 獲取消費記錄詳情 | - |
+| GET | `/api/v1/consumption_records/stats` | 消費統計 | member_id, start_date, end_date |
+| POST | `/api/v1/consumption_records` | 創建消費記錄 | 消費數據 |
+| PUT | `/api/v1/consumption_records/{id}` | 更新消費記錄 | 消費數據 |
+| DELETE | `/api/v1/consumption_records/{id}` | 刪除消費記錄 | - |
+
+#### 5.3.10 追蹤統計 API
+
+| 方法 | 端點 | 說明 | 參數 |
+|------|------|------|------|
+| POST | `/api/v1/tracking/interactions` | 記錄互動 | 互動數據 |
+| GET | `/api/v1/tracking/campaigns/{id}/statistics` | 獲取訊息統計 | - |
+| GET | `/api/v1/tracking/campaigns/{id}/interactions` | 獲取互動記錄 | page, limit |
+
+#### 5.3.11 文件上傳 API
+
+| 方法 | 端點 | 說明 | 參數 |
+|------|------|------|------|
+| POST | `/api/v1/upload/upload` | 上傳圖片 | file (multipart/form-data) |
+
+**上傳接口示例**:
+```
+POST /api/v1/upload/upload
+Content-Type: multipart/form-data
+
+Request:
+--boundary
+Content-Disposition: form-data; name="file"; filename="hotel-room.jpg"
+Content-Type: image/jpeg
+
+[binary data]
+--boundary--
+
+Response:
+{
+    "code": 200,
+    "message": "上傳成功",
+    "data": {
+        "url": "http://localhost:8700/uploads/hotel-room_20251112103000.jpg",
+        "filename": "hotel-room_20251112103000.jpg",
+        "size": 245760,
+        "mime_type": "image/jpeg"
+    }
+}
+```
+
+### 5.4 API 錯誤碼
+
+| 錯誤碼 | 說明 | HTTP 狀態碼 |
+|--------|------|-------------|
+| 200 | 成功 | 200 OK |
+| 201 | 創建成功 | 201 Created |
+| 400 | 請求參數錯誤 | 400 Bad Request |
+| 401 | 未認證 | 401 Unauthorized |
+| 403 | 無權限 | 403 Forbidden |
+| 404 | 資源不存在 | 404 Not Found |
+| 409 | 資源衝突 | 409 Conflict |
+| 422 | 驗證錯誤 | 422 Unprocessable Entity |
+| 429 | 請求過於頻繁 | 429 Too Many Requests |
+| 500 | 服務器內部錯誤 | 500 Internal Server Error |
+| 503 | 服務不可用 | 503 Service Unavailable |
+
+---
+
+## 6. 核心業務模塊
+
+### 6.1 會員管理模塊
+
+#### 職責
+- 會員基本資料 CRUD
+- LINE 用戶集成
+- 會員標籤管理
+- 互動記錄追蹤
+- 搜索與篩選
+
+#### 核心流程
+
+**會員註冊流程**:
+```
+1. 用戶關注 LINE 官方帳號
+   ↓
+2. LINE Webhook 觸發 (follow event)
+   ↓
+3. 獲取 LINE 用戶資料 (uid, name, avatar)
+   ↓
+4. 創建會員記錄 (join_source = 'LINE')
+   ↓
+5. 觸發歡迎訊息 (auto_response: welcome)
+   ↓
+6. 記錄創建日誌
+```
+
+**PMS 會員匹配流程**:
+```
+1. 接收 PMS 系統數據
+   ↓
+2. 創建 pms_integrations 記錄
+   ↓
+3. 嘗試匹配會員:
+   a. 使用 id_number 匹配
+   b. 若失敗，使用 phone 匹配
+   ↓
+4. 匹配成功:
+   - 更新 member_id
+   - match_status = 'matched'
+   - 計算 match_rate
+   - 同步住宿記錄到 consumption_records
+   ↓
+5. 匹配失敗:
+   - 自動創建新會員
+   - join_source = 'PMS'
+   - match_status = 'failed'
+```
+
+#### 業務規則
+
+1. **唯一性約束**:
+   - `line_uid` 必須唯一
+   - `id_number` 必須唯一
+   - 同一用戶不可重複註冊
+
+2. **最後互動時間更新規則**:
+   - 僅會員主動發送訊息時更新
+   - 被動接收推播訊息不更新
+   - 用於判斷會員活躍度
+
+3. **標籤管理規則**:
+   - 會員可擁有多個標籤
+   - 標籤分類：會員標籤、互動標籤
+   - 標籤來源：CRM/PMS/問券/後台自訂/訊息模板
+
+### 6.2 群發訊息模塊
+
+#### 職責
+- 訊息創建與編輯
+- 目標受眾選擇
+- 排程管理
+- 訊息發送
+- 統計追蹤
+
+#### 核心流程
+
+**群發訊息創建流程**:
+```
+1. 用戶創建訊息
+   ↓
+2. 選擇訊息模板 (template_id)
+   ↓
+3. 配置目標受眾:
+   - 所有好友
+   - 篩選目標對象 (標籤、條件)
+   ↓
+4. 計算預計發送人數 (estimated_send_count)
+   ↓
+5. 檢查訊息配額 (available_quota)
+   - 若不足，阻擋發送
+   ↓
+6. 選擇發送方式:
+   - 立即發送 → send_status = '已發送'
+   - 排程發送 → send_status = '排程發送'
+   - 儲存草稿 → send_status = '草稿'
+   ↓
+7. 創建訊息記錄 (messages 表)
+```
+
+**排程發送流程**:
+```
+1. APScheduler 定時檢查
+   ↓
+2. 查詢 send_status = '排程發送' 且到達發送時間的訊息
+   ↓
+3. 獲取目標受眾列表
+   ↓
+4. 批次發送 (每批 500 人):
+   a. 調用 LINE Messaging API
+   b. 創建 message_recipients 記錄
+   c. 更新 send_count
+   ↓
+5. 發送完成:
+   - send_status = '已發送'
+   - send_time = 實際發送時間
+   ↓
+6. 發送失敗:
+   - send_status = '發送失敗'
+   - 記錄 failure_reason
+```
+
+#### 業務規則
+
+1. **配額檢查**:
+   - 發送前必須檢查 `available_quota >= estimated_send_count`
+   - 若配額不足，系統阻擋發送並提示用戶
+
+2. **狀態轉換規則**:
+   - 草稿 ⇄ 排程發送 (可雙向轉換)
+   - 排程發送 → 已發送 (不可逆)
+   - 排程發送 → 發送失敗 (不可逆)
+
+3. **目標受眾篩選邏輯**:
+   ```python
+   if target_type == '所有好友':
+       recipients = all_members
+   else:
+       # 包含標籤
+       if target_filter.tags:
+           members = members.filter(tags__in=target_filter.tags)
+
+       # 排除標籤
+       if target_filter.exclude_tags:
+           members = members.exclude(tags__in=target_filter.exclude_tags)
+
+       recipients = members
+   ```
+
+4. **批次發送策略**:
+   - 每批 500 人
+   - 使用 LINE multicast API
+   - 發送間隔 1 秒 (避免速率限制)
+
+### 6.3 標籤管理模塊
+
+#### 職責
+- 標籤定義與管理
+- 標籤觸發追蹤
+- 標籤統計分析
+- 會員標籤關聯
+
+#### 標籤分類
+
+**1. 會員標籤 (Member Tags)**:
+- **來源**:
+  - CRM: 消費金額達門檻、房型分類、訪問頻率
+  - PMS: 住宿記錄、房型偏好
+  - 問券: 性別、年齡區間、地區、生日月份
+  - 後台自訂: VIP、黑名單
+
+**2. 互動標籤 (Interaction Tags)**:
+- **來源**:
+  - 訊息模板: 檔期優惠、雙十、早鳥
+  - 問券模板: 會員資料、滿意度調查
+
+#### 核心流程
+
+**標籤觸發流程**:
+```
+1. 用戶點擊訊息按鈕/連結
+   ↓
+2. 觸發 Webhook 或追蹤 API
+   ↓
+3. 記錄互動:
+   - 創建 member_interaction_records
+   - 更新 member_tags (若為會員標籤)
+   ↓
+4. 去重判斷:
+   - 檢查 (member_id, tag_name, message_id) 是否已存在
+   - 若存在，跳過
+   - 若不存在，繼續
+   ↓
+5. 更新統計:
+   - trigger_count += 1
+   - trigger_member_count += 1 (不重複)
+   - last_triggered_at = now()
+   ↓
+6. 更新 interaction_tags 統計
+```
+
+#### 業務規則
+
+1. **去重邏輯**:
+   - 唯一鍵: `(member_id, tag_name, message_id)`
+   - 同一會員對相同標籤在同一訊息中重複觸發僅計算一次
+   - 不同訊息來源可累計觸發次數
+
+2. **標籤命名規則**:
+   - 長度限制: 20 個字元
+   - 中英文皆計算
+   - 不允許特殊字符: `<>{}[]|\/`
+
+3. **標籤刪除規則**:
+   - 軟刪除: 保留歷史數據
+   - 硬刪除: 同時刪除關聯的 member_tags 記錄
+
+### 6.4 自動回應模塊
+
+#### 職責
+- 自動回應規則配置
+- 關鍵字匹配
+- 時間觸發
+- 歡迎訊息
+
+#### 觸發類型
+
+**1. 新好友歡迎訊息 (welcome)**:
+- 觸發時機: 用戶關注 LINE 官方帳號
+- 發送時機: 立即發送
+- 數量限制: 可設定 1-5 筆回應訊息
+
+**2. 關鍵字觸發 (keyword)**:
+- 觸發時機: 用戶發送訊息包含關鍵字
+- 匹配邏輯:
+  - 完全符合: 訊息文字 == 關鍵字
+  - 包含關鍵字: 訊息文字 contains 關鍵字
+- 關鍵字數量: 最多 20 組
+
+**3. 指定時間觸發 (time)**:
+- 觸發時機: 用戶發送訊息在指定時間範圍內
+- 時間配置:
+  - 時間區間: `trigger_time_start` ~ `trigger_time_end`
+  - 日期區間: `date_range_start` ~ `date_range_end`
+- 應用場景: 非營業時間自動回應
+
+#### 核心流程
+
+**關鍵字自動回應流程**:
+```
+1. 用戶發送訊息
+   ↓
+2. LINE Webhook 觸發 (message event)
+   ↓
+3. 獲取訊息文字
+   ↓
+4. 查詢啟用的關鍵字自動回應 (is_active = true)
+   ↓
+5. 匹配關鍵字:
+   - 遍歷所有關鍵字
+   - 完全符合或包含匹配
+   ↓
+6. 匹配成功:
+   - 獲取回應內容 (response_content 或 template_id)
+   - 發送回應訊息
+   - trigger_count += 1
+   - 記錄觸發日誌
+   ↓
+7. 匹配失敗:
+   - 不回應
+```
+
+#### 業務規則
+
+1. **優先級規則**:
+   - 關鍵字匹配優先於時間觸發
+   - 完全符合優先於包含匹配
+   - 若多個關鍵字匹配，僅回應第一個
+
+2. **回應數量限制**:
+   - 每個自動回應可設定 1-5 筆訊息
+   - 按順序依次發送
+
+3. **關鍵字去重**:
+   - 同一自動回應不可重複關鍵字
+   - 不同自動回應可重複關鍵字
+
+4. **啟用狀態控制**:
+   - `is_active = false` 時，不觸發
+   - 支持快速停用/啟用
+
+### 6.5 PMS 系統整合模塊
+
+#### 職責
+- PMS 數據接收
+- 會員匹配
+- 住宿記錄同步
+- 消費記錄管理
+
+#### 會員匹配邏輯
+
+**匹配規則**:
 ```python
-# ✓ 正確：通過參數注入依賴
-async def create_campaign(
-    self,
-    db: AsyncSession,  # 注入 database session
-    campaign_data: CampaignCreate
-) -> Campaign:
+def match_member(pms_data):
+    # 優先使用身分證號匹配
+    if pms_data.id_number:
+        member = Member.query.filter_by(id_number=pms_data.id_number).first()
+        if member:
+            return member, 100  # 匹配率 100%
+
+    # 若失敗，使用手機號碼匹配
+    if pms_data.phone:
+        member = Member.query.filter_by(phone=pms_data.phone).first()
+        if member:
+            return member, 95  # 匹配率 95%
+
+    # 若都失敗，創建新會員
+    new_member = Member.create(
+        name=pms_data.name,
+        id_number=pms_data.id_number,
+        phone=pms_data.phone,
+        join_source='PMS'
+    )
+    return new_member, 0  # 匹配率 0%（新建）
+```
+
+#### 數據同步流程
+
+**PMS 數據導入流程**:
+```
+1. 接收 PMS 系統數據 (CSV/API)
+   ↓
+2. 數據驗證:
+   - 必填字段檢查
+   - 格式驗證
+   ↓
+3. 批次處理:
+   for each record in pms_data:
+       a. 創建 pms_integrations 記錄
+       b. 執行會員匹配
+       c. 若匹配成功:
+          - 更新 member_id
+          - 同步住宿記錄
+          - 創建 consumption_records
+       d. 若匹配失敗:
+          - 創建新會員
+          - 標記 match_status = 'failed'
+   ↓
+4. 生成匹配報告:
+   - 總記錄數
+   - 匹配成功數
+   - 匹配失敗數
+   - 匹配成功率
+```
+
+#### 業務規則
+
+1. **匹配成功率目標**: ≥ 95%
+
+2. **數據更新策略**:
+   - 定期同步: 每日凌晨 3:00
+   - 增量更新: 僅處理新增或變更的記錄
+
+3. **住宿記錄同步規則**:
+   - 每筆住宿記錄創建一條 consumption_records
+   - 金額、房型、住宿日期同步
+
+---
+
+## 7. 安全設計
+
+### 7.1 認證機制
+
+#### JWT 認證
+- **算法**: HS256
+- **Token 有效期**: 60 分鐘 (可配置)
+- **Payload**:
+  ```json
+  {
+      "sub": "user_id",
+      "exp": 1699876543,
+      "role": "ADMIN"
+  }
+  ```
+
+#### 認證流程
+```
+1. 用戶登錄
+   ↓
+2. 驗證用戶名/密碼
+   ↓
+3. 生成 JWT Token
+   ↓
+4. 返回 access_token
+   ↓
+5. 客戶端攜帶 Token 請求
+   Authorization: Bearer <access_token>
+   ↓
+6. 服務端驗證 Token
+   - 解碼 Token
+   - 驗證簽名
+   - 檢查過期時間
+   ↓
+7. 提取用戶信息
+   ↓
+8. 執行業務邏輯
+```
+
+### 7.2 密碼安全
+
+#### 密碼加密
+- **算法**: Bcrypt
+- **Salt Rounds**: 12
+- **密碼強度要求**:
+  - 最小長度: 8 位
+  - 必須包含: 大小寫字母、數字、特殊字符
+
+#### 密碼處理流程
+```python
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# 密碼加密
+hashed = pwd_context.hash("plain_password")
+
+# 密碼驗證
+is_valid = pwd_context.verify("plain_password", hashed)
+```
+
+### 7.3 權限控制
+
+#### 角色權限矩陣
+
+| 資源 | ADMIN | MARKETING | CUSTOMER_SERVICE |
+|------|-------|-----------|------------------|
+| 會員管理 | CRUD | R | RU |
+| 群發訊息 | CRUD | CRUD | R |
+| 標籤管理 | CRUD | RU | RU |
+| 自動回應 | CRUD | CRUD | R |
+| 系統配置 | CRUD | - | - |
+| 用戶管理 | CRUD | - | - |
+
+**權限說明**:
+- C: Create (創建)
+- R: Read (讀取)
+- U: Update (更新)
+- D: Delete (刪除)
+
+#### 權限檢查
+```python
+from app.core.security import check_permission
+
+@router.post("/members")
+async def create_member(
+    member_data: MemberCreate,
+    current_user: User = Depends(get_current_user)
+):
+    # 檢查權限
+    check_permission(current_user, "members", "create")
+
+    # 執行業務邏輯
     ...
-
-# ✗ 錯誤：在 Service 內部創建連接
-async def create_campaign(self, campaign_data: CampaignCreate):
-    db = get_db()  # 不應該在這裡創建
-    ...
 ```
 
-**3. 錯誤處理**
+### 7.4 數據安全
+
+#### 敏感數據加密
+- **身分證號**: AES-256 加密存儲
+- **手機號碼**: 部分遮罩顯示 (0912***678)
+- **Email**: 部分遮罩顯示 (user***@example.com)
+
+#### SQL 注入防護
+- 使用 ORM (SQLAlchemy) 參數化查詢
+- 禁止拼接 SQL 語句
+- 輸入驗證與清理
+
+#### XSS 防護
+- 前端輸出轉義
+- Content-Security-Policy 頭部
+- 禁止 HTML 標籤輸入
+
+#### CSRF 防護
+- 使用 CSRF Token
+- SameSite Cookie 屬性
+
+### 7.5 API 安全
+
+#### 速率限制
+- **全局限制**: 100 req/min
+- **登錄限制**: 5 req/min
+- **上傳限制**: 10 req/min
+
+#### CORS 配置
 ```python
-# Service 層：拋出業務異常
-if not template:
-    raise ValueError(f"Template {template_id} not found")
+# 開發環境
+allow_origins = ["*"]
 
-# API 層：轉換為 HTTP 異常
-try:
-    campaign = await campaign_service.create_campaign(db, data)
-except ValueError as e:
-    raise HTTPException(status_code=400, detail=str(e))
+# 生產環境
+allow_origins = [
+    "https://example.com",
+    "https://admin.example.com"
+]
 ```
 
-**4. 事務管理**
-```python
-# ✓ 正確：Service 層不主動 commit，由調用方控制
-async def create_campaign(self, db: AsyncSession, data):
-    campaign = Campaign(...)
-    db.add(campaign)
-    await db.flush()  # 只 flush，不 commit
-    return campaign
-
-# API 層負責提交
-try:
-    campaign = await campaign_service.create_campaign(db, data)
-    await db.commit()  # 在這裡 commit
-except Exception:
-    await db.rollback()
-```
-
-**5. Service 方法命名**
-```
-✓ create_campaign()     → 創建單一資源
-✓ list_campaigns()      → 獲取列表
-✓ get_campaign_by_id()  → 獲取單一資源
-✓ update_campaign()     → 更新資源
-✓ delete_campaign()     → 刪除資源
-✓ send_campaign()       → 業務操作
-```
-
-#### 5.4.4 對比：重構前後
-
-**重構前（業務邏輯在路由層）**:
-- ❌ 路由函數 150+ 行，難以理解
-- ❌ 業務邏輯無法重用
-- ❌ 測試需要模擬整個 HTTP 請求
-- ❌ 代碼重複，多個路由有相似邏輯
-- ❌ 違反單一職責原則
-
-**重構後（Service 層）**:
-- ✅ 路由函數 10-30 行，職責清晰
-- ✅ Service 方法可在路由、排程、背景任務中重用
-- ✅ Service 可獨立單元測試
-- ✅ 業務邏輯集中管理
-- ✅ 符合 SOLID 原則
-
-### 5.5 安全機制
-
-1. **認證**: JWT Token，有效期 1 小時
-2. **授權**: 基於角色的訪問控制（RBAC）
-3. **敏感數據加密**:
-   - 密碼使用 bcrypt 加密
-   - 身分證號碼使用 AES-256 加密存儲
-4. **API 限流**:
-   - 登入接口：5 次/分鐘
-   - 一般接口：100 次/分鐘
-   - 消息發送：50 次/分鐘
-5. **CORS**: 僅允許指定域名訪問
-6. **SQL 注入防護**: 使用 ORM 參數化查詢
+#### 請求驗證
+- Content-Type 檢查
+- Payload 大小限制: 10MB
+- 文件類型白名單
 
 ---
 
-## 6. 部署方案
-
-### 6.1 開發環境
-```bash
-# 使用 Docker Compose
-docker-compose up -d
-```
-
-### 6.2 生產環境
-
-#### 服務器配置
-- **應用服務器**: 1-2 台
-  - CPU: 4 核
-  - 內存: 8GB
-  - 存儲: SSD 200GB（含文件存儲空間）
-  - 系統: Ubuntu 22.04 LTS
-
-- **數據庫服務器**: 1 主 1 從（可選）
-  - CPU: 4 核
-  - 內存: 8GB
-  - 存儲: SSD 500GB
-
-#### 部署步驟
-```bash
-# 1. 克隆代碼
-git clone <repository>
-
-# 2. 創建虛擬環境
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# venv\Scripts\activate   # Windows
-
-# 3. 安裝依賴
-pip install -r requirements.txt
-
-# 4. 創建上傳目錄
-mkdir -p uploads/images/templates
-mkdir -p uploads/images/members
-mkdir -p uploads/exports/reports
-
-# 5. 數據庫遷移
-alembic upgrade head
-
-# 6. 啟動服務（包含後台任務調度）
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
-```
-
----
-
-## 7. 監控與日誌
-
-### 7.1 應用監控
-- **工具**: Prometheus + Grafana
-- **指標**:
-  - API 響應時間
-  - 請求成功率
-  - 數據庫查詢性能
-  - 後台任務執行情況
-
-### 7.2 日誌管理
-- **日誌文件**: 按日期輪轉（logs/app-{date}.log）
-- **日誌級別**:
-  - ERROR: 錯誤信息
-  - WARNING: 警告信息
-  - INFO: 關鍵操作日誌
-  - DEBUG: 詳細調試信息（僅開發環境）
-
-### 7.3 告警機制
-- API 錯誤率超過 5%
-- 數據庫連接池耗盡
-- 後台任務執行失敗
-- 磁盤空間使用率超過 80%
-
----
-
-## 8. 性能優化
+## 8. 性能優化策略
 
 ### 8.1 數據庫優化
-- 為常用查詢字段添加索引
-- 使用連接池（最大連接數: 20）
-- 定期執行 ANALYZE 優化查詢計劃
-- 大表分區（如 messages 表按月分區）
 
-### 8.2 API 優化
-- 使用異步 I/O（asyncio）
-- 批量操作減少數據庫往返
-- 分頁查詢避免大結果集
-- 使用連接池管理數據庫連接
+#### 索引策略
+- 高頻查詢字段添加索引
+- 複合索引優化多條件查詢
+- 覆蓋索引減少回表查詢
 
-### 8.3 後台任務優化
-- **排程管理**: 使用 APScheduler AsyncIOScheduler 管理定時任務
-- **單例模式**: CampaignScheduler 採用單例模式確保唯一實例
-- **任務類型**:
-  - 活動排程: `campaign_{id}` job
-  - 問卷排程: `survey_{id}` job
-- **執行機制**:
-  - 排程時間到達 → 自動觸發背景任務
-  - 動態導入 line_app 避免模組衝突
-  - 直接調用 broadcast_message / push_survey_entry
-- **失敗處理**: 記錄錯誤日誌（未來可加重試機制）
+#### 查詢優化
+- 使用 `select_related` 和 `joinedload` 減少查詢次數
+- 避免 N+1 查詢問題
+- 分頁查詢避免全表掃描
 
----
+#### 連接池配置
+```python
+DATABASE_POOL_SIZE = 20
+DATABASE_MAX_OVERFLOW = 10
+```
 
-## 9. 測試策略
+### 8.2 緩存策略
 
-### 9.1 單元測試
-- 覆蓋率目標: ≥ 80%
-- 測試框架: Pytest
-- Mock 外部依賴
+#### Redis 緩存
+- **會員信息**: TTL 10 分鐘
+- **標籤列表**: TTL 30 分鐘
+- **統計數據**: TTL 5 分鐘
 
-### 9.2 集成測試
-- 測試 API 端點
-- 測試數據庫操作
-- 測試第三方集成
+#### 緩存模式
+- Cache-Aside: 先查緩存，再查數據庫
+- Write-Through: 寫入時同時更新緩存
+- Cache Invalidation: 數據變更時清除緩存
 
-### 9.3 壓力測試
-- 工具: Locust
-- 目標:
-  - 並發用戶: 1000
-  - 響應時間: P95 < 500ms
-  - 錯誤率: < 1%
+### 8.3 異步處理
 
----
+#### 異步 I/O
+- 全面使用 async/await 模式
+- 異步數據庫操作 (aiomysql)
+- 異步 HTTP 請求 (httpx)
 
-## 10. 版本控制與 CI/CD
+#### 後台任務
+- 使用 APScheduler 處理定時任務
+- 訊息推送異步執行
+- 統計數據異步計算
 
-### 10.1 Git 工作流
-- 主分支: `main`
-- 開發分支: `develop`
-- 功能分支: `feature/*`
-- 修復分支: `bugfix/*`
+### 8.4 批次操作
 
-### 10.2 CI/CD 流程
-```yaml
-# GitHub Actions 示例
-1. 代碼提交到 develop
-2. 運行自動化測試
-3. 代碼審查通過
-4. 合併到 main
-5. 自動部署到測試環境
-6. 手動部署到生產環境
+#### LINE 訊息批次發送
+```python
+# 每批 500 人
+batch_size = 500
+for i in range(0, len(recipients), batch_size):
+    batch = recipients[i:i+batch_size]
+    await line_bot_api.multicast(batch, messages)
+    await asyncio.sleep(1)  # 避免速率限制
+```
+
+#### 數據批次導入
+```python
+# 每批 1000 條記錄
+batch_size = 1000
+for i in range(0, len(records), batch_size):
+    batch = records[i:i+batch_size]
+    await db.bulk_insert_mappings(Member, batch)
+    await db.commit()
 ```
 
 ---
 
-## 附錄
+## 9. 部署架構
 
-### A. 環境變量配置
+### 9.1 部署環境
 
-```bash
-# backend/.env
+#### 開發環境
+- **服務器**: 本地開發機
+- **數據庫**: MySQL 8.0 (localhost)
+- **端口**: 8000 (FastAPI), 3306 (MySQL)
 
-# Application Configuration
-PROJECT_NAME=力麗飯店 LineOA CRM
-VERSION=0.1.0
-API_V1_STR=/api/v1
-ENVIRONMENT=development
-DEBUG=True
+#### 生產環境
+- **服務器**: 雲服務器 (AWS/GCP/Azure)
+- **數據庫**: MySQL 8.0 (RDS)
+- **反向代理**: Nginx
+- **進程管理**: Supervisor/Systemd
+- **HTTPS**: Let's Encrypt SSL 證書
 
-# Database Configuration
-DATABASE_URL=mysql+aiomysql://root:l123456@127.0.0.1:3306/lili_hotel
-DATABASE_POOL_SIZE=20
-DATABASE_MAX_OVERFLOW=10
+### 9.2 部署配置
 
-# Security Configuration
-SECRET_KEY=your-secret-key-change-in-production
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=60
+#### Nginx 配置
+```nginx
+server {
+    listen 80;
+    server_name api.example.com;
 
-# LINE Messaging API (主要配置在 line_app/.env)
-LINE_CHANNEL_ACCESS_TOKEN=your-line-channel-access-token
-LINE_CHANNEL_SECRET=your-line-channel-secret
+    # 靜態資源
+    location /uploads/ {
+        alias /data2/lili_hotel/backend/public/uploads/;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
 
-# OpenAI Configuration
-OPENAI_API_KEY=your-openai-api-key
-OPENAI_MODEL=gpt-4
-OPENAI_BASE_URL=https://api.openai.com/v1
-
-# File Storage Configuration
-UPLOAD_DIR=uploads
-MAX_FILE_SIZE=10485760  # 10MB in bytes
-ALLOWED_IMAGE_TYPES=jpg,jpeg,png,webp
-PUBLIC_BASE=http://localhost:8700  # 公開訪問的基礎 URL
-
-# CORS Configuration
-ALLOWED_ORIGINS=*  # 開發環境允許所有來源，生產環境需限制
+    # API 代理
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
 ```
 
-**說明**：
-- 使用 `pydantic_settings.BaseSettings` 自動讀取環境變量
-- LINE Bot 核心配置位於 `/data2/lili_hotel/line_app/.env`
-- `PUBLIC_BASE` 用於生成圖片公開訪問 URL
+#### Supervisor 配置
+```ini
+[program:lili_hotel_api]
+command=/usr/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+directory=/data2/lili_hotel/backend
+user=www-data
+autostart=true
+autorestart=true
+redirect_stderr=true
+stdout_logfile=/var/log/lili_hotel/api.log
+```
 
-### B. 常用命令
+### 9.3 啟動命令
 
+#### 開發模式
 ```bash
-# 創建數據庫遷移
-alembic revision --autogenerate -m "Add new table"
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+#### 生產模式
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+```
+
+#### 數據庫遷移
+```bash
+# 生成遷移文件
+alembic revision --autogenerate -m "description"
 
 # 執行遷移
 alembic upgrade head
 
 # 回滾遷移
 alembic downgrade -1
-
-# 運行測試
-pytest
-
-# 運行測試並生成覆蓋率報告
-pytest --cov=app --cov-report=html
-
-# 代碼格式化
-black app/
-isort app/
-
-# 代碼檢查
-flake8 app/
-
-# 清理臨時文件
-rm -rf uploads/images/temp/*
-rm -rf uploads/exports/temp/*
-
-# 啟動開發服務器（含熱重載）
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### C. 後台任務實現示例
+### 9.4 監控與日誌
 
-#### APScheduler 排程服務實現
-
+#### 日誌配置
 ```python
-# app/services/scheduler.py
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.date import DateTrigger
-
-class CampaignScheduler:
-    """活動與問卷排程管理器（單例模式）"""
-
-    _instance = None
-    _scheduler = None
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
-    def __init__(self):
-        if self._scheduler is None:
-            self._scheduler = AsyncIOScheduler()
-
-    async def schedule_campaign(self, campaign_id: int, scheduled_at: datetime):
-        """排程活動發送"""
-        job_id = f"campaign_{campaign_id}"
-
-        self._scheduler.add_job(
-            func=self._send_campaign_job,
-            trigger=DateTrigger(run_date=scheduled_at),
-            args=[campaign_id],
-            id=job_id,
-            name=f"Send Campaign {campaign_id}",
-            replace_existing=True
-        )
-
-    async def _send_campaign_job(self, campaign_id: int):
-        """背景任務：發送活動"""
-        # 1. 讀取 campaign 及 template
-        # 2. 構建 payload
-        # 3. 調用 line_app.broadcast_message()
-        # 4. 更新發送狀態
-        pass
-
-# 全局排程器實例
-scheduler = CampaignScheduler()
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("backend.log"),
+        logging.StreamHandler()
+    ]
+)
 ```
 
-#### 應用啟動時初始化排程器
-
-```python
-# app/main.py
-from app.services.scheduler import scheduler
-
-@app.on_event("startup")
-async def startup_event():
-    """應用啟動事件"""
-    # 啟動排程器
-    scheduler.start()
-    logger.info("✅ Scheduler started successfully")
-
-    # 顯示已排程的任務
-    jobs = scheduler.get_scheduled_jobs()
-    for job in jobs:
-        logger.info(f"📅 {job['name']}: {job['next_run_time']}")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """應用關閉事件"""
-    scheduler.shutdown()
-    logger.info("⏹️ Scheduler shutdown")
-```
-
-#### LineBotService 封裝 LINE 推播
-
-```python
-# app/services/linebot_service.py
-class LineBotService:
-    """LINE Bot 服務 - 封裝 line_app 調用"""
-
-    def __init__(self):
-        """動態導入 line_app 避免模組衝突"""
-        self.hotel_bot_module = self._get_line_app_module()
-
-    async def send_campaign(self, campaign_id: int):
-        """發送活動推播"""
-        async with AsyncSessionLocal() as db:
-            # 1. 讀取 campaign + template + carousel_items
-            campaign = await self._load_campaign(db, campaign_id)
-
-            # 2. 構建 payload
-            payload = self._build_campaign_payload(campaign)
-
-            # 3. 調用 line_app 推播
-            result = self.hotel_bot_module.broadcast_message(payload)
-
-            # 4. 更新狀態
-            campaign.status = CampaignStatus.SENT
-            campaign.sent_count = result.get("sent", 0)
-            await db.commit()
-```
-
-### D. 文件上傳處理示例
-
-```python
-# app/api/v1/upload.py
-from fastapi import UploadFile, File, HTTPException
-from app.integrations.file_storage import FileStorage
-
-@router.post("/upload/image")
-async def upload_image(
-    file: UploadFile = File(...),
-    category: str = "templates"
-):
-    # 驗證文件類型
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(400, "Only image files are allowed")
-
-    # 驗證文件大小
-    contents = await file.read()
-    if len(contents) > 10 * 1024 * 1024:  # 10MB
-        raise HTTPException(400, "File size exceeds 10MB")
-
-    # 保存文件
-    file_storage = FileStorage()
-    file_path = await file_storage.save_image(
-        contents,
-        filename=file.filename,
-        category=category
-    )
-
-    return {
-        "filename": file.filename,
-        "path": file_path,
-        "url": f"/static/uploads/{file_path}"
-    }
-```
-
-```python
-# app/integrations/file_storage.py
-import os
-import uuid
-from datetime import datetime
-from PIL import Image
-from io import BytesIO
-
-class FileStorage:
-    def __init__(self):
-        self.base_dir = "uploads"
-        self.ensure_directories()
-
-    def ensure_directories(self):
-        """確保目錄存在"""
-        dirs = [
-            "uploads/images/templates",
-            "uploads/images/members",
-            "uploads/images/temp",
-            "uploads/exports/reports",
-        ]
-        for dir_path in dirs:
-            os.makedirs(dir_path, exist_ok=True)
-
-    async def save_image(
-        self,
-        file_content: bytes,
-        filename: str,
-        category: str = "templates"
-    ) -> str:
-        """保存圖片並壓縮"""
-        # 生成唯一文件名
-        ext = filename.split(".")[-1]
-        unique_filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}.{ext}"
-
-        # 文件路徑
-        file_path = f"images/{category}/{unique_filename}"
-        full_path = os.path.join(self.base_dir, file_path)
-
-        # 圖片處理（壓縮）
-        image = Image.open(BytesIO(file_content))
-
-        # 如果圖片過大，調整尺寸
-        max_width = 1200
-        if image.width > max_width:
-            ratio = max_width / image.width
-            new_size = (max_width, int(image.height * ratio))
-            image = image.resize(new_size, Image.Resampling.LANCZOS)
-
-        # 保存圖片（壓縮質量 80%）
-        image.save(full_path, quality=80, optimize=True)
-
-        return file_path
-
-    def delete_file(self, file_path: str):
-        """刪除文件"""
-        full_path = os.path.join(self.base_dir, file_path)
-        if os.path.exists(full_path):
-            os.remove(full_path)
-```
+#### 監控指標
+- API 響應時間
+- 數據庫查詢時間
+- 緩存命中率
+- 錯誤率
+- 請求量 (QPS)
 
 ---
 
-**文檔版本**: v0.2
-**最後更新**: 2025-10-27
-**維護者**: 開發團隊
+## 10. 附錄
 
-**變更說明**:
+### 10.1 環境變量配置
 
-**v0.2 (2025-10-27) - 實際代碼同步更新**:
-- ✅ 更新項目目錄結構為實際實現的精簡版本
-- ✅ 修正技術棧說明（pydantic-settings, AsyncIO）
-- ✅ 同步數據模型字段（新增 last_triggered_at, image_base64 等）
-- ✅ 更新 template_carousel_items 的完整字段列表
-- ✅ 修正 Survey 和 Question 的 ENUM 值為大寫
-- ✅ 更新系統架構圖（含外部 line_app 依賴）
-- ✅ 補充活動推播和問卷發送的實際流程
-- ✅ 更新文件存儲路徑為實際路徑
-- ✅ 補充 APScheduler 排程服務實現細節
-- ✅ 更新環境變量配置為實際使用的配置
-- ✅ 補充 LineBotService 封裝說明
+```bash
+# 應用配置
+DEBUG=True
+ENVIRONMENT=development
 
-**v0.1 (2025-10-09) - 初始版本**:
-- 更新實際使用的技術棧版本
-- 新增 OpenAI API 集成配置
-- 更新環境變量配置為實際使用值
-- 移除德安 PMS 系統集成相關功能
+# 數據庫配置
+DATABASE_URL=mysql+aiomysql://user:password@localhost:3306/lili_hotel
+DATABASE_POOL_SIZE=20
+DATABASE_MAX_OVERFLOW=10
 
-**重要說明**:
-- 本文檔已與實際代碼庫同步（截至 2025-10-27）
-- 實際項目採用精簡設計，業務邏輯主要在 API 層實現
-- 核心 LINE Bot 功能依賴外部 `/data2/lili_hotel/line_app` 模組
-- 部分功能（analytics, auto_responses）尚未完整實現
+# JWT 配置
+SECRET_KEY=your-secret-key-here
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+
+# LINE API 配置
+LINE_CHANNEL_ACCESS_TOKEN=your-line-channel-access-token
+LINE_CHANNEL_SECRET=your-line-channel-secret
+
+# OpenAI 配置
+OPENAI_API_KEY=your-openai-api-key
+OPENAI_MODEL=gpt-4
+OPENAI_BASE_URL=https://api.openai.com/v1
+
+# CORS 配置
+ALLOWED_ORIGINS=*
+
+# 文件上傳配置
+UPLOAD_DIR=/data2/lili_hotel/backend/public/uploads
+MAX_FILE_SIZE=10485760
+ALLOWED_IMAGE_TYPES=jpg,jpeg,png,webp
+
+# 公共 URL
+PUBLIC_BASE=http://localhost:8700
+```
+
+### 10.2 常用命令
+
+#### 啟動服務
+```bash
+cd /data2/lili_hotel/backend
+source venv/bin/activate
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+#### 數據庫操作
+```bash
+# 創建數據庫
+mysql -u root -p -e "CREATE DATABASE lili_hotel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+# 執行遷移
+alembic upgrade head
+
+# 查看遷移歷史
+alembic history
+
+# 回滾遷移
+alembic downgrade -1
+```
+
+#### 依賴管理
+```bash
+# 安裝依賴
+pip install -r requirements.txt
+
+# 更新依賴
+pip freeze > requirements.txt
+```
+
+### 10.3 API 測試示例
+
+#### 使用 cURL 測試
+
+**登錄**:
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "password123"}'
+```
+
+**獲取會員列表**:
+```bash
+curl -X GET "http://localhost:8000/api/v1/members?page=1&limit=20" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+**創建會員**:
+```bash
+curl -X POST http://localhost:8000/api/v1/members \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -d '{
+    "name": "張三",
+    "email": "zhang@example.com",
+    "phone": "0912345678"
+  }'
+```
+
+### 10.4 故障排查
+
+#### 常見問題
+
+**1. 數據庫連接失敗**:
+- 檢查 DATABASE_URL 配置
+- 確認 MySQL 服務啟動
+- 檢查網絡連接
+
+**2. LINE API 調用失敗**:
+- 檢查 CHANNEL_ACCESS_TOKEN 是否正確
+- 確認 LINE 官方帳號狀態
+- 查看 LINE API 錯誤日誌
+
+**3. 文件上傳失敗**:
+- 檢查 UPLOAD_DIR 權限
+- 確認文件大小未超過限制
+- 檢查文件類型是否允許
+
+### 10.5 版本更新記錄
+
+#### v0.2 (2025-11-12)
+- 數據庫架構重構
+- campaigns 表 → messages 表 (群發訊息)
+- 新增 campaigns 表 (活動管理)
+- 標籤系統優化（雙表設計）
+- 向後兼容性維護
+
+#### v0.1 (2025-01-01)
+- 初始版本發布
+- 會員管理功能
+- 群發訊息功能
+- 標籤管理功能
+- LINE API 集成
+
+---
+
+**文檔結束**
+
+如有問題或建議，請聯繫技術團隊。

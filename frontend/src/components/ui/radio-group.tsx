@@ -32,20 +32,13 @@ function RadioGroupItem({
       )}
       {...props}
     >
-      <svg className="block size-full pointer-events-none" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
-        <g clipPath="url(#clip0_radio_6_62)">
-          <g></g>
-          <path d={svgPaths.p26f9ce00} fill="#4A4A4A" className="group-data-[state=checked]:fill-[#0F6BEB] transition-colors" />
-          <RadioGroupPrimitive.Indicator data-slot="radio-group-indicator" asChild>
-            <path d={svgPaths.pee04100} fill="#0F6BEB" />
-          </RadioGroupPrimitive.Indicator>
-        </g>
-        <defs>
-          <clipPath id="clip0_radio_6_62">
-            <rect fill="white" height="24" width="24" />
-          </clipPath>
-        </defs>
-      </svg>
+      {/* Outer circle */}
+      <div className="absolute inset-0 rounded-full border-2 border-[#4A4A4A] group-data-[state=checked]:border-[#0F6BEB] transition-colors" />
+      
+      {/* Inner dot - only visible when checked */}
+      <RadioGroupPrimitive.Indicator data-slot="radio-group-indicator" className="flex items-center justify-center size-full">
+        <div className="size-2.5 rounded-full bg-[#0F6BEB]" />
+      </RadioGroupPrimitive.Indicator>
     </RadioGroupPrimitive.Item>
   );
 }

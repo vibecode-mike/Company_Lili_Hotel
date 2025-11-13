@@ -1,6 +1,5 @@
 import json
-from app import broadcast_message #群發
-from app import push_campaign
+from app import push_campaign #群發
 
 if __name__ == "__main__":
     payload = {
@@ -11,6 +10,7 @@ if __name__ == "__main__":
         "url": "https://www.star-bit.io/",         # ← 原本是 action_url，改成 url
         "action_button_text": "查看詳情",
         "interaction_type": "open_url",            # ← 建議補上，確保按鈕可點且走追蹤
+        "interaction_tags": ["優惠", "萬聖節"],          # ← 新增：互動標籤
         "target_audience": "all",
         "source_campaign_id": 180  # ← 活動ID，只用來測試
     }

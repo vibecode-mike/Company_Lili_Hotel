@@ -6,7 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, and_, func, delete
 from app.database import get_db
 from app.models.member import Member
-from app.models.tag import MemberTag, InteractionTag, MemberTagRelation, TagType
+from app.models.tag import MemberTag, InteractionTag
+from app.models.member_interaction_record import MemberInteractionRecord
 from app.models.user import User
 from app.schemas.member import (
     MemberCreate,
@@ -53,11 +54,11 @@ async def get_members(
     if params.source:
         query = query.where(Member.source == params.source)
 
-    # 標籤篩選
+    # 標籤篩選 - 使用新的單表設計
     if params.tags:
-        tag_ids = [int(tid) for tid in params.tags.split(",")]
-        query = query.join(MemberTagRelation).where(
-            MemberTagRelation.tag_id.in_(tag_ids)
+        tag_names = params.tags.split(",")  # 現在使用標籤名稱而非ID
+        query = query.join(MemberTag).where(
+            MemberTag.tag_name.in_(tag_names)
         )
 
     # 排序 (MySQL 兼容版本)
@@ -88,36 +89,25 @@ async def get_members(
     # 獲取標籤信息
     items = []
     for member in members:
-        # 獲取會員標籤 - 分兩次查詢避免 JOIN 歧義
+        # 獲取會員標籤 - 使用新的單表設計
         tags = []
 
-        # 查詢會員標籤
+        # 查詢會員標籤（直接從 MemberTag 表查詢）
         member_tags_result = await db.execute(
-            select(MemberTag)
-            .join(MemberTagRelation, MemberTag.id == MemberTagRelation.tag_id)
-            .where(
-                and_(
-                    MemberTagRelation.member_id == member.id,
-                    MemberTagRelation.tag_type == TagType.MEMBER
-                )
-            )
+            select(MemberTag).where(MemberTag.member_id == member.id)
         )
         for tag in member_tags_result.scalars():
-            tags.append(TagInfo(id=tag.id, name=tag.name, type="member"))
+            tags.append(TagInfo(id=tag.id, name=tag.tag_name, type="member"))
 
-        # 查詢互動標籤
+        # 查詢互動標籤（通過 MemberInteractionRecord 關聯）
         interaction_tags_result = await db.execute(
             select(InteractionTag)
-            .join(MemberTagRelation, InteractionTag.id == MemberTagRelation.tag_id)
-            .where(
-                and_(
-                    MemberTagRelation.member_id == member.id,
-                    MemberTagRelation.tag_type == TagType.INTERACTION
-                )
-            )
+            .join(MemberInteractionRecord, InteractionTag.id == MemberInteractionRecord.tag_id)
+            .where(MemberInteractionRecord.member_id == member.id)
+            .distinct()
         )
         for tag in interaction_tags_result.scalars():
-            tags.append(TagInfo(id=tag.id, name=tag.name, type="interaction"))
+            tags.append(TagInfo(id=tag.id, name=tag.tag_name, type="interaction"))
 
         member_dict = MemberListItem.model_validate(member).model_dump()
         member_dict["tags"] = tags
@@ -145,14 +135,14 @@ async def get_member_count(
 
     # 如果是篩選目標對象且有標籤條件
     if target_audience == "filtered" and tag_ids:
-        tag_id_list = [int(tid) for tid in tag_ids.split(",")]
+        tag_name_list = tag_ids.split(",")  # 現在使用標籤名稱
 
-        # 加入標籤關聯表並篩選
+        # 使用新的單表設計篩選
         query = (
             select(func.count(func.distinct(Member.id)))
             .select_from(Member)
-            .join(MemberTagRelation, Member.id == MemberTagRelation.member_id)
-            .where(MemberTagRelation.tag_id.in_(tag_id_list))
+            .join(MemberTag, Member.id == MemberTag.member_id)
+            .where(MemberTag.tag_name.in_(tag_name_list))
         )
 
     result = await db.execute(query)
@@ -174,36 +164,25 @@ async def get_member(
     if not member:
         raise HTTPException(status_code=404, detail="會員不存在")
 
-    # 獲取標籤 - 分兩次查詢避免 JOIN 歧義
+    # 獲取標籤 - 使用新的單表設計
     tags = []
 
-    # 查詢會員標籤
+    # 查詢會員標籤（直接從 MemberTag 表查詢）
     member_tags_result = await db.execute(
-        select(MemberTag)
-        .join(MemberTagRelation, MemberTag.id == MemberTagRelation.tag_id)
-        .where(
-            and_(
-                MemberTagRelation.member_id == member.id,
-                MemberTagRelation.tag_type == TagType.MEMBER
-            )
-        )
+        select(MemberTag).where(MemberTag.member_id == member.id)
     )
     for tag in member_tags_result.scalars():
-        tags.append(TagInfo(id=tag.id, name=tag.name, type="member"))
+        tags.append(TagInfo(id=tag.id, name=tag.tag_name, type="member"))
 
-    # 查詢互動標籤
+    # 查詢互動標籤（通過 MemberInteractionRecord 關聯）
     interaction_tags_result = await db.execute(
         select(InteractionTag)
-        .join(MemberTagRelation, InteractionTag.id == MemberTagRelation.tag_id)
-        .where(
-            and_(
-                MemberTagRelation.member_id == member.id,
-                MemberTagRelation.tag_type == TagType.INTERACTION
-            )
-        )
+        .join(MemberInteractionRecord, InteractionTag.id == MemberInteractionRecord.tag_id)
+        .where(MemberInteractionRecord.member_id == member.id)
+        .distinct()
     )
     for tag in interaction_tags_result.scalars():
-        tags.append(TagInfo(id=tag.id, name=tag.name, type="interaction"))
+        tags.append(TagInfo(id=tag.id, name=tag.tag_name, type="interaction"))
 
     # 處理 None 值的欄位
     member_data = {
@@ -310,26 +289,29 @@ async def add_member_tags(
     if not member:
         raise HTTPException(status_code=404, detail="會員不存在")
 
-    # 添加標籤
+    # 添加標籤 - 使用新的單表設計
     for tag_id in request.tag_ids:
+        # 注意：tag_id 現在應該是標籤名稱，或需要查詢標籤表獲取名稱
+        # 這裡假設 tag_id 實際上是標籤名稱（需要前端配合修改）
+        tag_name = str(tag_id)  # 臨時轉換
+
         # 檢查標籤是否已存在
         exists = await db.execute(
-            select(MemberTagRelation).where(
+            select(MemberTag).where(
                 and_(
-                    MemberTagRelation.member_id == member_id,
-                    MemberTagRelation.tag_id == tag_id,
+                    MemberTag.member_id == member_id,
+                    MemberTag.tag_name == tag_name,
                 )
             )
         )
 
         if not exists.scalar_one_or_none():
-            relation = MemberTagRelation(
+            member_tag = MemberTag(
                 member_id=member_id,
-                tag_id=tag_id,
-                tag_type=TagType.MEMBER,
-                tagged_at=datetime.utcnow(),
+                tag_name=tag_name,
+                tag_source="CRM",  # 手動添加的標籤來源為 CRM
             )
-            db.add(relation)
+            db.add(member_tag)
 
     await db.commit()
 
@@ -344,11 +326,14 @@ async def remove_member_tag(
     current_user: User = Depends(get_current_user),
 ):
     """移除會員標籤"""
+    # tag_id 現在應該是標籤名稱
+    tag_name = str(tag_id)  # 臨時轉換
+
     await db.execute(
-        delete(MemberTagRelation).where(
+        delete(MemberTag).where(
             and_(
-                MemberTagRelation.member_id == member_id,
-                MemberTagRelation.tag_id == tag_id,
+                MemberTag.member_id == member_id,
+                MemberTag.tag_name == tag_name,
             )
         )
     )

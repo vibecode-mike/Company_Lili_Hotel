@@ -8,6 +8,7 @@
 # - 問卷（LIFF 動態表單）建立/推播/儲存
 # - 靜態 /uploads 提供給 LINE 取圖
 # - /test_push 測試推播
+# 顯示訊息群發餘額功能 調用usage_monitor.py程式 並將usage_status.html放置在lili_hotel/backend/uploads/ 若要改動請注意路徑
 # ============================================================
 
 import os
@@ -20,6 +21,7 @@ import logging
 import datetime
 import requests
 import uuid
+import usage_monitor #群發餘額量顯示
 from collections import defaultdict, deque
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote_plus, quote
@@ -88,10 +90,10 @@ os.makedirs(ASSET_LOCAL_DIR, exist_ok=True)
 # -------------------------------------------------
 SYSTEM_PROMPT = (
 """
-你是「水漾月明度假文旅（Hana Mizu Tsuki Hotel）」的智能客服。你只提供本飯店的官方且已知資訊；不得臆測或延伸至館外商家名單。若使用者需求超出已知資訊或需要館外名單，請婉拒並引導致電櫃檯（037-255-358）。
+你是「水漾月明度假文旅（Hana Mizu Tsuki Hotel）」的智能客服。用親切專業語氣接待使用者，只回答飯店相關的訊息。若使用者需求超出已知資訊或需要館外名單，請婉拒並引導致電櫃檯（037-255-358）。
 
 【回答範圍（必遵守）】
-- 可回：房型與價格、訂房、交通與聯絡、優惠專案、館內設施、環保政策、周邊景點（僅提供清單，不提供第三方評價/營業資訊），與飯店相關的內容可回答。
+- 可回：打招呼、房型與價格、訂房、交通與聯絡、優惠專案、館內設施、環保政策、周邊景點（僅提供清單，不提供第三方評價/營業資訊），與飯店相關的內容可回答。
 - 不可回：與本飯店不相關的內容。
 
 【語氣與格式】
@@ -168,12 +170,15 @@ if not OPENAI_API_KEY:
     raise RuntimeError("請在 .env 設定 OPENAI_API_KEY")
 if not PUBLIC_BASE:
     raise RuntimeError("請在 .env 設定 PUBLIC_BASE")
+# LIFF 可選：未設定就跳過，僅停用 LIFF 相關功能
 if not LIFF_ID_OPEN:
-    raise RuntimeError("請在 .env 設定 LIFF_ID_OPEN")
+    logging.info("LIFF_ID_OPEN 還未設定; 若要使用 LIFF 功能，請先填入")
 
 logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__, static_url_path=ASSET_ROUTE_PREFIX, static_folder=ASSET_LOCAL_DIR)
+
+app.register_blueprint(usage_monitor.bp)
 
 # LINE v3
 config = Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN)
@@ -226,6 +231,94 @@ def get_messaging_api(channel_id: str | None = None):
         return messaging_api  # 找不到就退回預設，避免出錯
     cfg = Configuration(access_token=cred["token"])
     return MessagingApi(ApiClient(cfg))
+
+# ========= 用 LINE 的 Channel ID（line_channel_id）抓憑證 =========
+def get_credentials_by_line_id(line_channel_id: str) -> dict | None:
+    row = fetchone("""
+        SELECT
+            channel_access_token AS token,
+            channel_secret       AS secret,
+            COALESCE(liff_id_open, '') AS liff_id_open
+        FROM ryan_line_channels
+        WHERE line_channel_id = :cid AND is_active = 1
+        LIMIT 1
+    """, {"cid": line_channel_id})
+    return row  # 可能為 None
+
+# 用 Messaging API 的 Channel Access Token 設定/啟用 Webhook
+def setup_line_webhook(line_channel_id: str, access_token: str):
+    # 你要單一路徑就用 /callback；要每客戶一條就用 /callback/<id>
+    webhook_url = f"https://linebot.star-bit.io/callback/{line_channel_id}"
+    # 如果你目前伺服器沒有 /callback/<id> 路由，請改成：
+    # webhook_url = "https://linebot.star-bit.io/callback"
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",   # ★ 一定是 Messaging API 的長期 token
+        "Content-Type": "application/json"
+    }
+
+    # 1) 設定 Webhook URL
+    r1 = requests.put(
+        "https://api.line.me/v2/bot/channel/webhook/endpoint",
+        headers=headers, json={"endpoint": webhook_url}, timeout=10
+    )
+    # 2) 啟用 Use webhook
+    r2 = requests.put(
+        "https://api.line.me/v2/bot/channel/webhook/enable",
+        headers=headers, timeout=10
+    )
+
+    return {"webhook_url": webhook_url, "set_status": r1.status_code, "enable_status": r2.status_code}
+# 功能：用 Channel ID + Secret 換取可呼叫 LIFF API 的 access_token（client_credentials）
+def get_login_access_token(channel_id: str, channel_secret: str) -> str:
+    resp = requests.post(
+        "https://api.line.me/v2/oauth/accessToken",
+        data={
+            "grant_type": "client_credentials",
+            "client_id": channel_id,
+            "client_secret": channel_secret,
+        },
+        timeout=10,
+    )
+    resp.raise_for_status()
+    return resp.json().get("access_token", "")
+
+
+# 用 access_token 建立 LIFF App 並回傳 liffId，同時寫回資料庫的 liff_id_open
+def setup_line_liff(line_channel_id: str, channel_secret: str, view_url: str, size: str = "full") -> dict:
+
+    # 1) 先用 Channel ID+Secret 換 LIFF 管理用 access_token
+    access_token = get_login_access_token(line_channel_id, channel_secret)
+    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+
+    # 2) 建立 LIFF（view_url 是你要在 LIFF 裡面開啟的頁面 URL）
+    payload = {
+        "view": {"type": size, "url": view_url},
+        "description": f"auto-{line_channel_id}",
+    }
+    create = requests.post("https://api.line.me/liff/v1/apps", headers=headers, json=payload, timeout=10)
+    ok = create.status_code // 100 == 2
+    liff_id = ""
+    try:
+        body = create.json()
+        liff_id = body.get("liffId", "")
+    except Exception:
+        pass
+
+    # 3) 建立成功就把 liff_id_open 寫回 DB（你已經有這個欄位）
+    if ok and liff_id:
+        execute(
+            "UPDATE ryan_line_channels SET liff_id_open=:liff, updated_at=:now WHERE line_channel_id=:cid",
+            {"liff": liff_id, "cid": line_channel_id, "now": utcnow()},
+        )
+
+    return {
+        "ok": ok,
+        "status": create.status_code,
+        "liff_id": liff_id,
+        "resp": (create.json() if ok else {"text": create.text[:500]}),
+    }
+
 
 
 # -------------------------------------------------
@@ -581,35 +674,176 @@ def image_url_from_item(item: dict) -> Optional[str]:
 # -------------------------------------------------
 # Flex builders（推廣）
 # -------------------------------------------------
+def make_image_button_bubble(item: dict, tracked_uri: Optional[str]):
+    body = []
+    if item.get("title"):
+        body.append({"type":"text","text":str(item["title"]),"weight":"bold","size":"lg","wrap":True})
+    if item.get("description"):
+        body.append({"type":"text","text":str(item["description"]),"wrap":True,"margin":"sm"})
+    if item.get("price") is not None:
+        body.append({"type":"text","text":f"$ {item['price']}", "weight":"bold","margin":"sm"})
+
+    hero = {"type":"image","url": image_url_from_item(item) or "https://dummyimage.com/1200x800/eeeeee/333333&text=No+Image",
+            "size":"full","aspectMode":"cover","aspectRatio":"1:1"}
+
+    # 無論如何 hero 直接可點
+    action_uri = tracked_uri or item.get("action_url") or item.get("url") or f"{PUBLIC_BASE}/"
+    hero["action"] = {"type":"uri","uri": action_uri}
+
+    return {
+        "type":"bubble",
+        "hero": hero,
+        "body":{"type":"box","layout":"vertical","spacing":"sm","contents": body or [{"type":"text","text":" "}]},
+        **({
+            "footer":{
+                "type":"box","layout":"vertical","spacing":"sm",
+                "contents":[{"type":"button","style":"primary","action":{"type":"uri","label": item.get("action_button_text") or "詳情","uri": action_uri}}]
+            }
+        } if action_uri else {})
+    }
+
+def make_image_click_bubble(item: dict, tracked_uri: Optional[str]):
+    image_url = image_url_from_item(item) or "https://dummyimage.com/1200x800/eeeeee/333333&text=No+Image"
+    aspect_ratio = item.get("image_aspect_ratio", "1:1")
+    action_button_enabled = item.get("action_button_enabled", False)
+
+    if not action_button_enabled:
+        click_action_type = item.get("image_click_action_type", "open_image")
+        click_action_value = item.get("image_click_action_value")
+
+        if click_action_type == "open_image":
+            action_uri = image_url
+        elif click_action_type == "open_url" and click_action_value:
+            action_uri = tracked_uri or click_action_value
+        else:
+            action_uri = tracked_uri or image_url
+
+        return {
+            "type": "bubble",
+            "hero": {
+                "type": "image",
+                "url": image_url,
+                "size": "full",
+                "aspectRatio": aspect_ratio,
+                "aspectMode": "cover",
+                "action": {"type": "uri", "uri": action_uri}
+            }
+        }
+
+    # 有動作按鈕
+    btn_action_type = (item.get("action_button_interaction_type") or "open_url").lower()
+    btn_label = item.get("action_button_text") or "查看詳情"
+
+    # 按鈕：open_url 走追蹤
+    if btn_action_type == "open_url":
+        button_action = {"type": "uri", "label": btn_label, "uri": tracked_uri}
+    else:
+        button_action = {"type": "message", "label": btn_label, "text": btn_label}
+
+    # 圖片：也導到追蹤（如不想記圖片點擊，可改 image_url）
+    hero_action = {"type": "uri", "uri": tracked_uri}
+
+    return {
+        "type": "bubble",
+        "hero": {
+            "type": "image",
+            "url": image_url,
+            "size": "full",
+            "aspectRatio": aspect_ratio,
+            "aspectMode": "cover",
+            "action": hero_action
+        },
+        "footer": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [{
+                "type": "button",
+                "style": "primary",
+                "action": button_action
+            }]
+        }
+    }
+
+
 def build_user_messages_from_payload(payload: dict, campaign_id: int, line_user_id: str) -> List[FlexMessage]:
-    """
-    從 payload 構建 LINE Flex Message
-    只支援前端產生的 Flex Message JSON 格式
-    """
+    ttype = (payload.get("template_type") or payload.get("type") or "").strip().lower()
     title = payload.get("title") or "活動通知"
     messages = []
 
-    # 使用 Flex Message JSON（前端產生）
-    flex_message_json = payload.get("flex_message_json")
-    if not flex_message_json:
-        logging.error("❌ Missing flex_message_json in payload")
-        raise ValueError("Campaign must include flex_message_json field")
+    # 準備項目
+    if payload.get("carousel_items"):
+        items = sorted(payload["carousel_items"], key=lambda x: x.get("sort_order") or 0)
+    else:
+        items = [{
+            "image_base64": payload.get("image_base64"),
+            "image_url": payload.get("image_url"),
+            "title": payload.get("title"),
+            "description": payload.get("notification_text"),
+            "price": payload.get("price"),
+            "action_url": payload.get("url"),
+            "interaction_tags": payload.get("interaction_tags"),
+            "action_button_enabled": True if payload.get("interaction_type") == "open_url" else False,
+            "action_button_text": payload.get("action_button_text") or "查看詳情",
+            "action_button_interaction_type": payload.get("interaction_type") or "open_url",
+            "sort_order": 0
+        }]
 
-    try:
-        # 直接解析前端產生的 JSON
-        flex_data = json.loads(flex_message_json) if isinstance(flex_message_json, str) else flex_message_json
-        logging.info("✅ Using Flex Message JSON from payload (frontend generated)")
-        logging.debug("Flex Message structure: %s", json.dumps(flex_data, ensure_ascii=False, indent=2))
+    # 產生追蹤連結（含 &src &tag）
+    def tracked_uri(item) -> Optional[str]:
+        target_url = (
+            item.get("action_url")
+            or item.get("action_button_url")
+            or item.get("url")
+            or f"{PUBLIC_BASE}/"
+        )
 
-        # TODO: 未來可在此添加追蹤 URI 邏輯
-        # 遍歷 Flex Message 結構，替換 action.uri 為追蹤 URI
+        btn_enabled = item.get("action_button_enabled", False)
+        btn_type = (item.get("action_button_interaction_type") or "").lower()
+        interaction_type = "button_url" if (btn_enabled and btn_type == "open_url") else "image_click"
 
-        fc = FlexContainer.from_dict(flex_data)
-        messages.append(FlexMessage(alt_text=title, contents=fc))
-        return messages
-    except Exception as e:
-        logging.error(f"❌ Failed to parse flex_message_json: {e}")
-        raise ValueError(f"Invalid flex_message_json format: {e}")
+        # &src
+        src = payload.get("source_campaign_id")
+        src_q = f"&src={src}" if src is not None else ""
+
+        # &tag（支援 list / str）
+        tag_val = item.get("interaction_tags") or payload.get("interaction_tags")
+        if isinstance(tag_val, list):
+            tag_val = ",".join([str(x).strip() for x in tag_val if str(x).strip()])
+        if isinstance(tag_val, str):
+            tag_val = tag_val.strip()
+        tag_q = f"&tag={quote(tag_val, safe='')}" if tag_val else ""
+
+        uri = (
+            f"{PUBLIC_BASE}/__track"
+            f"?cid={campaign_id}&uid={line_user_id}"
+            f"&type={interaction_type}&to={quote(target_url, safe='')}"
+            f"{src_q}{tag_q}"
+        )
+        logging.warning("[TRACK_URI] %s", uri)  # debug
+        return uri
+
+    # 建立 Bubble（確保 action 用 tracked_uri）
+    bubbles = []
+    for it in items:
+        uri = tracked_uri(it)
+        it["image_click_action_type"] = it.get("image_click_action_type", "open_url")
+        if ttype == "image_card":
+            bubbles.append(make_image_button_bubble(it, uri))
+        elif ttype in ("image_click", "carousel", ""):
+            bubbles.append(make_image_click_bubble(it, uri))
+        else:
+            bubbles.append(make_image_button_bubble(it, uri))
+
+    # 合併 Flex
+    if len(bubbles) > 1 or ttype == "carousel":
+        flex = {"type": "carousel", "contents": bubbles}
+    else:
+        flex = bubbles[0]
+
+    logging.error("=== FLEX DEBUG OUTPUT ===\n%s", json.dumps(flex, ensure_ascii=False, indent=2))
+    fc = FlexContainer.from_dict(flex)
+    messages.append(FlexMessage(alt_text=title, contents=fc))
+    return messages
 
 
 
@@ -692,21 +926,23 @@ def _add_campaign_recipients(campaign_id: int, mids: List[int]):
 def push_campaign(payload: dict) -> Dict[str, Any]:
     cid = _create_campaign_row(payload)
 
-    # 根據 target_audience 取得目標用戶
+    # 依 target_audience 取得目標用戶 
     target_audience = payload.get("target_audience", "all")
     target_tags = payload.get("target_tags", [])
 
-    # 構建查詢條件
     if target_audience == "all":
         # 發送給所有用戶
-        rs = fetchall("SELECT line_uid, id FROM members WHERE line_uid IS NOT NULL AND line_uid<>''")
+        rs = fetchall("""
+            SELECT line_uid, id
+            FROM members
+            WHERE line_uid IS NOT NULL
+              AND line_uid <> ''
+        """)
     elif target_audience == "tags" and target_tags:
         # 發送給特定標籤的用戶
-        # 將標籤列表轉換為 SQL IN 條件
         tag_placeholders = ", ".join([f":tag{i}" for i in range(len(target_tags))])
         tag_params = {f"tag{i}": tag for i, tag in enumerate(target_tags)}
-
-        query = f"""
+        rs = fetchall(f"""
             SELECT DISTINCT m.line_uid, m.id
             FROM members m
             JOIN member_tag_relations mtr ON m.id = mtr.member_id
@@ -714,35 +950,48 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
             WHERE m.line_uid IS NOT NULL
               AND m.line_uid <> ''
               AND mt.name IN ({tag_placeholders})
-        """
-        rs = fetchall(query, tag_params)
+        """, tag_params)
     else:
         # 預設發送給所有用戶
-        rs = fetchall("SELECT line_uid, id FROM members WHERE line_uid IS NOT NULL AND line_uid<>''")
+        rs = fetchall("""
+            SELECT line_uid, id
+            FROM members
+            WHERE line_uid IS NOT NULL
+              AND line_uid <> ''
+        """)
 
     if not rs:
-        execute("UPDATE campaigns SET status='no_recipients', updated_at=:now WHERE id=:cid",
-                {"cid": cid, "now": utcnow()})
+        execute(
+            "UPDATE campaigns SET status='no_recipients', updated_at=:now WHERE id=:cid",
+            {"cid": cid, "now": utcnow()},
+        )
         return {"ok": False, "campaign_id": cid, "sent": 0, "error": "no recipients found"}
+
+    # 在迴圈外先決定要用哪個 Messaging API（避免重複 new client）
+    line_cid = (payload or {}).get("line_channel_id")
+    inner_cid = (payload or {}).get("channel_id")
+    api = get_messaging_api_by_line_id(line_cid) if line_cid else get_messaging_api(inner_cid)
 
     sent = 0
     failed = 0
+
     for r in rs:
         uid = r["line_uid"]
         mid = r["id"]
-                
+
         if not _is_valid_line_user_id(uid):
             logging.warning(f"skip invalid user id: {uid}")
             continue
 
         try:
-            msgs = build_user_messages_from_payload(payload, cid, uid)
+            # 組訊息
+            msgs = build_user_messages_from_payload(payload, inner_cid, uid)
 
-            # LINE v3 push（改成會自動依 channel_id 選對應 token）
-            api = get_messaging_api(payload.get("channel_id"))  
-            api.push_message(PushMessageRequest(to=uid, messages=msgs))  
+            # 推播
+            api.push_message(PushMessageRequest(to=uid, messages=msgs))
             sent += 1
 
+            # 紀錄一筆 outgoing 訊息（清掉大欄位避免塞爆）
             if mid is not None:
                 payload_for_log = dict(payload)
                 payload_for_log.pop("image_base64", None)
@@ -752,25 +1001,20 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
                     "outgoing",
                     "text",
                     {"campaign_id": cid, "payload": payload_for_log},
-                    campaign_id=cid
+                    campaign_id=cid,
                 )
         except Exception as e:
             failed += 1
             logging.exception(f"push to {uid} failed: {e}")
 
     # 更新活動發送統計
-    execute("UPDATE campaigns SET sent_count=:sent, updated_at=:now WHERE id=:cid",
-            {"sent": sent, "cid": cid, "now": utcnow()})
+    execute(
+        "UPDATE campaigns SET sent_count=:sent, updated_at=:now WHERE id=:cid",
+        {"sent": sent, "cid": cid, "now": utcnow()},
+    )
 
     logging.info(f"📤 Campaign {cid} sent to {sent} users (failed: {failed})")
     return {"ok": True, "campaign_id": cid, "sent": sent, "failed": failed}
-
-
-# 群發（支援追蹤的替代：實際走逐一推播）
-def broadcast_message(payload):
-    logging.info("broadcast_message: fan-out via push_campaign() for per-user tracking")
-    return push_campaign(payload)
-
 
 
 # -------------------------------------------------
@@ -1256,7 +1500,13 @@ def _is_valid_line_user_id(uid: str) -> bool:
     # 真正的 LINE userId：U 開頭、長度 33
     return isinstance(uid, str) and uid.startswith("U") and len(uid) == 33
 
-def push_survey_entry(survey_id: int, title: Optional[str] = None, preview_text: Optional[str] = None, channel_id: Optional[str] = None) -> int:
+def push_survey_entry(
+    survey_id: int,
+    title: Optional[str] = None,
+    preview_text: Optional[str] = None,
+    channel_id: Optional[str] = None,          # 舊系統內部 id
+    line_channel_id: Optional[str] = None      # LINE 官方 Channel ID
+) -> int:
     """
     入口卡片推送(含三重保險):
       1) 只推給有效的 userId(U 開頭、長度 33)
@@ -1329,7 +1579,10 @@ def push_survey_entry(survey_id: int, title: Optional[str] = None, preview_text:
     for i, m in enumerate(msgs):
         logging.info(f"  [{i}] {type(m).__name__}")
 
-    api = get_messaging_api(channel_id)
+    if line_channel_id:
+        api = get_messaging_api_by_line_id(line_channel_id)
+    else:
+        api = get_messaging_api(channel_id)
 
     # --- 收件者名單 ---
     test_uids = [u.strip() for u in os.getenv("TEST_UIDS", "").split(",") if u.strip()]
@@ -1351,9 +1604,6 @@ def push_survey_entry(survey_id: int, title: Optional[str] = None, preview_text:
         """)
 
     sent = 0
-
-    # 依 channel_id 取對應的 MessagingApi；沒給就用預設
-    api = get_messaging_api(channel_id)
 
     for r in rs:
         uid = r["line_uid"]
@@ -1379,13 +1629,29 @@ def push_survey_entry(survey_id: int, title: Optional[str] = None, preview_text:
 
     return sent
 
+# ========= 用 LINE Channel ID 取 MessagingApi =========
+def get_messaging_api_by_line_id(line_channel_id: str | None) -> MessagingApi:
+    # 沒帶就回退到預設（.env）
+    if not line_channel_id:
+        return messaging_api  # 你現有的預設 client
+
+    cred = get_credentials_by_line_id(line_channel_id)
+    if not cred or not cred.get("token"):
+        logging.warning(f"[MSGAPI] line_channel_id={line_channel_id} not found; fallback to default")
+        return messaging_api
+
+    cfg = Configuration(access_token=cred["token"])
+    return MessagingApi(ApiClient(cfg))
+
+
 def send_survey_via_liff(payload: dict) -> dict:
     ids = register_survey_from_json(payload)
     pushed = push_survey_entry(
     ids["survey_id"],
     title=payload.get("name") or "問卷",
     preview_text=payload.get("description"),
-    channel_id=payload.get("channel_id")  # ← 允許從後台 JSON 帶頻道
+    channel_id=payload.get("channel_id"),  # ← 允許從後台 JSON 帶頻道
+    line_channel_id=payload.get("line_channel_id")
     )
 
     return {"template_id": ids["template_id"], "survey_id": ids["survey_id"], "pushed": pushed}
@@ -1549,10 +1815,20 @@ def __track():
 # 群發
 @app.route("/api/broadcast", methods=["POST"])
 def api_broadcast():
-    payload = request.get_json()
-    logging.info(f"📣 Received broadcast request: {payload}")
-    result = broadcast_message(payload)
-    return jsonify(result)
+    payload = request.get_json(force=True) or {}
+
+    # 1) 用量 preflight（不足就擋）
+    from usage_monitor import preflight_check
+    check = preflight_check(payload)
+    if not check.get("ok"):
+        # 409：讓前端彈出「餘額不足」提示
+        # 回傳 { code:"INSUFFICIENT_QUOTA", remaining, needed, deficit }
+        return jsonify(check), 409
+
+    # 2) 足夠才真正送推播（沿用你現有的推播主流程）
+    result = push_campaign(payload)  # 你現成的群發函式
+    return jsonify({**result, "preflight": check})
+
 
 @app.post("/__survey_submit")
 def __survey_submit():
@@ -1567,35 +1843,83 @@ def __survey_submit():
         logging.exception(e)
         return jsonify({"ok": False, "error": str(e)[:200]}), 400
     
+# -------------------------------------------------
+# LINE Channel Connect API
+# -------------------------------------------------
+@app.post("/api/connect_line_channel")
+def connect_line_channel():
+    data = request.json
+    line_channel_id = data["channel_id"]
+    secret = data["channel_secret"]
+    token = data["access_token"]
+
+    # 存入資料庫（若重複 channel_id 則更新）
+    execute("""
+        INSERT INTO ryan_line_channels (line_channel_id, channel_secret, channel_access_token, is_active)
+        VALUES (:cid, :sec, :tok, 1)
+        ON CONFLICT(line_channel_id)
+        DO UPDATE SET channel_secret=:sec, channel_access_token=:tok, is_active=1
+    """, {"cid": line_channel_id, "sec": secret, "tok": token})
+
+    # 自動註冊 webhook
+    result = setup_line_webhook(line_channel_id, token)
+    return jsonify(result)
+
+# 後台送進 Channel ID/Secret + 要開啟的 view_url，自動建立 LIFF 並回存 liff_id_open
+@app.post("/api/connect_line_liff")
+def connect_line_liff():
+    data = request.json or {}
+    line_channel_id = data.get("channel_id", "").strip()
+    channel_secret  = data.get("channel_secret", "").strip()
+    view_url        = data.get("view_url", "").strip()
+    size            = (data.get("size") or "full").strip()  # full/tall/compact
+
+    if not line_channel_id or not channel_secret or not view_url:
+        return jsonify({"ok": False, "error": "channel_id / channel_secret / view_url are required"}), 400
+
+    try:
+        result = setup_line_liff(line_channel_id, channel_secret, view_url, size=size)
+        return jsonify(result)
+    except requests.RequestException as re:
+        logging.exception(f"[connect_line_liff] network error: {re}")
+        return jsonify({"ok": False, "error": "network", "detail": str(re)}), 502
+    except Exception as e:
+        logging.exception(f"[connect_line_liff] unexpected error: {e}")
+        return jsonify({"ok": False, "error": "unknown", "detail": str(e)}), 500
+
 
 # -------------------------------------------------
 # LINE Webhook（v3）
 # -------------------------------------------------
 
-# 可重複註冊事件處理（新增）
-def register_handlers(h):
-    # 依事件型別把上面的函式掛到任何 handler h 上
-    h.add(FollowEvent)(on_follow)
-    h.add(PostbackEvent)(on_postback)
-    h.add(MessageEvent, message=TextMessageContent)(on_text)
+@app.post("/callback")
+def callback():
+    signature = request.headers.get("X-Line-Signature", "")
+    body = request.get_data(as_text=True)
+    try:
+        default_handler.handle(body, signature)   # ← 這裡要用 default_handler
+    except Exception as e:
+        logging.exception(f"Webhook error: {e}")
+        abort(400)
+    return "OK"
 
-@app.route("/callback/<channel_id>", methods=['POST'])
-def callback_multi(channel_id):
-    # 1) 取該頻道的 secret
-    cred = get_credentials(channel_id)  # 你前面已經寫好的查表函式
+# ========= 以「LINE Channel ID」為路徑後綴的 Webhook =========
+@app.route("/callback/<line_channel_id>", methods=['POST'])
+def callback_by_line_id(line_channel_id):
+    # 1) 取該頻道 secret（用 line_channel_id 當 key）
+    cred = get_credentials_by_line_id(line_channel_id)
     if not cred or not cred.get("secret"):
-        logging.error(f"callback for {channel_id}: credentials not found")
+        logging.error(f"[callback] unknown line_channel_id={line_channel_id}")
         return "channel not found", 404
 
-    # 2) 讀 LINE 簽章與 request body
-    signature = request.headers.get('X-Line-Signature')
+    # 2) 讀 header 與 body
+    signature = request.headers.get("X-Line-Signature")
     if not signature:
         return "missing signature", 400
-
     body = request.get_data(as_text=True)
-    logging.info(f"[{channel_id}] callback body length={len(body)}")
+    logging.info(f"[callback/{line_channel_id}] body length={len(body)}")
 
-    # 3) 以該頻道的 secret 建立臨時 handler，並註冊同一組事件處理
+    # 3) 以該 secret 建 handler，掛上同一組事件處理
     h = WebhookHandler(cred["secret"])
     register_handlers(h)
 
@@ -1603,25 +1927,14 @@ def callback_multi(channel_id):
     try:
         h.handle(body, signature)
     except InvalidSignatureError:
-        logging.exception(f"[{channel_id}] invalid signature")
+        logging.exception(f"[callback/{line_channel_id}] invalid signature")
         return "invalid signature", 400
     except Exception:
-        logging.exception(f"[{channel_id}] handler error")
+        logging.exception(f"[callback/{line_channel_id}] handler error")
         return "handler error", 500
 
     return "OK", 200
 
-
-@app.post("/callback")
-def callback():
-    signature = request.headers.get("X-Line-Signature", "")
-    body = request.get_data(as_text=True)
-    try:
-        default_handler.handle(body, signature)
-    except Exception as e:
-        logging.exception(f"Webhook error: {e}")
-        abort(400)
-    return "OK"
 
 def _source_key(ev_source) -> str:
     uid = getattr(ev_source, "user_id", None)
@@ -1781,6 +2094,13 @@ def on_text(event: MessageEvent):
     )
     user_memory[user_key].append(("assistant", answer))
 
+# 可重複註冊事件處理（新增）
+def register_handlers(h):
+    # 依事件型別把上面的函式掛到任何 handler h 上
+    h.add(FollowEvent)(on_follow)
+    h.add(PostbackEvent)(on_postback)
+    h.add(MessageEvent, message=TextMessageContent)(on_text)
+
 # 啟動時，先把事件註冊到預設 handler（吃 .env 的 secret）
 register_handlers(default_handler)
 
@@ -1798,6 +2118,17 @@ def test_push():
     result = push_campaign(payload)
     return jsonify(result)
 
+@app.route("/callback/<line_channel_id>", methods=["POST"])
+def callback_with_id(line_channel_id):
+    return callback()  # 先轉用你原本的處理；之後要做多租戶再改成用 id 驗章
+
+# -------------------------------------------------
+# Serve static files (uploads)
+# -------------------------------------------------
+
+@app.route(f"{ASSET_ROUTE_PREFIX}/<path:filename>")
+def serve_uploads(filename):
+    return send_from_directory(ASSET_LOCAL_DIR, filename)
 # -------------------------------------------------
 # Dev run（正式用 gunicorn）
 # -------------------------------------------------

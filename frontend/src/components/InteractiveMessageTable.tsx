@@ -1,4 +1,5 @@
-import svgPaths from "../imports/svg-kh0dbookih";
+import { useState } from 'react';
+import ButtonEdit from '../imports/ButtonEdit';
 
 export interface Message {
   id: string;
@@ -18,254 +19,361 @@ interface InteractiveMessageTableProps {
   onViewDetails: (id: string) => void;
 }
 
-const COLUMN_WIDTH_CLASSES = {
-  title: "w-[28%] min-w-[280px]",
-  tags: "w-[18%] min-w-[200px]",
-  platform: "w-[8%] min-w-[100px]",
-  status: "w-[10%] min-w-[120px]",
-  sentCount: "w-[8%] min-w-[100px]",
-  openCount: "w-[10%] min-w-[120px]",
-  clickCount: "w-[8%] min-w-[100px]",
-  sendTime: "w-[10%] min-w-[120px]",
-  edit: "w-[60px] shrink-0",
-  detail: "w-[80px] shrink-0",
-} as const;
+type SortField = 'title' | 'tags' | 'platform' | 'status' | 'sentCount' | 'openCount' | 'clickCount' | 'sendTime';
 
-const STATUS_STYLES: Record<string, { text: string; bg: string; border: string; icon?: "success" | "clock" | "draft" }> = {
-  已發送: {
-    text: "text-[#1f7a39]",
-    bg: "bg-[#e8f9ef]",
-    border: "border-[#b9ebc8]",
-    icon: "success",
-  },
-  已排程: {
-    text: "text-[#0f6beb]",
-    bg: "bg-[#f0f6ff]",
-    border: "border-[#c8ddff]",
-    icon: "clock",
-  },
-  草稿: {
-    text: "text-[#6e6e6e]",
-    bg: "bg-[#f5f5f5]",
-    border: "border-[#dddddd]",
-    icon: "draft",
-  },
-};
-
-const TAGS_PER_ROW = 3;
-
-function MessageTags({ tags }: { tags: string[] }) {
-  if (tags.length === 0) {
-    return <span className="text-[14px] text-[#6e6e6e]">—</span>;
-  }
-
-  // Limit displayed tags to prevent excessive row height
-  const maxDisplayTags = 4;
-  const displayTags = tags.slice(0, maxDisplayTags);
-  const remainingCount = tags.length - maxDisplayTags;
-
-  const rows: string[][] = [];
-  for (let i = 0; i < displayTags.length; i += TAGS_PER_ROW) {
-    rows.push(displayTags.slice(i, i + TAGS_PER_ROW));
-  }
+// Table Header Component
+function TableHeader({ sortBy, onSortChange }: { sortBy: SortField | null; onSortChange: (field: SortField) => void }) {
+  const SortIcon = ({
+    column,
+    isActive
+  }: {
+    column: string;
+    isActive: boolean;
+  }) => {
+    return (
+      <div className="overflow-clip relative shrink-0 size-[20px]">
+        <div className="absolute inset-0">
+          <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
+            <g id="Vector"></g>
+          </svg>
+        </div>
+        <div className="absolute h-[8px] left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%] w-[12px]">
+          <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 8">
+            <path d="M0.666667 8H3.33333C3.7 8 4 7.7 4 7.33333C4 6.96667 3.7 6.66667 3.33333 6.66667H0.666667C0.3 6.66667 0 6.96667 0 7.33333C0 7.7 0.3 8 0.666667 8ZM0 0.666667C0 1.03333 0.3 1.33333 0.666667 1.33333H11.3333C11.7 1.33333 12 1.03333 12 0.666667C12 0.3 11.7 0 11.3333 0H0.666667C0.3 0 0 0.3 0 0.666667ZM0.666667 4.66667H7.33333C7.7 4.66667 8 4.36667 8 4C8 3.63333 7.7 3.33333 7.33333 3.33333H0.666667C0.3 3.33333 0 3.63333 0 4C0 4.36667 0.3 4.66667 0.666667 4.66667Z" fill={isActive ? '#0F6BEB' : '#6E6E6E'} />
+          </svg>
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <div className="flex min-w-0 flex-col gap-2.5">
-      {rows.map((rowTags, rowIndex) => (
-        <div key={`row-${rowIndex}`} className="flex flex-wrap gap-2">
-          {rowTags.map((tag) => (
-            <span
-              key={tag}
-              className="inline-block rounded-[8px] bg-[#f0f6ff] px-2.5 py-1 text-[14px] leading-[1.4] text-[#0f6beb] whitespace-nowrap"
-            >
-              {tag}
-            </span>
-          ))}
-          {rowIndex === rows.length - 1 && remainingCount > 0 && (
-            <span
-              className="inline-block rounded-[8px] bg-[#f5f5f5] px-2.5 py-1 text-[14px] leading-[1.4] text-[#6e6e6e] whitespace-nowrap"
-            >
-              +{remainingCount}
-            </span>
-          )}
+    <div className="bg-white relative rounded-tl-[16px] rounded-tr-[16px] shrink-0 w-full">
+      <div aria-hidden="true" className="absolute border-[#dddddd] border-[0px_0px_1px] border-solid inset-0 pointer-events-none rounded-tl-[16px] rounded-tr-[16px]" />
+      <div className="flex flex-row items-center size-full">
+        <div className="box-border content-stretch flex items-center pb-[12px] pt-[16px] px-[12px] relative w-full">
+          {/* 訊息標題 */}
+          <div 
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[250px] cursor-pointer" 
+            onClick={() => onSortChange('title')}
+          >
+            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
+              <p className="leading-[1.5]">訊息標題</p>
+            </div>
+            <SortIcon column="title" isActive={sortBy === 'title'} />
+          </div>
+
+          {/* Divider */}
+          <div className="h-[12px] relative shrink-0 w-0">
+            <div className="absolute inset-[-3.33%_-0.4px]">
+              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
+                <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
+              </svg>
+            </div>
+          </div>
+
+          {/* 標籤 */}
+          <div 
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[200px] cursor-pointer"
+            onClick={() => onSortChange('tags')}
+          >
+            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
+              <p className="leading-[1.5] whitespace-pre">標籤</p>
+            </div>
+            <SortIcon column="tags" isActive={sortBy === 'tags'} />
+          </div>
+
+          {/* Divider */}
+          <div className="h-[12px] relative shrink-0 w-0">
+            <div className="absolute inset-[-3.33%_-0.4px]">
+              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
+                <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
+              </svg>
+            </div>
+          </div>
+
+          {/* 平台 */}
+          <div 
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px] cursor-pointer"
+            onClick={() => onSortChange('platform')}
+          >
+            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
+              <p className="leading-[1.5] whitespace-pre">平台</p>
+            </div>
+            <SortIcon column="platform" isActive={sortBy === 'platform'} />
+          </div>
+
+          {/* Divider */}
+          <div className="h-[12px] relative shrink-0 w-0">
+            <div className="absolute inset-[-3.33%_-0.4px]">
+              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
+                <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
+              </svg>
+            </div>
+          </div>
+
+          {/* 狀態 */}
+          <div 
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px] cursor-pointer"
+            onClick={() => onSortChange('status')}
+          >
+            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
+              <p className="leading-[1.5] whitespace-pre">狀態</p>
+            </div>
+            <SortIcon column="status" isActive={sortBy === 'status'} />
+          </div>
+
+          {/* Divider */}
+          <div className="h-[12px] relative shrink-0 w-0">
+            <div className="absolute inset-[-3.33%_-0.4px]">
+              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
+                <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
+              </svg>
+            </div>
+          </div>
+
+          {/* 發送人數 */}
+          <div 
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px] cursor-pointer"
+            onClick={() => onSortChange('sentCount')}
+          >
+            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
+              <p className="leading-[1.5] whitespace-pre">發送人數</p>
+            </div>
+            <SortIcon column="sentCount" isActive={sortBy === 'sentCount'} />
+          </div>
+
+          {/* Divider */}
+          <div className="h-[12px] relative shrink-0 w-0">
+            <div className="absolute inset-[-3.33%_-0.4px]">
+              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
+                <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
+              </svg>
+            </div>
+          </div>
+
+          {/* 已開啟次數 */}
+          <div 
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[120px] cursor-pointer"
+            onClick={() => onSortChange('openCount')}
+          >
+            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
+              <p className="leading-[1.5] whitespace-pre">已開啟次數</p>
+            </div>
+            <SortIcon column="openCount" isActive={sortBy === 'openCount'} />
+          </div>
+
+          {/* Divider */}
+          <div className="h-[12px] relative shrink-0 w-0">
+            <div className="absolute inset-[-3.33%_-0.4px]">
+              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
+                <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
+              </svg>
+            </div>
+          </div>
+
+          {/* 點擊次數 */}
+          <div 
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px] cursor-pointer"
+            onClick={() => onSortChange('clickCount')}
+          >
+            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
+              <p className="leading-[1.5] whitespace-pre">點擊次數</p>
+            </div>
+            <SortIcon column="clickCount" isActive={sortBy === 'clickCount'} />
+          </div>
+
+          {/* Divider */}
+          <div className="h-[12px] relative shrink-0 w-0">
+            <div className="absolute inset-[-3.33%_-0.4px]">
+              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
+                <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
+              </svg>
+            </div>
+          </div>
+
+          {/* 發送時間 */}
+          <div 
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[150px] cursor-pointer"
+            onClick={() => onSortChange('sendTime')}
+          >
+            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
+              <p className="leading-[1.5] whitespace-pre">發送時間</p>
+            </div>
+            <SortIcon column="sendTime" isActive={sortBy === 'sendTime'} />
+          </div>
         </div>
-      ))}
+      </div>
     </div>
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const style = STATUS_STYLES[status] ?? {
-    text: "text-[#383838]",
-    bg: "bg-[#f5f5f5]",
-    border: "border-[#dddddd]",
-  };
-
-  const renderIcon = () => {
-    if (style.icon === "success") {
-      return (
-        <svg className="block size-[16px]" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path d={svgPaths.p36cd5f00} fill="#00C853" />
-        </svg>
-      );
-    }
-
-    if (style.icon === "clock") {
-      return (
-        <svg className="block size-[16px]" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <circle cx="8" cy="8" r="6.5" stroke="#0F6BEB" strokeWidth="1.2" fill="none" />
-          <path d="M8 4.5V8L10.5 10" stroke="#0F6BEB" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      );
-    }
-
-    if (style.icon === "draft") {
-      return (
-        <svg className="block size-[16px]" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path d="M11.5 2L14 4.5L5 13.5L2 14L2.5 11L11.5 2Z" stroke="#6E6E6E" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-          <path d="M10 3.5L12.5 6" stroke="#6E6E6E" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      );
-    }
-
-    return null;
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[14px] leading-[1.5] ${style.text} ${style.bg} ${style.border}`}
-    >
-      <span className="flex items-center justify-center w-[16px] h-[16px] shrink-0">
-        {renderIcon()}
-      </span>
-      <span className="whitespace-nowrap">{status}</span>
-    </span>
-  );
-}
-
-function EditButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex items-center justify-start rounded-[8px] p-0 text-[#0f6beb] transition-colors hover:bg-[#f0f6ff]"
-      aria-label="編輯訊息"
-    >
-      <svg className="block size-4" viewBox="0 0 17 17" fill="none" aria-hidden="true">
-        <g>
-          <path d={svgPaths.p15419680} fill="#0F6BEB" />
-          <path d={svgPaths.p239e3d00} fill="#0F6BEB" />
+// Message Row Component
+function MessageRow({ 
+  message, 
+  isLast, 
+  onEdit, 
+  onViewDetails 
+}: { 
+  message: Message; 
+  isLast: boolean; 
+  onEdit: (id: string) => void; 
+  onViewDetails: (id: string) => void; 
+}) {
+  const CheckSuccess = () => (
+    <div className="relative shrink-0 size-[16px]">
+      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 16 16">
+        <g clipPath="url(#clip0_check)">
+          <path d="M6.66667 10.1147L12.7947 3.98599L13.7381 4.92866L6.66667 12L2.42468 7.75801L3.36734 6.81534L6.66667 10.1147Z" fill="#00C853" />
         </g>
+        <defs>
+          <clipPath id="clip0_check">
+            <rect fill="white" height="16" width="16" />
+          </clipPath>
+        </defs>
       </svg>
-    </button>
+    </div>
   );
-}
 
-function DetailButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex items-center gap-1 text-[14px] leading-[1.5] text-[#0f6beb] transition-opacity hover:opacity-70"
-    >
-      詳細
-      <svg className="size-4 rotate-180" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <path d={svgPaths.pbafd480} fill="#0F6BEB" />
+  const EditButton = () => {
+    const isDisabled = message.status === '已發送';
+    return (
+      <div 
+        className={`${
+          isDisabled 
+            ? 'cursor-not-allowed opacity-50' 
+            : ''
+        }`}
+        onClick={() => !isDisabled && onEdit(message.id)}
+      >
+        <ButtonEdit />
+      </div>
+    );
+  };
+
+  const Arrow = () => (
+    <div className="relative size-[16px]">
+      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 16 16">
+        <path d="M6 12L10 8L6 4" fill="#0F6BEB" />
       </svg>
-    </button>
+    </div>
   );
-}
 
-function MessageRow({ message, onEdit, onViewDetails }: { message: Message; onEdit: () => void; onViewDetails: () => void }) {
   return (
-    <tr className="border-b border-[#dddddd] text-[16px] leading-[1.75] text-[#383838] last:border-b-0 hover:bg-[#fafbfc] transition-colors">
-      <td className={`${COLUMN_WIDTH_CLASSES.title} pl-5 pr-6 py-8 align-middle`} style={{ textAlign: 'left' }}>
-        <span className="block break-words line-clamp-2">{message.title}</span>
-      </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.tags} pl-6 pr-6 py-8 align-middle`} style={{ textAlign: 'left' }}>
-        <MessageTags tags={message.tags} />
-      </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.platform} pl-12 pr-8 py-8 align-middle`} style={{ textAlign: 'left' }}>
-        <span className="block truncate">{message.platform}</span>
-      </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.status} pl-8 pr-6 py-8 align-middle`} style={{ textAlign: 'left' }}>
-        <StatusBadge status={message.status} />
-      </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.sentCount} pl-6 pr-3 py-8 align-middle`} style={{ textAlign: 'left' }}>
-        <span className="block">{message.sentCount}</span>
-      </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.openCount} pl-3 pr-3 py-8 align-middle`} style={{ textAlign: 'left' }}>
-        <span className="block">{message.openCount}</span>
-      </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.clickCount} pl-3 pr-8 py-8 align-middle`} style={{ textAlign: 'left' }}>
-        <span className="block">{message.clickCount}</span>
-      </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.sendTime} pl-8 pr-0 py-8 align-middle`} style={{ textAlign: 'left' }}>
-        <span className="block whitespace-nowrap">{message.sendTime}</span>
-      </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.edit} pl-2 pr-1 py-8 align-middle`} style={{ textAlign: 'left' }}>
-        <EditButton onClick={onEdit} />
-      </td>
-      <td className={`${COLUMN_WIDTH_CLASSES.detail} pl-1 pr-2 py-8 align-middle`} style={{ textAlign: 'center' }}>
-        <DetailButton onClick={onViewDetails} />
-      </td>
-    </tr>
+    <div className={`bg-white relative shrink-0 w-full ${isLast ? 'rounded-bl-[16px] rounded-br-[16px]' : ''}`}>
+      <div aria-hidden="true" className={`absolute border-[#dddddd] ${isLast ? 'border-0' : 'border-[0px_0px_1px]'} border-solid inset-0 pointer-events-none ${isLast ? 'rounded-bl-[16px] rounded-br-[16px]' : ''}`} />
+      <div className="flex flex-row items-center size-full">
+        <div className="box-border content-stretch flex items-center p-[12px] relative w-full">
+          {/* 訊息標題 */}
+          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[250px]">
+            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
+              <p className="leading-[1.5] truncate">{message.title}</p>
+            </div>
+          </div>
+
+          {/* 標籤 */}
+          <div className="box-border content-stretch flex flex-wrap gap-[4px] items-start px-[12px] py-0 relative shrink-0 w-[200px]">
+            {message.tags.map((tag, index) => (
+              <div key={index} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] px-[8px] py-[4px] relative rounded-[8px] shrink-0">
+                <p className="leading-[1.5] relative shrink-0 text-[#0f6beb] text-[14px] text-center whitespace-nowrap">{tag}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* 平台 */}
+          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[100px]">
+            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
+              <p className="leading-[24px]">{message.platform}</p>
+            </div>
+          </div>
+
+          {/* 狀態 */}
+          <div className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px]">
+            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
+              <p className="leading-[1.5] whitespace-pre">{message.status}</p>
+            </div>
+            {(message.status === '已排程' || message.status === '已發送') && <CheckSuccess />}
+          </div>
+
+          {/* 發送人數 - 左對齊 */}
+          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[100px]">
+            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
+              <p className="leading-[24px]">{message.sentCount}</p>
+            </div>
+          </div>
+
+          {/* 已開啟次數 - 左對齊 */}
+          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[120px]">
+            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
+              <p className="leading-[24px]">{message.openCount}</p>
+            </div>
+          </div>
+
+          {/* 點擊次數 - 左對齊 */}
+          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[100px]">
+            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
+              <p className="leading-[24px]">{message.clickCount}</p>
+            </div>
+          </div>
+
+          {/* 發送時間 */}
+          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[150px]">
+            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
+              <p className="leading-[1.5] whitespace-nowrap">{message.sendTime}</p>
+            </div>
+          </div>
+
+          {/* 編輯按鈕 */}
+          <EditButton />
+
+          {/* 詳細按鈕 */}
+          <div 
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 cursor-pointer hover:bg-[#f0f6ff] transition-colors rounded-[8px]"
+            onClick={() => onViewDetails(message.id)}
+          >
+            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#0f6beb] text-[14px] text-nowrap">
+              <p className="leading-[1.5] whitespace-pre">詳細</p>
+            </div>
+            <div className="flex items-center justify-center relative shrink-0">
+              <div className="flex-none scale-y-[-100%]">
+                <Arrow />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
 export default function InteractiveMessageTable({ messages, onEdit, onViewDetails }: InteractiveMessageTableProps) {
-  if (messages.length === 0) {
-    return (
-      <div className="w-full rounded-[16px] border border-dashed border-[#cbd5f5] bg-white p-10 text-center">
-        <p className="text-[16px] text-[#6e6e6e]">沒有找到符合條件的訊息</p>
-      </div>
-    );
-  }
+  const [sortBy, setSortBy] = useState<SortField | null>('sendTime');
+
+  const handleSort = (field: SortField) => {
+    setSortBy(field);
+  };
 
   return (
-    <div className="bg-white rounded-[14px] border-2 border-[#dddddd] overflow-hidden overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400">
-      <style>{`
-        .scrollbar-thin::-webkit-scrollbar {
-          height: 8px;
-        }
-        .scrollbar-thin::-webkit-scrollbar-track {
-          background: #f3f4f6;
-          border-radius: 4px;
-        }
-        .scrollbar-thin::-webkit-scrollbar-thumb {
-          background: #d1d5db;
-          border-radius: 4px;
-        }
-        .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-          background: #9ca3af;
-        }
-      `}</style>
-      <table className="w-full border-collapse table-fixed" style={{ textAlign: 'left', minWidth: '1280px' }}>
-        <thead className="bg-white text-[16px] leading-[1.6] text-[#383838]">
-          <tr className="border-b border-[#dddddd]">
-            <th className={`${COLUMN_WIDTH_CLASSES.title} pl-5 pr-6 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>訊息標題</th>
-            <th className={`${COLUMN_WIDTH_CLASSES.tags} pl-6 pr-6 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>標籤</th>
-            <th className={`${COLUMN_WIDTH_CLASSES.platform} pl-12 pr-8 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>平台</th>
-            <th className={`${COLUMN_WIDTH_CLASSES.status} pl-8 pr-6 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>狀態</th>
-            <th className={`${COLUMN_WIDTH_CLASSES.sentCount} pl-6 pr-3 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>發送人數</th>
-            <th className={`${COLUMN_WIDTH_CLASSES.openCount} pl-3 pr-3 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>已開啟次數</th>
-            <th className={`${COLUMN_WIDTH_CLASSES.clickCount} pl-3 pr-8 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>點擊次數</th>
-            <th className={`${COLUMN_WIDTH_CLASSES.sendTime} pl-8 pr-0 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }}>發送時間</th>
-            <th className={`${COLUMN_WIDTH_CLASSES.edit} pl-2 pr-1 py-6 font-normal`} style={{ textAlign: 'left', fontSize: '16px' }} aria-label="編輯" />
-            <th className={`${COLUMN_WIDTH_CLASSES.detail} pl-1 pr-2 py-6 font-normal`} style={{ textAlign: 'center', fontSize: '16px' }} aria-label="詳細" />
-          </tr>
-        </thead>
-        <tbody className="bg-white">
-          {messages.map((message) => (
-            <MessageRow
-              key={message.id}
-              message={message}
-              onEdit={() => onEdit(message.id)}
-              onViewDetails={() => onViewDetails(message.id)}
+    <div className="content-stretch flex flex-col items-start relative shrink-0 w-full">
+      {/* Table Container - Fixed height container with horizontal scroll */}
+      <div className="bg-white rounded-[16px] w-full flex flex-col max-h-[600px] overflow-x-auto table-scroll">
+        {/* Table Header - Fixed */}
+        <div className="relative shrink-0 w-[1250px]">
+          <TableHeader sortBy={sortBy} onSortChange={handleSort} />
+        </div>
+        
+        {/* Table Body - Scrollable Container */}
+        <div className="w-[1250px] flex-1 table-scroll">
+          {messages.map((message, index) => (
+            <MessageRow 
+              key={message.id} 
+              message={message} 
+              isLast={index === messages.length - 1}
+              onEdit={onEdit}
+              onViewDetails={onViewDetails}
             />
           ))}
-        </tbody>
-      </table>
+        </div>
+      </div>
     </div>
   );
 }

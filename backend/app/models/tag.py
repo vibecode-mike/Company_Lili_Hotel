@@ -1,5 +1,9 @@
 """
 標籤模型
+
+⚠️ 向後兼容性說明：
+- TagType 和 TagSource 枚舉用於向後兼容舊 API
+- name, source, type, description 等屬性通過 property 映射到新欄位
 """
 from sqlalchemy import (
     Column,
@@ -7,83 +11,137 @@ from sqlalchemy import (
     Integer,
     BigInteger,
     DateTime,
-    Enum as SQLEnum,
     ForeignKey,
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 from app.models.base import Base
-import enum
-from datetime import datetime
+from enum import Enum
 
 
-class TagType(str, enum.Enum):
-    """標籤類型"""
-
+class TagType(str, Enum):
+    """標籤類型枚舉（向後兼容）"""
     MEMBER = "member"
     INTERACTION = "interaction"
 
 
-class TagSource(str, enum.Enum):
-    """標籤來源"""
-
-    API = "api"
-    MANUAL = "manual"
+class TagSource(str, Enum):
+    """標籤來源枚舉（向後兼容）"""
+    CRM = "CRM"
+    PMS = "PMS"
+    SURVEY = "問券"
+    MANUAL = "後台自訂"
+    MESSAGE = "訊息模板"
 
 
 class MemberTag(Base):
-    """會員標籤表"""
+    """會員標籤表（單表設計，直接關聯會員）"""
 
     __tablename__ = "member_tags"
 
-    name = Column(String(50), unique=True, nullable=False, index=True, comment="標籤名稱")
-    type = Column(
-        SQLEnum(TagType),
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    member_id = Column(
+        BigInteger,
+        ForeignKey("members.id", ondelete="CASCADE"),
         nullable=False,
-        default=TagType.MEMBER,
-        comment="類型",
+        index=True,
+        comment="所屬會員ID",
     )
-    source = Column(SQLEnum(TagSource), nullable=False, comment="來源")
-    description = Column(String(200), comment="描述")
-    member_count = Column(Integer, default=0, comment="會員數量")
-    last_triggered_at = Column(DateTime, comment="最後觸發時間")
+    tag_name = Column(String(20), nullable=False, comment="標籤名稱，不得超過 20 個字元（中英文皆計算，每個字元計 1）。格式限制：僅允許中文（\\u4e00-\\u9fa5）、英文（a-zA-Z）、數字（0-9）、空格，禁止特殊字元與 Emoji。驗證：前端使用正則表達式 /^[\\u4e00-\\u9fa5a-zA-Z0-9\\s]+$/ 即時驗證")
+    tag_source = Column(String(20), comment="標籤來源：CRM/PMS/問券/後台自訂")
+    trigger_count = Column(Integer, default=0, comment="觸發次數")
+    trigger_member_count = Column(Integer, default=0, comment="觸發會員數")
+    last_triggered_at = Column(DateTime, comment="最近觸發時間")
+    message_id = Column(
+        BigInteger,
+        ForeignKey("messages.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="觸發來源訊息ID（用於去重）",
+    )
+    tagged_at = Column(DateTime, server_default=func.now(), comment="標記時間")
+    created_at = Column(DateTime, server_default=func.now(), comment="建立時間")
+    updated_at = Column(DateTime, onupdate=func.now(), comment="更新時間")
 
     # 關聯關係
-    member_relations = relationship(
-        "MemberTagRelation",
-        back_populates="member_tag",
-        primaryjoin="and_(MemberTag.id==foreign(MemberTagRelation.tag_id), MemberTagRelation.tag_type=='member')",
-        cascade="all, delete-orphan",
-        viewonly=True,
+    member = relationship("Member", back_populates="member_tags")
+    message = relationship("Message", foreign_keys=[message_id])
+
+    __table_args__ = (
+        UniqueConstraint(
+            "member_id",
+            "tag_name",
+            "message_id",
+            name="uq_member_tag_message",
+        ),
     )
+
+    # ============================================================
+    # 向後兼容屬性：映射舊欄位名稱到新欄位
+    # ============================================================
+
+    @property
+    def name(self) -> str:
+        """向後兼容：name 映射到 tag_name"""
+        return self.tag_name or ""
+
+    @name.setter
+    def name(self, value: str):
+        """向後兼容：設置 name 時更新 tag_name"""
+        self.tag_name = value
+
+    @property
+    def source(self) -> str:
+        """向後兼容：source 映射到 tag_source"""
+        return self.tag_source or ""
+
+    @source.setter
+    def source(self, value):
+        """向後兼容：設置 source 時更新 tag_source"""
+        if isinstance(value, TagSource):
+            self.tag_source = value.value
+        else:
+            self.tag_source = str(value) if value else None
+
+    @property
+    def type(self) -> TagType:
+        """向後兼容：type 固定返回 TagType.MEMBER"""
+        return TagType.MEMBER
+
+    @property
+    def description(self) -> str:
+        """向後兼容：description 欄位（新設計中不存在）"""
+        return ""
+
+    @property
+    def member_count(self) -> int:
+        """向後兼容：member_count 映射到 trigger_member_count"""
+        return self.trigger_member_count or 0
+
+    @member_count.setter
+    def member_count(self, value: int):
+        """向後兼容：設置 member_count 時更新 trigger_member_count"""
+        self.trigger_member_count = value
 
 
 class InteractionTag(Base):
-    """互動標籤表"""
+    """互動標籤定義表"""
 
     __tablename__ = "interaction_tags"
 
-    name = Column(String(50), nullable=False, index=True, comment="標籤名稱")
-    type = Column(
-        SQLEnum(TagType),
-        nullable=False,
-        default=TagType.INTERACTION,
-        comment="類型",
-    )
-    campaign_id = Column(BigInteger, ForeignKey("campaigns.id"), comment="關聯活動ID")
-    description = Column(String(200), comment="描述")
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    tag_name = Column(String(20), nullable=False, index=True, comment="標籤名稱，不得超過 20 個字元（中英文皆計算，每個字元計 1）。格式限制：僅允許中文（\\u4e00-\\u9fa5）、英文（a-zA-Z）、數字（0-9）、空格，禁止特殊字元與 Emoji。驗證：前端使用正則表達式 /^[\\u4e00-\\u9fa5a-zA-Z0-9\\s]+$/ 即時驗證")
+    tag_source = Column(String(20), comment="標籤來源：訊息模板/問券模板")
     trigger_count = Column(Integer, default=0, comment="觸發次數")
-    member_count = Column(Integer, default=0, comment="觸發會員數")
-    last_triggered_at = Column(DateTime, comment="最後觸發時間")
+    trigger_member_count = Column(Integer, default=0, comment="觸發會員數")
+    last_triggered_at = Column(DateTime, comment="最近觸發時間")
+    created_at = Column(DateTime, server_default=func.now(), comment="建立時間")
+    updated_at = Column(DateTime, onupdate=func.now(), comment="更新時間")
 
     # 關聯關係
-    campaign = relationship("Campaign", back_populates="interaction_tag_records")
-    member_relations = relationship(
-        "MemberTagRelation",
-        back_populates="interaction_tag",
-        primaryjoin="and_(InteractionTag.id==foreign(MemberTagRelation.tag_id), MemberTagRelation.tag_type=='interaction')",
-        cascade="all, delete-orphan",
-        viewonly=True,
+    interaction_records = relationship(
+        "MemberInteractionRecord", back_populates="interaction_tag", cascade="all, delete-orphan"
     )
     tag_trigger_logs = relationship(
         "TagTriggerLog", back_populates="tag", cascade="all, delete-orphan"
@@ -92,38 +150,54 @@ class InteractionTag(Base):
         "ComponentInteractionLog", back_populates="interaction_tag"
     )
 
+    # ============================================================
+    # 向後兼容屬性：映射舊欄位名稱到新欄位
+    # ============================================================
 
-class MemberTagRelation(Base):
-    """會員標籤關聯表"""
+    @property
+    def name(self) -> str:
+        """向後兼容：name 映射到 tag_name"""
+        return self.tag_name or ""
 
-    __tablename__ = "member_tag_relations"
+    @name.setter
+    def name(self, value: str):
+        """向後兼容：設置 name 時更新 tag_name"""
+        self.tag_name = value
 
-    member_id = Column(
-        BigInteger,
-        ForeignKey("members.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-        comment="會員ID",
-    )
-    tag_id = Column(BigInteger, nullable=False, index=True, comment="標籤ID")
-    tag_type = Column(SQLEnum(TagType), nullable=False, comment="標籤類型")
-    tagged_at = Column(DateTime, default=datetime.utcnow, nullable=False, comment="標記時間")
+    @property
+    def source(self) -> str:
+        """向後兼容：source 映射到 tag_source"""
+        return self.tag_source or ""
 
-    # 關聯關係
-    member = relationship("Member", back_populates="tag_relations")
-    member_tag = relationship(
-        "MemberTag",
-        foreign_keys=[tag_id],
-        primaryjoin="and_(MemberTagRelation.tag_id==MemberTag.id, MemberTagRelation.tag_type=='member')",
-        viewonly=True,
-    )
-    interaction_tag = relationship(
-        "InteractionTag",
-        foreign_keys=[tag_id],
-        primaryjoin="and_(MemberTagRelation.tag_id==InteractionTag.id, MemberTagRelation.tag_type=='interaction')",
-        viewonly=True,
-    )
+    @source.setter
+    def source(self, value):
+        """向後兼容：設置 source 時更新 tag_source"""
+        if isinstance(value, TagSource):
+            self.tag_source = value.value
+        else:
+            self.tag_source = str(value) if value else None
 
-    __table_args__ = (
-        UniqueConstraint("member_id", "tag_id", "tag_type", name="uq_member_tag"),
-    )
+    @property
+    def type(self) -> TagType:
+        """向後兼容：type 固定返回 TagType.INTERACTION"""
+        return TagType.INTERACTION
+
+    @property
+    def description(self) -> str:
+        """向後兼容：description 欄位（新設計中不存在）"""
+        return ""
+
+    @property
+    def member_count(self) -> int:
+        """向後兼容：member_count 映射到 trigger_member_count"""
+        return self.trigger_member_count or 0
+
+    @member_count.setter
+    def member_count(self, value: int):
+        """向後兼容：設置 member_count 時更新 trigger_member_count"""
+        self.trigger_member_count = value
+
+    @property
+    def campaign_id(self) -> int:
+        """向後兼容：campaign_id 欄位（新設計中不存在）"""
+        return None
