@@ -22,6 +22,7 @@ import datetime
 import requests
 import uuid
 import usage_monitor #群發餘額量顯示
+from member_liff import bp as member_liff_bp # 載入 LIFF 會員表單的 Blueprint 模組  
 from collections import defaultdict, deque
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote_plus, quote
@@ -178,7 +179,10 @@ logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__, static_url_path=ASSET_ROUTE_PREFIX, static_folder=ASSET_LOCAL_DIR)
 
+# 將群發餘額量顯示功能該模組註冊進 Flask 主應用，啟用其 API 路由
 app.register_blueprint(usage_monitor.bp)
+# 將LIFF 會員表單的 Blueprint 模組該模組註冊進 Flask 主應用，啟用其 API 路由
+app.register_blueprint(member_liff_bp)
 
 # LINE v3
 config = Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN)
@@ -201,7 +205,7 @@ def jdump(x): return json.dumps(x, ensure_ascii=False)
 def get_credentials(channel_id: str | None):
     """
     從資料表抓該 channel 的 access_token / secret / liff_id_open。
-    你之後建一張 ryan_line_channels 表即可（id, channel_name, channel_secret, channel_access_token, liff_id_open）。
+    你之後建一張 line_channels 表即可（id, channel_name, channel_secret, channel_access_token, liff_id_open）。
     若查不到就回 None，代表用預設 .env。
     """
     if not channel_id:
@@ -211,7 +215,7 @@ def get_credentials(channel_id: str | None):
             SELECT channel_access_token AS token,
                    channel_secret       AS secret,
                    COALESCE(liff_id_open, '') AS liff_id_open
-              FROM ryan_line_channels
+              FROM line_channels
              WHERE id = :cid AND is_active = 1
              LIMIT 1
         """, {"cid": channel_id})
@@ -239,7 +243,7 @@ def get_credentials_by_line_id(line_channel_id: str) -> dict | None:
             channel_access_token AS token,
             channel_secret       AS secret,
             COALESCE(liff_id_open, '') AS liff_id_open
-        FROM ryan_line_channels
+        FROM line_channels
         WHERE line_channel_id = :cid AND is_active = 1
         LIMIT 1
     """, {"cid": line_channel_id})
@@ -308,7 +312,7 @@ def setup_line_liff(line_channel_id: str, channel_secret: str, view_url: str, si
     # 3) 建立成功就把 liff_id_open 寫回 DB（你已經有這個欄位）
     if ok and liff_id:
         execute(
-            "UPDATE ryan_line_channels SET liff_id_open=:liff, updated_at=:now WHERE line_channel_id=:cid",
+            "UPDATE line_channels SET liff_id_open=:liff, updated_at=:now WHERE line_channel_id=:cid",
             {"liff": liff_id, "cid": line_channel_id, "now": utcnow()},
         )
 
@@ -460,14 +464,14 @@ def execute(sql, p=None):
 # [新增] 依 LINE 使用者建立/取得 thread（用 userId 當 thread_id，簡單且穩定）
 def ensure_thread_for_user(line_uid: str) -> str:
     """
-    以 LINE userId 直接當作 ryan_threads.id 來使用。
+    以 LINE userId 直接當作 conversation_threads.id 來使用。
     若不存在就建立一筆；存在則跳過。
     """
     if not line_uid:
         return "anonymous"
     try:
         execute("""
-            INSERT IGNORE INTO ryan_threads (id, conversation_name, created_at, updated_at)
+            INSERT IGNORE INTO conversation_threads (id, conversation_name, created_at, updated_at)
             VALUES (:tid, :name, NOW(), NOW())
         """, {"tid": line_uid, "name": f"LINE:{line_uid}"})
     except Exception:
@@ -475,7 +479,7 @@ def ensure_thread_for_user(line_uid: str) -> str:
     return line_uid
 
 
-# [新增] 寫一筆 ryan_messages（共用的小工具）
+# [新增] 寫一筆 conversation_messages（共用的小工具）
 def insert_ryan_message(*, thread_id: str, role: str, direction: str,
                         message_type: str = "chat",
                         question: str | None = None,
@@ -483,13 +487,13 @@ def insert_ryan_message(*, thread_id: str, role: str, direction: str,
                         event_id: str | None = None,
                         status: str = "received"):
     """
-    只寫你新表 ryan_messages，不動既有 messages/ryan_chat_logs。
+    只寫你新表 conversation_messages，不動既有 messages。
     由呼叫端決定是 user 問（傳 question）或 assistant 回（傳 response）。
     """
     msg_id = uuid.uuid4().hex  # 36 VARCHAR 用 hex 最穩
     try:
         execute("""
-            INSERT INTO ryan_messages
+            INSERT INTO conversation_messages
                 (id, thread_id, role, direction, message_type,
                  question, response, event_id, status, created_at, updated_at)
             VALUES
@@ -506,7 +510,7 @@ def insert_ryan_message(*, thread_id: str, role: str, direction: str,
             "st":  status
         })
     except Exception as e:
-        logging.warning(f"[ryan_messages insert] {e}")
+        logging.warning(f"[conversation_messages insert] {e}")
 
 
 # -------------------------------------------------
@@ -945,11 +949,10 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
         rs = fetchall(f"""
             SELECT DISTINCT m.line_uid, m.id
             FROM members m
-            JOIN member_tag_relations mtr ON m.id = mtr.member_id
-            JOIN member_tags mt ON mtr.tag_id = mt.id
+            JOIN member_tags mt ON m.id = mt.member_id
             WHERE m.line_uid IS NOT NULL
               AND m.line_uid <> ''
-              AND mt.name IN ({tag_placeholders})
+              AND mt.tag_name IN ({tag_placeholders})
         """, tag_params)
     else:
         # 預設發送給所有用戶
@@ -1749,7 +1752,7 @@ def __track():
     try:
         row = fetchone(f"""
             SELECT last_click_tag
-            FROM `{MYSQL_DB}`.`ryan_click_demo`
+            FROM `{MYSQL_DB}`.`click_tracking_demo`
             WHERE line_id = :uid AND source_campaign_id = :src
             LIMIT 1
         """, {"uid": uid, "src": src})
@@ -1769,7 +1772,7 @@ def __track():
     # ---- 3) upsert：不再用 FIND_IN_SET；直接寫入合併後的 merged_str ----
     try:
         execute(f"""
-            INSERT INTO `{MYSQL_DB}`.`ryan_click_demo`
+            INSERT INTO `{MYSQL_DB}`.`click_tracking_demo`
                 (line_id, source_campaign_id, line_display_name, total_clicks, last_clicked_at, last_click_tag)
             VALUES
                 (
@@ -1855,7 +1858,7 @@ def connect_line_channel():
 
     # 存入資料庫（若重複 channel_id 則更新）
     execute("""
-        INSERT INTO ryan_line_channels (line_channel_id, channel_secret, channel_access_token, is_active)
+        INSERT INTO line_channels (line_channel_id, channel_secret, channel_access_token, is_active)
         VALUES (:cid, :sec, :tok, 1)
         ON CONFLICT(line_channel_id)
         DO UPDATE SET channel_secret=:sec, channel_access_token=:tok, is_active=1
@@ -1996,7 +1999,7 @@ def on_text(event: MessageEvent):
     uid      = getattr(event.source, "user_id", None)
     logging.info(f"[on_text] uid={uid} text={text_in[:80]}")
 
-    # === 新增：建立 thread 並寫入 ryan_messages（user/incoming） ===
+    # === 新增：建立 thread 並寫入 conversation_messages（user/incoming） ===
     try:
         thread_id = ensure_thread_for_user(uid)
         insert_ryan_message(
@@ -2009,7 +2012,7 @@ def on_text(event: MessageEvent):
             status="received"
         )
     except Exception:
-        logging.exception("[on_text] write ryan_messages(user) failed")
+        logging.exception("[on_text] write conversation_messages(user) failed")
 
     # === 寫入 ryan_chat_logs ===
     try:
@@ -2083,7 +2086,7 @@ def on_text(event: MessageEvent):
         logging.exception("reply gpt failed")
     user_memory[user_key].append(("user", text_in)); 
 
-    # 把 AI 回覆寫進 ryan_messages（role=assistant / outgoing）
+    # 把 AI 回覆寫進 conversation_messages（role=assistant / outgoing）
     insert_ryan_message(
         thread_id=thread_id,
         role="assistant",

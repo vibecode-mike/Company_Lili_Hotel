@@ -19,7 +19,9 @@ from app.models.tag_rule import TagRule
 from app.models.admin import Admin, Role, Permission, AdminRole, RolePermission
 from app.models.line_config import LineOAConfig, LoginConfig, LoginSession, SystemAuthorization
 from app.models.survey import Survey, SurveyTemplate, SurveyQuestion, SurveyResponse
-from app.models.tracking import ComponentInteractionLog, InteractionType, RyanClickDemo
+from app.models.tracking import ComponentInteractionLog, InteractionType, ClickTrackingDemo
+from app.models.line_channel import LineChannel
+from app.models.conversation import ConversationThread, ConversationMessage
 
 __all__ = [
     "Base",
@@ -56,5 +58,8 @@ __all__ = [
     "SurveyResponse",
     "ComponentInteractionLog",
     "InteractionType",
-    "RyanClickDemo",
+    "ClickTrackingDemo",
+    "LineChannel",
+    "ConversationThread",
+    "ConversationMessage",
 ]

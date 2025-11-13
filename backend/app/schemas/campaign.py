@@ -2,7 +2,7 @@
 群發訊息相關 Schema (Message)
 注意：原 campaigns 表已重命名為 messages（語意變更）
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List, Union
 from datetime import datetime, date, time
 from decimal import Decimal
@@ -117,14 +117,23 @@ CampaignUpdate = MessageUpdate
 
 
 class TemplateInfo(BaseModel):
-    """模板信息"""
+    """模板信息
+
+    Note: MessageTemplate 模型使用 template_type 字段，此 schema 序列化为 type
+    """
 
     id: int
-    type: str
+    template_type: str = Field(
+        ...,
+        serialization_alias="type",  # 序列化时输出为 "type"
+        description="模板类型"
+    )
     name: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True,
+    }
 
 
 class MessageListItem(BaseModel):
@@ -229,3 +238,39 @@ class RecipientListItem(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ========== 新增：群發訊息配額相關 Schema ==========
+
+class QuotaStatusRequest(BaseModel):
+    """配額查詢請求"""
+
+    target_type: str  # "all_friends" | "filtered"
+    target_filter: Optional[Dict[str, Any]] = None  # 篩選條件 {"include": [...], "exclude": [...]}
+
+
+class QuotaStatusResponse(BaseModel):
+    """配額查詢響應"""
+
+    estimated_send_count: int  # 預計發送人數
+    available_quota: int  # 可用配額
+    is_sufficient: bool  # 配額是否充足
+    quota_type: str  # 配額類型：none | limited
+    monthly_limit: Optional[int] = None  # 月度限額（如果有）
+    used: int  # 已使用配額
+    quota_consumption: int  # 本次將消耗的配額
+
+
+class MessageSendRequest(BaseModel):
+    """消息發送請求"""
+
+    line_channel_id: Optional[str] = None  # LINE 頻道 ID（多租戶支持）
+
+
+class MessageSendResponse(BaseModel):
+    """消息發送響應"""
+
+    message: str  # 提示消息
+    sent_count: int  # 成功發送數量
+    failed_count: int  # 失敗數量
+    errors: Optional[List[str]] = None  # 錯誤信息列表

@@ -21,6 +21,7 @@ from app.api.v1 import (
     auto_responses,
     pms_integrations,
     consumption_records,
+    broadcast_messages,
 )
 
 api_router = APIRouter()
@@ -37,3 +38,4 @@ api_router.include_router(tracking.router, prefix="/tracking", tags=["追蹤統�
 api_router.include_router(auto_responses.router, prefix="/auto_responses", tags=["自動回應"])
 api_router.include_router(pms_integrations.router, prefix="/pms_integrations", tags=["PMS 系統整合"])
 api_router.include_router(consumption_records.router, prefix="/consumption_records", tags=["消費紀錄"])
+api_router.include_router(broadcast_messages.router, prefix="/messages", tags=["群發訊息（新）"])

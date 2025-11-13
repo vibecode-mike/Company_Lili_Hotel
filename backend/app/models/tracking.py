@@ -109,10 +109,10 @@ class ComponentInteractionLog(Base):
     interaction_tag = relationship("InteractionTag", back_populates="interaction_logs")
 
 
-class RyanClickDemo(Base):
-    """Ryan 點擊追蹤示範表 - 簡化的點擊計數表"""
+class ClickTrackingDemo(Base):
+    """點擊追蹤示範表 - 簡化的點擊計數表"""
 
-    __tablename__ = "ryan_click_demo"
+    __tablename__ = "click_tracking_demo"
     __table_args__ = (
         UniqueConstraint('line_id', 'source_campaign_id', name='uq_line_source_campaign'),
     )

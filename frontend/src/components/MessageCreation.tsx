@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Menu, X, Copy, Trash2, Plus } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
-import { RadioGroup, RadioGroupItem } from './ui/radio-group'; 
+import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Label } from './ui/label';
 import { Checkbox } from './ui/checkbox';
 import { toast } from 'sonner@2.0.3';
@@ -18,7 +18,6 @@ import imgBackgroundImage from "figma:asset/d1c10d8dbfc2ae5783543c9f0b76cd263571
 import FilterModal from './FilterModal';
 import closeIconPaths from '../imports/svg-b62f9l13m2';
 import uploadIconPaths from '../imports/svg-wb8nmg8j6i';
-import messageTextSvgPaths from '../imports/svg-hbkooryl5v';
 import FlexMessageEditorNew from './flex-message/FlexMessageEditorNew';
 import CarouselMessageEditor from './CarouselMessageEditor';
 import { TriggerImagePreview, TriggerTextPreview, GradientPreviewContainer } from './common/PreviewContainers';
@@ -28,6 +27,10 @@ import Sidebar from './Sidebar';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
 import { ScheduleSettings, TargetAudienceSelector, PreviewPanel } from './message-creation';
 import type { Tag } from './message-creation';
+// API 集成
+import messageService from '../services/messageService';
+import { transformToBackendFormat, validateMessageForm } from '../utils/messageDataTransform';
+import type { QuotaStatusResponse } from '../types/message';
 
 // Custom DialogContent without close button
 function DialogContentNoClose({
@@ -63,13 +66,11 @@ interface MessageCreationProps {
 
 export default function MessageCreation({ onBack, onNavigate }: MessageCreationProps = {}) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [templateType, setTemplateType] = useState('select');
   const [title, setTitle] = useState('');
   const [notificationMsg, setNotificationMsg] = useState('');
   const [previewMsg, setPreviewMsg] = useState('');
   const [scheduleType, setScheduleType] = useState('immediate');
   const [targetType, setTargetType] = useState('all');
-  const [messageText, setMessageText] = useState('');
   const [activeTab, setActiveTab] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [flexMessageJson, setFlexMessageJson] = useState<any>(null);
@@ -84,6 +85,12 @@ export default function MessageCreation({ onBack, onNavigate }: MessageCreationP
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false); // 顯示未儲存確認對話框
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null); // 待執行的導航
   const cardRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
+
+  // API 集成：配額相關狀態
+  const [quotaData, setQuotaData] = useState<QuotaStatusResponse | null>(null);
+  const [quotaLoading, setQuotaLoading] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
 
   // Monitor flexMessageJson changes
   useEffect(() => {
@@ -154,19 +161,18 @@ export default function MessageCreation({ onBack, onNavigate }: MessageCreationP
   // 監聽表單變更，標記為未儲存
   useEffect(() => {
     if (
-      title || 
-      notificationMsg || 
-      previewMsg || 
-      messageText || 
-      targetType !== 'all' || 
+      title ||
+      notificationMsg ||
+      previewMsg ||
+      targetType !== 'all' ||
       scheduleType !== 'immediate' ||
       selectedFilterTags.length > 0 ||
-      cards.some(card => 
-        card.enableImage || 
-        card.enableTitle || 
-        card.enableContent || 
-        card.enablePrice || 
-        card.enableButton1 || 
+      cards.some(card =>
+        card.enableImage ||
+        card.enableTitle ||
+        card.enableContent ||
+        card.enablePrice ||
+        card.enableButton1 ||
         card.enableButton2 ||
         card.enableButton3 ||
         card.enableButton4 ||
@@ -182,7 +188,7 @@ export default function MessageCreation({ onBack, onNavigate }: MessageCreationP
     ) {
       setIsDirty(true);
     }
-  }, [title, notificationMsg, previewMsg, messageText, targetType, scheduleType, selectedFilterTags, cards]);
+  }, [title, notificationMsg, previewMsg, targetType, scheduleType, selectedFilterTags, cards]);
 
   // Create stable URLs for trigger images
   const triggerImageUrl = useMemo(() => {
@@ -352,6 +358,53 @@ export default function MessageCreation({ onBack, onNavigate }: MessageCreationP
     }
   };
 
+  // API 集成：配額查詢函數
+  const fetchQuota = useCallback(async () => {
+    try {
+      setQuotaLoading(true);
+
+      // 構建後端格式的篩選條件
+      let targetTypeBackend: 'all_friends' | 'filtered';
+      let targetFilter: { include?: string[]; exclude?: string[] } | undefined;
+
+      if (targetType === 'all') {
+        targetTypeBackend = 'all_friends';
+        targetFilter = undefined;
+      } else {
+        targetTypeBackend = 'filtered';
+        const tagNames = selectedFilterTags.map((tag) => tag.name);
+
+        if (filterCondition === 'include') {
+          targetFilter = { include: tagNames };
+        } else {
+          targetFilter = { exclude: tagNames };
+        }
+      }
+
+      // 調用 API 查詢配額
+      const result = await messageService.getQuota({
+        target_type: targetTypeBackend,
+        target_filter: targetFilter,
+      });
+
+      setQuotaData(result);
+    } catch (error) {
+      console.error('獲取配額失敗:', error);
+      // 錯誤已在 api.ts 中通過 toast 顯示，這裡不重複提示
+    } finally {
+      setQuotaLoading(false);
+    }
+  }, [targetType, selectedFilterTags, filterCondition]);
+
+  // API 集成：當發送對象改變時，自動查詢配額（帶防抖）
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchQuota();
+    }, 500); // 500ms 防抖
+
+    return () => clearTimeout(timer);
+  }, [fetchQuota]);
+
   const copyCard = () => {
     if (cards.length < 4) {
       const cardToCopy = cards.find(c => c.id === activeTab);
@@ -366,9 +419,45 @@ export default function MessageCreation({ onBack, onNavigate }: MessageCreationP
     }
   };
 
-  const handleSaveDraft = () => {
-    setIsDirty(false); // 儲存後清除未儲存標記
-    toast.success('草稿已儲存');
+  const handleSaveDraft = async () => {
+    try {
+      setIsSavingDraft(true);
+
+      // 檢查 Flex Message JSON 是否存在
+      if (!flexMessageJson) {
+        toast.error('請先完成訊息內容設定');
+        return;
+      }
+
+      // 構建前端表單數據
+      const formData = {
+        title,
+        notificationMsg,
+        flexMessageJson,
+        targetType: targetType as 'all' | 'include' | 'exclude',
+        selectedFilterTags: selectedFilterTags.map((tag) => ({
+          id: parseInt(tag.id),
+          name: tag.name,
+        })),
+        scheduleType: 'draft' as const,
+        cards,
+        thumbnail: cards.length > 0 ? cards[0].imageUrl : undefined,
+      };
+
+      // 轉換為後端格式
+      const backendData = transformToBackendFormat(formData, 1);
+
+      // 調用 API 創建草稿
+      await messageService.createMessage(backendData);
+
+      setIsDirty(false);
+      toast.success('草稿已儲存');
+    } catch (error) {
+      console.error('儲存草稿失敗:', error);
+      // 錯誤已在 api.ts 中通過 toast 顯示
+    } finally {
+      setIsSavingDraft(false);
+    }
   };
 
   const validateForm = () => {
@@ -378,18 +467,32 @@ export default function MessageCreation({ onBack, onNavigate }: MessageCreationP
     if (!title) errors.push('訊息標題');
     if (!notificationMsg) errors.push('通知推播');
     if (!previewMsg) errors.push('通知預覽');
-    if (!messageText) errors.push('訊息文字');
 
-    // Check enabled buttons
+    // Check card configurations (動態驗證勾選項)
     cards.forEach((card, index) => {
       const cardLabel = cards.length > 1 ? `輪播 ${index + 1} - ` : '';
-      
-      // Check card title for each card
+
+      // Check card title (always required)
       if (!card.cardTitle) {
         errors.push(`${cardLabel}標題文字`);
       }
-      
-      // Check Button 1
+
+      // Check image if enabled
+      if (card.enableImage && !card.image) {
+        errors.push(`${cardLabel}圖片`);
+      }
+
+      // Check content if enabled
+      if (card.enableContent && !card.content) {
+        errors.push(`${cardLabel}內文文字`);
+      }
+
+      // Check price if enabled
+      if (card.enablePrice && (!card.price || card.price === '0')) {
+        errors.push(`${cardLabel}價格`);
+      }
+
+      // Check Button 1 if enabled
       if (card.enableButton1) {
         if (!card.button1) {
           errors.push(`${cardLabel}動作按鈕一 - 按鈕文字`);
@@ -408,7 +511,7 @@ export default function MessageCreation({ onBack, onNavigate }: MessageCreationP
         }
       }
 
-      // Check Button 2
+      // Check Button 2 if enabled
       if (card.enableButton2) {
         if (!card.button2) {
           errors.push(`${cardLabel}動作按鈕二 - 按鈕文字`);
@@ -431,17 +534,78 @@ export default function MessageCreation({ onBack, onNavigate }: MessageCreationP
     return errors;
   };
 
-  const handlePublish = () => {
+  const handlePublish = async () => {
     const errors = validateForm();
-    
+
     if (errors.length > 0) {
       setValidationErrors(errors);
       setValidationDialogOpen(true);
       return;
     }
-    
-    setIsDirty(false); // 發佈後清除未儲存標記
-    toast.success('發佈成功');
+
+    // 檢查 Flex Message JSON 是否存在
+    if (!flexMessageJson) {
+      toast.error('請先完成訊息內容設定');
+      return;
+    }
+
+    // 檢查配額是否充足
+    if (quotaData && !quotaData.is_sufficient && scheduleType === 'immediate') {
+      toast.error('配額不足，無法立即發送', {
+        description: `需要 ${quotaData.estimated_send_count} 則，可用 ${quotaData.available_quota} 則`,
+      });
+      return;
+    }
+
+    try {
+      setIsPublishing(true);
+
+      // 構建前端表單數據
+      const formData = {
+        title,
+        notificationMsg,
+        flexMessageJson,
+        targetType: targetType as 'all' | 'include' | 'exclude',
+        selectedFilterTags: selectedFilterTags.map((tag) => ({
+          id: parseInt(tag.id),
+          name: tag.name,
+        })),
+        scheduleType: scheduleType as 'immediate' | 'scheduled' | 'draft',
+        scheduledDate: scheduledDate
+          ? `${scheduledDate.getFullYear()}-${String(scheduledDate.getMonth() + 1).padStart(2, '0')}-${String(scheduledDate.getDate()).padStart(2, '0')}`
+          : undefined,
+        scheduledTime: scheduleType === 'scheduled' ? `${scheduledTime.hours}:${scheduledTime.minutes}` : undefined,
+        cards,
+        thumbnail: cards.length > 0 ? cards[0].imageUrl : undefined,
+      };
+
+      // 轉換為後端格式
+      const backendData = transformToBackendFormat(formData, 1);
+
+      // 1. 創建訊息
+      const createdMessage = await messageService.createMessage(backendData);
+
+      // 2. 如果是立即發送，調用發送 API
+      if (scheduleType === 'immediate') {
+        const sendResult = await messageService.sendMessage(createdMessage.id);
+        toast.success('發送成功', {
+          description: `成功發送 ${sendResult.sent_count} 則訊息`,
+        });
+      } else if (scheduleType === 'scheduled') {
+        toast.success('排程發送設定成功', {
+          description: `將於 ${formData.scheduledDate} ${formData.scheduledTime} 發送`,
+        });
+      } else {
+        toast.success('發佈成功');
+      }
+
+      setIsDirty(false);
+    } catch (error) {
+      console.error('發佈失敗:', error);
+      // 錯誤已在 api.ts 中通過 toast 顯示
+    } finally {
+      setIsPublishing(false);
+    }
   };
 
 
@@ -543,17 +707,19 @@ export default function MessageCreation({ onBack, onNavigate }: MessageCreationP
                 <p className="text-[32px] text-[#383838]">群發訊息類型</p>
               </div>
               <div className="flex gap-[8px] items-center">
-                <Button 
+                <Button
                   onClick={handleSaveDraft}
-                  className="bg-[#f0f6ff] text-[#0f6beb] hover:bg-[#e0ecff] h-[48px] px-3 min-w-[72px] rounded-[16px]"
+                  disabled={isSavingDraft || isPublishing}
+                  className="bg-[#f0f6ff] text-[#0f6beb] hover:bg-[#e0ecff] h-[48px] px-3 min-w-[72px] rounded-[16px] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  儲存草稿
+                  {isSavingDraft ? '儲存中...' : '儲存草稿'}
                 </Button>
-                <Button 
+                <Button
                   onClick={handlePublish}
-                  className="bg-[#242424] hover:bg-[#383838] text-white h-[48px] px-3 min-w-[72px] rounded-[16px]"
+                  disabled={isPublishing || isSavingDraft || quotaLoading}
+                  className="bg-[#242424] hover:bg-[#383838] text-white h-[48px] px-3 min-w-[72px] rounded-[16px] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  發佈
+                  {isPublishing ? '發佈中...' : '發佈'}
                 </Button>
               </div>
             </div>
@@ -839,8 +1005,33 @@ export default function MessageCreation({ onBack, onNavigate }: MessageCreationP
                   </div>
                 </RadioGroup>
                 <div className="mt-[30px] -ml-[20px]">
-                  <p className="text-[16px] text-[#383838]">預計發送好友人數：60人</p>
-                  <p className="text-[16px] text-[#383838] mt-[10px]">可用訊息則數：5,937 則</p>
+                  <p className="text-[16px] text-[#383838]">
+                    預計發送好友人數：
+                    {quotaLoading ? (
+                      <span className="ml-1">載入中...</span>
+                    ) : quotaData ? (
+                      <span className="ml-1">{quotaData.estimated_send_count} 人</span>
+                    ) : (
+                      <span className="ml-1">-- 人</span>
+                    )}
+                  </p>
+                  <p className="text-[16px] text-[#383838] mt-[10px]">
+                    可用訊息則數：
+                    {quotaLoading ? (
+                      <span className="ml-1">載入中...</span>
+                    ) : quotaData ? (
+                      <>
+                        <span className={`ml-1 ${!quotaData.is_sufficient ? 'text-red-500 font-semibold' : ''}`}>
+                          {quotaData.available_quota.toLocaleString()} 則
+                        </span>
+                        {!quotaData.is_sufficient && (
+                          <span className="ml-2 text-red-500 text-sm">（配額不足）</span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="ml-1">-- 則</span>
+                    )}
+                  </p>
                 </div>
               </div>
             </div>
@@ -929,62 +1120,12 @@ export default function MessageCreation({ onBack, onNavigate }: MessageCreationP
                       <p className="text-[12px] text-[#383838]">OA</p>
                     </div>
                     
-                    {/* Show simplified preview for 文字按鈕確認型 */}
-                    {templateType === '文字按鈕確認型' ? (
-                      <div className="relative shrink-0 w-[288px]">
-                        <div className="bg-[#f6f9fd] relative rounded-[15px] w-[288px]">
-                          <div className="flex flex-col items-center overflow-clip relative rounded-[inherit] w-[288px]">
-                            {/* Card Description */}
-                            <div className="relative shrink-0 w-full">
-                              <div className="flex flex-row items-center size-full">
-                                <div className="box-border flex items-center p-[16px] relative w-full">
-                                  <p className="basis-0 font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px]">
-                                    {messageText || '文字訊息'}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                            
-                            {/* Card Actions - show when button1 or button2 is enabled */}
-                            {(currentCard.enableButton1 || currentCard.enableButton2) && (
-                              <div className="relative shrink-0 w-full">
-                                <div className="flex flex-col justify-center size-full">
-                                  <div className="box-border content-stretch flex flex-col gap-[6px] items-start justify-center p-[9px] relative w-full">
-                                    {currentCard.enableButton1 && (
-                                      <div className="bg-white relative rounded-[15px] shrink-0 w-full">
-                                        <div className="flex flex-row items-center justify-center size-full">
-                                          <div className="box-border content-stretch flex items-center justify-center p-[15px] relative w-full">
-                                            <p className="basis-0 font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[18px] text-center">
-                                              {currentCard.button1 || '動作按鈕一'}
-                                            </p>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    )}
-                                    {currentCard.enableButton2 && (
-                                      <div className="bg-white relative rounded-[15px] shrink-0 w-full">
-                                        <div className="flex flex-row items-center justify-center size-full">
-                                          <div className="box-border content-stretch flex items-center justify-center p-[15px] relative w-full">
-                                            <p className="basis-0 font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[18px] text-center">
-                                              {currentCard.button2 || '動作按鈕二'}
-                                            </p>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div 
-                        className="flex gap-[15px] overflow-x-auto scroll-smooth snap-x snap-mandatory" 
-                        onScroll={handlePreviewScroll}
-                        style={{ scrollbarWidth: 'thin' }}
-                      >
+                    {/* Carousel Cards Preview */}
+                    <div
+                      className="flex gap-[15px] overflow-x-auto scroll-smooth snap-x snap-mandatory"
+                      onScroll={handlePreviewScroll}
+                      style={{ scrollbarWidth: 'thin' }}
+                    >
                         {cards.map((card) => (
                           <div 
                             key={card.id} 
@@ -1046,8 +1187,7 @@ export default function MessageCreation({ onBack, onNavigate }: MessageCreationP
                             )}
                           </div>
                         ))}
-                      </div>
-                    )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -1076,66 +1216,6 @@ export default function MessageCreation({ onBack, onNavigate }: MessageCreationP
                       <path d={svgPaths.pcbf700} fill="#6E6E6E" />
                     </svg>
                   </Button>
-                </div>
-
-                {/* Message Text */}
-                <div className="flex flex-col sm:flex-row items-start gap-4 w-full">
-                  <div className="flex gap-[2px] items-center min-w-[120px] sm:min-w-[140px] lg:min-w-[160px]">
-                    <div className="flex gap-[10px] items-center justify-center opacity-0 size-[24px]">
-                      <div className="relative shrink-0 size-[16px]">
-                        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 16 16">
-                          <g clipPath="url(#clip0_4004_285)">
-                            <g id="Vector"></g>
-                            <path d={messageTextSvgPaths.pcd62e00} fill="#0F6BEB" id="Vector_2" />
-                          </g>
-                          <defs>
-                            <clipPath id="clip0_4004_285">
-                              <rect fill="white" height="16" width="16" />
-                            </clipPath>
-                          </defs>
-                        </svg>
-                      </div>
-                    </div>
-                    <Label className="flex items-center">
-                      <span className="text-[16px] text-[#383838]">訊息文字</span>
-                      <span className="text-[16px] text-[#f44336]">*</span>
-                    </Label>
-                    <div className="relative shrink-0 size-[24px] opacity-0">
-                      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
-                        <g opacity="0">
-                          <path d={messageTextSvgPaths.p2cd5ff00} fill="#0F6BEB" />
-                        </g>
-                      </svg>
-                    </div>
-                  </div>
-                  <div className="flex-1 flex flex-col gap-[2px]">
-                    <div className="bg-white h-[48px] min-h-[48px] relative rounded-[8px] w-full">
-                      <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-[8px]" />
-                      <div className="flex flex-col justify-center min-h-inherit size-full">
-                        <div className="box-border flex flex-col gap-[4px] h-[48px] items-start justify-center min-h-inherit p-[8px] relative w-full">
-                          <input
-                            type="text"
-                            value={messageText}
-                            onChange={(e) => {
-                              if (e.target.value.length <= 100) {
-                                setMessageText(e.target.value);
-                              }
-                            }}
-                            placeholder="輸入訊息文字"
-                            className="w-full bg-transparent outline-none text-[16px] text-[#383838] placeholder:text-[#717182]"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-[10px] items-end w-full">
-                      <div className="h-[18px] w-full text-right">
-                        <p className="text-[12px] leading-[1.5]">
-                          <span className="text-[#6e6e6e]">{messageText.length}</span>
-                          <span className="text-[#383838]">/100</span>
-                        </p>
-                      </div>
-                    </div>
-                  </div>
                 </div>
 
                 {/* Title */}

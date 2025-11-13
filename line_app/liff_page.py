@@ -34,7 +34,7 @@ def fetchall(sql: str, p: dict | None = None) -> list[dict]:
 # ===== OAuth2：用 Channel ID + Secret 取 access_token =====
 def exchange_access_token(client_id: str, client_secret: str) -> Dict[str, Any]:
     r = requests.post(
-        "https://api.line.me/v2/oauth/token",
+        "https://api.line.me/oauth2/v2.1/token",
         data={
             "grant_type": "client_credentials",
             "client_id": client_id,
@@ -101,3 +101,28 @@ def multicast_liff_url(msg_access_token: str, user_ids: List[str], liff_url: str
         sent += len(chunk)
 
     return {"ok": True, "sent": sent, "total": total}
+
+
+# 查詢/更新 LIFF app
+def list_liff_apps(liff_access_token: str) -> dict:
+    r = requests.get(
+        "https://api.line.me/liff/v1/apps",
+        headers={"Authorization": f"Bearer {liff_access_token}"},
+        timeout=15,
+    )
+    j = r.json() if r.headers.get("content-type","").startswith("application/json") else {"raw": r.text}
+    return {"ok": r.ok, "data": j}
+
+def update_liff_view(liff_access_token: str, liff_id: str, endpoint_url: str, size: str = "full") -> dict:
+    r = requests.put(
+        f"https://api.line.me/liff/v1/apps/{liff_id}/view",
+        headers={"Authorization": f"Bearer {liff_access_token}"},
+        json={"type": size, "url": endpoint_url},
+        timeout=15,
+    )
+    if r.ok:
+        return {"ok": True}
+    try:
+        return {"ok": False, "error": r.json()}
+    except Exception:
+        return {"ok": False, "error": r.text}

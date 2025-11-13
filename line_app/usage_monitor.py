@@ -62,7 +62,7 @@ def resolve_access_token(line_channel_id: Optional[str]) -> Optional[str]:
     if line_channel_id:
         row = fetchone("""
             SELECT channel_access_token AS token
-            FROM ryan_line_channels
+            FROM line_channels
             WHERE line_channel_id = :cid AND is_active = 1
             LIMIT 1
         """, {"cid": line_channel_id})
@@ -132,13 +132,12 @@ def count_recipients_for_payload(payload: dict) -> int:
         sql = f"""
             SELECT COUNT(DISTINCT m.id) AS n
               FROM members m
-              JOIN member_tag_relations mtr ON m.id = mtr.member_id
-              JOIN member_tags mt ON mtr.tag_id = mt.id
+              JOIN member_tags mt ON m.id = mt.member_id
              WHERE m.line_uid IS NOT NULL
                AND m.line_uid <> ''
                AND m.line_uid LIKE 'U%%'
                AND LENGTH(m.line_uid) = 33
-               AND mt.name IN ({placeholders})
+               AND mt.tag_name IN ({placeholders})
         """
         row = fetchone(sql, params) or {"n": 0}
         return int(row["n"])

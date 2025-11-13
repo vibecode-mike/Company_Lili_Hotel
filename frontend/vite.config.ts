@@ -68,5 +68,10 @@
       port: 5173,
       open: true,
       allowedHosts: ['crmpoc.star-bit.io'],
+      hmr: {
+        host: 'crmpoc.star-bit.io',
+        protocol: 'wss',
+        clientPort: 443,
+      },
     },
   });

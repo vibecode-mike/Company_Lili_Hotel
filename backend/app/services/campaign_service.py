@@ -12,7 +12,7 @@ import json
 
 from app.models.campaign import Campaign, CampaignStatus, CampaignRecipient
 from app.models.template import MessageTemplate, TemplateCarouselItem, TemplateType
-from app.models.tracking import RyanClickDemo
+from app.models.tracking import ClickTrackingDemo
 from app.schemas.campaign import CampaignCreate, CampaignUpdate
 from app.services.scheduler import scheduler
 
@@ -250,13 +250,13 @@ class CampaignService:
 
         # 构建查询：按 source_campaign_id 分组，SUM total_clicks
         query = select(
-            RyanClickDemo.source_campaign_id,
-            func.sum(RyanClickDemo.total_clicks).label('click_count')
-        ).group_by(RyanClickDemo.source_campaign_id)
+            ClickTrackingDemo.source_campaign_id,
+            func.sum(ClickTrackingDemo.total_clicks).label('click_count')
+        ).group_by(ClickTrackingDemo.source_campaign_id)
 
         # 如果提供了campaign_ids，只查询这些活动
         if campaign_ids:
-            query = query.where(RyanClickDemo.source_campaign_id.in_(campaign_ids))
+            query = query.where(ClickTrackingDemo.source_campaign_id.in_(campaign_ids))
 
         result = await db.execute(query)
         rows = result.all()
