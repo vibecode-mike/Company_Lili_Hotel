@@ -201,14 +201,54 @@ export default function CarouselMessageEditor({
   const imageUploadRef = useRef<HTMLInputElement>(null);
   const currentCard = cards.find(c => c.id === activeTab) || cards[0];
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        onUpdateCard({ image: reader.result as string });
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    // 檢查文件大小（最大 5MB）
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast.error('圖片大小不能超過 5MB');
+      return;
+    }
+
+    // 檢查文件類型
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('只支持 JPG、PNG、GIF 格式的圖片');
+      return;
+    }
+
+    try {
+      // 顯示上傳中提示
+      toast.loading('上傳圖片中...', { id: 'image-upload' });
+
+      // 上傳圖片到服務器
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/v1/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || '上傳失敗');
+      }
+
+      const result = await response.json();
+      const imageUrl = result.data.url;
+
+      // 更新卡片圖片為 URL
+      onUpdateCard({ image: imageUrl });
+
+      toast.success('圖片上傳成功', { id: 'image-upload' });
+    } catch (error) {
+      console.error('圖片上傳失敗:', error);
+      toast.error(error instanceof Error ? error.message : '圖片上傳失敗', {
+        id: 'image-upload'
+      });
     }
   };
 

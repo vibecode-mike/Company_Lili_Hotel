@@ -73,5 +73,12 @@
         protocol: 'wss',
         clientPort: 443,
       },
+      proxy: {
+        '/api': {
+          target: 'http://192.168.50.123:8700',
+          changeOrigin: true,
+          secure: false,
+        },
+      },
     },
   });

@@ -21,6 +21,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Text,
 )
+from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.models.base import Base
@@ -86,7 +87,7 @@ class Message(Base):
         comment="關聯活動ID（選填）",
     )
     created_by = Column(BigInteger, ForeignKey("users.id"), comment="創建者ID")
-    flex_message_json = Column(Text, nullable=True, comment="Flex Message JSON 內容")
+    flex_message_json = Column(MEDIUMTEXT, nullable=True, comment="Flex Message JSON 內容（最大 16MB）")
 
     # 相容 line_app/app.py 的欄位
     interaction_tags = Column(JSON, comment="互動標籤（相容舊程式）")
