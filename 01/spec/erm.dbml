@@ -1,0 +1,520 @@
+// 力麗飯店 LineOA CRM 管理後台 - 資料模型
+// 根據規格文檔萃取的實體關係模型
+
+Table Member {
+  member_id string [pk, note: '會員唯一識別碼']
+  line_uid string [note: 'LINE 官方帳號會員的唯一識別碼，長度上限 100 字元（當前格式為 U 開頭加 32 位英數字，預留未來 LINE 格式變更空間）']
+  line_avatar string [note: 'LINE 會員頭像 CDN URL（儲存 LINE 提供的完整 URL，如 https://profile.line-scdn.net/xxxxx），若無頭像或 URL 失效則顯示預設頭像。URL 來源：會員加入時從 LINE Profile API 取得，儲存後不定期更新。前端顯示時直接載入此 URL']
+  line_name string [note: 'LINE 會員顯示名稱']
+  name string [note: '會員姓名，供內部人員識別用，上限32字']
+  gender string [note: '性別，值域：0=不透漏 / 1=男 / 2=女。必填欄位，不允許 NULL，預設值為 0（不透漏）']
+  birthday date [note: '生日，格式：yyyy-mm-dd，儲存完整日期（年/月/日）。用途：(1) 生日月份標籤自動生成（系統從完整日期提取月份）、(2) 生日行銷推播、(3) 會員年齡計算。允許 NULL（會員可選擇不提供）']
+  email string [unique, note: '電子信箱，唯一性約束（NULL 值不受約束），用於會員識別與登入']
+  phone string [note: '手機號碼，允許重複（考慮家庭成員共用號碼情境）']
+  id_number string [unique, note: '身分證/護照號碼（唯一值），用於與 PMS 系統比對。資料保護：明文儲存於資料庫，前端預設顯示遮罩格式（如 A12****789），可手動解除查看完整號碼']
+  residence string [note: '居住地，值域限制為台灣 22 縣市標準名稱：台北市、新北市、桃園市、台中市、台南市、高雄市、基隆市、新竹市、嘉義市、新竹縣、苗栗縣、彰化縣、南投縣、雲林縣、嘉義縣、屏東縣、宜蘭縣、花蓮縣、台東縣、澎湖縣、金門縣、連江縣。允許 NULL（會員可選擇不提供）']
+  join_source string [note: '加入來源，採用可擴充設計，支援透過設定檔動態管理來源清單。初始值域：LINE（LINE 官方帳號加入）、CRM（CRM 系統匯入）、PMS（德安 PMS 系統整合）、ERP（ERP 系統整合）、系統（後台手動建立）。未來可透過管理後台或設定檔新增其他來源（如：問券、活動報名等），無需修改程式碼。必填欄位，不允許 NULL']
+  created_at string [note: '建立時間，格式：yyyy/mm/dd hh:mm']
+  last_interaction_at string [note: '最後回覆日期，格式：yyyy/mm/dd hh:mm。更新觸發條件：僅當會員主動發送文字或圖片訊息時更新。不更新情境：被動接收推播訊息、點擊按鈕互動、開啟訊息等行為皆不更新此欄位']
+  receive_notification bool [note: '是否接收優惠通知']
+  internal_note string [note: '內部人員可新增的備註，用於記錄該會員的消費習慣與喜好']
+
+  Note: '''
+  會員實體，整合 LINE 官方帳號會員的基本資料與互動行為
+  last_interaction_at 更新規則：僅會員主動發送訊息時更新，被動接收推播訊息或點擊按鈕不更新此欄位，用於判斷會員主動互動活躍度
+  關係：Member 1:N MemberTag, Member 1:N MemberInteractionRecord, Member 1:N MessageRecord, Member 1:N ConsumptionRecord
+  '''
+}
+
+Table MemberTag {
+  tag_id string [pk, note: '標籤唯一識別碼']
+  tag_name string [note: '標籤名稱，不得超過 20 個字元（中英文皆計算，每個字元計 1）。格式限制：僅允許中文（\u4e00-\u9fa5）、英文（a-zA-Z）、數字（0-9）、空格，禁止特殊字元與 Emoji。驗證：前端使用正則表達式 /^[\u4e00-\u9fa5a-zA-Z0-9\s]+$/ 即時驗證']
+  tag_source string [note: '標籤來源：CRM / PMS / 問券 / 後台自訂']
+  trigger_count int [note: '觸發次數（匯總層級），累計該標籤所有會員的觸發總數，>= 0。計算邏輯：SUM(各會員的 trigger_count)，用於標籤總覽頁顯示該標籤的整體活躍度']
+  trigger_member_count int [note: '觸發會員數（匯總層級），擁有該標籤的不重複會員總數，>= 0。計算邏輯：COUNT(DISTINCT member_id)']
+  last_triggered_at string [note: '最近觸發時間']
+  member_id string [ref: > Member.member_id, note: '所屬會員']
+  message_id string [note: '觸發來源訊息ID，用於去重判斷']
+
+  indexes {
+    unique_member_tag_trigger [unique, note: '確保 (member_id, tag_id, message_id) 組合唯一性，防止重複插入。同一組合重複觸發時更新 trigger_count'] (member_id, tag_id, message_id)
+  }
+
+  Note: '''
+  會員標籤實體，用於標記會員屬性或消費行為
+  來源1：外部系統串接（CRM/PMS）- 消費金額達門檻、房型分類、訪問頻率、上次互動時間
+  來源2：問券蒐集 - 性別、年齡區間、地區、生日月份
+  來源3：後台自訂 - 如 VIP、黑名單
+  觸發去重規則：依據 (member_id, tag_id, message_id) 判斷唯一性，不同訊息來源可累計，同一訊息重複觸發僅計一次
+  統計邏輯（標籤總覽頁）：
+    - trigger_count：該標籤所有會員的累計觸發次數總和
+    - trigger_member_count：擁有該標籤的不重複會員數
+  '''
+}
+
+Table TagRule {
+  rule_id string [pk, note: '規則唯一識別碼']
+  tag_name string [note: '標籤名稱（如：高消費客戶、常客）']
+  tag_source string [note: '標籤來源：CRM / PMS。必填欄位']
+  rule_type string [note: '規則類型：consumption_amount（消費金額）/ visit_frequency（訪問頻率）/ interaction_time（互動時間）/ room_type（房型分類）。必填欄位']
+  threshold_value float [note: '門檻值（如：30000 元、3 次）。允許 NULL（房型分類不需要門檻值）']
+  threshold_unit string [note: '單位：NTD（新台幣）/ times（次）/ days（天）。允許 NULL（房型分類不需要單位）']
+  period_days int [note: '計算週期（天數），如 365 表示滾動 12 個月。允許 NULL（互動時間規則不需要週期）']
+  condition_operator string [note: '比較運算子：>= / > / <= / < / =。預設值：>=']
+  is_enabled bool [note: '是否啟用。預設值：true']
+  created_at string [note: '建立時間，格式：yyyy/mm/dd hh:mm']
+  updated_at string [note: '更新時間，格式：yyyy/mm/dd hh:mm']
+
+  Note: '''
+  標籤規則實體，用於定義 CRM/PMS 標籤的自動生成規則
+  規則類型說明：
+    - consumption_amount：消費金額達門檻（如：過去 12 個月消費 >= 30000 元）
+    - visit_frequency：訪問頻率達門檻（如：過去 12 個月住宿 >= 3 次）
+    - interaction_time：互動時間超過門檻（如：超過 60 天未主動互動）
+    - room_type：房型分類（如：雙人房、商務房）
+  計算週期：採用滾動時間窗口（從當前日期往前推算 period_days 天）
+  規則管理：透過後台管理介面進行 CRUD 操作，修改立即生效
+  規則驗證：門檻值必須為正數，計算週期建議不超過 730 天（2 年）
+  規則執行：排程任務定期讀取 TagRule 表並執行規則，為符合條件的會員自動生成標籤
+  '''
+}
+
+Table InteractionTag {
+  tag_id string [pk, note: '標籤唯一識別碼']
+  tag_name string [note: '標籤名稱，不得超過 20 個字元（中英文皆計算，每個字元計 1）。格式限制：僅允許中文（\u4e00-\u9fa5）、英文（a-zA-Z）、數字（0-9）、空格，禁止特殊字元與 Emoji。驗證：前端使用正則表達式 /^[\u4e00-\u9fa5a-zA-Z0-9\s]+$/ 即時驗證']
+  tag_source string [note: '標籤來源：訊息模板 / 問券模板']
+  trigger_count int [note: '觸發次數，累計所有不重複的 (member_id, tag_id, message_id) 組合數，>= 0。計算邏輯：COUNT(DISTINCT member_id, tag_id, message_id)，同一會員點擊不同訊息會累計，點擊相同訊息不重複計算']
+  trigger_member_count int [note: '觸發會員數，不重複會員總數，>= 0。計算邏輯：COUNT(DISTINCT member_id)，同一會員無論點擊多少次或多少訊息，僅計算一次']
+  last_triggered_at string [note: '最近觸發時間']
+
+  Note: '''
+  互動標籤定義實體，用於定義可用的互動標籤
+  來源1：訊息模板設定 - 檔期優惠、雙十、早鳥
+  來源2：會員互動模板 - 文字按鈕確認型、圖片點擊型、圖卡按鈕型、問券模板
+  統計邏輯：
+    - trigger_count：累計所有觸發（以 MemberInteractionRecord 唯一記錄為基準）
+    - trigger_member_count：不重複會員數（同一會員多次觸發僅計一次）
+    - 範例：會員A點擊訊息1、訊息2，會員B點擊訊息1 → trigger_count=3, trigger_member_count=2
+  關係：InteractionTag 1:N MemberInteractionRecord
+  '''
+}
+
+Table MemberInteractionRecord {
+  record_id string [pk, note: '互動紀錄唯一識別碼']
+  member_id string [ref: > Member.member_id, note: '所屬會員']
+  tag_id string [ref: > InteractionTag.tag_id, note: '互動標籤']
+  message_id string [note: '關聯的訊息ID（若來自訊息模板）']
+  triggered_at string [note: '觸發時間，格式：yyyy/mm/dd hh:mm']
+
+  indexes {
+    unique_member_tag_message [unique, note: '同一會員對相同標籤於同一訊息僅計一次'] (member_id, tag_id, message_id)
+  }
+
+  Note: '''
+  會員互動紀錄實體，用於追蹤會員與訊息的互動行為
+  觸發去重規則：依據 (member_id, tag_id, message_id) 判斷唯一性，同一會員點擊不同訊息可累計，同一訊息重複點擊僅計一次
+  關係：MemberInteractionRecord N:1 Member, MemberInteractionRecord N:1 InteractionTag
+  '''
+}
+
+Table Message {
+  message_id string [pk, note: '訊息唯一識別碼']
+  template_id string [ref: > MessageTemplate.template_id, note: '使用的訊息模板ID']
+  send_time string [note: '傳送時間，格式：yyyy/mm/dd hh:mm']
+  send_count int [note: '傳送人數，>= 0']
+  message_content string [note: '訊息內容（部分內容用於列表顯示）']
+  open_count int [note: '開啟次數（會員已讀訊息的不重複人數），>= 0。計算邏輯：COUNT(DISTINCT member_id WHERE 已讀)']
+  click_count int [note: '點擊次數（點擊按鈕/連結的不重複人數），>= 0。計算邏輯：COUNT(DISTINCT member_id WHERE 點擊互動)']
+  send_status string [note: '發送狀態：草稿 / 排程發送 / 已發送 / 發送失敗。狀態轉換規則：草稿 ⇄ 排程發送 → 已發送（終止）/ 發送失敗 → 草稿（可修改重試）。已發送為終止狀態不可變更；發送失敗後可改回草稿修正問題並重新排程']
+  failure_reason string [note: '發送失敗原因（如：訊息額度不足）']
+  target_type string [note: '傳送對象類型：所有好友 / 篩選目標對象']
+  target_filter string [note: '篩選條件（若為篩選目標對象），JSON 格式儲存。支援邏輯：包含條件（多個標籤全部 AND）+ 排除條件（多個標籤全部 AND NOT）。範例：{"include": ["VIP", "台北市"], "exclude": ["黑名單", "已發送"]} 表示「包含 VIP 且包含 台北市 且 排除 黑名單 且 排除 已發送」']
+  scheduled_datetime_utc string [note: '排程發送時間（UTC），格式：ISO 8601 (yyyy-MM-ddTHH:mm:ssZ)。範例：2025-02-01T02:00:00Z 表示台灣時間 2025/02/01 10:00。前端顯示時轉換為台灣時區（UTC+8）。若為立即發送則此欄位為 NULL']
+  trigger_condition string [note: '特定觸發條件（如：加入好友期間的 7～29天）']
+  estimated_send_count int [note: '預計發送好友人數，>= 0']
+  available_quota int [note: '可用訊息配額用量，>= 0']
+  thumbnail string [note: '縮圖 URL，無圖片則為系統預設圖']
+  flex_message_json string [note: 'Flex Message JSON 內容（選填），由前端 Flex Message Simulator 產生。後端驗證：(1) JSON 格式正確性（可解析）、(2) 基本結構完整性。前端使用 LINE 官方 Simulator 確保符合 LINE Flex Message 規範']
+
+  Note: '''
+  訊息實體，用於群發訊息的管理與追蹤
+  不變條件：若 available_quota < estimated_send_count，系統須阻擋發送行為；當 available_quota >= estimated_send_count 時允許發送（剛好相等視為足夠）
+  狀態轉換規則：
+    - 草稿 ⇄ 排程發送：雙向轉換（允許取消排程）
+    - 排程發送 → 已發送：成功發送後進入終止狀態，不可變更（防止重複發送）
+    - 排程發送 → 發送失敗：發送過程中失敗（如：額度不足、API 錯誤）
+    - 發送失敗 → 草稿：允許修正問題後改回草稿，重新編輯並排程
+  取消排程邏輯：
+    - 操作方式：將 send_status 從「排程發送」改為「草稿」
+    - 資料保留：保留所有訊息資料（message_content, scheduled_datetime_utc, target_filter, template_id 等）
+    - 時間限制：無時間限制，任何時候都可取消
+    - 後續操作：取消後可重新編輯訊息內容、調整排程時間並再次發送
+  終止狀態：已發送（不可逆）
+  可重試狀態：發送失敗（可改回草稿）
+  關係：Message 1:1 MessageTemplate
+  '''
+}
+
+Table MessageTemplate {
+  template_id string [pk, note: '模板唯一識別碼']
+  template_name string [note: '模板名稱（選填，用於模板庫顯示）。建議格式：「春節促銷」、「新會員歡迎」等描述性名稱']
+  is_in_library bool [note: '是否加入模板庫：true 加入模板庫（可在模板庫選擇）/ false 不加入（僅限該群發使用）。預設值：false']
+  source_template_id string [note: '複製來源模板ID（選填）。若此模板是從模板庫選擇並複製而來，記錄原始模板ID，用於追蹤來源。允許 NULL（從空白建立的模板）']
+  text_content string [note: '文字內容（選填）']
+  image_url string [note: '圖片 URL（選填）。圖片處理流程：(1) 前端上傳原圖（檔案大小 <= 1 MB）、(2) 後端執行中心裁切為正方形（1:1 比例，取中心區域）、(3) 儲存裁切後圖片 URL。前端預覽：使用 CSS object-fit: cover + object-position: center 模擬裁切效果']
+  title string [note: '標題（選填）']
+  description string [note: '內文描述（選填）']
+  amount int [note: '金額數值（選填），整數型別，不允許小數，>= 0']
+  button_text string [note: '按鈕文字（選填）']
+  button_count int [note: '顯示的文字按鈕數量，>= 0。驗證層級：前端 UI 層限制，根據實際需求限制按鈕數量']
+  interaction_tag string [note: '互動標籤（選填，用於數據追蹤），支援多個標籤以逗號分隔，如「雙十,檔期優惠」']
+  tag_trigger_mode string [note: '標籤觸發模式（當設定多個互動標籤時）：全部觸發 / 僅主標籤。全部觸發：所有標籤都記錄並累加 trigger_count；僅主標籤：只記錄第一個標籤，其他標籤作為描述用途']
+  action_type string [note: '動作按鈕互動類型（選填）：開啟網址 / 觸發文字 / 觸發圖片。若為 NULL 或未設定，按鈕點擊後無反應（僅展示）。草稿容錯：儲存草稿時允許未設定；發送前驗證：發送訊息時若未設定顯示警告但不阻擋']
+  action_url string [note: 'URL 網址（選填）。必填邏輯：當 action_type = 開啟網址時，發送訊息前必須填寫，否則阻擋發送。草稿容錯：儲存草稿時允許為 NULL。切換互動類型時保留舊值（不清空）']
+  action_text string [note: '觸發的訊息文字（選填）。必填邏輯：當 action_type = 觸發文字時，發送訊息前必須填寫，否則阻擋發送。草稿容錯：儲存草稿時允許為 NULL。切換互動類型時保留舊值（不清空）']
+  action_image string [note: '觸發的圖片檔案（選填）。必填邏輯：當 action_type = 觸發圖片時，發送訊息前必須上傳，否則阻擋發送。草稿容錯：儲存草稿時允許為 NULL。切換互動類型時保留舊值（不清空）']
+  notification_message string [note: '通知訊息（選填）']
+  preview_message string [note: '訊息預覽（選填）']
+  carousel_count int [note: '輪播圖卡數量（選填，有效範圍 2-9 張，單張圖片不算輪播），>= 2']
+  flex_message_json string [note: 'LINE Flex Message JSON（後端根據上述欄位自動生成），用於實際發送到 LINE API。格式：標準的 LINE Flex Message JSON 結構']
+  usage_count int [note: '使用次數統計（模板被選擇複製的次數），>= 0。用途：模板庫排序（熱門優先）']
+  created_at string [note: '建立時間，格式：yyyy/mm/dd hh:mm']
+  updated_at string [note: '更新時間，格式：yyyy/mm/dd hh:mm']
+
+  Note: '''
+  訊息模板實體，用於儲存配置區填寫的欄位資料
+  模板來源：(1) 從模板庫選擇既有模板（複製建立新記錄）、(2) 從空白建立新模板
+  模板庫管理：is_in_library = true 的模板會顯示在模板庫，供其他群發選擇複製
+  複製機制：從模板庫選擇模板時，系統複製所有欄位資料建立新 MessageTemplate 記錄，並記錄 source_template_id 追蹤來源
+  獨立編輯：每個 Message 都有自己專屬的 MessageTemplate（1:1 關係），編輯不影響其他群發或原始模板
+  加入模板庫：建立群發時可選擇是否將模板加入模板庫（設定 is_in_library = true），供未來重用
+  使用統計：usage_count 記錄模板被選擇複製的次數，用於模板庫排序（熱門優先）
+  用戶在配置區填寫欄位（text_content, image_url, title 等），系統即時預覽並由後端自動生成 LINE Flex Message JSON
+  不區分固定的模板類型，由填寫的欄位組合決定最終的 Flex Message 結構
+  輪播規則：必須至少 2 張圖片才算輪播，單張圖片不使用輪播功能
+  多標籤觸發規則：由 tag_trigger_mode 決定，「全部觸發」時所有標籤都記錄，「僅主標籤」時只記錄第一個標籤
+  flex_message_json 欄位由後端根據填寫的欄位自動生成，前端不需處理 JSON 編輯
+  '''
+}
+
+Table MessageRecord {
+  record_id string [pk, note: '訊息紀錄唯一識別碼']
+  member_id string [ref: > Member.member_id, note: '所屬會員']
+  message_content string [note: '訊息內容']
+  message_type string [note: '訊息類型：純文字 / 圖片 / 訊息模板']
+  message_status string [note: '訊息狀態：已讀 / 未讀（未讀不標記）']
+  send_time string [note: '傳送時間，格式：hh:mm（12小時制，分5個時段：上午/中午/下午/晚上/凌晨）']
+  message_source string [note: '訊息來源：人工回覆（顯示帳號名稱） / 訊息推播 / 自動回應']
+  conversation_date string [note: '對話開啟日期，格式：yyyy/mm/dd（week）']
+  scheduled_send bool [note: '是否排程發送']
+  scheduled_date string [note: '排程指定日期']
+  scheduled_time string [note: '排程指定時間']
+
+  Note: '''
+  訊息紀錄實體，用於一對一聊天記錄的管理
+  關係：MessageRecord N:1 Member
+  '''
+}
+
+Table AutoResponse {
+  response_id string [pk, note: '自動回應唯一識別碼']
+  trigger_type string [note: '觸發類型，採用可擴充設計，支援透過設定檔動態管理觸發類型清單。初始值域：新好友歡迎訊息（會員加入好友時觸發）、關鍵字觸發（會員訊息包含關鍵字時觸發）、指定時間觸發（特定時間/日期區間內觸發）。未來可透過管理後台或設定檔新增其他觸發類型（如：取消追蹤、加入群組、特定事件等），無需修改程式碼。必填欄位，不允許 NULL']
+  time_range_start string [note: '指定時間區間起始（當 trigger_type = 指定時間觸發時使用）。格式：HH:mm（24小時制），如「18:00」。驗證規則：正則表達式 ^([01]\\d|2[0-3]):[0-5]\\d$，確保格式正確。允許 NULL（非指定時間觸發時為 NULL）']
+  time_range_end string [note: '指定時間區間結束（當 trigger_type = 指定時間觸發時使用）。格式：HH:mm（24小時制），如「09:00」。驗證規則：正則表達式 ^([01]\\d|2[0-3]):[0-5]\\d$，確保格式正確。跨日判斷：當 time_range_end < time_range_start 時表示跨日（如 18:00-09:00 表示晚上 18:00 到隔天早上 09:00）。允許 NULL（非指定時間觸發時為 NULL）']
+  date_range_start string [note: '指定日期區間起始（當 trigger_type = 指定時間觸發時使用）。格式：yyyy/mm/dd，如「2025/02/01」。允許 NULL（不限定日期範圍時為 NULL）']
+  date_range_end string [note: '指定日期區間結束（當 trigger_type = 指定時間觸發時使用）。格式：yyyy/mm/dd，如「2025/02/28」。允許 NULL（不限定日期範圍時為 NULL）']
+  scheduled_mode string [note: '指定時間觸發模式（當 trigger_type = 指定時間觸發時使用）：被動回應模式 / 主動推播模式。被動回應模式：會員發訊息時判斷時間是否在範圍內，符合則回應；主動推播模式：系統於時間範圍開始時主動推播給所有會員']
+  is_enabled bool [note: '啟用狀態：true 啟用 / false 停用']
+  response_count int [note: '設定的自動回應訊息數量（至少 1 筆，最多 5 筆），>= 1。驗證層級：應用層驗證，UI 層限制輸入範圍 1-5。此欄位應與 AutoResponseMessage 記錄數量一致']
+  created_at string [note: '建立時間，格式：yyyy/mm/dd hh:mm']
+
+  Note: '''
+  自動回應實體，用於設定訊息的自動回應規則
+  觸發方式：新好友歡迎訊息、輸入關鍵字觸發、選擇指定時間觸發
+  觸發類型擴充性：採用可擴充設計，未來可透過設定檔或管理後台動態新增觸發類型，支援 LINE webhook 新事件（如取消追蹤、加入群組等）
+  訊息管理：自動回應的訊息內容透過 AutoResponseMessage 關聯表管理，最多 5 筆訊息
+  訊息發送邏輯：觸發時依照 AutoResponseMessage 的 sequence_order 順序，依序發送所有訊息（1-5 筆）
+  關鍵字管理：當 trigger_type = 關鍵字觸發時，關鍵字透過 AutoResponseKeyword 關聯表管理，最多 20 組關鍵字
+  時間區間表示法：採用兩欄位設計（time_range_start, time_range_end），格式 HH:mm（24小時制）
+  跨日判斷邏輯：當 time_range_end < time_range_start 時表示跨日情境（如 18:00-09:00 表示晚上 18:00 到隔天 09:00）
+  時間區間比對：非跨日（09:00-18:00）→ current_time >= start AND current_time <= end；跨日（18:00-09:00）→ current_time >= start OR current_time <= end
+  不變條件：1 <= response_count <= 5（由應用層驗證）
+  關係：AutoResponse 1:N AutoResponseMessage, AutoResponse 1:N AutoResponseKeyword
+  '''
+}
+
+Table AutoResponseKeyword {
+  keyword_id string [pk, note: '關鍵字唯一識別碼']
+  response_id string [ref: > AutoResponse.response_id, note: '所屬自動回應']
+  keyword_text string [note: '關鍵字文字，不區分大小寫，支援中英文與特殊字元，長度上限 50 字元']
+  match_type string [note: '比對類型：包含匹配（預設）/ 完全匹配 / 正則表達式（未來擴充）。包含匹配：會員訊息包含此關鍵字即觸發；完全匹配：會員訊息完全等於此關鍵字才觸發']
+  is_enabled bool [note: '是否啟用：true 啟用（參與比對）/ false 停用（不參與比對）。預設值：true']
+  trigger_count int [note: '觸發次數，記錄該關鍵字被觸發的累計次數，>= 0。用途：統計分析哪些關鍵字最常被觸發']
+  last_triggered_at string [note: '最近觸發時間，格式：yyyy/mm/dd hh:mm。用途：追蹤關鍵字活躍度']
+  created_at string [note: '建立時間，格式：yyyy/mm/dd hh:mm']
+
+  indexes {
+    unique_response_keyword [unique, note: '確保 (response_id, keyword_text) 組合唯一性，同一自動回應不可有重複關鍵字'] (response_id, keyword_text)
+  }
+
+  Note: '''
+  自動回應關鍵字關聯實體（一對多關係）
+  用途：管理自動回應的關鍵字清單，支援個別關鍵字的觸發統計與狀態管理
+  比對邏輯：預設為「包含匹配」且「不區分大小寫」，會員訊息包含任一啟用的關鍵字即觸發對應的自動回應
+  數量限制：每個自動回應最多 20 組關鍵字（應用層驗證）
+  唯一性約束：同一自動回應內的關鍵字文字不可重複（資料庫層約束）
+  觸發統計：每次關鍵字觸發時更新 trigger_count 與 last_triggered_at，用於後台統計分析
+  未來擴充：match_type 可支援正則表達式，提供更靈活的比對規則
+  關係：AutoResponseKeyword N:1 AutoResponse
+  '''
+}
+
+Table AutoResponseMessage {
+  message_id string [pk, note: '訊息唯一識別碼']
+  response_id string [ref: > AutoResponse.response_id, note: '所屬自動回應']
+  message_content string [note: '訊息內容（純文字）。長度限制：建議 <= 500 字元（LINE 訊息建議長度）']
+  sequence_order int [note: 'UI 顯示順序與發送順序，>= 1。發送時依照此順序由小到大依序發送']
+  created_at string [note: '建立時間，格式：yyyy/mm/dd hh:mm']
+
+  indexes {
+    unique_response_sequence [unique, note: '確保 (response_id, sequence_order) 組合唯一性，同一自動回應不可有重複順序'] (response_id, sequence_order)
+  }
+
+  Note: '''
+  自動回應訊息關聯實體（一對多關係）
+  用途：管理自動回應的訊息內容清單，支援 1-5 筆訊息的依序發送
+  數量限制：每個自動回應最多 5 筆訊息（應用層驗證）
+  發送邏輯：觸發時依照 sequence_order 順序由小到大依序發送所有訊息
+  發送間隔：建議在訊息間加入短暫延遲（如 1-2 秒），模擬真人回覆節奏，避免洗版感
+  順序管理：UI 支援拖曳排序，前端需維護 sequence_order 的連續性（1, 2, 3...）
+  唯一性約束：同一自動回應內的 sequence_order 不可重複（資料庫層約束）
+  使用場景：教學流程（步驟說明）、完整資訊傳遞（多段說明）、引導式對話（分段引導）
+  關係：AutoResponseMessage N:1 AutoResponse
+  '''
+}
+
+Table ConsumptionRecord {
+  record_id string [pk, note: '消費紀錄唯一識別碼']
+  member_id string [ref: > Member.member_id, note: '所屬會員']
+  consumption_time string [note: '消費時間']
+  amount float [note: '消費金額，>= 0，無特別上限限制（使用 float 型別範圍內）']
+  room_type string [note: '房型或套餐']
+
+  Note: '''
+  消費紀錄實體，用於串接 CRM 系統的會員消費資料（v0.2）
+  同步機制：
+    - 同步頻率：每日凌晨 02:00 執行（飯店業務低峰期）
+    - 同步模式：全量同步（CRM 資料為準，覆蓋本地資料）
+    - 衝突處理：以 CRM 系統資料為唯一來源，不處理衝突
+    - 失敗重試：記錄失敗日誌，次日自動重試；連續失敗超過 3 日則系統告警
+    - 同步記錄：記錄同步時間、同步筆數、失敗原因供人工檢查
+  用途：分析會員消費頻率、金額、房型偏好等行為資料，無需實時性
+  關係：ConsumptionRecord N:1 Member
+  '''
+}
+
+Table Campaign {
+  campaign_id string [pk, note: '活動唯一識別碼']
+  campaign_name string [note: '活動名稱']
+  campaign_tag string [note: '活動標籤']
+  campaign_date string [note: '活動日期']
+
+  Note: '''
+  活動實體，用於行銷活動的管理
+  '''
+}
+
+Table PMS_Integration {
+  integration_id string [pk, note: 'PMS 整合資料唯一識別碼']
+  pms_type string [note: 'PMS 系統類型，採用可擴充設計。初始值域：dean_pms（德安）/ opera_pms（Oracle Opera）/ fidelio_pms（Fidelio）。未來可透過新增 Adapter 擴展其他 PMS 系統，無需修改資料庫結構。必填欄位，不允許 NULL']
+  api_endpoint string [note: 'PMS API 端點完整 URL。格式：https://domain.com/api/v1。每家飯店可配置不同的 endpoint。必填欄位']
+  api_key string [note: 'API 認證金鑰（加密儲存）。用於 API 請求認證，儲存前需使用加密演算法（如 AES-256）加密。必填欄位']
+  config_json string [note: 'PMS 特定配置（JSON 格式）。包含：adapter_settings（adapter 特定設定）、field_mapping（欄位映射規則，如 {"id_number": "guestIdNo", "phone": "mobile"}）、auth_type（認證類型：bearer_token / api_key / oauth2）、sync_interval（同步頻率：realtime / hourly / daily）、retry_policy（重試策略）等。允許 NULL（使用預設配置）']
+  id_number string [note: '身分證字號（用於關聯會員）。從 PMS 同步取得']
+  phone string [note: '手機號碼（用於關聯會員）。從 PMS 同步取得']
+  stay_records string [note: '住宿紀錄資訊。從 PMS 同步取得']
+  room_type string [note: '房型。從 PMS 同步取得']
+  stay_date string [note: '住宿日期。從 PMS 同步取得']
+  member_id string [ref: > Member.member_id, note: '關聯的會員ID。會員比對成功後建立關聯']
+  sync_status string [note: '同步狀態，值域：active（正常同步）/ failed（同步失敗）/ disabled（已停用）。預設值：active']
+  last_sync_at string [note: '最後同步時間，格式：yyyy/mm/dd hh:mm。記錄最近一次成功同步的時間']
+  error_message string [note: '同步錯誤訊息。當 sync_status = failed 時記錄錯誤原因，用於除錯與監控。允許 NULL']
+  created_at string [note: '建立時間，格式：yyyy/mm/dd hh:mm']
+
+  Note: '''
+  PMS 整合實體，支援多種 PMS 系統透過 Adapter Pattern 整合
+  設計理念：採用 Adapter Pattern，每種 PMS 系統使用獨立的 adapter 處理資料同步與欄位映射
+  初期支援：德安 PMS（dean_pms），實作 DeanPMSAdapter
+  擴充策略：未來可新增 OperaPMSAdapter、FidelioPMSAdapter 等，新增 adapter 不需修改既有程式碼或資料庫結構
+  API 配置：每家飯店可配置獨立的 api_endpoint 與 api_key，支援不同 PMS 版本與部署環境
+  欄位映射：透過 config_json 的 field_mapping 定義 PMS 欄位與系統欄位的對應關係，不同 PMS 使用不同映射規則
+  會員比對：以身分證字號/手機號碼作關聯，會員比對成功率 >= 95%
+  定期更新機制：根據 sync_interval 設定執行定期同步，確保資料一致性
+  比對失敗處理：無法比對至現有會員時，系統自動建立新會員並標記 join_source 為 PMS
+  錯誤處理：同步失敗時記錄 error_message，並根據 retry_policy 執行重試
+  安全性：api_key 加密儲存，config_json 不包含敏感資訊
+  關係：PMS_Integration N:1 Member
+  '''
+}
+
+Table Admin {
+  admin_id string [pk, note: '管理員唯一識別碼']
+  email string [unique, note: '登入信箱，作為識別帳號']
+  password_hash string [note: '密碼雜湊值（使用 bcrypt/Argon2 加密儲存）。密碼複雜度要求：長度 8-64 字元、至少包含 3 種類型（大寫字母、小寫字母、數字、特殊符號）、不允許連續字元或超過 3 次重複字元、不允許常見弱密碼、不允許與信箱相同。允許的特殊符號：!@#$%^&*()-_=+[]{}|;:,.<>?/~']
+  name string [note: '管理員名稱']
+  created_at string [note: '建立時間，格式：yyyy/mm/dd hh:mm']
+
+  Note: '''
+  管理員實體，用於系統登入與權限管理
+  登入方式：信箱+密碼 / Google 快速登入 / LINE 快速登入
+  權限管理：採用 RBAC（Role-Based Access Control）系統，管理員透過角色獲得權限，支援動態權限配置
+  關係：Admin 1:1 LineOAConfig, Admin 1:1 LoginConfig, Admin 1:N LoginSession, Admin 1:N SystemAuthorization, Admin N:M Role (透過 AdminRole)
+  '''
+}
+
+Table Role {
+  role_id string [pk, note: '角色唯一識別碼']
+  role_name string [unique, note: '角色名稱，如「超級管理員」「管理員」「一般員工」，不得重複']
+  role_code string [unique, note: '角色代碼，如「superadmin」「admin」「staff」，用於程式識別，不得重複']
+  description string [note: '角色描述，說明該角色的職責與適用範圍']
+  is_system_role bool [note: '是否為系統預設角色（系統預設角色不可刪除，但可修改權限）']
+  created_at string [note: '建立時間，格式：yyyy/mm/dd hh:mm']
+  updated_at string [note: '最後更新時間，格式：yyyy/mm/dd hh:mm']
+
+  Note: '''
+  角色實體，定義管理員的角色分類
+  系統預設角色：superadmin（超級管理員，擁有所有權限）、admin（管理員，擁有大部分權限）、staff（一般員工，擁有基本權限）
+  自訂角色：管理員可新增自訂角色並配置權限（如「行銷人員」「客服人員」等）
+  角色刪除規則：系統預設角色不可刪除，自訂角色若有管理員使用則無法刪除，需先解除關聯
+  關係：Role N:M Admin (透過 AdminRole), Role N:M Permission (透過 RolePermission)
+  '''
+}
+
+Table Permission {
+  permission_id string [pk, note: '權限唯一識別碼']
+  permission_name string [unique, note: '權限名稱，如「查看會員資料」「發送群發訊息」「管理標籤」，不得重複']
+  permission_code string [unique, note: '權限代碼，如「member.view」「message.send」「tag.manage」，用於程式判斷，不得重複']
+  resource string [note: '資源類別，如「member」「message」「tag」「campaign」「admin」等']
+  action string [note: '操作類型，如「view」「create」「update」「delete」「manage」等']
+  description string [note: '權限描述，說明該權限的作用範圍']
+  created_at string [note: '建立時間，格式：yyyy/mm/dd hh:mm']
+
+  Note: '''
+  權限實體，定義系統功能的存取控制
+  權限命名規則：permission_code 採用「資源.操作」格式（如 member.view, message.send）
+  權限分類（resource）：member（會員管理）、message（訊息管理）、tag（標籤管理）、campaign（行銷活動）、admin（管理員管理）、system（系統設定）等
+  操作分類（action）：view（查看）、create（建立）、update（編輯）、delete（刪除）、manage（完整管理，包含 CRUD）
+  權限初始化：系統啟動時自動載入預設權限清單
+  關係：Permission N:M Role (透過 RolePermission)
+  '''
+}
+
+Table AdminRole {
+  admin_role_id string [pk, note: '關聯唯一識別碼']
+  admin_id string [ref: > Admin.admin_id, note: '管理員 ID']
+  role_id string [ref: > Role.role_id, note: '角色 ID']
+  assigned_at string [note: '指派時間，格式：yyyy/mm/dd hh:mm']
+  assigned_by string [note: '指派人（管理員 ID），記錄由誰指派此角色']
+
+  indexes {
+    unique_admin_role [unique, note: '確保 (admin_id, role_id) 組合唯一性，同一管理員不可重複指派相同角色'] (admin_id, role_id)
+  }
+
+  Note: '''
+  管理員-角色關聯實體（多對多關係）
+  用途：管理員可擁有多個角色，角色可被多個管理員擁有
+  權限計算：管理員的最終權限 = 所有角色的權限聯集（union）
+  指派規則：僅擁有「admin.manage」權限的管理員可指派角色
+  關係：AdminRole N:1 Admin, AdminRole N:1 Role
+  '''
+}
+
+Table RolePermission {
+  role_permission_id string [pk, note: '關聯唯一識別碼']
+  role_id string [ref: > Role.role_id, note: '角色 ID']
+  permission_id string [ref: > Permission.permission_id, note: '權限 ID']
+  granted_at string [note: '授予時間，格式：yyyy/mm/dd hh:mm']
+  granted_by string [note: '授予人（管理員 ID），記錄由誰授予此權限']
+
+  indexes {
+    unique_role_permission [unique, note: '確保 (role_id, permission_id) 組合唯一性，同一角色不可重複授予相同權限'] (role_id, permission_id)
+  }
+
+  Note: '''
+  角色-權限關聯實體（多對多關係）
+  用途：角色可擁有多個權限，權限可被多個角色擁有
+  動態配置：管理員可動態新增/移除角色的權限，即時生效
+  授權規則：僅擁有「admin.manage」權限的管理員可配置角色權限
+  關係：RolePermission N:1 Role, RolePermission N:1 Permission
+  '''
+}
+
+Table LineOAConfig {
+  config_id string [pk, note: '設定唯一識別碼']
+  admin_id string [ref: > Admin.admin_id, note: '所屬管理員']
+  channel_id string [note: 'Messaging API Channel ID。格式要求：10 位數字。範例：1234567890。驗證：前端即時驗證格式，後端最終驗證']
+  channel_secret string [note: 'Messaging API Channel Secret。格式要求：32 字元英數字。範例：abcdef1234567890abcdef1234567890。驗證：前端即時驗證格式，後端最終驗證。用途：計算 Webhook 簽章（HMAC-SHA256）']
+  channel_access_token string [note: 'Messaging API Channel Access Token。格式要求：最少 50 字元。驗證：前端檢查最小長度，後端調用 LINE Get Bot Info API (GET https://api.line.me/v2/bot/info) 驗證有效性']
+  line_account_id string [note: 'LINE 官方帳號 ID，如 @262qaash']
+  webhook_enabled bool [note: 'Webhook 是否已開啟']
+  is_verified bool [note: '是否已完成 LINE 驗證']
+  created_at string [note: '建立時間']
+  updated_at string [note: '最後更新時間']
+
+  Note: '''
+  LINE 官方帳號設定實體
+  驗證條件：channel_id, channel_secret, channel_access_token 三項必填且格式正確
+  驗證規則：須向 LINE 原生後台驗證成功，且 webhook 已開啟
+  關係：LineOAConfig N:1 Admin
+  '''
+}
+
+Table LoginConfig {
+  config_id string [pk, note: '設定唯一識別碼']
+  admin_id string [ref: > Admin.admin_id, note: '所屬管理員']
+  channel_id string [note: 'Login Channel ID，格式：以 165 開頭的 10 位數字（LINE Login 官方格式）']
+  channel_secret string [note: 'Login Channel Secret，32 位大小寫英數字（LINE Login 官方格式）']
+  is_verified bool [note: '是否已完成 LINE 驗證']
+  created_at string [note: '建立時間']
+  updated_at string [note: '最後更新時間']
+
+  Note: '''
+  LINE Login Channel 設定實體（管理員設定，供會員使用）
+  驗證條件：channel_id, channel_secret 兩項必填且格式正確
+  用途：管理員設定 LINE Login Channel 後，會員可透過 LINE Login 授權登入，系統藉此整併會員資料（如姓名、email、頭像等）
+  關係：LoginConfig N:1 Admin（一個管理員可設定一組 LINE Login Channel）
+  '''
+}
+
+Table LoginSession {
+  session_id string [pk, note: '會話唯一識別碼']
+  admin_id string [ref: > Admin.admin_id, note: '所屬管理員']
+  login_method string [note: '登入方式：email_password / google / line']
+  login_time string [note: '登入時間，格式：yyyy/mm/dd hh:mm，時區採用 UTC+8（Asia/Taipei）']
+  expire_time string [note: '會話過期時間，取「登入時間 + 24 小時」與「下一個 00:00（UTC+8）」兩者較早者']
+  device_info string [note: '裝置資訊']
+  is_active bool [note: '會話是否有效']
+
+  Note: '''
+  管理員登入會話實體（記錄管理員登入狀態）
+  會話管理：同一管理員帳號可在不同裝置同時登入，各自維護獨立會話
+  自動登出：會話於 UTC+8 時區下，取登入時間 + 24 小時與下一個 00:00 的較早者自動失效
+  登入方式：支援 email_password、google、line 三種方式
+  關係：LoginSession N:1 Admin（一個管理員可有多筆會話記錄）
+  '''
+}
+
+Table SystemAuthorization {
+  auth_id string [pk, note: '授權唯一識別碼']
+  admin_id string [ref: > Admin.admin_id, note: '所屬管理員']
+  expire_date string [note: '授權到期日，格式：yyyy/mm/dd']
+  is_active bool [note: '授權是否有效']
+  created_at string [note: '建立時間']
+
+  Note: '''
+  系統授權實體
+  授權控制：未付款或授權過期則無法使用系統功能，並即時將所有登入會話失效
+  到期提醒：授權到期前 7 日內，每次登入彈窗提示（v0.3）
+  關係：SystemAuthorization N:1 Admin
+  '''
+}
