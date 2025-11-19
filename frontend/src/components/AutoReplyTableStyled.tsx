@@ -1,11 +1,11 @@
-import { useState } from 'react';
-import toggleSvgPaths from '../imports/svg-3zvphj6nxz';
+import { memo, useMemo, useState } from 'react';
+import svgPaths from "../imports/svg-wbwsye31ry";
 import ButtonEdit from '../imports/ButtonEdit';
 
 export interface AutoReplyData {
   id: string;
   content: string;
-  replyType: string;
+  replyType: '歡迎訊息' | '觸發關鍵字' | '一律回應' | '指定時間';
   keywords: string[];
   status: '啟用' | '停用';
   platform: string;
@@ -16,12 +16,13 @@ export interface AutoReplyData {
 interface AutoReplyTableProps {
   data: AutoReplyData[];
   onRowClick?: (id: string) => void;
+  onToggleStatus?: (id: string, nextState: boolean) => void;
 }
 
 type SortField = 'content' | 'replyType' | 'keywords' | 'status' | 'platform' | 'triggerCount' | 'createTime';
 
-// Table Header Component
-function TableHeader({ sortBy, onSortChange }: { sortBy: SortField | null; onSortChange: (field: SortField) => void }) {
+// Memoized Table Header Component
+const TableHeader = memo(function TableHeader({ sortBy, onSortChange }: { sortBy: SortField | null; onSortChange: (field: SortField) => void }) {
   const SortIcon = ({ isActive }: { isActive: boolean }) => (
     <div className="overflow-clip relative shrink-0 size-[20px]">
       <div className="absolute h-[8px] left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%] w-[12px]">
@@ -38,8 +39,8 @@ function TableHeader({ sortBy, onSortChange }: { sortBy: SortField | null; onSor
       <div className="flex flex-row items-center size-full">
         <div className="box-border content-stretch flex items-center pb-[12px] pt-[16px] pl-[12px] pr-[12px] relative w-full">
           {/* 訊息內容 */}
-          <div
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[300px] cursor-pointer"
+          <div 
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[300px] cursor-pointer" 
             onClick={() => onSortChange('content')}
           >
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
@@ -157,7 +158,7 @@ function TableHeader({ sortBy, onSortChange }: { sortBy: SortField | null; onSor
             </div>
           </div>
 
-          {/* 建立時間 */}
+          {/* 建立時 */}
           <div 
             className="box-border content-stretch flex items-center pl-[12px] pr-0 py-0 relative shrink-0 w-[160px] cursor-pointer"
             onClick={() => onSortChange('createTime')}
@@ -171,19 +172,19 @@ function TableHeader({ sortBy, onSortChange }: { sortBy: SortField | null; onSor
       </div>
     </div>
   );
-}
+});
 
-// Auto Reply Row Component
-function AutoReplyRow({ 
-  row, 
-  isLast, 
+// Memoized Auto Reply Row Component
+const AutoReplyRow = memo(function AutoReplyRow({
+  row,
+  isLast,
   onRowClick,
-  onToggleStatus
-}: { 
-  row: AutoReplyData; 
-  isLast: boolean; 
+  onToggleStatus,
+}: {
+  row: AutoReplyData;
+  isLast: boolean;
   onRowClick: (id: string) => void;
-  onToggleStatus: (e: React.MouseEvent, id: string) => void;
+  onToggleStatus: (event: React.MouseEvent, id: string, status: AutoReplyData['status']) => void;
 }) {
   const EditButton = () => (
     <div onClick={() => onRowClick(row.id)}>
@@ -227,8 +228,8 @@ function AutoReplyRow({
 
           {/* 狀態 */}
           <div className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px]">
-            <button 
-              onClick={(e) => onToggleStatus(e, row.id)}
+            <button
+              onClick={(e) => onToggleStatus(e, row.id, row.status)}
               className="flex items-center justify-center"
             >
               <div className="relative size-[40px]">
@@ -237,8 +238,8 @@ function AutoReplyRow({
                     <g id="Vector"></g>
                     <path 
                       d={row.status === '啟用' 
-                        ? toggleSvgPaths.p13e42a00 
-                        : "M28.3333 11.6667H11.6667C7.06667 11.6667 3.33333 15.4 3.33333 20C3.33333 24.6 7.06667 28.3333 11.6667 28.3333H28.3333C32.9333 28.3333 36.6667 24.6 36.6667 20C36.6667 15.4 32.9333 11.6667 28.3333 11.6667ZM11.6667 25C8.9 25 6.66667 22.7667 6.66667 20C6.66667 17.2333 8.9 15 11.6667 15C14.4333 15 16.6667 17.2333 16.6667 20C16.6667 22.7667 14.4333 25 11.6667 25Z"
+                        ? svgPaths.p13e42a00 
+                        : svgPaths.p3ed4d200
                       }
                       fill={row.status === '啟用' ? '#0F6BEB' : '#E5E7EB'}
                       id="Vector_2"
@@ -284,30 +285,48 @@ function AutoReplyRow({
       </div>
     </div>
   );
-}
+});
 
-export default function AutoReplyTableStyled({ data, onRowClick }: AutoReplyTableProps) {
+export default function AutoReplyTableStyled({ data, onRowClick, onToggleStatus }: AutoReplyTableProps) {
   const [sortBy, setSortBy] = useState<SortField | null>('createTime');
-  const [tableData, setTableData] = useState<AutoReplyData[]>(data);
 
   const handleSort = (field: SortField) => {
     setSortBy(field);
   };
 
+  const sortedData = useMemo(() => {
+    const list = [...data];
+    if (!sortBy) return list;
+
+    return list.sort((a, b) => {
+      switch (sortBy) {
+        case 'content':
+          return a.content.localeCompare(b.content);
+        case 'replyType':
+          return a.replyType.localeCompare(b.replyType);
+        case 'keywords':
+          return a.keywords.join(',').localeCompare(b.keywords.join(','));
+        case 'status':
+          return a.status.localeCompare(b.status);
+        case 'platform':
+          return a.platform.localeCompare(b.platform);
+        case 'triggerCount':
+          return b.triggerCount - a.triggerCount;
+        case 'createTime':
+          return new Date(b.createTime).getTime() - new Date(a.createTime).getTime();
+        default:
+          return 0;
+      }
+    });
+  }, [data, sortBy]);
+
   const handleRowClick = (id: string) => {
     onRowClick?.(id);
   };
 
-  const handleToggleStatus = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    // Toggle status between '啟用' and '停用'
-    setTableData(prevData =>
-      prevData.map(row =>
-        row.id === id
-          ? { ...row, status: row.status === '啟用' ? '停用' : '啟用' }
-          : row
-      )
-    );
+  const handleToggleStatus = (event: React.MouseEvent, id: string, status: AutoReplyData['status']) => {
+    event.stopPropagation();
+    onToggleStatus?.(id, status !== '啟用');
   };
 
   return (
@@ -321,11 +340,11 @@ export default function AutoReplyTableStyled({ data, onRowClick }: AutoReplyTabl
         
         {/* Table Body - Scrollable Container */}
         <div className="w-[1250px] flex-1 overflow-y-auto table-scroll">
-          {tableData.map((row, index) => (
+          {sortedData.map((row, index) => (
             <AutoReplyRow 
               key={row.id} 
               row={row} 
-              isLast={index === tableData.length - 1}
+              isLast={index === sortedData.length - 1}
               onRowClick={handleRowClick}
               onToggleStatus={handleToggleStatus}
             />

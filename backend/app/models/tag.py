@@ -77,52 +77,6 @@ class MemberTag(Base):
         ),
     )
 
-    # ============================================================
-    # 向後兼容屬性：映射舊欄位名稱到新欄位
-    # ============================================================
-
-    @property
-    def name(self) -> str:
-        """向後兼容：name 映射到 tag_name"""
-        return self.tag_name or ""
-
-    @name.setter
-    def name(self, value: str):
-        """向後兼容：設置 name 時更新 tag_name"""
-        self.tag_name = value
-
-    @property
-    def source(self) -> str:
-        """向後兼容：source 映射到 tag_source"""
-        return self.tag_source or ""
-
-    @source.setter
-    def source(self, value):
-        """向後兼容：設置 source 時更新 tag_source"""
-        if isinstance(value, TagSource):
-            self.tag_source = value.value
-        else:
-            self.tag_source = str(value) if value else None
-
-    @property
-    def type(self) -> TagType:
-        """向後兼容：type 固定返回 TagType.MEMBER"""
-        return TagType.MEMBER
-
-    @property
-    def description(self) -> str:
-        """向後兼容：description 欄位（新設計中不存在）"""
-        return ""
-
-    @property
-    def member_count(self) -> int:
-        """向後兼容：member_count 映射到 trigger_member_count"""
-        return self.trigger_member_count or 0
-
-    @member_count.setter
-    def member_count(self, value: int):
-        """向後兼容：設置 member_count 時更新 trigger_member_count"""
-        self.trigger_member_count = value
 
 
 class InteractionTag(Base):
@@ -140,64 +94,9 @@ class InteractionTag(Base):
     updated_at = Column(DateTime, onupdate=func.now(), comment="更新時間")
 
     # 關聯關係
-    interaction_records = relationship(
-        "MemberInteractionRecord", back_populates="interaction_tag", cascade="all, delete-orphan"
-    )
     tag_trigger_logs = relationship(
         "TagTriggerLog", back_populates="tag", cascade="all, delete-orphan"
     )
     interaction_logs = relationship(
         "ComponentInteractionLog", back_populates="interaction_tag"
     )
-
-    # ============================================================
-    # 向後兼容屬性：映射舊欄位名稱到新欄位
-    # ============================================================
-
-    @property
-    def name(self) -> str:
-        """向後兼容：name 映射到 tag_name"""
-        return self.tag_name or ""
-
-    @name.setter
-    def name(self, value: str):
-        """向後兼容：設置 name 時更新 tag_name"""
-        self.tag_name = value
-
-    @property
-    def source(self) -> str:
-        """向後兼容：source 映射到 tag_source"""
-        return self.tag_source or ""
-
-    @source.setter
-    def source(self, value):
-        """向後兼容：設置 source 時更新 tag_source"""
-        if isinstance(value, TagSource):
-            self.tag_source = value.value
-        else:
-            self.tag_source = str(value) if value else None
-
-    @property
-    def type(self) -> TagType:
-        """向後兼容：type 固定返回 TagType.INTERACTION"""
-        return TagType.INTERACTION
-
-    @property
-    def description(self) -> str:
-        """向後兼容：description 欄位（新設計中不存在）"""
-        return ""
-
-    @property
-    def member_count(self) -> int:
-        """向後兼容：member_count 映射到 trigger_member_count"""
-        return self.trigger_member_count or 0
-
-    @member_count.setter
-    def member_count(self, value: int):
-        """向後兼容：設置 member_count 時更新 trigger_member_count"""
-        self.trigger_member_count = value
-
-    @property
-    def campaign_id(self) -> int:
-        """向後兼容：campaign_id 欄位（新設計中不存在）"""
-        return None

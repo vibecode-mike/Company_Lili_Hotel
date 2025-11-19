@@ -1,136 +1,131 @@
 """
-�o! API
+模板庫 API (Template Library)
+負責模板庫的瀏覽、複製和管理功能
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from typing import List, Optional
+import logging
+
 from app.database import get_db
-from app.models.template import MessageTemplate, TemplateCarouselItem
-from app.models.user import User
 from app.schemas.template import (
-    TemplateCreate,
-    TemplateUpdate,
-    TemplateListItem,
-    TemplateDetail,
-    TemplateSearchParams,
+    TemplateLibraryItem,
+    TemplateCopyResponse,
+    TemplateLibraryToggle,
 )
-from app.schemas.common import SuccessResponse
-from app.core.pagination import PageParams, PageResponse
-from app.api.v1.auth import get_current_user
+from app.services.template_service import TemplateService
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+# 創建服務實例
+template_service = TemplateService()
 
 
-@router.get("", response_model=SuccessResponse)
-async def get_templates(
-    params: TemplateSearchParams = Depends(),
-    page_params: PageParams = Depends(),
+@router.get("/library", response_model=List[TemplateLibraryItem])
+async def list_library_templates(
+    sort_by: str = Query("usage_count", description="排序方式：usage_count | created_at"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
-    """r�!h"""
-    query = select(MessageTemplate)
+    """
+    瀏覽模板庫
 
-    # 移除 type 篩選條件，因為該欄位已廢棄
+    獲取所有標記為「在模板庫中」的模板列表
 
-    query = query.order_by(MessageTemplate.created_at.desc())
+    Query Parameters:
+        - sort_by: 排序方式
+          - "usage_count": 按使用次數降序（默認）
+          - "created_at": 按創建時間降序
 
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar()
+    Returns:
+        List[TemplateLibraryItem]: 模板庫列表
+    """
+    try:
+        logger.info(f"📚 瀏覽模板庫: sort_by={sort_by}")
 
-    query = query.offset(page_params.offset).limit(page_params.limit)
-    result = await db.execute(query)
-    templates = result.scalars().all()
+        templates = await template_service.list_library_templates(db, sort_by)
 
-    items = [TemplateListItem.model_validate(t).model_dump() for t in templates]
+        logger.info(f"✅ 模板庫查詢成功: 找到 {len(templates)} 個模板")
 
-    page_response = PageResponse.create(
-        items=items, total=total, page=page_params.page, page_size=page_params.page_size
-    )
+        return templates
 
-    return SuccessResponse(data=page_response.model_dump())
+    except Exception as e:
+        logger.error(f"❌ 模板庫查詢失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"模板庫查詢失敗: {str(e)}")
 
 
-@router.get("/{template_id}", response_model=SuccessResponse)
-async def get_template(
+@router.post("/{template_id}/copy", response_model=TemplateCopyResponse)
+async def copy_template(
     template_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
-    """r�!s�"""
-    result = await db.execute(select(MessageTemplate).where(MessageTemplate.id == template_id))
-    template = result.scalar_one_or_none()
+    """
+    複製模板
 
-    if not template:
-        raise HTTPException(status_code=404, detail="!X(")
+    從模板庫複製模板用於創建新消息。
+    操作會：
+    1. 創建新的模板副本
+    2. 記錄來源模板 ID (source_template_id)
+    3. 增加源模板的使用次數 (usage_count)
 
-    return SuccessResponse(data=TemplateDetail.model_validate(template).model_dump())
+    Path Parameters:
+        - template_id: 源模板 ID
 
+    Returns:
+        TemplateCopyResponse: 新創建的模板副本信息
+    """
+    try:
+        logger.info(f"📋 複製模板: template_id={template_id}")
 
-@router.post("", response_model=SuccessResponse)
-async def create_template(
-    template_data: TemplateCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """u�!"""
-    carousel_items = template_data.carousel_items
-    template_dict = template_data.model_dump(exclude={"carousel_items"})
+        new_template = await template_service.copy_template(db, template_id)
 
-    template = MessageTemplate(**template_dict)
-    db.add(template)
-    await db.flush()
+        logger.info(f"✅ 模板複製成功: 新模板 ID={new_template.id}")
 
-    if carousel_items:
-        for item in carousel_items:
-            carousel_item = TemplateCarouselItem(**item.model_dump(), template_id=template.id)
-            db.add(carousel_item)
+        return new_template
 
-    await db.commit()
-    await db.refresh(template)
-
-    return SuccessResponse(data=TemplateDetail.model_validate(template).model_dump())
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"❌ 模板複製失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"模板複製失敗: {str(e)}")
 
 
-@router.put("/{template_id}", response_model=SuccessResponse)
-async def update_template(
+@router.put("/{template_id}/library", response_model=TemplateLibraryItem)
+async def toggle_library(
     template_id: int,
-    template_data: TemplateUpdate,
+    data: TemplateLibraryToggle,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
-    """��!"""
-    result = await db.execute(select(MessageTemplate).where(MessageTemplate.id == template_id))
-    template = result.scalar_one_or_none()
+    """
+    添加或移除模板庫中的模板
 
-    if not template:
-        raise HTTPException(status_code=404, detail="!X(")
+    切換模板的 is_in_library 標誌。
 
-    template_dict = template_data.model_dump(exclude={"carousel_items"}, exclude_unset=True)
-    for field, value in template_dict.items():
-        setattr(template, field, value)
+    Path Parameters:
+        - template_id: 模板 ID
 
-    await db.commit()
-    await db.refresh(template)
+    Request Body:
+        - add_to_library: true=加入模板庫, false=從模板庫移除
 
-    return SuccessResponse(data=TemplateDetail.model_validate(template).model_dump())
+    Returns:
+        TemplateLibraryItem: 更新後的模板信息
+    """
+    try:
+        action = "加入" if data.add_to_library else "移除"
+        logger.info(f"📚 {action}模板庫: template_id={template_id}")
 
+        template = await template_service.add_to_library(
+            db,
+            template_id,
+            add=data.add_to_library
+        )
 
-@router.delete("/{template_id}", response_model=SuccessResponse)
-async def delete_template(
-    template_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """*d!"""
-    result = await db.execute(select(MessageTemplate).where(MessageTemplate.id == template_id))
-    template = result.scalar_one_or_none()
+        logger.info(f"✅ 模板庫更新成功: ID={template_id}, is_in_library={template.is_in_library}")
 
-    if not template:
-        raise HTTPException(status_code=404, detail="!X(")
+        return template
 
-    await db.delete(template)
-    await db.commit()
-
-    return SuccessResponse(message="!*d�")
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"❌ 模板庫更新失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"模板庫更新失敗: {str(e)}")

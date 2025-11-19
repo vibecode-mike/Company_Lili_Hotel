@@ -1,12 +1,18 @@
 """
 配置管理模組
 """
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 
 
 class Settings(BaseSettings):
     """應用配置"""
+
+    model_config = SettingsConfigDict(
+        extra="ignore",
+        env_file=".env",
+        case_sensitive=True,
+    )
 
     # 應用基本配置
     PROJECT_NAME: str = "力麗飯店 LineOA CRM"
@@ -38,7 +44,7 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "uploads"
     MAX_FILE_SIZE: int = 10485760  # 10MB
     ALLOWED_IMAGE_TYPES: str = "jpg,jpeg,png,webp"
-    PUBLIC_BASE: str = "http://localhost:8700"  # 公開訪問的基礎URL
+    PUBLIC_BASE: str = "https://linebot.star-bit.io"  # 公開訪問的基礎URL
 
     # CORS
     ALLOWED_ORIGINS: str = "*"
@@ -49,10 +55,6 @@ class Settings(BaseSettings):
         if self.ALLOWED_ORIGINS == "*":
             return ["*"]
         return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",")]
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
 
 
 # 創建全域設定實例

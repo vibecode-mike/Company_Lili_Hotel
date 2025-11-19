@@ -2,80 +2,83 @@
   import { defineConfig } from 'vite';
   import react from '@vitejs/plugin-react-swc';
   import path from 'path';
+  import { visualizer } from 'rollup-plugin-visualizer';
 
   export default defineConfig({
-    plugins: [react()],
+    plugins: [
+      react(),
+      visualizer({
+        filename: './build/stats.html',
+        open: false,
+        gzipSize: true,
+        brotliSize: true,
+      }),
+    ],
     resolve: {
       extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
       alias: {
-        'vaul@1.1.2': 'vaul',
-        'sonner@2.0.3': 'sonner',
-        'recharts@2.15.2': 'recharts',
-        'react-resizable-panels@2.1.7': 'react-resizable-panels',
-        'react-hook-form@7.55.0': 'react-hook-form',
-        'react-day-picker@8.10.1': 'react-day-picker',
-        'next-themes@0.4.6': 'next-themes',
-        'lucide-react@0.487.0': 'lucide-react',
-        'input-otp@1.4.2': 'input-otp',
+        // Path alias for cleaner imports
+        '@': path.resolve(__dirname, './src'),
+
+        // Figma asset aliases
+        'figma:asset/f05dee67f2743d5c7b8183a074546e987c63f567.png': path.resolve(__dirname, './src/assets/f05dee67f2743d5c7b8183a074546e987c63f567.png'),
+        'figma:asset/e9db79d0f3507f2a61e25dfa2f8f638bbcaf8b9d.png': path.resolve(__dirname, './src/assets/e9db79d0f3507f2a61e25dfa2f8f638bbcaf8b9d.png'),
         'figma:asset/e859f2896aa57670db9ed9933eb059d29ffaf7c7.png': path.resolve(__dirname, './src/assets/e859f2896aa57670db9ed9933eb059d29ffaf7c7.png'),
         'figma:asset/e0079245ea67343450871e33ff689154160aa2bb.png': path.resolve(__dirname, './src/assets/e0079245ea67343450871e33ff689154160aa2bb.png'),
         'figma:asset/d1c10d8dbfc2ae5783543c9f0b76cd2635713297.png': path.resolve(__dirname, './src/assets/d1c10d8dbfc2ae5783543c9f0b76cd2635713297.png'),
         'figma:asset/bf4ffd108c2e836b466874e959531fdf5c9bd8b1.png': path.resolve(__dirname, './src/assets/bf4ffd108c2e836b466874e959531fdf5c9bd8b1.png'),
-        'figma:asset/8e00ff5667a0201102bd7740decd474177a9f4ae.png': path.resolve(__dirname, './src/assets/8e00ff5667a0201102bd7740decd474177a9f4ae.png'),
+        'figma:asset/9c06d369cd4b66fb5b16a4209259f1271ce88ec7.png': path.resolve(__dirname, './src/assets/9c06d369cd4b66fb5b16a4209259f1271ce88ec7.png'),
         'figma:asset/88076181b402df2ffcba98c51345afaaa2165468.png': path.resolve(__dirname, './src/assets/88076181b402df2ffcba98c51345afaaa2165468.png'),
         'figma:asset/6b82043ca68632e4603c63153aae4828cae95e1b.png': path.resolve(__dirname, './src/assets/6b82043ca68632e4603c63153aae4828cae95e1b.png'),
         'figma:asset/68b289cb927cef11d11501fd420bb560ad25c667.png': path.resolve(__dirname, './src/assets/68b289cb927cef11d11501fd420bb560ad25c667.png'),
-        'figma:asset/642ad615d8f518959bf63fad5c3e52059858fe77.png': path.resolve(__dirname, './src/assets/642ad615d8f518959bf63fad5c3e52059858fe77.png'),
-        'figma:asset/20122aaae7549f293a92fcf95360eb6d375d538b.png': path.resolve(__dirname, './src/assets/20122aaae7549f293a92fcf95360eb6d375d538b.png'),
-        'embla-carousel-react@8.6.0': 'embla-carousel-react',
-        'cmdk@1.1.1': 'cmdk',
-        'class-variance-authority@0.7.1': 'class-variance-authority',
-        '@radix-ui/react-tooltip@1.1.8': '@radix-ui/react-tooltip',
-        '@radix-ui/react-toggle@1.1.2': '@radix-ui/react-toggle',
-        '@radix-ui/react-toggle-group@1.1.2': '@radix-ui/react-toggle-group',
-        '@radix-ui/react-tabs@1.1.3': '@radix-ui/react-tabs',
-        '@radix-ui/react-switch@1.1.3': '@radix-ui/react-switch',
-        '@radix-ui/react-slot@1.1.2': '@radix-ui/react-slot',
-        '@radix-ui/react-slider@1.2.3': '@radix-ui/react-slider',
-        '@radix-ui/react-separator@1.1.2': '@radix-ui/react-separator',
-        '@radix-ui/react-select@2.1.6': '@radix-ui/react-select',
-        '@radix-ui/react-scroll-area@1.2.3': '@radix-ui/react-scroll-area',
-        '@radix-ui/react-radio-group@1.2.3': '@radix-ui/react-radio-group',
-        '@radix-ui/react-progress@1.1.2': '@radix-ui/react-progress',
-        '@radix-ui/react-popover@1.1.6': '@radix-ui/react-popover',
-        '@radix-ui/react-navigation-menu@1.2.5': '@radix-ui/react-navigation-menu',
-        '@radix-ui/react-menubar@1.1.6': '@radix-ui/react-menubar',
-        '@radix-ui/react-label@2.1.2': '@radix-ui/react-label',
-        '@radix-ui/react-hover-card@1.1.6': '@radix-ui/react-hover-card',
-        '@radix-ui/react-dropdown-menu@2.1.6': '@radix-ui/react-dropdown-menu',
-        '@radix-ui/react-dialog@1.1.6': '@radix-ui/react-dialog',
-        '@radix-ui/react-context-menu@2.2.6': '@radix-ui/react-context-menu',
-        '@radix-ui/react-collapsible@1.1.3': '@radix-ui/react-collapsible',
-        '@radix-ui/react-checkbox@1.1.4': '@radix-ui/react-checkbox',
-        '@radix-ui/react-avatar@1.1.3': '@radix-ui/react-avatar',
-        '@radix-ui/react-aspect-ratio@1.1.2': '@radix-ui/react-aspect-ratio',
-        '@radix-ui/react-alert-dialog@1.1.6': '@radix-ui/react-alert-dialog',
-        '@radix-ui/react-accordion@1.2.3': '@radix-ui/react-accordion',
-        '@': path.resolve(__dirname, './src'),
+        'figma:asset/146d0c4e38c1dc2f05fd32c9740151e0eaaee326.png': path.resolve(__dirname, './src/assets/146d0c4e38c1dc2f05fd32c9740151e0eaaee326.png'),
       },
     },
     build: {
       target: 'esnext',
       outDir: 'build',
+
+      // Rollup optimization for better code splitting
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            // Separate vendor chunks for better caching
+            'vendor-react': ['react', 'react-dom'],
+            'vendor-ui': [
+              '@radix-ui/react-dialog',
+              '@radix-ui/react-select',
+              '@radix-ui/react-popover',
+              '@radix-ui/react-dropdown-menu',
+            ],
+            'vendor-charts': ['recharts'],
+            'vendor-utils': ['date-fns', 'clsx', 'tailwind-merge'],
+          },
+        },
+      },
+
+      // Minification with Terser for production
+      minify: 'terser',
+      terserOptions: {
+        compress: {
+          // Remove console.* and debugger in production
+          drop_console: true,
+          drop_debugger: true,
+          // Remove unused code
+          pure_funcs: ['console.log', 'console.info', 'console.debug'],
+        },
+      },
+
+      // Chunk size warnings
+      chunkSizeWarningLimit: 1000,
     },
     server: {
       host: '0.0.0.0',
       port: 5173,
       open: true,
       allowedHosts: ['crmpoc.star-bit.io'],
-      hmr: {
-        host: 'crmpoc.star-bit.io',
-        protocol: 'wss',
-        clientPort: 443,
-      },
       proxy: {
         '/api': {
-          target: 'http://192.168.50.123:8700',
+          target: 'http://127.0.0.1:8700',
           changeOrigin: true,
           secure: false,
         },

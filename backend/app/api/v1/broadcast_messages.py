@@ -14,7 +14,8 @@ from typing import Optional
 import logging
 
 from app.database import get_db
-from app.schemas.campaign import (
+from app.schemas.common import SuccessResponse
+from app.schemas.message import (
     QuotaStatusRequest,
     QuotaStatusResponse,
     MessageCreate,
@@ -22,6 +23,7 @@ from app.schemas.campaign import (
     MessageDetail,
     MessageSendRequest,
     MessageSendResponse,
+    MessageSearchParams,
 )
 from app.services.message_service import MessageService
 
@@ -30,6 +32,30 @@ logger = logging.getLogger(__name__)
 
 # 创建服务实例
 message_service = MessageService()
+
+
+@router.get("", response_model=SuccessResponse)
+async def list_messages(
+    params: MessageSearchParams = Depends(),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    取得群發訊息列表
+    """
+    try:
+        data = await message_service.list_messages(
+            db=db,
+            send_status=params.send_status,
+            search=params.search,
+            start_date=params.start_date,
+            end_date=params.end_date,
+            page=params.page,
+            page_size=params.page_size,
+        )
+        return SuccessResponse(data=data)
+    except Exception as e:
+        logger.error(f"❌ 獲取群發訊息列表失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"獲取群發訊息列表失敗: {str(e)}")
 
 
 @router.post("/quota", response_model=QuotaStatusResponse)
@@ -101,12 +127,6 @@ async def create_message(
 
         logger.info(f"📤 创建群发消息: schedule_type={data.schedule_type}")
 
-        # 处理 scheduled_at（如果是分开的 date 和 time，需要合并）
-        scheduled_at = data.scheduled_at
-        if not scheduled_at and data.scheduled_date and data.scheduled_time:
-            from datetime import datetime
-            scheduled_at = datetime.combine(data.scheduled_date, data.scheduled_time)
-
         message = await message_service.create_message(
             db=db,
             flex_message_json=data.flex_message_json,
@@ -114,7 +134,7 @@ async def create_message(
             schedule_type=data.schedule_type,
             template_name=None,  # 由 service 自动生成模板名称
             target_filter=data.target_filter,
-            scheduled_at=scheduled_at,
+            scheduled_at=data.scheduled_at,
             campaign_id=data.campaign_id,
             notification_text=data.notification_text,
             thumbnail=data.thumbnail,
@@ -202,8 +222,9 @@ async def send_message(
         )
 
         if not result.get("ok"):
-            # 发送失败
-            error_msg = f"发送失败: {result.get('errors', [])}"
+            # 发送失败 - 处理 error (单数) 和 errors (复数) 两种情况
+            error_detail = result.get('errors') or result.get('error') or '未知错误'
+            error_msg = f"发送失败: {error_detail}"
             logger.error(f"❌ {error_msg}")
             raise HTTPException(status_code=500, detail=error_msg)
 

@@ -1,45 +1,58 @@
-/**
- * ArrowButton Component - Pagination navigation arrows
- *
- * Used in message detail drawer for navigating between carousel cards
- *
- * Props:
- * - direction: "left" | "right" - Arrow direction
- * - onClick: Function to handle click
- * - disabled: Boolean to disable button
- * - aria-label: Accessibility label
- */
+import React from 'react';
+import svgPaths from '../imports/svg-0m1jkx8owp';
 
-import React from "react";
-import svgPathsPagination from "../imports/svg-0m1jkx8owp";
-
-export interface ArrowButtonProps {
-  direction: "left" | "right";
-  onClick: () => void;
+interface ArrowButtonProps {
+  direction: 'left' | 'right';
   disabled?: boolean;
-  "aria-label"?: string;
+  onClick?: () => void;
+  'aria-label'?: string;
 }
 
-export function ArrowButton({
-  direction,
-  onClick,
-  disabled = false,
-  "aria-label": ariaLabel
-}: ArrowButtonProps) {
-  const svgPath = direction === "left" ? svgPathsPagination.p1fb6d4c0 : svgPathsPagination.p30296c80;
+export function ArrowButton({ direction, disabled = false, onClick, 'aria-label': ariaLabel }: ArrowButtonProps) {
+  const [isHovered, setIsHovered] = React.useState(false);
+  const [isPressed, setIsPressed] = React.useState(false);
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (!disabled && onClick) {
+      onClick();
+    }
+  };
+
+  // Determine fill color based on state
+  let arrowFillColor = '#6E6E6E'; // Enabled
+  
+  if (disabled) {
+    arrowFillColor = '#E8E8E8'; // Disabled
+  }
+
+  const showBackground = (isHovered || isPressed) && !disabled;
+  const arrowPath = direction === 'left' ? svgPaths.p1fb6d4c0 : svgPaths.p30296c80;
 
   return (
     <button
-      onClick={onClick}
+      onClick={handleClick}
       disabled={disabled}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => {
+        setIsHovered(false);
+        setIsPressed(false);
+      }}
+      onMouseDown={() => setIsPressed(true)}
+      onMouseUp={() => setIsPressed(false)}
+      className="relative shrink-0 size-[24px] cursor-pointer disabled:cursor-not-allowed transition-colors flex items-center justify-center"
       aria-label={ariaLabel}
-      className={`relative shrink-0 size-[32px] rounded-full bg-[#F5F5F5] flex items-center justify-center transition-colors ${
-        disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-gray-200'
-      }`}
-      data-name={`Arrow/${direction === "left" ? "Left" : "Right"}`}
+      style={{
+        backgroundColor: showBackground ? '#F5F5F5' : 'transparent',
+        borderRadius: '12px',
+      }}
     >
-      <svg className="size-[16px]" viewBox="0 0 16 16" fill="none">
-        <path d={svgPath} fill="#6E6E6E" />
+      <svg className="block size-[24px]" fill="none" viewBox="0 0 16 16">
+        <g id={direction === 'left' ? 'Arrow / Left' : 'Arrow / Right'}>
+          <path 
+            d={arrowPath} 
+            fill={arrowFillColor}
+          />
+        </g>
       </svg>
     </button>
   );

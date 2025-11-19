@@ -1,14 +1,20 @@
-import { toast } from 'sonner@2.0.3';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import Sidebar from './Sidebar';
-import { useState, useRef } from 'react';
 import svgPathsModal from "../imports/svg-9n0wtrekj3";
 import KeywordTagsInput from './KeywordTagsInput';
 import TriggerTimeOptions, { TriggerTimeType } from './TriggerTimeOptions';
+import { SimpleBreadcrumb } from './common/Breadcrumb';
+import { useAutoReplies, type AutoReply as AutoReplyRecord, type AutoReplyPayload } from '../contexts/AutoRepliesContext';
 
 interface CreateAutoReplyProps {
   onBack: () => void;
   onNavigateToMessages?: () => void;
   onNavigateToMembers?: () => void;
+  onNavigateToSettings?: () => void;
+  autoReplyId?: string | null;
+  onSaved?: () => void;
+  onDeleted?: () => void;
 }
 
 type ReplyType = 'welcome' | 'keyword' | 'follow';
@@ -18,7 +24,45 @@ interface MessageItem {
   text: string;
 }
 
-export default function CreateAutoReplyInteractive({ onBack, onNavigateToMessages, onNavigateToMembers }: CreateAutoReplyProps) {
+const INITIAL_SCHEDULE = {
+  startDate: '',
+  endDate: '',
+  startTime: '',
+  endTime: '',
+};
+
+const formatDateForInput = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}/${mm}/${dd}`;
+};
+
+const normalizeDateForApi = (value?: string) => {
+  if (!value) return null;
+  const parts = value.split('/');
+  if (parts.length !== 3) return null;
+  const [yyyy, mm, dd] = parts;
+  if (!yyyy || !mm || !dd) return null;
+  return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+};
+
+export default function CreateAutoReplyInteractive({
+  onBack,
+  onNavigateToMessages,
+  onNavigateToMembers,
+  onNavigateToSettings,
+  autoReplyId,
+  onSaved,
+  onDeleted,
+}: CreateAutoReplyProps) {
+  const { saveAutoReply, removeAutoReply, getAutoReplyById, fetchAutoReplyById } = useAutoReplies();
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isHydrating, setIsHydrating] = useState<boolean>(Boolean(autoReplyId));
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [replyType, setReplyType] = useState<ReplyType>('welcome');
   const [isEnabled, setIsEnabled] = useState(true);
@@ -26,13 +70,69 @@ export default function CreateAutoReplyInteractive({ onBack, onNavigateToMessage
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [keywordTags, setKeywordTags] = useState<string[]>([]);
   const [triggerTime, setTriggerTime] = useState<TriggerTimeType>('immediate');
-  const [scheduledDateTime, setScheduledDateTime] = useState({
-    startDate: '',
-    endDate: '',
-    startTime: '',
-    endTime: '',
-  });
+  const [scheduledDateTime, setScheduledDateTime] = useState(() => ({ ...INITIAL_SCHEDULE }));
   const textareaRefs = useRef<{ [key: number]: HTMLTextAreaElement | null }>({});
+  const isEditing = Boolean(autoReplyId);
+
+  const resetForm = useCallback(() => {
+    setReplyType('welcome');
+    setIsEnabled(true);
+    setMessages([{ id: 1, text: '' }]);
+    setKeywordTags([]);
+    setTriggerTime('immediate');
+    setScheduledDateTime({ ...INITIAL_SCHEDULE });
+  }, []);
+
+  const hydrateFromRecord = useCallback((record: AutoReplyRecord) => {
+    const normalizedType: ReplyType =
+      record.triggerType === 'time' ? 'follow' : (record.triggerType as ReplyType);
+
+    setReplyType(normalizedType);
+    setIsEnabled(record.isActive);
+    const hydratedMessages = (record.messages.length ? record.messages : ['']).map((text, index) => ({
+      id: index + 1,
+      text,
+    }));
+    setMessages(hydratedMessages);
+    setKeywordTags(record.keywords);
+
+    const hasSchedule =
+      normalizedType === 'follow' &&
+      (record.triggerTimeStart || record.triggerTimeEnd || record.dateRangeStart || record.dateRangeEnd);
+
+    setTriggerTime(hasSchedule ? 'scheduled' : 'immediate');
+    setScheduledDateTime({
+      startDate: formatDateForInput(record.dateRangeStart),
+      endDate: formatDateForInput(record.dateRangeEnd),
+      startTime: record.triggerTimeStart ?? '',
+      endTime: record.triggerTimeEnd ?? '',
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!isEditing || !autoReplyId) {
+      resetForm();
+      setIsHydrating(false);
+      return;
+    }
+
+    const existing = getAutoReplyById(autoReplyId);
+    if (existing) {
+      hydrateFromRecord(existing);
+      setIsHydrating(false);
+      return;
+    }
+
+    setIsHydrating(true);
+    fetchAutoReplyById(autoReplyId)
+      .then((record) => {
+        if (record) {
+          hydrateFromRecord(record);
+        }
+      })
+      .catch(() => null)
+      .finally(() => setIsHydrating(false));
+  }, [autoReplyId, isEditing, getAutoReplyById, fetchAutoReplyById, hydrateFromRecord, resetForm]);
 
   const replyTypeOptions: { value: ReplyType; label: string }[] = [
     { value: 'welcome', label: '歡迎訊息' },
@@ -45,20 +145,22 @@ export default function CreateAutoReplyInteractive({ onBack, onNavigateToMessage
   };
 
   const handleInsertVariable = (index: number) => {
-    const textarea = textareaRefs.current[messages[index].id];
+    const target = messages[index];
+    if (!target) return;
+    const textarea = textareaRefs.current[target.id];
     if (!textarea) return;
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const text = messages[index].text;
+    const text = target.text;
     const before = text.substring(0, start);
     const after = text.substring(end);
     const newText = before + '{好友的顯示名稱}' + after;
 
     if (newText.length <= 100) {
-      const newMessages = [...messages];
-      newMessages[index].text = newText;
-      setMessages(newMessages);
+      setMessages(prev =>
+        prev.map((msg, idx) => (idx === index ? { ...msg, text: newText } : msg))
+      );
 
       // 設置光標位置到插入變數之後
       setTimeout(() => {
@@ -93,58 +195,119 @@ export default function CreateAutoReplyInteractive({ onBack, onNavigateToMessage
     );
   };
 
-  const handleCreate = () => {
-    const hasEmptyMessage = messages.some(msg => !msg.text.trim());
-    if (hasEmptyMessage) {
+  const handleSave = async () => {
+    if (isSaving) return;
+    const trimmedMessages = messages
+      .map((msg) => msg.text.trim())
+      .filter((text) => text.length > 0);
+    if (!trimmedMessages.length) {
       toast.error('請輸入訊息文字');
       return;
     }
-    
-    // 验证关键字标签（只有当回应类型为"触发关键字"时才需要验证）
+
     if (replyType === 'keyword' && keywordTags.length === 0) {
       toast.error('請至少新增一個關鍵字標籤');
       return;
     }
-    
-    toast.success('自動回應已儲存');
-    setTimeout(() => onBack(), 1500);
+
+    const shouldSendSchedule = replyType === 'follow' && triggerTime === 'scheduled';
+    if (shouldSendSchedule && (!scheduledDateTime.startTime || !scheduledDateTime.endTime)) {
+      toast.error('請設定完整的觸發時間區間');
+      return;
+    }
+
+    const payload: AutoReplyPayload = {
+      name: `${getReplyTypeLabel(replyType)} - ${trimmedMessages[0].slice(0, 12) || '訊息'}`,
+      triggerType: replyType,
+      messages: trimmedMessages,
+      keywords: replyType === 'keyword' ? keywordTags : [],
+      isActive: isEnabled,
+      triggerTimeStart: shouldSendSchedule ? scheduledDateTime.startTime || null : null,
+      triggerTimeEnd: shouldSendSchedule ? scheduledDateTime.endTime || null : null,
+      dateRangeStart: shouldSendSchedule ? normalizeDateForApi(scheduledDateTime.startDate) : null,
+      dateRangeEnd: shouldSendSchedule ? normalizeDateForApi(scheduledDateTime.endDate) : null,
+    };
+
+    setIsSaving(true);
+    try {
+      await saveAutoReply(payload, autoReplyId ?? undefined);
+      onSaved?.();
+      onBack();
+    } catch {
+      // 錯誤提示已由 context 處理
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleMoveUp = (index: number) => {
-    if (index === 0) return;
-    const newMessages = [...messages];
-    [newMessages[index - 1], newMessages[index]] = 
-      [newMessages[index], newMessages[index - 1]];
-    setMessages(newMessages);
-    toast.info('訊息已上移');
+    if (index <= 0) return;
+    let moved = false;
+    setMessages(prev => {
+      if (index >= prev.length) return prev;
+      moved = true;
+      const next = [...prev];
+      [next[index - 1], next[index]] = [next[index], next[index - 1]];
+      return next;
+    });
+    if (moved) {
+      toast.info('訊息已上移');
+    }
   };
 
   const handleMoveDown = (index: number) => {
-    if (index === messages.length - 1) return;
-    const newMessages = [...messages];
-    [newMessages[index], newMessages[index + 1]] = 
-      [newMessages[index + 1], newMessages[index]];
-    setMessages(newMessages);
-    toast.info('訊息已下移');
+    let moved = false;
+    setMessages(prev => {
+      if (index >= prev.length - 1) return prev;
+      moved = true;
+      const next = [...prev];
+      [next[index], next[index + 1]] = [next[index + 1], next[index]];
+      return next;
+    });
+    if (moved) {
+      toast.info('訊息已下移');
+    }
   };
 
   const handleDeleteMessage = (index: number) => {
-    if (messages.length === 1) return;
-    const newMessages = messages.filter((_, i) => i !== index);
-    setMessages(newMessages);
-    toast.success('訊息已刪除');
+    setMessages(prev => {
+      if (prev.length === 1) {
+        toast.error('至少需保留一則訊息');
+        return prev;
+      }
+      const next = prev.filter((_, i) => i !== index);
+      toast.success('訊息已刪除');
+      return next;
+    });
   };
 
   const handleAddMessage = () => {
-    if (messages.length >= 5) return;
-    const newId = Math.max(...messages.map(m => m.id)) + 1;
-    setMessages([...messages, { id: newId, text: '' }]);
-    toast.success('已新增訊息');
+    setMessages(prev => {
+      if (prev.length >= 5) {
+        toast.error('最多新增 5 則訊息');
+        return prev;
+      }
+      const nextId = prev.length ? Math.max(...prev.map(m => m.id)) + 1 : 1;
+      toast.success('已新增訊息');
+      return [...prev, { id: nextId, text: '' }];
+    });
   };
 
-  const handleDeleteAutoReply = () => {
-    toast.success('自動回應已刪除');
-    setTimeout(() => onBack(), 1000);
+  const handleDeleteAutoReply = async () => {
+    if (!autoReplyId) return;
+    const confirmed = window.confirm('確定要刪除此自動回應嗎？');
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    try {
+      await removeAutoReply(autoReplyId);
+      onDeleted?.();
+      onBack();
+    } catch {
+      // 錯誤已於 context 中處理
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -154,37 +317,31 @@ export default function CreateAutoReplyInteractive({ onBack, onNavigateToMessage
         onNavigateToMessages={onNavigateToMessages}
         onNavigateToAutoReply={onBack}
         onNavigateToMembers={onNavigateToMembers}
+        onNavigateToSettings={onNavigateToSettings}
         sidebarOpen={sidebarOpen}
         onToggleSidebar={setSidebarOpen}
       />
 
       <main className={`flex-1 overflow-auto bg-slate-50 transition-all duration-300 ${sidebarOpen ? 'ml-[330px] lg:ml-[280px] md:ml-[250px]' : 'ml-[72px]'}`}>
         <div className="bg-slate-50 content-stretch flex flex-col items-start relative size-full">
+          {isHydrating && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70">
+              <div className="flex flex-col items-center gap-2 text-sm text-[#383838]">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#0f6beb] border-r-transparent" />
+                <span>載入自動回應...</span>
+              </div>
+            </div>
+          )}
           {/* Breadcrumb */}
           <div className="relative shrink-0 w-full">
             <div className="flex flex-row items-center size-full">
               <div className="box-border content-stretch flex gap-[4px] items-center pb-0 pt-[48px] px-[40px] relative w-full">
-                <div className="box-border content-stretch flex gap-[4px] items-center p-[4px] relative shrink-0">
-                  <div className="content-stretch flex items-center justify-center relative shrink-0 cursor-pointer hover:opacity-70" onClick={onBack}>
-                    <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#6e6e6e] text-[14px] text-nowrap whitespace-pre">自動回應</p>
-                  </div>
-                  <div className="overflow-clip relative shrink-0 size-[12px]">
-                    <div className="absolute flex h-[calc(1px*((var(--transform-inner-width)*0.9510564804077148)+(var(--transform-inner-height)*0.30901697278022766)))] items-center justify-center left-[calc(50%-0.313px)] top-[calc(50%+0.542px)] translate-x-[-50%] translate-y-[-50%] w-[calc(1px*((var(--transform-inner-height)*0.9510564804077148)+(var(--transform-inner-width)*0.30901697278022766)))]" style={{ "--transform-inner-width": "8.5", "--transform-inner-height": "0" } as React.CSSProperties}>
-                      <div className="flex-none rotate-[108deg]">
-                        <div className="h-0 relative w-[8.5px]">
-                          <div className="absolute bottom-0 left-0 right-0 top-[-1px]">
-                            <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 9 1">
-                              <line stroke="var(--stroke-0, #6E6E6E)" strokeLinecap="round" x1="0.5" x2="8" y1="0.5" y2="0.5" />
-                            </svg>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="content-stretch flex items-center relative shrink-0">
-                    <p className="font-['Noto_Sans_TC:Medium',sans-serif] font-medium leading-[1.5] relative shrink-0 text-[#383838] text-[14px] text-nowrap whitespace-pre">編輯自動回應</p>
-                  </div>
-                </div>
+                <SimpleBreadcrumb
+                  items={[
+                    { label: '自動回應', onClick: onBack },
+                    { label: isEditing ? '編輯自動回應' : '建立自動回應', active: true },
+                  ]}
+                />
               </div>
             </div>
           </div>
@@ -196,25 +353,52 @@ export default function CreateAutoReplyInteractive({ onBack, onNavigateToMessage
                 <div className="content-stretch flex items-start relative shrink-0 w-full">
                   <div className="basis-0 content-stretch flex gap-[4px] grow items-center min-h-px min-w-px relative shrink-0">
                     <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[32px] text-nowrap">
-                      <p className="leading-[1.5] whitespace-pre">編輯自動回應</p>
+                      <p className="leading-[1.5] whitespace-pre">{isEditing ? '編輯自動回應' : '建立自動回應'}</p>
                     </div>
                   </div>
                   <div className="content-stretch flex gap-[4px] items-center justify-end relative shrink-0">
-                    <div className="box-border content-stretch flex gap-[10px] items-center p-[8px] relative rounded-[16px] shrink-0 cursor-pointer hover:bg-[#ffebee] active:bg-[#ffebee] transition-colors group" onClick={handleDeleteAutoReply}>
-                      <div className="relative shrink-0 size-[32px]">
-                        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
-                          <g clipPath="url(#clip0_delete_main)">
-                            <path d={svgPathsModal.pcbf700} fill="var(--fill-0, #6E6E6E)" className="group-hover:fill-[#F44336] group-active:fill-[#F44336] transition-colors" />
-                          </g>
-                          <defs>
-                            <clipPath id="clip0_delete_main"><rect fill="white" height="32" width="32" /></clipPath>
-                          </defs>
-                        </svg>
-                      </div>
-                    </div>
-                    <div className="bg-[#242424] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer hover:bg-[#383838] active:bg-[#4a4a4a] transition-colors" onClick={handleCreate}>
-                      <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center text-white">儲存</p>
-                    </div>
+                    {isEditing && autoReplyId && (
+                      <button
+                        type="button"
+                        onClick={handleDeleteAutoReply}
+                        disabled={isDeleting || isHydrating}
+                        className={`box-border content-stretch flex gap-[10px] items-center p-[8px] relative rounded-[16px] shrink-0 transition-colors ${
+                          isDeleting || isHydrating
+                            ? 'cursor-not-allowed opacity-60'
+                            : 'cursor-pointer hover:bg-[#ffebee] active:bg-[#ffebee]'
+                        }`}
+                      >
+                        <div className="relative shrink-0 size-[32px]">
+                          <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
+                            <g clipPath="url(#clip0_delete_main)">
+                              <path
+                                d={svgPathsModal.pcbf700}
+                                fill="var(--fill-0, #6E6E6E)"
+                                className="transition-colors"
+                              />
+                            </g>
+                            <defs>
+                              <clipPath id="clip0_delete_main"><rect fill="white" height="32" width="32" /></clipPath>
+                            </defs>
+                          </svg>
+                        </div>
+                        <span className="font-['Noto_Sans_TC:Regular',sans-serif] text-[#F44336] text-[16px]">
+                          {isDeleting ? '刪除中…' : '刪除'}
+                        </span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleSave}
+                      disabled={isSaving || isHydrating}
+                      className={`bg-[#242424] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 transition-colors ${
+                        isSaving || isHydrating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-[#383838] active:bg-[#4a4a4a]'
+                      }`}
+                    >
+                      <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center text-white">
+                        {isSaving ? '儲存中…' : '儲存'}
+                      </p>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -369,7 +553,7 @@ export default function CreateAutoReplyInteractive({ onBack, onNavigateToMessage
                         <div className="content-stretch flex flex-col gap-[12px] items-start relative shrink-0 w-full">
                           {messages.map((msg, index) => (
                             <div key={msg.id} className="content-stretch flex flex-col gap-[12px] items-start relative shrink-0 w-full">
-                              {/* 標題行：訊息文字標籤 + 上下移動和刪除按鈕 */}
+                              {/* 標題行：訊息文字標籤 + 上下移動和刪按鈕 */}
                               <div className="content-stretch flex items-center justify-between relative shrink-0 w-full">
                                 {/* 左側：訊息文字標籤 */}
                                 <div className="content-stretch flex flex-row gap-[2px] items-center relative shrink-0">
@@ -415,9 +599,15 @@ export default function CreateAutoReplyInteractive({ onBack, onNavigateToMessage
                                         <div className="w-full min-h-[84px] relative">
                                           {/* 實際的 textarea（用於輸入） */}
                                           <textarea 
-                                            ref={el => textareaRefs.current[msg.id] = el} 
+                                            ref={el => (textareaRefs.current[msg.id] = el)} 
                                             value={msg.text} 
-                                            onChange={(e) => setMessages(messages.map((m, i) => i === index ? { ...m, text: e.target.value.slice(0, 100) } : m))} 
+                                            onChange={(e) =>
+                                              setMessages(prev =>
+                                                prev.map((m, i) =>
+                                                  i === index ? { ...m, text: e.target.value.slice(0, 100) } : m
+                                                )
+                                              )
+                                            } 
                                             placeholder="輸入訊息文字" 
                                             className={`w-full min-h-[84px] font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] border-none outline-none resize-none bg-transparent ${msg.text ? 'text-transparent caret-[#383838]' : 'placeholder:text-[#a8a8a8]'}`}
                                             rows={3} 

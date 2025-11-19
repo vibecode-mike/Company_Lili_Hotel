@@ -125,6 +125,81 @@ Feature: PMS 系統整合
       And 系統在 20 分鐘後執行第三次重試
       And 若仍失敗則標記 sync_status 為「failed」
 
+  Rule: PMS 數據格式錯誤處理機制（方案 A：跳過錯誤記錄 + 記錄 log + 繼續處理）
+
+    處理邏輯：
+      - 欄位缺失或型別錯誤時跳過該筆記錄
+      - 記錄詳細錯誤 log（記錄編號、欄位名稱、錯誤原因）
+      - 繼續處理其他記錄（不中斷整批同步）
+      - 完成後統計成功/失敗數量，顯示「部分同步失敗」
+
+    Example: 欄位缺失跳過該筆記錄
+      Given PMS 同步回傳 3 筆會員資料
+        | 記錄編號 | id_number  | phone      | room_type | stay_date  |
+        | 1        | A123456789 | 0912345678 | 商務房    | 2024/03/15 |
+        | 2        | (缺失)     | 0987654321 | 豪華房    | 2024/03/16 |
+        | 3        | C111222333 | 0923456789 | 標準房    | 2024/03/17 |
+      When 系統驗證記錄 2 缺少必填欄位「id_number」
+      Then 系統跳過記錄 2 不處理
+      And 系統記錄錯誤 log「Record #2: Missing required field 'id_number'」
+      And 系統繼續處理記錄 1 和記錄 3
+      And 系統成功同步 2 筆記錄（記錄 1、3）
+      And 系統失敗 1 筆記錄（記錄 2）
+
+    Example: 型別錯誤跳過該筆記錄
+      Given PMS 同步回傳 3 筆會員資料
+        | 記錄編號 | id_number  | phone        | room_type | stay_date    |
+        | 1        | A123456789 | 0912345678   | 商務房    | 2024/03/15   |
+        | 2        | B987654321 | invalid_text | 豪華房    | 2024/03/16   |
+        | 3        | C111222333 | 0923456789   | 標準房    | 2024/03/17   |
+      When 系統驗證記錄 2 的「phone」欄位格式錯誤
+      Then 系統跳過記錄 2 不處理
+      And 系統記錄錯誤 log「Record #2: Invalid type for field 'phone', expected phone number format, got 'invalid_text'」
+      And 系統繼續處理記錄 1 和記錄 3
+      And 系統成功同步 2 筆記錄
+      And 系統失敗 1 筆記錄
+
+    Example: 值域超範圍跳過該筆記錄
+      Given PMS 同步回傳 3 筆會員資料
+        | 記錄編號 | id_number  | phone      | room_type | stay_date  |
+        | 1        | A123456789 | 0912345678 | 商務房    | 2024/03/15 |
+        | 2        | B987654321 | 0987654321 | 豪華房    | 1800/01/01 |
+        | 3        | C111222333 | 0923456789 | 標準房    | 2024/03/17 |
+      When 系統驗證記錄 2 的「stay_date」超出合理範圍（1800 年）
+      Then 系統跳過記錄 2 不處理
+      And 系統記錄錯誤 log「Record #2: Invalid value for field 'stay_date', date '1800/01/01' out of valid range」
+      And 系統繼續處理記錄 1 和記錄 3
+      And 系統成功同步 2 筆記錄
+      And 系統失敗 1 筆記錄
+
+    Example: 完成後顯示同步結果統計
+      Given PMS 同步處理 100 筆記錄
+      And 其中 5 筆因格式錯誤被跳過
+      When 同步完成
+      Then 系統更新 sync_status 為「partial_success」
+      And 系統更新 last_sync_at 為當前時間
+      And 系統記錄 error_message「同步完成：成功 95 筆，失敗 5 筆（格式錯誤）」
+      And 系統在管理介面顯示「部分同步失敗（95/100 成功）」
+      And 系統提供「查看錯誤記錄」按鈕，可下載錯誤 log
+
+    Example: 全部成功時不顯示錯誤提示
+      Given PMS 同步處理 50 筆記錄
+      And 所有記錄格式正確
+      When 同步完成
+      Then 系統更新 sync_status 為「active」
+      And 系統更新 last_sync_at 為當前時間
+      And 系統清除 error_message
+      And 系統顯示「同步成功（50/50 成功）」
+
+    Example: 全部失敗時標記為失敗
+      Given PMS 同步處理 10 筆記錄
+      And 所有記錄都有格式錯誤
+      When 同步完成
+      Then 系統更新 sync_status 為「failed」
+      And 系統記錄 error_message「同步失敗：成功 0 筆，失敗 10 筆（格式錯誤）」
+      And 系統通知管理員檢查 PMS 數據格式
+      And 系統建議管理員檢查 PMS 端資料品質
+
   Rule: 會員比對與自動建立
 
     Example: 比對成功建立關聯

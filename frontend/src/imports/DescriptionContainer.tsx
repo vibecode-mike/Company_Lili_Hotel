@@ -28,8 +28,8 @@ function UsageStatus() {
 
 function DescriptionTextContainer1() {
   return (
-    <div className="content-stretch flex gap-[10px] items-center justify-center relative shrink-0 w-full" data-name="Description Text Container">
-      <p className="w-full font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative text-[#6e6e6e] text-[16px] break-words">※ 已傳送的訊息則數資訊通常於每天上午更新。</p>
+    <div className="content-stretch flex gap-[10px] items-center justify-center relative shrink-0 w-[340px]" data-name="Description Text Container">
+      <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#6e6e6e] text-[16px]">※ 已傳送的訊息則數資訊通常於每天上午更新。</p>
     </div>
   );
 }

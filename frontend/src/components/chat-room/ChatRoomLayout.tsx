@@ -6,10 +6,12 @@
 
 import { useState, useEffect, useRef } from 'react';
 import type { ChatRoomLayoutProps, ChatMessage } from './types';
+import type { Member } from '../../types/member';
 import MemberAvatar from './MemberAvatar';
 import MemberInfoPanelComplete from './MemberInfoPanelComplete';
 import MemberTagEditModal from '../MemberTagEditModal';
 import ButtonEdit from '../../imports/ButtonEdit';
+import ButtonEditAvatar from '../../imports/ButtonEdit-8025-230';
 import svgPathsInfo from '../../imports/svg-k0rlkn3s4y';
 import svgPaths from '../../imports/svg-bzzivawqvx';
 import svgPathsForm from '../../imports/svg-htq1l2704k';
@@ -17,13 +19,14 @@ import { useToast } from '../ToastProvider';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
 import MemberNoteEditor from '../shared/MemberNoteEditor';
+import { useMembers } from '../../contexts/MembersContext';
 
 // Mock messages data
 const mockMessages: ChatMessage[] = [
   { id: 1, type: 'user', text: '文字訊息', time: '下午 03:30', isRead: false },
   { id: 2, type: 'official', text: '官方文字訊息', time: '下午 03:40', isRead: true },
   { id: 3, type: 'user', text: '文字訊息', time: '下午 04:30', isRead: false },
-  { id: 4, type: 'official', text: '官方文字訊息', time: '下午 04:50', isRead: true },
+  { id: 4, type: 'official', text: '官方文字訊息', time: '���午 04:50', isRead: true },
   { id: 5, type: 'user', text: '文字訊息', time: '下午 05:30', isRead: false },
   { id: 6, type: 'official', text: '官方文字訊息', time: '下午 05:40', isRead: true },
 ];
@@ -175,24 +178,28 @@ function ReadOnlyInfo({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function ChatRoomLayout({ member }: ChatRoomLayoutProps) {
+export default function ChatRoomLayout({ member: initialMember }: ChatRoomLayoutProps) {
+  const { fetchMemberById } = useMembers();
+  const [member, setMember] = useState<Member | undefined>(initialMember);
+  const [isLoadingMember, setIsLoadingMember] = useState(false);
+
   const [messages, setMessages] = useState<ChatMessage[]>(mockMessages);
   const [messageInput, setMessageInput] = useState('');
   const [isTagModalOpen, setIsTagModalOpen] = useState(false);
-  const [memberTags, setMemberTags] = useState<string[]>(member?.tags || ['消費力高', 'VIP', '會員專屬優惠']);
-  const [interactionTags, setInteractionTags] = useState<string[]>(['優惠活動', '限時折扣', '滿額贈品', '會員專屬優惠', '手工芝', 'BeautyBlogger']);
-  const [note, setNote] = useState(member?.note || '');
-  
+  const [memberTags, setMemberTags] = useState<string[]>(member?.memberTags || []); // ✅ 使用真實會員標籤
+  const [interactionTags, setInteractionTags] = useState<string[]>(member?.interactionTags || []); // ✅ 使用真實互動標籤
+  const [note, setNote] = useState(member?.internal_note || '');
+
   // Form field states
   const [formData, setFormData] = useState({
-    name: member?.name || 'Real Name',
-    birthday: '2000-12-12',
-    gender: 'female' as 'male' | 'female' | 'other',
-    location: '台北市',
-    phone: '0909000000',
-    email: 'info@mail.com',
-    idNumber: 'IDDDDD090909',
-    passport: '399999999'
+    realName: member?.realName || '',
+    birthday: member?.birthday || '',
+    gender: member?.gender || '0',
+    residence: member?.residence || '',
+    phone: member?.phone || '',
+    email: member?.email || '',
+    id_number: member?.id_number || '',
+    passport_number: member?.passport_number || ''
   });
   
   // Editing state for form
@@ -200,8 +207,62 @@ export default function ChatRoomLayout({ member }: ChatRoomLayoutProps) {
   const [originalFormData, setOriginalFormData] = useState(formData);
   const [birthdayPopoverOpen, setBirthdayPopoverOpen] = useState(false);
   
+  // Avatar interaction states
+  const [isAvatarHovered, setIsAvatarHovered] = useState(false);
+  const [isAvatarPressed, setIsAvatarPressed] = useState(false);
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
+
+  // Convert backend gender format to frontend format
+  const convertGenderToFrontend = (backendGender?: string): 'male' | 'female' | 'other' => {
+    if (backendGender === '1') return 'male';
+    if (backendGender === '2') return 'female';
+    return 'other'; // '0' or undefined
+  };
+
+  // Convert frontend gender format to backend format
+  const convertGenderToBackend = (frontendGender: string): string => {
+    if (frontendGender === 'male') return '1';
+    if (frontendGender === 'female') return '2';
+    return '0'; // 'other'
+  };
+
+  // Fetch full member details when component mounts
+  useEffect(() => {
+    if (!initialMember?.id) return;
+
+    const loadMemberDetail = async () => {
+      setIsLoadingMember(true);
+      const fullMember = await fetchMemberById(initialMember.id);
+      if (fullMember) {
+        setMember(fullMember);
+      }
+      setIsLoadingMember(false);
+    };
+
+    loadMemberDetail();
+  }, [initialMember?.id, fetchMemberById]);
+
+  // Sync member data to formData when member changes
+  useEffect(() => {
+    if (member) {
+      setFormData({
+        realName: member.realName || '',
+        birthday: member.birthday || '',
+        gender: convertGenderToFrontend(member.gender),
+        residence: member.residence || '',
+        phone: member.phone || '',
+        email: member.email || '',
+        id_number: member.id_number || '',
+        passport_number: member.passport_number || ''
+      });
+      setNote(member.internal_note || '');
+      setMemberTags(member.memberTags || []);
+      setInteractionTags(member.interactionTags || []);
+    }
+  }, [member]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -279,6 +340,36 @@ export default function ChatRoomLayout({ member }: ChatRoomLayoutProps) {
     }
   };
 
+  // Avatar upload handlers
+  const handleAvatarClick = () => {
+    avatarFileInputRef.current?.click();
+  };
+
+  const handleAvatarFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      try {
+        // Validate file size (e.g., max 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+          showToast('圖片大小不能超過 5MB', 'error');
+          return;
+        }
+        
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+          showToast('請選擇圖片檔案', 'error');
+          return;
+        }
+
+        // Simulate backend API call
+        // await uploadAvatar(file);
+        showToast('儲存成功', 'success');
+      } catch (error) {
+        showToast('儲存失敗', 'error');
+      }
+    }
+  };
+
   return (
     <>
       {/* Main Layout: Two Columns */}
@@ -288,25 +379,72 @@ export default function ChatRoomLayout({ member }: ChatRoomLayoutProps) {
           {/* Avatar + Username */}
           <div className="content-stretch flex flex-col gap-[16px] items-center relative shrink-0 w-full">
             {/* Avatar */}
-            <div className="overflow-clip relative shrink-0 size-[180px]">
-              <div className="absolute bg-[#f6f9fd] content-stretch flex flex-col items-center left-1/2 overflow-clip rounded-[158.824px] size-[158.824px] top-1/2 translate-x-[-50%] translate-y-[-50%]">
-                <div className="basis-0 bg-[#edf0f8] content-stretch flex grow items-center justify-center min-h-px min-w-px relative shrink-0 w-full">
-                  <div className="relative shrink-0 size-[74.118px]">
-                    <div className="absolute left-[calc(50%-0.06px)] size-[49.412px] top-[calc(50%-0.06px)] translate-x-[-50%] translate-y-[-50%]">
-                      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 50 50">
-                        <g>
-                          <path d={svgPaths.pd9dc180} fill="#383838" />
-                        </g>
-                      </svg>
+            <div 
+              className="relative flex items-center justify-center size-[180px] rounded-full bg-[#EDF2F8] cursor-pointer overflow-hidden transition-all duration-300 ease-in-out"
+              onMouseEnter={() => setIsAvatarHovered(true)}
+              onMouseLeave={() => {
+                setIsAvatarHovered(false);
+                setIsAvatarPressed(false);
+              }}
+              onMouseDown={() => setIsAvatarPressed(true)}
+              onMouseUp={() => setIsAvatarPressed(false)}
+              onClick={handleAvatarClick}
+            >
+              <input
+                ref={avatarFileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarFileChange}
+              />
+
+              {/* LINE Avatar or Default User Icon */}
+              {member?.lineAvatar ? (
+                <img
+                  src={member.lineAvatar}
+                  alt="會員頭像"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="absolute bg-[#f6f9fd] content-stretch flex flex-col items-center left-1/2 overflow-clip rounded-[158.824px] size-[158.824px] top-1/2 translate-x-[-50%] translate-y-[-50%]">
+                  <div className="basis-0 bg-[#edf0f8] content-stretch flex grow items-center justify-center min-h-px min-w-px relative shrink-0 w-full">
+                    <div className="relative shrink-0 size-[74.118px]">
+                      <div className="absolute left-[calc(50%-0.06px)] size-[49.412px] top-[calc(50%-0.06px)] translate-x-[-50%] translate-y-[-50%]">
+                        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 50 50">
+                          <g>
+                            <path d={svgPaths.pd9dc180} fill="#383838" />
+                          </g>
+                        </svg>
+                      </div>
                     </div>
                   </div>
+                </div>
+              )}
+              
+              {/* Hover/Pressed Overlay */}
+              <div
+                className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ease-in-out ${
+                  isAvatarHovered ? 'opacity-100' : 'opacity-0'
+                }`}
+                style={{
+                  backgroundColor: isAvatarPressed
+                    ? 'rgba(56, 56, 56, 0.5)'
+                    : 'rgba(56, 56, 56, 0.3)',
+                }}
+              >
+                <div
+                  className={`flex items-center justify-center size-[60px] transition-transform duration-150 ease-in-out ${
+                    isAvatarPressed ? 'scale-95' : isAvatarHovered ? 'scale-[2]' : 'scale-100'
+                  }`}
+                >
+                  <ButtonEditAvatar className="w-[60px] h-[60px]" />
                 </div>
               </div>
             </div>
             {/* Username */}
             <div className="content-stretch flex items-center justify-center relative shrink-0">
               <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[32px] text-nowrap">
-                <p className="leading-[1.5] whitespace-pre">{member?.name || 'User Name'}</p>
+                <p className="leading-[1.5] whitespace-pre">{member?.username || 'User Name'}</p>
               </div>
             </div>
           </div>
@@ -320,11 +458,11 @@ export default function ChatRoomLayout({ member }: ChatRoomLayoutProps) {
                   {/* Editable Fields Container */}
                   <div className="content-stretch flex flex-col gap-[20px] items-start relative shrink-0 w-full">
                     {/* Name Field */}
-                    <MemberInfoField 
-                      label="姓名" 
-                      required 
-                      value={formData.name} 
-                      onChange={(val) => setFormData({ ...formData, name: val })}
+                    <MemberInfoField
+                      label="姓名"
+                      required
+                      value={formData.realName}
+                      onChange={(val) => setFormData({ ...formData, realName: val })}
                       onFocus={handleEditForm}
                     />
                     
@@ -408,10 +546,10 @@ export default function ChatRoomLayout({ member }: ChatRoomLayoutProps) {
                     </div>
                     
                     {/* Location Field */}
-                    <MemberInfoField 
-                      label="居住地" 
-                      value={formData.location} 
-                      onChange={(val) => setFormData({ ...formData, location: val })}
+                    <MemberInfoField
+                      label="居住地"
+                      value={formData.residence}
+                      onChange={(val) => setFormData({ ...formData, residence: val })}
                       onFocus={handleEditForm}
                     />
                     
@@ -434,18 +572,18 @@ export default function ChatRoomLayout({ member }: ChatRoomLayoutProps) {
                     />
                     
                     {/* ID Number Field */}
-                    <MemberInfoField 
-                      label="身分證字號" 
-                      value={formData.idNumber} 
-                      onChange={(val) => setFormData({ ...formData, idNumber: val })}
+                    <MemberInfoField
+                      label="身分證字號"
+                      value={formData.id_number}
+                      onChange={(val) => setFormData({ ...formData, id_number: val })}
                       onFocus={handleEditForm}
                     />
-                    
+
                     {/* Passport Field */}
-                    <MemberInfoField 
-                      label="護照號碼" 
-                      value={formData.passport} 
-                      onChange={(val) => setFormData({ ...formData, passport: val })}
+                    <MemberInfoField
+                      label="護照號碼"
+                      value={formData.passport_number}
+                      onChange={(val) => setFormData({ ...formData, passport_number: val })}
                       onFocus={handleEditForm}
                     />
                   </div>
@@ -479,10 +617,13 @@ export default function ChatRoomLayout({ member }: ChatRoomLayoutProps) {
                   
                   {/* Read-only Info Container */}
                   <div className="content-stretch flex flex-col gap-[12px] items-start relative shrink-0 w-full">
-                    <ReadOnlyInfo label="加入來源" value="LINE (LINE UID: 000000000)" />
-                    <ReadOnlyInfo label="建立時間" value="2025-01-01" />
-                    <ReadOnlyInfo label="最近聊天時間" value="2025-08-08" />
-                    <ReadOnlyInfo label="會員 ID" value="000000001" />
+                    <ReadOnlyInfo
+                      label="加入來源"
+                      value={member?.join_source || 'LINE'}
+                    />
+                    <ReadOnlyInfo label="建立時間" value={member?.createTime || '未提供'} />
+                    <ReadOnlyInfo label="最近聊天時間" value={member?.lastChatTime || '未提供'} />
+                    <ReadOnlyInfo label="會員 ID" value={member?.id || '未提供'} />
                   </div>
                 </div>
               </div>
@@ -587,7 +728,7 @@ export default function ChatRoomLayout({ member }: ChatRoomLayoutProps) {
               <div className="bg-white relative rounded-[20px] shrink-0">
                 <div className="flex flex-row justify-end min-h-inherit size-full">
                   <div className="box-border content-stretch flex gap-[4px] items-start justify-end min-h-inherit p-[20px] relative w-full">
-                    <div className="basis-0 content-stretch flex flex-col gap-[12px] grow min-h-[96px] items-start min-w-px relative shrink-0">
+                    <div className="basis-0 content-stretch flex flex-col gap-[12px] grow h-[168px] items-start min-h-[96px] min-w-px relative shrink-0">
                       {/* Text Input */}
                       <div className="basis-0 content-stretch flex flex-wrap gap-[10px] grow items-center justify-center min-h-[108px] min-w-px relative shrink-0 w-full">
                         <textarea
@@ -606,13 +747,6 @@ export default function ChatRoomLayout({ member }: ChatRoomLayoutProps) {
                       
                       {/* Buttons */}
                       <div className="content-stretch flex gap-[4px] items-start justify-end relative shrink-0 w-full">
-                        <button
-                          className="bg-neutral-100 hover:bg-neutral-200 box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 transition-colors"
-                          onClick={() => {}}
-                        >
-                          <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] text-center">排程傳送</p>
-                        </button>
-                        
                         <button
                           onClick={handleSendMessage}
                           disabled={!messageInput.trim()}

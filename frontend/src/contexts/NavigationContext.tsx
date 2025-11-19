@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
 
 // 路由页面类型
 export type Page = 
@@ -64,16 +64,16 @@ export function NavigationProvider({
     { page: initialPage, params: initialParams }
   ]);
 
-  const navigate = (page: Page, newParams: NavigationParams = {}) => {
+  const navigate = useCallback((page: Page, newParams: NavigationParams = {}) => {
     // 添加到历史记录
     setHistory(prev => [...prev, { page: currentPage, params }]);
     
     // 更新当前页面和参数
     setCurrentPage(page);
     setParams(newParams);
-  };
+  }, [currentPage, params]);
 
-  const goBack = () => {
+  const goBack = useCallback(() => {
     if (history.length > 1) {
       // 移除最后一项
       const newHistory = [...history];
@@ -87,15 +87,15 @@ export function NavigationProvider({
       setCurrentPage(previousState.page);
       setParams(previousState.params);
     }
-  };
+  }, [history]);
 
-  const reset = () => {
+  const reset = useCallback(() => {
     setCurrentPage(initialPage);
     setParams(initialParams);
     setHistory([{ page: initialPage, params: initialParams }]);
-  };
+  }, [initialPage, initialParams]);
 
-  const value: NavigationContextType = {
+  const value: NavigationContextType = useMemo(() => ({
     currentPage,
     params,
     history,
@@ -103,7 +103,7 @@ export function NavigationProvider({
     goBack,
     canGoBack: history.length > 1,
     reset,
-  };
+  }), [currentPage, params, history, navigate, goBack, reset]);
 
   return (
     <NavigationContext.Provider value={value}>

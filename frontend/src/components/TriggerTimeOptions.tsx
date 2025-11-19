@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import svgPaths from '../imports/svg-qyn0laeroz';
 import { parse, isBefore, startOfDay, format } from 'date-fns';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { DatePicker, TimePicker } from './DateTimePicker';
 
 // ========== 类型定义 ==========

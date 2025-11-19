@@ -14,7 +14,7 @@ async def cleanup_tables():
     tables_to_drop = [
         'consumption_records',  # 依賴 pms_integrations
         'member_interaction_records',
-        'message_recipients',
+        'message_deliveries',
         'message_records',
         'pms_integrations',
     ]

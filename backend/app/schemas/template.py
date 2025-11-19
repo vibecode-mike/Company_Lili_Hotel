@@ -88,3 +88,39 @@ class TemplateSearchParams(BaseModel):
     # 移除 type 篩選，該欄位已廢棄
     page: int = 1
     page_size: int = 20
+
+
+# 模板庫相關 Schema
+
+class TemplateLibraryItem(BaseModel):
+    """模板庫列表項"""
+
+    id: int
+    name: Optional[str] = None
+    template_type: Optional[str] = None
+    is_in_library: bool
+    usage_count: int
+    storage_type: Optional[str] = "database"
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class TemplateCopyResponse(BaseModel):
+    """複製模板響應"""
+
+    id: int
+    name: str
+    source_template_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TemplateLibraryToggle(BaseModel):
+    """模板庫切換請求"""
+
+    add_to_library: bool  # True=加入模板庫, False=從模板庫移除

@@ -2,6 +2,16 @@ import svgPaths from "./svg-ckckvhq9os";
 import { TitleContainer as SharedTitleContainer, HeaderContainer as SharedHeaderContainer, DescriptionContainer as SharedDescriptionContainer } from "../components/common/Containers";
 import { SimpleBreadcrumb } from "../components/common/Breadcrumb";
 
+/**
+ * 活動與訊息推播頁面組件
+ * 
+ * 用途：訊息推播管理的基礎容器組件
+ * 功能：顯示標題、描述和搜索功能
+ * 
+ * 注意：此文件名為 Figma 導入時自動生成的名稱
+ * 目前未在主應用中直接使用，可能作為其他組件的基礎
+ */
+
 function TitleTextContainer() {
   return (
     <div className="content-stretch flex gap-[10px] items-center justify-center relative shrink-0" data-name="Title Text Container">

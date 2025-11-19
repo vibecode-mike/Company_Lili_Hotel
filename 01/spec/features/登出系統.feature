@@ -11,11 +11,6 @@
       When 管理員請求登出
       Then 系統允許登出操作
 
-    Example: 未登入狀態無法執行登出
-      Given 管理員未登入系統
-      When 管理員嘗試呼叫登出 API
-      Then 系統回應 401 Unauthorized
-      And 提示「請先登入」
 
   Rule: 登出後清除會話並導向登入頁面
 

@@ -315,8 +315,21 @@ function MySpecialTitleContainer() {
 - [重构示例](/REFACTORING_EXAMPLE.md)
 - [重构总结](/REFACTORING_SUMMARY.md)
 - [组件源码](/components/common/Containers.tsx)
+- **[组件合并计划](/COMPONENT_CONSOLIDATION_PLAN.md)** - 重复组件分析
+- **[组件合并总结](/COMPONENT_CONSOLIDATION_SUMMARY.md)** - 合并工作完成报告
+- **[组件合并测试清单](/CONSOLIDATION_TEST_CHECKLIST.md)** - 功能验证指南
 
 ---
 
-**快速参考版本**: v1.0  
-**最后更新**: 2024-11-08
+## 🔄 最近更新
+
+### 2025-11-17: 组件合并优化
+- ✅ **删除重复组件**: 移除 `CreateAutoReplyNew.tsx`（362 行冗余代码）
+- ✅ **文档化 MainContainer 变体**: 为三个 MainContainer 文件添加说明注释
+- ✅ **统一实现**: 所有自动回应功能现在使用 `CreateAutoReplyInteractive.tsx`
+- 📝 **添加文档**: 创建详细的合并计划、总结和测试清单
+
+---
+
+**快速参考版本**: v1.1  
+**最后更新**: 2025-11-17

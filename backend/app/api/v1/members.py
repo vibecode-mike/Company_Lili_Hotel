@@ -7,7 +7,7 @@ from sqlalchemy import select, or_, and_, func, delete
 from app.database import get_db
 from app.models.member import Member
 from app.models.tag import MemberTag, InteractionTag
-from app.models.member_interaction_record import MemberInteractionRecord
+from app.models.tracking import ComponentInteractionLog
 from app.models.user import User
 from app.schemas.member import (
     MemberCreate,
@@ -42,17 +42,16 @@ async def get_members(
         search_pattern = f"%{params.search}%"
         query = query.where(
             or_(
-                Member.first_name.like(search_pattern),
-                Member.last_name.like(search_pattern),
+                Member.name.like(search_pattern),
                 Member.email.like(search_pattern),
                 Member.phone.like(search_pattern),
-                Member.line_display_name.like(search_pattern),
+                Member.line_name.like(search_pattern),
             )
         )
 
     # 來源篩選
-    if params.source:
-        query = query.where(Member.source == params.source)
+    if params.join_source:
+        query = query.where(Member.join_source == params.join_source)
 
     # 標籤篩選 - 使用新的單表設計
     if params.tags:
@@ -99,11 +98,11 @@ async def get_members(
         for tag in member_tags_result.scalars():
             tags.append(TagInfo(id=tag.id, name=tag.tag_name, type="member"))
 
-        # 查詢互動標籤（通過 MemberInteractionRecord 關聯）
+        # 查詢互動標籤（通過 ComponentInteractionLog 關聯）
         interaction_tags_result = await db.execute(
             select(InteractionTag)
-            .join(MemberInteractionRecord, InteractionTag.id == MemberInteractionRecord.tag_id)
-            .where(MemberInteractionRecord.member_id == member.id)
+            .join(ComponentInteractionLog, InteractionTag.id == ComponentInteractionLog.interaction_tag_id)
+            .where(ComponentInteractionLog.line_id == member.line_uid)
             .distinct()
         )
         for tag in interaction_tags_result.scalars():
@@ -174,11 +173,11 @@ async def get_member(
     for tag in member_tags_result.scalars():
         tags.append(TagInfo(id=tag.id, name=tag.tag_name, type="member"))
 
-    # 查詢互動標籤（通過 MemberInteractionRecord 關聯）
+    # 查詢互動標籤（通過 ComponentInteractionLog 關聯）
     interaction_tags_result = await db.execute(
         select(InteractionTag)
-        .join(MemberInteractionRecord, InteractionTag.id == MemberInteractionRecord.tag_id)
-        .where(MemberInteractionRecord.member_id == member.id)
+        .join(ComponentInteractionLog, InteractionTag.id == ComponentInteractionLog.interaction_tag_id)
+        .where(ComponentInteractionLog.line_id == member.line_uid)
         .distinct()
     )
     for tag in interaction_tags_result.scalars():
@@ -188,18 +187,19 @@ async def get_member(
     member_data = {
         "id": member.id,
         "line_uid": member.line_uid,
-        "line_display_name": member.line_display_name,
-        "line_picture_url": member.line_picture_url,
-        "first_name": member.first_name,
-        "last_name": member.last_name,
+        "line_name": member.line_name,
+        "line_avatar": member.line_avatar,
+        "name": member.name,
         "email": member.email,
         "phone": member.phone,
         "gender": member.gender,
         "birthday": member.birthday,
         "id_number": member.id_number,
-        "source": member.source,
-        "accept_marketing": member.accept_marketing if member.accept_marketing is not None else True,
-        "notes": member.notes,
+        "passport_number": member.passport_number,
+        "residence": member.residence,
+        "join_source": member.join_source,
+        "receive_notification": member.receive_notification if member.receive_notification is not None else True,
+        "internal_note": member.internal_note,
         "created_at": member.created_at,
         "last_interaction_at": member.last_interaction_at,
         "tags": tags,
@@ -356,7 +356,7 @@ async def update_member_notes(
     if not member:
         raise HTTPException(status_code=404, detail="會員不存在")
 
-    member.notes = request.notes
+    member.internal_note = request.internal_note
     await db.commit()
 
     return SuccessResponse(message="備註更新成功")

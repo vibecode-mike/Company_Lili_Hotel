@@ -23,9 +23,10 @@ class Member(Base):
     name = Column(String(32), comment="會員姓名（統一單欄位）")
     gender = Column(String(1), comment="性別：0=不透漏/1=男/2=女")
     birthday = Column(Date, comment="生日")
-    email = Column(String(100), index=True, comment="電子信箱")
+    email = Column(String(255), unique=True, index=True, comment="電子信箱")
     phone = Column(String(20), index=True, comment="手機號碼")
-    id_number = Column(String(50), unique=True, index=True, comment="身分證/護照號碼")
+    id_number = Column(String(20), unique=True, index=True, comment="身分證字號")
+    passport_number = Column(String(50), comment="護照號碼")
     residence = Column(String(100), comment="居住地")
 
     # 系統資訊
@@ -34,10 +35,11 @@ class Member(Base):
         nullable=False,
         default="LINE",
         comment="加入來源：LINE/CRM/PMS/ERP/系統",
+        index=True,
     )
     receive_notification = Column(Boolean, default=True, comment="是否接收優惠通知")
     internal_note = Column(Text, comment="內部備註")
-    last_interaction_at = Column(DateTime, comment="最後互動時間")
+    last_interaction_at = Column(DateTime, index=True, comment="最後互動時間")
 
     created_at = Column(DateTime, server_default=func.now(), comment="建立時間")
     updated_at = Column(DateTime, onupdate=func.now(), comment="更新時間")
@@ -45,9 +47,6 @@ class Member(Base):
     # 關聯關係
     member_tags = relationship(
         "MemberTag", back_populates="member", cascade="all, delete-orphan"
-    )
-    interaction_records = relationship(
-        "MemberInteractionRecord", back_populates="member", cascade="all, delete-orphan"
     )
     message_records = relationship(
         "MessageRecord", back_populates="member", cascade="all, delete-orphan"
@@ -58,6 +57,15 @@ class Member(Base):
     pms_integrations = relationship(
         "PMSIntegration", back_populates="member", cascade="all, delete-orphan"
     )
-    message_recipients = relationship(
-        "MessageRecipient", back_populates="member", cascade="all, delete-orphan"
+    message_deliveries = relationship(
+        "MessageDelivery", back_populates="member", cascade="all, delete-orphan"
     )
+
+    @property
+    def message_recipients(self):
+        """向後兼容舊屬性名稱"""
+        return self.message_deliveries
+
+    @message_recipients.setter
+    def message_recipients(self, value):
+        self.message_deliveries = value

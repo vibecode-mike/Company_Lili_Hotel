@@ -479,7 +479,7 @@ def insert_ryan_message(*, thread_id: str, role: str, direction: str,
                         event_id: str | None = None,
                         status: str = "received"):
     """
-    只寫你新表 ryan_messages，不動既有 messages/ryan_chat_logs。
+    只寫你新表 ryan_messages，不動既有 messages/chat_logs。
     由呼叫端決定是 user 問（傳 question）或 assistant 回（傳 response）。
     """
     msg_id = uuid.uuid4().hex  # 36 VARCHAR 用 hex 最穩
@@ -1952,11 +1952,11 @@ def on_text(event: MessageEvent):
     except Exception:
         logging.exception("[on_text] write ryan_messages(user) failed")
 
-    # === 寫入 ryan_chat_logs ===
+    # === 寫入 chat_logs ===
     try:
         with engine.begin() as conn:
             conn.execute(sql_text("""
-                INSERT INTO ryan_chat_logs
+                INSERT INTO chat_logs
                 (platform, user_id, direction, message_type, text, content, event_id, status, created_at)
                 VALUES (:platform, :user_id, :direction, :message_type, :text, :content, :event_id, :status, NOW())
             """), {

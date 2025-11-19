@@ -18,7 +18,6 @@ from app.models import (
     InteractionTag,
     MemberTagRelation,
     Campaign,
-    CampaignRecipient,
     MessageTemplate,
     TemplateCarouselItem,
     AutoResponse,

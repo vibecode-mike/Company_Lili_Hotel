@@ -18,15 +18,14 @@ router = APIRouter()
 
 
 class TagCreate(BaseModel):
-    name: str
+    tag_name: str
     type: TagType
-    source: TagSource
-    description: Optional[str] = None
+    tag_source: TagSource
 
 
 class TagUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
+    tag_name: Optional[str] = None
+    tag_source: Optional[str] = None
 
 
 @router.get("", response_model=SuccessResponse)
@@ -44,13 +43,13 @@ async def get_tags(
     if type == TagType.MEMBER or type is None:
         query = select(MemberTag)
         if search:
-            query = query.where(MemberTag.name.like(f"%{search}%"))
+            query = query.where(MemberTag.tag_name.like(f"%{search}%"))
         if source:
-            query = query.where(MemberTag.source == source)
+            query = query.where(MemberTag.tag_source == source)
 
         # 排序
         if sort_by == "member_count":
-            order_col = MemberTag.member_count
+            order_col = MemberTag.trigger_member_count
         elif sort_by == "last_triggered_at":
             order_col = MemberTag.last_triggered_at
         else:
@@ -72,26 +71,25 @@ async def get_tags(
         items = [
             {
                 "id": t.id,
-                "name": t.name,
-                "type": t.type,
-                "source": t.source,
-                "member_count": t.member_count or 0,
+                "tag_name": t.tag_name,
+                "type": "member",
+                "tag_source": t.tag_source,
+                "trigger_member_count": t.trigger_member_count or 0,
                 "last_triggered_at": t.last_triggered_at.isoformat() if t.last_triggered_at else None,
                 "created_at": t.created_at.isoformat() if t.created_at else None,
-                "description": t.description,
             }
             for t in tags
         ]
     else:
         query = select(InteractionTag)
         if search:
-            query = query.where(InteractionTag.name.like(f"%{search}%"))
+            query = query.where(InteractionTag.tag_name.like(f"%{search}%"))
 
         # 排序
         if sort_by == "trigger_count":
             order_col = InteractionTag.trigger_count
         elif sort_by == "member_count":
-            order_col = InteractionTag.member_count
+            order_col = InteractionTag.trigger_member_count
         elif sort_by == "last_triggered_at":
             order_col = InteractionTag.last_triggered_at
         else:
@@ -113,14 +111,12 @@ async def get_tags(
         items = [
             {
                 "id": t.id,
-                "name": t.name,
-                "type": t.type,
+                "tag_name": t.tag_name,
+                "type": "interaction",
                 "trigger_count": t.trigger_count or 0,
-                "member_count": t.member_count or 0,
+                "trigger_member_count": t.trigger_member_count or 0,
                 "last_triggered_at": t.last_triggered_at.isoformat() if t.last_triggered_at else None,
                 "created_at": t.created_at.isoformat() if t.created_at else None,
-                "description": t.description,
-                "campaign_id": t.campaign_id,
             }
             for t in tags
         ]
@@ -140,30 +136,30 @@ async def create_tag(
 ):
     """新增標籤"""
     # 驗證標籤名稱長度
-    if len(tag_data.name) > 20:
+    if len(tag_data.tag_name) > 20:
         raise HTTPException(status_code=400, detail="標籤名稱不得超過 20 個字")
 
     # 檢查標籤是否已存在
     if tag_data.type == TagType.MEMBER:
         existing = await db.execute(
-            select(MemberTag).where(MemberTag.name == tag_data.name)
+            select(MemberTag).where(MemberTag.tag_name == tag_data.tag_name)
         )
         if existing.scalar_one_or_none():
             raise HTTPException(status_code=400, detail="標籤名稱已存在")
-        tag = MemberTag(**tag_data.model_dump())
+        tag = MemberTag(**tag_data.model_dump(exclude={'type'}))
     else:
         existing = await db.execute(
-            select(InteractionTag).where(InteractionTag.name == tag_data.name)
+            select(InteractionTag).where(InteractionTag.tag_name == tag_data.tag_name)
         )
         if existing.scalar_one_or_none():
             raise HTTPException(status_code=400, detail="標籤名稱已存在")
-        tag = InteractionTag(**tag_data.model_dump())
+        tag = InteractionTag(**tag_data.model_dump(exclude={'type'}))
 
     db.add(tag)
     await db.commit()
     await db.refresh(tag)
 
-    return SuccessResponse(data={"id": tag.id, "name": tag.name, "type": tag.type})
+    return SuccessResponse(data={"id": tag.id, "tag_name": tag.tag_name, "type": tag_data.type.value})
 
 
 @router.put("/{tag_id}", response_model=SuccessResponse)
@@ -176,7 +172,7 @@ async def update_tag(
 ):
     """更新標籤"""
     # 驗證標籤名稱長度
-    if tag_data.name and len(tag_data.name) > 20:
+    if tag_data.tag_name and len(tag_data.tag_name) > 20:
         raise HTTPException(status_code=400, detail="標籤名稱不得超過 20 個字")
 
     if tag_type == TagType.MEMBER:
@@ -186,9 +182,9 @@ async def update_tag(
             raise HTTPException(status_code=404, detail="標籤不存在")
 
         # 檢查名稱是否與其他標籤重複
-        if tag_data.name and tag_data.name != tag.name:
+        if tag_data.tag_name and tag_data.tag_name != tag.tag_name:
             existing = await db.execute(
-                select(MemberTag).where(MemberTag.name == tag_data.name)
+                select(MemberTag).where(MemberTag.tag_name == tag_data.tag_name)
             )
             if existing.scalar_one_or_none():
                 raise HTTPException(status_code=400, detail="標籤名稱已存在")
@@ -199,9 +195,9 @@ async def update_tag(
             raise HTTPException(status_code=404, detail="標籤不存在")
 
         # 檢查名稱是否與其他標籤重複
-        if tag_data.name and tag_data.name != tag.name:
+        if tag_data.tag_name and tag_data.tag_name != tag.tag_name:
             existing = await db.execute(
-                select(InteractionTag).where(InteractionTag.name == tag_data.name)
+                select(InteractionTag).where(InteractionTag.tag_name == tag_data.tag_name)
             )
             if existing.scalar_one_or_none():
                 raise HTTPException(status_code=400, detail="標籤名稱已存在")
@@ -252,8 +248,8 @@ async def get_tag_statistics(
     # 會員標籤最多使用
     most_used_member_tag_result = await db.execute(
         select(MemberTag)
-        .where(MemberTag.member_count.isnot(None))
-        .order_by(MemberTag.member_count.desc())
+        .where(MemberTag.trigger_member_count.isnot(None))
+        .order_by(MemberTag.trigger_member_count.desc())
         .limit(1)
     )
     most_used_member_tag = most_used_member_tag_result.scalar_one_or_none()
@@ -269,7 +265,7 @@ async def get_tag_statistics(
 
     # 總會員標籤數
     total_member_tags_result = await db.execute(
-        select(func.sum(MemberTag.member_count))
+        select(func.sum(MemberTag.trigger_member_count))
     )
     total_member_tags_sum = total_member_tags_result.scalar() or 0
 
@@ -288,8 +284,8 @@ async def get_tag_statistics(
         "most_used_member_tag": (
             {
                 "id": most_used_member_tag.id,
-                "name": most_used_member_tag.name,
-                "member_count": most_used_member_tag.member_count or 0,
+                "tag_name": most_used_member_tag.tag_name,
+                "trigger_member_count": most_used_member_tag.trigger_member_count or 0,
                 "type": "member",
             }
             if most_used_member_tag
@@ -298,7 +294,7 @@ async def get_tag_statistics(
         "most_triggered_interaction_tag": (
             {
                 "id": most_triggered_interaction_tag.id,
-                "name": most_triggered_interaction_tag.name,
+                "tag_name": most_triggered_interaction_tag.tag_name,
                 "trigger_count": most_triggered_interaction_tag.trigger_count or 0,
                 "type": "interaction",
             }
@@ -388,7 +384,7 @@ async def get_tag_trends(
     # 獲取前10個最活躍的標籤（MySQL 不支持 NULLS LAST，使用 COALESCE 處理）
     member_tags_result = await db.execute(
         select(MemberTag)
-        .order_by(func.coalesce(MemberTag.member_count, 0).desc())
+        .order_by(func.coalesce(MemberTag.trigger_member_count, 0).desc())
         .limit(10)
     )
     member_tags = member_tags_result.scalars().all()
@@ -405,13 +401,13 @@ async def get_tag_trends(
     for tag in member_tags:
         all_tags.append({
             "id": tag.id,
-            "name": tag.name,
+            "tag_name": tag.tag_name,
             "type": "member",
         })
     for tag in interaction_tags:
         all_tags.append({
             "id": tag.id,
-            "name": tag.name,
+            "tag_name": tag.tag_name,
             "type": "interaction",
         })
 
@@ -459,8 +455,8 @@ async def get_tag_trends(
                 )
                 member_count = member_count_result.scalar() or 0
 
-                trend_item[f"{tag['name']}_trigger"] = trigger_count
-                trend_item[f"{tag['name']}_member"] = member_count
+                trend_item[f"{tag['tag_name']}_trigger"] = trigger_count
+                trend_item[f"{tag['tag_name']}_member"] = member_count
             else:
                 # 會員標籤：統計當天新增的會員數（使用新的單表設計）
                 member_count_result = await db.execute(
@@ -468,7 +464,7 @@ async def get_tag_trends(
                     .select_from(MemberTag)
                     .where(
                         and_(
-                            MemberTag.tag_name == tag['name'],
+                            MemberTag.tag_name == tag['tag_name'],
                             MemberTag.tagged_at >= date_start,
                             MemberTag.tagged_at <= date_end
                         )
@@ -477,8 +473,8 @@ async def get_tag_trends(
                 member_count = member_count_result.scalar() or 0
 
                 # 會員標籤沒有觸發次數概念，設為0
-                trend_item[f"{tag['name']}_trigger"] = 0
-                trend_item[f"{tag['name']}_member"] = member_count
+                trend_item[f"{tag['tag_name']}_trigger"] = 0
+                trend_item[f"{tag['tag_name']}_member"] = member_count
 
         trends.append(trend_item)
 

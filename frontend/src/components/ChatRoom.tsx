@@ -68,7 +68,7 @@ export default function ChatRoom({ member, onBack }: ChatRoomProps) {
           <div className="box-border content-stretch flex gap-[4px] items-center pb-0 pt-[48px] px-[40px] relative w-full">
             <Breadcrumb 
               items={[
-                { label: '會員管理', href: '#' },
+                { label: '會員管理', onClick: onBack },
                 { label: member.username, active: true }
               ]} 
             />

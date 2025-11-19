@@ -4,6 +4,19 @@ import { SearchContainer } from "../components/common/SearchContainers";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../components/ui/tooltip";
 import TooltipComponent from "./Tooltip";
 import { PageHeaderWithBreadcrumb } from "../components/common/Breadcrumb";
+import { TextIconButton, ArrowRightIcon } from "../components/common";
+import { useMembers } from "../contexts/MembersContext";
+
+/**
+ * 會員管理列表頁面組件
+ * 
+ * 用途：顯示會員列表、搜索和管理會員
+ * 使用位置：
+ * - App.tsx (作為 MemberManagement)
+ * - MessageList.tsx (作為 MemberMainContainer)
+ * 
+ * 注意：此文件名為 Figma 導入時自動生成的名稱
+ */
 
 // 使用共享的 Member 类型
 export type { Member } from "../types/member";
@@ -15,45 +28,6 @@ interface MemberMainContainerProps {
   onViewDetail?: (member: Member) => void;
 }
 
-// Sample member data
-const SAMPLE_MEMBERS: Member[] = [
-  {
-    id: '1',
-    username: 'User Name',
-    realName: 'Real Name',
-    tags: ['優惠活動', '伴手禮', 'KOL'],
-    memberTags: ['VIP', '消費力高', '忠實顧客'],
-    interactionTags: ['優惠活動', '伴手禮', 'KOL'],
-    phone: '0987654321',
-    email: 'Chox.ox@gmail.com',
-    createTime: '2025-10-02 10:40',
-    lastChatTime: '2025-10-02 18:40'
-  },
-  {
-    id: '2',
-    username: 'JaneDoe88',
-    realName: 'Jane Doe',
-    tags: ['夏季特惠', '手工皂', 'BeautyBlogger'],
-    memberTags: ['新會員', '潛力客戶'],
-    interactionTags: ['夏季特惠', '手工皂', 'BeautyBlogger', '美容保養'],
-    phone: '0912345678',
-    email: 'JaneDoe88@example.com',
-    createTime: '2025-10-03 10:00',
-    lastChatTime: '2025-10-03 10:30'
-  },
-  {
-    id: '3',
-    username: 'ChocLover',
-    realName: 'John Smith',
-    tags: ['聖誕促銷', '巧克力禮盒', 'Foodie'],
-    memberTags: ['常客', '送禮需求', '節日購物'],
-    interactionTags: ['聖誕促銷', '巧克力禮盒', 'Foodie'],
-    phone: '0923456789',
-    email: 'john.smith@example.com',
-    createTime: '2025-10-04 14:20',
-    lastChatTime: '2025-10-04 16:45'
-  }
-];
 
 
 
@@ -488,7 +462,7 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Membe
               <div className="flex flex-row items-center size-full">
                 <div className="box-border content-stretch flex items-center px-[12px] py-0 relative w-full">
                   <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-                    <p className="leading-[1.5]">{member.username}</p>
+                    <p className="leading-[1.5]">{member.username || '未命名會員'}</p>
                   </div>
                 </div>
               </div>
@@ -496,30 +470,30 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Membe
           </div>
           <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[180px]" data-name="Table/List-atomic">
             <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[1.5]">{member.realName}</p>
+              <p className="leading-[1.5]">{member.realName || '-'}</p>
             </div>
           </div>
           <MemberTags member={member} />
           <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[140px]" data-name="Table/List-atomic">
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] w-[90px]">
-              <p className="leading-[1.5]">{member.phone}</p>
+              <p className="leading-[1.5]">{member.phone || '-'}</p>
             </div>
           </div>
           <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[200px]" data-name="Table/List-atomic">
             <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[1.5]">{member.email}</p>
+              <p className="leading-[1.5]">{member.email || '-'}</p>
             </div>
           </div>
           <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[140px]" data-name="Table/List-atomic">
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">{member.createTime}</p>
+              <p className="leading-[1.5] whitespace-pre">{member.createTime || '-'}</p>
             </div>
           </div>
           <div className="basis-0 grow min-h-px min-w-px relative shrink-0" data-name="Table/List-atomic">
             <div className="flex flex-row items-center size-full">
               <div className="box-border content-stretch flex items-center px-[12px] py-0 relative w-full">
                 <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-                  <p className="leading-[1.5]">{member.lastChatTime}</p>
+                  <p className="leading-[1.5]">{member.lastChatTime || '-'}</p>
                 </div>
               </div>
             </div>
@@ -531,26 +505,12 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Membe
           >
             <MynauiMessageSolid />
           </div>
-          <div onClick={() => onViewDetail?.(member)} className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 cursor-pointer hover:opacity-70 transition-opacity" data-name="Table/List-atomic">
-            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#0f6beb] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">詳細</p>
-            </div>
-            <div className="flex items-center justify-center relative shrink-0">
-              <div className="flex-none rotate-[180deg]">
-                <div className="overflow-clip relative size-[16px]" data-name="Arrow">
-                  <div className="absolute flex inset-[23.56%_36.29%_29.88%_36.27%] items-center justify-center">
-                    <div className="flex-none h-[4.39px] rotate-[90deg] w-[7.45px]">
-                      <div className="relative size-full" data-name="Vector">
-                        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 8 5">
-                          <path d={svgPaths.p1c38d100} fill="var(--fill-0, #0F6BEB)" id="Vector" />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <TextIconButton 
+            text="詳細"
+            icon={<ArrowRightIcon color="#0F6BEB" />}
+            onClick={() => onViewDetail?.(member)}
+            variant="primary"
+          />
         </div>
       </div>
     </div>
@@ -990,13 +950,15 @@ function MainContent({
   searchValue, 
   onSearchChange, 
   onSearch, 
-  onClearSearch,
-  filteredMembers,
-  sortBy,
-  onSortChange,
-  onAddMember,
-  onOpenChat,
-  onViewDetail
+  onClearSearch, 
+  filteredMembers, 
+  sortBy, 
+  onSortChange, 
+  onAddMember, 
+  onOpenChat, 
+  onViewDetail,
+  isLoading,
+  error,
 }: { 
   searchValue: string; 
   onSearchChange: (value: string) => void;
@@ -1008,6 +970,8 @@ function MainContent({
   onAddMember?: () => void;
   onOpenChat?: (member: Member) => void;
   onViewDetail?: (member: Member) => void;
+  isLoading: boolean;
+  error: string | null;
 }) {
   return (
     <div className="relative shrink-0 w-full" data-name="Main Content">
@@ -1031,7 +995,24 @@ function MainContent({
           
           {/* Table */}
           <div className="px-[40px] pb-[40px] w-full">
-            <Table8Columns3Actions members={filteredMembers} sortBy={sortBy} onSortChange={onSortChange} onOpenChat={onOpenChat} onViewDetail={onViewDetail} />
+            {isLoading ? (
+              <div className="flex h-[240px] items-center justify-center rounded-[16px] border border-dashed border-[#dddddd] bg-white text-[#6e6e6e]">
+                <div className="flex flex-col items-center gap-2 text-sm">
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#0f6beb] border-r-transparent" />
+                  <span>資料載入中...</span>
+                </div>
+              </div>
+            ) : error ? (
+              <div className="flex h-[240px] items-center justify-center rounded-[16px] border border-dashed border-red-200 bg-white text-red-500">
+                {error}
+              </div>
+            ) : filteredMembers.length > 0 ? (
+              <Table8Columns3Actions members={filteredMembers} sortBy={sortBy} onSortChange={onSortChange} onOpenChat={onOpenChat} onViewDetail={onViewDetail} />
+            ) : (
+              <div className="flex h-[240px] items-center justify-center rounded-[16px] border border-dashed border-[#dddddd] bg-white text-[#6e6e6e]">
+                尚無會員資料
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1040,34 +1021,33 @@ function MainContent({
 }
 
 export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }: MemberMainContainerProps = {}) {
+  const { members, isLoading, error } = useMembers();
   const [searchValue, setSearchValue] = useState('');
   const [appliedSearchValue, setAppliedSearchValue] = useState('');
   const [sortBy, setSortBy] = useState<SortField>('lastChatTime');
 
   // Helper function to parse date strings
-  const parseDateTime = (dateStr: string): number => {
-    const parts = dateStr.split(' ');
-    if (parts.length !== 2) return 0;
-    const [datePart, timePart] = parts;
-    const [year, month, day] = datePart.split('-').map(Number);
-    const [hour, minute] = timePart.split(':').map(Number);
-    return new Date(year, month - 1, day, hour, minute).getTime();
+  const parseDateTime = (dateStr?: string): number => {
+    if (!dateStr) return 0;
+    const normalized = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T');
+    const timestamp = Date.parse(normalized);
+    return Number.isNaN(timestamp) ? 0 : timestamp;
   };
 
   // Filter and sort members
   const filteredMembers = useMemo(() => {
-    let result = SAMPLE_MEMBERS;
+    let result = members;
     
     // Apply search filter
     if (appliedSearchValue.trim()) {
       const searchLower = appliedSearchValue.toLowerCase();
       result = result.filter((member) => {
         return (
-          member.username.toLowerCase().includes(searchLower) ||
-          member.realName.toLowerCase().includes(searchLower) ||
-          member.tags.some(tag => tag.toLowerCase().includes(searchLower)) ||
-          member.phone.includes(searchLower) ||
-          member.email.toLowerCase().includes(searchLower)
+          (member.username || '').toLowerCase().includes(searchLower) ||
+          (member.realName || '').toLowerCase().includes(searchLower) ||
+          (member.tags || []).some(tag => tag.toLowerCase().includes(searchLower)) ||
+          (member.phone || '').includes(searchLower) ||
+          (member.email || '').toLowerCase().includes(searchLower)
         );
       });
     }
@@ -1093,7 +1073,7 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
     });
 
     return sorted;
-  }, [appliedSearchValue, sortBy]);
+  }, [members, appliedSearchValue, sortBy]);
 
   const handleSearch = () => {
     setAppliedSearchValue(searchValue);
@@ -1131,6 +1111,8 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
         onAddMember={onAddMember}
         onOpenChat={onOpenChat}
         onViewDetail={onViewDetail}
+        isLoading={isLoading}
+        error={error}
       />
     </div>
   );

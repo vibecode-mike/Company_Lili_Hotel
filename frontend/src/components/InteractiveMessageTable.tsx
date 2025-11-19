@@ -1,5 +1,10 @@
-import { useState } from 'react';
+import { useState, useMemo, memo } from 'react';
+import svgPaths from "../imports/svg-noih6nla1w";
+import { TextIconButton } from './common/buttons';
+import { ArrowRightIcon } from './common/icons/ArrowIcon';
 import ButtonEdit from '../imports/ButtonEdit';
+import IcInfo from '../imports/IcInfo';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 export interface Message {
   id: string;
@@ -17,12 +22,13 @@ interface InteractiveMessageTableProps {
   messages: Message[];
   onEdit: (id: string) => void;
   onViewDetails: (id: string) => void;
+  statusFilter: string;
 }
 
 type SortField = 'title' | 'tags' | 'platform' | 'status' | 'sentCount' | 'openCount' | 'clickCount' | 'sendTime';
 
-// Table Header Component
-function TableHeader({ sortBy, onSortChange }: { sortBy: SortField | null; onSortChange: (field: SortField) => void }) {
+// Memoized Table Header Component
+const TableHeader = memo(function TableHeader({ sortBy, onSortChange, statusFilter }: { sortBy: SortField | null; onSortChange: (field: SortField) => void; statusFilter: string }) {
   const SortIcon = ({
     column,
     isActive
@@ -44,6 +50,13 @@ function TableHeader({ sortBy, onSortChange }: { sortBy: SortField | null; onSor
         </div>
       </div>
     );
+  };
+
+  // Determine time column label based on status filter
+  const getTimeColumnLabel = () => {
+    if (statusFilter === '已排程') return '預計發送時間';
+    if (statusFilter === '草稿') return '最後更新時間';
+    return '發送時間'; // Default for '已發送'
   };
 
   return (
@@ -191,24 +204,41 @@ function TableHeader({ sortBy, onSortChange }: { sortBy: SortField | null; onSor
             </div>
           </div>
 
-          {/* 發送時間 */}
+          {/* 時間欄位 - 動態標籤 */}
           <div 
             className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[150px] cursor-pointer"
             onClick={() => onSortChange('sendTime')}
           >
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">發送時間</p>
+              <p className="leading-[1.5] whitespace-pre">{getTimeColumnLabel()}</p>
             </div>
+            {statusFilter === '草稿' && (
+              <TooltipProvider>
+                <Tooltip delayDuration={0}>
+                  <TooltipTrigger asChild>
+                    <div 
+                      className="relative shrink-0 size-[24px]"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <IcInfo />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>草稿不會因發送而移除，可重複使用</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
             <SortIcon column="sendTime" isActive={sortBy === 'sendTime'} />
           </div>
         </div>
       </div>
     </div>
   );
-}
+});
 
-// Message Row Component
-function MessageRow({ 
+// Memoized Message Row Component
+const MessageRow = memo(function MessageRow({ 
   message, 
   isLast, 
   onEdit, 
@@ -237,16 +267,7 @@ function MessageRow({
   const EditButton = () => {
     const isDisabled = message.status === '已發送';
     return (
-      <div 
-        className={`${
-          isDisabled 
-            ? 'cursor-not-allowed opacity-50' 
-            : ''
-        }`}
-        onClick={() => !isDisabled && onEdit(message.id)}
-      >
-        <ButtonEdit />
-      </div>
+      <ButtonEdit onClick={() => onEdit(message.id)} hidden={isDisabled} />
     );
   };
 
@@ -315,7 +336,7 @@ function MessageRow({
             </div>
           </div>
 
-          {/* 發送時間 */}
+          {/* 時間欄位 - 動態標籤 */}
           <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[150px]">
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
               <p className="leading-[1.5] whitespace-nowrap">{message.sendTime}</p>
@@ -326,26 +347,19 @@ function MessageRow({
           <EditButton />
 
           {/* 詳細按鈕 */}
-          <div 
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 cursor-pointer hover:bg-[#f0f6ff] transition-colors rounded-[8px]"
+          <TextIconButton 
+            text="詳細"
+            icon={<ArrowRightIcon color="#0F6BEB" />}
             onClick={() => onViewDetails(message.id)}
-          >
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#0f6beb] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">詳細</p>
-            </div>
-            <div className="flex items-center justify-center relative shrink-0">
-              <div className="flex-none scale-y-[-100%]">
-                <Arrow />
-              </div>
-            </div>
-          </div>
+            variant="primary"
+          />
         </div>
       </div>
     </div>
   );
-}
+});
 
-export default function InteractiveMessageTable({ messages, onEdit, onViewDetails }: InteractiveMessageTableProps) {
+export default function InteractiveMessageTable({ messages, onEdit, onViewDetails, statusFilter }: InteractiveMessageTableProps) {
   const [sortBy, setSortBy] = useState<SortField | null>('sendTime');
 
   const handleSort = (field: SortField) => {
@@ -358,7 +372,7 @@ export default function InteractiveMessageTable({ messages, onEdit, onViewDetail
       <div className="bg-white rounded-[16px] w-full flex flex-col max-h-[600px] overflow-x-auto table-scroll">
         {/* Table Header - Fixed */}
         <div className="relative shrink-0 w-[1250px]">
-          <TableHeader sortBy={sortBy} onSortChange={handleSort} />
+          <TableHeader sortBy={sortBy} onSortChange={handleSort} statusFilter={statusFilter} />
         </div>
         
         {/* Table Body - Scrollable Container */}

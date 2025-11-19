@@ -57,11 +57,24 @@ function ModeEdit() {
   );
 }
 
-export default function ButtonEdit({ className }: { className?: string }) {
+export default function ButtonEdit({
+  onClick,
+  className,
+  hidden = false
+}: {
+  onClick?: () => void;
+  className?: string;
+  hidden?: boolean;
+}) {
+  if (hidden) {
+    return null;
+  }
+
   return (
     <div 
-      className={`relative rounded-[8px] transition-colors hover:bg-[#f0f6ff] active:bg-[#f0f6ff] ${className || 'size-[28px]'}`}
+      className={`relative rounded-[8px] transition-colors hover:bg-[#f0f6ff] active:bg-[#f0f6ff] cursor-pointer ${className || 'size-[28px]'}`}
       data-name="Button/Edit"
+      onClick={onClick}
     >
       <ModeEdit />
     </div>

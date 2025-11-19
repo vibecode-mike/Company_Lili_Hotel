@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, memo } from 'react';
 import { Plus, Upload, Copy, Trash2 } from 'lucide-react';
 import { Checkbox } from './ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import svgPaths from '../imports/svg-708vqjfcuf';
 import imgImageHero from "figma:asset/68b289cb927cef11d11501fd420bb560ad25c667.png";
 
-interface CarouselCard {
+export interface CarouselCard {
   id: number;
   enableImage: boolean;
   enableTitle: boolean;
@@ -64,10 +64,11 @@ interface CarouselMessageEditorProps {
   onAddCarousel: () => void;
   onUpdateCard: (updates: Partial<CarouselCard>) => void;
   onCopyCard?: () => void;
+  onImageUpload?: (file: File) => Promise<string | null>;
 }
 
 // LINE Flex Message 風格的卡片預覽組件
-function FlexMessageCardPreview({ card }: { card: CarouselCard }) {
+export const FlexMessageCardPreview = memo(function FlexMessageCardPreview({ card }: { card: CarouselCard }) {
   return (
     <div className="bg-white rounded-[10px] shadow-[0px_20px_25px_-5px_rgba(0,0,0,0.1),0px_8px_10px_-6px_rgba(0,0,0,0.1)] w-[300px] overflow-hidden">
       {/* Hero Image */}
@@ -188,7 +189,7 @@ function FlexMessageCardPreview({ card }: { card: CarouselCard }) {
       )}
     </div>
   );
-}
+});
 
 export default function CarouselMessageEditor({
   cards,
@@ -196,59 +197,29 @@ export default function CarouselMessageEditor({
   onTabChange,
   onAddCarousel,
   onUpdateCard,
-  onCopyCard
+  onCopyCard,
+  onImageUpload
 }: CarouselMessageEditorProps) {
   const imageUploadRef = useRef<HTMLInputElement>(null);
   const currentCard = cards.find(c => c.id === activeTab) || cards[0];
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-
-    // 檢查文件大小（最大 5MB）
-    const maxSize = 5 * 1024 * 1024;
-    if (file.size > maxSize) {
-      toast.error('圖片大小不能超過 5MB');
-      return;
-    }
-
-    // 檢查文件類型
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
-    if (!allowedTypes.includes(file.type)) {
-      toast.error('只支持 JPG、PNG、GIF 格式的圖片');
-      return;
-    }
-
-    try {
-      // 顯示上傳中提示
-      toast.loading('上傳圖片中...', { id: 'image-upload' });
-
-      // 上傳圖片到服務器
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch('/api/v1/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || '上傳失敗');
+    if (file) {
+      if (onImageUpload) {
+        // Use parent's upload handler (uploads to backend)
+        const imageUrl = await onImageUpload(file);
+        if (imageUrl) {
+          onUpdateCard({ image: imageUrl });
+        }
+      } else {
+        // Fallback to base64 if no upload handler provided
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          onUpdateCard({ image: reader.result as string });
+        };
+        reader.readAsDataURL(file);
       }
-
-      const result = await response.json();
-      const imageUrl = result.data.url;
-
-      // 更新卡片圖片為 URL
-      onUpdateCard({ image: imageUrl });
-
-      toast.success('圖片上傳成功', { id: 'image-upload' });
-    } catch (error) {
-      console.error('圖片上傳失敗:', error);
-      toast.error(error instanceof Error ? error.message : '圖片上傳失敗', {
-        id: 'image-upload'
-      });
     }
   };
 
@@ -284,19 +255,19 @@ export default function CarouselMessageEditor({
         <div className="flex-1 flex flex-col gap-[12px]">
           {/* Carousel Tabs */}
           <div className="relative h-[40px] w-full">
-            <div className="flex items-center gap-[8px]">
-              <div className="bg-neutral-100 rounded-[10px] p-[4px] flex items-center gap-[4px]">
+            <div className="flex items-center gap-[8px] flex-nowrap overflow-x-auto">
+              <div className="bg-neutral-100 rounded-[10px] p-[4px] flex items-center gap-[4px] flex-nowrap shrink-0">
                 {cards.map((card) => (
                   <button
                     key={card.id}
                     onClick={() => onTabChange(card.id)}
-                    className={`h-[32px] px-[16px] rounded-[10px] flex items-center transition-all ${
+                    className={`h-[32px] px-[16px] rounded-[10px] flex items-center transition-all shrink-0 whitespace-nowrap ${
                       card.id === activeTab
                         ? 'bg-white shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_-1px_rgba(0,0,0,0.1)]'
                         : 'hover:bg-white/50'
                     }`}
                   >
-                    <p className={`text-[14px] leading-[20px] ${
+                    <p className={`text-[14px] leading-[20px] whitespace-nowrap ${
                       card.id === activeTab ? 'text-[#101828]' : 'text-[#6a7282]'
                     }`}>
                       輪播 {card.id}
@@ -308,10 +279,10 @@ export default function CarouselMessageEditor({
               {cards.length < 10 && (
                 <button
                   onClick={onAddCarousel}
-                  className="h-[32px] px-[8px] flex items-center gap-[6px] hover:bg-gray-50 rounded transition-colors"
+                  className="h-[32px] px-[8px] flex items-center gap-[6px] hover:bg-gray-50 rounded transition-colors shrink-0 whitespace-nowrap"
                 >
-                  <Plus className="size-[16px] text-[#0f6beb]" strokeWidth={1.33} />
-                  <span className="text-[14px] leading-[20px] text-[#0f6beb]">新增輪播</span>
+                  <Plus className="size-[16px] text-[#0f6beb] shrink-0" strokeWidth={1.33} />
+                  <span className="text-[14px] leading-[20px] text-[#0f6beb] whitespace-nowrap">新增輪播</span>
                 </button>
               )}
             </div>

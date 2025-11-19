@@ -1,123 +1,134 @@
 """
-群發訊息 API（向後兼容）
-職責：HTTP 請求處理、參數驗證、回應格式化
-業務邏輯委託給 CampaignService
-
-⚠️ 重要說明：資料庫重構後的語意變更
-===========================================
-在 v0.2 資料庫重構後：
-- 此 API 路由 (/campaigns) 實際操作的是「群發訊息」功能（對應 messages 表）
-- 新的「活動管理」功能請使用 /campaigns_new API（對應 campaigns 表）
-
-為了向後兼容，此 API 保持不變，但請注意：
-- Campaign 模型現在實際上是 Message 模型（群發訊息）
-- 建議新專案使用 /messages 端點（待實施）
-- 活動管理使用 /campaigns_new 端點
-
-資料表對應關係：
-- 原 campaigns 表 → 現 messages 表（群發訊息）
-- 新 campaigns 表 → 活動管理
+活動管理 API（新語意）
+職責：管理行銷活動，與群發訊息分離
+注意：此 API 用於活動管理，群發訊息功能請使用 /campaigns API（向後兼容）
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 from app.database import get_db
-from app.schemas.campaign import CampaignCreate
-from app.services.campaign_service import campaign_service
-from typing import List, Dict, Any
+from app.models.campaign import Campaign
+from app.schemas.campaign import (
+    CampaignCreateNew,
+    CampaignUpdateNew,
+    CampaignListItemNew,
+    CampaignDetailNew,
+    CampaignSearchParams as CampaignSearchParamsNew
+)
+from typing import List, Optional
+from datetime import date
 import logging
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# ============================================================
-# API 路由：僅處理 HTTP 請求，業務邏輯委託給 Service 層
-# ============================================================
-
 
 @router.post("", response_model=dict)
 async def create_campaign(
-    campaign_data: CampaignCreate,
+    data: CampaignCreateNew,
     db: AsyncSession = Depends(get_db),
 ):
     """
-    創建活動推播
+    創建活動
 
-    業務邏輯委託給 CampaignService，此路由僅負責：
-    - 參數驗證（由 Pydantic 自動處理）
-    - 調用服務層
-    - 格式化回應
+    Args:
+        data: 活動資料
+        db: 資料庫 session
+
+    Returns:
+        創建的活動 ID
     """
     try:
-        campaign = await campaign_service.create_campaign(db, campaign_data)
+        campaign = Campaign(**data.model_dump())
+        db.add(campaign)
+        await db.commit()
+        await db.refresh(campaign)
 
         return {
             "code": 200,
             "message": "活動創建成功",
-            "data": {
-                "id": campaign.id,
-                "title": campaign.title,
-                "status": campaign.status.value,
-                "sent_count": campaign.sent_count or 0,
-            }
+            "data": {"id": campaign.id, "campaign_name": campaign.campaign_name}
         }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"❌ Failed to create campaign: {e}")
-        raise HTTPException(status_code=500, detail=f"創建活動失敗: {str(e)}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"創建失敗: {str(e)}")
 
 
-@router.get("", response_model=List[dict])
-async def get_campaigns(
-    status_filter: str = None,
-    search: str = None,
-    page: int = 1,
-    limit: int = 20,
+@router.get("", response_model=dict)
+async def list_campaigns(
+    campaign_tag: Optional[str] = Query(None, description="活動標籤篩選"),
+    start_date: Optional[date] = Query(None, description="開始日期"),
+    end_date: Optional[date] = Query(None, description="結束日期"),
+    status: Optional[str] = Query(None, description="狀態篩選"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
     """
     獲取活動列表
 
-    支援功能：
-    - 狀態篩選 (draft, scheduled, sent)
-    - 搜索 (標題和標籤模糊搜索)
-    - 分頁
+    Args:
+        campaign_tag: 活動標籤
+        start_date: 開始日期
+        end_date: 結束日期
+        status: 活動狀態
+        page: 頁碼
+        page_size: 每頁數量
+        db: 資料庫 session
 
-    業務邏輯委託給 CampaignService
+    Returns:
+        活動列表
     """
     try:
-        campaigns, total = await campaign_service.list_campaigns(
-            db,
-            status_filter=status_filter,
-            search=search,
-            page=page,
-            limit=limit
-        )
+        # 構建查詢
+        query = select(Campaign)
 
-        # 獲取 ryan_click_demo 的點擊計數
-        campaign_ids = [c.id for c in campaigns]
-        ryan_click_counts = await campaign_service.get_click_counts_from_ryan_demo(
-            db, campaign_ids
-        )
+        if campaign_tag:
+            query = query.where(Campaign.campaign_tag == campaign_tag)
+        if start_date:
+            query = query.where(Campaign.start_date >= start_date)
+        if end_date:
+            query = query.where(Campaign.end_date <= end_date)
+        if status:
+            query = query.where(Campaign.status == status)
 
-        return [
-            {
-                "id": c.id,
-                "title": c.title,
-                "status": c.status.value.lower() if hasattr(c.status, 'value') else str(c.status).lower(),
-                "platform": "LINE",  # 目前固定為 LINE
-                "interaction_tags": c.interaction_tags or [],  # 多標籤數組
-                "target_count": c.sent_count,
-                "open_count": c.opened_count,
-                "click_count": ryan_click_counts.get(c.id, 0),  # 使用 ryan_click_demo 的計數
-                "sent_at": c.sent_at.strftime("%Y-%m-%d %H:%M") if c.sent_at else None,
-                "scheduled_at": c.scheduled_at.strftime("%Y-%m-%d %H:%M") if c.scheduled_at else None,
+        # 計算總數
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar()
+
+        # 分頁查詢
+        query = query.order_by(Campaign.created_at.desc())
+        query = query.offset((page - 1) * page_size).limit(page_size)
+        result = await db.execute(query)
+        campaigns = result.scalars().all()
+
+        return {
+            "code": 200,
+            "data": {
+                "items": [
+                    {
+                        "id": c.id,
+                        "campaign_name": c.campaign_name,
+                        "campaign_tag": c.campaign_tag,
+                        "campaign_date": c.campaign_date.isoformat() if c.campaign_date else None,
+                        "start_date": c.start_date.isoformat() if c.start_date else None,
+                        "end_date": c.end_date.isoformat() if c.end_date else None,
+                        "status": c.status,
+                        "created_at": c.created_at.isoformat() if c.created_at else None,
+                    }
+                    for c in campaigns
+                ],
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": (total + page_size - 1) // page_size
             }
-            for c in campaigns
-        ]
+        }
     except Exception as e:
         logger.error(f"❌ Failed to list campaigns: {e}")
-        raise HTTPException(status_code=500, detail=f"獲取活動列表失敗: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"查詢失敗: {str(e)}")
 
 
 @router.get("/{campaign_id}", response_model=dict)
@@ -126,62 +137,80 @@ async def get_campaign(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    獲取單一活動詳情
+    獲取單個活動詳情
 
-    業務邏輯委託給 CampaignService
+    Args:
+        campaign_id: 活動 ID
+        db: 資料庫 session
+
+    Returns:
+        活動詳情
     """
-    try:
-        campaign = await campaign_service.get_campaign_by_id(db, campaign_id)
-        if not campaign:
-            raise HTTPException(status_code=404, detail=f"活動 {campaign_id} 不存在")
+    query = select(Campaign).where(Campaign.id == campaign_id)
+    result = await db.execute(query)
+    campaign = result.scalar_one_or_none()
 
-        return {
-            "code": 200,
-            "data": {
-                "id": campaign.id,
-                "title": campaign.title,
-                "status": campaign.status.value,
-                "template": {
-                    "id": campaign.template.id,
-                    # 移除 type 欄位，因為現在使用 Flex Message JSON
-                    "notification_text": campaign.template.notification_text,
-                    "preview_text": campaign.template.preview_text,
-                },
-                "target_audience": campaign.target_audience,
-                "scheduled_at": campaign.scheduled_at.isoformat() if campaign.scheduled_at else None,
-                "sent_at": campaign.sent_at.isoformat() if campaign.sent_at else None,
-                "sent_count": campaign.sent_count,
-            }
+    if not campaign:
+        raise HTTPException(status_code=404, detail="活動不存在")
+
+    return {
+        "code": 200,
+        "data": {
+            "id": campaign.id,
+            "campaign_name": campaign.campaign_name,
+            "campaign_tag": campaign.campaign_tag,
+            "campaign_date": campaign.campaign_date.isoformat() if campaign.campaign_date else None,
+            "start_date": campaign.start_date.isoformat() if campaign.start_date else None,
+            "end_date": campaign.end_date.isoformat() if campaign.end_date else None,
+            "description": campaign.description,
+            "status": campaign.status,
+            "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
+            "updated_at": campaign.updated_at.isoformat() if campaign.updated_at else None,
         }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ Failed to get campaign: {e}")
-        raise HTTPException(status_code=500, detail=f"獲取活動失敗: {str(e)}")
+    }
 
 
-@router.post("/{campaign_id}/send", response_model=dict)
-async def send_campaign(
+@router.put("/{campaign_id}", response_model=dict)
+async def update_campaign(
     campaign_id: int,
+    data: CampaignUpdateNew,
     db: AsyncSession = Depends(get_db),
 ):
     """
-    立即發送活動
+    更新活動
 
-    業務邏輯委託給 CampaignService
+    Args:
+        campaign_id: 活動 ID
+        data: 更新資料
+        db: 資料庫 session
+
+    Returns:
+        更新結果
     """
+    query = select(Campaign).where(Campaign.id == campaign_id)
+    result = await db.execute(query)
+    campaign = result.scalar_one_or_none()
+
+    if not campaign:
+        raise HTTPException(status_code=404, detail="活動不存在")
+
     try:
-        result = await campaign_service.send_campaign(db, campaign_id)
+        # 更新字段
+        for field, value in data.model_dump(exclude_unset=True).items():
+            setattr(campaign, field, value)
+
+        await db.commit()
+        await db.refresh(campaign)
+
         return {
             "code": 200,
-            "message": f"活動已發送給 {result.get('sent', 0)} 位用戶",
-            "data": result
+            "message": "更新成功",
+            "data": {"id": campaign.id}
         }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"❌ Failed to send campaign: {e}")
-        raise HTTPException(status_code=500, detail=f"發送活動失敗: {str(e)}")
+        logger.error(f"❌ Failed to update campaign: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"更新失敗: {str(e)}")
 
 
 @router.delete("/{campaign_id}", response_model=dict)
@@ -190,126 +219,31 @@ async def delete_campaign(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    刪除活動（僅草稿可刪除）
+    刪除活動
 
-    業務邏輯委託給 CampaignService
+    Args:
+        campaign_id: 活動 ID
+        db: 資料庫 session
+
+    Returns:
+        刪除結果
     """
+    query = select(Campaign).where(Campaign.id == campaign_id)
+    result = await db.execute(query)
+    campaign = result.scalar_one_or_none()
+
+    if not campaign:
+        raise HTTPException(status_code=404, detail="活動不存在")
+
     try:
-        success = await campaign_service.delete_campaign(db, campaign_id)
-        if not success:
-            raise HTTPException(status_code=404, detail=f"活動 {campaign_id} 不存在")
+        await db.delete(campaign)
+        await db.commit()
 
         return {
             "code": 200,
-            "message": "活動已刪除"
+            "message": "刪除成功"
         }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"❌ Failed to delete campaign: {e}")
-        raise HTTPException(status_code=500, detail=f"刪除活動失敗: {str(e)}")
-
-
-@router.post("/estimate-recipients", response_model=dict)
-async def estimate_recipients(
-    request_data: Dict[str, Any],
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    預計發送好友人數計算
-
-    根據篩選條件（target_audience）計算符合條件的會員數量
-
-    Request Body:
-    {
-        "type": "all" | "filtered",
-        "condition": "include" | "exclude",
-        "tags": ["tag1", "tag2", ...]
-    }
-
-    Response:
-    {
-        "code": 200,
-        "data": {
-            "count": 123
-        }
-    }
-    """
-    try:
-        from app.models.member import Member
-        from app.models.tag import MemberTagRelation, TagType
-        from sqlalchemy import select, func, and_, exists
-
-        target_type = request_data.get("type", "all")
-        condition = request_data.get("condition", "include")
-        tags = request_data.get("tags", [])
-
-        # 如果是所有好友，直接返回全部會員數量
-        if target_type == "all":
-            count_query = select(func.count()).select_from(Member)
-            result = await db.execute(count_query)
-            total_count = result.scalar() or 0
-
-            return {
-                "code": 200,
-                "data": {
-                    "count": total_count
-                }
-            }
-
-        # 篩選目標對象
-        if not tags:
-            return {
-                "code": 200,
-                "data": {
-                    "count": 0
-                }
-            }
-
-        # 根據包含/排除條件計算
-        if condition == "include":
-            # 包含：擁有任一標籤的會員
-            subquery = (
-                select(MemberTagRelation.member_id)
-                .where(
-                    and_(
-                        MemberTagRelation.tag_type == TagType.MEMBER,
-                        MemberTagRelation.tag_id.in_(tags)
-                    )
-                )
-                .distinct()
-            )
-            count_query = select(func.count()).select_from(
-                select(Member.id).where(Member.id.in_(subquery)).subquery()
-            )
-        else:
-            # 排除：不擁有任何指定標籤的會員
-            subquery = (
-                select(MemberTagRelation.member_id)
-                .where(
-                    and_(
-                        MemberTagRelation.tag_type == TagType.MEMBER,
-                        MemberTagRelation.tag_id.in_(tags)
-                    )
-                )
-                .distinct()
-            )
-            count_query = select(func.count()).select_from(
-                select(Member.id).where(~Member.id.in_(subquery)).subquery()
-            )
-
-        result = await db.execute(count_query)
-        filtered_count = result.scalar() or 0
-
-        return {
-            "code": 200,
-            "data": {
-                "count": filtered_count
-            }
-        }
-
-    except Exception as e:
-        logger.error(f"❌ Failed to estimate recipients: {e}")
-        raise HTTPException(status_code=500, detail=f"預計人數計算失敗: {str(e)}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"刪除失敗: {str(e)}")

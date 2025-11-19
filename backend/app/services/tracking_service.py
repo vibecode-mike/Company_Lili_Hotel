@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 import logging
 
 from app.models.tracking import ComponentInteractionLog, InteractionType
-from app.models.campaign import Campaign
+from app.models.message import Message
 from app.models.template import MessageTemplate, TemplateCarouselItem
 from app.models.tag import InteractionTag
 
@@ -199,10 +199,10 @@ class TrackingService:
         """
         # 查詢活動
         campaign_stmt = (
-            select(Campaign)
-            .where(Campaign.id == campaign_id)
+            select(Message)
+            .where(Message.id == campaign_id)
             .options(
-                selectinload(Campaign.template).selectinload(
+                selectinload(Message.template).selectinload(
                     MessageTemplate.carousel_items
                 )
             )

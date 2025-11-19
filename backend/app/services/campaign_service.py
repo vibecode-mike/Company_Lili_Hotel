@@ -1,6 +1,6 @@
 """
-活动推播业务逻辑层
-职责：处理活动相关的业务逻辑，与数据库和外部服务交互
+活动推播业务逻辑层 - v0.2 统一新架构
+职责：处理群发消息相关的业务逻辑，与数据库和外部服务交互
 """
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -10,10 +10,10 @@ from sqlalchemy.orm import selectinload
 import logging
 import json
 
-from app.models.campaign import Campaign, CampaignStatus, CampaignRecipient
+from app.models.message import Message
 from app.models.template import MessageTemplate, TemplateCarouselItem, TemplateType
 from app.models.tracking import ClickTrackingDemo
-from app.schemas.campaign import CampaignCreate, CampaignUpdate
+from app.schemas.message import MessageCreate, MessageUpdate
 from app.services.scheduler import scheduler
 
 logger = logging.getLogger(__name__)
@@ -25,8 +25,8 @@ class CampaignService:
     async def create_campaign(
         self,
         db: AsyncSession,
-        campaign_data: CampaignCreate
-    ) -> Campaign:
+        campaign_data: MessageCreate
+    ) -> Message:
         """
         创建活动推播
 
@@ -82,17 +82,17 @@ class CampaignService:
         # 5. 根据 schedule_type 决定状态
         scheduled_at = campaign_data.scheduled_at
         if campaign_data.schedule_type == "draft":
-            status = CampaignStatus.DRAFT
+            send_status = "草稿"
         elif campaign_data.schedule_type == "immediate":
             # 立即發佈在實際送出前維持為草稿，送出後再更新狀態
-            status = CampaignStatus.DRAFT
+            send_status = "草稿"
         elif campaign_data.schedule_type == "scheduled":
             if scheduled_at and scheduled_at > datetime.now():
-                status = CampaignStatus.SCHEDULED
+                send_status = "已排程"
             else:
-                status = CampaignStatus.SENT
+                send_status = "已發送"
         else:
-            status = CampaignStatus.DRAFT
+            send_status = "草稿"
 
         # 6. 从 flex_message_json 解析互动标签
         interaction_tags = []
@@ -102,14 +102,14 @@ class CampaignService:
             )
 
         # 7. 创建活动
-        campaign = Campaign(
-            title=campaign_data.title or "未命名活动",
+        campaign = Message(
+            message_content=campaign_data.title or "未命名活动",
             template_id=template.id,
             target_audience=target_audience,
             trigger_condition=trigger_condition,
             interaction_tags=interaction_tags,  # 使用解析出的标签
-            scheduled_at=scheduled_at,
-            status=status,
+            scheduled_datetime_utc=scheduled_at,
+            send_status=send_status,
             flex_message_json=campaign_data.flex_message_json,  # Flex Message JSON
         )
         db.add(campaign)
@@ -127,12 +127,12 @@ class CampaignService:
             sent_count = result.get("sent", 0) if isinstance(result, dict) else 0
             ok = bool(result.get("ok")) and sent_count > 0 if isinstance(result, dict) else False
 
-            campaign.sent_count = sent_count
+            campaign.send_count = sent_count
             if ok:
-                campaign.status = CampaignStatus.SENT
-                campaign.sent_at = datetime.now()
+                campaign.send_status = "已發送"
+                campaign.send_time = datetime.now()
             else:
-                campaign.status = CampaignStatus.FAILED
+                campaign.send_status = "發送失敗"
             await db.commit()
             await db.refresh(campaign)
 
@@ -142,14 +142,14 @@ class CampaignService:
         if campaign_data.scheduled_at:
             await self._schedule_campaign(campaign)
 
-        logger.info(f"✅ Created campaign: {campaign.title} (ID: {campaign.id})")
+        logger.info(f"✅ Created campaign: {campaign.message_content} (ID: {campaign.id})")
         return campaign
 
     async def get_campaign_by_id(
         self,
         db: AsyncSession,
         campaign_id: int
-    ) -> Optional[Campaign]:
+    ) -> Optional[Message]:
         """
         获取活动详情
 
@@ -161,11 +161,11 @@ class CampaignService:
             活动对象或 None
         """
         query = (
-            select(Campaign)
+            select(Message)
             .options(
-                selectinload(Campaign.template).selectinload(MessageTemplate.carousel_items)
+                selectinload(Message.template).selectinload(MessageTemplate.carousel_items)
             )
-            .where(Campaign.id == campaign_id)
+            .where(Message.id == campaign_id)
         )
         result = await db.execute(query)
         return result.scalar_one_or_none()
@@ -177,7 +177,7 @@ class CampaignService:
         search: Optional[str] = None,
         page: int = 1,
         limit: int = 20,
-    ) -> tuple[List[Campaign], int]:
+    ) -> tuple[List[Message], int]:
         """
         获取活动列表
 
@@ -193,29 +193,26 @@ class CampaignService:
         """
         from sqlalchemy import or_, func, cast, String
 
-        query = select(Campaign).options(selectinload(Campaign.template))
+        query = select(Message).options(selectinload(Message.template))
 
         # 状态筛选
         if status_filter:
-            try:
-                campaign_status = CampaignStatus(status_filter)
-                query = query.where(Campaign.status == campaign_status)
-            except ValueError:
-                pass
+            # 直接使用字符串进行筛选：草稿、排程發送、已發送、發送失敗
+            query = query.where(Message.send_status == status_filter)
 
         # 搜索功能：标题或标签模糊搜索
         if search:
             search_term = f"%{search}%"
             query = query.where(
                 or_(
-                    Campaign.title.like(search_term),
+                    Message.message_content.like(search_term),
                     # JSON 数组搜索：检查 interaction_tags 是否包含搜索关键词
-                    cast(Campaign.interaction_tags, String).like(search_term)
+                    cast(Message.interaction_tags, String).like(search_term)
                 )
             )
 
         # 排序和分页
-        query = query.order_by(Campaign.created_at.desc())
+        query = query.order_by(Message.created_at.desc())
 
         # 获取总数
         count_query = select(func.count()).select_from(query.subquery())
@@ -290,7 +287,7 @@ class CampaignService:
             raise ValueError(f"Campaign {campaign_id} not found")
 
         # 检查状态
-        if campaign.status == CampaignStatus.SENT:
+        if campaign.send_status == "已發送":
             raise ValueError("Campaign already sent")
 
         # 调用 LINE Bot 服务发送
@@ -306,13 +303,13 @@ class CampaignService:
             failed_count = result.get("failed", 0) or 0
             ok = bool(result.get("ok")) and sent_count > 0
 
-        campaign.sent_count = sent_count
+        campaign.send_count = sent_count
 
         if ok:
-            campaign.status = CampaignStatus.SENT
-            campaign.sent_at = datetime.now()
+            campaign.send_status = "已發送"
+            campaign.send_time = datetime.now()
         else:
-            campaign.status = CampaignStatus.FAILED
+            campaign.send_status = "發送失敗"
 
         await db.commit()
         await db.refresh(campaign)
@@ -350,7 +347,7 @@ class CampaignService:
         if not campaign:
             return False
 
-        if campaign.status != CampaignStatus.DRAFT:
+        if campaign.send_status != "草稿":
             raise ValueError("Only draft campaigns can be deleted")
 
         await db.delete(campaign)
@@ -399,7 +396,7 @@ class CampaignService:
     async def _create_template(
         self,
         db: AsyncSession,
-        campaign_data: CampaignCreate
+        campaign_data: MessageCreate
     ) -> MessageTemplate:
         """创建消息模板"""
         # 移除 type 欄位處理，因為該欄位已從資料庫移除
@@ -447,16 +444,16 @@ class CampaignService:
             )
             db.add(carousel_item)
 
-    async def _schedule_campaign(self, campaign: Campaign):
+    async def _schedule_campaign(self, campaign: Message):
         """排程活动发送"""
-        if campaign.scheduled_at:
+        if campaign.scheduled_datetime_utc:
             success = await scheduler.schedule_campaign(
                 campaign.id,
-                campaign.scheduled_at
+                campaign.scheduled_datetime_utc
             )
             if success:
-                campaign.status = CampaignStatus.SCHEDULED
-                logger.info(f"📅 Scheduled campaign {campaign.id} for {campaign.scheduled_at}")
+                campaign.send_status = "已排程"
+                logger.info(f"📅 Scheduled campaign {campaign.id} for {campaign.scheduled_datetime_utc}")
 
 
 # 全局服务实例

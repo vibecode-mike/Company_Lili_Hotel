@@ -50,8 +50,12 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ):
     """用戶登入"""
-    # 查詢用戶
-    result = await db.execute(select(User).where(User.username == form_data.username))
+    # 查詢用戶 (支持使用用戶名或電子郵件登入)
+    result = await db.execute(
+        select(User).where(
+            (User.username == form_data.username) | (User.email == form_data.username)
+        )
+    )
     user = result.scalar_one_or_none()
 
     # 驗證用戶和密碼

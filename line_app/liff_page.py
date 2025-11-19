@@ -32,9 +32,20 @@ def fetchall(sql: str, p: dict | None = None) -> list[dict]:
         return [dict(r) for r in conn.execute(text(sql), p or {}).mappings().all()]
 
 # ===== OAuth2：用 Channel ID + Secret 取 access_token =====
+# ===== OAuth2：用 Login/LIFF Channel ID + Secret 換短期 access_token =====
 def exchange_access_token(client_id: str, client_secret: str) -> Dict[str, Any]:
+    """
+    用 LINE Login / LIFF Channel 的 client_id + client_secret
+    去拿「短期 Channel access token」（大約 30 天有效）
+
+    這個 access_token 用來：
+    - 建立 LIFF App
+    - 列出 LIFF Apps
+    - 更新 LIFF view.url
+    不影響 Messaging API，那邊繼續用 msg_access_token。
+    """
     r = requests.post(
-        "https://api.line.me/oauth2/v2.1/token",
+        "https://api.line.me/v2/oauth/accessToken",  # ← 官方文件：client_credentials 用這個
         data={
             "grant_type": "client_credentials",
             "client_id": client_id,
@@ -46,8 +57,16 @@ def exchange_access_token(client_id: str, client_secret: str) -> Dict[str, Any]:
         j = r.json()
     except Exception:
         j = {"error": "invalid_response", "text": r.text}
+
     if r.ok and j.get("access_token"):
+        # j 格式大概是：
+        # {
+        #   "access_token": "...",
+        #   "token_type": "Bearer",
+        #   "expires_in": 2592000
+        # }
         return {"ok": True, **j}
+
     return {"ok": False, "error": j}
 
 # ===== LIFF：建立 LIFF App（用 Login/LIFF Channel 的 access_token）=====
@@ -64,12 +83,13 @@ def create_liff_app(liff_access_token: str, endpoint_url: str, size: str = "full
         return {"ok": True, "liffId": j["liffId"], "liffUrl": f"https://liff.line.me/{j['liffId']}"}
     return {"ok": False, "error": j}
 
-# ===== 受眾：撈出全部有效 LINE userId（U 開頭 / 長度 33）=====
+# ===== 受眾：從line_friends DB 表單中撈出全部有效(仍是好友的) LINE userId（U 開頭 / 長度 33）=====
 def get_all_valid_user_ids(limit: Optional[int] = None) -> List[str]:
     sql = """
         SELECT line_uid
-          FROM members
-         WHERE line_uid IS NOT NULL
+          FROM line_friends
+         WHERE is_following = 1              -- 只發給目前仍是好友的
+           AND line_uid IS NOT NULL
            AND line_uid <> ''
            AND line_uid LIKE 'U%%'
            AND LENGTH(line_uid) = 33

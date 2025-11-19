@@ -16,7 +16,7 @@ from sqlalchemy.orm import selectinload
 logger = logging.getLogger(__name__)
 
 from app.database import AsyncSessionLocal
-from app.models.campaign import Campaign, CampaignStatus
+from app.models.message import Message
 from app.models.survey import Survey, SurveyStatus
 from app.models.template import MessageTemplate
 from app.models.tag import MemberTag
@@ -95,11 +95,11 @@ class LineBotService:
                 # 1. 讀取 campaign 及相關資料 (包含 carousel_items)
                 from app.models.template import MessageTemplate
                 stmt = (
-                    select(Campaign)
+                    select(Message)
                     .options(
-                        selectinload(Campaign.template).selectinload(MessageTemplate.carousel_items)
+                        selectinload(Message.template).selectinload(MessageTemplate.carousel_items)
                     )
-                    .where(Campaign.id == campaign_id)
+                    .where(Message.id == campaign_id)
                 )
                 result = await db.execute(stmt)
                 campaign = result.scalar_one_or_none()
@@ -126,13 +126,13 @@ class LineBotService:
                     failed_count = result.get("failed", 0) or 0
                     ok = bool(result.get("ok")) and sent_count > 0
 
-                campaign.sent_count = sent_count
+                campaign.send_count = sent_count
 
                 if ok:
-                    campaign.status = CampaignStatus.SENT
-                    campaign.sent_at = datetime.now()
+                    campaign.send_status = "已發送"
+                    campaign.send_time = datetime.now()
                 else:
-                    campaign.status = CampaignStatus.FAILED
+                    campaign.send_status = "發送失敗"
                     logger.error(
                         "❌ Campaign %s failed to send via LINE: %s",
                         campaign_id,
@@ -278,14 +278,14 @@ class LineBotService:
 
     def _build_campaign_payload(
         self,
-        campaign: Campaign,
+        campaign: Message,
         target_tag_names: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         構建 campaign payload 給 HotelBot
 
         Args:
-            campaign: Campaign 物件
+            campaign: Message 物件
 
         Returns:
             Dict: HotelBot 所需的 payload 格式
@@ -300,15 +300,15 @@ class LineBotService:
 
         # 驗證 campaign.id 必須存在
         if campaign.id is None:
-            error_msg = f"❌ Campaign ID is None when building payload for campaign '{campaign.title}'"
+            error_msg = f"❌ Campaign ID is None when building payload for campaign '{campaign.message_content}'"
             logger.error(error_msg)
             raise ValueError(error_msg)
 
-        logger.debug(f"✅ Building payload with source_campaign_id={campaign.id} for campaign '{campaign.title}'")
+        logger.debug(f"✅ Building payload with source_campaign_id={campaign.id} for campaign '{campaign.message_content}'")
 
         payload = {
-            "name": campaign.title,
-            "title": campaign.title,
+            "name": campaign.message_content,
+            "title": campaign.message_content,
             # 移除 template_type，因為現在使用 Flex Message JSON
             "notification_text": template.notification_text or "",
             "preview_text": template.preview_text or "",

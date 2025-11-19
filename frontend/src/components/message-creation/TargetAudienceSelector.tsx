@@ -76,30 +76,24 @@ export default function TargetAudienceSelector({
             {targetType === 'tags' && (
               <div className="flex flex-col gap-3">
                 {/* 包含/排除选择 */}
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="filterCondition"
-                      value="include"
-                      checked={filterCondition === 'include'}
-                      onChange={() => onFilterConditionChange('include')}
-                      className="w-[16px] h-[16px]"
-                    />
-                    <span className="text-[16px] text-[#383838]">包含</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="filterCondition"
-                      value="exclude"
-                      checked={filterCondition === 'exclude'}
-                      onChange={() => onFilterConditionChange('exclude')}
-                      className="w-[16px] h-[16px]"
-                    />
-                    <span className="text-[16px] text-[#383838]">排除</span>
-                  </label>
-                </div>
+                <RadioGroup 
+                  value={filterCondition} 
+                  onValueChange={onFilterConditionChange}
+                  className="flex gap-4"
+                >
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="include" id="filter-include" />
+                    <Label htmlFor="filter-include" className="cursor-pointer text-[16px] text-[#383838]">
+                      包含
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="exclude" id="filter-exclude" />
+                    <Label htmlFor="filter-exclude" className="cursor-pointer text-[16px] text-[#383838]">
+                      排除
+                    </Label>
+                  </div>
+                </RadioGroup>
 
                 {/* 选择标签按钮 */}
                 <button

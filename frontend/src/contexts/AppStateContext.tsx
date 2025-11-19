@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useMemo } from 'react';
 
 // 主题类型
 export type Theme = 'light' | 'dark';
@@ -111,32 +111,32 @@ export function AppStateProvider({
   }, [theme]);
 
   // 侧边栏方法
-  const toggleSidebar = () => setSidebarOpen(prev => !prev);
+  const toggleSidebar = useCallback(() => setSidebarOpen(prev => !prev), []);
 
   // 主题方法
-  const setTheme = (newTheme: Theme) => {
+  const setTheme = useCallback((newTheme: Theme) => {
     setThemeState(newTheme);
-  };
+  }, []);
 
-  const toggleTheme = () => {
+  const toggleTheme = useCallback(() => {
     setTheme(theme === 'light' ? 'dark' : 'light');
-  };
+  }, [theme, setTheme]);
 
   // 模态框方法
-  const openModal = (modalId: string) => {
+  const openModal = useCallback((modalId: string) => {
     setModals(prev => ({ ...prev, [modalId]: true }));
-  };
+  }, []);
 
-  const closeModal = (modalId: string) => {
+  const closeModal = useCallback((modalId: string) => {
     setModals(prev => ({ ...prev, [modalId]: false }));
-  };
+  }, []);
 
-  const toggleModal = (modalId: string) => {
+  const toggleModal = useCallback((modalId: string) => {
     setModals(prev => ({ ...prev, [modalId]: !prev[modalId] }));
-  };
+  }, []);
 
   // 选择方法
-  const toggleItemSelection = (id: string) => {
+  const toggleItemSelection = useCallback((id: string) => {
     setSelectedItems(prev => {
       const newSet = new Set(prev);
       if (newSet.has(id)) {
@@ -146,18 +146,18 @@ export function AppStateProvider({
       }
       return newSet;
     });
-  };
+  }, []);
 
-  const selectAllItems = (ids: string[]) => {
+  const selectAllItems = useCallback((ids: string[]) => {
     setSelectedItems(new Set(ids));
-  };
+  }, []);
 
-  const clearSelection = () => {
+  const clearSelection = useCallback(() => {
     setSelectedItems(new Set());
-  };
+  }, []);
 
   // 重置状态
-  const resetAppState = () => {
+  const resetAppState = useCallback(() => {
     setSidebarOpen(true);
     setTheme(initialTheme);
     setUser(initialUser);
@@ -165,9 +165,9 @@ export function AppStateProvider({
     setModals({});
     setSearchQuery('');
     setSelectedItems(new Set());
-  };
+  }, [initialTheme, initialUser, setTheme]);
 
-  const value: AppStateContextType = {
+  const value = useMemo<AppStateContextType>(() => ({
     sidebarOpen,
     setSidebarOpen,
     toggleSidebar,
@@ -189,7 +189,25 @@ export function AppStateProvider({
     selectAllItems,
     clearSelection,
     resetAppState,
-  };
+  }), [
+    sidebarOpen,
+    toggleSidebar,
+    theme,
+    setTheme,
+    toggleTheme,
+    user,
+    isLoading,
+    modals,
+    openModal,
+    closeModal,
+    toggleModal,
+    searchQuery,
+    selectedItems,
+    toggleItemSelection,
+    selectAllItems,
+    clearSelection,
+    resetAppState,
+  ]);
 
   return (
     <AppStateContext.Provider value={value}>

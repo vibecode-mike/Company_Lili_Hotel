@@ -58,29 +58,34 @@ Feature: 會員搜尋與篩選
         | M002      | 陳大明 |
         | M003      | 李明華 |
 
-  Rule: 支援搜尋字段：電子信箱（精確搜尋）
+  Rule: 支援搜尋字段：電子信箱（模糊搜尋）
 
-    Example: 以電子信箱精確搜尋會員
+  Example: 以電子信箱模糊搜尋會員
       Given 系統中存在以下會員
         | member_id | email              |
         | M001      | zhang@example.com  |
         | M002      | li@example.com     |
         | M003      | wang@example.com   |
       When 使用者搜尋電子信箱「zhang@example.com」
-      Then 系統使用精確搜尋（= 'zhang@example.com'）
+      Then 系統使用模糊搜尋（LIKE '%zhang@example.com%'）
       And 系統顯示以下會員
         | member_id | email              |
         | M001      | zhang@example.com  |
 
-    Example: 電子信箱精確搜尋不支援部分匹配
+    Example: 電子信箱模糊搜尋支援部分匹配
       Given 系統中存在以下會員
         | member_id | email               |
         | M001      | user@gmail.com      |
         | M002      | user123@gmail.com   |
         | M003      | testuser@gmail.com  |
       When 使用者搜尋電子信箱「user」
-      Then 系統找不到任何會員
-      And 系統提示「請輸入完整的 email 地址」
+      Then 系統使用模糊搜尋（LIKE '%user%'）
+      And 系統顯示以下會員
+        | member_id | email               |
+        | M001      | user@gmail.com      |
+        | M002      | user123@gmail.com   |
+        | M003      | testuser@gmail.com  |
+
 
   Rule: 支援搜尋字段：手機號碼（精確搜尋）
 
@@ -161,18 +166,6 @@ Feature: 會員搜尋與篩選
         | member_id | name | join_source |
         | M002      | 李四 | CRM         |
 
-  Rule: 支援篩選條件：建立來源（後台系統）
-
-    Example: 以建立來源篩選會員（後台系統）
-      Given 系統中存在以下會員
-        | member_id | name | join_source |
-        | M001      | 張三 | LINE        |
-        | M002      | 李四 | CRM         |
-        | M003      | 王五 | 系統        |
-      When 使用者篩選建立來源「系統」
-      Then 系統顯示以下會員
-        | member_id | name | join_source |
-        | M003      | 王五 | 系統        |
 
   Rule: 加入來源支援動態擴充（可透過設定檔管理）
 
@@ -185,8 +178,7 @@ Feature: 會員搜尋與篩選
         | CRM         | CRM 系統             | 從 CRM 系統匯入              |
         | PMS         | PMS 系統             | 從德安 PMS 系統整合          |
         | ERP         | ERP 系統             | 從 ERP 系統整合              |
-        | 系統        | 後台手動建立         | 管理員於後台手動建立會員     |
-
+ 
     Example: 動態新增加入來源
       Given 系統需要支援新的會員來源「問券」
       When 管理員透過設定檔或管理後台新增來源「問券」
@@ -205,6 +197,18 @@ Feature: 會員搜尋與篩選
       Then 系統顯示以下會員
         | member_id | name | join_source |
         | M002      | 李四 | 問券        |
+
+  Rule: 錯誤處理：篩選結果為零時提示放寬條件
+
+    Example: 多條件篩選無符合結果
+      Given 系統中存在以下會員
+        | member_id | name | gender | tags        | city  |
+        | M001      | 張三 | 男     | VIP         | 台北  |
+        | M002      | 李四 | 女     | 一般會員    | 台中  |
+        | M003      | 王五 | 男     | 黑名單      | 高雄  |
+      When 使用者同時設定性別「女」且標籤「VIP」且城市「高雄」
+      Then 系統找不到任何會員
+      And 系統提示「找不到符合條件的會員，請放寬篩選條件」
 
   Rule: 支援排序方式：按最近回覆日期排序
 

@@ -72,6 +72,20 @@ class MessageTemplate(Base):
     # 輪播設定
     carousel_count = Column(Integer, comment="輪播圖卡數量（2-9張）")
 
+    # 模板庫管理欄位
+    is_in_library = Column(Boolean, default=False, comment="是否在模板庫中")
+    source_template_id = Column(
+        BigInteger,
+        ForeignKey("message_templates.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="來源模板ID（複製時記錄）",
+    )
+    usage_count = Column(Integer, default=0, comment="使用次數（複製/使用計數）")
+    storage_type = Column(
+        String(10), default="database", comment="儲存類型：database | cdn"
+    )
+    flex_message_url = Column(String(500), comment="Flex Message CDN URL（>10KB時使用）")
+
     # 系統欄位
     created_at = Column(DateTime, server_default=func.now(), comment="建立時間")
     updated_at = Column(DateTime, onupdate=func.now(), comment="更新時間")

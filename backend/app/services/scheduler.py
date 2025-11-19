@@ -211,11 +211,11 @@ class CampaignScheduler:
                 ok = bool(result.get("ok")) and sent_count > 0
 
             from app.database import AsyncSessionLocal
-            from app.models.campaign import Campaign, CampaignStatus
+            from app.models.message import Message
             from sqlalchemy import select
 
             async with AsyncSessionLocal() as db:
-                stmt = select(Campaign).where(Campaign.id == campaign_id)
+                stmt = select(Message).where(Message.id == campaign_id)
                 campaign_result = await db.execute(stmt)
                 campaign = campaign_result.scalar_one_or_none()
 
@@ -223,11 +223,11 @@ class CampaignScheduler:
                     logger.error(f"❌ Campaign {campaign_id} not found when updating status")
                     return
 
-                campaign.sent_count = sent_count
+                campaign.send_count = sent_count
 
                 if ok:
-                    campaign.status = CampaignStatus.SENT
-                    campaign.sent_at = datetime.now()
+                    campaign.send_status = "已發送"
+                    campaign.send_time = datetime.now()
                     if failed_count:
                         logger.warning(
                             "⚠️ Campaign %s sent to %s users with %s failures",
@@ -240,7 +240,7 @@ class CampaignScheduler:
                             "✅ Campaign %s sent to %s users", campaign_id, sent_count
                         )
                 else:
-                    campaign.status = CampaignStatus.FAILED
+                    campaign.send_status = "發送失敗"
                     logger.warning("⚠️ Campaign %s failed to send during schedule", campaign_id)
 
                 await db.commit()

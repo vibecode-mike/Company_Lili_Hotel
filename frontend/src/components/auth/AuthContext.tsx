@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 interface User {
   email: string;
@@ -40,27 +40,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Email/Password login
   const login = async (email: string, password: string): Promise<boolean> => {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 800));
+    try {
+      // 使用 FormData 格式發送登入請求（符合 OAuth2PasswordRequestForm）
+      const formData = new URLSearchParams();
+      formData.append('username', email);
+      formData.append('password', password);
 
-    // Check credentials
-    if (email === 'admin@starbit.com' && password === 'admin123') {
-      const token = `token_${Date.now()}`;
-      localStorage.setItem('auth_token', token);
-      localStorage.setItem('user_email', email);
+      const response = await fetch('/api/v1/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: '登入失敗' }));
+        toast.error(errorData.detail || '帳號或密碼錯誤，請重試');
+        return false;
+      }
+
+      const data = await response.json();
+
+      // 儲存 token 和用戶信息
+      localStorage.setItem('auth_token', data.access_token);
+      localStorage.setItem('user_email', data.user.email);
       localStorage.setItem('login_method', 'email');
 
       setIsAuthenticated(true);
       setUser({
-        email: email,
-        name: email.split('@')[0],
+        email: data.user.email,
+        name: data.user.username || data.user.email.split('@')[0],
         loginMethod: 'email'
       });
 
       toast.success('登入成功！');
       return true;
-    } else {
-      toast.error('帳號或密碼錯誤，請重試');
+    } catch (error) {
+      console.error('登入錯誤:', error);
+      toast.error('登入失敗，請檢查網絡連接');
       return false;
     }
   };

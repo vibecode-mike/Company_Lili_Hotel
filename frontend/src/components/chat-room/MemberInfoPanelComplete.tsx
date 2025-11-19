@@ -7,6 +7,8 @@ import React, { useState, useEffect } from 'react';
 import type { Member } from '../../types/member';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
+import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
+import { Label } from '../ui/label';
 import { format } from 'date-fns';
 import svgPathsInfo from '../../imports/svg-k0rlkn3s4y';
 import { useToast } from '../ToastProvider';
@@ -195,106 +197,40 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
           </div>
         </div>
         <div className="basis-0 content-stretch flex gap-[20px] grow items-center min-h-px min-w-px relative self-stretch shrink-0">
-          <div className="flex flex-wrap gap-[16px] items-center content-center justify-start relative min-w-0 max-w-full">
-            {/* 男性 */}
-            <div 
-              className="content-stretch flex gap-[8px] items-center relative shrink-0 cursor-pointer" 
-              onClick={(e) => {
-                if (isEditing) {
-                  e.stopPropagation();
-                  setGender('male');
-                }
-              }}
-            >
-              <div className="overflow-clip relative shrink-0 size-[24px]">
-                <div className="absolute inset-[8.333%]">
-                  <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 20 20">
-                    <path d={svgPathsInfo.p3a58b490} fill={gender === 'male' ? 'var(--fill-0, #0F6BEB)' : 'var(--fill-0, #383838)'} id="Vector" />
-                  </svg>
-                </div>
-                {gender === 'male' && (
-                  <div className="absolute inset-[29.167%]">
-                    <div className="absolute inset-0" style={{ "--fill-0": "rgba(15, 107, 235, 1)" } as React.CSSProperties}>
-                      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 10 10">
-                        <path d={svgPathsInfo.p46c6500} fill="var(--fill-0, #0F6BEB)" id="Vector" />
-                      </svg>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="content-stretch flex items-center relative shrink-0">
-                <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[16px] text-nowrap">
-                  <p className="leading-[1.5] whitespace-pre">男性</p>
-                </div>
-              </div>
+          <RadioGroup 
+            value={gender} 
+            onValueChange={(value) => isEditing && setGender(value as 'male' | 'female' | 'undisclosed')}
+            className="flex flex-wrap gap-[16px]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="male" id="gender-male" disabled={!isEditing} />
+              <Label 
+                htmlFor="gender-male" 
+                className="cursor-pointer text-[16px] text-[#383838] font-['Noto_Sans_TC:Regular',sans-serif] font-normal"
+              >
+                男性
+              </Label>
             </div>
-            {/* 女性 */}
-            <div 
-              className="content-stretch flex gap-[8px] items-center relative shrink-0 cursor-pointer" 
-              onClick={(e) => {
-                if (isEditing) {
-                  e.stopPropagation();
-                  setGender('female');
-                }
-              }}
-            >
-              <div className="overflow-clip relative shrink-0 size-[24px]">
-                <div className="absolute inset-[8.333%]">
-                  <div className="absolute inset-0" style={{ "--fill-0": gender === 'female' ? "rgba(15, 107, 235, 1)" : "rgba(56, 56, 56, 1)" } as React.CSSProperties}>
-                    <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 20 20">
-                      <path d={svgPathsInfo.p3a58b490} fill={gender === 'female' ? 'var(--fill-0, #0F6BEB)' : 'var(--fill-0, #383838)'} id="Vector" />
-                    </svg>
-                  </div>
-                </div>
-                {gender === 'female' && (
-                  <div className="absolute inset-[29.167%]">
-                    <div className="absolute inset-0" style={{ "--fill-0": "rgba(15, 107, 235, 1)" } as React.CSSProperties}>
-                      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 10 10">
-                        <path d={svgPathsInfo.p46c6500} fill="var(--fill-0, #0F6BEB)" id="Vector" />
-                      </svg>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="content-stretch flex items-center relative shrink-0">
-                <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[16px] text-nowrap">
-                  <p className="leading-[1.5] whitespace-pre">女性</p>
-                </div>
-              </div>
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="female" id="gender-female" disabled={!isEditing} />
+              <Label 
+                htmlFor="gender-female" 
+                className="cursor-pointer text-[16px] text-[#383838] font-['Noto_Sans_TC:Regular',sans-serif] font-normal"
+              >
+                女性
+              </Label>
             </div>
-            {/* 不透露 */}
-            <div 
-              className="content-stretch flex gap-[8px] items-center relative shrink-0 cursor-pointer" 
-              onClick={(e) => {
-                if (isEditing) {
-                  e.stopPropagation();
-                  setGender('undisclosed');
-                }
-              }}
-            >
-              <div className="overflow-clip relative shrink-0 size-[24px]">
-                <div className="absolute inset-[8.333%]">
-                  <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 20 20">
-                    <path d={svgPathsInfo.p3a58b490} fill={gender === 'undisclosed' ? 'var(--fill-0, #0F6BEB)' : 'var(--fill-0, #383838)'} id="Vector" />
-                  </svg>
-                </div>
-                {gender === 'undisclosed' && (
-                  <div className="absolute inset-[29.167%]">
-                    <div className="absolute inset-0" style={{ "--fill-0": "rgba(15, 107, 235, 1)" } as React.CSSProperties}>
-                      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 10 10">
-                        <path d={svgPathsInfo.p46c6500} fill="var(--fill-0, #0F6BEB)" id="Vector" />
-                      </svg>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="content-stretch flex items-center relative shrink-0">
-                <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[16px] text-nowrap">
-                  <p className="leading-[1.5] whitespace-pre">不透露</p>
-                </div>
-              </div>
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="undisclosed" id="gender-undisclosed" disabled={!isEditing} />
+              <Label 
+                htmlFor="gender-undisclosed" 
+                className="cursor-pointer text-[16px] text-[#383838] font-['Noto_Sans_TC:Regular',sans-serif] font-normal"
+              >
+                不透露
+              </Label>
             </div>
-          </div>
+          </RadioGroup>
         </div>
       </div>
 
@@ -537,6 +473,70 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
             <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center text-white">儲存變更</p>
           </div>
         </div>
+      )}
+
+      {/* Tags Section */}
+      {((memberTags && memberTags.length > 0) || (interactionTags && interactionTags.length > 0)) && (
+        <>
+          {/* Divider */}
+          <div className="h-0 relative shrink-0 w-full">
+            <div className="absolute bottom-0 left-0 right-0 top-[-1px]">
+              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 502 1">
+                <line stroke="#E1EBF9" strokeLinecap="round" x1="0.5" x2="501.5" y1="0.5" y2="0.5" />
+              </svg>
+            </div>
+          </div>
+
+          <div className="content-stretch flex flex-col gap-[20px] items-start relative shrink-0 w-full">
+            {/* Member Tags */}
+            {memberTags && memberTags.length > 0 && (
+              <div className="flex flex-col gap-[8px] w-full">
+                <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] text-[#383838]">
+                  會員標籤
+                </p>
+                <div className="flex flex-wrap gap-[8px]">
+                  {memberTags.map((tag, index) => (
+                    <span
+                      key={index}
+                      className="bg-[#f0f6ff] text-[#0f6beb] px-[12px] py-[4px] rounded-[8px] text-[14px] font-medium"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Interaction Tags */}
+            {interactionTags && interactionTags.length > 0 && (
+              <div className="flex flex-col gap-[8px] w-full">
+                <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] text-[#383838]">
+                  互動標籤
+                </p>
+                <div className="flex flex-wrap gap-[8px]">
+                  {interactionTags.map((tag, index) => (
+                    <span
+                      key={index}
+                      className="bg-[#fff4e6] text-[#ff9800] px-[12px] py-[4px] rounded-[8px] text-[14px] font-medium"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Edit Tags Button */}
+            {onEditTags && (
+              <button
+                onClick={onEditTags}
+                className="text-[#0f6beb] text-[16px] hover:underline cursor-pointer"
+              >
+                編輯標籤
+              </button>
+            )}
+          </div>
+        </>
       )}
 
       {/* Divider */}

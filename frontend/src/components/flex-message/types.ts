@@ -1,9 +1,23 @@
+// Flex Message Styles Types
+export interface FlexBlockStyle {
+  backgroundColor?: string;
+  separator?: boolean;
+  separatorColor?: string;
+}
+
+export interface FlexBubbleStyle {
+  header?: FlexBlockStyle;
+  hero?: FlexBlockStyle;
+  body?: FlexBlockStyle;
+  footer?: FlexBlockStyle;
+}
+
 export interface FlexMessage {
   type: "bubble" | "carousel";
   hero?: FlexComponent;
   body?: FlexBox;
   footer?: FlexBox;
-  styles?: any;
+  styles?: FlexBubbleStyle;
   contents?: FlexBubble[];
 }
 
@@ -12,19 +26,24 @@ export interface FlexBubble {
   hero?: FlexComponent;
   body?: FlexBox;
   footer?: FlexBox;
-  styles?: any;
+  styles?: FlexBubbleStyle;
   _metadata?: {
     heroActionLabel?: string;
     buttonLabels?: { [index: number]: string };
   };
 }
 
-export interface FlexComponent {
-  type: "box" | "text" | "image" | "button" | "separator" | "spacer" | "icon";
-  [key: string]: any;
-}
+// Base Flex Component Type - using Union Type instead of [key: string]: any
+export type FlexComponent =
+  | FlexBox
+  | FlexText
+  | FlexImage
+  | FlexButton
+  | FlexSeparator
+  | FlexSpacer
+  | FlexIcon;
 
-export interface FlexBox extends FlexComponent {
+export interface FlexBox {
   type: "box";
   layout: "horizontal" | "vertical" | "baseline";
   contents: FlexComponent[];
@@ -39,35 +58,60 @@ export interface FlexBox extends FlexComponent {
   paddingBottom?: string;
   paddingStart?: string;
   paddingEnd?: string;
+  flex?: number;
+  width?: string;
+  height?: string;
 }
 
-export interface FlexText extends FlexComponent {
+export interface FlexText {
   type: "text";
   text: string;
   size?: string;
-  weight?: string;
+  weight?: "regular" | "bold";
   color?: string;
-  align?: string;
+  align?: "start" | "end" | "center";
   wrap?: boolean;
   margin?: string;
   flex?: number;
+  maxLines?: number;
 }
 
-export interface FlexImage extends FlexComponent {
+export interface FlexImage {
   type: "image";
   url: string;
-  size?: string;
+  size?: string | "xxs" | "xs" | "sm" | "md" | "lg" | "xl" | "xxl" | "3xl" | "4xl" | "5xl" | "full";
   aspectRatio?: string;
-  aspectMode?: string;
+  aspectMode?: "cover" | "fit";
   backgroundColor?: string;
+  action?: FlexAction;
 }
 
-export interface FlexButton extends FlexComponent {
+export interface FlexButton {
   type: "button";
   action: FlexAction;
   style?: "primary" | "secondary" | "link";
   color?: string;
-  height?: string;
+  height?: "sm" | "md";
+  margin?: string;
+  flex?: number;
+}
+
+export interface FlexSeparator {
+  type: "separator";
+  margin?: string;
+  color?: string;
+}
+
+export interface FlexSpacer {
+  type: "spacer";
+  size?: "xs" | "sm" | "md" | "lg" | "xl" | "xxl";
+}
+
+export interface FlexIcon {
+  type: "icon";
+  url: string;
+  size?: string;
+  aspectRatio?: string;
   margin?: string;
 }
 
@@ -77,30 +121,4 @@ export interface FlexAction {
   uri?: string;
   text?: string;
   data?: string;
-}
-
-export interface FlexCarousel {
-  type: "carousel";
-  contents: FlexBubble[];
-}
-
-export interface BubbleConfig {
-  showImage: boolean;
-  imageUrl: string;
-  imageAction: string;
-  imageActionLabel: string;
-  showTitle: boolean;
-  titleText: string;
-  showDescription: boolean;
-  descriptionText: string;
-  showPrice: boolean;
-  priceValue: string;
-  buttons: ButtonConfig[];
-}
-
-export interface ButtonConfig {
-  style: "primary" | "secondary" | "link";
-  label: string;
-  url: string;
-  actionLabel: string;
 }

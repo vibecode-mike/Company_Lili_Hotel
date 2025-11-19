@@ -163,10 +163,10 @@ def preflight_check(payload: dict) -> Dict[str, Any]:
       { ok:False, code:"INSUFFICIENT_QUOTA", remaining, needed, deficit }
     """
     # 解析頻道（優先 LINE 官方 channel_id；沒有就用 None → 使用 .env token）
+    # 注意：移除 request.args.get() 以支援從 FastAPI 調用（無 Flask request context）
     line_channel_id = (
         payload.get("line_channel_id")
         or payload.get("lineChannelId")
-        or request.args.get("line_channel_id")
         or None
     )
 

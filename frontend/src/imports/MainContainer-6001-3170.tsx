@@ -9,11 +9,23 @@ import ButtonEdit from "./ButtonEdit";
 import ButtonEditAvatar from "./ButtonEdit-8025-230";
 import ChatButton from "./Button-8027-97";
 import MemberNoteEditor from "../components/shared/MemberNoteEditor";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 import { useToast } from "../components/ToastProvider";
 import MemberTagEditModal from "../components/MemberTagEditModal";
 import { TitleContainer as SharedTitleContainer, HeaderContainer as SharedHeaderContainer } from "../components/common/Containers";
 import { SimpleBreadcrumb } from "../components/common/Breadcrumb";
+
+/**
+ * 會員詳情頁面組件
+ * 
+ * 用途：顯示和編輯單個會員的詳細資訊
+ * 功能：頭像上傳、標籤編輯、備註、消費記錄等
+ * 使用位置：
+ * - App.tsx (作為 MainContainer - 需重構命名)
+ * - MessageList.tsx (作為 AddMemberContainer)
+ * 
+ * 注意：此文件名為 Figma 導入時自動生成的名稱
+ */
 
 
 
@@ -47,7 +59,7 @@ function Icons8Account() {
   );
 }
 
-function Frame8() {
+function Frame8({ lineAvatar }: { lineAvatar?: string }) {
   const [isHovered, setIsHovered] = useState(false);
   const [isPressed, setIsPressed] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -66,7 +78,7 @@ function Frame8() {
           showToast('圖片大小不能超過 5MB', 'error');
           return;
         }
-        
+
         // Validate file type
         if (!file.type.startsWith('image/')) {
           showToast('請選擇圖片檔案', 'error');
@@ -83,7 +95,7 @@ function Frame8() {
   };
 
   return (
-    <div 
+    <div
       className="relative flex items-center justify-center size-[180px] rounded-full bg-[#EDF2F8] cursor-pointer overflow-hidden transition-all duration-300 ease-in-out"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => {
@@ -101,10 +113,18 @@ function Frame8() {
         className="hidden"
         onChange={handleFileChange}
       />
-      
-      {/* Default User Icon */}
-      <Icons8Account />
-      
+
+      {/* Display LINE Avatar or Default Icon */}
+      {lineAvatar ? (
+        <img
+          src={lineAvatar}
+          alt="會員頭像"
+          className="w-full h-full object-cover"
+        />
+      ) : (
+        <Icons8Account />
+      )}
+
       {/* Hover/Pressed Overlay */}
       <div
         className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ease-in-out ${
@@ -128,8 +148,8 @@ function Frame8() {
   );
 }
 
-function Avatar() {
-  return <Frame8 />;
+function Avatar({ member }: { member?: MemberData }) {
+  return <Frame8 lineAvatar={member?.lineAvatar} />;
 }
 
 function Container({ member }: { member?: MemberData }) {
@@ -144,13 +164,13 @@ function Container({ member }: { member?: MemberData }) {
 
 function Container1({ member, onNavigate }: { member?: MemberData; onNavigate?: (page: string, params?: { memberId?: string }) => void }) {
   const handleChatClick = () => {
-    onNavigate?.("member-chat", { memberId: member?.id });
+    onNavigate?.("chat-room", { memberId: member?.id });
   };
 
   return (
     <div className="content-stretch flex flex-col gap-[16px] items-center relative shrink-0 w-full" data-name="Container">
       <div className="relative shrink-0 size-[180px] rounded-full" data-name="Avatar">
-        <Avatar />
+        <Avatar member={member} />
       </div>
       <Container member={member} />
       <div 
@@ -370,52 +390,73 @@ function Option({ selected, onClick, label }: { selected: boolean; onClick: () =
   );
 }
 
-function Container4() {
-  const [selectedGender, setSelectedGender] = useState<string | null>(null);
+function Container4({ member }: { member?: MemberData }) {
+  // 將後端格式轉換為前端格式
+  const normalizeGender = (gender?: string): string | null => {
+    if (!gender) return null;
+    // 處理後端格式 "0"/"1"/"2"
+    if (gender === '0') return 'undisclosed';
+    if (gender === '1') return 'male';
+    if (gender === '2') return 'female';
+    // 處理已經是前端格式的情況
+    if (['undisclosed', 'male', 'female'].includes(gender)) return gender;
+    return null;
+  };
+
+  const [selectedGender, setSelectedGender] = useState<string | null>(
+    normalizeGender(member?.gender)
+  );
+
+  // ✅ 當 member 資料更新時，同步更新性別選擇
+  React.useEffect(() => {
+    if (member?.gender) {
+      setSelectedGender(normalizeGender(member.gender));
+    }
+  }, [member?.gender]);
 
   return (
     <div className="flex flex-wrap gap-[16px] items-center content-center justify-start relative min-w-0 max-w-full" data-name="Container">
-      <Option 
-        selected={selectedGender === 'male'} 
-        onClick={() => setSelectedGender('male')} 
-        label="男性" 
+      <Option
+        selected={selectedGender === 'male'}
+        onClick={() => setSelectedGender('male')}
+        label="男性"
       />
-      <Option 
-        selected={selectedGender === 'female'} 
-        onClick={() => setSelectedGender('female')} 
-        label="女性" 
+      <Option
+        selected={selectedGender === 'female'}
+        onClick={() => setSelectedGender('female')}
+        label="女性"
       />
-      <Option 
-        selected={selectedGender === 'undisclosed'} 
-        onClick={() => setSelectedGender('undisclosed')} 
-        label="不透露" 
+      <Option
+        selected={selectedGender === 'undisclosed'}
+        onClick={() => setSelectedGender('undisclosed')}
+        label="不透露"
       />
     </div>
   );
 }
 
-function DropdownItem2() {
+function DropdownItem2({ member }: { member?: MemberData }) {
   return (
     <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[8px] 2xl:gap-x-2 2xl:gap-y-0 min-h-px min-w-px relative" data-name="Dropdown Item">
       <ModalTitleContent2 />
-      <Container4 />
+      <Container4 member={member} />
     </div>
   );
 }
 
-function Container5() {
+function Container5({ member }: { member?: MemberData }) {
   return (
     <div className="basis-0 content-stretch flex gap-[20px] grow items-center min-h-px min-w-px relative self-stretch shrink-0" data-name="Container">
-      <DropdownItem2 />
+      <DropdownItem2 member={member} />
     </div>
   );
 }
 
-function DropdownItem3() {
+function DropdownItem3({ member }: { member?: MemberData }) {
   return (
     <div className="content-stretch flex flex-wrap gap-[20px] md:gap-[40px] items-start relative shrink-0 w-full" data-name="Dropdown Item">
       <Container3 />
-      <Container5 />
+      <Container5 member={member} />
     </div>
   );
 }
@@ -439,26 +480,28 @@ function ModalTitleContent3() {
   );
 }
 
-function Frame1() {
+function Frame1({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
     <div className="content-stretch flex gap-[10px] items-start relative shrink-0 w-full">
-      <input 
+      <input
         type="text"
         placeholder="輸入居住縣市"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
         className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] placeholder:text-[#a8a8a8] bg-transparent border-0 outline-none w-full"
       />
     </div>
   );
 }
 
-function DropdownItem4() {
+function DropdownItem4({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
     <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0" data-name="Dropdown Item">
       <div className="bg-white group h-[48px] min-h-[48px] relative rounded-[8px] shrink-0 w-full" data-name="Text area">
         <div aria-hidden="true" className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]" />
         <div className="flex flex-col justify-center min-h-inherit size-full">
           <div className="box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center min-h-inherit p-[8px] relative w-full">
-            <Frame1 />
+            <Frame1 value={value} onChange={onChange} />
           </div>
         </div>
       </div>
@@ -466,11 +509,11 @@ function DropdownItem4() {
   );
 }
 
-function DropdownItem5() {
+function DropdownItem5({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
     <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[8px] 2xl:gap-x-2 2xl:gap-y-0 relative shrink-0 w-full" data-name="Dropdown Item">
       <ModalTitleContent3 />
-      <DropdownItem4 />
+      <DropdownItem4 value={value} onChange={onChange} />
     </div>
   );
 }
@@ -603,14 +646,14 @@ function Frame3({ value, onChange }: { value: string; onChange: (value: string) 
   );
 }
 
-function DropdownItem8() {
+function DropdownItem8({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
     <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0" data-name="Dropdown Item">
       <div className="bg-white group h-[48px] min-h-[48px] relative rounded-[8px] shrink-0 w-full" data-name="Text area">
         <div aria-hidden="true" className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]" />
         <div className="flex flex-col justify-center min-h-inherit size-full">
           <div className="box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center min-h-inherit p-[8px] relative w-full">
-            <Frame3 />
+            <Frame3 value={value} onChange={onChange} />
           </div>
         </div>
       </div>
@@ -618,11 +661,11 @@ function DropdownItem8() {
   );
 }
 
-function DropdownItem9() {
+function DropdownItem9({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
     <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[8px] 2xl:gap-x-2 2xl:gap-y-0 relative shrink-0 w-full" data-name="Dropdown Item">
       <ModalTitleContent5 />
-      <DropdownItem8 />
+      <DropdownItem8 value={value} onChange={onChange} />
     </div>
   );
 }
@@ -646,26 +689,28 @@ function ModalTitleContent6() {
   );
 }
 
-function Frame4() {
+function Frame4({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
     <div className="content-stretch flex gap-[10px] items-start relative shrink-0 w-full">
-      <input 
+      <input
         type="text"
         placeholder="輸入身分證字號"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
         className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] placeholder:text-[#a8a8a8] bg-transparent border-0 outline-none w-full"
       />
     </div>
   );
 }
 
-function DropdownItem10() {
+function DropdownItem10({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
     <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0" data-name="Dropdown Item">
       <div className="bg-white group h-[48px] min-h-[48px] relative rounded-[8px] shrink-0 w-full" data-name="Text area">
         <div aria-hidden="true" className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]" />
         <div className="flex flex-col justify-center min-h-inherit size-full">
           <div className="box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center min-h-inherit p-[8px] relative w-full">
-            <Frame4 />
+            <Frame4 value={value} onChange={onChange} />
           </div>
         </div>
       </div>
@@ -673,11 +718,11 @@ function DropdownItem10() {
   );
 }
 
-function DropdownItem11() {
+function DropdownItem11({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
     <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[8px] 2xl:gap-x-2 2xl:gap-y-0 relative shrink-0 w-full" data-name="Dropdown Item">
       <ModalTitleContent6 />
-      <DropdownItem10 />
+      <DropdownItem10 value={value} onChange={onChange} />
     </div>
   );
 }
@@ -701,26 +746,28 @@ function ModalTitleContent7() {
   );
 }
 
-function Frame5() {
+function Frame5({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
     <div className="content-stretch flex gap-[10px] items-start relative shrink-0 w-full">
-      <input 
+      <input
         type="text"
         placeholder="輸入外籍人士護照號碼"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
         className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] placeholder:text-[#a8a8a8] bg-transparent border-0 outline-none w-full"
       />
     </div>
   );
 }
 
-function DropdownItem12() {
+function DropdownItem12({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
     <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0" data-name="Dropdown Item">
       <div className="bg-white group h-[48px] min-h-[48px] relative rounded-[8px] shrink-0 w-full" data-name="Text area">
         <div aria-hidden="true" className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]" />
         <div className="flex flex-col justify-center min-h-inherit size-full">
           <div className="box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center min-h-inherit p-[8px] relative w-full">
-            <Frame5 />
+            <Frame5 value={value} onChange={onChange} />
           </div>
         </div>
       </div>
@@ -728,11 +775,11 @@ function DropdownItem12() {
   );
 }
 
-function DropdownItem13() {
+function DropdownItem13({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
     <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[8px] 2xl:gap-x-2 2xl:gap-y-0 relative shrink-0 w-full" data-name="Dropdown Item">
       <ModalTitleContent7 />
-      <DropdownItem12 />
+      <DropdownItem12 value={value} onChange={onChange} />
     </div>
   );
 }
@@ -742,6 +789,9 @@ function Container6({ member }: { member?: MemberData }) {
   const [realName, setRealName] = React.useState(member?.realName || '');
   const [phone, setPhone] = React.useState(member?.phone || '');
   const [email, setEmail] = React.useState(member?.email || '');
+  const [idNumber, setIdNumber] = React.useState(member?.id_number || '');
+  const [residence, setResidence] = React.useState(member?.residence || '');
+  const [passportNumber, setPassportNumber] = React.useState(member?.passport_number || '');
   const { showToast } = useToast();
 
   React.useEffect(() => {
@@ -749,6 +799,9 @@ function Container6({ member }: { member?: MemberData }) {
       setRealName(member.realName);
       setPhone(member.phone);
       setEmail(member.email);
+      setIdNumber(member.id_number || '');
+      setResidence(member.residence || '');
+      setPassportNumber(member.passport_number || '');
     }
   }, [member]);
 
@@ -769,6 +822,9 @@ function Container6({ member }: { member?: MemberData }) {
       setRealName(member.realName);
       setPhone(member.phone);
       setEmail(member.email);
+      setIdNumber(member.id_number || '');
+      setResidence(member.residence || '');
+      setPassportNumber(member.passport_number || '');
     }
     setIsEditing(false);
   };
@@ -776,12 +832,12 @@ function Container6({ member }: { member?: MemberData }) {
   return (
     <div className="content-stretch flex flex-col gap-[20px] items-start relative shrink-0 w-full" data-name="Container" onClick={() => setIsEditing(true)}>
       <DropdownItem1 value={realName} onChange={setRealName} />
-      <DropdownItem3 />
-      <DropdownItem5 />
+      <DropdownItem3 member={member} />
+      <DropdownItem5 value={residence} onChange={setResidence} />
       <DropdownItem7 value={phone} onChange={setPhone} />
       <DropdownItem9 value={email} onChange={setEmail} />
-      <DropdownItem11 />
-      <DropdownItem13 />
+      <DropdownItem11 value={idNumber} onChange={setIdNumber} />
+      <DropdownItem13 value={passportNumber} onChange={setPassportNumber} />
       
       {/* Edit buttons - only show when editing */}
       {isEditing && (
@@ -812,7 +868,7 @@ function Container6({ member }: { member?: MemberData }) {
   );
 }
 
-function Container7() {
+function Container7({ member }: { member?: MemberData }) {
   return (
     <div className="content-stretch flex items-center relative shrink-0 w-full" data-name="Container">
       <div className="content-stretch flex items-center min-w-[120px] relative shrink-0" data-name="Modal/Title&Content">
@@ -822,14 +878,27 @@ function Container7() {
       </div>
       <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0" data-name="Modal/Title&Content">
         <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-          <p className="leading-[1.5] whitespace-pre">LINE (LINE UID: 000000000)</p>
+          <p className="leading-[1.5] whitespace-pre">LINE (LINE UID: {member?.lineUid || '未提供'})</p>
         </div>
       </div>
     </div>
   );
 }
 
-function Container8() {
+function Container8({ member }: { member?: MemberData }) {
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return '未知';
+    try {
+      return new Date(dateString).toLocaleDateString('zh-TW', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+    } catch {
+      return '無效日期';
+    }
+  };
+
   return (
     <div className="content-stretch flex items-center relative shrink-0 w-full" data-name="Container">
       <div className="content-stretch flex items-center min-w-[120px] relative shrink-0" data-name="Modal/Title&Content">
@@ -839,14 +908,27 @@ function Container8() {
       </div>
       <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0" data-name="Modal/Title&Content">
         <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-          <p className="leading-[1.5] whitespace-pre">2025-01-01</p>
+          <p className="leading-[1.5] whitespace-pre">{formatDate(member?.createTime)}</p>
         </div>
       </div>
     </div>
   );
 }
 
-function Container9() {
+function Container9({ member }: { member?: MemberData }) {
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return '未知';
+    try {
+      return new Date(dateString).toLocaleDateString('zh-TW', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+    } catch {
+      return '無效日期';
+    }
+  };
+
   return (
     <div className="content-stretch flex items-center relative shrink-0 w-full" data-name="Container">
       <div className="content-stretch flex items-center min-w-[120px] relative shrink-0" data-name="Modal/Title&Content">
@@ -856,14 +938,14 @@ function Container9() {
       </div>
       <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0" data-name="Modal/Title&Content">
         <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-          <p className="leading-[1.5] whitespace-pre">2025-08-08</p>
+          <p className="leading-[1.5] whitespace-pre">{formatDate(member?.lastChatTime)}</p>
         </div>
       </div>
     </div>
   );
 }
 
-function Container10() {
+function Container10({ member }: { member?: MemberData }) {
   return (
     <div className="content-stretch flex items-center relative shrink-0 w-full" data-name="Container">
       <div className="content-stretch flex items-center min-w-[120px] relative shrink-0" data-name="Modal/Title&Content">
@@ -873,20 +955,20 @@ function Container10() {
       </div>
       <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0" data-name="Modal/Title&Content">
         <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-          <p className="leading-[1.5] whitespace-pre">000000001</p>
+          <p className="leading-[1.5] whitespace-pre">{member?.id || '未提供'}</p>
         </div>
       </div>
     </div>
   );
 }
 
-function Container11() {
+function Container11({ member }: { member?: MemberData }) {
   return (
     <div className="content-stretch flex flex-col gap-[12px] items-start relative shrink-0 w-full" data-name="Container">
-      <Container7 />
-      <Container8 />
-      <Container9 />
-      <Container10 />
+      <Container7 member={member} />
+      <Container8 member={member} />
+      <Container9 member={member} />
+      <Container10 member={member} />
     </div>
   );
 }
@@ -1119,8 +1201,8 @@ function SaveCancelButtonsTags({ onSave, onCancel }: { onSave: () => void; onCan
 
 function Container20({ member }: { member?: MemberData }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [memberTags, setMemberTags] = useState<string[]>(['消費力高', 'VIP']);
-  const [interactionTags, setInteractionTags] = useState<string[]>(['優惠活動', '限時折扣', '滿額贈品', '會員專屬優惠']);
+  const [memberTags, setMemberTags] = useState<string[]>(member?.memberTags || []); // ✅ 使用真實數據
+  const [interactionTags, setInteractionTags] = useState<string[]>(member?.interactionTags || []); // ✅ 使用真實數據
   const { showToast } = useToast();
 
   const handleEdit = () => {
@@ -1253,7 +1335,7 @@ function ModeEdit1() {
 function Container23({ member }: { member?: MemberData }) {
   return (
     <div className="basis-0 content-stretch flex gap-[32px] grow items-start min-h-px min-w-px relative rounded-[20px] shrink-0" data-name="Container">
-      <MemberNoteEditor initialValue={member?.note || ''} />
+      <MemberNoteEditor initialValue={member?.internal_note || ''} />
     </div>
   );
 }
@@ -1424,8 +1506,7 @@ function ConnectSystemButton({ onClick }: { onClick: () => void }) {
   return (
     <div className="content-stretch flex flex-col gap-[10px] items-center justify-center relative shrink-0 w-full" data-name="Container">
       <div 
-        onClick={onClick}
-        className="bg-[#242424] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer hover:bg-[#383838] active:bg-[#1a1a1a] transition-colors" 
+        className="bg-[#242424] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 opacity-50 cursor-not-allowed transition-colors" 
         data-name="Button"
       >
         <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center text-white">串接系統</p>

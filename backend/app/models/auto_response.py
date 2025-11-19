@@ -28,7 +28,8 @@ class TriggerType(str, enum.Enum):
 
     WELCOME = "welcome"  # 歡迎訊息
     KEYWORD = "keyword"  # 關鍵字
-    TIME = "time"  # 指定時間
+    TIME = "time"  # 指定時間觸發（排程）
+    FOLLOW = "follow"  # 一律回應（AI 額度不足時的後備方案）
 
 
 class AutoResponse(Base):
@@ -91,6 +92,7 @@ class AutoResponseKeyword(Base):
 
     __tablename__ = "auto_response_keywords"
 
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
     auto_response_id = Column(
         BigInteger,
         ForeignKey("auto_responses.id", ondelete="CASCADE"),
@@ -100,6 +102,8 @@ class AutoResponseKeyword(Base):
     )
     keyword = Column(String(50), nullable=False, comment="關鍵字")
     match_count = Column(Integer, default=0, comment="匹配次數")
+    created_at = Column(DateTime, server_default=func.now(), comment="建立時間")
+    updated_at = Column(DateTime, onupdate=func.now(), comment="更新時間")
 
     # 關聯關係
     auto_response = relationship("AutoResponse", back_populates="keyword_relations")

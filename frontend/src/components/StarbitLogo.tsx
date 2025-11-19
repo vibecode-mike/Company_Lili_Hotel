@@ -1,5 +1,5 @@
 import svgPaths from '../imports/svg-jb10q6lg6b';
-import { imgGroup, imgGroup1, imgGroup2, imgGroup3, imgGroup4, imgGroup5, imgGroup6 } from "../imports/svg-zrjx6";
+import { imgGroup, imgGroup1, imgGroup2, imgGroup3, imgGroup4, imgGroup5, imgGroup6 } from "../imports/StarbitLogoAssets";
 
 interface StarbitLogoProps {
   onClick?: () => void;

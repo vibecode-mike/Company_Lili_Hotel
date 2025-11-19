@@ -5,16 +5,16 @@ from app.models.base import Base
 from app.models.user import User
 from app.models.member import Member
 from app.models.tag import MemberTag, InteractionTag
-from app.models.campaign import Message, MessageRecipient
-from app.models.new_campaign import Campaign
+from app.models.message import Message, MessageDelivery
+from app.models.campaign import Campaign
 from app.models.template import MessageTemplate, TemplateCarouselItem
 from app.models.auto_response import AutoResponse, AutoResponseKeyword
 from app.models.auto_response_message import AutoResponseMessage
 from app.models.message_record import MessageRecord
-from app.models.member_interaction_record import MemberInteractionRecord
 from app.models.consumption_record import ConsumptionRecord
 from app.models.pms_integration import PMSIntegration
 from app.models.tag_trigger_log import TagTriggerLog
+from app.models.chat_log import ChatLog
 from app.models.tag_rule import TagRule
 from app.models.admin import Admin, Role, Permission, AdminRole, RolePermission
 from app.models.line_config import LineOAConfig, LoginConfig, LoginSession, SystemAuthorization
@@ -30,7 +30,7 @@ __all__ = [
     "MemberTag",
     "InteractionTag",
     "Message",
-    "MessageRecipient",
+    "MessageDelivery",
     "MessageRecord",
     "Campaign",
     "MessageTemplate",
@@ -38,10 +38,10 @@ __all__ = [
     "AutoResponse",
     "AutoResponseKeyword",
     "AutoResponseMessage",
-    "MemberInteractionRecord",
     "ConsumptionRecord",
     "PMSIntegration",
     "TagTriggerLog",
+    "ChatLog",
     "TagRule",
     "Admin",
     "Role",

@@ -14,27 +14,21 @@ from app.schemas.member import (
     UpdateNotesRequest,
 )
 
-# 群發訊息相關（原 Campaign）
-from app.schemas.campaign import (
+# 群發訊息相關
+from app.schemas.message import (
     MessageBase,
     MessageCreate,
     MessageUpdate,
     MessageListItem,
+    MessageListResponse,
     MessageDetail,
     MessageSearchParams,
     SendMessageResponse,
     RecipientListItem,
-    # 向後兼容別名
-    CampaignCreate,
-    CampaignUpdate,
-    CampaignListItem,
-    CampaignDetail,
-    CampaignSearchParams,
-    SendCampaignResponse,
 )
 
-# 活動管理相關（新 Campaign）
-from app.schemas.new_campaign import (
+# 活動管理相關
+from app.schemas.campaign import (
     CampaignBase,
     CampaignCreateNew,
     CampaignUpdateNew,
@@ -63,15 +57,6 @@ from app.schemas.message_record import (
     MessageRecordUpdate,
     MessageRecordListItem,
     MessageRecordDetail,
-)
-
-# 會員互動記錄
-from app.schemas.member_interaction_record import (
-    MemberInteractionRecordBase,
-    MemberInteractionRecordCreate,
-    MemberInteractionRecordListItem,
-    MemberInteractionRecordDetail,
-    InteractionSearchParams,
 )
 
 # 消費紀錄
@@ -122,17 +107,11 @@ __all__ = [
     "MessageCreate",
     "MessageUpdate",
     "MessageListItem",
+    "MessageListResponse",
     "MessageDetail",
     "MessageSearchParams",
     "SendMessageResponse",
     "RecipientListItem",
-    # 向後兼容
-    "CampaignCreate",
-    "CampaignUpdate",
-    "CampaignListItem",
-    "CampaignDetail",
-    "CampaignSearchParams",
-    "SendCampaignResponse",
     # 活動管理
     "CampaignBase",
     "CampaignCreateNew",
@@ -156,12 +135,6 @@ __all__ = [
     "MessageRecordUpdate",
     "MessageRecordListItem",
     "MessageRecordDetail",
-    # 會員互動記錄
-    "MemberInteractionRecordBase",
-    "MemberInteractionRecordCreate",
-    "MemberInteractionRecordListItem",
-    "MemberInteractionRecordDetail",
-    "InteractionSearchParams",
     # 消費紀錄
     "ConsumptionRecordBase",
     "ConsumptionRecordCreate",

@@ -11,8 +11,17 @@ export interface Member {
   interactionTags?: string[]; // 互動標籤
   phone: string;
   email: string;
+  gender?: string;            // 性別：0=不透露/1=男/2=女 或 undisclosed/male/female
+  birthday?: string;          // 生日 (ISO 日期格式 YYYY-MM-DD)
   createTime: string;
   lastChatTime: string;
+  lineUid?: string;
+  lineAvatar?: string;
+  join_source?: string;       // 加入來源：LINE/CRM/PMS/ERP/系統
+  id_number?: string;         // 身分證字號
+  residence?: string;         // 居住地
+  passport_number?: string;   // 護照號碼
+  internal_note?: string;     // 會員備註
 }
 
 /**
@@ -22,7 +31,6 @@ export interface Member {
  */
 export interface MemberData extends Member {
   status?: "active" | "inactive";
-  note?: string;
 }
 
 /**
@@ -115,6 +123,8 @@ export function createEmptyMember(): Member {
     email: '',
     createTime: new Date().toISOString(),
     lastChatTime: new Date().toISOString(),
+    lineUid: '',
+    lineAvatar: '',
   };
 }
 

@@ -47,7 +47,7 @@ async def upload_image(file: UploadFile = File(...)):
             "code": 200,
             "message": "上传成功",
             "data": {
-                "url": "http://127.0.0.1:8700/uploads/20250128_abc12345.jpg",
+                "url": "https://linebot.star-bit.io/uploads/20250128_abc12345.jpg",
                 "filename": "20250128_abc12345.jpg",
                 "size": 123456
             }
