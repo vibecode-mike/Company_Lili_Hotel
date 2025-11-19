@@ -15,6 +15,7 @@ from app.models.message import Message
 from app.models.template import MessageTemplate
 from app.models.member import Member
 from app.models.tag import MemberTag
+from app.models.tracking import ComponentInteractionLog
 from app.adapters.line_app_adapter import LineAppAdapter
 from app.clients.line_app_client import LineAppClient
 from app.core.pagination import PageResponse
@@ -44,7 +45,7 @@ class MessageService:
         target_filter: Optional[Dict] = None,
         scheduled_at: Optional[datetime] = None,
         campaign_id: Optional[int] = None,
-        notification_text: Optional[str] = None,
+        notification_message: Optional[str] = None,
         thumbnail: Optional[str] = None,
         admin_id: Optional[int] = None
     ) -> Message:
@@ -59,7 +60,7 @@ class MessageService:
             target_filter: 筛选条件（可选）
             scheduled_at: 排程时间（可选）
             campaign_id: 关联活动 ID（可选）
-            notification_text: 推送通知文字（可选）
+            notification_message: 推送通知文字（可选）
             thumbnail: 缩略图 URL（可选）
             admin_id: 创建者 ID（可选）
 
@@ -95,9 +96,9 @@ class MessageService:
             send_status=send_status,
             campaign_id=campaign_id,
             flex_message_json=flex_message_json,  # 直接存储 Flex Message JSON
-            message_content=notification_text or thumbnail,  # 使用 notification_text 作为摘要
-            notification_text=notification_text,  # 保存通知推播文字
-            preview_text=notification_text,  # 保存预览文字（与 notification_text 相同）
+            message_content=notification_message or thumbnail,  # 使用 notification_message 作为摘要
+            notification_message=notification_message,  # 保存通知推播文字
+            preview_message=notification_message,  # 保存预览文字（与 notification_message 相同）
             thumbnail=thumbnail,
             # created_by=admin_id  # 如果 Message 模型有此字段
         )
@@ -248,7 +249,7 @@ class MessageService:
         db: AsyncSession,
         target_type: str,
         target_filter: Optional[Dict] = None,
-        line_channel_id: Optional[str] = None
+        channel_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """获取配额状态（真实数据）
 
@@ -256,7 +257,7 @@ class MessageService:
             db: 数据库 session
             target_type: 发送对象类型
             target_filter: 筛选条件
-            line_channel_id: LINE 频道 ID
+            channel_id: LINE 频道 ID
 
         Returns:
             {
@@ -277,7 +278,7 @@ class MessageService:
 
         # 2. 调用 line_app 获取配额（真实数据）
         try:
-            quota_info = await LineAppAdapter.get_quota(line_channel_id)
+            quota_info = await LineAppAdapter.get_quota(channel_id)
             logger.info(f"📊 配额信息: {quota_info}")
         except Exception as e:
             logger.error(f"❌ 获取配额失败: {e}")
@@ -416,14 +417,14 @@ class MessageService:
         self,
         db: AsyncSession,
         message_id: int,
-        line_channel_id: Optional[str] = None
+        channel_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """发送群发消息
 
         Args:
             db: 数据库 session
             message_id: 消息 ID
-            line_channel_id: LINE 频道 ID
+            channel_id: LINE 频道 ID
 
         Returns:
             {
@@ -443,20 +444,20 @@ class MessageService:
 
         # 2. 发送消息
         logger.info(f"📤 准备发送消息: ID={message_id}")
-        return await self._send_via_http(db, message, line_channel_id)
+        return await self._send_via_http(db, message, channel_id)
 
     async def _send_via_http(
         self,
         db: AsyncSession,
         message: Message,
-        line_channel_id: Optional[str] = None
+        channel_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """通过 HTTP 调用 line_app 发送消息
 
         Args:
             db: 数据库 session
             message: 消息对象
-            line_channel_id: LINE 频道 ID
+            channel_id: LINE 频道 ID
 
         Returns:
             {
@@ -492,8 +493,9 @@ class MessageService:
                 target_audience=target_audience,
                 target_tags=target_tags,
                 alt_text=message.message_content or "新訊息",
-                notification_text=message.notification_text,
-                campaign_id=message.id
+                notification_message=message.notification_message,
+                campaign_id=message.id,
+                channel_id=channel_id
             )
             logger.info(
                 f"✅ 发送完成: 成功 {result.get('sent', 0)}, "
@@ -534,3 +536,26 @@ class MessageService:
         )
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def get_message_click_count(
+        self,
+        db: AsyncSession,
+        message_id: int
+    ) -> int:
+        """获取消息的点击次数
+
+        Args:
+            db: 数据库 session
+            message_id: 消息 ID
+
+        Returns:
+            点击次数总计
+        """
+        # 统计该消息的所有互动记录数
+        stmt = select(func.count()).select_from(ComponentInteractionLog).where(
+            ComponentInteractionLog.message_id == message_id
+        )
+        result = await db.execute(stmt)
+        count = result.scalar() or 0
+        logger.debug(f"📊 消息 ID={message_id} 点击次数: {count}")
+        return count

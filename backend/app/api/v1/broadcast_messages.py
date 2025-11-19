@@ -61,7 +61,7 @@ async def list_messages(
 @router.post("/quota", response_model=QuotaStatusResponse)
 async def get_quota_status(
     data: QuotaStatusRequest,
-    line_channel_id: Optional[str] = Query(None, description="LINE 频道 ID（多租户支持）"),
+    channel_id: Optional[str] = Query(None, description="LINE 频道 ID（多租户支持）"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -86,7 +86,7 @@ async def get_quota_status(
             db,
             data.target_type,
             data.target_filter,
-            line_channel_id
+            channel_id
         )
 
         logger.info(
@@ -136,7 +136,7 @@ async def create_message(
             target_filter=data.target_filter,
             scheduled_at=data.scheduled_at,
             campaign_id=data.campaign_id,
-            notification_text=data.notification_text,
+            notification_message=data.notification_message,
             thumbnail=data.thumbnail,
         )
 
@@ -213,12 +213,12 @@ async def send_message(
     try:
         logger.info(f"📤 发送消息: ID={message_id}")
 
-        line_channel_id = request.line_channel_id if request else None
+        channel_id = request.channel_id if request else None
 
         result = await message_service.send_message(
             db,
             message_id,
-            line_channel_id
+            channel_id
         )
 
         if not result.get("ok"):
@@ -259,7 +259,7 @@ async def get_message(
     获取消息详情
 
     Returns:
-        消息对象详情，包括关联的模板信息
+        消息对象详情，包括关联的模板信息和点击次数
     """
     try:
         logger.info(f"📖 获取消息详情: ID={message_id}")
@@ -269,9 +269,46 @@ async def get_message(
         if not message:
             raise HTTPException(status_code=404, detail=f"消息不存在: ID={message_id}")
 
-        logger.info(f"✅ 消息详情获取成功: ID={message_id}")
+        # 获取点击次数
+        click_count = await message_service.get_message_click_count(db, message_id)
 
-        return message
+        # 将 Message 对象转换为字典，添加 click_count 和 flex_message_json
+        # 处理可能为 None 的字段，使用默认值
+        message_dict = {
+            "id": message.id,
+            "message_content": message.message_content,
+            "thumbnail": message.thumbnail,
+            "template": {
+                "id": message.template.id,
+                "template_type": message.template.template_type,
+                "name": message.template.name,
+            },
+            "send_status": message.send_status,
+            "interaction_tags": message.interaction_tags or [],
+            "platform": "LINE",
+            "send_count": message.send_count or 0,
+            "open_count": message.open_count or 0,
+            "open_rate": None,
+            "click_rate": None,
+            "scheduled_at": message.scheduled_datetime_utc,
+            "send_time": message.send_time,
+            "created_at": message.created_at,
+            "template_id": message.template_id,
+            "target_type": message.target_type,
+            "target_filter": message.target_filter,
+            "trigger_condition": message.trigger_condition,
+            "failure_reason": message.failure_reason,
+            "campaign_id": message.campaign_id,
+            "created_by": None,  # TODO: implement user relationship
+            "estimated_send_count": message.estimated_send_count or 0,
+            "available_quota": message.available_quota or 0,
+            "click_count": click_count,
+            "flex_message_json": message.flex_message_json,
+        }
+
+        logger.info(f"✅ 消息详情获取成功: ID={message_id}, 点击次数={click_count}")
+
+        return message_dict
 
     except HTTPException:
         raise

@@ -101,7 +101,10 @@ class AutoResponseKeyword(Base):
         comment="自動回應ID",
     )
     keyword = Column(String(50), nullable=False, comment="關鍵字")
+    match_type = Column(String(20), default="exact", nullable=False, comment="比對類型：exact（完全匹配）")
+    is_enabled = Column(Boolean, default=True, nullable=False, comment="是否啟用此關鍵字")
     match_count = Column(Integer, default=0, comment="匹配次數")
+    last_triggered_at = Column(DateTime, nullable=True, comment="最近觸發時間")
     created_at = Column(DateTime, server_default=func.now(), comment="建立時間")
     updated_at = Column(DateTime, onupdate=func.now(), comment="更新時間")
 

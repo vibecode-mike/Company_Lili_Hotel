@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, ChevronUp, ExternalLink, X, Check } from 'lucide-react';
 import { Checkbox } from './ui/checkbox';
 import { ImageWithFallback } from './figma/ImageWithFallback';
@@ -20,10 +20,12 @@ export default function LineApiSettingsContent() {
   const [channelSecret, setChannelSecret] = useState<string>('');
   const [channelAccessToken, setChannelAccessToken] = useState<string>('');
   const [enlargedImage, setEnlargedImage] = useState<string | null>(null);
-  const [step7Input, setStep7Input] = useState<string>('');
-  const [step8Input, setStep8Input] = useState<string>('');
+  const [loginChannelId, setLoginChannelId] = useState<string>('');
+  const [loginChannelSecret, setLoginChannelSecret] = useState<string>('');
   const [isSetupComplete, setIsSetupComplete] = useState<boolean>(false);
   const [showResetDialog, setShowResetDialog] = useState<boolean>(false);
+  const [lineChannelDbId, setLineChannelDbId] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const { showToast } = useToast();
 
   // Refs for each card
@@ -35,6 +37,79 @@ export default function LineApiSettingsContent() {
   const card6Ref = useRef<HTMLDivElement>(null);
   const card7Ref = useRef<HTMLDivElement>(null);
   const card8Ref = useRef<HTMLDivElement>(null);
+
+  // 載入現有設定
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const response = await fetch('/api/v1/line_channels/current');
+        if (response.ok) {
+          const data = await response.json();
+          if (data) {
+            setLineChannelDbId(data.id);
+            setChannelId(data.channel_id || '');
+            setChannelSecret(data.channel_secret || '');
+            setChannelAccessToken(data.channel_access_token || '');
+            setLoginChannelId(data.login_channel_id || '');
+            setLoginChannelSecret(data.login_channel_secret || '');
+
+            // 如果所有必填欄位都有值，顯示完成頁面
+            if (data.channel_id && data.channel_secret && data.channel_access_token &&
+                data.login_channel_id && data.login_channel_secret) {
+              setIsSetupComplete(true);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('載入 LINE 頻道設定失敗:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadSettings();
+  }, []);
+
+  // 保存設定到資料庫
+  const saveSettings = async (data: any) => {
+    try {
+      let response;
+      if (lineChannelDbId) {
+        // 更新現有設定
+        response = await fetch(`/api/v1/line_channels/${lineChannelDbId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+      } else {
+        // 創建新設定
+        response = await fetch('/api/v1/line_channels', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            channel_secret: data.channel_secret || '',
+            channel_access_token: data.channel_access_token || '',
+            ...data
+          })
+        });
+      }
+
+      if (!response.ok) {
+        throw new Error('保存失敗');
+      }
+
+      const result = await response.json();
+      if (!lineChannelDbId) {
+        setLineChannelDbId(result.id);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('保存 LINE 頻道設定失敗:', error);
+      showToast('保存失敗，請稍後再試', 'error');
+      return false;
+    }
+  };
 
   const toggleCard = (cardNumber: number) => {
     setExpandedCard(expandedCard === cardNumber ? 0 : cardNumber);
@@ -61,7 +136,8 @@ export default function LineApiSettingsContent() {
 
   // 驗證所有必填欄位
   const validateAllFields = () => {
-    if (!channelId.trim() || !channelSecret.trim() || !channelAccessToken.trim() || !step7Input.trim() || !step8Input.trim()) {
+    if (!channelId.trim() || !channelSecret.trim() || !channelAccessToken.trim() ||
+        !loginChannelId.trim() || !loginChannelSecret.trim()) {
       showToast('填寫內容有誤', 'error');
       return false;
     }
@@ -69,19 +145,50 @@ export default function LineApiSettingsContent() {
   };
 
   // 處理建立連結
-  const handleCreateConnection = () => {
+  const handleCreateConnection = async () => {
     if (validateAllFields()) {
-      setIsSetupComplete(true);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      const success = await saveSettings({
+        channel_id: channelId,
+        channel_secret: channelSecret,
+        channel_access_token: channelAccessToken,
+        login_channel_id: loginChannelId,
+        login_channel_secret: loginChannelSecret
+      });
+
+      if (success) {
+        setIsSetupComplete(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
     }
   };
 
   // 處理重新設定
-  const handleReset = () => {
-    setShowResetDialog(false);
-    setIsSetupComplete(false);
-    setExpandedCard(1);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  const handleReset = async () => {
+    try {
+      if (lineChannelDbId) {
+        const response = await fetch(`/api/v1/line_channels/${lineChannelDbId}`, {
+          method: 'DELETE'
+        });
+
+        if (!response.ok) {
+          throw new Error('刪除失敗');
+        }
+      }
+
+      setShowResetDialog(false);
+      setIsSetupComplete(false);
+      setExpandedCard(1);
+      setLineChannelDbId(null);
+      setChannelId('');
+      setChannelSecret('');
+      setChannelAccessToken('');
+      setLoginChannelId('');
+      setLoginChannelSecret('');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error) {
+      console.error('重新設定失敗:', error);
+      showToast('重新設定失敗，請稍後再試', 'error');
+    }
   };
 
   // 如果已完成設定，顯示完成頁面
@@ -172,7 +279,7 @@ export default function LineApiSettingsContent() {
               <div className="relative bg-white rounded-[10px] border border-[#bedbff] p-[13px]">
                 <div className="flex flex-col gap-[4px]">
                   <p className="text-[14px] leading-[20px] text-[#4a5565] tracking-[-0.1504px]">Login Channel ID</p>
-                  <p className="text-[16px] leading-[24px] text-[#101828] tracking-[-0.3125px] font-mono break-all">{step7Input || 'ˇˇˇˇ'}</p>
+                  <p className="text-[16px] leading-[24px] text-[#101828] tracking-[-0.3125px] font-mono break-all">{loginChannelId || 'ˇˇˇˇ'}</p>
                 </div>
               </div>
 
@@ -181,7 +288,7 @@ export default function LineApiSettingsContent() {
                 <div className="flex flex-col gap-[4px]">
                   <p className="text-[14px] leading-[20px] text-[#4a5565] tracking-[-0.1504px]">Login Channel Secret</p>
                   <p className="text-[16px] leading-[24px] text-[#101828] tracking-[-0.3125px]">
-                    {step8Input ? '•'.repeat(Math.min(step8Input.length, 32)) : '•••••'}
+                    {loginChannelSecret ? '•'.repeat(Math.min(loginChannelSecret.length, 32)) : '•••••'}
                   </p>
                 </div>
               </div>
@@ -494,10 +601,15 @@ export default function LineApiSettingsContent() {
                 {/* Next Button */}
                 <button
                   disabled={!channelId.trim()}
-                  onClick={() => channelId.trim() && goToNextCard(3)}
+                  onClick={async () => {
+                    if (channelId.trim()) {
+                      await saveSettings({ channel_id: channelId });
+                      goToNextCard(3);
+                    }
+                  }}
                   className={`h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] flex items-center justify-center transition-colors ${
-                    channelId.trim() 
-                      ? 'bg-[#0f6beb] hover:bg-[#0d5bbf]' 
+                    channelId.trim()
+                      ? 'bg-[#0f6beb] hover:bg-[#0d5bbf]'
                       : 'bg-[#d1d5dc] opacity-50 cursor-not-allowed'
                   }`}
                 >
@@ -595,10 +707,15 @@ export default function LineApiSettingsContent() {
                 {/* Next Button */}
                 <button
                   disabled={!channelSecret.trim()}
-                  onClick={() => channelSecret.trim() && goToNextCard(4)}
+                  onClick={async () => {
+                    if (channelSecret.trim()) {
+                      await saveSettings({ channel_secret: channelSecret });
+                      goToNextCard(4);
+                    }
+                  }}
                   className={`h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] flex items-center justify-center transition-colors ${
-                    channelSecret.trim() 
-                      ? 'bg-[#0f6beb] hover:bg-[#0d5bbf]' 
+                    channelSecret.trim()
+                      ? 'bg-[#0f6beb] hover:bg-[#0d5bbf]'
                       : 'bg-[#d1d5dc] opacity-50 cursor-not-allowed'
                   }`}
                 >
@@ -703,10 +820,15 @@ export default function LineApiSettingsContent() {
                 {/* Next Button */}
                 <button
                   disabled={!channelAccessToken.trim()}
-                  onClick={() => channelAccessToken.trim() && goToNextCard(5)}
+                  onClick={async () => {
+                    if (channelAccessToken.trim()) {
+                      await saveSettings({ channel_access_token: channelAccessToken });
+                      goToNextCard(5);
+                    }
+                  }}
                   className={`h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] flex items-center justify-center transition-colors ${
-                    channelAccessToken.trim() 
-                      ? 'bg-[#0f6beb] hover:bg-[#0d5bbf]' 
+                    channelAccessToken.trim()
+                      ? 'bg-[#0f6beb] hover:bg-[#0d5bbf]'
                       : 'bg-[#d1d5dc] opacity-50 cursor-not-allowed'
                   }`}
                 >
@@ -998,15 +1120,18 @@ export default function LineApiSettingsContent() {
                   <input
                     type="text"
                     placeholder="請輸入 Channel ID"
-                    value={step7Input}
-                    onChange={(e) => setStep7Input(e.target.value)}
+                    value={loginChannelId}
+                    onChange={(e) => setLoginChannelId(e.target.value)}
                     className="bg-[#f3f3f5] h-[36px] px-[12px] py-[4px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] border-none outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
                   />
                 </div>
 
                 {/* Next Button */}
                 <button
-                  onClick={() => goToNextCard(8)}
+                  onClick={async () => {
+                    await saveSettings({ login_channel_id: loginChannelId });
+                    goToNextCard(8);
+                  }}
                   className="bg-[#0f6beb] h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] hover:bg-[#0d5bbf] transition-colors flex items-center justify-center"
                 >
                   下一步
@@ -1094,19 +1219,19 @@ export default function LineApiSettingsContent() {
                   <input
                     type="text"
                     placeholder="請輸入 Channel Secret"
-                    value={step8Input}
-                    onChange={(e) => setStep8Input(e.target.value)}
+                    value={loginChannelSecret}
+                    onChange={(e) => setLoginChannelSecret(e.target.value)}
                     className="bg-[#f3f3f5] h-[36px] px-[12px] py-[4px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] border-none outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
                   />
                 </div>
 
                 {/* Next Button */}
                 <button
-                  disabled={!step8Input.trim()}
-                  onClick={() => step8Input.trim() && handleCreateConnection()}
+                  disabled={!loginChannelSecret.trim()}
+                  onClick={() => loginChannelSecret.trim() && handleCreateConnection()}
                   className={`h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] flex items-center justify-center transition-colors ${
-                    step8Input.trim() 
-                      ? 'bg-[#0f6beb] hover:bg-[#0d5bbf]' 
+                    loginChannelSecret.trim()
+                      ? 'bg-[#0f6beb] hover:bg-[#0d5bbf]'
                       : 'bg-[#d1d5dc] opacity-50 cursor-not-allowed'
                   }`}
                 >

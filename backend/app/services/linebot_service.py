@@ -109,8 +109,8 @@ class LineBotService:
                     logger.error(f"❌ {error_msg}")
                     return {"ok": False, "sent": 0, "error": error_msg}
 
-                # 2. 構建 payload
-                target_tag_names = await self._resolve_member_tag_names(db, campaign.target_audience)
+                # 2. 構建 payload（使用新版 target_type + target_filter）
+                target_tag_names = await self._resolve_member_tag_names_from_filter(db, campaign.target_filter)
                 payload = self._build_campaign_payload(campaign, target_tag_names)
 
                 # 3. 獲取 line_app 模組並調用 push_campaign
@@ -201,7 +201,7 @@ class LineBotService:
                 sent_count = hotel_bot_module.push_survey_entry(
                     survey_id=survey_id,
                     title=survey.name,
-                    preview_text=survey.description
+                    preview_message=survey.description
                 )
 
                 # 4. 更新資料庫狀態 (確保狀態為 PUBLISHED 且記錄發送時間)
@@ -276,6 +276,32 @@ class LineBotService:
 
         return ordered_names
 
+    async def _resolve_member_tag_names_from_filter(
+        self,
+        db: AsyncSession,
+        target_filter: Optional[Dict[str, Any]],
+    ) -> List[str]:
+        """
+        從 target_filter 中提取標籤名稱（新版設計）
+
+        Args:
+            db: 數據庫 session
+            target_filter: 篩選條件 {"include": [...], "exclude": [...]}
+
+        Returns:
+            標籤名稱列表
+        """
+        if not target_filter or not isinstance(target_filter, dict):
+            return []
+
+        # 目前只處理 include 標籤
+        raw_tags = target_filter.get("include") or []
+        if not raw_tags:
+            return []
+
+        # 標籤通常已經是名稱字串，直接返回
+        return [str(tag) for tag in raw_tags if tag]
+
     def _build_campaign_payload(
         self,
         campaign: Message,
@@ -310,8 +336,8 @@ class LineBotService:
             "name": campaign.message_content,
             "title": campaign.message_content,
             # 移除 template_type，因為現在使用 Flex Message JSON
-            "notification_text": template.notification_text or "",
-            "preview_text": template.preview_text or "",
+            "notification_message": template.notification_message or "",
+            "preview_message": template.preview_message or "",
             "template_id": template.id,
             "interaction_tags": interaction_tags_json,
             "source_campaign_id": campaign.id,
@@ -321,24 +347,10 @@ class LineBotService:
         if campaign.flex_message_json:
             payload["flex_message_json"] = campaign.flex_message_json
 
-        # 處理目標對象 - 確保格式正確 (字串 "all" 或 "tags")
-        audience_type = "all"
-        target_condition = None
-        raw_tags: List[Any] = []
-
-        if campaign.target_audience:
-            if isinstance(campaign.target_audience, dict):
-                audience_type = str(campaign.target_audience.get("type") or "all").lower()
-                target_condition = campaign.target_audience.get("condition")
-                raw_tags = campaign.target_audience.get("tags") or []
-            else:
-                audience_type = str(campaign.target_audience).lower()
-
-        if audience_type in {"filtered", "tags"}:
+        # 處理目標對象（使用新版 target_type + target_filter）
+        if campaign.target_type == "篩選目標對象" and campaign.target_filter:
             payload["target_audience"] = "tags"
             resolved_tags = target_tag_names or []
-            if not resolved_tags and raw_tags:
-                resolved_tags = [str(tag) for tag in raw_tags if tag]
             if resolved_tags:
                 payload["target_tags"] = resolved_tags
             else:
@@ -349,9 +361,6 @@ class LineBotService:
                 payload["target_audience"] = "all"
         else:
             payload["target_audience"] = "all"
-
-        if target_condition:
-            payload["target_condition"] = target_condition
 
         # 處理輪播項目
         if hasattr(template, "carousel_items") and template.carousel_items:

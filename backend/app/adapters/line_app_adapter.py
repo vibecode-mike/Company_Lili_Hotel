@@ -71,11 +71,11 @@ class LineAppAdapter:
     """
 
     @staticmethod
-    async def get_quota(line_channel_id: Optional[str] = None) -> Dict[str, Any]:
+    async def get_quota(channel_id: Optional[str] = None) -> Dict[str, Any]:
         """获取 LINE 配额信息（异步）
 
         Args:
-            line_channel_id: LINE 频道 ID（可选，用于多租户）
+            channel_id: LINE 频道 ID（可选，用于多租户）
 
         Returns:
             {
@@ -91,11 +91,11 @@ class LineAppAdapter:
         loop = asyncio.get_event_loop()
 
         try:
-            logger.info(f"查询 LINE 配额，channel_id: {line_channel_id}")
+            logger.info(f"查询 LINE 配额，channel_id: {channel_id}")
             result = await loop.run_in_executor(
                 _executor,
                 usage_monitor.get_monthly_usage_summary,
-                line_channel_id
+                channel_id
             )
             logger.info(f"配额查询结果: {result}")
 
@@ -139,7 +139,7 @@ class LineAppAdapter:
             payload: {
                 "target_audience": "all" | "tags",  # 目标受众类型
                 "target_tags": [...],               # 目标标签（可选）
-                "line_channel_id": str              # LINE 频道 ID
+                "channel_id": str                   # LINE 频道 ID
             }
 
         Returns:
@@ -176,7 +176,7 @@ class LineAppAdapter:
         Args:
             payload: {
                 "campaign_id": int,              # 活动/消息 ID
-                "line_channel_id": str,          # LINE 频道 ID（可选）
+                "channel_id": str,               # LINE 频道 ID（可选）
                 "target_audience": "all" | "tags",  # 目标受众类型
                 "target_tags": [...],            # 目标标签（可选）
                 "flex_message_json": dict,       # 前端生成的 Flex Message

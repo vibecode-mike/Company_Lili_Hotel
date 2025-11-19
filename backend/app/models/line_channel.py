@@ -19,10 +19,13 @@ class LineChannel(Base):
     __tablename__ = "line_channels"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
+    channel_id = Column(String(100), unique=True, nullable=True, comment="Messaging API Channel ID")
     channel_access_token = Column(
         String(500), nullable=False, comment="頻道存取權杖"
     )
     channel_secret = Column(String(100), nullable=False, comment="頻道密鑰")
+    login_channel_id = Column(String(100), nullable=True, comment="LINE Login Channel ID")
+    login_channel_secret = Column(String(100), nullable=True, comment="LINE Login Channel Secret")
     liff_id_open = Column(String(100), nullable=True, comment="LIFF ID")
     channel_name = Column(String(100), nullable=True, comment="頻道名稱")
     is_active = Column(Boolean, default=True, nullable=False, comment="是否啟用")

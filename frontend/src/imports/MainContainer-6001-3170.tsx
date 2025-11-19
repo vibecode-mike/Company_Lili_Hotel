@@ -297,8 +297,18 @@ function IconCalendar() {
   );
 }
 
-function Container3() {
-  const [date, setDate] = useState<Date>();
+function Container3({ member }: { member?: MemberData }) {
+  // ✅ 從 member.birthday 初始化日期
+  const [date, setDate] = useState<Date | undefined>(
+    member?.birthday ? new Date(member.birthday) : undefined
+  );
+
+  // ✅ 當 member 資料更新時，同步更新生日
+  React.useEffect(() => {
+    if (member?.birthday) {
+      setDate(new Date(member.birthday));
+    }
+  }, [member?.birthday]);
 
   return (
     <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[8px] 2xl:gap-x-2 2xl:gap-y-0 relative shrink-0 w-full md:w-auto" data-name="Container">
@@ -455,7 +465,7 @@ function Container5({ member }: { member?: MemberData }) {
 function DropdownItem3({ member }: { member?: MemberData }) {
   return (
     <div className="content-stretch flex flex-wrap gap-[20px] md:gap-[40px] items-start relative shrink-0 w-full" data-name="Dropdown Item">
-      <Container3 />
+      <Container3 member={member} />
       <Container5 member={member} />
     </div>
   );

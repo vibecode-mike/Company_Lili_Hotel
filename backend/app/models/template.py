@@ -66,8 +66,8 @@ class MessageTemplate(Base):
     action_image = Column(String(500), comment="觸發的圖片檔案")
 
     # 通知設定
-    notification_text = Column(String(100), comment="通知訊息")
-    preview_text = Column(String(100), comment="訊息預覽")
+    notification_message = Column(String(100), comment="通知推播訊息")
+    preview_message = Column(String(100), comment="聊天室預覽訊息")
 
     # 輪播設定
     carousel_count = Column(Integer, comment="輪播圖卡數量（2-9張）")

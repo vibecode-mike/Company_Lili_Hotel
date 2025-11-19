@@ -49,7 +49,10 @@ def _serialize_keywords(keyword_relations: Sequence[AutoResponseKeyword]) -> Lis
             "keyword": kw.keyword,
             "name": kw.keyword,
             "type": "keyword",
+            "match_type": kw.match_type,
+            "is_enabled": kw.is_enabled,
             "match_count": kw.match_count,
+            "last_triggered_at": kw.last_triggered_at.isoformat() if kw.last_triggered_at else None,
         }
         for kw in keyword_relations
     ]

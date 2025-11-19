@@ -72,7 +72,7 @@ DATABASE_URL = (
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=3600, future=True)
 
 
-def db_get_liff_id(line_channel_id: str) -> str | None:
+def db_get_liff_id(channel_id: str) -> str | None:
     """
     若 ryan_line_channels 有欄位 liff_id，可在這裡讀取；
     若沒有此欄位，會直接忽略（回傳 None）。
@@ -80,15 +80,15 @@ def db_get_liff_id(line_channel_id: str) -> str | None:
     try:
         with engine.begin() as conn:
             r = conn.execute(
-                text("SELECT liff_id FROM ryan_line_channels WHERE line_channel_id=:cid LIMIT 1"),
-                {"cid": line_channel_id},
+                text("SELECT liff_id FROM ryan_line_channels WHERE channel_id=:cid LIMIT 1"),
+                {"cid": channel_id},
             ).scalar()
             return (r or "").strip() or None
     except Exception:
         return None
 
 
-def db_set_liff_id(line_channel_id: str, liff_id: str):
+def db_set_liff_id(channel_id: str, liff_id: str):
     """可選：若 ryan_line_channels 有 liff_id 欄位，可以把固定 LIFF Id 存回去。"""
     try:
         with engine.begin() as conn:
@@ -96,10 +96,10 @@ def db_set_liff_id(line_channel_id: str, liff_id: str):
                 text("""
                     UPDATE ryan_line_channels
                        SET liff_id = :lid
-                     WHERE line_channel_id = :cid
+                     WHERE channel_id = :cid
                     LIMIT 1
                 """),
-                {"lid": liff_id, "cid": line_channel_id},
+                {"lid": liff_id, "cid": channel_id},
             )
     except Exception:
         pass

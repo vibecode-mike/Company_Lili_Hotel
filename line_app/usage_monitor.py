@@ -54,18 +54,18 @@ def fetchall(sql: str, p: dict | None = None) -> list[dict]:
 # -------------------------------------------------
 ENV_FALLBACK_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "").strip()
 
-def resolve_access_token(line_channel_id: Optional[str]) -> Optional[str]:
+def resolve_access_token(channel_id: Optional[str]) -> Optional[str]:
     """
     依 LINE 官方的 Channel ID 取 Messaging API 長期 token。
     查不到時，回退 .env 預設 token（單一頻道情境）。
     """
-    if line_channel_id:
+    if channel_id:
         row = fetchone("""
             SELECT channel_access_token AS token
             FROM line_channels
-            WHERE line_channel_id = :cid AND is_active = 1
+            WHERE channel_id = :cid AND is_active = 1
             LIMIT 1
-        """, {"cid": line_channel_id})
+        """, {"cid": channel_id})
         if row and row.get("token"):
             return row["token"]
     return ENV_FALLBACK_TOKEN or None
@@ -79,13 +79,13 @@ LINE_CONSUMPTION = "https://api.line.me/v2/bot/message/quota/consumption"
 def _auth_headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
-def get_monthly_usage_summary(line_channel_id: Optional[str]) -> Dict[str, Any]:
+def get_monthly_usage_summary(channel_id: Optional[str]) -> Dict[str, Any]:
     """
     回傳：{ ok, type, monthly_limit, used, remaining, updated_at }
       - type: "limited" 或 "none"（官方定義）
       - monthly_limit: 若 type=none 會給 None
     """
-    token = resolve_access_token(line_channel_id)
+    token = resolve_access_token(channel_id)
     if not token:
         return {"ok": False, "error": "no_token"}
 
@@ -162,15 +162,11 @@ def preflight_check(payload: dict) -> Dict[str, Any]:
       { ok:True, remaining, needed }  或
       { ok:False, code:"INSUFFICIENT_QUOTA", remaining, needed, deficit }
     """
-    # 解析頻道（優先 LINE 官方 channel_id；沒有就用 None → 使用 .env token）
+    # 解析頻道（LINE 官方 channel_id；沒有就用 None → 使用 .env token）
     # 注意：移除 request.args.get() 以支援從 FastAPI 調用（無 Flask request context）
-    line_channel_id = (
-        payload.get("line_channel_id")
-        or payload.get("lineChannelId")
-        or None
-    )
+    channel_id = payload.get("channel_id") or None
 
-    summary = get_monthly_usage_summary(line_channel_id)
+    summary = get_monthly_usage_summary(channel_id)
     if not summary.get("ok"):
         return {"ok": False, "code": "USAGE_FETCH_FAILED", "error": summary.get("error", "unknown")}
 
@@ -197,10 +193,10 @@ def preflight_check(payload: dict) -> Dict[str, Any]:
 def api_usage_summary():
     """
     顯示本月 quota / 已使用量 / 剩餘（僅數字，無金額）。
-    支援 ?line_channel_id=xxx
+    支援 ?channel_id=xxx
     """
-    line_channel_id = request.args.get("line_channel_id")
-    return jsonify(get_monthly_usage_summary(line_channel_id))
+    channel_id = request.args.get("channel_id")
+    return jsonify(get_monthly_usage_summary(channel_id))
 
 @bp.post("/api/usage/preflight_broadcast")
 def api_preflight_broadcast():

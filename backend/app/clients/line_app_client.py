@@ -40,10 +40,11 @@ class LineAppClient:
         target_audience: str,
         target_tags: Optional[List[str]] = None,
         alt_text: str = "新訊息",
-        notification_text: Optional[str] = None,
+        notification_message: Optional[str] = None,
         campaign_id: Optional[int] = None,
         title: Optional[str] = None,
-        interaction_tags: Optional[List[str]] = None
+        interaction_tags: Optional[List[str]] = None,
+        channel_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         群发消息
@@ -53,10 +54,11 @@ class LineAppClient:
             target_audience: "all" | "tags"
             target_tags: 标签列表 (target_audience="tags" 时必填)
             alt_text: 替代文字
-            notification_text: 推播通知文字
+            notification_message: 推播通知文字
             campaign_id: 活动 ID
             title: 消息标题
             interaction_tags: 互动标签列表
+            channel_id: LINE 频道 ID（多租户支持）
 
         Returns:
             {
@@ -76,14 +78,16 @@ class LineAppClient:
 
             if target_tags:
                 payload["target_tags"] = target_tags
-            if notification_text:
-                payload["notification_text"] = notification_text
+            if notification_message:
+                payload["notification_message"] = notification_message
             if campaign_id:
                 payload["campaign_id"] = campaign_id
             if title:
                 payload["title"] = title
             if interaction_tags:
                 payload["interaction_tags"] = interaction_tags
+            if channel_id:
+                payload["channel_id"] = channel_id
 
             logger.info(f"Sending broadcast via HTTP to {self.base_url}/api/v1/messages/broadcast")
             logger.debug(f"Payload: target_audience={target_audience}, campaign_id={campaign_id}")

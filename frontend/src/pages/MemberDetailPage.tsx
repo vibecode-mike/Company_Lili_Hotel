@@ -43,6 +43,7 @@ export default function MemberDetailPage() {
     phone: member.phone,
     email: member.email,
     gender: member.gender,                   // ✅ 添加性別
+    birthday: member.birthday,               // ✅ 添加生日
     createTime: member.createTime,
     lastChatTime: member.lastChatTime,
     lineUid: member.lineUid,                 // ✅ 添加 LINE UID

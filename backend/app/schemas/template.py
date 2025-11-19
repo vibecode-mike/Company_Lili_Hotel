@@ -41,8 +41,8 @@ class TemplateBase(BaseModel):
     name: Optional[str] = None
     content: Optional[str] = None
     buttons: Optional[Dict[str, Any]] = None
-    notification_text: Optional[str] = None
-    preview_text: Optional[str] = None
+    notification_message: Optional[str] = None
+    preview_message: Optional[str] = None
     interaction_tag_id: Optional[int] = None
     interaction_result: Optional[Dict[str, Any]] = None
 

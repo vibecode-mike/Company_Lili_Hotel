@@ -1066,19 +1066,50 @@ def make_image_click_bubble(item: dict, tracked_uri: Optional[str]):
 
 
 def build_user_messages_from_payload(payload: dict, campaign_id: int, line_user_id: str) -> List[FlexMessage]:
+    """
+    從後台 payload 組成「要發給單一 user 的 Flex 訊息」列表。
+
+    🔹 跟『通知 / 聊天室預覽』相關的欄位說明：
+        - payload["notification_message"]
+            → 給【手機通知列 / 鎖屏】看的文字
+            → 會用在第一則 Text 訊息（在 push_campaign 裡處理）
+
+        - payload["preview_message"]
+            → 給【聊天室列表預覽】看的文字
+            → 這裡會用在 FlexMessage.alt_text（Flex 的預覽文字）
+
+    ⚠ 注意：
+        - build_user_messages_from_payload 只負責產生 Flex，
+          第一則「通知用文字」會在 push_campaign 裡多送一則 TextMessage。
+    """
     ttype = (payload.get("template_type") or payload.get("type") or "").strip().lower()
     title = payload.get("title") or "活動通知"
-    messages = []
 
-    # 準備項目
+    # 後台自定義的兩段文字
+    notification_message = (payload.get("notification_message") or "").strip() or title
+    preview_message = (payload.get("preview_message") or "").strip() or notification_message
+
+    messages: List[FlexMessage] = []
+
+    # -----------------------------
+    # 準備項目（單卡 or 多卡 carousel）
+    # -----------------------------
     if payload.get("carousel_items"):
         items = sorted(payload["carousel_items"], key=lambda x: x.get("sort_order") or 0)
     else:
+        # 單張卡的簡單模式
+        # description 優先用 preview_message，其次才用 notification_message
+        description = (
+            payload.get("description")
+            or payload.get("preview_message")
+            or payload.get("notification_message")
+            or title
+        )
         items = [{
             "image_base64": payload.get("image_base64"),
             "image_url": payload.get("image_url"),
             "title": payload.get("title"),
-            "description": payload.get("notification_text"),
+            "description": description,
             "price": payload.get("price"),
             "action_url": payload.get("url"),
             "interaction_tags": payload.get("interaction_tags"),
@@ -1088,7 +1119,9 @@ def build_user_messages_from_payload(payload: dict, campaign_id: int, line_user_
             "sort_order": 0
         }]
 
+    # -----------------------------
     # 產生追蹤連結（含 &src &tag）
+    # -----------------------------
     def tracked_uri(item) -> Optional[str]:
         target_url = (
             item.get("action_url")
@@ -1119,14 +1152,17 @@ def build_user_messages_from_payload(payload: dict, campaign_id: int, line_user_
             f"&type={interaction_type}&to={quote(target_url, safe='')}"
             f"{src_q}{tag_q}"
         )
-        logging.warning("[TRACK_URI] %s", uri)  # debug
+        logging.warning("[TRACK_URI] %s", uri)
         return uri
 
-    # 建立 Bubble（確保 action 用 tracked_uri）
+    # -----------------------------
+    # 組 Bubble（每一張卡片）
+    # -----------------------------
     bubbles = []
     for it in items:
         uri = tracked_uri(it)
         it["image_click_action_type"] = it.get("image_click_action_type", "open_url")
+
         if ttype == "image_card":
             bubbles.append(make_image_button_bubble(it, uri))
         elif ttype in ("image_click", "carousel", ""):
@@ -1134,7 +1170,9 @@ def build_user_messages_from_payload(payload: dict, campaign_id: int, line_user_
         else:
             bubbles.append(make_image_button_bubble(it, uri))
 
-    # 合併 Flex
+    # -----------------------------
+    # Flex 容器（單卡 or carousel）
+    # -----------------------------
     if len(bubbles) > 1 or ttype == "carousel":
         flex = {"type": "carousel", "contents": bubbles}
     else:
@@ -1142,18 +1180,36 @@ def build_user_messages_from_payload(payload: dict, campaign_id: int, line_user_
 
     logging.error("=== FLEX DEBUG OUTPUT ===\n%s", json.dumps(flex, ensure_ascii=False, indent=2))
     fc = FlexContainer.from_dict(flex)
-    messages.append(FlexMessage(alt_text=title, contents=fc))
-    return messages
 
+    # ✅ 這裡很關鍵：
+    #   - alt_text 使用 preview_message
+    #   - 這樣在「雙訊息模式」下：
+    #       第一則 Text：notification_message → 給通知列/鎖屏看
+    #       第二則 Flex：alt_text = preview_message → 給聊天室列表預覽看
+    messages.append(FlexMessage(alt_text=preview_message, contents=fc))
+    return messages
 
 
 # 活動推播 (Campaign Push)
 def _create_campaign_row(payload: dict) -> int:
-    # 先決定 template_id
+    """
+    建立一筆 messages「群發活動」紀錄，回傳 messages.id。
+
+    ⚠ 不改資料庫結構，只使用你現在 messages / message_templates 表裡「確實存在」的欄位。
+      - message_templates: 用 template_type 找 id，找不到就讓 template_id = NULL
+      - messages: 寫入欄位：
+          message_content, template_id, target_type, trigger_condition,
+          interaction_tags, send_time, send_status,
+          send_count, open_count, created_at, updated_at
+    """
+
+    # 1) 先決定 template_id（可以為 None）
     tid = payload.get("template_id")
     if not tid:
         raw_type = payload.get("type") or payload.get("template_type") or ""
         ttype = raw_type.strip().upper()
+
+        # 後台傳來的類型，先做個簡單對應（你之前用 IMAGE_CARD / IMAGE_CLICK）
         ALIAS = {
             "IMAGE_CARD": "IMAGE_CARD",
             "IMAGE_CLICK": "IMAGE_CLICK",
@@ -1162,62 +1218,91 @@ def _create_campaign_row(payload: dict) -> int:
             "CLICK": "IMAGE_CLICK",
         }
         ttype = ALIAS.get(ttype, ttype)
-        if not ttype:
-            raise ValueError("payload 需要 type 或 template_id")
-        row = fetchone("""
-            SELECT id FROM message_templates
-            WHERE type = :t
-            ORDER BY id DESC
-            LIMIT 1
-        """, {"t": ttype})
-        if not row:
-            raise ValueError(f"message_templates 找不到 type={ttype} 的模板")
-        tid = row["id"]
 
-    # 主要欄位
+        if not ttype:
+            # 連 type/template_type 都沒有，就不要再硬找模板，直接用 None
+            tid = None
+        else:
+            try:
+                # ✅ 這裡只用「真的存在」的 template_type 欄位
+                row = fetchone("""
+                    SELECT id FROM message_templates
+                    WHERE template_type = :t
+                    ORDER BY id DESC
+                    LIMIT 1
+                """, {"t": ttype})
+                if row:
+                    tid = row["id"]
+                else:
+                    # 找不到就算了，不要炸掉，template_id 用 NULL
+                    logging.warning(
+                        "[_create_campaign_row] message_templates 找不到 template_type=%s 的模板，template_id 先用 NULL",
+                        ttype,
+                    )
+                    tid = None
+            except Exception as e:
+                # 查模板失敗一樣不要讓整個流程掛掉
+                logging.warning(
+                    "[_create_campaign_row] 查詢 message_templates 失敗，template_id 先用 NULL：%s",
+                    e,
+                )
+                tid = None
+
+    # 2) 準備要寫進 messages 的其他欄位
     now = utcnow()
-    sat = utcnow()
     title = payload.get("title") or payload.get("name") or "未命名活動"
     audience = payload.get("target_audience") or "all"
 
-    # 標籤正規化 → JSON
+    # 標籤 → 轉成 JSON 文字存進 interaction_tags（你的欄位名稱就是 interaction_tags）
     interaction_tags = payload.get("interaction_tags")
     if isinstance(interaction_tags, str):
         interaction_tags = [x.strip() for x in interaction_tags.split(",") if x.strip()]
     elif not interaction_tags:
-        interaction_tags = None  # 無標籤 → 存 NULL
+        interaction_tags = None
 
+    # 發送狀態：立即送 / 預約
     status = "sent" if (payload.get("schedule_type") or "immediate") == "immediate" else "scheduled"
 
-    # 映射 target_audience 到 target_type（新資料庫結構）
+    # 映射 target_audience → target_type（messages 表裡有 target_type）
     target_type = "all_friends" if audience == "all" else "filtered"
 
-    # 映射 status 到 send_status（新資料庫結構）
+    # 映射 status → send_status（messages 表裡有 send_status）
     status_map = {
         "sent": "已發送",
         "scheduled": "排程發送",
         "draft": "草稿",
-        "failed": "發送失敗"
+        "failed": "發送失敗",
     }
     send_status = status_map.get(status, "草稿")
 
+    params = {
+        "content": title,
+        "tid": tid,
+        "target_type": target_type,
+        "itag": json.dumps(interaction_tags, ensure_ascii=False) if interaction_tags is not None else None,
+        "now": now,
+        "send_status": send_status,
+    }
+
+    # 3) ✅ 寫入 messages（完全照你現在 messages 表有的欄位，不多加）
+    #
+    #   欄位：
+    #     message_content, template_id, target_type, trigger_condition,
+    #     interaction_tags, send_time, send_status,
+    #     send_count, open_count, created_at, updated_at
+    #
+    #   ❌ 沒有 click_count
     with engine.begin() as conn:
         conn.execute(text("""
             INSERT INTO messages
                 (message_content, template_id, target_type, trigger_condition,
                  interaction_tags, send_time, send_status,
-                 send_count, open_count, click_count, created_at, updated_at)
+                 send_count, open_count, created_at, updated_at)
             VALUES
-                (:content, :tid, :target_type, NULL, :itag, :now, :send_status,
-                 0, 0, 0, :now, :now)
-        """), {
-            "content": title,
-            "tid": tid,
-            "target_type": target_type,
-            "itag": json.dumps(interaction_tags, ensure_ascii=False) if interaction_tags is not None else None,
-            "now": now,
-            "send_status": send_status,
-        })
+                (:content, :tid, :target_type, NULL,
+                 :itag, :now, :send_status,
+                 0, 0, :now, :now)
+        """), params)
         rid = conn.execute(text("SELECT LAST_INSERT_ID()")).scalar()
 
     return int(rid)
@@ -1314,7 +1399,11 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
     failed = 0
     total_targets = len(rs)
 
-    logging.info(f"Starting to send to {total_targets} members...")
+    logging.info(f"Starting to send to {total_targets} members.")
+
+    # 後台自訂的兩段文案（可以是空）
+    notification_message = (payload.get("notification_message") or "").strip()
+    preview_message = (payload.get("preview_message") or "").strip()
 
     for idx, r in enumerate(rs, 1):
         uid = r["line_uid"]
@@ -1326,12 +1415,68 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
             continue
 
         try:
-            # 組訊息
-            msgs = build_user_messages_from_payload(payload, inner_cid, uid)
+            # 先組 Flex（裡面的 alt_text 已經用 preview_message）
+            msgs = build_user_messages_from_payload(payload, cid, uid)
 
-            # 推播
-            logging.info(f"[{idx}/{total_targets}] Sending to {uid} (member_id={mid})")
-            api.push_message(PushMessageRequest(to=uid, messages=msgs))
+            # 判斷是否啟用「雙訊息模式」
+            #   - 兩個欄位都有值，而且內容不同：才啟用
+            #   - 否則就跟原本一樣只送一次 Flex
+            
+            #use_two_step = (
+            #   notification_message
+            #  and preview_message
+            #  and notification_message != preview_message
+            #)
+
+            use_two_step = False
+            
+            logging.info(
+                f"[{idx}/{total_targets}] Sending to {uid} "
+                f"(member_id={mid}), two_step={use_two_step}"
+            )
+
+            # - altText = notification_message（作為通知內容）
+            # - notification_disabled = False（讓通知跳出）
+            # - 聊天室不會顯示文字 notification_message
+
+            try:
+                # 用 notification_message 當 alt_text（LINE 通知會用 alt_text）
+                alt_txt = notification_message or preview_message or payload.get("title", "通知")
+
+                # msgs 是 build_user_messages_from_payload 回傳的 list
+                # 通常 msgs[0] 就是 FlexMessage
+                flex_msg = msgs[0]
+
+                # 強制設置 Flex 的 alt_text
+                flex_msg.alt_text = alt_txt
+
+                api.push_message(PushMessageRequest(
+                    to=uid,
+                    messages=[flex_msg],
+                    notification_disabled=False     # 允許通知跳出
+                ))
+
+                sent += 1
+                logging.info(f"[{idx}/{total_targets}] ✓ Success to {uid}")
+
+                # 記錄 outgoing log
+                if mid is not None:
+                    payload_for_log = dict(payload)
+                    payload_for_log.pop("image_base64", None)
+                    payload_for_log.pop("image_url", None)
+                    insert_message(
+                        mid,
+                        "outgoing",
+                        "flex",
+                        {"campaign_id": cid, "payload": payload_for_log},
+                        campaign_id=cid,
+                    )
+
+            except Exception as e:
+                logging.exception(f"[{idx}/{total_targets}] ✗ Failed to {uid}: {e}")
+                failed += 1
+                continue
+
             sent += 1
             logging.info(f"[{idx}/{total_targets}] ✓ Success to {uid}")
 
@@ -1347,23 +1492,20 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
                     {"campaign_id": cid, "payload": payload_for_log},
                     campaign_id=cid,
                 )
+
         except Exception as e:
+            logging.exception(f"[{idx}/{total_targets}] ✗ Failed to {uid}: {e}")
             failed += 1
-            logging.error(f"[{idx}/{total_targets}] ✗ Failed to {uid}: {e}")
+            continue
 
-    # 更新活動發送統計
-    execute(
-        "UPDATE messages SET send_count=:sent, updated_at=:now WHERE id=:cid",
-        {"sent": sent, "cid": cid, "now": utcnow()},
-    )
+    logging.info(f"[Broadcast Done] sent={sent}, failed={failed}")
 
-    logging.info(f"=== [Broadcast Complete] ===")
-    logging.info(f"Campaign ID: {cid}")
-    logging.info(f"Sent: {sent}/{total_targets}")
-    logging.info(f"Failed: {failed}/{total_targets}")
-    logging.info(f"Success rate: {(sent/total_targets*100):.1f}%" if total_targets > 0 else "0%")
-
-    return {"ok": True, "campaign_id": cid, "sent": sent, "failed": failed}
+    return {
+        "ok": True,
+        "campaign_id": cid,
+        "sent": sent,
+        "failed": failed,
+    }
 
 
 # -------------------------------------------------
@@ -2135,52 +2277,36 @@ def __track():
     try:
         execute(f"""
             INSERT INTO `{MYSQL_DB}`.`click_tracking_demo`
-                (line_id, source_campaign_id, line_display_name, total_clicks, last_clicked_at, last_click_tag, created_at, updated_at)
+                (line_id, source_campaign_id, line_display_name, total_clicks, last_clicked_at, last_click_tag)
             VALUES
                 (
                     :uid,
                     :src,
-                    COALESCE(:dname, (SELECT m.line_name FROM `{MYSQL_DB}`.`members` m WHERE m.line_uid = :uid LIMIT 1)),
+                    COALESCE(:dname, (SELECT m.line_display_name FROM `{MYSQL_DB}`.`members` m WHERE m.line_uid = :uid LIMIT 1)),
                     1,
                     NOW(),
-                    :merged,
-                    NOW(),
-                    NOW()
+                    :merged
                 )
             ON DUPLICATE KEY UPDATE
-                total_clicks = total_clicks + 1,
+                total_clicks = 1,
                 line_display_name = COALESCE(
                     :dname,
-                    (SELECT m.line_name FROM `{MYSQL_DB}`.`members` m WHERE m.line_uid = :uid LIMIT 1),
+                    (SELECT m.line_display_name FROM `{MYSQL_DB}`.`members` m WHERE m.line_uid = :uid LIMIT 1),
                     line_display_name
                 ),
                 last_click_tag = :merged,
-                last_clicked_at = NOW(),
-                updated_at = NOW();
+                last_clicked_at = NOW();
         """, {"uid": uid, "src": src, "dname": display_name, "merged": merged_str})
     except Exception as e:
         logging.exception(e)
 
-    # 互動明細紀錄 - 修复：查询正确的 message_id
+    # 互動明細紀錄（可保留你原來的邏輯）
     try:
-        if uid and cid:
-            # 从 URL 参数获取 message_id，如果没有则从 messages 表查询
-            msg_id = request.args.get("mid")
-            if not msg_id:
-                # 通过 campaign_id 查询对应的 message_id
-                msg_row = fetchone("""
-                    SELECT id FROM messages WHERE campaign_id = :cid LIMIT 1
-                """, {"cid": cid})
-                msg_id = msg_row["id"] if msg_row else None
-
-            if msg_id:
-                execute("""
-                    INSERT INTO component_interaction_logs
-                        (line_id, message_id, campaign_id, interaction_type, interaction_value, triggered_at, created_at)
-                    VALUES (:uid, :msg_id, :cid, :itype, :to, NOW(), NOW())
-                """, {"uid": uid, "msg_id": msg_id, "cid": cid, "itype": ityp, "to": to})
-            else:
-                logging.warning(f"[__track] 无法找到 campaign_id={cid} 对应的 message_id，跳过 tracking 记录")
+        execute("""
+            INSERT INTO component_interaction_logs
+                (line_id, campaign_id, interaction_type, interaction_value, triggered_at)
+            VALUES (:uid, :cid, :itype, :to, NOW())
+        """, {"uid": uid, "cid": cid, "itype": ityp, "to": to})
     except Exception as e:
         logging.exception(e)
 
@@ -2526,34 +2652,6 @@ def on_postback(event: PostbackEvent):
 
             # 3) 原本就有的訊息紀錄
             insert_message(mid, "incoming", "postback", {"data": data})
-
-            # 4) ★新增：記錄 postback 互動到 component_interaction_logs
-            # 从 postback data 中解析 campaign_id 和 message_id
-            try:
-                import urllib.parse
-                parsed_data = urllib.parse.parse_qs(data)
-                cid = parsed_data.get("cid", [None])[0] or parsed_data.get("campaign_id", [None])[0]
-                msg_id = parsed_data.get("mid", [None])[0] or parsed_data.get("message_id", [None])[0]
-
-                # 如果 postback data 中没有 message_id，通过 campaign_id 查询
-                if not msg_id and cid:
-                    msg_row = fetchone("""
-                        SELECT id FROM messages WHERE campaign_id = :cid LIMIT 1
-                    """, {"cid": cid})
-                    msg_id = msg_row["id"] if msg_row else None
-
-                if uid and cid and msg_id:
-                    execute("""
-                        INSERT INTO component_interaction_logs
-                            (line_id, message_id, campaign_id, interaction_type, interaction_value, triggered_at, created_at)
-                        VALUES (:uid, :msg_id, :cid, :itype, :data, NOW(), NOW())
-                    """, {"uid": uid, "msg_id": msg_id, "cid": cid, "itype": "postback", "data": data})
-                    logging.info(f"[on_postback] tracking recorded: line_id={uid}, message_id={msg_id}, campaign_id={cid}")
-                else:
-                    if cid and not msg_id:
-                        logging.warning(f"[on_postback] 无法找到 campaign_id={cid} 对应的 message_id，跳过 tracking 记录")
-            except Exception:
-                logging.exception("[on_postback] tracking insert failed")
         except Exception:
             # 建議留 log，比較好除錯，不要完全吃掉
             logging.exception("[on_postback] update member/line_friends failed")

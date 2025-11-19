@@ -4,7 +4,7 @@
  * - 右側：聊天區域（藍色背景 + 對話氣泡 + 輸入框）
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { ChatRoomLayoutProps, ChatMessage } from './types';
 import type { Member } from '../../types/member';
 import MemberAvatar from './MemberAvatar';
@@ -21,8 +21,11 @@ import { Calendar } from '../ui/calendar';
 import MemberNoteEditor from '../shared/MemberNoteEditor';
 import { useMembers } from '../../contexts/MembersContext';
 
-// Mock messages data
-const mockMessages: ChatMessage[] = [
+// Chat messages constants
+const PAGE_SIZE = 6;  // 每次載入 6 條訊息（3 對問答）
+
+// Removed mock messages - will load from API
+const mockMessages_REMOVED: ChatMessage[] = [
   { id: 1, type: 'user', text: '文字訊息', time: '下午 03:30', isRead: false },
   { id: 2, type: 'official', text: '官方文字訊息', time: '下午 03:40', isRead: true },
   { id: 3, type: 'user', text: '文字訊息', time: '下午 04:30', isRead: false },
@@ -183,8 +186,14 @@ export default function ChatRoomLayout({ member: initialMember }: ChatRoomLayout
   const [member, setMember] = useState<Member | undefined>(initialMember);
   const [isLoadingMember, setIsLoadingMember] = useState(false);
 
-  const [messages, setMessages] = useState<ChatMessage[]>(mockMessages);
+  // Chat messages state
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(1);
+
   const [messageInput, setMessageInput] = useState('');
+  const [isComposing, setIsComposing] = useState(false); // IME composition state
   const [isTagModalOpen, setIsTagModalOpen] = useState(false);
   const [memberTags, setMemberTags] = useState<string[]>(member?.memberTags || []); // ✅ 使用真實會員標籤
   const [interactionTags, setInteractionTags] = useState<string[]>(member?.interactionTags || []); // ✅ 使用真實互動標籤
@@ -264,7 +273,87 @@ export default function ChatRoomLayout({ member: initialMember }: ChatRoomLayout
     }
   }, [member]);
 
-  // Auto-scroll to bottom when messages change
+  // Load chat messages from API
+  const loadChatMessages = useCallback(async (pageNum: number = 1, append: boolean = false) => {
+    if (!member?.id) return;
+
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(
+        `/api/v1/members/${member.id}/chat-messages?page=${pageNum}&page_size=${PAGE_SIZE}`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }
+      );
+
+      const result = await response.json();
+
+      if (result.success) {
+        const { messages: newMessages, has_more } = result.data;
+
+        // API 返回降序（最新在前），需反轉為升序（最舊在前）
+        const reversedMessages = [...newMessages].reverse();
+
+        if (append) {
+          // 向上滾動載入更早訊息 - 添加到前面
+          setMessages(prev => [...reversedMessages, ...prev]);
+        } else {
+          // 初次載入 - 替換全部
+          setMessages(reversedMessages);
+        }
+
+        setHasMore(has_more);
+        setPage(pageNum);
+      }
+    } catch (error) {
+      console.error('載入聊天訊息失敗:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [member?.id]);
+
+  // Handle scroll for infinite scrolling
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const container = e.currentTarget;
+
+    // 滾動到頂部 + 還有更多訊息 + 不在載入中
+    if (container.scrollTop === 0 && hasMore && !isLoading) {
+      const prevScrollHeight = container.scrollHeight;
+
+      const loadMore = async () => {
+        await loadChatMessages(page + 1, true);
+        // 保持滾動位置（避免跳動）
+        requestAnimationFrame(() => {
+          if (container) {
+            container.scrollTop = container.scrollHeight - prevScrollHeight;
+          }
+        });
+      };
+
+      loadMore();
+    }
+  }, [hasMore, isLoading, page, loadChatMessages]);
+
+  // Load initial messages when member changes
+  useEffect(() => {
+    if (member?.id) {
+      loadChatMessages(1, false);
+    }
+  }, [member?.id, loadChatMessages]);
+
+  // Auto-scroll to bottom on initial load
+  useEffect(() => {
+    if (messages.length > 0 && chatContainerRef.current && page === 1) {
+      requestAnimationFrame(() => {
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        }
+      });
+    }
+  }, [messages, page]);
+
+  // Auto-scroll to bottom when messages change (legacy - keep for new message functionality)
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
@@ -714,10 +803,40 @@ export default function ChatRoomLayout({ member: initialMember }: ChatRoomLayout
             </div>
 
             {/* Messages Scroll Container */}
-            <div 
+            <div
               ref={chatContainerRef}
+              onScroll={handleScroll}
               className="box-border content-stretch flex flex-col gap-[20px] items-start overflow-y-auto p-[24px] pt-[60px] relative w-full flex-1"
             >
+              {/* Loading more messages indicator (top) */}
+              {isLoading && page > 1 && (
+                <div className="w-full text-center py-2 text-gray-400 text-sm">
+                  載入更早訊息...
+                </div>
+              )}
+
+              {/* No more messages indicator */}
+              {!hasMore && messages.length > 0 && (
+                <div className="w-full text-center py-2 text-gray-400 text-sm">
+                  ─── 沒有更多訊息了 ───
+                </div>
+              )}
+
+              {/* Initial loading indicator */}
+              {isLoading && page === 1 && (
+                <div className="w-full text-center py-4 text-gray-500">
+                  載入中...
+                </div>
+              )}
+
+              {/* Empty state */}
+              {messages.length === 0 && !isLoading && (
+                <div className="w-full text-center py-4 text-gray-500">
+                  暫無對話記錄
+                </div>
+              )}
+
+              {/* Messages list */}
               {messages.map((message) => (
                 <MessageBubble key={message.id} message={message} />
               ))}
@@ -735,11 +854,14 @@ export default function ChatRoomLayout({ member: initialMember }: ChatRoomLayout
                           value={messageInput}
                           onChange={(e) => setMessageInput(e.target.value)}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
+                            // Prevent sending message during IME composition (Chinese, Japanese, Korean input)
+                            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !isComposing) {
                               e.preventDefault();
                               handleSendMessage();
                             }
                           }}
+                          onCompositionStart={() => setIsComposing(true)}
+                          onCompositionEnd={() => setIsComposing(false)}
                           placeholder="輸入訊息文字"
                           className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow h-full leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] placeholder:text-[#a8a8a8] bg-transparent border-0 outline-none resize-none [&::-webkit-scrollbar]:w-[8px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/60 [&::-webkit-scrollbar-thumb]:rounded-full"
                         />

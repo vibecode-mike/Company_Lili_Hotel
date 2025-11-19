@@ -68,18 +68,13 @@ class MessageCreate(BaseModel):
     trigger_image_url: Optional[str] = None  # 觸發圖片 URL
 
     # 訊息相關
-    notification_text: Optional[str] = None
-    preview_text: Optional[str] = None
+    notification_message: Optional[str] = None
+    preview_message: Optional[str] = None
     template_type: Optional[str] = None  # Template01/Template02/Template03/Template04
 
-    # 發送對象設定（兩欄位設計）
+    # 發送對象設定（兩欄位設計，符合官方規格）
     target_type: str  # 所有好友/篩選目標對象
     target_filter: Optional[Dict[str, Any]] = None  # 篩選條件（JSON格式）
-
-    # 兼容舊 API 的欄位
-    target_audience: Optional[Union[str, Dict[str, Any]]] = None  # 'all' 或包含詳細條件（向後兼容）
-    target_condition: Optional[str] = None  # 'include' 或 'exclude'（向後兼容）
-    target_tags: Optional[List[str]] = None  # 篩選標籤數組（向後兼容）
 
     # 排程設定
     schedule_type: str  # 'immediate', 'scheduled', 'draft'
@@ -177,14 +172,8 @@ class MessageDetail(MessageListItem):
     created_by: Optional[UserInfo] = None
     estimated_send_count: int = 0  # 預計發送好友人數
     available_quota: int = 0  # 可用訊息配額用量
-
-    # 向後兼容：保留 target_audience
-    @property
-    def target_audience(self) -> Dict[str, Any]:
-        """向後兼容：轉換 target_type + target_filter 為 target_audience"""
-        if self.target_type == "所有好友":
-            return {"type": "all"}
-        return self.target_filter or {}
+    click_count: int = 0  # 點擊次數（從ComponentInteractionLog統計）
+    flex_message_json: Optional[str] = None  # Flex Message JSON字串（用於前端預覽）
 
 
 class MessageSearchParams(BaseModel):
@@ -255,7 +244,7 @@ class QuotaStatusResponse(BaseModel):
 class MessageSendRequest(BaseModel):
     """消息發送請求"""
 
-    line_channel_id: Optional[str] = None  # LINE 頻道 ID（多租戶支持）
+    channel_id: Optional[str] = None  # LINE 頻道 ID（多租戶支持）
 
 
 class MessageSendResponse(BaseModel):

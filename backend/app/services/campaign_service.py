@@ -64,20 +64,9 @@ class CampaignService:
                         )
                         trigger_condition = None
 
-        # 4. 構建 target_audience（兼容字串與物件兩種格式）
-        raw_target_audience = campaign_data.target_audience
-        if isinstance(raw_target_audience, dict):
-            target_audience = {
-                "type": raw_target_audience.get("type", "all"),
-                "condition": raw_target_audience.get("condition", "include"),
-                "tags": raw_target_audience.get("tags") or [],
-            }
-        else:
-            target_audience = {
-                "type": raw_target_audience or "all",
-                "condition": campaign_data.target_condition or "include",
-                "tags": campaign_data.target_tags or [],
-            }
+        # 4. 使用新版兩欄位設計（target_type + target_filter）
+        target_type = campaign_data.target_type
+        target_filter = campaign_data.target_filter
 
         # 5. 根据 schedule_type 决定状态
         scheduled_at = campaign_data.scheduled_at
@@ -101,11 +90,12 @@ class CampaignService:
                 campaign_data.flex_message_json
             )
 
-        # 7. 创建活动
+        # 7. 创建活动（使用新版兩欄位設計）
         campaign = Message(
             message_content=campaign_data.title or "未命名活动",
             template_id=template.id,
-            target_audience=target_audience,
+            target_type=target_type,
+            target_filter=target_filter,
             trigger_condition=trigger_condition,
             interaction_tags=interaction_tags,  # 使用解析出的标签
             scheduled_datetime_utc=scheduled_at,
@@ -402,9 +392,9 @@ class CampaignService:
         # 移除 type 欄位處理，因為該欄位已從資料庫移除
         template = MessageTemplate(
             name=campaign_data.title or "未命名模板",
-            content=campaign_data.notification_text,
-            notification_text=campaign_data.notification_text,
-            preview_text=campaign_data.preview_text,
+            content=campaign_data.notification_message,
+            notification_message=campaign_data.notification_message,
+            preview_message=campaign_data.preview_message,
         )
         db.add(template)
         await db.flush()

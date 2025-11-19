@@ -185,164 +185,318 @@ function CheckSuccess() {
 
 export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: MessageDetailDrawerProps) {
   const [currentCardIndex, setCurrentCardIndex] = React.useState(0);
+  const [messageData, setMessageData] = React.useState<any>(null);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  // Fetch message data from API
+  React.useEffect(() => {
+    if (!messageId || !open) {
+      return;
+    }
+
+    const fetchMessageData = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const response = await fetch(`/api/v1/messages/${messageId}`);
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch message: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        setMessageData(data);
+      } catch (err) {
+        console.error('Error fetching message data:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load message');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMessageData();
+  }, [messageId, open]);
 
   // Reset to first card when drawer opens or messageId changes
   React.useEffect(() => {
     setCurrentCardIndex(0);
   }, [open, messageId]);
 
-  // Create mock CarouselCard data for preview
-  const createMockCard = (title: string, content: string, image?: string): CarouselCard => ({
-    id: 1,
-    enableImage: true,
-    enableTitle: true,
-    enableContent: true,
-    enablePrice: false,
-    enableButton1: false,
-    enableButton2: false,
-    enableButton3: false,
-    enableButton4: false,
-    image: image || imgImageHero,
-    cardTitle: title,
-    content: content,
-    price: '',
-    currency: 'ntd',
-    button1: '',
-    button2: '',
-    button3: '',
-    button4: '',
-    button1Action: '',
-    button1Url: '',
-    button1Tag: '',
-    button1Text: '',
-    button1TriggerImage: null,
-    button1Mode: 'primary',
-    button2Action: '',
-    button2Url: '',
-    button2Tag: '',
-    button2Text: '',
-    button2TriggerImage: null,
-    button2Mode: 'secondary',
-    button3Action: '',
-    button3Url: '',
-    button3Tag: '',
-    button3Text: '',
-    button3TriggerImage: null,
-    button3Mode: 'secondary',
-    button4Action: '',
-    button4Url: '',
-    button4Tag: '',
-    button4Text: '',
-    button4TriggerImage: null,
-    button4Mode: 'secondary',
-    enableImageUrl: false,
-    imageUrl: '',
-    imageTag: '',
-  });
+  // Parse Flex Message JSON to CarouselCard format
+  const parseFlexMessageToCards = (flexMessageJson: string | null): CarouselCard[] => {
+    if (!flexMessageJson) {
+      return [{
+        id: 1,
+        enableImage: false,
+        enableTitle: true,
+        enableContent: true,
+        enablePrice: false,
+        enableButton1: false,
+        enableButton2: false,
+        enableButton3: false,
+        enableButton4: false,
+        image: imgImageHero,
+        cardTitle: '訊息標題',
+        content: '內文文字說明',
+        price: '',
+        currency: 'ntd',
+        button1: '',
+        button2: '',
+        button3: '',
+        button4: '',
+        button1Action: '',
+        button1Url: '',
+        button1Tag: '',
+        button1Text: '',
+        button1TriggerImage: null,
+        button1Mode: 'primary',
+        button2Action: '',
+        button2Url: '',
+        button2Tag: '',
+        button2Text: '',
+        button2TriggerImage: null,
+        button2Mode: 'secondary',
+        button3Action: '',
+        button3Url: '',
+        button3Tag: '',
+        button3Text: '',
+        button3TriggerImage: null,
+        button3Mode: 'secondary',
+        button4Action: '',
+        button4Url: '',
+        button4Tag: '',
+        button4Text: '',
+        button4TriggerImage: null,
+        button4Mode: 'secondary',
+        enableImageUrl: false,
+        imageUrl: '',
+        imageTag: '',
+      }];
+    }
 
-  // Mock data mapping for demo purposes
-  const messageDataMap: Record<string, any> = {
-    '1': {
-      title: '雙人遊行 獨家優惠',
-      tags: ['雙人床', '送禮', 'KOL'],
-      platform: 'LINE',
-      status: '已排程',
-      recipients: 1000,
-      clicks: 0,
-      opens: 0,
-      sendTime: '2026-10-02 22:47',
-      cards: [
-        createMockCard('雙人遊行 獨家優惠', '限時特惠，立即預訂享受超值優惠'),
-        createMockCard('豪華雙人房', '頂級享受，浪漫時光'),
-        createMockCard('早鳥優惠', '提前預訂，享受更多優惠'),
-      ],
-    },
-    '2': {
-      title: '雙人遊行 獨家優惠',
-      tags: ['商務房', '送禮', 'KOL'],
-      platform: 'LINE',
-      status: '已排程',
-      recipients: 1200,
-      clicks: 0,
-      opens: 0,
-      sendTime: '2026-10-02 22:47',
-      cards: [
-        createMockCard('雙人遊行 獨家優惠', '商務房特惠方案，立即預訂'),
-        createMockCard('行政套房', '專業商務人士首選'),
-      ],
-    },
-    '3': {
-      title: '雙人遊行 獨家優惠',
-      tags: ['商務房', 'KOL'],
-      platform: 'LINE',
-      status: '已排程',
-      recipients: 800,
-      clicks: 0,
-      opens: 0,
-      sendTime: '2026-10-02 22:47',
-      cards: [
-        createMockCard('雙人遊行 獨家優惠', '頂級商務房體驗'),
-      ],
-    },
-    '4': {
-      title: '夏季特惠活動',
-      tags: ['促銷', '限時'],
-      platform: 'LINE',
-      status: '已發送',
-      recipients: 1234,
-      clicks: 342,
-      opens: 856,
-      sendTime: '2026-09-28 10:00',
-      cards: [
-        createMockCard('夏季特惠活動', '炎炎夏日，清涼優惠等你來'),
-        createMockCard('泳池派對', '夏日限定，盡情享受'),
-        createMockCard('海灘度假', '陽光沙灘，放鬆身心'),
-        createMockCard('冰品優惠', '清涼一夏，甜蜜滋味'),
-      ],
-    },
-    '5': {
-      title: '會員專屬優惠',
-      tags: ['VIP', '會員'],
-      platform: 'LINE',
-      status: '已發送',
-      recipients: 2567,
-      clicks: 891,
-      opens: 1823,
-      sendTime: '2026-09-25 14:30',
-      cards: [
-        createMockCard('會員專屬優惠', 'VIP 會員限定，專屬禮遇'),
-        createMockCard('積分加倍', '消費滿額，積分翻倍'),
-      ],
-    },
-    '6': {
-      title: '新品上市通知',
-      tags: ['新品', '首發'],
-      platform: 'LINE',
-      status: '草稿',
-      recipients: 0,
-      clicks: 0,
-      opens: 0,
-      sendTime: '-',
-      cards: [
-        createMockCard('新品上市通知', '全新產品，搶先體驗'),
-      ],
-    },
+    try {
+      const flexMessage = JSON.parse(flexMessageJson);
+      const contents = flexMessage?.contents;
+
+      // Handle carousel type
+      if (contents?.type === 'carousel') {
+        return contents.contents.map((bubble: any, index: number) => {
+          const body = bubble.body?.contents || [];
+          const hero = bubble.hero;
+
+          // Extract title, content, and price from body
+          let cardTitle = '';
+          let content = '';
+          let price = '';
+
+          body.forEach((item: any) => {
+            if (item.type === 'text' && item.weight === 'bold' && !cardTitle) {
+              cardTitle = item.text;
+            } else if (item.type === 'text' && !content && cardTitle) {
+              content = item.text;
+            } else if (item.type === 'text' && item.text?.includes('NT$')) {
+              price = item.text.replace('NT$', '').trim();
+            }
+          });
+
+          // Extract buttons
+          const footer = bubble.footer?.contents || [];
+          const buttons = footer.filter((item: any) => item.type === 'button');
+
+          return {
+            id: index + 1,
+            enableImage: !!hero,
+            enableTitle: !!cardTitle,
+            enableContent: !!content,
+            enablePrice: !!price,
+            enableButton1: buttons.length > 0,
+            enableButton2: buttons.length > 1,
+            enableButton3: buttons.length > 2,
+            enableButton4: buttons.length > 3,
+            image: hero?.url || imgImageHero,
+            cardTitle,
+            content,
+            price,
+            currency: 'ntd',
+            button1: buttons[0]?.action?.label || '',
+            button2: buttons[1]?.action?.label || '',
+            button3: buttons[2]?.action?.label || '',
+            button4: buttons[3]?.action?.label || '',
+            button1Action: buttons[0]?.action?.type || '',
+            button1Url: buttons[0]?.action?.uri || '',
+            button1Tag: '',
+            button1Text: '',
+            button1TriggerImage: null,
+            button1Mode: 'primary',
+            button2Action: buttons[1]?.action?.type || '',
+            button2Url: buttons[1]?.action?.uri || '',
+            button2Tag: '',
+            button2Text: '',
+            button2TriggerImage: null,
+            button2Mode: 'secondary',
+            button3Action: buttons[2]?.action?.type || '',
+            button3Url: buttons[2]?.action?.uri || '',
+            button3Tag: '',
+            button3Text: '',
+            button3TriggerImage: null,
+            button3Mode: 'secondary',
+            button4Action: buttons[3]?.action?.type || '',
+            button4Url: buttons[3]?.action?.uri || '',
+            button4Tag: '',
+            button4Text: '',
+            button4TriggerImage: null,
+            button4Mode: 'secondary',
+            enableImageUrl: false,
+            imageUrl: '',
+            imageTag: '',
+          };
+        });
+      }
+
+      // Handle single bubble
+      if (contents?.type === 'bubble') {
+        const body = contents.body?.contents || [];
+        const hero = contents.hero;
+
+        let cardTitle = '';
+        let content = '';
+        let price = '';
+
+        body.forEach((item: any) => {
+          if (item.type === 'text' && item.weight === 'bold' && !cardTitle) {
+            cardTitle = item.text;
+          } else if (item.type === 'text' && !content && cardTitle) {
+            content = item.text;
+          } else if (item.type === 'text' && item.text?.includes('NT$')) {
+            price = item.text.replace('NT$', '').trim();
+          }
+        });
+
+        const footer = contents.footer?.contents || [];
+        const buttons = footer.filter((item: any) => item.type === 'button');
+
+        return [{
+          id: 1,
+          enableImage: !!hero,
+          enableTitle: !!cardTitle,
+          enableContent: !!content,
+          enablePrice: !!price,
+          enableButton1: buttons.length > 0,
+          enableButton2: buttons.length > 1,
+          enableButton3: buttons.length > 2,
+          enableButton4: buttons.length > 3,
+          image: hero?.url || imgImageHero,
+          cardTitle,
+          content,
+          price,
+          currency: 'ntd',
+          button1: buttons[0]?.action?.label || '',
+          button2: buttons[1]?.action?.label || '',
+          button3: buttons[2]?.action?.label || '',
+          button4: buttons[3]?.action?.label || '',
+          button1Action: buttons[0]?.action?.type || '',
+          button1Url: buttons[0]?.action?.uri || '',
+          button1Tag: '',
+          button1Text: '',
+          button1TriggerImage: null,
+          button1Mode: 'primary',
+          button2Action: buttons[1]?.action?.type || '',
+          button2Url: buttons[1]?.action?.uri || '',
+          button2Tag: '',
+          button2Text: '',
+          button2TriggerImage: null,
+          button2Mode: 'secondary',
+          button3Action: buttons[2]?.action?.type || '',
+          button3Url: buttons[2]?.action?.uri || '',
+          button3Tag: '',
+          button3Text: '',
+          button3TriggerImage: null,
+          button3Mode: 'secondary',
+          button4Action: buttons[3]?.action?.type || '',
+          button4Url: buttons[3]?.action?.uri || '',
+          button4Tag: '',
+          button4Text: '',
+          button4TriggerImage: null,
+          button4Mode: 'secondary',
+          enableImageUrl: false,
+          imageUrl: '',
+          imageTag: '',
+        }];
+      }
+
+      // Fallback if unable to parse
+      return parseFlexMessageToCards(null);
+    } catch (err) {
+      console.error('Error parsing Flex Message JSON:', err);
+      return parseFlexMessageToCards(null);
+    }
   };
 
-  const defaultData = {
-    title: '訊息標題',
-    tags: ['標籤'],
-    platform: 'LINE',
-    status: '草稿',
-    recipients: 0,
-    clicks: 0,
-    opens: 0,
-    sendTime: '-',
-    cards: [createMockCard('訊息標題', '內文文字說明')],
+  // Format datetime for display
+  const formatDateTime = (dateString: string | null) => {
+    if (!dateString) return '-';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleString('zh-TW', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).replace(/\//g, '-');
+    } catch {
+      return dateString;
+    }
   };
 
-  const displayData = messageId && messageDataMap[messageId] ? messageDataMap[messageId] : defaultData;
-  const cards = displayData.cards || [];
+  // Map API data to display format
+  const cards = React.useMemo(() => {
+    if (!messageData) return parseFlexMessageToCards(null);
+    return parseFlexMessageToCards(messageData.flex_message_json);
+  }, [messageData]);
+
+  const displayData = React.useMemo(() => {
+    if (loading) {
+      return {
+        title: '載入中...',
+        tags: [],
+        platform: 'LINE',
+        status: '載入中',
+        recipients: 0,
+        clicks: 0,
+        opens: 0,
+        sendTime: '-',
+      };
+    }
+
+    if (error || !messageData) {
+      return {
+        title: error || '無法載入訊息',
+        tags: [],
+        platform: 'LINE',
+        status: '錯誤',
+        recipients: 0,
+        clicks: 0,
+        opens: 0,
+        sendTime: '-',
+      };
+    }
+
+    return {
+      title: messageData.message_content || messageData.template?.name || '訊息標題',
+      tags: messageData.interaction_tags || [],
+      platform: messageData.platform || 'LINE',
+      status: messageData.send_status || '草稿',
+      recipients: messageData.send_count || 0,
+      clicks: messageData.click_count || 0,
+      opens: messageData.open_count || 0,
+      sendTime: formatDateTime(messageData.send_time || messageData.scheduled_at),
+    };
+  }, [messageData, loading, error]);
+
   const totalPages = cards.length;
   const currentCard = cards[currentCardIndex] || cards[0];
 
