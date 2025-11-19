@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { useAuth } from './auth/AuthContext';
 import sidebarPaths from '../imports/svg-jb10q6lg6b';
 import StarbitLogo from './StarbitLogo';
@@ -13,7 +13,41 @@ interface SidebarProps {
   onToggleSidebar?: (open: boolean) => void;
 }
 
-export default function Sidebar({ 
+// Memoized menu item component
+const MenuItem = memo(function MenuItem({ 
+  isActive, 
+  label, 
+  onClick 
+}: { 
+  isActive: boolean; 
+  label: string; 
+  onClick?: () => void; 
+}) {
+  return (
+    <button 
+      onClick={onClick}
+      className={`box-border flex items-center px-[28px] py-[8px] rounded-[8px] w-full transition-colors ${
+        isActive ? 'bg-[#e1ebf9] hover:bg-[#d0e0f5]' : 'hover:bg-slate-200'
+      }`}
+    >
+      <p className={`text-[16px] ${isActive ? 'text-[#0f6beb]' : 'text-[#383838]'}`}>{label}</p>
+    </button>
+  );
+});
+
+// Memoized section header
+const SectionHeader = memo(function SectionHeader({ icon, label }: { icon: string; label: string }) {
+  return (
+    <div className="box-border flex gap-2 items-center p-1 min-h-[29px]">
+      <svg className="shrink-0 size-[20px]" fill="none" viewBox="0 0 20 20">
+        <path d={icon} fill="#6E6E6E" />
+      </svg>
+      <p className="text-[14px] text-[#6e6e6e] leading-[1.5]">{label}</p>
+    </div>
+  );
+});
+
+const Sidebar = memo(function Sidebar({ 
   currentPage = 'messages',
   onNavigateToMessages,
   onNavigateToAutoReply,
@@ -61,64 +95,37 @@ export default function Sidebar({
           <>
             {/* 會員 Section */}
             <div className="box-border flex flex-col gap-1 px-4">
-              <div className="box-border flex gap-1 h-[29px] items-center p-1">
-                <svg className="shrink-0 size-[20px]" fill="none" viewBox="0 0 14 14">
-                  <path d={sidebarPaths.pa54d00} fill="#6E6E6E" />
-                </svg>
-                <p className="text-[14px] text-[#6e6e6e]">會員</p>
-              </div>
-              <button 
+              <SectionHeader icon={sidebarPaths.pa54d00} label="會員" />
+              <MenuItem 
+                isActive={currentPage === 'members'} 
+                label="會員管理" 
                 onClick={onNavigateToMembers}
-                className={`box-border flex items-center px-[28px] py-[8px] rounded-[8px] w-full transition-colors ${
-                  currentPage === 'members' ? 'bg-[#e1ebf9] hover:bg-[#d0e0f5]' : 'hover:bg-slate-200'
-                }`}
-              >
-                <p className={`text-[16px] ${currentPage === 'members' ? 'text-[#0f6beb]' : 'text-[#383838]'}`}>會員管理</p>
-              </button>
+              />
             </div>
 
             {/* 群發訊息 Section */}
             <div className="box-border flex flex-col gap-1 px-4 mt-5">
-              <div className="box-border flex gap-1 h-[29px] items-center p-1">
-                <svg className="shrink-0 size-[18px]" fill="none" viewBox="0 0 14 13">
-                  <path d={sidebarPaths.p25432100} fill="#6E6E6E" />
-                </svg>
-                <p className="text-[14px] text-[#6e6e6e]">群發訊息</p>
-              </div>
-              <button 
+              <SectionHeader icon={sidebarPaths.p25432100} label="群發訊息" />
+              <MenuItem 
+                isActive={currentPage === 'messages'} 
+                label="活動與訊息推播" 
                 onClick={onNavigateToMessages}
-                className={`box-border flex items-center px-[28px] py-[8px] rounded-[8px] w-full transition-colors ${
-                  currentPage === 'messages' ? 'bg-[#e1ebf9] hover:bg-[#d0e0f5]' : 'hover:bg-slate-200'
-                }`}
-              >
-                <p className={`text-[16px] ${currentPage === 'messages' ? 'text-[#0f6beb]' : 'text-[#383838]'}`}>活動與訊息推播</p>
-              </button>
-              <button 
+              />
+              <MenuItem 
+                isActive={currentPage === 'auto-reply'} 
+                label="自動回應" 
                 onClick={onNavigateToAutoReply}
-                className={`box-border flex items-center px-[28px] py-[8px] rounded-[8px] w-full transition-colors ${
-                  currentPage === 'auto-reply' ? 'bg-[#e1ebf9] hover:bg-[#d0e0f5]' : 'hover:bg-slate-200'
-                }`}
-              >
-                <p className={`text-[16px] ${currentPage === 'auto-reply' ? 'text-[#0f6beb]' : 'text-[#383838]'}`}>自動回應</p>
-              </button>
+              />
             </div>
 
             {/* 設定 Section */}
             <div className="box-border flex flex-col gap-1 px-4 mt-5">
-              <div className="box-border flex gap-1 h-[29px] items-center p-1">
-                <svg className="shrink-0 size-[20px]" fill="none" viewBox="0 0 20 20">
-                  <path d={sidebarPaths.p16734900} fill="#6E6E6E" />
-                </svg>
-                <p className="text-[14px] text-[#6e6e6e]">設定</p>
-              </div>
-              <button 
+              <SectionHeader icon={sidebarPaths.p16734900} label="設定" />
+              <MenuItem 
+                isActive={currentPage === 'settings'} 
+                label="基本設定" 
                 onClick={onNavigateToSettings}
-                className={`box-border flex items-center px-[28px] py-[8px] rounded-[8px] w-full transition-colors ${
-                  currentPage === 'settings' ? 'bg-[#e1ebf9] hover:bg-[#d0e0f5]' : 'hover:bg-slate-200'
-                }`}
-              >
-                <p className={`text-[16px] ${currentPage === 'settings' ? 'text-[#0f6beb]' : 'text-[#383838]'}`}>基本設定</p>
-              </button>
+              />
               <button className="box-border flex items-center px-[28px] py-[8px] rounded-[8px] w-full hover:bg-slate-200 transition-colors" hidden>
                 <p className="text-[16px] text-[#383838]">標籤管理</p>
               </button>
@@ -138,7 +145,7 @@ export default function Sidebar({
           {isOpen && (
             <>
               <p className="flex-1 text-[16px] text-[#383838]">{user?.name || 'User' || 'Daisy Yang'}</p>
-              <button
+              <button 
                 onClick={logout}
                 className="text-[16px] text-[#0f6beb] hover:underline"
               >
@@ -150,7 +157,20 @@ export default function Sidebar({
       </div>
     </aside>
   );
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison function for better performance
+  return (
+    prevProps.currentPage === nextProps.currentPage &&
+    prevProps.sidebarOpen === nextProps.sidebarOpen &&
+    prevProps.onNavigateToMessages === nextProps.onNavigateToMessages &&
+    prevProps.onNavigateToAutoReply === nextProps.onNavigateToAutoReply &&
+    prevProps.onNavigateToMembers === nextProps.onNavigateToMembers &&
+    prevProps.onNavigateToSettings === nextProps.onNavigateToSettings &&
+    prevProps.onToggleSidebar === nextProps.onToggleSidebar
+  );
+});
+
+export default Sidebar;
 
 /**
  * Hook to get the margin-left value based on sidebar state
@@ -184,14 +204,13 @@ export function PageWithSidebar({
 
   return (
     <div className="bg-slate-50 min-h-screen flex">
-      <Sidebar
+      <Sidebar 
         currentPage={currentPage}
         onNavigateToMessages={onNavigateToMessages}
         onNavigateToAutoReply={onNavigateToAutoReply}
         onNavigateToMembers={onNavigateToMembers}
         onNavigateToSettings={onNavigateToSettings}
-        sidebarOpen={sidebarOpen}
-        onToggleSidebar={setSidebarOpen}
+        defaultOpen={sidebarOpen}
       />
       <main className={`flex-1 bg-slate-50 transition-all duration-300 overflow-x-hidden overflow-y-auto ${sidebarOpen ? 'ml-[330px] lg:ml-[280px] md:ml-[250px]' : 'ml-[72px]'}`}>
         {children}
