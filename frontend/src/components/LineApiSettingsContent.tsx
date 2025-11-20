@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, ExternalLink, X, Check } from 'lucide-react';
 import { Checkbox } from './ui/checkbox';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useToast } from './ToastProvider';
+import { useLineChannelStatus } from '../contexts/LineChannelStatusContext';
 import imgStep1 from "figma:asset/bf4ffd108c2e836b466874e959531fdf5c9bd8b1.png";
 import imgStep1New from "figma:asset/146d0c4e38c1dc2f05fd32c9740151e0eaaee326.png";
 import imgStep2 from "figma:asset/88076181b402df2ffcba98c51345afaaa2165468.png";
@@ -22,7 +23,8 @@ export default function LineApiSettingsContent() {
   const [enlargedImage, setEnlargedImage] = useState<string | null>(null);
   const [loginChannelId, setLoginChannelId] = useState<string>('');
   const [loginChannelSecret, setLoginChannelSecret] = useState<string>('');
-  const [isSetupComplete, setIsSetupComplete] = useState<boolean>(false);
+  const { isConfigured, refreshStatus } = useLineChannelStatus();
+  const [isSetupComplete, setIsSetupComplete] = useState<boolean>(isConfigured);
   const [showResetDialog, setShowResetDialog] = useState<boolean>(false);
   const [lineChannelDbId, setLineChannelDbId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -70,6 +72,10 @@ export default function LineApiSettingsContent() {
     loadSettings();
   }, []);
 
+  useEffect(() => {
+    setIsSetupComplete(isConfigured);
+  }, [isConfigured]);
+
   // 保存設定到資料庫
   const saveSettings = async (data: any) => {
     try {
@@ -103,6 +109,7 @@ export default function LineApiSettingsContent() {
         setLineChannelDbId(result.id);
       }
 
+      await refreshStatus();
       return true;
     } catch (error) {
       console.error('保存 LINE 頻道設定失敗:', error);
@@ -184,6 +191,7 @@ export default function LineApiSettingsContent() {
       setChannelAccessToken('');
       setLoginChannelId('');
       setLoginChannelSecret('');
+      await refreshStatus();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
       console.error('重新設定失敗:', error);
@@ -307,8 +315,8 @@ export default function LineApiSettingsContent() {
 
           {/* Reset Dialog */}
           {showResetDialog && (
-            <div className="fixed inset-0 bg-[#000000] bg-opacity-50 flex items-center justify-center z-50">
-              <div className="relative bg-white rounded-[10px] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)] w-[90%] max-w-[512px]">
+            <div className="fixed inset-0 bg-[rgba(0,0,0,0.3)] backdrop-blur-[1px] flex items-center justify-center z-50 transition-colors">
+              <div className="relative bg-white rounded-[10px] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.12),0px_4px_6px_-4px_rgba(0,0,0,0.08)] w-[90%] max-w-[512px] border border-[rgba(0,0,0,0.08)]">
                 <div className="absolute border border-[rgba(0,0,0,0.1)] border-solid inset-0 pointer-events-none rounded-[10px]" />
                 <div className="p-[25px] grid grid-cols-1 grid-rows-[56px_auto] gap-[16px]">
                   {/* Header */}

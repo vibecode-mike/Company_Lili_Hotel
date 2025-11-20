@@ -1,6 +1,7 @@
 import { ReactNode, useState } from 'react';
 import Sidebar from '../Sidebar';
 import { useNavigation } from '../../contexts/NavigationContext';
+import { useLineChannelStatus } from '../../contexts/LineChannelStatusContext';
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -21,6 +22,8 @@ export default function MainLayout({
 }: MainLayoutProps) {
   const { navigate } = useNavigation();
   const [internalSidebarOpen, setInternalSidebarOpen] = useState(true);
+  const { isConfigured } = useLineChannelStatus();
+  const navigationLocked = !isConfigured;
 
   // 使用受控或非受控的 sidebar 狀態
   const sidebarOpen = controlledSidebarOpen !== undefined ? controlledSidebarOpen : internalSidebarOpen;
@@ -37,6 +40,8 @@ export default function MainLayout({
         onNavigateToSettings={() => navigate('line-api-settings')}
         sidebarOpen={sidebarOpen}
         onToggleSidebar={setSidebarOpen}
+        navigationLocked={navigationLocked}
+        lockedTooltip="請先完成基本設定"
       />
 
       {/* Main Content Area - offset by sidebar width */}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Sidebar from './Sidebar';
 import LineApiSettingsContent from './LineApiSettingsContent';
+import { useLineChannelStatus } from '../contexts/LineChannelStatusContext';
 
 interface LineApiSettingsProps {
   onBack?: () => void;
@@ -16,6 +17,7 @@ export default function LineApiSettings({
   onNavigateToMembers
 }: LineApiSettingsProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const { isConfigured } = useLineChannelStatus();
 
   return (
     <div className="bg-slate-50 min-h-screen flex">
@@ -28,6 +30,8 @@ export default function LineApiSettings({
         onNavigateToSettings={() => {}} // Already on settings page
         sidebarOpen={sidebarOpen}
         onToggleSidebar={setSidebarOpen}
+        navigationLocked={!isConfigured}
+        lockedTooltip="請先完成基本設定"
       />
 
       {/* Main Content Area - offset by sidebar width */}

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
+import { useAuth } from '../components/auth/AuthContext';
 
 /**
  * 訊息數據 Context
@@ -80,6 +81,7 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [quotaStatus, setQuotaStatus] = useState<QuotaStatus | null>(null);
+  const { isAuthenticated } = useAuth();
 
   const fetchMessages = useCallback(async () => {
     setIsLoading(true);
@@ -150,9 +152,14 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
 
   // 初始載入數據
   useEffect(() => {
-    fetchMessages();
-    fetchQuota();
-  }, [fetchMessages, fetchQuota]);
+    if (isAuthenticated) {
+      fetchMessages();
+      fetchQuota();
+    } else {
+      setMessages([]);
+      setQuotaStatus(null);
+    }
+  }, [isAuthenticated, fetchMessages, fetchQuota]);
 
   const addMessage = useCallback((message: Message) => {
     setMessages(prev => [...prev, message]);

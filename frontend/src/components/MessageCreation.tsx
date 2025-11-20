@@ -720,8 +720,10 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         flex_message_json: JSON.stringify(flexMessage),
         target_type: targetType === 'all' ? 'all_friends' : 'filtered',
         schedule_type: scheduleType,
-        notification_text: notificationMsg,
-        thumbnail: cards[0].image || null
+        notification_message: notificationMsg,
+        preview_message: previewMsg || notificationMsg,
+        message_content: title || notificationMsg || '未命名訊息',
+        thumbnail: cards[0]?.image || null
       };
 
       // Add target filter for filtered audience
@@ -741,7 +743,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       }
 
       // Create broadcast message
-      const createResponse = await fetch('/api/v1/broadcast-messages', {
+      const createResponse = await fetch('/api/v1/messages', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -766,7 +768,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
       // Send immediately if schedule type is "immediate"
       if (scheduleType === 'immediate') {
-        const sendResponse = await fetch(`/api/v1/broadcast-messages/${messageId}/send`, {
+        const sendResponse = await fetch(`/api/v1/messages/${messageId}/send`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,

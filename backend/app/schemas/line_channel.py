@@ -2,7 +2,7 @@
 LINE 頻道設定 Schemas
 """
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 
@@ -46,3 +46,20 @@ class LineChannelResponse(LineChannelBase):
 
     class Config:
         from_attributes = True
+
+
+class LineChannelStatusResponse(BaseModel):
+    """LINE 頻道設定檢查結果"""
+
+    has_active_channel: bool = Field(
+        False, description="是否已存在啟用中的 LINE 頻道設定"
+    )
+    is_configured: bool = Field(
+        False, description="必填欄位是否皆已通過驗證"
+    )
+    missing_fields: List[str] = Field(
+        default_factory=list, description="尚未通過驗證的欄位"
+    )
+    channel_db_id: Optional[int] = Field(
+        None, description="資料表中的頻道資料 ID（若存在）"
+    )

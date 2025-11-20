@@ -5,7 +5,7 @@ LINE 頻道設定 API
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import Optional
+from typing import Optional, List
 import logging
 
 from app.database import get_db
@@ -14,11 +14,44 @@ from app.schemas.line_channel import (
     LineChannelCreate,
     LineChannelUpdate,
     LineChannelResponse,
+    LineChannelStatusResponse,
 )
 from app.schemas.common import SuccessResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+REQUIRED_FIELDS = (
+    "channel_id",
+    "channel_secret",
+    "channel_access_token",
+    "login_channel_id",
+    "login_channel_secret",
+)
+
+
+def _has_value(value: Optional[str]) -> bool:
+    return bool(value and value.strip())
+
+
+def _collect_missing_fields(channel: LineChannel) -> List[str]:
+    """檢查頻道設定缺少哪些必填欄位"""
+
+    missing: List[str] = []
+
+    if not _has_value(channel.channel_id):
+        missing.append("channel_id")
+    if not _has_value(channel.channel_secret):
+        missing.append("channel_secret")
+    if not _has_value(channel.channel_access_token):
+        missing.append("channel_access_token")
+    if not _has_value(channel.login_channel_id):
+        missing.append("login_channel_id")
+    if not _has_value(channel.login_channel_secret):
+        missing.append("login_channel_secret")
+
+    return missing
 
 
 @router.get("/current", response_model=Optional[LineChannelResponse])
@@ -45,6 +78,46 @@ async def get_current_channel(db: AsyncSession = Depends(get_db)):
     except Exception as e:
         logger.error(f"❌ 取得 LINE 頻道設定失敗: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"取得設定失敗: {str(e)}")
+
+
+@router.get("/status", response_model=LineChannelStatusResponse)
+async def get_channel_status(db: AsyncSession = Depends(get_db)):
+    """取得 LINE 頻道設定狀態與缺漏欄位"""
+
+    try:
+        stmt = select(LineChannel).where(LineChannel.is_active == True).limit(1)
+        result = await db.execute(stmt)
+        channel = result.scalar_one_or_none()
+
+        if not channel:
+            logger.info("ℹ️ 尚未建立任何 LINE 頻道設定")
+            return LineChannelStatusResponse(
+                has_active_channel=False,
+                is_configured=False,
+                missing_fields=list(REQUIRED_FIELDS),
+                channel_db_id=None,
+            )
+
+        missing_fields = _collect_missing_fields(channel)
+        is_configured = len(missing_fields) == 0
+
+        if is_configured:
+            logger.info("✅ LINE 頻道設定已通過驗證")
+        else:
+            logger.warning(
+                "⚠️ LINE 頻道設定缺少欄位", extra={"missing_fields": missing_fields}
+            )
+
+        return LineChannelStatusResponse(
+            has_active_channel=True,
+            is_configured=is_configured,
+            missing_fields=missing_fields,
+            channel_db_id=channel.id,
+        )
+
+    except Exception as e:
+        logger.error(f"❌ 檢查 LINE 頻道設定失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"取得設定狀態失敗: {str(e)}")
 
 
 @router.post("", response_model=LineChannelResponse, status_code=201)

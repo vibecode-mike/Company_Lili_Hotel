@@ -11,23 +11,35 @@ interface SidebarProps {
   onNavigateToSettings?: () => void;
   sidebarOpen?: boolean;
   onToggleSidebar?: (open: boolean) => void;
+  navigationLocked?: boolean;
+  lockedTooltip?: string;
 }
 
 // Memoized menu item component
 const MenuItem = memo(function MenuItem({ 
   isActive, 
   label, 
-  onClick 
+  onClick,
+  disabled = false,
+  tooltip
 }: { 
   isActive: boolean; 
   label: string; 
-  onClick?: () => void; 
+  onClick?: () => void;
+  disabled?: boolean;
+  tooltip?: string;
 }) {
   return (
     <button 
       onClick={onClick}
+      disabled={disabled}
+      title={disabled ? tooltip : undefined}
       className={`box-border flex items-center px-[28px] py-[8px] rounded-[8px] w-full transition-colors ${
-        isActive ? 'bg-[#e1ebf9] hover:bg-[#d0e0f5]' : 'hover:bg-slate-200'
+        disabled
+          ? 'opacity-50 cursor-not-allowed'
+          : isActive
+            ? 'bg-[#e1ebf9] hover:bg-[#d0e0f5]'
+            : 'hover:bg-slate-200'
       }`}
     >
       <p className={`text-[16px] ${isActive ? 'text-[#0f6beb]' : 'text-[#383838]'}`}>{label}</p>
@@ -54,7 +66,9 @@ const Sidebar = memo(function Sidebar({
   onNavigateToMembers,
   onNavigateToSettings,
   sidebarOpen = true,
-  onToggleSidebar
+  onToggleSidebar,
+  navigationLocked = false,
+  lockedTooltip = '請先完成基本設定'
 }: SidebarProps) {
   const [internalSidebarOpen, setInternalSidebarOpen] = useState(true);
   const { logout, user } = useAuth();
@@ -99,7 +113,9 @@ const Sidebar = memo(function Sidebar({
               <MenuItem 
                 isActive={currentPage === 'members'} 
                 label="會員管理" 
-                onClick={onNavigateToMembers}
+                onClick={navigationLocked ? undefined : onNavigateToMembers}
+                disabled={navigationLocked}
+                tooltip={lockedTooltip}
               />
             </div>
 
@@ -109,12 +125,16 @@ const Sidebar = memo(function Sidebar({
               <MenuItem 
                 isActive={currentPage === 'messages'} 
                 label="活動與訊息推播" 
-                onClick={onNavigateToMessages}
+                onClick={navigationLocked ? undefined : onNavigateToMessages}
+                disabled={navigationLocked}
+                tooltip={lockedTooltip}
               />
               <MenuItem 
                 isActive={currentPage === 'auto-reply'} 
                 label="自動回應" 
-                onClick={onNavigateToAutoReply}
+                onClick={navigationLocked ? undefined : onNavigateToAutoReply}
+                disabled={navigationLocked}
+                tooltip={lockedTooltip}
               />
             </div>
 
@@ -166,7 +186,9 @@ const Sidebar = memo(function Sidebar({
     prevProps.onNavigateToAutoReply === nextProps.onNavigateToAutoReply &&
     prevProps.onNavigateToMembers === nextProps.onNavigateToMembers &&
     prevProps.onNavigateToSettings === nextProps.onNavigateToSettings &&
-    prevProps.onToggleSidebar === nextProps.onToggleSidebar
+    prevProps.onToggleSidebar === nextProps.onToggleSidebar &&
+    prevProps.navigationLocked === nextProps.navigationLocked &&
+    prevProps.lockedTooltip === nextProps.lockedTooltip
   );
 });
 

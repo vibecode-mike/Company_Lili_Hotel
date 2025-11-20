@@ -1,10 +1,15 @@
 
-  import { defineConfig } from 'vite';
-  import react from '@vitejs/plugin-react-swc';
-  import path from 'path';
-  import { visualizer } from 'rollup-plugin-visualizer';
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react-swc';
+import path from 'path';
+import { visualizer } from 'rollup-plugin-visualizer';
 
-  export default defineConfig({
+const DEV_HOST = process.env.VITE_DEV_HOST || process.env.DEV_HOST || '0.0.0.0';
+const HMR_HOST = process.env.VITE_HMR_HOST || process.env.HMR_HOST;
+const HMR_PORT = Number(process.env.VITE_HMR_PORT || process.env.HMR_PORT) || 5173;
+const HMR_PROTOCOL = process.env.VITE_HMR_PROTOCOL || process.env.HMR_PROTOCOL || 'ws';
+
+export default defineConfig({
     plugins: [
       react(),
       visualizer({
@@ -72,10 +77,15 @@
       chunkSizeWarningLimit: 1000,
     },
     server: {
-      host: '0.0.0.0',
+      host: DEV_HOST,
       port: 5173,
       open: true,
-      allowedHosts: ['crmpoc.star-bit.io'],
+      allowedHosts: true,
+      hmr: {
+        host: HMR_HOST,
+        port: HMR_PORT,
+        protocol: HMR_PROTOCOL as 'ws' | 'wss',
+      },
       proxy: {
         '/api': {
           target: 'http://127.0.0.1:8700',

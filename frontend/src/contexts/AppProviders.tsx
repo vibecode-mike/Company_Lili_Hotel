@@ -6,6 +6,7 @@ import { MessagesProvider } from './MessagesContext';
 import { AutoRepliesProvider } from './AutoRepliesContext';
 import { TagsProvider } from './TagsContext';
 import { ToastProvider } from '../components/ToastProvider';
+import { LineChannelStatusProvider } from './LineChannelStatusContext';
 
 /**
  * 统一的应用 Provider 组合
@@ -32,19 +33,21 @@ interface AppProvidersProps {
 export function AppProviders({ children }: AppProvidersProps) {
   return (
     <NavigationProvider>
-      <AppStateProvider>
-        <MembersProvider>
-          <MessagesProvider>
-            <AutoRepliesProvider>
-              <TagsProvider>
-                <ToastProvider>
-                  {children}
-                </ToastProvider>
-              </TagsProvider>
-            </AutoRepliesProvider>
-          </MessagesProvider>
-        </MembersProvider>
-      </AppStateProvider>
+      <LineChannelStatusProvider>
+        <AppStateProvider>
+          <MembersProvider>
+            <MessagesProvider>
+              <AutoRepliesProvider>
+                <TagsProvider>
+                  <ToastProvider>
+                    {children}
+                  </ToastProvider>
+                </TagsProvider>
+              </AutoRepliesProvider>
+            </MessagesProvider>
+          </MembersProvider>
+        </AppStateProvider>
+      </LineChannelStatusProvider>
     </NavigationProvider>
   );
 }

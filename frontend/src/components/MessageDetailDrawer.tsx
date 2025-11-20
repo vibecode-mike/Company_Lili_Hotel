@@ -206,8 +206,9 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
           throw new Error(`Failed to fetch message: ${response.statusText}`);
         }
 
-        const data = await response.json();
-        setMessageData(data);
+        const payload = await response.json();
+        const normalizedData = payload?.data?.data ?? payload?.data ?? payload;
+        setMessageData(normalizedData);
       } catch (err) {
         console.error('Error fetching message data:', err);
         setError(err instanceof Error ? err.message : 'Failed to load message');
@@ -225,64 +226,90 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
   }, [open, messageId]);
 
   // Parse Flex Message JSON to CarouselCard format
-  const parseFlexMessageToCards = (flexMessageJson: string | null): CarouselCard[] => {
+  const createFallbackCards = (): CarouselCard[] => [{
+    id: 1,
+    enableImage: false,
+    enableTitle: true,
+    enableContent: true,
+    enablePrice: false,
+    enableButton1: false,
+    enableButton2: false,
+    enableButton3: false,
+    enableButton4: false,
+    image: imgImageHero,
+    cardTitle: '訊息標題',
+    content: '內文文字說明',
+    price: '',
+    currency: 'ntd',
+    button1: '',
+    button2: '',
+    button3: '',
+    button4: '',
+    button1Action: '',
+    button1Url: '',
+    button1Tag: '',
+    button1Text: '',
+    button1TriggerImage: null,
+    button1Mode: 'primary',
+    button2Action: '',
+    button2Url: '',
+    button2Tag: '',
+    button2Text: '',
+    button2TriggerImage: null,
+    button2Mode: 'secondary',
+    button3Action: '',
+    button3Url: '',
+    button3Tag: '',
+    button3Text: '',
+    button3TriggerImage: null,
+    button3Mode: 'secondary',
+    button4Action: '',
+    button4Url: '',
+    button4Tag: '',
+    button4Text: '',
+    button4TriggerImage: null,
+    button4Mode: 'secondary',
+    enableImageUrl: false,
+    imageUrl: '',
+    imageTag: '',
+  }];
+
+  const parseFlexMessageToCards = (flexMessageJson: string | Record<string, any> | null): CarouselCard[] => {
     if (!flexMessageJson) {
-      return [{
-        id: 1,
-        enableImage: false,
-        enableTitle: true,
-        enableContent: true,
-        enablePrice: false,
-        enableButton1: false,
-        enableButton2: false,
-        enableButton3: false,
-        enableButton4: false,
-        image: imgImageHero,
-        cardTitle: '訊息標題',
-        content: '內文文字說明',
-        price: '',
-        currency: 'ntd',
-        button1: '',
-        button2: '',
-        button3: '',
-        button4: '',
-        button1Action: '',
-        button1Url: '',
-        button1Tag: '',
-        button1Text: '',
-        button1TriggerImage: null,
-        button1Mode: 'primary',
-        button2Action: '',
-        button2Url: '',
-        button2Tag: '',
-        button2Text: '',
-        button2TriggerImage: null,
-        button2Mode: 'secondary',
-        button3Action: '',
-        button3Url: '',
-        button3Tag: '',
-        button3Text: '',
-        button3TriggerImage: null,
-        button3Mode: 'secondary',
-        button4Action: '',
-        button4Url: '',
-        button4Tag: '',
-        button4Text: '',
-        button4TriggerImage: null,
-        button4Mode: 'secondary',
-        enableImageUrl: false,
-        imageUrl: '',
-        imageTag: '',
-      }];
+      return createFallbackCards();
     }
 
     try {
-      const flexMessage = JSON.parse(flexMessageJson);
-      const contents = flexMessage?.contents;
+      let flexMessage: Record<string, any> | null = null;
+
+      if (typeof flexMessageJson === 'string') {
+        try {
+          flexMessage = JSON.parse(flexMessageJson);
+        } catch {
+          const normalized = flexMessageJson
+            .replace(/'/g, '"')
+            .replace(/\bTrue\b/g, 'true')
+            .replace(/\bFalse\b/g, 'false')
+            .replace(/\bNone\b/g, 'null');
+          flexMessage = JSON.parse(normalized);
+        }
+      } else {
+        flexMessage = flexMessageJson;
+      }
+
+      // Flex wrapper可能是 { type: 'flex', altText, contents: {...} }
+      const root = flexMessage?.type === 'flex'
+        ? flexMessage.contents
+        : flexMessage;
+
+      if (!root) {
+        return createFallbackCards();
+      }
 
       // Handle carousel type
-      if (contents?.type === 'carousel') {
-        return contents.contents.map((bubble: any, index: number) => {
+      if (root.type === 'carousel') {
+        const slides = root.contents || [];
+        return slides.map((bubble: any, index: number) => {
           const body = bubble.body?.contents || [];
           const hero = bubble.hero;
 
@@ -356,9 +383,9 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
       }
 
       // Handle single bubble
-      if (contents?.type === 'bubble') {
-        const body = contents.body?.contents || [];
-        const hero = contents.hero;
+      if (root.type === 'bubble') {
+        const body = root.body?.contents || [];
+        const hero = root.hero;
 
         let cardTitle = '';
         let content = '';
@@ -374,7 +401,7 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
           }
         });
 
-        const footer = contents.footer?.contents || [];
+        const footer = root.footer?.contents || [];
         const buttons = footer.filter((item: any) => item.type === 'button');
 
         return [{
@@ -387,10 +414,10 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
           enableButton2: buttons.length > 1,
           enableButton3: buttons.length > 2,
           enableButton4: buttons.length > 3,
-          image: hero?.url || imgImageHero,
-          cardTitle,
-          content,
-          price,
+            image: hero?.url || hero?.contents?.url || imgImageHero,
+            cardTitle,
+            content,
+            price,
           currency: 'ntd',
           button1: buttons[0]?.action?.label || '',
           button2: buttons[1]?.action?.label || '',
@@ -427,10 +454,10 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
       }
 
       // Fallback if unable to parse
-      return parseFlexMessageToCards(null);
+      return createFallbackCards();
     } catch (err) {
       console.error('Error parsing Flex Message JSON:', err);
-      return parseFlexMessageToCards(null);
+      return createFallbackCards();
     }
   };
 
@@ -454,7 +481,7 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
 
   // Map API data to display format
   const cards = React.useMemo(() => {
-    if (!messageData) return parseFlexMessageToCards(null);
+    if (!messageData) return createFallbackCards();
     return parseFlexMessageToCards(messageData.flex_message_json);
   }, [messageData]);
 
