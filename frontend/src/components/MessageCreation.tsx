@@ -65,7 +65,6 @@ interface MessageCreationProps {
   editMessageData?: {
     title: string;
     notificationMsg: string;
-    previewMsg: string;
     scheduleType: string;
     targetType: string;
     templateType: string;
@@ -85,7 +84,6 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   const [templateType, setTemplateType] = useState('select');
   const [title, setTitle] = useState('');
   const [notificationMsg, setNotificationMsg] = useState('');
-  const [previewMsg, setPreviewMsg] = useState('');
   const [scheduleType, setScheduleType] = useState('immediate');
   const [targetType, setTargetType] = useState('all');
   const [messageText, setMessageText] = useState('');
@@ -97,8 +95,25 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   const [scheduledDate, setScheduledDate] = useState<Date | undefined>(undefined);
   const [scheduledTime, setScheduledTime] = useState({ hours: '12', minutes: '00' });
   const [datePickerOpen, setDatePickerOpen] = useState(false);
-  const [validationDialogOpen, setValidationDialogOpen] = useState(false);
-  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  // 個別欄位錯誤狀態
+  const [titleError, setTitleError] = useState('');
+  const [notificationMsgError, setNotificationMsgError] = useState('');
+
+  // 卡片欄位錯誤狀態 - 使用 Map 以卡片 ID 為 key
+  const [cardErrors, setCardErrors] = useState<Map<number, {
+    image?: string;
+    cardTitle?: string;
+    content?: string;
+    price?: string;
+    button1?: string;
+    button1Url?: string;
+    button2?: string;
+    button2Url?: string;
+    button3?: string;
+    button3Url?: string;
+    button4?: string;
+    button4Url?: string;
+  }>>(new Map());
   const [isDirty, setIsDirty] = useState(false); // 追蹤是否有未儲存的變更
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false); // 顯示未儲存確認對話框
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null); // 待執行的導航
@@ -356,7 +371,6 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         setTemplateType(editMessageData.templateType || 'carousel');
         setTitle(editMessageData.title || '');
         setNotificationMsg(editMessageData.notificationMsg || '');
-        setPreviewMsg(editMessageData.previewMsg || '');
         setScheduleType(editMessageData.scheduleType || 'immediate');
         setTargetType(editMessageData.targetType || 'all');
         setSelectedFilterTags(editMessageData.selectedFilterTags || []);
@@ -373,19 +387,18 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   // 監聽表單變更，標記為未儲存
   useEffect(() => {
     if (
-      title || 
-      notificationMsg || 
-      previewMsg || 
-      messageText || 
-      targetType !== 'all' || 
+      title ||
+      notificationMsg ||
+      messageText ||
+      targetType !== 'all' ||
       scheduleType !== 'immediate' ||
       selectedFilterTags.length > 0 ||
-      cards.some(card => 
-        card.enableImage || 
-        card.enableTitle || 
-        card.enableContent || 
-        card.enablePrice || 
-        card.enableButton1 || 
+      cards.some(card =>
+        card.enableImage ||
+        card.enableTitle ||
+        card.enableContent ||
+        card.enablePrice ||
+        card.enableButton1 ||
         card.enableButton2 ||
         card.enableButton3 ||
         card.enableButton4 ||
@@ -401,7 +414,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     ) {
       setIsDirty(true);
     }
-  }, [title, notificationMsg, previewMsg, messageText, targetType, scheduleType, selectedFilterTags, cards]);
+  }, [title, notificationMsg, messageText, targetType, scheduleType, selectedFilterTags, cards]);
 
   // Note: Trigger images removed - buttons now only support URI action type
 
@@ -578,9 +591,6 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     if (!notificationMsg || notificationMsg.trim() === '') {
       errors.push('通知訊息');
     }
-    if (!previewMsg || previewMsg.trim() === '') {
-      errors.push('訊息預覽');
-    }
 
     if (errors.length > 0) {
       setValidationErrors(errors);
@@ -610,7 +620,6 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         target_type: targetType === 'all' ? 'all_friends' : 'filtered',
         schedule_type: 'draft',  // 固定為 draft
         notification_message: notificationMsg,
-        preview_message: previewMsg || notificationMsg,
         message_content: title || notificationMsg || '未命名訊息',
         thumbnail: cards[0]?.uploadedImageUrl || cards[0]?.image || null
       };
@@ -661,81 +670,101 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     }
   };
 
-  const validateForm = () => {
-    const errors: string[] = [];
+  const validateForm = (): boolean => {
+    // 清除所有錯誤
+    setTitleError('');
+    setNotificationMsgError('');
+    setCardErrors(new Map());
 
-    // Check basic required fields
-    if (!title) errors.push('訊息標題');
-    if (!notificationMsg) errors.push('通知推播');
-    if (!previewMsg) errors.push('通知預覽');
-    // 訊息文字不再是必填欄位（已移除模板之分）
+    let hasError = false;
 
-    // Check enabled fields in cards
-    cards.forEach((card, index) => {
-      const cardLabel = cards.length > 1 ? `輪播 ${index + 1} - ` : '';
+    // 驗證基本必填欄位
+    if (!title || title.trim() === '') {
+      setTitleError('請輸入訊息標題');
+      hasError = true;
+    }
 
-      // Check card title (only if enabled)
-      if (card.enableTitle && !card.cardTitle) {
-        errors.push(`${cardLabel}標題文字`);
-      }
+    if (!notificationMsg || notificationMsg.trim() === '') {
+      setNotificationMsgError('請輸入通知推播訊息');
+      hasError = true;
+    }
 
-      // Check content (only if enabled)
-      if (card.enableContent && !card.content) {
-        errors.push(`${cardLabel}內文`);
-      }
+    // 驗證卡片欄位
+    const newCardErrors = new Map();
 
-      // Check price (only if enabled)
-      if (card.enablePrice && !card.price) {
-        errors.push(`${cardLabel}金額`);
-      }
+    cards.forEach((card) => {
+      const errors: any = {};
 
-      // Check image (only if enabled)
+      // 驗證圖片（只有啟用時才驗證）
       if (card.enableImage && !card.image) {
-        errors.push(`${cardLabel}圖片`);
+        errors.image = '請選擇圖片';
       }
 
-      // Check Button 1
+      // 驗證標題文字（只有啟用時才驗證）
+      if (card.enableTitle && (!card.cardTitle || card.cardTitle.trim() === '')) {
+        errors.cardTitle = '請輸入標題文字';
+      }
+
+      // 驗證內文（只有啟用時才驗證）
+      if (card.enableContent && (!card.content || card.content.trim() === '')) {
+        errors.content = '請輸入內文';
+      }
+
+      // 驗證金額（只有啟用時才驗證）
+      if (card.enablePrice && (!card.price || card.price.trim() === '')) {
+        errors.price = '請輸入金額';
+      }
+
+      // 驗證動作按鈕 1
       if (card.enableButton1) {
-        if (!card.button1) {
-          errors.push(`${cardLabel}動作按鈕一 - 按鈕文字`);
+        if (!card.button1 || card.button1.trim() === '') {
+          errors.button1 = '請輸入按鈕文字';
         }
-        if (!card.button1Url) {
-          errors.push(`${cardLabel}動作按鈕一 - 連結網址`);
+        if (!card.button1Url || card.button1Url.trim() === '') {
+          errors.button1Url = '請輸入連結網址';
         }
       }
 
-      // Check Button 2
+      // 驗證動作按鈕 2
       if (card.enableButton2) {
-        if (!card.button2) {
-          errors.push(`${cardLabel}動作按鈕二 - 按鈕文字`);
+        if (!card.button2 || card.button2.trim() === '') {
+          errors.button2 = '請輸入按鈕文字';
         }
-        if (!card.button2Url) {
-          errors.push(`${cardLabel}動作按鈕二 - 連結網址`);
+        if (!card.button2Url || card.button2Url.trim() === '') {
+          errors.button2Url = '請輸入連結網址';
         }
       }
 
-      // Check Button 3
+      // 驗證動作按鈕 3
       if (card.enableButton3) {
-        if (!card.button3) {
-          errors.push(`${cardLabel}動作按鈕三 - 按鈕文字`);
+        if (!card.button3 || card.button3.trim() === '') {
+          errors.button3 = '請輸入按鈕文字';
         }
-        if (!card.button3Url) {
-          errors.push(`${cardLabel}動作按鈕三 - 連結網址`);
+        if (!card.button3Url || card.button3Url.trim() === '') {
+          errors.button3Url = '請輸入連結網址';
         }
       }
 
-      // Check Button 4
+      // 驗證動作按鈕 4
       if (card.enableButton4) {
-        if (!card.button4) {
-          errors.push(`${cardLabel}動作按鈕四 - 按鈕文字`);
+        if (!card.button4 || card.button4.trim() === '') {
+          errors.button4 = '請輸入按鈕文字';
         }
-        if (!card.button4Url) {
-          errors.push(`${cardLabel}動作按鈕四 - 連結網址`);
+        if (!card.button4Url || card.button4Url.trim() === '') {
+          errors.button4Url = '請輸入連結網址';
         }
+      }
+
+      // 如果該卡片有錯誤，記錄到 Map 中
+      if (Object.keys(errors).length > 0) {
+        newCardErrors.set(card.id, errors);
+        hasError = true;
       }
     });
 
-    return errors;
+    setCardErrors(newCardErrors);
+
+    return !hasError;
   };
 
   // Calculate aspect ratio based on card content
@@ -1035,11 +1064,10 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   };
 
   const handlePublish = async () => {
-    const errors = validateForm();
-
-    if (errors.length > 0) {
-      setValidationErrors(errors);
-      setValidationDialogOpen(true);
+    // 驗證表單，如果有錯誤則停止發佈
+    const isValid = validateForm();
+    if (!isValid) {
+      toast.error('請修正表單錯誤後再發佈');
       return;
     }
 
@@ -1066,7 +1094,6 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         target_type: targetType === 'all' ? 'all_friends' : 'filtered',
         schedule_type: scheduleType,
         notification_message: notificationMsg,
-        preview_message: previewMsg || notificationMsg,
         message_content: title || notificationMsg || '未命名訊息',
         thumbnail: cards[0]?.uploadedImageUrl || cards[0]?.image || null
       };
@@ -1283,9 +1310,12 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                   </Tooltip>
                 </Label>
                 <div className="flex-1 flex flex-col gap-[2px]">
-                  <Input 
+                  <Input
                     value={title}
-                    onChange={(e) => setTitle(e.target.value)}
+                    onChange={(e) => {
+                      setTitle(e.target.value);
+                      if (titleError) setTitleError(''); // 清除錯誤
+                    }}
                     placeholder="輸入訊息"
                     maxLength={32}
                     className="w-full h-[48px] rounded-[8px] border-neutral-100 bg-white"
@@ -1296,6 +1326,11 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                       <span className="text-[#383838]">/32</span>
                     </p>
                   </div>
+                  {titleError && (
+                    <p className="text-[12px] leading-[16px] text-red-500 mt-2">
+                      {titleError}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -1318,9 +1353,12 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                   </Tooltip>
                 </Label>
                 <div className="flex-1 flex flex-col gap-[2px] w-full">
-                  <Input 
+                  <Input
                     value={notificationMsg}
-                    onChange={(e) => setNotificationMsg(e.target.value)}
+                    onChange={(e) => {
+                      setNotificationMsg(e.target.value);
+                      if (notificationMsgError) setNotificationMsgError(''); // 清除錯誤
+                    }}
                     placeholder="顯示於裝置通知列的訊息內容"
                     maxLength={100}
                     className="h-[48px] rounded-[8px] border-neutral-100 bg-white"
@@ -1331,38 +1369,14 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                       <span className="text-[#383838]">/100</span>
                     </p>
                   </div>
+                  {notificationMsgError && (
+                    <p className="text-[12px] leading-[16px] text-red-500 mt-2">
+                      {notificationMsgError}
+                    </p>
+                  )}
                 </div>
               </div>
 
-              <div className="flex-1 flex flex-col sm:flex-row items-start gap-4 w-full">
-                <Label className="min-w-[120px] sm:min-w-[140px] lg:min-w-[160px] pt-3 flex items-center gap-1">
-                  <span className="text-[16px] text-[#383838]">通知預覽</span>
-                  <span className="text-[16px] text-[#f44336]">*</span>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <svg className="size-[24px]" fill="none" viewBox="0 0 24 24">
-                        <path d={svgPaths.p2cd5ff00} fill="#0F6BEB" />
-                      </svg>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>使用者接收通知時，顯示於聊天室訊息列表的預覽文字</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </Label>
-                <div className="flex-1 flex flex-col gap-[2px]">
-                  <Input 
-                    value={previewMsg}
-                    onChange={(e) => setPreviewMsg(e.target.value)}
-                    placeholder="顯示於聊天室過通知列的訊息內容"
-                    maxLength={100}
-                    className="h-[48px] rounded-[8px] border-neutral-100 bg-white"
-                  />
-                  <div className="flex justify-end text-[12px] leading-[1.5]">
-                    <span className="text-[#6e6e6e]">{previewMsg.length}</span>
-                    <span className="text-[#383838]">/100</span>
-                  </div>
-                </div>
-              </div>
             </div>
 
             {/* Schedule Section */}
@@ -1586,7 +1600,8 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                 onAddCarousel={addCarousel}
                 onUpdateCard={updateCard}
                 onImageUpload={(file) => handleImageUpload(file, currentCard)}
-                previewMsg={previewMsg}
+                previewMsg={notificationMsg}
+                errors={cardErrors.get(currentCard.id)}
                 onCopyCard={() => {
                   // Copy current card functionality
                   const newId = Math.max(...cards.map(c => c.id)) + 1;
@@ -1635,34 +1650,6 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Validation Dialog */}
-      <Dialog open={validationDialogOpen} onOpenChange={setValidationDialogOpen}>
-        <DialogContentNoClose className="max-w-[480px]">
-          <div className="flex flex-col gap-6">
-            <div className="flex flex-col gap-2">
-              <DialogTitle className="text-[20px] text-[#383838]">
-                請填寫必填欄位
-              </DialogTitle>
-              <DialogDescription className="text-[14px] text-[#6e6e6e]">
-                以下欄位為必填，請完成填寫後再發佈：
-              </DialogDescription>
-            </div>
-            <ul className="list-disc list-inside space-y-1">
-              {validationErrors.map((error, index) => (
-                <li key={index} className="text-[14px] text-[#383838]">{error}</li>
-              ))}
-            </ul>
-            <div className="flex justify-end">
-              <Button
-                onClick={() => setValidationDialogOpen(false)}
-                className="bg-[#0f6beb] hover:bg-[#0d5bc9] text-white h-[48px] px-6 rounded-[16px]"
-              >
-                知道了
-              </Button>
-            </div>
-          </div>
-        </DialogContentNoClose>
-      </Dialog>
     </TooltipProvider>
   );
 }

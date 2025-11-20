@@ -60,7 +60,6 @@ export default function FlexEditorPage() {
             id: message.id,
             title: message.message_content,
             notificationMsg: message.notification_message || '',
-            previewMsg: message.preview_message || message.notification_message || '',
             scheduleType,
             targetType: message.target_type === 'all_friends' ? 'all' : 'filtered',
             templateType: 'carousel', // Default to carousel for draft messages

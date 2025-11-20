@@ -1098,9 +1098,8 @@ def build_user_messages_from_payload(payload: dict, campaign_id: int, line_user_
           第一則「通知用文字」會在 push_campaign 裡多送一則 TextMessage。
     """
 
-    # 後台自定義的兩段文字
-    notification_message = (payload.get("notification_message") or "").strip()
-    preview_message = (payload.get("preview_message") or "").strip() or notification_message or "新訊息"
+    # 後台自定義通知文字（同時用於 altText）
+    notification_message = (payload.get("notification_message") or "").strip() or "新訊息"
 
     # -----------------------------
     # 追蹤 URL 注入函數
@@ -1183,10 +1182,10 @@ def build_user_messages_from_payload(payload: dict, campaign_id: int, line_user_
         # 轉換為 FlexContainer
         fc = FlexContainer.from_dict(flex_json)
 
-        logging.info(f"[FLEX_MESSAGE] Created FlexMessage with alt_text='{preview_message}'")
+        logging.info(f"[FLEX_MESSAGE] Created FlexMessage with alt_text='{notification_message}'")
 
         # 回傳 FlexMessage
-        return [FlexMessage(alt_text=preview_message, contents=fc)]
+        return [FlexMessage(alt_text=notification_message, contents=fc)]
 
     except json.JSONDecodeError as e:
         error_msg = f"Failed to parse flex_message_json (campaign_id={campaign_id}): {e}"
@@ -2018,7 +2017,7 @@ def _is_valid_line_user_id(uid: str) -> bool:
 def push_survey_entry(
     survey_id: int,
     title: Optional[str] = None,
-    preview_text: Optional[str] = None,
+    notification_message: Optional[str] = None,
     channel_id: Optional[str] = None,          # 舊系統內部 id
     line_channel_id: Optional[str] = None      # LINE 官方 Channel ID
 ) -> int:
@@ -2030,7 +2029,7 @@ def push_survey_entry(
     """
     liff_url = liff_form_url(survey_id)
     title = str(title or "問卷")
-    preview_text = str(preview_text or "").strip()
+    notification_message = str(notification_message or "").strip()
 
     # ✅ 使用 dict 構建 Flex (最穩定的方式)
     bubble_dict = {
@@ -2083,7 +2082,7 @@ def push_survey_entry(
     except Exception as e:
         logging.error(f"FlexContainer conversion failed: {e}")
         # Fallback: 只推文字
-        text_only = TextMessage(text=f"{title}\n\n{preview_text}\n\n開始填寫:{liff_url}".strip())
+        text_only = TextMessage(text=f"{title}\n\n{notification_message}\n\n開始填寫:{liff_url}".strip())
         msgs = [text_only]
     else:
         # ✅ 組合訊息 (只推 Flex,不推前置文字)
@@ -2164,7 +2163,7 @@ def send_survey_via_liff(payload: dict) -> dict:
     pushed = push_survey_entry(
     ids["survey_id"],
     title=payload.get("name") or "問卷",
-    preview_text=payload.get("description"),
+    notification_message=payload.get("description"),
     channel_id=payload.get("channel_id"),  # ← 允許從後台 JSON 帶頻道
     line_channel_id=payload.get("line_channel_id")
     )

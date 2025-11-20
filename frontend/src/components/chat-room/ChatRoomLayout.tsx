@@ -20,6 +20,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
 import MemberNoteEditor from '../shared/MemberNoteEditor';
 import { useMembers } from '../../contexts/MembersContext';
+import Container from '../../imports/Container-8548-103';
 
 // Chat messages constants
 const PAGE_SIZE = 6;  // 每次載入 6 條訊息（3 對問答）
@@ -34,13 +35,22 @@ const mockMessages_REMOVED: ChatMessage[] = [
   { id: 6, type: 'official', text: '官方文字訊息', time: '下午 05:40', isRead: true },
 ];
 
-// OA 頭像組件
-function OAAvatar() {
+// 用戶頭像（左側 OA）
+function UserAvatar() {
   return (
     <div className="bg-white content-stretch flex items-center justify-center relative rounded-[100px] shrink-0 size-[45px]">
       <div className="h-[18px] relative shrink-0 w-[16.938px]">
         <p className="font-['Inter:Regular',sans-serif] font-normal leading-[18px] text-[#383838] text-[12px] text-nowrap">OA</p>
       </div>
+    </div>
+  );
+}
+
+// 官方頭像（右側，使用設計稿 Container）
+function OfficialAvatar() {
+  return (
+    <div className="relative shrink-0 size-[45px]">
+      <Container />
     </div>
   );
 }
@@ -51,7 +61,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 
   return (
     <div className={`content-stretch flex gap-[20px] items-start ${isOfficial ? 'justify-end' : 'justify-start'} relative shrink-0 w-full`}>
-      {!isOfficial && <OAAvatar />}
+      {!isOfficial && <UserAvatar />}
       
       <div className={`content-stretch flex flex-col gap-[2px] items-${isOfficial ? 'end' : 'start'} relative shrink-0`}>
         <div className={`${isOfficial ? 'bg-[#383838]' : 'bg-[#f6f9fd]'} content-stretch flex flex-col items-center max-w-[288px] overflow-clip relative rounded-[15px] shrink-0 w-[288px]`}>
@@ -72,7 +82,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         </div>
       </div>
 
-      {isOfficial && <OAAvatar />}
+      {isOfficial && <OfficialAvatar />}
     </div>
   );
 }

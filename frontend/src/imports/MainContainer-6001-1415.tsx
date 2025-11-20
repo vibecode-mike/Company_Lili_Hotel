@@ -93,14 +93,41 @@ function Container5({ count }: { count: number }) {
 }
 
 type SortField = 'realName' | 'tags' | 'phone' | 'email' | 'createTime' | 'lastChatTime';
+type SortOrder = 'asc' | 'desc';
+interface SortConfig {
+  field: SortField;
+  order: SortOrder;
+}
+
+function SortingIcon({ active, order }: { active: boolean; order: SortOrder }) {
+  const color = active ? 'var(--fill-0, #0F6BEB)' : 'var(--fill-0, #6E6E6E)';
+  return (
+    <div className="overflow-clip relative shrink-0 size-[20px]" data-name="Sorting">
+      <div className="absolute inset-0" data-name="Vector">
+        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
+          <g id="Vector"></g>
+        </svg>
+      </div>
+      <div
+        className={`absolute h-[8px] left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%] w-[12px] ${order === 'asc' ? 'rotate-180' : ''}`}
+        data-name="Vector"
+      >
+        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 8">
+          <path d={svgPaths.p24dcb900} fill={color} id="Vector" />
+        </svg>
+      </div>
+    </div>
+  );
+}
 
 function Container6({ 
-  sortBy, 
+  sortConfig, 
   onSortChange 
 }: { 
-  sortBy: SortField; 
+  sortConfig: SortConfig; 
   onSortChange: (field: SortField) => void;
 }) {
+  const isActive = (field: SortField) => sortConfig.field === field;
   return (
     <div className="bg-white relative shrink-0 w-full" data-name="Container">
       <div className="flex flex-row items-center size-full border-b border-[#dddddd]">
@@ -125,18 +152,7 @@ function Container6({
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">姓名</p>
             </div>
-            <div className="overflow-clip relative shrink-0 size-[20px]" data-name="Sorting">
-              <div className="absolute inset-0" data-name="Vector">
-                <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
-                  <g id="Vector"></g>
-                </svg>
-              </div>
-              <div className="absolute h-[8px] left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%] w-[12px]" data-name="Vector">
-                <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 8">
-                  <path d={svgPaths.p24dcb900} fill={sortBy === 'realName' ? 'var(--fill-0, #0F6BEB)' : 'var(--fill-0, #6E6E6E)'} id="Vector" />
-                </svg>
-              </div>
-            </div>
+            <SortingIcon active={isActive('realName')} order={sortConfig.order} />
           </div>
           <div className="h-[12px] relative shrink-0 w-0" data-name="Divier">
             <div className="absolute inset-[-3.33%_-0.4px]">
@@ -171,18 +187,7 @@ function Container6({
                 <TooltipComponent />
               </TooltipContent>
             </Tooltip>
-            <div className="overflow-clip relative shrink-0 size-[20px]" data-name="Sorting">
-              <div className="absolute inset-0" data-name="Vector">
-                <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
-                  <g id="Vector"></g>
-                </svg>
-              </div>
-              <div className="absolute h-[8px] left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%] w-[12px]" data-name="Vector">
-                <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 8">
-                  <path d={svgPaths.p24dcb900} fill={sortBy === 'tags' ? 'var(--fill-0, #0F6BEB)' : 'var(--fill-0, #6E6E6E)'} id="Vector" />
-                </svg>
-              </div>
-            </div>
+            <SortingIcon active={isActive('tags')} order={sortConfig.order} />
           </div>
           <div className="h-[12px] relative shrink-0 w-0" data-name="Divier">
             <div className="absolute inset-[-3.33%_-0.4px]">
@@ -199,18 +204,7 @@ function Container6({
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">手機號碼</p>
             </div>
-            <div className="overflow-clip relative shrink-0 size-[20px]" data-name="Sorting">
-              <div className="absolute inset-0" data-name="Vector">
-                <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
-                  <g id="Vector"></g>
-                </svg>
-              </div>
-              <div className="absolute h-[8px] left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%] w-[12px]" data-name="Vector">
-                <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 8">
-                  <path d={svgPaths.p24dcb900} fill={sortBy === 'phone' ? 'var(--fill-0, #0F6BEB)' : 'var(--fill-0, #6E6E6E)'} id="Vector" />
-                </svg>
-              </div>
-            </div>
+            <SortingIcon active={isActive('phone')} order={sortConfig.order} />
           </div>
           <div className="h-[12px] relative shrink-0 w-0" data-name="Divier">
             <div className="absolute inset-[-3.33%_-0.4px]">
@@ -227,18 +221,7 @@ function Container6({
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">Email</p>
             </div>
-            <div className="overflow-clip relative shrink-0 size-[20px]" data-name="Sorting">
-              <div className="absolute inset-0" data-name="Vector">
-                <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
-                  <g id="Vector"></g>
-                </svg>
-              </div>
-              <div className="absolute h-[8px] left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%] w-[12px]" data-name="Vector">
-                <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 8">
-                  <path d={svgPaths.p24dcb900} fill={sortBy === 'email' ? 'var(--fill-0, #0F6BEB)' : 'var(--fill-0, #6E6E6E)'} id="Vector" />
-                </svg>
-              </div>
-            </div>
+            <SortingIcon active={isActive('email')} order={sortConfig.order} />
           </div>
           <div className="h-[12px] relative shrink-0 w-0" data-name="Divier">
             <div className="absolute inset-[-3.33%_-0.4px]">
@@ -262,18 +245,7 @@ function Container6({
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">建立時間</p>
             </div>
-            <div className="overflow-clip relative shrink-0 size-[20px]" data-name="Sorting">
-              <div className="absolute inset-0" data-name="Vector">
-                <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
-                  <g id="Vector"></g>
-                </svg>
-              </div>
-              <div className="absolute h-[8px] left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%] w-[12px]" data-name="Vector">
-                <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 8">
-                  <path d={svgPaths.p24dcb900} fill={sortBy === 'createTime' ? 'var(--fill-0, #0F6BEB)' : 'var(--fill-0, #6E6E6E)'} id="Vector" />
-                </svg>
-              </div>
-            </div>
+            <SortingIcon active={isActive('createTime')} order={sortConfig.order} />
           </div>
           <div className="h-[12px] relative shrink-0 w-0" data-name="Divier">
             <div className="absolute inset-[-3.33%_-0.4px]">
@@ -312,18 +284,7 @@ function Container6({
                 <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
                   <p className="leading-[1.5] whitespace-pre">最近聊天時間</p>
                 </div>
-                <div className="overflow-clip relative shrink-0 size-[20px]" data-name="Sorting">
-                  <div className="absolute inset-0" data-name="Vector">
-                    <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
-                      <g id="Vector"></g>
-                    </svg>
-                  </div>
-                  <div className="absolute h-[8px] left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%] w-[12px]" data-name="Vector">
-                    <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 8">
-                      <path d={svgPaths.p24dcb900} fill={sortBy === 'lastChatTime' ? 'var(--fill-0, #0F6BEB)' : 'var(--fill-0, #6E6E6E)'} id="Vector" />
-                    </svg>
-                  </div>
-                </div>
+                <SortingIcon active={isActive('lastChatTime')} order={sortConfig.order} />
               </div>
             </div>
           </div>
@@ -467,8 +428,34 @@ function MynauiMessageSolid() {
 
 // Dynamic Member Row Component
 function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Member; isLast?: boolean; onOpenChat?: (member: Member) => void; onViewDetail?: (member: Member) => void }) {
+  const [isPressed, setIsPressed] = useState(false);
+
+  const handleRowClick = () => {
+    onViewDetail?.(member);
+  };
+
+  const handleMouseDown = () => setIsPressed(true);
+  const handleMouseUp = () => setIsPressed(false);
+  const handleMouseLeave = () => setIsPressed(false);
+
   return (
-    <div className={`bg-white relative shrink-0 w-full hover:bg-slate-50 transition-colors group ${isLast ? 'rounded-bl-[16px] rounded-br-[16px]' : 'border-b border-[#dddddd]'}`} data-name="Container">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={handleRowClick}
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleRowClick();
+        }
+      }}
+      className={`relative shrink-0 w-full transition-colors group cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0f6beb]/30 ${isLast ? 'rounded-bl-[16px] rounded-br-[16px]' : 'border-b border-[#dddddd]'}`}
+      data-name="Container"
+      style={{ backgroundColor: isPressed ? '#edf3ff' : 'white' }}
+    >
       <div className="flex flex-row items-center size-full">
         <div className="box-border content-stretch flex items-center p-[12px] relative w-full">
           <div className="content-stretch flex items-center relative shrink-0 w-[260px]" data-name="Container">
@@ -516,7 +503,10 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Membe
             </div>
           </div>
           <div 
-            onClick={() => onOpenChat?.(member)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenChat?.(member);
+            }}
             className="content-stretch flex items-center justify-center min-h-[28px] min-w-[28px] relative rounded-[8px] shrink-0 size-[28px] cursor-pointer hover:bg-[#f0f6ff] transition-colors" 
             data-name="Icon Button"
           >
@@ -525,7 +515,10 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Membe
           <TextIconButton 
             text="詳細"
             icon={<ArrowRightIcon color="#0F6BEB" />}
-            onClick={() => onViewDetail?.(member)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewDetail?.(member);
+            }}
             variant="primary"
           />
         </div>
@@ -905,13 +898,13 @@ function Container12() {
 
 function Table8Columns3Actions({ 
   members, 
-  sortBy, 
+  sortConfig, 
   onSortChange,
   onOpenChat,
   onViewDetail
 }: { 
   members: Member[]; 
-  sortBy: SortField; 
+  sortConfig: SortConfig; 
   onSortChange: (field: SortField) => void;
   onOpenChat?: (member: Member) => void;
   onViewDetail?: (member: Member) => void;
@@ -922,7 +915,7 @@ function Table8Columns3Actions({
       <div className="bg-white rounded-[16px] w-full flex flex-col max-h-[600px] overflow-x-auto table-scroll">
         {/* Table Header - Fixed */}
         <div className="relative shrink-0 w-[1510px]">
-          <Container6 sortBy={sortBy} onSortChange={onSortChange} />
+          <Container6 sortConfig={sortConfig} onSortChange={onSortChange} />
         </div>
         
         {/* Table Body - Scrollable Container */}
@@ -944,13 +937,13 @@ function Table8Columns3Actions({
 
 function Container13({ 
   members, 
-  sortBy, 
+  sortConfig, 
   onSortChange,
   onOpenChat,
   onViewDetail
 }: { 
   members: Member[]; 
-  sortBy: SortField; 
+  sortConfig: SortConfig; 
   onSortChange: (field: SortField) => void;
   onOpenChat?: (member: Member) => void;
   onViewDetail?: (member: Member) => void;
@@ -958,7 +951,7 @@ function Container13({
   return (
     <div className="content-stretch flex flex-col gap-[8px] items-start relative shrink-0 w-full" data-name="Container">
       <Container5 count={members.length} />
-      <Table8Columns3Actions members={members} sortBy={sortBy} onSortChange={onSortChange} onOpenChat={onOpenChat} onViewDetail={onViewDetail} />
+      <Table8Columns3Actions members={members} sortConfig={sortConfig} onSortChange={onSortChange} onOpenChat={onOpenChat} onViewDetail={onViewDetail} />
     </div>
   );
 }
@@ -969,7 +962,7 @@ function MainContent({
   onSearch, 
   onClearSearch, 
   filteredMembers, 
-  sortBy, 
+  sortConfig, 
   onSortChange, 
   onAddMember, 
   onOpenChat, 
@@ -982,7 +975,7 @@ function MainContent({
   onSearch: () => void;
   onClearSearch: () => void;
   filteredMembers: Member[];
-  sortBy: SortField;
+  sortConfig: SortConfig;
   onSortChange: (field: SortField) => void;
   onAddMember?: () => void;
   onOpenChat?: (member: Member) => void;
@@ -1024,7 +1017,7 @@ function MainContent({
                 {error}
               </div>
             ) : filteredMembers.length > 0 ? (
-              <Table8Columns3Actions members={filteredMembers} sortBy={sortBy} onSortChange={onSortChange} onOpenChat={onOpenChat} onViewDetail={onViewDetail} />
+              <Table8Columns3Actions members={filteredMembers} sortConfig={sortConfig} onSortChange={onSortChange} onOpenChat={onOpenChat} onViewDetail={onViewDetail} />
             ) : (
               <div className="flex h-[240px] items-center justify-center rounded-[16px] border border-dashed border-[#dddddd] bg-white text-[#6e6e6e]">
                 尚無會員資料
@@ -1041,7 +1034,10 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
   const { members, isLoading, error } = useMembers();
   const [searchValue, setSearchValue] = useState('');
   const [appliedSearchValue, setAppliedSearchValue] = useState('');
-  const [sortBy, setSortBy] = useState<SortField>('lastChatTime');
+  const [sortConfig, setSortConfig] = useState<SortConfig>({
+    field: 'lastChatTime',
+    order: 'desc',
+  });
 
   // Helper function to parse date strings
   const parseDateTime = (dateStr?: string): number => {
@@ -1071,26 +1067,34 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
 
     // Apply sorting
     const sorted = [...result].sort((a, b) => {
-      switch (sortBy) {
+      let comparison = 0;
+      switch (sortConfig.field) {
         case 'realName':
-          return a.realName.localeCompare(b.realName);
+          comparison = (a.realName || '').localeCompare(b.realName || '');
+          break;
         case 'tags':
-          return (a.tags[0] || '').localeCompare(b.tags[0] || '');
+          comparison = (a.tags?.[0] || '').localeCompare(b.tags?.[0] || '');
+          break;
         case 'phone':
-          return a.phone.localeCompare(b.phone);
+          comparison = (a.phone || '').localeCompare(b.phone || '');
+          break;
         case 'email':
-          return a.email.localeCompare(b.email);
+          comparison = (a.email || '').localeCompare(b.email || '');
+          break;
         case 'createTime':
-          return parseDateTime(b.createTime) - parseDateTime(a.createTime);
+          comparison = parseDateTime(a.createTime) - parseDateTime(b.createTime);
+          break;
         case 'lastChatTime':
-          return parseDateTime(b.lastChatTime) - parseDateTime(a.lastChatTime);
+          comparison = parseDateTime(a.lastChatTime) - parseDateTime(b.lastChatTime);
+          break;
         default:
-          return 0;
+          break;
       }
+      return sortConfig.order === 'asc' ? comparison : -comparison;
     });
 
     return sorted;
-  }, [members, appliedSearchValue, sortBy]);
+  }, [members, appliedSearchValue, sortConfig]);
 
   const handleSearch = () => {
     setAppliedSearchValue(searchValue);
@@ -1099,11 +1103,20 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
   const handleClearSearch = () => {
     setSearchValue('');
     setAppliedSearchValue('');
-    setSortBy('lastChatTime'); // Reset to default sort
+    setSortConfig({ field: 'lastChatTime', order: 'desc' }); // Reset to default sort
   };
 
   const handleSortChange = (field: SortField) => {
-    setSortBy(field);
+    setSortConfig((prev) => {
+      if (prev.field === field) {
+        return {
+          field,
+          order: prev.order === 'desc' ? 'asc' : 'desc',
+        };
+      }
+      const defaultOrder: SortOrder = field === 'createTime' || field === 'lastChatTime' ? 'desc' : 'asc';
+      return { field, order: defaultOrder };
+    });
   };
 
   return (
@@ -1123,7 +1136,7 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
         onSearch={handleSearch}
         onClearSearch={handleClearSearch}
         filteredMembers={filteredMembers}
-        sortBy={sortBy}
+        sortConfig={sortConfig}
         onSortChange={handleSortChange}
         onAddMember={onAddMember}
         onOpenChat={onOpenChat}

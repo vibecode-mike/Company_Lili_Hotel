@@ -20,18 +20,24 @@ interface AutoReplyTableProps {
 }
 
 type SortField = 'content' | 'replyType' | 'keywords' | 'status' | 'platform' | 'triggerCount' | 'createTime';
+type SortOrder = 'asc' | 'desc';
+interface SortConfig {
+  field: SortField;
+  order: SortOrder;
+}
 
 // Memoized Table Header Component
-const TableHeader = memo(function TableHeader({ sortBy, onSortChange }: { sortBy: SortField | null; onSortChange: (field: SortField) => void }) {
-  const SortIcon = ({ isActive }: { isActive: boolean }) => (
+const TableHeader = memo(function TableHeader({ sortConfig, onSortChange }: { sortConfig: SortConfig; onSortChange: (field: SortField) => void }) {
+  const SortIcon = ({ active, order }: { active: boolean; order: SortOrder }) => (
     <div className="overflow-clip relative shrink-0 size-[20px]">
       <div className="absolute h-[8px] left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%] w-[12px]">
-        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 8">
-          <path d="M0.666667 8H3.33333C3.7 8 4 7.7 4 7.33333C4 6.96667 3.7 6.66667 3.33333 6.66667H0.666667C0.3 6.66667 0 6.96667 0 7.33333C0 7.7 0.3 8 0.666667 8ZM0 0.666667C0 1.03333 0.3 1.33333 0.666667 1.33333H11.3333C11.7 1.33333 12 1.03333 12 0.666667C12 0.3 11.7 0 11.3333 0H0.666667C0.3 0 0 0.3 0 0.666667ZM0.666667 4.66667H7.33333C7.7 4.66667 8 4.36667 8 4C8 3.63333 7.7 3.33333 7.33333 3.33333H0.666667C0.3 3.33333 0 3.63333 0 4C0 4.36667 0.3 4.66667 0.666667 4.66667Z" fill={isActive ? '#0F6BEB' : '#6E6E6E'} />
+        <svg className={`block size-full ${active && order === 'asc' ? 'rotate-180' : ''}`} fill="none" preserveAspectRatio="none" viewBox="0 0 12 8">
+          <path d="M0.666667 8H3.33333C3.7 8 4 7.7 4 7.33333C4 6.96667 3.7 6.66667 3.33333 6.66667H0.666667C0.3 6.66667 0 6.96667 0 7.33333C0 7.7 0.3 8 0.666667 8ZM0 0.666667C0 1.03333 0.3 1.33333 0.666667 1.33333H11.3333C11.7 1.33333 12 1.03333 12 0.666667C12 0.3 11.7 0 11.3333 0H0.666667C0.3 0 0 0.3 0 0.666667ZM0.666667 4.66667H7.33333C7.7 4.66667 8 4.36667 8 4C8 3.63333 7.7 3.33333 7.33333 3.33333H0.666667C0.3 3.33333 0 3.63333 0 4C0 4.36667 0.3 4.66667 0.666667 4.66667Z" fill={active ? '#0F6BEB' : '#6E6E6E'} />
         </svg>
       </div>
     </div>
   );
+  const isActive = (field: SortField) => sortConfig.field === field;
 
   return (
     <div className="bg-white relative rounded-tl-[16px] rounded-tr-[16px] shrink-0 w-full">
@@ -46,7 +52,7 @@ const TableHeader = memo(function TableHeader({ sortBy, onSortChange }: { sortBy
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">訊息內容</p>
             </div>
-            <SortIcon isActive={sortBy === 'content'} />
+            <SortIcon active={isActive('content')} order={sortConfig.order} />
           </div>
 
           {/* Divider */}
@@ -66,7 +72,7 @@ const TableHeader = memo(function TableHeader({ sortBy, onSortChange }: { sortBy
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">回應類型</p>
             </div>
-            <SortIcon isActive={sortBy === 'replyType'} />
+            <SortIcon active={isActive('replyType')} order={sortConfig.order} />
           </div>
 
           {/* Divider */}
@@ -86,7 +92,7 @@ const TableHeader = memo(function TableHeader({ sortBy, onSortChange }: { sortBy
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">關鍵字標籤</p>
             </div>
-            <SortIcon isActive={sortBy === 'keywords'} />
+            <SortIcon active={isActive('keywords')} order={sortConfig.order} />
           </div>
 
           {/* Divider */}
@@ -106,7 +112,7 @@ const TableHeader = memo(function TableHeader({ sortBy, onSortChange }: { sortBy
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">狀態</p>
             </div>
-            <SortIcon isActive={sortBy === 'status'} />
+            <SortIcon active={isActive('status')} order={sortConfig.order} />
           </div>
 
           {/* Divider */}
@@ -126,7 +132,7 @@ const TableHeader = memo(function TableHeader({ sortBy, onSortChange }: { sortBy
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">平台</p>
             </div>
-            <SortIcon isActive={sortBy === 'platform'} />
+            <SortIcon active={isActive('platform')} order={sortConfig.order} />
           </div>
 
           {/* Divider */}
@@ -146,7 +152,7 @@ const TableHeader = memo(function TableHeader({ sortBy, onSortChange }: { sortBy
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">觸發次數</p>
             </div>
-            <SortIcon isActive={sortBy === 'triggerCount'} />
+            <SortIcon active={isActive('triggerCount')} order={sortConfig.order} />
           </div>
 
           {/* Divider */}
@@ -166,7 +172,7 @@ const TableHeader = memo(function TableHeader({ sortBy, onSortChange }: { sortBy
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">建立時間</p>
             </div>
-            <SortIcon isActive={sortBy === 'createTime'} />
+            <SortIcon active={isActive('createTime')} order={sortConfig.order} />
           </div>
         </div>
       </div>
@@ -288,37 +294,69 @@ const AutoReplyRow = memo(function AutoReplyRow({
 });
 
 export default function AutoReplyTableStyled({ data, onRowClick, onToggleStatus }: AutoReplyTableProps) {
-  const [sortBy, setSortBy] = useState<SortField | null>('createTime');
+  const [sortConfig, setSortConfig] = useState<SortConfig>({
+    field: 'createTime',
+    order: 'desc',
+  });
+
+  const getDefaultOrder = (field: SortField): SortOrder => {
+    switch (field) {
+      case 'createTime':
+      case 'triggerCount':
+        return 'desc';
+      default:
+        return 'asc';
+    }
+  };
 
   const handleSort = (field: SortField) => {
-    setSortBy(field);
+    setSortConfig((prev) => {
+      if (prev.field === field) {
+        return {
+          field,
+          order: prev.order === 'desc' ? 'asc' : 'desc',
+        };
+      }
+      return {
+        field,
+        order: getDefaultOrder(field),
+      };
+    });
   };
 
   const sortedData = useMemo(() => {
     const list = [...data];
-    if (!sortBy) return list;
-
-    return list.sort((a, b) => {
-      switch (sortBy) {
+    list.sort((a, b) => {
+      let comparison = 0;
+      switch (sortConfig.field) {
         case 'content':
-          return a.content.localeCompare(b.content);
+          comparison = a.content.localeCompare(b.content);
+          break;
         case 'replyType':
-          return a.replyType.localeCompare(b.replyType);
+          comparison = a.replyType.localeCompare(b.replyType);
+          break;
         case 'keywords':
-          return a.keywords.join(',').localeCompare(b.keywords.join(','));
+          comparison = a.keywords.join(',').localeCompare(b.keywords.join(','));
+          break;
         case 'status':
-          return a.status.localeCompare(b.status);
+          comparison = a.status.localeCompare(b.status);
+          break;
         case 'platform':
-          return a.platform.localeCompare(b.platform);
+          comparison = a.platform.localeCompare(b.platform);
+          break;
         case 'triggerCount':
-          return b.triggerCount - a.triggerCount;
+          comparison = a.triggerCount - b.triggerCount;
+          break;
         case 'createTime':
-          return new Date(b.createTime).getTime() - new Date(a.createTime).getTime();
+          comparison = new Date(a.createTime).getTime() - new Date(b.createTime).getTime();
+          break;
         default:
-          return 0;
+          comparison = 0;
       }
+      return sortConfig.order === 'asc' ? comparison : -comparison;
     });
-  }, [data, sortBy]);
+    return list;
+  }, [data, sortConfig]);
 
   const handleRowClick = (id: string) => {
     onRowClick?.(id);
@@ -335,7 +373,7 @@ export default function AutoReplyTableStyled({ data, onRowClick, onToggleStatus 
       <div className="bg-white rounded-[16px] w-full flex flex-col max-h-[600px] overflow-x-auto table-scroll">
         {/* Table Header - Fixed */}
         <div className="relative shrink-0 w-[1250px]">
-          <TableHeader sortBy={sortBy} onSortChange={handleSort} />
+          <TableHeader sortConfig={sortConfig} onSortChange={handleSort} />
         </div>
         
         {/* Table Body - Scrollable Container */}

@@ -53,7 +53,6 @@ export interface MessageFormState {
   templateType: TemplateType;
   title: string;
   notificationMsg: string;
-  previewMsg: string;
   scheduleType: ScheduleType;
   targetType: TargetType;
   messageText: string;
@@ -102,7 +101,6 @@ export const createInitialState = (editMessageData?: Partial<MessageFormState>):
   templateType: editMessageData?.templateType || 'select',
   title: editMessageData?.title || '',
   notificationMsg: editMessageData?.notificationMsg || '',
-  previewMsg: editMessageData?.previewMsg || '',
   scheduleType: editMessageData?.scheduleType || 'immediate',
   targetType: editMessageData?.targetType || 'all',
   messageText: '',
@@ -146,7 +144,6 @@ export type MessageFormAction =
   | { type: 'SET_TEMPLATE_TYPE'; payload: TemplateType }
   | { type: 'SET_TITLE'; payload: string }
   | { type: 'SET_NOTIFICATION_MSG'; payload: string }
-  | { type: 'SET_PREVIEW_MSG'; payload: string }
   | { type: 'SET_SCHEDULE_TYPE'; payload: ScheduleType }
   | { type: 'SET_TARGET_TYPE'; payload: TargetType }
   | { type: 'SET_MESSAGE_TEXT'; payload: string }
@@ -223,10 +220,7 @@ export function messageFormReducer(
     
     case 'SET_NOTIFICATION_MSG':
       return { ...state, notificationMsg: action.payload, isDirty: true };
-    
-    case 'SET_PREVIEW_MSG':
-      return { ...state, previewMsg: action.payload, isDirty: true };
-    
+
     case 'SET_SCHEDULE_TYPE':
       return { ...state, scheduleType: action.payload, isDirty: true };
     
@@ -331,7 +325,6 @@ export function useMessageForm(initialData?: Partial<MessageFormState>) {
     setTemplateType: useCallback((type: TemplateType) => dispatch({ type: 'SET_TEMPLATE_TYPE', payload: type }), []),
     setTitle: useCallback((title: string) => dispatch({ type: 'SET_TITLE', payload: title }), []),
     setNotificationMsg: useCallback((msg: string) => dispatch({ type: 'SET_NOTIFICATION_MSG', payload: msg }), []),
-    setPreviewMsg: useCallback((msg: string) => dispatch({ type: 'SET_PREVIEW_MSG', payload: msg }), []),
     setScheduleType: useCallback((type: ScheduleType) => dispatch({ type: 'SET_SCHEDULE_TYPE', payload: type }), []),
     setTargetType: useCallback((type: TargetType) => dispatch({ type: 'SET_TARGET_TYPE', payload: type }), []),
     setMessageText: useCallback((text: string) => dispatch({ type: 'SET_MESSAGE_TEXT', payload: text }), []),

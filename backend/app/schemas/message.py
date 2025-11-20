@@ -69,7 +69,6 @@ class MessageCreate(BaseModel):
 
     # 訊息相關
     notification_message: Optional[str] = None
-    preview_message: Optional[str] = None
     template_type: Optional[str] = None  # Template01/Template02/Template03/Template04
 
     # 發送對象設定（兩欄位設計，符合官方規格）
@@ -101,7 +100,6 @@ class MessageUpdate(MessageBase):
     template_id: Optional[int] = None  # 更新時可選
     target_type: Optional[str] = None  # 更新時可選
     notification_message: Optional[str] = None  # 通知訊息（更新時可選）
-    preview_message: Optional[str] = None  # 預覽訊息（更新時可選）
     flex_message_json: Optional[str] = None  # Flex Message JSON（更新時可選）
     failure_reason: Optional[str] = None  # 發送失敗原因
 

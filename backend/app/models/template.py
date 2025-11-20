@@ -67,7 +67,6 @@ class MessageTemplate(Base):
 
     # 通知設定
     notification_message = Column(String(100), comment="通知推播訊息")
-    preview_message = Column(String(100), comment="聊天室預覽訊息")
 
     # 輪播設定
     carousel_count = Column(Integer, comment="輪播圖卡數量（2-9張）")

@@ -26,31 +26,31 @@ interface InteractiveMessageTableProps {
 }
 
 type SortField = 'title' | 'tags' | 'platform' | 'status' | 'sentCount' | 'openCount' | 'clickCount' | 'sendTime';
+type SortOrder = 'asc' | 'desc';
+interface SortConfig {
+  field: SortField;
+  order: SortOrder;
+}
 
 // Memoized Table Header Component
-const TableHeader = memo(function TableHeader({ sortBy, onSortChange, statusFilter }: { sortBy: SortField | null; onSortChange: (field: SortField) => void; statusFilter: string }) {
-  const SortIcon = ({
-    column,
-    isActive
-  }: {
-    column: string;
-    isActive: boolean;
-  }) => {
-    return (
-      <div className="overflow-clip relative shrink-0 size-[20px]">
-        <div className="absolute inset-0">
-          <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
-            <g id="Vector"></g>
-          </svg>
-        </div>
-        <div className="absolute h-[8px] left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%] w-[12px]">
-          <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 8">
-            <path d="M0.666667 8H3.33333C3.7 8 4 7.7 4 7.33333C4 6.96667 3.7 6.66667 3.33333 6.66667H0.666667C0.3 6.66667 0 6.96667 0 7.33333C0 7.7 0.3 8 0.666667 8ZM0 0.666667C0 1.03333 0.3 1.33333 0.666667 1.33333H11.3333C11.7 1.33333 12 1.03333 12 0.666667C12 0.3 11.7 0 11.3333 0H0.666667C0.3 0 0 0.3 0 0.666667ZM0.666667 4.66667H7.33333C7.7 4.66667 8 4.36667 8 4C8 3.63333 7.7 3.33333 7.33333 3.33333H0.666667C0.3 3.33333 0 3.63333 0 4C0 4.36667 0.3 4.66667 0.666667 4.66667Z" fill={isActive ? '#0F6BEB' : '#6E6E6E'} />
-          </svg>
-        </div>
+const TableHeader = memo(function TableHeader({ sortConfig, onSortChange, statusFilter }: { sortConfig: SortConfig; onSortChange: (field: SortField) => void; statusFilter: string }) {
+  const SortIcon = ({ active, order }: { active: boolean; order: SortOrder }) => (
+    <div className="overflow-clip relative shrink-0 size-[20px]">
+      <div className="absolute inset-0">
+        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
+          <g id="Vector"></g>
+        </svg>
       </div>
-    );
-  };
+      <div
+        className={`absolute h-[8px] left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%] w-[12px] ${active && order === 'asc' ? 'rotate-180' : ''}`}
+      >
+        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 8">
+          <path d="M0.666667 8H3.33333C3.7 8 4 7.7 4 7.33333C4 6.96667 3.7 6.66667 3.33333 6.66667H0.666667C0.3 6.66667 0 6.96667 0 7.33333C0 7.7 0.3 8 0.666667 8ZM0 0.666667C0 1.03333 0.3 1.33333 0.666667 1.33333H11.3333C11.7 1.33333 12 1.03333 12 0.666667C12 0.3 11.7 0 11.3333 0H0.666667C0.3 0 0 0.3 0 0.666667ZM0.666667 4.66667H7.33333C7.7 4.66667 8 4.36667 8 4C8 3.63333 7.7 3.33333 7.33333 3.33333H0.666667C0.3 3.33333 0 3.63333 0 4C0 4.36667 0.3 4.66667 0.666667 4.66667Z" fill={active ? '#0F6BEB' : '#6E6E6E'} />
+        </svg>
+      </div>
+    </div>
+  );
+  const isActive = (field: SortField) => sortConfig.field === field;
 
   // Determine time column label based on status filter
   const getTimeColumnLabel = () => {
@@ -72,7 +72,7 @@ const TableHeader = memo(function TableHeader({ sortBy, onSortChange, statusFilt
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
               <p className="leading-[1.5]">訊息標題</p>
             </div>
-            <SortIcon column="title" isActive={sortBy === 'title'} />
+            <SortIcon active={isActive('title')} order={sortConfig.order} />
           </div>
 
           {/* Divider */}
@@ -92,7 +92,7 @@ const TableHeader = memo(function TableHeader({ sortBy, onSortChange, statusFilt
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">標籤</p>
             </div>
-            <SortIcon column="tags" isActive={sortBy === 'tags'} />
+            <SortIcon active={isActive('tags')} order={sortConfig.order} />
           </div>
 
           {/* Divider */}
@@ -112,7 +112,7 @@ const TableHeader = memo(function TableHeader({ sortBy, onSortChange, statusFilt
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">平台</p>
             </div>
-            <SortIcon column="platform" isActive={sortBy === 'platform'} />
+            <SortIcon active={isActive('platform')} order={sortConfig.order} />
           </div>
 
           {/* Divider */}
@@ -132,7 +132,7 @@ const TableHeader = memo(function TableHeader({ sortBy, onSortChange, statusFilt
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">狀態</p>
             </div>
-            <SortIcon column="status" isActive={sortBy === 'status'} />
+            <SortIcon active={isActive('status')} order={sortConfig.order} />
           </div>
 
           {/* Divider */}
@@ -152,7 +152,7 @@ const TableHeader = memo(function TableHeader({ sortBy, onSortChange, statusFilt
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">發送人數</p>
             </div>
-            <SortIcon column="sentCount" isActive={sortBy === 'sentCount'} />
+            <SortIcon active={isActive('sentCount')} order={sortConfig.order} />
           </div>
 
           {/* Divider */}
@@ -172,7 +172,7 @@ const TableHeader = memo(function TableHeader({ sortBy, onSortChange, statusFilt
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">已開啟次數</p>
             </div>
-            <SortIcon column="openCount" isActive={sortBy === 'openCount'} />
+            <SortIcon active={isActive('openCount')} order={sortConfig.order} />
           </div>
 
           {/* Divider */}
@@ -192,7 +192,7 @@ const TableHeader = memo(function TableHeader({ sortBy, onSortChange, statusFilt
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">點擊次數</p>
             </div>
-            <SortIcon column="clickCount" isActive={sortBy === 'clickCount'} />
+            <SortIcon active={isActive('clickCount')} order={sortConfig.order} />
           </div>
 
           {/* Divider */}
@@ -229,7 +229,7 @@ const TableHeader = memo(function TableHeader({ sortBy, onSortChange, statusFilt
                 </Tooltip>
               </TooltipProvider>
             )}
-            <SortIcon column="sendTime" isActive={sortBy === 'sendTime'} />
+            <SortIcon active={isActive('sendTime')} order={sortConfig.order} />
           </div>
         </div>
       </div>
@@ -360,11 +360,87 @@ const MessageRow = memo(function MessageRow({
 });
 
 export default function InteractiveMessageTable({ messages, onEdit, onViewDetails, statusFilter }: InteractiveMessageTableProps) {
-  const [sortBy, setSortBy] = useState<SortField | null>('sendTime');
+  const [sortConfig, setSortConfig] = useState<SortConfig>({
+    field: 'sendTime',
+    order: 'desc',
+  });
+
+  const getDefaultOrder = (field: SortField): SortOrder => {
+    switch (field) {
+      case 'sendTime':
+      case 'sentCount':
+      case 'openCount':
+      case 'clickCount':
+        return 'desc';
+      default:
+        return 'asc';
+    }
+  };
 
   const handleSort = (field: SortField) => {
-    setSortBy(field);
+    setSortConfig((prev) => {
+      if (prev.field === field) {
+        return {
+          field,
+          order: prev.order === 'desc' ? 'asc' : 'desc',
+        };
+      }
+      return {
+        field,
+        order: getDefaultOrder(field),
+      };
+    });
   };
+
+  const sortedMessages = useMemo(() => {
+    const compareString = (a?: string, b?: string) =>
+      (a || '').localeCompare(b || '', undefined, { numeric: true, sensitivity: 'base' });
+
+    const parseNumber = (value?: string) => {
+      const num = Number(value?.replace(/,/g, ''));
+      return Number.isNaN(num) ? 0 : num;
+    };
+
+    const parseTime = (value?: string) => {
+      const timestamp = Date.parse(value || '');
+      return Number.isNaN(timestamp) ? 0 : timestamp;
+    };
+
+    const list = [...messages];
+    list.sort((a, b) => {
+      let comparison = 0;
+      switch (sortConfig.field) {
+        case 'title':
+          comparison = compareString(a.title, b.title);
+          break;
+        case 'tags':
+          comparison = compareString(a.tags?.[0], b.tags?.[0]);
+          break;
+        case 'platform':
+          comparison = compareString(a.platform, b.platform);
+          break;
+        case 'status':
+          comparison = compareString(a.status, b.status);
+          break;
+        case 'sentCount':
+          comparison = parseNumber(a.sentCount) - parseNumber(b.sentCount);
+          break;
+        case 'openCount':
+          comparison = parseNumber(a.openCount) - parseNumber(b.openCount);
+          break;
+        case 'clickCount':
+          comparison = parseNumber(a.clickCount) - parseNumber(b.clickCount);
+          break;
+        case 'sendTime':
+          comparison = parseTime(a.sendTime) - parseTime(b.sendTime);
+          break;
+        default:
+          comparison = 0;
+      }
+      return sortConfig.order === 'asc' ? comparison : -comparison;
+    });
+    return list;
+  }, [messages, sortConfig]);
 
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0 w-full">
@@ -372,16 +448,16 @@ export default function InteractiveMessageTable({ messages, onEdit, onViewDetail
       <div className="bg-white rounded-[16px] w-full flex flex-col max-h-[600px] overflow-x-auto table-scroll">
         {/* Table Header - Fixed */}
         <div className="relative shrink-0 w-[1250px]">
-          <TableHeader sortBy={sortBy} onSortChange={handleSort} statusFilter={statusFilter} />
+          <TableHeader sortConfig={sortConfig} onSortChange={handleSort} statusFilter={statusFilter} />
         </div>
         
         {/* Table Body - Scrollable Container */}
         <div className="w-[1250px] flex-1 table-scroll">
-          {messages.map((message, index) => (
+          {sortedMessages.map((message, index) => (
             <MessageRow 
               key={message.id} 
               message={message} 
-              isLast={index === messages.length - 1}
+              isLast={index === sortedMessages.length - 1}
               onEdit={onEdit}
               onViewDetails={onViewDetails}
             />

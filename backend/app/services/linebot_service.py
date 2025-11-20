@@ -201,7 +201,7 @@ class LineBotService:
                 sent_count = hotel_bot_module.push_survey_entry(
                     survey_id=survey_id,
                     title=survey.name,
-                    preview_message=survey.description
+                    notification_message=survey.description
                 )
 
                 # 4. 更新資料庫狀態 (確保狀態為 PUBLISHED 且記錄發送時間)
@@ -337,7 +337,6 @@ class LineBotService:
             "title": campaign.message_content,
             # 移除 template_type，因為現在使用 Flex Message JSON
             "notification_message": template.notification_message or "",
-            "preview_message": template.preview_message or "",
             "template_id": template.id,
             "interaction_tags": interaction_tags_json,
             "source_campaign_id": campaign.id,

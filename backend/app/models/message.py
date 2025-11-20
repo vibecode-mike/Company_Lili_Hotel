@@ -36,7 +36,6 @@ class Message(Base):
     )
     message_content = Column(Text, comment="訊息內容（用於列表顯示）")
     notification_message = Column(String(200), comment="通知推播訊息（顯示在手機通知欄）")
-    preview_message = Column(String(200), comment="聊天室預覽訊息（用於預覽顯示）")
     thumbnail = Column(String(500), comment="縮圖 URL")
     send_time = Column(DateTime, index=True, comment="傳送時間")
     send_count = Column(Integer, default=0, comment="傳送人數")

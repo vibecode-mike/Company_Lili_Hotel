@@ -68,6 +68,21 @@ export interface CarouselCard {
   imageTag: string;
 }
 
+interface CardErrors {
+  image?: string;
+  cardTitle?: string;
+  content?: string;
+  price?: string;
+  button1?: string;
+  button1Url?: string;
+  button2?: string;
+  button2Url?: string;
+  button3?: string;
+  button3Url?: string;
+  button4?: string;
+  button4Url?: string;
+}
+
 interface CarouselMessageEditorProps {
   cards: CarouselCard[];
   activeTab: number;
@@ -76,6 +91,7 @@ interface CarouselMessageEditorProps {
   onUpdateCard: (updates: Partial<CarouselCard>) => void;
   onCopyCard?: () => void;
   previewMsg?: string; // altText for LINE chat list preview
+  errors?: CardErrors; // 當前卡片的錯誤訊息
 }
 
 // altText 預覽組件 - 顯示 LINE 聊天列表中的預覽訊息
@@ -239,7 +255,8 @@ export default function CarouselMessageEditor({
   onAddCarousel,
   onUpdateCard,
   onCopyCard,
-  previewMsg
+  previewMsg,
+  errors
 }: CarouselMessageEditorProps) {
   const imageUploadRef = useRef<HTMLInputElement>(null);
   const currentCard = cards.find(c => c.id === activeTab) || cards[0];
@@ -466,6 +483,13 @@ export default function CarouselMessageEditor({
                   <p className="text-[12px] leading-[16px] text-[#6a7282]">• 圖片會自動調整為 1.92:1 或 1:1 比例</p>
                 </div>
 
+                {/* Image Error */}
+                {errors?.image && (
+                  <p className="text-[12px] leading-[16px] text-red-500 mt-2">
+                    {errors.image}
+                  </p>
+                )}
+
                 {/* Click Image Trigger URL */}
                 <div className="pt-[11px]">
                   <div className="flex items-center gap-[8px]">
@@ -524,18 +548,25 @@ export default function CarouselMessageEditor({
             </div>
 
             {currentCard.enableTitle && (
-              <div className="relative">
-                <input
-                  type="text"
-                  value={currentCard.cardTitle}
-                  onChange={(e) => onUpdateCard({ cardTitle: e.target.value })}
-                  placeholder="標題文字"
-                  maxLength={20}
-                  className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
-                />
-                <span className="absolute right-[12px] top-[10px] text-[12px] leading-[16px] text-[#6a7282]">
-                  {currentCard.cardTitle.length}/20
-                </span>
+              <div className="flex flex-col gap-[2px]">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={currentCard.cardTitle}
+                    onChange={(e) => onUpdateCard({ cardTitle: e.target.value })}
+                    placeholder="標題文字"
+                    maxLength={20}
+                    className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                  />
+                  <span className="absolute right-[12px] top-[10px] text-[12px] leading-[16px] text-[#6a7282]">
+                    {currentCard.cardTitle.length}/20
+                  </span>
+                </div>
+                {errors?.cardTitle && (
+                  <p className="text-[12px] leading-[16px] text-red-500 mt-2">
+                    {errors.cardTitle}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -552,17 +583,24 @@ export default function CarouselMessageEditor({
             </div>
 
             {currentCard.enableContent && (
-              <div className="relative">
-                <textarea
-                  value={currentCard.content}
-                  onChange={(e) => onUpdateCard({ content: e.target.value })}
-                  placeholder="輸入內文文字說明"
-                  maxLength={60}
-                  className="w-full h-[78px] px-[12px] py-[8px] rounded-[10px] border border-neutral-100 text-[14px] leading-[20px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all resize-none"
-                />
-                <span className="absolute right-[12px] bottom-[8px] text-[12px] leading-[16px] text-[#6a7282]">
-                  {currentCard.content.length}/60
-                </span>
+              <div className="flex flex-col gap-[2px]">
+                <div className="relative">
+                  <textarea
+                    value={currentCard.content}
+                    onChange={(e) => onUpdateCard({ content: e.target.value })}
+                    placeholder="輸入內文文字說明"
+                    maxLength={60}
+                    className="w-full h-[78px] px-[12px] py-[8px] rounded-[10px] border border-neutral-100 text-[14px] leading-[20px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all resize-none"
+                  />
+                  <span className="absolute right-[12px] bottom-[8px] text-[12px] leading-[16px] text-[#6a7282]">
+                    {currentCard.content.length}/60
+                  </span>
+                </div>
+                {errors?.content && (
+                  <p className="text-[12px] leading-[16px] text-red-500 mt-2">
+                    {errors.content}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -579,17 +617,24 @@ export default function CarouselMessageEditor({
             </div>
 
             {currentCard.enablePrice && (
-              <div className="relative">
-                <span className="absolute left-[12px] top-[10px] text-[14px] text-[#6a7282] pointer-events-none">
-                  NT$
-                </span>
-                <input
-                  type="number"
-                  value={currentCard.price}
-                  onChange={(e) => onUpdateCard({ price: e.target.value })}
-                  placeholder="0"
-                  className="w-full h-[36px] pl-[50px] pr-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
-                />
+              <div className="flex flex-col gap-[2px]">
+                <div className="relative">
+                  <span className="absolute left-[12px] top-[10px] text-[14px] text-[#6a7282] pointer-events-none">
+                    NT$
+                  </span>
+                  <input
+                    type="number"
+                    value={currentCard.price}
+                    onChange={(e) => onUpdateCard({ price: e.target.value })}
+                    placeholder="0"
+                    className="w-full h-[36px] pl-[50px] pr-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                  />
+                </div>
+                {errors?.price && (
+                  <p className="text-[12px] leading-[16px] text-red-500 mt-2">
+                    {errors.price}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -670,18 +715,25 @@ export default function CarouselMessageEditor({
                 </div>
                 
                 {/* 按鈕文字 */}
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={currentCard.button1}
-                    onChange={(e) => onUpdateCard({ button1: e.target.value })}
-                    placeholder="按鈕文字"
-                    maxLength={12}
-                    className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
-                  />
-                  <span className="absolute right-[12px] top-[10px] text-[12px] leading-[16px] text-[#6a7282]">
-                    {currentCard.button1.length}/12
-                  </span>
+                <div className="flex flex-col gap-[2px]">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={currentCard.button1}
+                      onChange={(e) => onUpdateCard({ button1: e.target.value })}
+                      placeholder="按鈕文字"
+                      maxLength={12}
+                      className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                    />
+                    <span className="absolute right-[12px] top-[10px] text-[12px] leading-[16px] text-[#6a7282]">
+                      {currentCard.button1.length}/12
+                    </span>
+                  </div>
+                  {errors?.button1 && (
+                    <p className="text-[12px] leading-[16px] text-red-500 mt-2">
+                      {errors.button1}
+                    </p>
+                  )}
                 </div>
 
                 {/* 連結網址 */}
@@ -694,6 +746,11 @@ export default function CarouselMessageEditor({
                     placeholder="https://example.com"
                     className="w-full h-[36px] px-[12px] rounded-[8px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
                   />
+                  {errors?.button1Url && (
+                    <p className="text-[12px] leading-[16px] text-red-500 mt-2">
+                      {errors.button1Url}
+                    </p>
+                  )}
                 </div>
 
                 {/* 互動標籤 */}
@@ -780,18 +837,25 @@ export default function CarouselMessageEditor({
                 </div>
                 
                 {/* 按鈕文字 */}
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={currentCard.button2}
-                    onChange={(e) => onUpdateCard({ button2: e.target.value })}
-                    placeholder="按鈕文字"
-                    maxLength={12}
-                    className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
-                  />
-                  <span className="absolute right-[12px] top-[10px] text-[12px] leading-[16px] text-[#6a7282]">
-                    {currentCard.button2.length}/12
-                  </span>
+                <div className="flex flex-col gap-[2px]">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={currentCard.button2}
+                      onChange={(e) => onUpdateCard({ button2: e.target.value })}
+                      placeholder="按鈕文字"
+                      maxLength={12}
+                      className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                    />
+                    <span className="absolute right-[12px] top-[10px] text-[12px] leading-[16px] text-[#6a7282]">
+                      {currentCard.button2.length}/12
+                    </span>
+                  </div>
+                  {errors?.button2 && (
+                    <p className="text-[12px] leading-[16px] text-red-500 mt-2">
+                      {errors.button2}
+                    </p>
+                  )}
                 </div>
 
                 {/* 連結網址 */}
@@ -804,6 +868,11 @@ export default function CarouselMessageEditor({
                     placeholder="https://example.com"
                     className="w-full h-[36px] px-[12px] rounded-[8px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
                   />
+                  {errors?.button2Url && (
+                    <p className="text-[12px] leading-[16px] text-red-500 mt-2">
+                      {errors.button2Url}
+                    </p>
+                  )}
                 </div>
 
                 {/* 互動標籤 */}
@@ -885,18 +954,25 @@ export default function CarouselMessageEditor({
                 </div>
                 
                 {/* 按鈕文字 */}
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={currentCard.button3}
-                    onChange={(e) => onUpdateCard({ button3: e.target.value })}
-                    placeholder="按鈕文字"
-                    maxLength={12}
-                    className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
-                  />
-                  <span className="absolute right-[12px] top-[10px] text-[12px] leading-[16px] text-[#6a7282]">
-                    {currentCard.button3.length}/12
-                  </span>
+                <div className="flex flex-col gap-[2px]">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={currentCard.button3}
+                      onChange={(e) => onUpdateCard({ button3: e.target.value })}
+                      placeholder="按鈕文字"
+                      maxLength={12}
+                      className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                    />
+                    <span className="absolute right-[12px] top-[10px] text-[12px] leading-[16px] text-[#6a7282]">
+                      {currentCard.button3.length}/12
+                    </span>
+                  </div>
+                  {errors?.button3 && (
+                    <p className="text-[12px] leading-[16px] text-red-500 mt-2">
+                      {errors.button3}
+                    </p>
+                  )}
                 </div>
 
                 {/* 連結網址 */}
@@ -909,6 +985,11 @@ export default function CarouselMessageEditor({
                     placeholder="https://example.com"
                     className="w-full h-[36px] px-[12px] rounded-[8px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
                   />
+                  {errors?.button3Url && (
+                    <p className="text-[12px] leading-[16px] text-red-500 mt-2">
+                      {errors.button3Url}
+                    </p>
+                  )}
                 </div>
 
                 {/* 互動標籤 */}
@@ -973,18 +1054,25 @@ export default function CarouselMessageEditor({
                 </div>
                 
                 {/* 按鈕文字 */}
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={currentCard.button4}
-                    onChange={(e) => onUpdateCard({ button4: e.target.value })}
-                    placeholder="按鈕文字"
-                    maxLength={12}
-                    className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
-                  />
-                  <span className="absolute right-[12px] top-[10px] text-[12px] leading-[16px] text-[#6a7282]">
-                    {currentCard.button4.length}/12
-                  </span>
+                <div className="flex flex-col gap-[2px]">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={currentCard.button4}
+                      onChange={(e) => onUpdateCard({ button4: e.target.value })}
+                      placeholder="按鈕文字"
+                      maxLength={12}
+                      className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                    />
+                    <span className="absolute right-[12px] top-[10px] text-[12px] leading-[16px] text-[#6a7282]">
+                      {currentCard.button4.length}/12
+                    </span>
+                  </div>
+                  {errors?.button4 && (
+                    <p className="text-[12px] leading-[16px] text-red-500 mt-2">
+                      {errors.button4}
+                    </p>
+                  )}
                 </div>
 
                 {/* 連結網址 */}
@@ -997,6 +1085,11 @@ export default function CarouselMessageEditor({
                     placeholder="https://example.com"
                     className="w-full h-[36px] px-[12px] rounded-[8px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
                   />
+                  {errors?.button4Url && (
+                    <p className="text-[12px] leading-[16px] text-red-500 mt-2">
+                      {errors.button4Url}
+                    </p>
+                  )}
                 </div>
 
                 {/* 互動標籤 */}

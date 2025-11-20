@@ -394,7 +394,6 @@ class CampaignService:
             name=campaign_data.title or "未命名模板",
             content=campaign_data.notification_message,
             notification_message=campaign_data.notification_message,
-            preview_message=campaign_data.preview_message,
         )
         db.add(template)
         await db.flush()

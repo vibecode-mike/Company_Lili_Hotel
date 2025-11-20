@@ -100,7 +100,6 @@ class TemplateService:
             action_text=source_template.action_text,
             action_image=source_template.action_image,
             notification_message=source_template.notification_message,
-            preview_message=source_template.preview_message,
             carousel_count=source_template.carousel_count,
             # 模板库管理字段
             is_in_library=False,  # 副本默认不在库中
