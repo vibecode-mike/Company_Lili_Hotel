@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, useEffect, ReactNode } from 'react';
 
 // 路由页面类型
 export type Page = 
@@ -52,16 +52,42 @@ interface NavigationProviderProps {
   initialParams?: NavigationParams;
 }
 
+// 從 localStorage 恢復導航狀態
+const getInitialNavigationState = () => {
+  try {
+    const saved = localStorage.getItem('navigation_state');
+    if (saved) {
+      const state = JSON.parse(saved);
+      // 驗證資料格式
+      if (state.page && state.params) {
+        return {
+          page: state.page as Page,
+          params: state.params as NavigationParams
+        };
+      }
+    }
+  } catch (error) {
+    console.error('Failed to restore navigation state:', error);
+  }
+  // 返回預設值
+  return null;
+};
+
 // Provider 组件
-export function NavigationProvider({ 
-  children, 
+export function NavigationProvider({
+  children,
   initialPage = 'member-management',
-  initialParams = {} 
+  initialParams = {}
 }: NavigationProviderProps) {
-  const [currentPage, setCurrentPage] = useState<Page>(initialPage);
-  const [params, setParams] = useState<NavigationParams>(initialParams);
+  // 嘗試從 localStorage 恢復狀態
+  const savedState = getInitialNavigationState();
+  const startPage = savedState?.page || initialPage;
+  const startParams = savedState?.params || initialParams;
+
+  const [currentPage, setCurrentPage] = useState<Page>(startPage);
+  const [params, setParams] = useState<NavigationParams>(startParams);
   const [history, setHistory] = useState<Array<{ page: Page; params: NavigationParams }>>([
-    { page: initialPage, params: initialParams }
+    { page: startPage, params: startParams }
   ]);
 
   const navigate = useCallback((page: Page, newParams: NavigationParams = {}) => {
@@ -94,6 +120,18 @@ export function NavigationProvider({
     setParams(initialParams);
     setHistory([{ page: initialPage, params: initialParams }]);
   }, [initialPage, initialParams]);
+
+  // 當路由狀態變化時,儲存到 localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('navigation_state', JSON.stringify({
+        page: currentPage,
+        params
+      }));
+    } catch (error) {
+      console.error('Failed to save navigation state:', error);
+    }
+  }, [currentPage, params]);
 
   const value: NavigationContextType = useMemo(() => ({
     currentPage,

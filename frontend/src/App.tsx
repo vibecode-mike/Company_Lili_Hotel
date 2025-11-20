@@ -62,7 +62,15 @@ function AppContent() {
 
     // Unlock navigation once when設定完成
     if (hasLockedStateRef.current || !hasRoutedAfterUnlockRef.current) {
-      navigate('member-management');
+      // 檢查是否有儲存的路由狀態 (重新整理的情況)
+      const savedNavigationState = localStorage.getItem('navigation_state');
+
+      // 只在真正的首次登入時導航到會員管理頁
+      // 如果有儲存的路由狀態,表示是重新整理,不應該強制導航
+      if (!savedNavigationState) {
+        navigate('member-management');
+      }
+
       hasLockedStateRef.current = false;
       hasRoutedAfterUnlockRef.current = true;
     }
