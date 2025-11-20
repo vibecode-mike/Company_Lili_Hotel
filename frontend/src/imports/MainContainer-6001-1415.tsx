@@ -355,7 +355,24 @@ function Frame1() {
   );
 }
 
-function Avatar() {
+function Avatar({ avatarUrl, altText }: { avatarUrl?: string; altText?: string }) {
+  const [imageError, setImageError] = useState(false);
+
+  // 有 LINE 頭像且未載入失敗
+  if (avatarUrl && !imageError) {
+    return (
+      <div className="absolute left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%] overflow-clip rounded-full size-[60px]">
+        <img
+          src={avatarUrl}
+          alt={altText || '會員頭像'}
+          className="w-full h-full object-cover"
+          onError={() => setImageError(true)}
+        />
+      </div>
+    );
+  }
+
+  // 無頭像或載入失敗時顯示預設圖標
   return (
     <div className="absolute bg-[#f6f9fd] content-stretch flex flex-col items-center left-1/2 overflow-clip rounded-[60px] size-[60px] top-1/2 translate-x-[-50%] translate-y-[-50%]" data-name="Avatar">
       <Frame1 />
@@ -455,8 +472,8 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Membe
       <div className="flex flex-row items-center size-full">
         <div className="box-border content-stretch flex items-center p-[12px] relative w-full">
           <div className="content-stretch flex items-center relative shrink-0 w-[260px]" data-name="Container">
-            <div className="overflow-clip relative shrink-0 size-[68px]" data-name="Avatar">
-              <Avatar />
+            <div className="bg-white relative rounded-full shrink-0 size-[68px]" data-name="Avatar">
+              <Avatar avatarUrl={member.lineAvatar} altText={member.username || '會員頭像'} />
             </div>
             <div className="basis-0 grow min-h-px min-w-px relative shrink-0" data-name="Table/List-atomic">
               <div className="flex flex-row items-center size-full">
