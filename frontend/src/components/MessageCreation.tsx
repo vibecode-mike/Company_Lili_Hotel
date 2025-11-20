@@ -176,29 +176,33 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       button2: '',
       button3: '',
       button4: '',
-      button1Action: 'select', 
-      button1Url: '', 
-      button1Tag: '', 
+      button1Action: 'select',
+      button1Url: '',
+      button1Tag: '',
       button1Text: '',
       button1TriggerImage: null as File | null,
+      button1TriggerImageUrl: '',
       button1Mode: 'primary' as 'primary' | 'secondary' | 'link',
       button2Action: 'select',
       button2Url: '',
       button2Tag: '',
       button2Text: '',
       button2TriggerImage: null as File | null,
+      button2TriggerImageUrl: '',
       button2Mode: 'secondary' as 'primary' | 'secondary' | 'link',
       button3Action: 'select',
       button3Url: '',
       button3Tag: '',
       button3Text: '',
       button3TriggerImage: null as File | null,
+      button3TriggerImageUrl: '',
       button3Mode: 'secondary' as 'primary' | 'secondary' | 'link',
       button4Action: 'select',
       button4Url: '',
       button4Tag: '',
       button4Text: '',
       button4TriggerImage: null as File | null,
+      button4TriggerImageUrl: '',
       button4Mode: 'secondary' as 'primary' | 'secondary' | 'link',
       enableImageUrl: false,
       imageUrl: '',
@@ -457,9 +461,6 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         if (!card.button1) {
           errors.push(`${cardLabel}動作按鈕一 - 按鈕文字`);
         }
-        if (card.button1Action === 'select') {
-          errors.push(`${cardLabel}動作按鈕一 - 互動類型`);
-        }
         if (card.button1Action === 'url' && !card.button1Url) {
           errors.push(`${cardLabel}動作按鈕一 - URL`);
         }
@@ -475,9 +476,6 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       if (card.enableButton2) {
         if (!card.button2) {
           errors.push(`${cardLabel}動作按鈕二 - 按鈕文字`);
-        }
-        if (card.button2Action === 'select') {
-          errors.push(`${cardLabel}動作按鈕二 - 互動類型`);
         }
         if (card.button2Action === 'url' && !card.button2Url) {
           errors.push(`${cardLabel}動作按鈕二 - URL`);
@@ -542,8 +540,8 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   };
 
   // Generate LINE Flex Message JSON from cards
-  const generateFlexMessage = () => {
-    const bubbles = cards.map(card => {
+  const generateFlexMessage = (cardsToUse = cards) => {
+    const bubbles = cardsToUse.map(card => {
       const bubble: any = {
         type: "bubble",
         size: "mega"
@@ -622,6 +620,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         const urlKey = `button${buttonNum}Url` as keyof typeof card;
         const textKey = `button${buttonNum}Text` as keyof typeof card;
         const modeKey = `button${buttonNum}Mode` as keyof typeof card;
+        const triggerImageUrlKey = `button${buttonNum}TriggerImageUrl` as keyof typeof card;
 
         if (!card[enableKey]) return;
 
@@ -653,6 +652,23 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
               type: "message",
               label: buttonText,
               text: text
+            };
+          }
+        } else if (action === 'image') {
+          // Handle trigger image action
+          const imageUrl = card[triggerImageUrlKey] as string;
+          if (imageUrl) {
+            button.action = {
+              type: "uri",
+              label: buttonText,
+              uri: imageUrl
+            };
+          } else {
+            // Fallback if image URL is not available
+            button.action = {
+              type: "message",
+              label: buttonText,
+              text: buttonText
             };
           }
         } else {
@@ -706,8 +722,39 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     }
 
     try {
-      // Generate flex message JSON
-      const flexMessage = generateFlexMessage();
+      // Upload trigger images first
+      const cardsWithUploadedImages = await Promise.all(cards.map(async (card) => {
+        const updates: any = {};
+
+        // Upload button1 trigger image
+        if (card.button1Action === 'image' && card.button1TriggerImage && !card.button1TriggerImageUrl) {
+          const url = await handleImageUpload(card.button1TriggerImage);
+          if (url) updates.button1TriggerImageUrl = url;
+        }
+
+        // Upload button2 trigger image
+        if (card.button2Action === 'image' && card.button2TriggerImage && !card.button2TriggerImageUrl) {
+          const url = await handleImageUpload(card.button2TriggerImage);
+          if (url) updates.button2TriggerImageUrl = url;
+        }
+
+        // Upload button3 trigger image
+        if (card.button3Action === 'image' && card.button3TriggerImage && !card.button3TriggerImageUrl) {
+          const url = await handleImageUpload(card.button3TriggerImage);
+          if (url) updates.button3TriggerImageUrl = url;
+        }
+
+        // Upload button4 trigger image
+        if (card.button4Action === 'image' && card.button4TriggerImage && !card.button4TriggerImageUrl) {
+          const url = await handleImageUpload(card.button4TriggerImage);
+          if (url) updates.button4TriggerImageUrl = url;
+        }
+
+        return { ...card, ...updates };
+      }));
+
+      // Generate flex message JSON using cards with uploaded image URLs
+      const flexMessage = generateFlexMessage(cardsWithUploadedImages);
 
       const token = localStorage.getItem('auth_token');
       if (!token) {

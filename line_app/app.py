@@ -1415,41 +1415,35 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
             continue
 
         try:
-            # 先組 Flex（裡面的 alt_text 已經用 preview_message）
-            msgs = build_user_messages_from_payload(payload, cid, uid)
-
-            # 判斷是否啟用「雙訊息模式」
-            #   - 兩個欄位都有值，而且內容不同：才啟用
-            #   - 否則就跟原本一樣只送一次 Flex
-            
-            #use_two_step = (
-            #   notification_message
-            #  and preview_message
-            #  and notification_message != preview_message
-            #)
-
-            use_two_step = False
-            
-            logging.info(
-                f"[{idx}/{total_targets}] Sending to {uid} "
-                f"(member_id={mid}), two_step={use_two_step}"
-            )
-
-            # - altText = notification_message（作為通知內容）
-            # - notification_disabled = False（讓通知跳出）
-            # - 聊天室不會顯示文字 notification_message
-
-            try:
-                # 用 notification_message 當 alt_text（LINE 通知會用 alt_text）
+            # 優先使用前端生成的 flex_message_json
+            if "flex_message_json" in payload and payload["flex_message_json"]:
+                # 使用完整的 FlexMessage JSON (包含觸發圖片 URL)
+                flex_dict = payload["flex_message_json"]
                 alt_txt = notification_message or preview_message or payload.get("title", "通知")
 
-                # msgs 是 build_user_messages_from_payload 回傳的 list
-                # 通常 msgs[0] 就是 FlexMessage
+                try:
+                    fc = FlexContainer.from_dict(flex_dict)
+                    flex_msg = FlexMessage(alt_text=alt_txt, contents=fc)
+                except Exception as e:
+                    logging.error(f"[{idx}/{total_targets}] Failed to parse flex_message_json: {e}")
+                    failed += 1
+                    continue
+            else:
+                # Fallback: 使用舊模板系統
+                msgs = build_user_messages_from_payload(payload, cid, uid)
+                if not msgs:
+                    logging.warning(f"[{idx}/{total_targets}] No messages generated")
+                    failed += 1
+                    continue
                 flex_msg = msgs[0]
-
-                # 強制設置 Flex 的 alt_text
+                alt_txt = notification_message or preview_message or payload.get("title", "通知")
                 flex_msg.alt_text = alt_txt
 
+            logging.info(
+                f"[{idx}/{total_targets}] Sending to {uid} (member_id={mid})"
+            )
+
+            try:
                 api.push_message(PushMessageRequest(
                     to=uid,
                     messages=[flex_msg],
@@ -1476,22 +1470,6 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
                 logging.exception(f"[{idx}/{total_targets}] ✗ Failed to {uid}: {e}")
                 failed += 1
                 continue
-
-            sent += 1
-            logging.info(f"[{idx}/{total_targets}] ✓ Success to {uid}")
-
-            # 紀錄一筆 outgoing 訊息（清掉大欄位避免塞爆）
-            if mid is not None:
-                payload_for_log = dict(payload)
-                payload_for_log.pop("image_base64", None)
-                payload_for_log.pop("image_url", None)
-                insert_message(
-                    mid,
-                    "outgoing",
-                    "text",
-                    {"campaign_id": cid, "payload": payload_for_log},
-                    campaign_id=cid,
-                )
 
         except Exception as e:
             logging.exception(f"[{idx}/{total_targets}] ✗ Failed to {uid}: {e}")
