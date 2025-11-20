@@ -2,9 +2,10 @@
 
 后端主系统 → `line_app/app.py` 的 JSON 接口定义
 
-**版本**: v1.0
-**更新日期**: 2025-11-19
+**版本**: v1.1
+**更新日期**: 2025-11-20
 **命名策略**: 与数据库字段名保持一致
+**實作決策**: 不實作流量限制和重試機制（詳見 implementation_decisions.md）
 
 ---
 
@@ -79,18 +80,13 @@
     {
       "line_uid": "U1234567890abcdef1234567890abcdef",
       "status": "success",
-      "sent_at": "2025-11-19T10:30:00Z",
-      "attempts": 1,
-      "last_status_code": 200,
-      "last_error": null
+      "sent_at": "2025-11-19T10:30:00Z"
     },
     {
       "line_uid": "U9876543210fedcba9876543210fedcba",
       "status": "failed",
       "sent_at": null,
-      "attempts": 3,
-      "last_status_code": 429,
-      "last_error": "LINE API 错误: Too Many Requests"
+      "error": "LINE API 错误: Invalid user ID"
     }
   ]
 }
@@ -151,14 +147,11 @@
 }
 ```
 
-## 🚦 批量发送节流与重试策略
+## 🚦 批量发送限制
 
 - **请求上限**：单次调用最多 500 个 `line_uids`；如需覆盖更多好友，请拆批或交由后台任务。
-- **限速**：每个 `line_app` 实例使用令牌桶控制在 15 请求/秒（≈900 请求/分钟），低于 LINE Messaging API 默认 1,000 请求/分钟限制 10%，避免触发 429。排队耗时将体现在批次总时长中。
-- **重试条件**：遇到 429、5xx 以及 HTTP 连接/超时错误时对单一 UID 最多重试 3 次，退避延迟分别为 1 秒、2 秒、4 秒。
-- **不重试情境**：4xx（除 429）视为业务错误，如無效 LINE UID、無發送權限，直接回报。
-- **结果字段**：`details` 中新增 `attempts`、`last_status_code`、`last_error`，用以呈现節流或重試狀態；成功紀錄 `last_error = null`、`attempts = 1`。
-- **日志**：節流等待、重試次數與最終失敗原因皆寫入 `line_app` log，供營運/維運監控。
+- **错误处理**：4xx 錯誤（如無效 LINE UID、無發送權限）直接返回失敗，記錄在 `details` 的 `error` 欄位中。
+- **日志**：所有發送結果（成功/失敗）皆寫入 `line_app` log，供營運/維運監控。
 
 ---
 

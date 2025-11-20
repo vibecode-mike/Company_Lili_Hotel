@@ -46,6 +46,7 @@ class MessageService:
         scheduled_at: Optional[datetime] = None,
         campaign_id: Optional[int] = None,
         notification_message: Optional[str] = None,
+        preview_message: Optional[str] = None,
         thumbnail: Optional[str] = None,
         admin_id: Optional[int] = None
     ) -> Message:
@@ -61,6 +62,7 @@ class MessageService:
             scheduled_at: 排程时间（可选）
             campaign_id: 关联活动 ID（可选）
             notification_message: 推送通知文字（可选）
+            preview_message: 预览文字（可选，默认与 notification_message 相同）
             thumbnail: 缩略图 URL（可选）
             admin_id: 创建者 ID（可选）
 
@@ -98,7 +100,7 @@ class MessageService:
             flex_message_json=flex_message_json,  # 直接存储 Flex Message JSON
             message_content=notification_message or thumbnail,  # 使用 notification_message 作为摘要
             notification_message=notification_message,  # 保存通知推播文字
-            preview_message=notification_message,  # 保存预览文字（与 notification_message 相同）
+            preview_message=preview_message or notification_message,  # 使用独立的 preview_message，默认与 notification_message 相同
             thumbnail=thumbnail,
             # created_by=admin_id  # 如果 Message 模型有此字段
         )

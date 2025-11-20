@@ -1,4 +1,4 @@
-import { useState, useRef, memo } from 'react';
+import { useState, useRef, memo, useEffect } from 'react';
 import { Plus, Upload, Copy, Trash2 } from 'lucide-react';
 import { Checkbox } from './ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -8,6 +8,15 @@ import { ImageWithFallback } from './figma/ImageWithFallback';
 import { toast } from 'sonner';
 import svgPaths from '../imports/svg-708vqjfcuf';
 import imgImageHero from "figma:asset/68b289cb927cef11d11501fd420bb560ad25c667.png";
+import { cropImage, createBlobUrl, revokeBlobUrl } from '../utils/imageCropper';
+
+// Calculate aspect ratio based on card content
+const calculateAspectRatio = (card: CarouselCard): "1:1" | "1.92:1" => {
+  const hasContent = card.enableTitle || card.enableContent || card.enablePrice ||
+                     card.enableButton1 || card.enableButton2 ||
+                     card.enableButton3 || card.enableButton4;
+  return hasContent ? "1.92:1" : "1:1";
+};
 
 export interface CarouselCard {
   id: number;
@@ -19,7 +28,9 @@ export interface CarouselCard {
   enableButton2: boolean;
   enableButton3: boolean;
   enableButton4: boolean;
-  image: string;
+  image: string;             // 預覽用的 Blob URL 或已上傳的 URL
+  originalFile?: File;       // 原始 File 對象（內存暫存，用於重新裁切）
+  uploadedImageUrl?: string; // 最終上傳到後端的 URL（保存後才有）
   cardTitle: string;
   content: string;
   price: string;
@@ -64,11 +75,41 @@ interface CarouselMessageEditorProps {
   onAddCarousel: () => void;
   onUpdateCard: (updates: Partial<CarouselCard>) => void;
   onCopyCard?: () => void;
-  onImageUpload?: (file: File) => Promise<string | null>;
+  previewMsg?: string; // altText for LINE chat list preview
 }
+
+// altText 預覽組件 - 顯示 LINE 聊天列表中的預覽訊息
+export const AltTextPreview = memo(function AltTextPreview({ altText }: { altText?: string }) {
+  if (!altText) return null;
+
+  return (
+    <div className="mb-3 w-[300px]">
+      <div className="text-xs text-gray-500 mb-1 flex items-center gap-1">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+          <path d="M7 0a7 7 0 100 14A7 7 0 007 0zm0 12.6A5.6 5.6 0 1112.6 7 5.607 5.607 0 017 12.6z"/>
+          <path d="M7 3.5a.7.7 0 00-.7.7v3.5a.7.7 0 101.4 0V4.2A.7.7 0 007 3.5zm0 5.6a.7.7 0 100 1.4.7.7 0 000-1.4z"/>
+        </svg>
+        <span>聊天列表預覽 (altText)</span>
+      </div>
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+        <div className="flex items-start gap-2">
+          <div className="w-8 h-8 rounded-full bg-[#06C755] flex items-center justify-center flex-shrink-0">
+            <span className="text-white text-xs font-bold">官</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-medium text-gray-900 mb-0.5">官方帳號</div>
+            <div className="text-sm text-gray-700 line-clamp-2">{altText}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
 
 // LINE Flex Message 風格的卡片預覽組件
 export const FlexMessageCardPreview = memo(function FlexMessageCardPreview({ card }: { card: CarouselCard }) {
+  const aspectRatio = calculateAspectRatio(card);
+
   return (
     <div className="bg-white rounded-[10px] shadow-[0px_20px_25px_-5px_rgba(0,0,0,0.1),0px_8px_10px_-6px_rgba(0,0,0,0.1)] w-[300px] overflow-hidden">
       {/* Hero Image */}
@@ -78,7 +119,7 @@ export const FlexMessageCardPreview = memo(function FlexMessageCardPreview({ car
             src={card.image || imgImageHero}
             alt="卡片圖片"
             className="w-full h-auto object-cover"
-            style={{ aspectRatio: "1.92:1" }}
+            style={{ aspectRatio: aspectRatio }}
           />
         </div>
       )}
@@ -198,55 +239,146 @@ export default function CarouselMessageEditor({
   onAddCarousel,
   onUpdateCard,
   onCopyCard,
-  onImageUpload
+  previewMsg
 }: CarouselMessageEditorProps) {
   const imageUploadRef = useRef<HTMLInputElement>(null);
   const currentCard = cards.find(c => c.id === activeTab) || cards[0];
+  const prevAspectRatioRef = useRef<"1:1" | "1.92:1" | null>(null);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (onImageUpload) {
-        // Use parent's upload handler (uploads to backend)
-        const imageUrl = await onImageUpload(file);
-        if (imageUrl) {
-          onUpdateCard({ image: imageUrl });
-        }
-      } else {
-        // Fallback to base64 if no upload handler provided
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          onUpdateCard({ image: reader.result as string });
-        };
-        reader.readAsDataURL(file);
+    if (!file) return;
+
+    try {
+      // 驗證文件類型
+      const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+      if (!validTypes.includes(file.type)) {
+        toast.error('檔案格式錯誤，請上傳 JPG、JPEG 或 PNG 格式的圖片');
+        return;
       }
+
+      // 驗證文件大小 (5MB)
+      if (file.size > 5242880) {
+        toast.error('圖片大小超過 5 MB，請選擇較小的圖片');
+        return;
+      }
+
+      // 計算當前需要的裁切比例
+      const aspectRatio = calculateAspectRatio(currentCard);
+
+      // 前端裁切圖片
+      const croppedBlob = await cropImage(file, aspectRatio);
+
+      // 清理舊的 blob URL（如果存在）
+      if (currentCard.image && currentCard.image.startsWith('blob:')) {
+        revokeBlobUrl(currentCard.image);
+      }
+
+      // 生成新的 blob URL 用於預覽
+      const blobUrl = createBlobUrl(croppedBlob);
+
+      // 更新卡片狀態
+      onUpdateCard({
+        originalFile: file,      // 保存原始 File 對象
+        image: blobUrl           // 保存 blob URL 用於預覽
+      });
+
+      toast.success('圖片上傳成功');
+    } catch (error) {
+      console.error('圖片處理錯誤:', error);
+      toast.error('圖片處理失敗，請重試');
     }
   };
 
   const handleCheckboxChange = (field: keyof CarouselCard, checked: boolean) => {
     // Check if trying to uncheck one of the three required fields
     const requiredFields: (keyof CarouselCard)[] = ['enableImage', 'enableTitle', 'enableContent'];
-    
+
     if (!checked && requiredFields.includes(field)) {
       // Count how many of the three required fields are currently checked
       const checkedCount = requiredFields.filter(f => currentCard[f]).length;
-      
+
       // If only one is checked (the current one), prevent unchecking
       if (checkedCount === 1) {
         toast.error('至少需要保留「選擇圖片」、「標題文字」或「內文文字說明」其中一個選項');
         return;
       }
     }
-    
+
     onUpdateCard({ [field]: checked });
   };
+
+  // Automatic re-crop when aspect ratio changes (frontend)
+  useEffect(() => {
+    const handleRecrop = async () => {
+      // Only proceed if we have original file
+      if (!currentCard.originalFile) {
+        return;
+      }
+
+      // Calculate current aspect ratio based on card settings
+      const newAspectRatio = calculateAspectRatio(currentCard);
+
+      // Check if aspect ratio actually changed
+      if (prevAspectRatioRef.current === null) {
+        // First render, just store the current ratio
+        prevAspectRatioRef.current = newAspectRatio;
+        return;
+      }
+
+      if (prevAspectRatioRef.current === newAspectRatio) {
+        // No change in aspect ratio, skip re-crop
+        return;
+      }
+
+      // Aspect ratio changed, update ref and trigger re-crop
+      prevAspectRatioRef.current = newAspectRatio;
+
+      try {
+        // 前端重新裁切
+        const croppedBlob = await cropImage(currentCard.originalFile, newAspectRatio);
+
+        // 清理舊的 blob URL
+        if (currentCard.image && currentCard.image.startsWith('blob:')) {
+          revokeBlobUrl(currentCard.image);
+        }
+
+        // 生成新的 blob URL
+        const blobUrl = createBlobUrl(croppedBlob);
+
+        // 更新預覽圖片
+        onUpdateCard({ image: blobUrl });
+      } catch (error) {
+        console.error('自動重新裁切錯誤:', error);
+        // Don't show toast error for automatic re-crop to avoid annoying users
+      }
+    };
+
+    // Trigger re-crop when any field that affects aspect ratio changes
+    handleRecrop();
+  }, [
+    currentCard.enableTitle,
+    currentCard.enableContent,
+    currentCard.enablePrice,
+    currentCard.enableButton1,
+    currentCard.enableButton2,
+    currentCard.enableButton3,
+    currentCard.enableButton4,
+    currentCard.originalFile
+  ]);
+
+  // Reset prevAspectRatioRef when switching cards
+  useEffect(() => {
+    prevAspectRatioRef.current = null;
+  }, [activeTab]);
 
   return (
     <div className="w-full h-full bg-[#F8FAFC] overflow-y-auto">
       <div className="flex gap-[32px] items-start p-[40px] w-full">
         {/* Left: Preview Card */}
         <div className="shrink-0">
-          <div className="bg-gradient-to-b from-[#a5d8ff] to-[#d0ebff] rounded-[20px] p-[24px] w-[460px] flex items-center justify-center">
+          <div className="bg-gradient-to-b from-[#a5d8ff] to-[#d0ebff] rounded-[20px] p-[24px] w-[460px] flex flex-col items-center justify-center">
+            <AltTextPreview altText={previewMsg} />
             <FlexMessageCardPreview card={currentCard} />
           </div>
         </div>

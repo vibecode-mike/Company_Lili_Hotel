@@ -137,6 +137,7 @@ async def create_message(
             scheduled_at=data.scheduled_at,
             campaign_id=data.campaign_id,
             notification_message=data.notification_message,
+            preview_message=data.preview_message,
             thumbnail=data.thumbnail,
         )
 
@@ -277,6 +278,8 @@ async def get_message(
         message_dict = {
             "id": message.id,
             "message_content": message.message_content,
+            "notification_message": message.notification_message,
+            "preview_message": message.preview_message,
             "thumbnail": message.thumbnail,
             "template": {
                 "id": message.template.id,

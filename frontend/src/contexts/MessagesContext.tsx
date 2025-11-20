@@ -48,6 +48,7 @@ interface MessagesContextType {
   statusCounts: { sent: number; scheduled: number; draft: number };
   quotaStatus: QuotaStatus | null;
   fetchQuota: () => Promise<void>;
+  refreshAll: () => Promise<void>;
 }
 
 // 創建 Context
@@ -150,6 +151,14 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
     }
   }, []);
 
+  // 刷新所有數據（訊息列表 + 配額狀態）
+  const refreshAll = useCallback(async () => {
+    await Promise.all([
+      fetchMessages(),
+      fetchQuota()
+    ]);
+  }, [fetchMessages, fetchQuota]);
+
   // 初始載入數據
   useEffect(() => {
     if (isAuthenticated) {
@@ -200,7 +209,8 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
     statusCounts,
     quotaStatus,
     fetchQuota,
-  }), [messages, addMessage, updateMessage, deleteMessage, getMessageById, totalMessages, isLoading, fetchMessages, statusCounts, quotaStatus, fetchQuota]);
+    refreshAll,
+  }), [messages, addMessage, updateMessage, deleteMessage, getMessageById, totalMessages, isLoading, fetchMessages, statusCounts, quotaStatus, fetchQuota, refreshAll]);
 
   return (
     <MessagesContext.Provider value={value}>

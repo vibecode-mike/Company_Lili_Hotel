@@ -21,7 +21,7 @@ from app.api.v1 import (
     auto_responses,
     pms_integrations,
     consumption_records,
-    broadcast_messages,
+    messages,
     templates,
     chat_messages,
     line_channels,
@@ -32,7 +32,7 @@ api_router = APIRouter()
 # 註冊路由
 api_router.include_router(auth.router, prefix="/auth", tags=["認證授權"])
 api_router.include_router(members.router, prefix="/members", tags=["會員管理"])
-api_router.include_router(broadcast_messages.router, prefix="/messages", tags=["群發訊息"])
+api_router.include_router(messages.router, prefix="/messages", tags=["群發訊息"])
 api_router.include_router(templates.router, prefix="/templates", tags=["模板庫"])
 api_router.include_router(campaigns.router, prefix="/campaigns", tags=["活動管理"])
 api_router.include_router(surveys.router, prefix="/surveys", tags=["問卷管理"])

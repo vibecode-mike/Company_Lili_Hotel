@@ -247,7 +247,7 @@ def get_credentials_by_line_id(line_channel_id: str) -> dict | None:
             channel_secret       AS secret,
             COALESCE(liff_id_open, '') AS liff_id_open
         FROM line_channels
-        WHERE line_channel_id = :cid AND is_active = 1
+        WHERE channel_id = :cid AND is_active = 1
         LIMIT 1
     """, {"cid": line_channel_id})
     return row  # 可能為 None
@@ -315,7 +315,7 @@ def setup_line_liff(line_channel_id: str, channel_secret: str, view_url: str, si
     # 3) 建立成功就把 liff_id_open 寫回 DB（你已經有這個欄位）
     if ok and liff_id:
         execute(
-            "UPDATE line_channels SET liff_id_open=:liff, updated_at=:now WHERE line_channel_id=:cid",
+            "UPDATE line_channels SET liff_id_open=:liff, updated_at=:now WHERE channel_id=:cid",
             {"liff": liff_id, "cid": line_channel_id, "now": utcnow()},
         )
 
@@ -536,72 +536,84 @@ def upsert_member(line_uid: str,
                   join_source: Optional[str] = None,
                   name: Optional[str] = None,
                   id_number: Optional[str] = None,
+                  passport_number: Optional[str] = None,      # ← 新增
                   residence: Optional[str] = None,
+                  address_detail: Optional[str] = None,       # ← 新增
                   receive_notification: Optional[int] = None) -> int:
+
     fields, ph, p = ["line_uid"], [":uid"], {"uid": line_uid}
 
     def add(col, key, val):
+        # 空字串自動轉換成 NULL
+        if val == "":
+            val = None
+
         if _table_has("members", col) and val is not None:
             fields.append(col)
             ph.append(f":{key}")
             p[key] = val
 
-    # ✅ 名稱欄位：優先寫 line_name，若未來表叫 line_display_name 也支援
+    # display name
     if display_name is not None:
         if _table_has("members", "line_name"):
             add("line_name", "dn", display_name)
         elif _table_has("members", "line_display_name"):
             add("line_display_name", "dn", display_name)
 
-    # ✅ 頭像欄位：優先寫 line_avatar，若未來表叫 line_picture_url 也支援
+    # avatar
     if picture_url is not None:
         if _table_has("members", "line_avatar"):
             add("line_avatar", "pu", picture_url)
         elif _table_has("members", "line_picture_url"):
             add("line_picture_url", "pu", picture_url)
 
-    # 其他問卷欄位
+    # form fields
     add("gender", "g", gender)
-    add("birthday", "bd", birthday_date)
+    add("birthday", "bd", birthday_date or None)
     add("email", "em", email)
     add("phone", "phn", phone)
     add("name", "nm", name)
     add("id_number", "idn", id_number)
+    add("passport_number", "psn", passport_number)   # ← 新增
     add("residence", "res", residence)
+    add("address_detail", "addr", address_detail)    # ← 新增
     add("receive_notification", "rn", receive_notification)
 
-
-    # ✅ 加入來源：優先寫 join_source，沒有這欄再退到舊的 source
+    # join source
     js_val = join_source or "LINE"
     if _table_has("members", "join_source"):
         add("join_source", "js", js_val)
     elif _table_has("members", "source"):
         add("source", "js", js_val)
 
-    # 時間欄位
+    # timestamps
     if _col_required("members", "created_at"):
         fields.append("created_at")
         ph.append(":cat")
         p["cat"] = utcnow()
+
     if _table_has("members", "updated_at"):
         fields.append("updated_at")
         ph.append(":uat")
         p["uat"] = utcnow()
 
-    # UPDATE 欄位（有對應欄位才會更新）
+    # UPDATE part
     set_parts = []
     for k in (
         "line_name", "line_display_name",
         "line_avatar", "line_picture_url",
         "gender", "birthday", "email", "phone",
         "join_source", "source",
-        "name", "id_number", "residence", "receive_notification"
+        "name", "id_number", "passport_number",    # ← 新增
+        "residence", "address_detail",             # ← 新增
+        "receive_notification"
     ):
         if _table_has("members", k):
             set_parts.append(f"{k}=VALUES({k})")
 
     if _table_has("members", "updated_at"):
         set_parts.append("updated_at=VALUES(updated_at)")
+
     if _table_has("members", "last_interaction_at"):
         set_parts.append("last_interaction_at=NOW()")
 
@@ -617,6 +629,7 @@ def upsert_member(line_uid: str,
             text("SELECT id FROM members WHERE line_uid=:u"),
             {"u": line_uid}
         ).scalar()
+
     return int(mid)
 
 
@@ -1069,6 +1082,8 @@ def build_user_messages_from_payload(payload: dict, campaign_id: int, line_user_
     """
     從後台 payload 組成「要發給單一 user 的 Flex 訊息」列表。
 
+    ✅ 新版：僅使用前端生成的 flex_message_json，移除舊格式處理邏輯。
+
     🔹 跟『通知 / 聊天室預覽』相關的欄位說明：
         - payload["notification_message"]
             → 給【手機通知列 / 鎖屏】看的文字
@@ -1082,112 +1097,105 @@ def build_user_messages_from_payload(payload: dict, campaign_id: int, line_user_
         - build_user_messages_from_payload 只負責產生 Flex，
           第一則「通知用文字」會在 push_campaign 裡多送一則 TextMessage。
     """
-    ttype = (payload.get("template_type") or payload.get("type") or "").strip().lower()
-    title = payload.get("title") or "活動通知"
 
     # 後台自定義的兩段文字
-    notification_message = (payload.get("notification_message") or "").strip() or title
-    preview_message = (payload.get("preview_message") or "").strip() or notification_message
-
-    messages: List[FlexMessage] = []
+    notification_message = (payload.get("notification_message") or "").strip()
+    preview_message = (payload.get("preview_message") or "").strip() or notification_message or "新訊息"
 
     # -----------------------------
-    # 準備項目（單卡 or 多卡 carousel）
+    # 追蹤 URL 注入函數
     # -----------------------------
-    if payload.get("carousel_items"):
-        items = sorted(payload["carousel_items"], key=lambda x: x.get("sort_order") or 0)
-    else:
-        # 單張卡的簡單模式
-        # description 優先用 preview_message，其次才用 notification_message
-        description = (
-            payload.get("description")
-            or payload.get("preview_message")
-            or payload.get("notification_message")
-            or title
-        )
-        items = [{
-            "image_base64": payload.get("image_base64"),
-            "image_url": payload.get("image_url"),
-            "title": payload.get("title"),
-            "description": description,
-            "price": payload.get("price"),
-            "action_url": payload.get("url"),
-            "interaction_tags": payload.get("interaction_tags"),
-            "action_button_enabled": True if payload.get("interaction_type") == "open_url" else False,
-            "action_button_text": payload.get("action_button_text") or "查看詳情",
-            "action_button_interaction_type": payload.get("interaction_type") or "open_url",
-            "sort_order": 0
-        }]
+    def inject_tracking_into_flex_json(flex_json, campaign_id, line_user_id, payload):
+        """遞迴注入追蹤 URL 到 Flex JSON 的所有 action.uri"""
 
-    # -----------------------------
-    # 產生追蹤連結（含 &src &tag）
-    # -----------------------------
-    def tracked_uri(item) -> Optional[str]:
-        target_url = (
-            item.get("action_url")
-            or item.get("action_button_url")
-            or item.get("url")
-            or f"{PUBLIC_BASE}/"
-        )
+        def make_tracking_url(original_url, interaction_type="image_click"):
+            """生成追蹤 URL"""
+            # &src (來源活動 ID)
+            src = payload.get("source_campaign_id")
+            src_q = f"&src={src}" if src is not None else ""
 
-        btn_enabled = item.get("action_button_enabled", False)
-        btn_type = (item.get("action_button_interaction_type") or "").lower()
-        interaction_type = "button_url" if (btn_enabled and btn_type == "open_url") else "image_click"
+            # &tag (互動標籤)
+            tag_val = payload.get("interaction_tags")
+            if isinstance(tag_val, list):
+                tag_val = ",".join([str(x).strip() for x in tag_val if str(x).strip()])
+            if isinstance(tag_val, str):
+                tag_val = tag_val.strip()
+            tag_q = f"&tag={quote(tag_val, safe='')}" if tag_val else ""
 
-        # &src
-        src = payload.get("source_campaign_id")
-        src_q = f"&src={src}" if src is not None else ""
+            # 組成追蹤 URL
+            tracking_url = (
+                f"{PUBLIC_BASE}/__track"
+                f"?cid={campaign_id}&uid={line_user_id}"
+                f"&type={interaction_type}&to={quote(original_url, safe='')}"
+                f"{src_q}{tag_q}"
+            )
+            logging.info(f"[TRACKING] {interaction_type}: {original_url} -> {tracking_url}")
+            return tracking_url
 
-        # &tag（支援 list / str）
-        tag_val = item.get("interaction_tags") or payload.get("interaction_tags")
-        if isinstance(tag_val, list):
-            tag_val = ",".join([str(x).strip() for x in tag_val if str(x).strip()])
-        if isinstance(tag_val, str):
-            tag_val = tag_val.strip()
-        tag_q = f"&tag={quote(tag_val, safe='')}" if tag_val else ""
+        def walk_and_replace(obj):
+            """遞迴替換所有 action.uri"""
+            if isinstance(obj, dict):
+                # 檢查是否有 action.uri
+                if "action" in obj and isinstance(obj["action"], dict):
+                    if obj["action"].get("type") == "uri" and "uri" in obj["action"]:
+                        original_uri = obj["action"]["uri"]
+                        # 根據父元素類型判斷互動類型
+                        interaction_type = "button_url" if obj.get("type") == "button" else "image_click"
+                        obj["action"]["uri"] = make_tracking_url(original_uri, interaction_type)
 
-        uri = (
-            f"{PUBLIC_BASE}/__track"
-            f"?cid={campaign_id}&uid={line_user_id}"
-            f"&type={interaction_type}&to={quote(target_url, safe='')}"
-            f"{src_q}{tag_q}"
-        )
-        logging.warning("[TRACK_URI] %s", uri)
-        return uri
+                # 遞迴處理所有嵌套物件
+                for key, value in obj.items():
+                    obj[key] = walk_and_replace(value)
+
+            elif isinstance(obj, list):
+                return [walk_and_replace(item) for item in obj]
+
+            return obj
+
+        # 深度複製避免修改原始資料
+        import copy
+        flex_copy = copy.deepcopy(flex_json)
+        return walk_and_replace(flex_copy)
 
     # -----------------------------
-    # 組 Bubble（每一張卡片）
+    # 使用 flex_message_json
     # -----------------------------
-    bubbles = []
-    for it in items:
-        uri = tracked_uri(it)
-        it["image_click_action_type"] = it.get("image_click_action_type", "open_url")
+    flex_json_raw = payload.get("flex_message_json")
+    if not flex_json_raw:
+        error_msg = f"flex_message_json is required (campaign_id={campaign_id})"
+        logging.error(error_msg)
+        raise ValueError(error_msg)
 
-        if ttype == "image_card":
-            bubbles.append(make_image_button_bubble(it, uri))
-        elif ttype in ("image_click", "carousel", ""):
-            bubbles.append(make_image_click_bubble(it, uri))
+    try:
+        # 解析 JSON（可能是字串或已解析的 dict）
+        if isinstance(flex_json_raw, str):
+            flex_json = json.loads(flex_json_raw)
         else:
-            bubbles.append(make_image_button_bubble(it, uri))
+            flex_json = flex_json_raw
 
-    # -----------------------------
-    # Flex 容器（單卡 or carousel）
-    # -----------------------------
-    if len(bubbles) > 1 or ttype == "carousel":
-        flex = {"type": "carousel", "contents": bubbles}
-    else:
-        flex = bubbles[0]
+        logging.info(f"[FLEX_JSON] Original: {json.dumps(flex_json, ensure_ascii=False)[:200]}...")
 
-    logging.error("=== FLEX DEBUG OUTPUT ===\n%s", json.dumps(flex, ensure_ascii=False, indent=2))
-    fc = FlexContainer.from_dict(flex)
+        # 注入追蹤 URL
+        flex_json = inject_tracking_into_flex_json(flex_json, campaign_id, line_user_id, payload)
 
-    # ✅ 這裡很關鍵：
-    #   - alt_text 使用 preview_message
-    #   - 這樣在「雙訊息模式」下：
-    #       第一則 Text：notification_message → 給通知列/鎖屏看
-    #       第二則 Flex：alt_text = preview_message → 給聊天室列表預覽看
-    messages.append(FlexMessage(alt_text=preview_message, contents=fc))
-    return messages
+        logging.info(f"[FLEX_JSON] After tracking injection: {json.dumps(flex_json, ensure_ascii=False)[:200]}...")
+
+        # 轉換為 FlexContainer
+        fc = FlexContainer.from_dict(flex_json)
+
+        logging.info(f"[FLEX_MESSAGE] Created FlexMessage with alt_text='{preview_message}'")
+
+        # 回傳 FlexMessage
+        return [FlexMessage(alt_text=preview_message, contents=fc)]
+
+    except json.JSONDecodeError as e:
+        error_msg = f"Failed to parse flex_message_json (campaign_id={campaign_id}): {e}"
+        logging.error(error_msg)
+        raise ValueError(error_msg)
+    except Exception as e:
+        error_msg = f"Failed to process flex_message_json (campaign_id={campaign_id}): {e}"
+        logging.error(error_msg)
+        raise
 
 
 # 活動推播 (Campaign Push)
@@ -1415,35 +1423,41 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
             continue
 
         try:
-            # 優先使用前端生成的 flex_message_json
-            if "flex_message_json" in payload and payload["flex_message_json"]:
-                # 使用完整的 FlexMessage JSON (包含觸發圖片 URL)
-                flex_dict = payload["flex_message_json"]
-                alt_txt = notification_message or preview_message or payload.get("title", "通知")
+            # 先組 Flex（裡面的 alt_text 已經用 preview_message）
+            msgs = build_user_messages_from_payload(payload, cid, uid)
 
-                try:
-                    fc = FlexContainer.from_dict(flex_dict)
-                    flex_msg = FlexMessage(alt_text=alt_txt, contents=fc)
-                except Exception as e:
-                    logging.error(f"[{idx}/{total_targets}] Failed to parse flex_message_json: {e}")
-                    failed += 1
-                    continue
-            else:
-                # Fallback: 使用舊模板系統
-                msgs = build_user_messages_from_payload(payload, cid, uid)
-                if not msgs:
-                    logging.warning(f"[{idx}/{total_targets}] No messages generated")
-                    failed += 1
-                    continue
-                flex_msg = msgs[0]
-                alt_txt = notification_message or preview_message or payload.get("title", "通知")
-                flex_msg.alt_text = alt_txt
+            # 判斷是否啟用「雙訊息模式」
+            #   - 兩個欄位都有值，而且內容不同：才啟用
+            #   - 否則就跟原本一樣只送一次 Flex
+            
+            #use_two_step = (
+            #   notification_message
+            #  and preview_message
+            #  and notification_message != preview_message
+            #)
 
+            use_two_step = False
+            
             logging.info(
-                f"[{idx}/{total_targets}] Sending to {uid} (member_id={mid})"
+                f"[{idx}/{total_targets}] Sending to {uid} "
+                f"(member_id={mid}), two_step={use_two_step}"
             )
 
+            # - altText = notification_message（作為通知內容）
+            # - notification_disabled = False（讓通知跳出）
+            # - 聊天室不會顯示文字 notification_message
+
             try:
+                # 用 notification_message 當 alt_text（LINE 通知會用 alt_text）
+                alt_txt = notification_message or preview_message or payload.get("title", "通知")
+
+                # msgs 是 build_user_messages_from_payload 回傳的 list
+                # 通常 msgs[0] 就是 FlexMessage
+                flex_msg = msgs[0]
+
+                # 強制設置 Flex 的 alt_text
+                flex_msg.alt_text = alt_txt
+
                 api.push_message(PushMessageRequest(
                     to=uid,
                     messages=[flex_msg],
@@ -1470,6 +1484,22 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
                 logging.exception(f"[{idx}/{total_targets}] ✗ Failed to {uid}: {e}")
                 failed += 1
                 continue
+
+            sent += 1
+            logging.info(f"[{idx}/{total_targets}] ✓ Success to {uid}")
+
+            # 紀錄一筆 outgoing 訊息（清掉大欄位避免塞爆）
+            if mid is not None:
+                payload_for_log = dict(payload)
+                payload_for_log.pop("image_base64", None)
+                payload_for_log.pop("image_url", None)
+                insert_message(
+                    mid,
+                    "outgoing",
+                    "text",
+                    {"campaign_id": cid, "payload": payload_for_log},
+                    campaign_id=cid,
+                )
 
         except Exception as e:
             logging.exception(f"[{idx}/{total_targets}] ✗ Failed to {uid}: {e}")
@@ -2415,16 +2445,22 @@ def api_member_form_submit():
         line_uid=uid,
         display_name=dn,
         picture_url=pu,
-        gender=answers.get("gender"),
+
+        name=answers.get("name"),
+        gender=answers.get("gender") or 0,   # 預設值
+
         birthday_date=answers.get("birthday"),
         email=answers.get("email"),
         phone=answers.get("phone"),
-        join_source=answers.get("join_source") or "LINE",
-        # 新增這四個
-        name=answers.get("name"),
+
         id_number=answers.get("id_number"),
+        passport_number=answers.get("passport_number"),
+
         residence=answers.get("residence"),
-        receive_notification=answers.get("receive_notification"),
+        address_detail=answers.get("address_detail"),
+
+        join_source=answers.get("join_source") or "LINE",
+        receive_notification=answers.get("receive_notification") or 1,
     )
 
     # 4) 同步更新 line_friends

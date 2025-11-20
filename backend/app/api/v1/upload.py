@@ -6,9 +6,11 @@ import os
 import uuid
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from io import BytesIO
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import JSONResponse
 from pathlib import Path
+from PIL import Image
 
 from app.config import settings
 
@@ -34,13 +36,15 @@ def generate_unique_filename(original_filename: str) -> str:
     return f"{timestamp}_{unique_id}{ext}"
 
 
+
+
 @router.post("", summary="上传图片", description="上传图片文件，返回图片URL")
 async def upload_image(file: UploadFile = File(...)):
     """
-    上传图片接口
+    上传图片接口（前端已裁切）
 
     Args:
-        file: 上传的文件对象
+        file: 上传的文件对象（已由前端裁切）
 
     Returns:
         {
@@ -79,21 +83,42 @@ async def upload_image(file: UploadFile = File(...)):
         if file_size == 0:
             raise HTTPException(status_code=400, detail="文件为空")
 
-        # 4. 生成唯一文件名
-        unique_filename = generate_unique_filename(file.filename)
+        # 4. 圖片處理
+        try:
+            # 讀取圖片
+            img = Image.open(BytesIO(contents))
+
+            # 確保為 RGB 模式 (處理 RGBA、灰階等)
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+
+            # 保存為 JPEG（前端已裁切，不需要再裁切）
+            output = BytesIO()
+            img.save(output, format='JPEG', quality=95, optimize=True)
+            output.seek(0)
+            contents = output.read()
+            file_size = len(contents)
+
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"图片处理失败: {str(e)}")
+
+        # 5. 生成唯一文件名 (強制使用 .jpg)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_id = str(uuid.uuid4())[:8]
+        unique_filename = f"{timestamp}_{unique_id}.jpg"
         file_path = UPLOAD_DIR / unique_filename
 
-        # 5. 确保上传目录存在
+        # 6. 确保上传目录存在
         UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-        # 6. 保存文件
+        # 7. 保存文件
         with open(file_path, "wb") as f:
             f.write(contents)
 
-        # 7. 生成访问URL
+        # 8. 生成访问URL
         file_url = f"{BASE_URL}/uploads/{unique_filename}"
 
-        # 8. 返回成功响应
+        # 9. 返回成功响应
         return JSONResponse(
             status_code=200,
             content={

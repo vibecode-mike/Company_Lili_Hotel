@@ -78,24 +78,24 @@ interface MessageCreationProps {
 }
 
 export default function MessageCreation({ onBack, onNavigate, onNavigateToSettings, editMessageId, editMessageData }: MessageCreationProps = {}) {
-  // Get quota status from MessagesContext
-  const { quotaStatus } = useMessages();
+  // Get quota status and refreshAll from MessagesContext
+  const { quotaStatus, refreshAll } = useMessages();
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [templateType, setTemplateType] = useState(editMessageData?.templateType || 'select');
-  const [title, setTitle] = useState(editMessageData?.title || '');
-  const [notificationMsg, setNotificationMsg] = useState(editMessageData?.notificationMsg || '');
-  const [previewMsg, setPreviewMsg] = useState(editMessageData?.previewMsg || '');
-  const [scheduleType, setScheduleType] = useState(editMessageData?.scheduleType || 'immediate');
-  const [targetType, setTargetType] = useState(editMessageData?.targetType || 'all');
+  const [templateType, setTemplateType] = useState('select');
+  const [title, setTitle] = useState('');
+  const [notificationMsg, setNotificationMsg] = useState('');
+  const [previewMsg, setPreviewMsg] = useState('');
+  const [scheduleType, setScheduleType] = useState('immediate');
+  const [targetType, setTargetType] = useState('all');
   const [messageText, setMessageText] = useState('');
   const [activeTab, setActiveTab] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
-  const [flexMessageJson, setFlexMessageJson] = useState<any>(editMessageData?.flexMessageJson || null);
-  const [selectedFilterTags, setSelectedFilterTags] = useState<Array<{ id: string; name: string }>>(editMessageData?.selectedFilterTags || []);
-  const [filterCondition, setFilterCondition] = useState<'include' | 'exclude'>(editMessageData?.filterCondition || 'include');
-  const [scheduledDate, setScheduledDate] = useState<Date | undefined>(editMessageData?.scheduledDate);
-  const [scheduledTime, setScheduledTime] = useState(editMessageData?.scheduledTime || { hours: '12', minutes: '00' });
+  const [flexMessageJson, setFlexMessageJson] = useState<any>(null);
+  const [selectedFilterTags, setSelectedFilterTags] = useState<Array<{ id: string; name: string }>>([]);
+  const [filterCondition, setFilterCondition] = useState<'include' | 'exclude'>('include');
+  const [scheduledDate, setScheduledDate] = useState<Date | undefined>(undefined);
+  const [scheduledTime, setScheduledTime] = useState({ hours: '12', minutes: '00' });
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [validationDialogOpen, setValidationDialogOpen] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
@@ -172,32 +172,32 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       content: '', 
       price: '', 
       currency: 'ntd',
-      button1: '', 
+      button1: '',
       button2: '',
       button3: '',
       button4: '',
-      button1Action: 'select',
+      button1Action: 'uri',
       button1Url: '',
       button1Tag: '',
       button1Text: '',
       button1TriggerImage: null as File | null,
       button1TriggerImageUrl: '',
       button1Mode: 'primary' as 'primary' | 'secondary' | 'link',
-      button2Action: 'select',
+      button2Action: 'uri',
       button2Url: '',
       button2Tag: '',
       button2Text: '',
       button2TriggerImage: null as File | null,
       button2TriggerImageUrl: '',
       button2Mode: 'secondary' as 'primary' | 'secondary' | 'link',
-      button3Action: 'select',
+      button3Action: 'uri',
       button3Url: '',
       button3Tag: '',
       button3Text: '',
       button3TriggerImage: null as File | null,
       button3TriggerImageUrl: '',
       button3Mode: 'secondary' as 'primary' | 'secondary' | 'link',
-      button4Action: 'select',
+      button4Action: 'uri',
       button4Url: '',
       button4Tag: '',
       button4Text: '',
@@ -213,10 +213,162 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   const currentCard = cards.find(c => c.id === activeTab) || cards[0];
 
   const updateCard = (updates: Partial<typeof currentCard>) => {
-    setCards(cards.map(card => 
+    setCards(cards.map(card =>
       card.id === activeTab ? { ...card, ...updates } : card
     ));
   };
+
+  // Load edit message data when editMessageData changes
+  useEffect(() => {
+    if (editMessageData && editMessageData.flexMessageJson) {
+      try {
+        const flexJson = editMessageData.flexMessageJson;
+
+        // Parse flexMessageJson to extract card data
+        const parseFlexMessageToCards = (flexData: any) => {
+          const newCards: typeof cards = [];
+
+          if (flexData.type === 'carousel' && flexData.contents) {
+            // Multiple cards (carousel)
+            flexData.contents.forEach((bubble: any, index: number) => {
+              const card = parseBubbleToCard(bubble, index + 1);
+              newCards.push(card);
+            });
+          } else if (flexData.type === 'bubble') {
+            // Single card
+            const card = parseBubbleToCard(flexData, 1);
+            newCards.push(card);
+          }
+
+          return newCards.length > 0 ? newCards : cards;
+        };
+
+        const parseBubbleToCard = (bubble: any, id: number) => {
+          const card: any = {
+            id,
+            enableImage: false,
+            enableTitle: false,
+            enableContent: false,
+            enablePrice: false,
+            enableButton1: false,
+            enableButton2: false,
+            enableButton3: false,
+            enableButton4: false,
+            image: '',
+            cardTitle: '',
+            content: '',
+            price: '',
+            currency: 'ntd',
+            button1: '',
+            button2: '',
+            button3: '',
+            button4: '',
+            button1Action: 'uri',
+            button1Url: '',
+            button1Tag: '',
+            button1Text: '',
+            button1TriggerImage: null,
+            button1TriggerImageUrl: '',
+            button1Mode: 'primary' as const,
+            button2Action: 'uri',
+            button2Url: '',
+            button2Tag: '',
+            button2Text: '',
+            button2TriggerImage: null,
+            button2TriggerImageUrl: '',
+            button2Mode: 'secondary' as const,
+            button3Action: 'uri',
+            button3Url: '',
+            button3Tag: '',
+            button3Text: '',
+            button3TriggerImage: null,
+            button3TriggerImageUrl: '',
+            button3Mode: 'secondary' as const,
+            button4Action: 'uri',
+            button4Url: '',
+            button4Tag: '',
+            button4Text: '',
+            button4TriggerImage: null,
+            button4TriggerImageUrl: '',
+            button4Mode: 'secondary' as const,
+            enableImageUrl: false,
+            imageUrl: '',
+            imageTag: ''
+          };
+
+          // Parse hero image
+          if (bubble.hero && bubble.hero.url) {
+            card.enableImage = true;
+            card.image = bubble.hero.url;
+          }
+
+          // Parse body contents
+          if (bubble.body && bubble.body.contents) {
+            bubble.body.contents.forEach((item: any) => {
+              if (item.type === 'text') {
+                if (item.weight === 'bold' || item.size === 'xl' || item.size === 'lg') {
+                  // Title
+                  card.enableTitle = true;
+                  card.cardTitle = item.text;
+                } else if (item.text && item.text.includes('NT$')) {
+                  // Price
+                  card.enablePrice = true;
+                  card.price = item.text.replace(/[^0-9]/g, '');
+                  card.currency = 'ntd';
+                } else {
+                  // Content
+                  card.enableContent = true;
+                  card.content = item.text;
+                }
+              }
+            });
+          }
+
+          // Parse footer buttons
+          if (bubble.footer && bubble.footer.contents) {
+            bubble.footer.contents.forEach((item: any, btnIndex: number) => {
+              if (item.type === 'button' && btnIndex < 4) {
+                const buttonNum = btnIndex + 1;
+                card[`enableButton${buttonNum}`] = true;
+                card[`button${buttonNum}Text`] = item.action.label || '';
+
+                if (item.action.type === 'uri') {
+                  card[`button${buttonNum}Action`] = 'url';
+                  card[`button${buttonNum}Url`] = item.action.uri || '';
+                } else if (item.action.type === 'message') {
+                  card[`button${buttonNum}Action`] = 'text';
+                  card[`button${buttonNum}Text`] = item.action.text || item.action.label || '';
+                }
+
+                card[`button${buttonNum}Mode`] = item.style === 'primary' ? 'primary' : 'secondary';
+              }
+            });
+          }
+
+          return card;
+        };
+
+        const parsedCards = parseFlexMessageToCards(flexJson);
+        setCards(parsedCards);
+
+        // Update all states explicitly
+        setFlexMessageJson(flexJson);
+        setTemplateType(editMessageData.templateType || 'carousel');
+        setTitle(editMessageData.title || '');
+        setNotificationMsg(editMessageData.notificationMsg || '');
+        setPreviewMsg(editMessageData.previewMsg || '');
+        setScheduleType(editMessageData.scheduleType || 'immediate');
+        setTargetType(editMessageData.targetType || 'all');
+        setSelectedFilterTags(editMessageData.selectedFilterTags || []);
+        setFilterCondition(editMessageData.filterCondition || 'include');
+        setScheduledDate(editMessageData.scheduledDate);
+        setScheduledTime(editMessageData.scheduledTime || { hours: '12', minutes: '00' });
+
+      } catch (error) {
+        console.error('Error parsing edit message data:', error);
+      }
+    }
+  }, [editMessageData]);
 
   // 監聽表單變更，標記為未儲存
   useEffect(() => {
@@ -251,25 +403,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     }
   }, [title, notificationMsg, previewMsg, messageText, targetType, scheduleType, selectedFilterTags, cards]);
 
-  // Create stable URLs for trigger images
-  const triggerImageUrl = useMemo(() => {
-    if (currentCard.button1Action === 'image' && currentCard.button1TriggerImage) {
-      return URL.createObjectURL(currentCard.button1TriggerImage);
-    }
-    if (currentCard.button2Action === 'image' && currentCard.button2TriggerImage) {
-      return URL.createObjectURL(currentCard.button2TriggerImage);
-    }
-    return undefined;
-  }, [currentCard.button1Action, currentCard.button1TriggerImage, currentCard.button2Action, currentCard.button2TriggerImage]);
-
-  // Cleanup object URLs to prevent memory leaks
-  useEffect(() => {
-    return () => {
-      if (triggerImageUrl) {
-        URL.revokeObjectURL(triggerImageUrl);
-      }
-    };
-  }, [triggerImageUrl]);
+  // Note: Trigger images removed - buttons now only support URI action type
 
   const addCarousel = () => {
     if (cards.length < 10) {
@@ -433,9 +567,98 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     }
   };
 
-  const handleSaveDraft = () => {
-    setIsDirty(false); // 儲存後清除未儲存標記
-    toast.success('草稿已儲存');
+  const handleSaveDraft = async () => {
+    // 草稿驗證 - 僅檢查基本必填欄位
+    const errors: string[] = [];
+
+    // Check basic required fields only for draft
+    if (!title || title.trim() === '') {
+      errors.push('訊息標題');
+    }
+    if (!notificationMsg || notificationMsg.trim() === '') {
+      errors.push('通知訊息');
+    }
+    if (!previewMsg || previewMsg.trim() === '') {
+      errors.push('訊息預覽');
+    }
+
+    if (errors.length > 0) {
+      setValidationErrors(errors);
+      setValidationDialogOpen(true);
+      return;
+    }
+
+    try {
+      // 批量上傳裁切後的圖片
+      const uploadSuccess = await uploadCroppedImages();
+      if (!uploadSuccess) {
+        return; // 上傳失敗，已經顯示錯誤訊息
+      }
+
+      // Generate flex message JSON from cards (使用 uploadedImageUrl)
+      const flexMessage = generateFlexMessage(cards);
+
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        toast.error('請先登入');
+        return;
+      }
+
+      // Prepare request body for draft
+      const requestBody: any = {
+        flex_message_json: JSON.stringify(flexMessage),
+        target_type: targetType === 'all' ? 'all_friends' : 'filtered',
+        schedule_type: 'draft',  // 固定為 draft
+        notification_message: notificationMsg,
+        preview_message: previewMsg || notificationMsg,
+        message_content: title || notificationMsg || '未命名訊息',
+        thumbnail: cards[0]?.uploadedImageUrl || cards[0]?.image || null
+      };
+
+      // Add target filter for filtered audience
+      if (targetType === 'filtered' && selectedFilterTags.length > 0) {
+        requestBody.target_filter = {
+          [filterCondition]: selectedFilterTags.map(t => t.name)
+        };
+      }
+
+      // Determine if this is a new draft or updating existing draft
+      const isUpdate = !!editMessageId;
+      const method = isUpdate ? 'PUT' : 'POST';
+      const url = isUpdate ? `/api/v1/messages/${editMessageId}` : '/api/v1/messages';
+
+      // Create or update draft message
+      const saveResponse = await fetch(url, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!saveResponse.ok) {
+        const errorData = await saveResponse.json().catch(() => ({ detail: '儲存草稿失敗' }));
+        toast.error(errorData.detail || '儲存草稿失敗');
+        return;
+      }
+
+      // Show appropriate success message
+      toast.success(isUpdate ? '草稿已更新' : '草稿已儲存');
+      setIsDirty(false); // 儲存後清除未儲存標記
+
+      // Refresh all data (messages list + quota status)
+      await refreshAll();
+
+      // Navigate back to message list immediately
+      if (onNavigate) {
+        onNavigate('message-list');
+      }
+
+    } catch (error) {
+      console.error('儲存草稿錯誤:', error);
+      toast.error('儲存草稿失敗，請檢查網絡連接');
+    }
   };
 
   const validateForm = () => {
@@ -447,28 +670,37 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     if (!previewMsg) errors.push('通知預覽');
     // 訊息文字不再是必填欄位（已移除模板之分）
 
-    // Check enabled buttons
+    // Check enabled fields in cards
     cards.forEach((card, index) => {
       const cardLabel = cards.length > 1 ? `輪播 ${index + 1} - ` : '';
-      
-      // Check card title for each card
-      if (!card.cardTitle) {
+
+      // Check card title (only if enabled)
+      if (card.enableTitle && !card.cardTitle) {
         errors.push(`${cardLabel}標題文字`);
       }
-      
+
+      // Check content (only if enabled)
+      if (card.enableContent && !card.content) {
+        errors.push(`${cardLabel}內文`);
+      }
+
+      // Check price (only if enabled)
+      if (card.enablePrice && !card.price) {
+        errors.push(`${cardLabel}金額`);
+      }
+
+      // Check image (only if enabled)
+      if (card.enableImage && !card.image) {
+        errors.push(`${cardLabel}圖片`);
+      }
+
       // Check Button 1
       if (card.enableButton1) {
         if (!card.button1) {
           errors.push(`${cardLabel}動作按鈕一 - 按鈕文字`);
         }
-        if (card.button1Action === 'url' && !card.button1Url) {
-          errors.push(`${cardLabel}動作按鈕一 - URL`);
-        }
-        if (card.button1Action === 'text' && !card.button1Text) {
-          errors.push(`${cardLabel}動作按鈕一 - 觸發文字`);
-        }
-        if (card.button1Action === 'image' && !card.button1TriggerImage) {
-          errors.push(`${cardLabel}動作按鈕一 - 觸發圖片`);
+        if (!card.button1Url) {
+          errors.push(`${cardLabel}動作按鈕一 - 連結網址`);
         }
       }
 
@@ -477,14 +709,28 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         if (!card.button2) {
           errors.push(`${cardLabel}動作按鈕二 - 按鈕文字`);
         }
-        if (card.button2Action === 'url' && !card.button2Url) {
-          errors.push(`${cardLabel}動作按鈕二 - URL`);
+        if (!card.button2Url) {
+          errors.push(`${cardLabel}動作按鈕二 - 連結網址`);
         }
-        if (card.button2Action === 'text' && !card.button2Text) {
-          errors.push(`${cardLabel}動作按鈕二 - 觸發文字`);
+      }
+
+      // Check Button 3
+      if (card.enableButton3) {
+        if (!card.button3) {
+          errors.push(`${cardLabel}動作按鈕三 - 按鈕文字`);
         }
-        if (card.button2Action === 'image' && !card.button2TriggerImage) {
-          errors.push(`${cardLabel}動作按鈕二 - 觸發圖片`);
+        if (!card.button3Url) {
+          errors.push(`${cardLabel}動作按鈕三 - 連結網址`);
+        }
+      }
+
+      // Check Button 4
+      if (card.enableButton4) {
+        if (!card.button4) {
+          errors.push(`${cardLabel}動作按鈕四 - 按鈕文字`);
+        }
+        if (!card.button4Url) {
+          errors.push(`${cardLabel}動作按鈕四 - 連結網址`);
         }
       }
     });
@@ -492,8 +738,19 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     return errors;
   };
 
+  // Calculate aspect ratio based on card content
+  const calculateAspectRatio = (card: any): "1:1" | "1.92:1" => {
+    // 檢查是否有勾選其他欄位（標題、內容、金額、按鈕）
+    const hasContent = card.enableTitle || card.enableContent || card.enablePrice ||
+                       card.enableButton1 || card.enableButton2 ||
+                       card.enableButton3 || card.enableButton4;
+
+    // 如果有內容，使用 1.92:1，否則使用 1:1
+    return hasContent ? "1.92:1" : "1:1";
+  };
+
   // Image upload handler - uploads to backend and returns URL
-  const handleImageUpload = async (file: File): Promise<string | null> => {
+  const handleImageUpload = async (file: File, card?: any): Promise<{ url: string; originalUrl: string; originalFilename: string } | null> => {
     try {
       // Validate file type
       const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
@@ -508,8 +765,12 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         return null;
       }
 
+      // 計算裁切比例
+      const aspectRatio = card ? calculateAspectRatio(card) : "1.92:1";
+
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('aspect_ratio', aspectRatio);  // 傳遞裁切比例
 
       const token = localStorage.getItem('auth_token');
       const response = await fetch('/api/v1/upload', {
@@ -528,7 +789,11 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
       if (result.code === 200 && result.data?.url) {
         toast.success('圖片上傳成功');
-        return result.data.url;
+        return {
+          url: result.data.url,
+          originalUrl: result.data.original_url,
+          originalFilename: result.data.original_filename
+        };
       } else {
         throw new Error(result.message || '圖片上傳失敗');
       }
@@ -536,6 +801,71 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       console.error('圖片上傳錯誤:', error);
       toast.error('圖片上傳失敗，請重試');
       return null;
+    }
+  };
+
+  // 批量上傳裁切後的圖片（在保存訊息前調用）
+  const uploadCroppedImages = async (): Promise<boolean> => {
+    try {
+      const token = localStorage.getItem('auth_token');
+
+      // 遍歷所有卡片，上傳有 originalFile 的圖片
+      for (let i = 0; i < cards.length; i++) {
+        const card = cards[i];
+
+        // 如果卡片有 originalFile，需要重新裁切並上傳
+        if (card.originalFile) {
+          const aspectRatio = calculateAspectRatio(card);
+
+          // 前端重新裁切（確保使用最新的 ratio）
+          const { cropImage } = await import('../utils/imageCropper');
+          const croppedBlob = await cropImage(card.originalFile, aspectRatio);
+
+          // 轉換為 File 對象
+          const croppedFile = new File(
+            [croppedBlob],
+            `carousel_${i + 1}.jpg`,
+            { type: 'image/jpeg' }
+          );
+
+          // 上傳到後端
+          const formData = new FormData();
+          formData.append('file', croppedFile);
+
+          const response = await fetch('/api/v1/upload', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+            body: formData
+          });
+
+          if (!response.ok) {
+            throw new Error(`卡片 ${i + 1} 圖片上傳失敗`);
+          }
+
+          const result = await response.json();
+
+          if (result.code === 200 && result.data?.url) {
+            // 更新卡片的上傳URL（用於保存到數據庫）
+            cards[i].uploadedImageUrl = result.data.url;
+          } else {
+            throw new Error(result.message || `卡片 ${i + 1} 圖片上傳失敗`);
+          }
+        } else if (card.uploadedImageUrl) {
+          // 已經有上傳的 URL，跳過
+          continue;
+        } else if (card.image && !card.image.startsWith('blob:')) {
+          // 使用現有的 URL（非 blob）
+          cards[i].uploadedImageUrl = card.image;
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error('批量上傳圖片錯誤:', error);
+      toast.error(error instanceof Error ? error.message : '圖片上傳失敗');
+      return false;
     }
   };
 
@@ -548,12 +878,14 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       };
 
       // Hero image
-      if (card.enableImage && card.image) {
+      const imageUrl = card.uploadedImageUrl || card.image; // 優先使用已上傳的 URL
+      if (card.enableImage && imageUrl) {
+        const aspectRatio = calculateAspectRatio(card);
         bubble.hero = {
           type: "image",
-          url: card.image,
+          url: imageUrl,
           size: "full",
-          aspectRatio: "1.92:1",
+          aspectRatio: aspectRatio,
           aspectMode: "cover"
         };
 
@@ -628,57 +960,47 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         const action = card[actionKey] as string;
         const mode = card[modeKey] as string;
 
+        // Get the URL for this button
+        const url = card[urlKey] as string;
+
+        // Only create button if both text and URL are provided
+        if (!buttonText || !url) return;
+
+        // Determine action type based on buttonAction field
+        // Default to 'uri' for backward compatibility
+        const actionType = action || 'uri';
+
+        let buttonAction: any;
+        if (actionType === 'postback') {
+          // Postback action: triggers webhook with data
+          buttonAction = {
+            type: "postback",
+            label: buttonText,
+            data: url, // Use URL field as postback data
+            displayText: buttonText
+          };
+        } else if (actionType === 'message') {
+          // Message action: sends text as user message
+          buttonAction = {
+            type: "message",
+            label: buttonText,
+            text: url // Use URL field as message text
+          };
+        } else {
+          // URI action: opens URL (default)
+          buttonAction = {
+            type: "uri",
+            label: buttonText,
+            uri: url
+          };
+        }
+
         const button: any = {
           type: "button",
-          action: { type: "message", text: buttonText },
+          action: buttonAction,
           style: mode === 'primary' ? 'primary' : (mode === 'link' ? 'link' : 'secondary'),
           height: "sm"
         };
-
-        // Set button action based on type
-        if (action === 'url') {
-          const url = card[urlKey] as string;
-          if (url) {
-            button.action = {
-              type: "uri",
-              label: buttonText,
-              uri: url
-            };
-          }
-        } else if (action === 'text') {
-          const text = card[textKey] as string;
-          if (text) {
-            button.action = {
-              type: "message",
-              label: buttonText,
-              text: text
-            };
-          }
-        } else if (action === 'image') {
-          // Handle trigger image action
-          const imageUrl = card[triggerImageUrlKey] as string;
-          if (imageUrl) {
-            button.action = {
-              type: "uri",
-              label: buttonText,
-              uri: imageUrl
-            };
-          } else {
-            // Fallback if image URL is not available
-            button.action = {
-              type: "message",
-              label: buttonText,
-              text: buttonText
-            };
-          }
-        } else {
-          // Default message action
-          button.action = {
-            type: "message",
-            label: buttonText,
-            text: buttonText
-          };
-        }
 
         footerContents.push(button);
       };
@@ -722,39 +1044,15 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     }
 
     try {
-      // Upload trigger images first
-      const cardsWithUploadedImages = await Promise.all(cards.map(async (card) => {
-        const updates: any = {};
+      // ✅ 先上傳所有圖片到後端
+      const uploadSuccess = await uploadCroppedImages();
+      if (!uploadSuccess) {
+        toast.error('圖片上傳失敗，請重試');
+        return;
+      }
 
-        // Upload button1 trigger image
-        if (card.button1Action === 'image' && card.button1TriggerImage && !card.button1TriggerImageUrl) {
-          const url = await handleImageUpload(card.button1TriggerImage);
-          if (url) updates.button1TriggerImageUrl = url;
-        }
-
-        // Upload button2 trigger image
-        if (card.button2Action === 'image' && card.button2TriggerImage && !card.button2TriggerImageUrl) {
-          const url = await handleImageUpload(card.button2TriggerImage);
-          if (url) updates.button2TriggerImageUrl = url;
-        }
-
-        // Upload button3 trigger image
-        if (card.button3Action === 'image' && card.button3TriggerImage && !card.button3TriggerImageUrl) {
-          const url = await handleImageUpload(card.button3TriggerImage);
-          if (url) updates.button3TriggerImageUrl = url;
-        }
-
-        // Upload button4 trigger image
-        if (card.button4Action === 'image' && card.button4TriggerImage && !card.button4TriggerImageUrl) {
-          const url = await handleImageUpload(card.button4TriggerImage);
-          if (url) updates.button4TriggerImageUrl = url;
-        }
-
-        return { ...card, ...updates };
-      }));
-
-      // Generate flex message JSON using cards with uploaded image URLs
-      const flexMessage = generateFlexMessage(cardsWithUploadedImages);
+      // Generate flex message JSON from cards (使用 uploadedImageUrl)
+      const flexMessage = generateFlexMessage(cards);
 
       const token = localStorage.getItem('auth_token');
       if (!token) {
@@ -770,7 +1068,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         notification_message: notificationMsg,
         preview_message: previewMsg || notificationMsg,
         message_content: title || notificationMsg || '未命名訊息',
-        thumbnail: cards[0]?.image || null
+        thumbnail: cards[0]?.uploadedImageUrl || cards[0]?.image || null
       };
 
       // Add target filter for filtered audience
@@ -839,12 +1137,13 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
       setIsDirty(false); // 發佈後清除未儲存標記
 
-      // Navigate back to message list after 1.5 seconds
-      setTimeout(() => {
-        if (onNavigate) {
-          onNavigate('message-list');
-        }
-      }, 1500);
+      // Refresh all data (messages list + quota status)
+      await refreshAll();
+
+      // Navigate back to message list immediately
+      if (onNavigate) {
+        onNavigate('message-list');
+      }
 
     } catch (error) {
       console.error('發佈錯誤:', error);
@@ -1069,7 +1368,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
             {/* Schedule Section */}
             <div className="flex items-start gap-4 w-full">
               <Label className="min-w-[160px] pt-1 flex items-center gap-1">
-                <span className="text-[16px] text-[#383838]">排程發送</span>
+                <span className="text-[16px] text-[#383838]">自訂時間</span>
                 <span className="text-[16px] text-[#f44336]">*</span>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -1164,12 +1463,18 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                   </Popover>
                 </div>
               </RadioGroup>
+              {/* Error message when scheduled is selected but date/time not set */}
+              {scheduleType === 'scheduled' && !scheduledDate && (
+                <p className="text-[12px] leading-[16px] text-red-500 mt-2">
+                  自訂時間為必填
+                </p>
+              )}
             </div>
 
             {/* Target Audience Section */}
             <div className="flex items-start gap-4 w-full">
               <Label className="min-w-[160px] pt-1 flex items-center gap-1">
-                <span className="text-[16px] text-[#383838]">發送對象</span>
+                <span className="text-[16px] text-[#383838]">篩選目標對象</span>
                 <span className="text-[16px] text-[#f44336]">*</span>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -1244,6 +1549,12 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                         </div>
                       </div>
                     </div>
+                    {/* Error message when filtered is selected but no tags chosen */}
+                    {targetType === 'filtered' && selectedFilterTags.length === 0 && (
+                      <p className="text-[12px] leading-[16px] text-red-500 mt-2">
+                        請至少選擇一個標籤
+                      </p>
+                    )}
                   </div>
                 </RadioGroup>
                 <div className="mt-[30px] -ml-[20px]">
@@ -1274,7 +1585,8 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                 onTabChange={setActiveTab}
                 onAddCarousel={addCarousel}
                 onUpdateCard={updateCard}
-                onImageUpload={handleImageUpload}
+                onImageUpload={(file) => handleImageUpload(file, currentCard)}
+                previewMsg={previewMsg}
                 onCopyCard={() => {
                   // Copy current card functionality
                   const newId = Math.max(...cards.map(c => c.id)) + 1;

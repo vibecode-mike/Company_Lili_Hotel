@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import MessageCreation from '../components/MessageCreation';
 import { useNavigation } from '../contexts/NavigationContext';
 
@@ -6,94 +7,105 @@ import { useNavigation } from '../contexts/NavigationContext';
  */
 export default function FlexEditorPage() {
   const { params, navigate, goBack } = useNavigation();
+  const [messageData, setMessageData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
 
   // Get message data if editing
   const editMessageId = params.messageId;
-  
-  // Mock message data - in real app, fetch from API or context
-  const getMessageData = (id: string) => {
-    const mockMessages: Record<string, any> = {
-      '1': {
-        title: '雙人遊行 獨家優惠',
-        notificationMsg: '限時優惠！',
-        previewMsg: '立即查看雙人遊行優惠',
-        scheduleType: 'scheduled',
-        targetType: 'filtered',
-        templateType: 'carousel',
-        selectedFilterTags: [
-          { id: '1', name: '雙人床' },
-          { id: '2', name: '送禮' },
-          { id: '3', name: 'KOL' }
-        ],
-        filterCondition: 'include' as const,
-        scheduledDate: new Date('2026-10-02'),
-        scheduledTime: { hours: '22', minutes: '47' },
-        flexMessageJson: {
-          type: 'carousel',
-          contents: []
-        }
-      },
-      '2': {
-        title: '雙人遊行 獨家優惠',
-        notificationMsg: '商務房特惠',
-        previewMsg: '查看商務房優惠方案',
-        scheduleType: 'scheduled',
-        targetType: 'filtered',
-        templateType: 'carousel',
-        selectedFilterTags: [
-          { id: '4', name: '商務房' },
-          { id: '2', name: '送禮' },
-          { id: '3', name: 'KOL' }
-        ],
-        filterCondition: 'include' as const,
-        scheduledDate: new Date('2026-10-02'),
-        scheduledTime: { hours: '22', minutes: '47' },
-        flexMessageJson: {
-          type: 'carousel',
-          contents: []
-        }
-      },
-      '3': {
-        title: '雙人遊行 獨家優惠',
-        notificationMsg: '頂級商務房',
-        previewMsg: '體驗頂級商務房',
-        scheduleType: 'scheduled',
-        targetType: 'filtered',
-        templateType: 'carousel',
-        selectedFilterTags: [
-          { id: '4', name: '商務房' },
-          { id: '3', name: 'KOL' }
-        ],
-        filterCondition: 'include' as const,
-        scheduledDate: new Date('2026-10-02'),
-        scheduledTime: { hours: '22', minutes: '47' },
-        flexMessageJson: {
-          type: 'carousel',
-          contents: []
-        }
-      },
-      '6': {
-        title: '新品上市通知',
-        notificationMsg: '新品來了',
-        previewMsg: '搶先體驗新品',
-        scheduleType: 'immediate',
-        targetType: 'all',
-        templateType: 'single',
-        selectedFilterTags: [
-          { id: '5', name: '新品' },
-          { id: '6', name: '首發' }
-        ],
-        filterCondition: 'include' as const,
-        flexMessageJson: {
-          type: 'bubble',
-          body: {}
-        }
-      }
-    };
-    return mockMessages[id];
-  };
 
-  const editMessageData = editMessageId ? getMessageData(editMessageId) : undefined;
+  // Fetch message data from API when editing
+  useEffect(() => {
+    if (editMessageId) {
+      const fetchMessageData = async () => {
+        setLoading(true);
+        try {
+          const token = localStorage.getItem('auth_token');
+          if (!token) {
+            console.error('No auth token found');
+            return;
+          }
+
+          const response = await fetch(`/api/v1/messages/${editMessageId}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to fetch message data');
+          }
+
+          const result = await response.json();
+          const message = result.data || result;
+
+          // Transform backend data to frontend format
+          // Determine scheduleType based on send_status
+          let scheduleType = 'immediate';
+          if (message.send_status === '草稿') {
+            scheduleType = 'draft';
+          } else if (message.send_status === '已排程' || message.scheduled_datetime_utc) {
+            scheduleType = 'scheduled';
+          }
+
+          // Determine filterCondition from target_filter
+          let filterCondition: 'include' | 'exclude' = 'include';
+          if (message.target_filter) {
+            if (message.target_filter.exclude) {
+              filterCondition = 'exclude';
+            }
+          }
+
+          const transformedData = {
+            id: message.id,
+            title: message.message_content,
+            notificationMsg: message.notification_message || '',
+            previewMsg: message.preview_message || message.notification_message || '',
+            scheduleType,
+            targetType: message.target_type === 'all_friends' ? 'all' : 'filtered',
+            templateType: 'carousel', // Default to carousel for draft messages
+            selectedFilterTags: message.target_filter ?
+              Object.values(message.target_filter).flat().map((name: any, index: number) => ({
+                id: String(index + 1),
+                name: String(name)
+              })) : [],
+            filterCondition,
+            scheduledDate: message.scheduled_datetime_utc ?
+              new Date(message.scheduled_datetime_utc) : undefined,
+            scheduledTime: message.scheduled_datetime_utc ? {
+              hours: new Date(message.scheduled_datetime_utc).getHours().toString().padStart(2, '0'),
+              minutes: new Date(message.scheduled_datetime_utc).getMinutes().toString().padStart(2, '0')
+            } : undefined,
+            flexMessageJson: message.flex_message_json ?
+              (typeof message.flex_message_json === 'string' ?
+                JSON.parse(message.flex_message_json) :
+                message.flex_message_json) : null,
+            thumbnail: message.thumbnail
+          };
+
+          setMessageData(transformedData);
+        } catch (error) {
+          console.error('Error fetching message data:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchMessageData();
+    }
+  }, [editMessageId]);
+
+  // Show loading state while fetching
+  if (editMessageId && loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
+          <p className="text-gray-600">載入訊息資料中...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <MessageCreation
@@ -101,7 +113,7 @@ export default function FlexEditorPage() {
       onNavigate={navigate}
       onNavigateToSettings={() => navigate('line-api-settings')}
       editMessageId={editMessageId}
-      editMessageData={editMessageData}
+      editMessageData={messageData}
     />
   );
 }

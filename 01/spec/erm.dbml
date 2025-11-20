@@ -109,12 +109,11 @@ Table LineFriend {
 
   Profile 同步策略：
     - 加好友時（FollowEvent）：立即呼叫 LINE Profile API 取得 displayName 和 pictureUrl
-    - 後續互動時：智能更新策略
-      * 首次互動：呼叫 LINE Profile API 補抓取（若 line_display_name 或 line_picture_url 為空）
-      * 後續互動：距離 profile_updated_at 超過 30 天才重新呼叫 API（固定 30 天週期，不開放後台調整），兼顧資料新鮮度與 API 成本
+    - 後續互動時：僅在首次互動時補抓取（若 line_display_name 或 line_picture_url 為空）
     - 每次呼叫成功後更新 line_display_name、line_picture_url 與 profile_updated_at
-    - 更新觸發事件：文字訊息、postback、圖片訊息等所有用戶互動事件
+    - profile_updated_at 欄位保留用於記錄最後更新時間，但不實作定期自動更新排程
     - 錯誤處理：API 失敗時靜默失敗，記錄 log，不中斷主流程
+    - **實作決策**：不實作 30 天定期頭像更新排程（詳見 implementation_decisions.md）
 
   好友狀態管理：
     - 加好友（FollowEvent）：
@@ -579,52 +578,14 @@ Table TemplateCarouselItem {
   '''
 }
 
-Table TemplateButton {
-  button_id string(50) [pk, note: '按鈕唯一識別碼，上限 50 字元']
-  template_id string(50) [ref: > MessageTemplate.template_id, note: '所屬訊息模板ID']
-  sequence_order int [note: '按鈕順序編號（1-4），用於控制按鈕顯示順序。範圍：1-4，對應 MessageTemplate.button_count。資料庫層建議使用 CHECK 約束：CHECK (sequence_order >= 1 AND sequence_order <= 4)']
-  button_text string(50) [note: '按鈕文字，上限 50 字元']
-  action_url string(500) [note: '按鈕開啟的 URL 網址，上限 500 字元。草稿容錯：儲存草稿時允許為 NULL；發送前驗證：發送訊息時若有按鈕但 URL 未填寫則阻擋發送']
-  interaction_tag string(200) [note: '互動標籤（選填，用於數據追蹤），上限 200 字元，支援多個標籤以逗號分隔，如「雙十,檔期優惠」']
-  created_at timestamp [note: '建立時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串']
-  updated_at timestamp [note: '更新時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串']
-
-  indexes {
-    template_sequence (template_id, sequence_order) [unique, note: '確保同一模板內按鈕序號唯一，優化按鈕查詢']
-  }
-
-  Note: '''
-  訊息模板按鈕實體，用於儲存訊息模板中每個按鈕的獨立配置
-
-  設計原則：
-    - 每個按鈕獨立設定：支援不同的按鈕文字、網址、互動標籤
-    - 關聯方式：透過 template_id 關聯至 MessageTemplate，透過 sequence_order 控制順序
-    - 序號管理：序號範圍 1-4，對應 MessageTemplate.button_count
-
-  業務規則：
-    - 按鈕數量：0-4 個（LINE Messaging API 限制，MessageTemplate.button_count 記錄總數）
-    - 序號範圍：1 到 button_count，必須連續無間斷
-    - 唯一性約束：(template_id, sequence_order) 組合唯一
-  刪除與序號遞補：
-    - 刪除任一按鈕後，系統自動調整剩餘按鈕的 sequence_order，保持從 1 起連續遞增
-    - 新增按鈕時依當前按鈕數量決定下一個序號（button_count + 1），確保順序不留缺口
-
-  互動追蹤：
-    - ComponentInteractionLog 透過 component_slot 追蹤按鈕點擊
-    - interaction_tag 用於標籤觸發與統計
-
-  按鈕互動類型：
-    - v0 版固定為「開啟網址」互動類型
-    - action_url 為必填（發送前驗證，草稿時允許 NULL）
-
-  與 MessageTemplate 的關係：
-    - MessageTemplate.button_text, action_url, interaction_tag 欄位保留作為快速配置單一按鈕使用
-    - 多按鈕場景透過 TemplateButton 表管理
-    - button_count 記錄按鈕總數，與 TemplateButton 記錄數保持一致
-
-  關係：TemplateButton N:1 MessageTemplate
-  '''
-}
+// ============================================
+// TemplateButton 表已移除
+// ============================================
+// 實作決策（2025-11-20）：不使用獨立的 TemplateButton 資料表
+// 原因：按鈕數量少（最多4個）且結構簡單，使用 JSON 儲存更高效
+// 實作方式：按鈕資料儲存在 MessageTemplate.buttons JSON 欄位
+// 詳見：implementation_decisions.md
+// ============================================
 
 Table MessageRecord {
   record_id string [pk, note: '訊息紀錄唯一識別碼']
