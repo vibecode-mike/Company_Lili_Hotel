@@ -1,4 +1,4 @@
-import { useState, useMemo, memo, useCallback } from 'react';
+import { useState, useMemo, memo, useCallback, useEffect } from 'react';
 import svgPaths from "../imports/svg-icons-common";
 import { imgGroup, imgGroup1, imgGroup2, imgGroup3, imgGroup4, imgGroup5, imgGroup6 } from "../imports/StarbitLogoAssets";
 import InteractiveMessageTable, { type Message } from "./InteractiveMessageTable";
@@ -343,7 +343,21 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
 
   // Get messages from context
-  const { messages: contextMessages, isLoading, statusCounts, fetchMessages, quotaStatus } = useMessages();
+  const {
+    messages: contextMessages,
+    isLoading,
+    statusCounts,
+    quotaStatus,
+    fetchMessages,
+    fetchQuota
+  } = useMessages();
+
+  useEffect(() => {
+    if (currentPage === 'messages') {
+      fetchMessages();
+      fetchQuota();
+    }
+  }, [currentPage, fetchMessages, fetchQuota]);
 
   // Transform context messages to match InteractiveMessageTable format
   const transformedMessages = useMemo(() => {
@@ -414,19 +428,18 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
     setSelectedMember(null);
   };
 
-  const handleOpenChat = (member: Member) => {
+  const handleOpenChat = (member: any) => {
     setSelectedMember(member);
     setMemberView('chat');
   };
 
-  const handleViewDetail = (member: Member) => {
+  const handleViewDetail = (member: any) => {
     setSelectedMember(member);
     setMemberView('detail');
   };
 
   const handleNavigateFromDetail = (page: string, params?: { memberId?: string }) => {
     if (page === 'member-chat') {
-      // Navigate to chat room - selectedMember is already set from handleViewDetail
       setMemberView('chat');
     }
   };
@@ -434,7 +447,7 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
   return (
     <div className="bg-slate-50 min-h-screen flex">
       {/* Sidebar */}
-      <Sidebar 
+      <Sidebar
         currentPage={currentPage}
         onNavigateToMessages={() => setCurrentPage('messages')}
         onNavigateToAutoReply={onNavigateToAutoReply}
@@ -459,7 +472,7 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
               title="活動與訊息推播"
               description="建立單一圖文或多頁輪播內容，打造引人注目的品牌訊息"
             />
-            
+
             <MainContent
               onCreateMessage={onCreateMessage}
               searchValue={searchValue}
@@ -478,17 +491,17 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
           </div>
         ) : (
           memberView === 'list' ? (
-            <MemberMainContainer 
-              onAddMember={handleAddMember} 
+            <MemberMainContainer
+              onAddMember={handleAddMember}
               onOpenChat={handleOpenChat}
               onViewDetail={handleViewDetail}
             />
           ) : memberView === 'add' ? (
             <AddMemberContainer onBack={handleBackToMemberList} />
           ) : memberView === 'detail' ? (
-            <AddMemberContainer 
-              onBack={handleBackToMemberList} 
-              member={selectedMember} 
+            <AddMemberContainer
+              onBack={handleBackToMemberList}
+              member={selectedMember}
               onNavigate={handleNavigateFromDetail}
             />
           ) : (

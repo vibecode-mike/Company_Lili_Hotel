@@ -67,6 +67,10 @@ export type {
   ArrowIconProps,
 } from './icons';
 
+// ========== 标签组件 ==========
+export { default as Tag } from './Tag';
+export type { TagProps } from './Tag';
+
 // ========== 样式工具 ==========
 export {
   COLORS,

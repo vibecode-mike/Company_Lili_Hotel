@@ -1,6 +1,7 @@
 import { useState, KeyboardEvent, useRef, useEffect } from 'react';
 import svgPaths from '../imports/svg-er211vihwc';
 import toggleSvgPaths from '../imports/svg-eulbcts4ba';
+import { Tag as TagComponent } from './common';
 
 interface Tag {
   id: string;
@@ -22,6 +23,9 @@ const initialTags: Tag[] = [
   // { id: '5', name: '減醣' },
   // { id: '6', name: '有機' },
 ];
+
+const MAX_TAGS = 20; // 标签数量上限
+const MAX_TAG_LENGTH = 20; // 标签名称字符数上限
 
 export default function FilterModal({ onClose, onConfirm, initialSelectedTags, initialIsInclude }: FilterModalProps) {
   const [availableTags, setAvailableTags] = useState<Tag[]>(initialTags);
@@ -52,6 +56,18 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       if (searchInput.trim()) {
+        // Check if reached tag limit
+        if (selectedTags.length >= MAX_TAGS) {
+          alert(`最多只能選擇 ${MAX_TAGS} 個標籤`);
+          return;
+        }
+
+        // Check tag name length
+        if (searchInput.trim().length > MAX_TAG_LENGTH) {
+          alert(`標籤名稱不得超過 ${MAX_TAG_LENGTH} 個字元`);
+          return;
+        }
+
         // Check if tag already exists
         const existingTag = availableTags.find(t => t.name === searchInput.trim());
         if (existingTag && !selectedTags.find(st => st.id === existingTag.id)) {
@@ -90,6 +106,12 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
   }, [selectedTags, isInclude, searchInput, onConfirm]);
 
   const handleTagClick = (tag: Tag) => {
+    // Check if reached tag limit
+    if (selectedTags.length >= MAX_TAGS) {
+      alert(`最多只能選擇 ${MAX_TAGS} 個標籤`);
+      return;
+    }
+
     if (!selectedTags.find(st => st.id === tag.id)) {
       setSelectedTags([...selectedTags, tag]);
       setSearchInput('');
@@ -210,17 +232,6 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
     </div>
   );
 
-  const TagComponent = ({ tag, onRemove }: { tag: Tag; onRemove?: () => void }) => (
-    <div className="bg-[floralwhite] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0">
-      <p className="basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#eba20f] text-[16px] text-center">{tag.name}</p>
-      {onRemove && (
-        <div onClick={onRemove}>
-          <CloseIcon />
-        </div>
-      )}
-    </div>
-  );
-
   const showNewTagCreation = searchInput.trim() && !availableTags.find(t => t.name.toLowerCase() === searchInput.toLowerCase());
 
   return (
@@ -230,9 +241,14 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
           {/* Main Content */}
           <div className="content-stretch flex flex-col gap-[32px] items-start relative shrink-0 w-full">
             {/* Title */}
-            <div className="content-stretch flex items-center relative shrink-0 w-full">
+            <div className="content-stretch flex items-center justify-between relative shrink-0 w-full">
               <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[32px]">
                 <p className="leading-[1.5]">篩選目標對象</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <p className={`font-['Noto_Sans_TC:Regular',_sans-serif] font-normal text-[14px] ${selectedTags.length >= MAX_TAGS ? 'text-[#f44336]' : 'text-[#6e6e6e]'}`}>
+                  已選擇 {selectedTags.length} / {MAX_TAGS}
+                </p>
               </div>
             </div>
 
@@ -245,7 +261,9 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
                     <div className="content-stretch flex gap-[4px] items-center relative shrink-0 flex-1">
                       <IconSearch />
                       {selectedTags.map(tag => (
-                        <TagComponent key={tag.id} tag={tag} onRemove={() => handleRemoveTag(tag.id)} />
+                        <TagComponent key={tag.id} variant="blue" onRemove={() => handleRemoveTag(tag.id)}>
+                          {tag.name}
+                        </TagComponent>
                       ))}
                       <input
                         type="text"
@@ -253,6 +271,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
                         onChange={(e) => handleSearchChange(e.target.value)}
                         onKeyDown={handleKeyDown}
                         placeholder={selectedTags.length === 0 ? "輸入或按Enter 新增標籤" : ""}
+                        maxLength={20}
                         className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] flex-1 outline-none text-[#383838] text-[20px] placeholder:text-[#a8a8a8] bg-transparent"
                       />
                     </div>
@@ -275,7 +294,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
                   </div>
                 </div>
                 <div className="content-stretch flex gap-[4px] items-center relative shrink-0">
-                  <p className={`font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[16px] text-nowrap whitespace-pre ${!isInclude ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>不包含</p>
+                  <p className={`font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[16px] text-nowrap whitespace-pre ${!isInclude ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>排除</p>
                   <div className="relative shrink-0 size-[40px] cursor-pointer" onClick={() => setIsInclude(!isInclude)}>
                     <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 40 40">
                       <g clipPath="url(#clip0_8236_31)">
@@ -294,7 +313,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
                       </defs>
                     </svg>
                   </div>
-                  <p className={`font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[16px] text-nowrap whitespace-pre ${isInclude ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>包含</p>
+                  <p className={`font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[16px] text-nowrap whitespace-pre ${isInclude ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>符合</p>
                 </div>
               </div>
             </div>
@@ -332,7 +351,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
                       {availableTags.map((tag, index) => (
                         <div key={tag.id}>
                           <div className="content-stretch flex flex-col gap-[10px] items-start justify-center relative shrink-0 w-full cursor-pointer" onClick={() => handleTagClick(tag)}>
-                            <TagComponent tag={tag} />
+                            <TagComponent variant="blue">{tag.name}</TagComponent>
                           </div>
                           {index < availableTags.length - 1 && (
                             <div className="flex h-[calc(1px*((var(--transform-inner-width)*1)+(var(--transform-inner-height)*0)))] items-center justify-center relative shrink-0 w-[calc(1px*((var(--transform-inner-height)*1)+(var(--transform-inner-width)*0)))]" style={{ "--transform-inner-width": "0", "--transform-inner-height": "736" } as React.CSSProperties}>
@@ -355,7 +374,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
                     <>
                       {filteredTags.map(tag => (
                         <div key={tag.id} className="content-stretch flex flex-col gap-[10px] items-start justify-center relative shrink-0 w-full cursor-pointer" onClick={() => handleTagClick(tag)}>
-                          <TagComponent tag={tag} />
+                          <TagComponent variant="blue">{tag.name}</TagComponent>
                         </div>
                       ))}
                       {showNewTagCreation && (
@@ -363,9 +382,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
                           <div className="flex flex-row items-center size-full">
                             <div className="box-border content-stretch flex gap-[10px] items-center px-[8px] py-[4px] relative w-full">
                               <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[20px] text-center text-nowrap whitespace-pre">建立</p>
-                              <div className="bg-[floralwhite] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0">
-                                <p className="basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#eba20f] text-[16px] text-center">{searchInput}</p>
-                              </div>
+                              <TagComponent variant="blue">{searchInput}</TagComponent>
                               <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[20px] text-center text-nowrap whitespace-pre">的標籤</p>
                             </div>
                           </div>

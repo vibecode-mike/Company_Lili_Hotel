@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, KeyboardEvent } from 'react';
 import svgPaths from '../imports/svg-pen3bccldb';
 import { useToast } from './ToastProvider';
+import { Tag } from './common';
 
 interface MemberTagEditModalProps {
   isOpen: boolean;
@@ -11,6 +12,8 @@ interface MemberTagEditModalProps {
 }
 
 type TabType = 'member' | 'interaction';
+
+const MAX_TAG_LENGTH = 20; // 标签名称字符数上限
 
 export default function MemberTagEditModal({
   isOpen,
@@ -25,19 +28,52 @@ export default function MemberTagEditModal({
   const [selectedMemberTags, setSelectedMemberTags] = useState<string[]>([]);
   const [selectedInteractionTags, setSelectedInteractionTags] = useState<string[]>([]);
 
-  // Mock available tags (in real app, these would come from backend)
-  const allMemberTags = ['消費力高', 'VIP', '白金會員', '翡翠會員', '鑽石會員', '黃金會員', '一般會員'];
-  const allInteractionTags = ['優惠活動', '限時折扣', '滿額贈品', '會員專屬優惠', '新品推薦', '季節促銷'];
+  // Available tags from backend (dynamically loaded)
+  const [allMemberTags, setAllMemberTags] = useState<string[]>([]);
+  const [allInteractionTags, setAllInteractionTags] = useState<string[]>([]);
+  const [isLoadingTags, setIsLoadingTags] = useState(false);
 
-  // Initialize selected tags when modal opens
+  // Fetch available tags from backend when modal opens
   useEffect(() => {
+    const fetchAvailableTags = async () => {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        showToast('請先登入', 'error');
+        return;
+      }
+
+      setIsLoadingTags(true);
+      try {
+        const response = await fetch('/api/v1/tags/available-options', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!response.ok) {
+          throw new Error('獲取標籤選項失敗');
+        }
+
+        const result = await response.json();
+        setAllMemberTags(result.data.memberTags || []);
+        setAllInteractionTags(result.data.interactionTags || []);
+      } catch (error) {
+        console.error('獲取標籤選項失敗:', error);
+        showToast('獲取標籤選項失敗', 'error');
+        // Fallback to empty arrays if API fails
+        setAllMemberTags([]);
+        setAllInteractionTags([]);
+      } finally {
+        setIsLoadingTags(false);
+      }
+    };
+
     if (isOpen) {
       setSelectedMemberTags([...initialMemberTags]);
       setSelectedInteractionTags([...initialInteractionTags]);
       setSearchInput('');
       setActiveTab('member');
+      fetchAvailableTags();
     }
-  }, [isOpen, initialMemberTags, initialInteractionTags]);
+  }, [isOpen, initialMemberTags, initialInteractionTags, showToast]);
 
   const currentSelectedTags = activeTab === 'member' ? selectedMemberTags : selectedInteractionTags;
   const currentAllTags = activeTab === 'member' ? allMemberTags : allInteractionTags;
@@ -100,9 +136,15 @@ export default function MemberTagEditModal({
   // Handle tag creation
   const handleCreateTag = () => {
     if (!searchInput.trim()) return;
-    
+
     const trimmedInput = searchInput.trim();
-    
+
+    // Check tag name length
+    if (trimmedInput.length > MAX_TAG_LENGTH) {
+      showToast(`標籤名稱不得超過 ${MAX_TAG_LENGTH} 個字元`, 'error');
+      return;
+    }
+
     // Check for duplicates (case-insensitive)
     if (currentSelectedTags.some(t => t.toLowerCase() === trimmedInput.toLowerCase())) {
       showToast('此標籤已存在', 'error');
@@ -206,6 +248,7 @@ export default function MemberTagEditModal({
                             onChange={(e) => setSearchInput(e.target.value)}
                             onKeyDown={handleKeyDown}
                             placeholder="輸入或按 Enter 新增標籤，可多組輸入"
+                            maxLength={20}
                             className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative grow text-[#383838] text-[20px] outline-none placeholder:text-[#a8a8a8]"
                           />
                         </div>
@@ -265,29 +308,9 @@ export default function MemberTagEditModal({
                         </p>
                       ) : (
                         currentSelectedTags.map((tag, index) => (
-                          <div key={index} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-                            <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px]">
-                              {tag}
-                            </p>
-                            <div 
-                              className="box-border content-stretch flex items-center justify-between overflow-clip p-[3.5px] relative shrink-0 size-[16px] cursor-pointer" 
-                              data-name="Close"
-                              onClick={() => handleRemoveTag(tag)}
-                            >
-                              <div className="absolute aspect-[24/24] left-0 right-0 top-1/2 translate-y-[-50%]" data-name="Vector">
-                                <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
-                                  <g id="Vector"></g>
-                                </svg>
-                              </div>
-                              <div className="absolute left-[4.5px] size-[6.787px] top-[4.61px]" data-name="Vector">
-                                <div className="absolute inset-0" style={{ "--fill-0": "rgba(168, 168, 168, 1)" } as React.CSSProperties}>
-                                  <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 7 7">
-                                    <path d={svgPaths.p38a549b0} fill="var(--fill-0, #A8A8A8)" id="Vector" />
-                                  </svg>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
+                          <Tag key={index} variant="blue" onRemove={() => handleRemoveTag(tag)}>
+                            {tag}
+                          </Tag>
                         ))
                       )}
                     </div>
@@ -315,11 +338,7 @@ export default function MemberTagEditModal({
                               <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[20px] text-center text-nowrap whitespace-pre">
                                 建立
                               </p>
-                              <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-                                <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">
-                                  {searchInput.trim()}
-                                </p>
-                              </div>
+                              <Tag variant="blue">{searchInput.trim()}</Tag>
                               <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[20px] text-center text-nowrap whitespace-pre">
                                 的標籤
                               </p>
@@ -331,16 +350,12 @@ export default function MemberTagEditModal({
                       {/* Available Tags List */}
                       {availableTags.map((tag, index) => (
                         <div key={index}>
-                          <div 
-                            className="content-stretch flex flex-col gap-[10px] items-start justify-center relative shrink-0 w-full cursor-pointer" 
+                          <div
+                            className="content-stretch flex flex-col gap-[10px] items-start justify-center relative shrink-0 w-full cursor-pointer"
                             data-name="Tag Container"
                             onClick={() => handleSelectTag(tag)}
                           >
-                            <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0 hover:bg-[#e0efff] transition-colors" data-name="Tag">
-                              <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">
-                                {tag}
-                              </p>
-                            </div>
+                            <Tag variant="blue">{tag}</Tag>
                           </div>
                           {index < availableTags.length - 1 && (
                             <div className="flex h-[calc(1px*((var(--transform-inner-width)*1)+(var(--transform-inner-height)*0)))] items-center justify-center relative shrink-0 w-[calc(1px*((var(--transform-inner-height)*1)+(var(--transform-inner-width)*0)))]" style={{ "--transform-inner-width": "0", "--transform-inner-height": "736" } as React.CSSProperties}>
