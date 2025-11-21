@@ -134,9 +134,18 @@ export default function FlexEditorPage() {
     );
   }
 
+  // 決定返回的目標頁面
+  const handleBack = () => {
+    if (params.fromPage) {
+      navigate(params.fromPage);
+    } else {
+      goBack();
+    }
+  };
+
   return (
     <MessageCreation
-      onBack={goBack}
+      onBack={handleBack}
       onNavigate={navigate}
       onNavigateToSettings={() => navigate('line-api-settings')}
       editMessageId={editMessageId}

@@ -15,6 +15,7 @@ export interface NavigationParams {
   memberId?: string;
   messageId?: string;
   replyId?: string;
+  fromPage?: Page;  // 記錄來源頁面，用於返回
   [key: string]: string | undefined;
 }
 
@@ -59,10 +60,11 @@ const getInitialNavigationState = () => {
     if (saved) {
       const state = JSON.parse(saved);
       // 驗證資料格式
-      if (state.page && state.params) {
+      if (state.page && state.params !== undefined) {
         return {
           page: state.page as Page,
-          params: state.params as NavigationParams
+          params: state.params as NavigationParams,
+          history: state.history as Array<{ page: Page; params: NavigationParams }> || []
         };
       }
     }
@@ -83,19 +85,24 @@ export function NavigationProvider({
   const savedState = getInitialNavigationState();
   const startPage = savedState?.page || initialPage;
   const startParams = savedState?.params || initialParams;
+  const startHistory = savedState?.history && savedState.history.length > 0
+    ? savedState.history
+    : [{ page: startPage, params: startParams }];
 
   const [currentPage, setCurrentPage] = useState<Page>(startPage);
   const [params, setParams] = useState<NavigationParams>(startParams);
-  const [history, setHistory] = useState<Array<{ page: Page; params: NavigationParams }>>([
-    { page: startPage, params: startParams }
-  ]);
+  const [history, setHistory] = useState<Array<{ page: Page; params: NavigationParams }>>(startHistory);
 
   const navigate = useCallback((page: Page, newParams: NavigationParams = {}) => {
+    // 構建新的 history（添加當前頁到歷史記錄）
+    const newHistory = [...history, { page: currentPage, params }];
+
     // 先更新 localStorage 狀態，以便刷新後恢復到正確頁面
     try {
       localStorage.setItem('navigation_state', JSON.stringify({
         page,
-        params: newParams
+        params: newParams,
+        history: newHistory
       }));
     } catch (error) {
       console.error('Failed to save navigation state:', error);
@@ -105,26 +112,57 @@ export function NavigationProvider({
     window.location.href = window.location.origin + window.location.pathname;
 
     // 以下代碼在刷新後不會執行，但保留以防萬一
-    setHistory(prev => [...prev, { page: currentPage, params }]);
+    setHistory(newHistory);
     setCurrentPage(page);
     setParams(newParams);
-  }, [currentPage, params]);
+  }, [currentPage, params, history]);
 
   const goBack = useCallback(() => {
+    // 優先使用 fromPage 參數來決定返回位置
+    if (params.fromPage) {
+      const targetPage = params.fromPage;
+      const targetParams: NavigationParams = {};
+
+      // 根據目標頁面決定是否需要傳遞參數
+      if (targetPage === 'member-detail' && params.memberId) {
+        targetParams.memberId = params.memberId;
+      }
+
+      // 儲存目標頁面狀態到 localStorage
+      try {
+        localStorage.setItem('navigation_state', JSON.stringify({
+          page: targetPage,
+          params: targetParams,
+          history: [{ page: targetPage, params: targetParams }]
+        }));
+      } catch (error) {
+        console.error('Failed to save navigation state:', error);
+      }
+
+      // 觸發整頁刷新返回目標頁面
+      window.location.href = window.location.origin + window.location.pathname;
+      return;
+    }
+
+    // 如果沒有 fromPage，則使用 history
     if (history.length > 1) {
-      // 移除最后一项
       const newHistory = [...history];
       newHistory.pop();
-      
-      // 获取前一页
       const previousState = newHistory[newHistory.length - 1];
-      
-      // 更新状态
-      setHistory(newHistory);
-      setCurrentPage(previousState.page);
-      setParams(previousState.params);
+
+      try {
+        localStorage.setItem('navigation_state', JSON.stringify({
+          page: previousState.page,
+          params: previousState.params,
+          history: newHistory
+        }));
+      } catch (error) {
+        console.error('Failed to save navigation state:', error);
+      }
+
+      window.location.href = window.location.origin + window.location.pathname;
     }
-  }, [history]);
+  }, [params, history]);
 
   const reset = useCallback(() => {
     setCurrentPage(initialPage);

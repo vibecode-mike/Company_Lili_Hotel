@@ -9,8 +9,8 @@ export default function MessageListPage() {
 
   return (
     <MessageList
-      onCreateMessage={() => navigate('flex-editor')}
-      onEditMessage={(messageId) => navigate('flex-editor', { messageId })}
+      onCreateMessage={() => navigate('flex-editor', { fromPage: 'message-list' })}
+      onEditMessage={(messageId) => navigate('flex-editor', { messageId, fromPage: 'message-list' })}
       onNavigateToAutoReply={() => navigate('auto-reply')}
       onNavigateToSettings={() => navigate('line-api-settings')}
     />

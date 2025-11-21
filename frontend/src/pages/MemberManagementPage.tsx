@@ -27,10 +27,10 @@ export default function MemberManagementPage() {
           // TODO: 打開新增會員模態框
         }}
         onOpenChat={(member) => {
-          navigate('chat-room', { memberId: member.id });
+          navigate('chat-room', { memberId: member.id, fromPage: 'member-management' });
         }}
         onViewDetail={(member) => {
-          navigate('member-detail', { memberId: member.id });
+          navigate('member-detail', { memberId: member.id, fromPage: 'member-management' });
         }}
       />
     </MainLayout>
