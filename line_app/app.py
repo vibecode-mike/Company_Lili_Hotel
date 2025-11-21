@@ -47,7 +47,11 @@ from linebot.v3.messaging import (
 
 )
 from linebot.v3.webhooks import (
-    MessageEvent, TextMessageContent, FollowEvent, UnfollowEvent, PostbackEvent
+    FollowEvent,
+    UnfollowEvent,
+    MessageEvent,
+    PostbackEvent,
+    TextMessageContent,
 )
 
 from linebot.v3.messaging.models import FlexContainer
@@ -483,17 +487,15 @@ def ensure_thread_for_user(line_uid: str) -> str:
 
 
 # [新增] 寫一筆 conversation_messages（共用的小工具）
-def insert_ryan_message(*, thread_id: str, role: str, direction: str,
-                        message_type: str = "chat",
-                        question: str | None = None,
-                        response: str | None = None,
-                        event_id: str | None = None,
-                        status: str = "received"):
-    """
-    只寫你新表 conversation_messages，不動既有 messages。
-    由呼叫端決定是 user 問（傳 question）或 assistant 回（傳 response）。
-    """
-    msg_id = uuid.uuid4().hex  # 36 VARCHAR 用 hex 最穩
+def insert_conversation_message(*, thread_id: str, role: str, direction: str,
+                                message_type: str = "chat",
+                                question: str | None = None,
+                                response: str | None = None,
+                                event_id: str | None = None,
+                                status: str = "received"):
+
+    msg_id = uuid.uuid4().hex
+
     try:
         execute("""
             INSERT INTO conversation_messages
@@ -502,18 +504,19 @@ def insert_ryan_message(*, thread_id: str, role: str, direction: str,
             VALUES
                 (:id, :tid, :role, :dir, :mt, :q, :r, :eid, :st, NOW(), NOW())
         """, {
-            "id":  msg_id,
+            "id": msg_id,
             "tid": thread_id,
-            "role": role,               # 'user' / 'assistant'
-            "dir":  direction,          # 'incoming' / 'outgoing'
-            "mt":  message_type,        # 預設 'chat'
-            "q":   question,
-            "r":   response,
+            "role": role,
+            "dir": direction,
+            "mt": message_type,
+            "q": question,
+            "r": response,
             "eid": event_id,
-            "st":  status
+            "st": status
         })
+
     except Exception as e:
-        logging.warning(f"[conversation_messages insert] {e}")
+        logging.warning(f"[conversation_messages insert error] {e}")
 
 # -------------------------------------------------
 # Members / Messages
@@ -1294,7 +1297,7 @@ def _create_campaign_row(payload: dict) -> int:
     # 3) ✅ 寫入 messages（完全照你現在 messages 表有的欄位，不多加）
     #
     #   欄位：
-    #     message_content, template_id, target_type, trigger_condition,
+    #     message_title, template_id, target_type, trigger_condition,
     #     interaction_tags, send_time, send_status,
     #     send_count, open_count, created_at, updated_at
     #
@@ -1302,7 +1305,7 @@ def _create_campaign_row(payload: dict) -> int:
     with engine.begin() as conn:
         conn.execute(text("""
             INSERT INTO messages
-                (message_content, template_id, target_type, trigger_condition,
+                (message_title, template_id, target_type, trigger_condition,
                  interaction_tags, send_time, send_status,
                  send_count, open_count, created_at, updated_at)
             VALUES
@@ -2680,11 +2683,11 @@ def on_text(event: MessageEvent):
     # === 新增：建立 thread 並寫入 conversation_messages（user/incoming） ===
     try:
         thread_id = ensure_thread_for_user(uid)
-        insert_ryan_message(
+        insert_conversation_message(
             thread_id=thread_id,
             role="user",
             direction="incoming",
-            message_type="chat",
+            message_type="text",
             question=text_in,
             event_id=event.message.id,
             status="received"
@@ -2778,7 +2781,7 @@ def on_text(event: MessageEvent):
     user_memory[user_key].append(("user", text_in)); 
 
     # 把 AI 回覆寫進 conversation_messages（role=assistant / outgoing）
-    insert_ryan_message(
+    insert_conversation_message(
         thread_id=thread_id,
         role="assistant",
         direction="outgoing",
@@ -2788,13 +2791,94 @@ def on_text(event: MessageEvent):
     )
     user_memory[user_key].append(("assistant", answer))
 
+# 處理使用者傳貼圖事件
+def on_sticker(event: MessageEvent):
+
+    # 從事件來源取得使用者 user_id
+    uid = getattr(event.source, "user_id", None)
+
+    # 取得使用者對應的 thread_id（每個人一個對話 thread）
+    thread_id = ensure_thread_for_user(uid)
+
+    # 建立要存進資料庫的貼圖 JSON（之後後台可用來顯示）
+    payload = {
+        "type": "sticker",
+        "packageId": event.message.package_id,
+        "stickerId": event.message.sticker_id
+    }
+
+    # 寫入 conversation_messages（使用者 → incoming）
+    insert_conversation_message(
+        thread_id=thread_id,
+        role="user",
+        direction="incoming",
+        message_type="sticker",
+        question=json.dumps(payload, ensure_ascii=False),
+        event_id=event.message.id,
+        status="received"
+    )
+
+# 處理圖片事件
+def on_image(event: MessageEvent):
+    uid = getattr(event.source, "user_id", None)
+    thread_id = ensure_thread_for_user(uid)
+
+    message_id = event.message.id
+    content = messaging_api.get_message_content(message_id)
+
+    filename = f"{message_id}.jpg"
+    filepath = os.path.join(ASSET_LOCAL_DIR, filename)
+
+    with open(filepath, "wb") as f:
+        f.write(content.body)
+
+    image_url = f"{PUBLIC_BASE}/uploads/{filename}"
+
+    payload = {
+        "type": "image",
+        "url": image_url
+    }
+
+    insert_conversation_message(
+        thread_id=thread_id,
+        role="user",
+        direction="incoming",
+        message_type="image",
+        question=json.dumps(payload, ensure_ascii=False),
+        event_id=message_id,
+        status="received"
+    )
+
+def on_message_router(event: MessageEvent):
+    msg = event.message
+
+    # 文字
+    if isinstance(msg, TextMessageContent):
+        return on_text(event)
+
+    # 貼圖（舊 SDK 正確寫法）
+    if msg.type == "sticker":
+        return on_sticker(event)
+
+    # 圖片（等一下再處理）
+    if msg.type == "image":
+        return on_image(event)
+
+    print("[router] unsupported type:", msg.type)
+
 # 可重複註冊事件處理（新增）
 def register_handlers(h):
-    # 依事件型別把上面的函式掛到任何 handler h 上
+    # 使用者加入好友
     h.add(FollowEvent)(on_follow)
+
+    # 使用者封鎖 / 取消好友
     h.add(UnfollowEvent)(on_unfollow)
+
+    # 按下 postback（選單等）
     h.add(PostbackEvent)(on_postback)
-    h.add(MessageEvent, message=TextMessageContent)(on_text)
+
+    # 所有 MessageEvent（文字、貼圖、圖片）都先進 router
+    h.add(MessageEvent)(on_message_router)
 
 # 啟動時，先把事件註冊到預設 handler（吃 .env 的 secret）
 register_handlers(default_handler)
