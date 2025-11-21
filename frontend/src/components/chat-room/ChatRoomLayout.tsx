@@ -98,11 +98,13 @@ function TagBadge({ text }: { text: string }) {
   );
 }
 
-// Figma Tag Component (Orange/Yellow theme)
+// Figma Tag Component (Blue theme to match spec)
 function FigmaTag({ text }: { text: string }) {
   return (
-    <div className="bg-[floralwhite] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0">
-      <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#eba20f] text-[16px] text-center">{text}</p>
+    <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0">
+      <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">
+        {text}
+      </p>
     </div>
   );
 }

@@ -84,7 +84,7 @@ export default function TargetAudienceSelector({
                   <div className="flex items-center gap-2">
                     <RadioGroupItem value="include" id="filter-include" />
                     <Label htmlFor="filter-include" className="cursor-pointer text-[16px] text-[#383838]">
-                      包含
+                      符合
                     </Label>
                   </div>
                   <div className="flex items-center gap-2">

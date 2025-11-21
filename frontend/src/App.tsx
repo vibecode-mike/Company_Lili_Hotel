@@ -66,8 +66,9 @@ function AppContent() {
       const savedNavigationState = localStorage.getItem('navigation_state');
 
       // 只在真正的首次登入時導航到會員管理頁
-      // 如果有儲存的路由狀態,表示是重新整理,不應該強制導航
-      if (!savedNavigationState) {
+      // 條件：沒有保存的導航狀態 AND 當前頁面是初始頁面 (member-management)
+      // 如果有保存的狀態或 currentPage 已變更，表示是重新整理或已導航，不應該強制導航
+      if (!savedNavigationState && currentPage === 'member-management') {
         navigate('member-management');
       }
 

@@ -14,7 +14,7 @@
  * - innerClassName: 內層容器自定義樣式
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import ButtonEdit from '../../imports/ButtonEdit';
 import { useToast } from '../ToastProvider';
 
@@ -39,6 +39,12 @@ export default function MemberNoteEditor({
   const [noteValue, setNoteValue] = useState(initialValue);
   const [savedNote, setSavedNote] = useState(initialValue);
   const { showToast } = useToast();
+
+  useEffect(() => {
+    if (isEditing) return;
+    setNoteValue(initialValue);
+    setSavedNote(initialValue);
+  }, [initialValue, isEditing]);
 
   const handleEdit = () => {
     setIsEditing(true);

@@ -128,6 +128,36 @@ async def get_tags(
     return SuccessResponse(data=page_response.model_dump())
 
 
+@router.get("/available-options", response_model=SuccessResponse)
+async def get_available_tag_options(
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    獲取標籤編輯器的可用標籤選項
+
+    返回所有資料庫中出現過的不重複標籤名稱，
+    用於標籤編輯器的選項池
+    """
+    # 查詢會員標籤 - 獲取所有不重複的標籤名稱
+    member_tags_query = select(MemberTag.tag_name).distinct().order_by(MemberTag.tag_name)
+    member_result = await db.execute(member_tags_query)
+    member_tag_names = [row[0] for row in member_result.all()]
+
+    # 查詢互動標籤 - 獲取所有不重複的標籤名稱
+    interaction_tags_query = (
+        select(InteractionTag.tag_name).distinct().order_by(InteractionTag.tag_name)
+    )
+    interaction_result = await db.execute(interaction_tags_query)
+    interaction_tag_names = [row[0] for row in interaction_result.all()]
+
+    return SuccessResponse(
+        data={
+            "memberTags": member_tag_names,
+            "interactionTags": interaction_tag_names,
+        }
+    )
+
+
 @router.post("", response_model=SuccessResponse)
 async def create_tag(
     tag_data: TagCreate,

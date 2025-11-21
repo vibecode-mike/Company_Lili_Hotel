@@ -107,7 +107,7 @@ def multicast_liff_url(msg_access_token: str, user_ids: List[str], liff_url: str
         return {"ok": False, "error": "empty_audience"}
 
     line_bot_api = LineBotApi(msg_access_token)
-    msg = TextSendMessage(text=f"請點擊以下連結填寫：\n{liff_url}")
+    msg = TextSendMessage(text=f"請點擊以下連結填寫會員問卷：\n{liff_url}")
 
     batch, total = 500, len(user_ids)
     pages = math.ceil(total / batch)
