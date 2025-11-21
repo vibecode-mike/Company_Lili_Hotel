@@ -59,7 +59,7 @@ export default function MemberDetailPage() {
     <MainLayout currentPage="members">
       <MainContainer
         member={memberData}
-        onBack={goBack}
+        onBack={() => navigate('members')}
         onNavigate={navigate}
       />
     </MainLayout>

@@ -4,7 +4,7 @@ import { SearchContainer } from "../components/common/SearchContainers";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../components/ui/tooltip";
 import TooltipComponent from "./Tooltip";
 import { PageHeaderWithBreadcrumb } from "../components/common/Breadcrumb";
-import { TextIconButton, ArrowRightIcon } from "../components/common";
+import { TextIconButton, ArrowRightIcon, Tag } from "../components/common";
 import { useMembers } from "../contexts/MembersContext";
 
 /**
@@ -109,7 +109,7 @@ function SortingIcon({ active, order }: { active: boolean; order: SortOrder }) {
         </svg>
       </div>
       <div
-        className={`absolute h-[8px] left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%] w-[12px] ${order === 'asc' ? 'rotate-180' : ''}`}
+        className={`absolute h-[8px] left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%] w-[12px] transition-transform ${active && order === 'asc' ? 'rotate-180' : ''}`}
         data-name="Vector"
       >
         <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 8">
@@ -363,24 +363,12 @@ function Container7() {
 function TableListAtomic() {
   return (
     <div className="box-border content-center flex flex-wrap gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[320px]" data-name="Table/List-atomic">
-      <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">優惠活動</p>
-      </div>
-      <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">伴手禮</p>
-      </div>
-      <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">KOL</p>
-      </div>
-      <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">優惠活動</p>
-      </div>
-      <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">伴手禮</p>
-      </div>
-      <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">KOL</p>
-      </div>
+      <Tag variant="blue">優惠活動</Tag>
+      <Tag variant="blue">伴手禮</Tag>
+      <Tag variant="blue">KOL</Tag>
+      <Tag variant="blue">優惠活動</Tag>
+      <Tag variant="blue">伴手禮</Tag>
+      <Tag variant="blue">KOL</Tag>
     </div>
   );
 }

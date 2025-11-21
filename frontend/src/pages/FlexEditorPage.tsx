@@ -40,11 +40,9 @@ export default function FlexEditorPage() {
           const message = result.data || result;
 
           // Transform backend data to frontend format
-          // Determine scheduleType based on send_status
+          // Determine scheduleType based on scheduled_at
           let scheduleType = 'immediate';
-          if (message.send_status === '草稿') {
-            scheduleType = 'draft';
-          } else if (message.send_status === '已排程' || message.scheduled_datetime_utc) {
+          if (message.scheduled_at) {
             scheduleType = 'scheduled';
           }
 
@@ -56,24 +54,54 @@ export default function FlexEditorPage() {
             }
           }
 
+          // ✅ Improved: Dynamically detect templateType from flex_message_json
+          let templateType = 'carousel'; // Default
+          if (message.flex_message_json) {
+            try {
+              const flexJson = typeof message.flex_message_json === 'string' ?
+                JSON.parse(message.flex_message_json) :
+                message.flex_message_json;
+
+              if (flexJson.type === 'carousel') {
+                templateType = 'carousel';
+              } else if (flexJson.type === 'bubble') {
+                templateType = 'bubble';
+              }
+            } catch (error) {
+              console.error('Error parsing flex_message_json for templateType detection:', error);
+            }
+          }
+
+          // ✅ Improved: Generate stable tag IDs using hash of tag name
+          const generateStableTagId = (tagName: string): string => {
+            // Simple hash function for stable ID generation
+            let hash = 0;
+            for (let i = 0; i < tagName.length; i++) {
+              const char = tagName.charCodeAt(i);
+              hash = ((hash << 5) - hash) + char;
+              hash = hash & hash; // Convert to 32bit integer
+            }
+            return `tag_${Math.abs(hash)}`;
+          };
+
           const transformedData = {
             id: message.id,
-            title: message.message_content,
-            notificationMsg: message.notification_message || '',
+            title: message.message_title,
+            notificationMsg: message.notification_message ?? '',
             scheduleType,
             targetType: message.target_type === 'all_friends' ? 'all' : 'filtered',
-            templateType: 'carousel', // Default to carousel for draft messages
+            templateType, // ✅ Now dynamically detected
             selectedFilterTags: message.target_filter ?
-              Object.values(message.target_filter).flat().map((name: any, index: number) => ({
-                id: String(index + 1),
+              Object.values(message.target_filter).flat().map((name: any) => ({
+                id: generateStableTagId(String(name)), // ✅ Stable ID generation
                 name: String(name)
               })) : [],
             filterCondition,
-            scheduledDate: message.scheduled_datetime_utc ?
-              new Date(message.scheduled_datetime_utc) : undefined,
-            scheduledTime: message.scheduled_datetime_utc ? {
-              hours: new Date(message.scheduled_datetime_utc).getHours().toString().padStart(2, '0'),
-              minutes: new Date(message.scheduled_datetime_utc).getMinutes().toString().padStart(2, '0')
+            scheduledDate: message.scheduled_at ?
+              new Date(message.scheduled_at) : undefined,
+            scheduledTime: message.scheduled_at ? {
+              hours: new Date(message.scheduled_at).getHours().toString().padStart(2, '0'),
+              minutes: new Date(message.scheduled_at).getMinutes().toString().padStart(2, '0')
             } : undefined,
             flexMessageJson: message.flex_message_json ?
               (typeof message.flex_message_json === 'string' ?

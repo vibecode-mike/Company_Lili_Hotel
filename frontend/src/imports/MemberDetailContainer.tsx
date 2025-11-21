@@ -866,15 +866,10 @@ function Container6({ member, onMemberUpdate }: { member?: MemberData; onMemberU
       return;
     }
 
-    if (!realName.trim()) {
-      showToast("請輸入姓名", "error");
-      return;
-    }
-
     const token = localStorage.getItem("auth_token");
 
     const payload: Record<string, any> = {
-      name: realName.trim(),
+      name: sanitize(realName),  // 允許空值,使用 sanitize 統一處理
       phone: sanitize(phone),
       email: sanitize(email),
       id_number: sanitize(idNumber),
@@ -1333,19 +1328,59 @@ function Container20({ member }: { member?: MemberData }) {
   const [memberTags, setMemberTags] = useState<string[]>(member?.memberTags || []); // ✅ 使用真實數據
   const [interactionTags, setInteractionTags] = useState<string[]>(member?.interactionTags || []); // ✅ 使用真實數據
   const { showToast } = useToast();
+  const { logout } = useAuth();
 
   const handleEdit = () => {
     setIsModalOpen(true);
   };
 
   const handleSave = async (newMemberTags: string[], newInteractionTags: string[]): Promise<boolean> => {
+    if (!member?.id) {
+      showToast('找不到會員資料', 'error');
+      return false;
+    }
+
     try {
-      // Simulate backend API call
-      // await saveMemberTags(member?.id, newMemberTags, newInteractionTags);
+      const token = localStorage.getItem('auth_token');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      // 使用批量更新 API - 一次性完全替換所有標籤
+      const response = await fetch(`/api/v1/members/${member.id}/tags`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ tag_names: newMemberTags }),
+      });
+
+      if (response.status === 401) {
+        showToast('登入已過期，請重新登入', 'error');
+        logout();
+        return false;
+      }
+
+      if (!response.ok) {
+        let errorMessage = '標籤儲存失敗';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorData.message || errorMessage;
+        } catch {
+          // ignore
+        }
+        showToast(errorMessage, 'error');
+        return false;
+      }
+
+      // 更新本地狀態
       setMemberTags(newMemberTags);
-      setInteractionTags(newInteractionTags);
+      setInteractionTags(newInteractionTags); // 互動標籤只更新本地狀態，不儲存到後端
       return true;
     } catch (error) {
+      const message = error instanceof Error ? error.message : '標籤儲存失敗';
+      showToast(message, 'error');
       return false;
     }
   };
@@ -1461,18 +1496,69 @@ function ModeEdit1() {
   );
 }
 
-function Container23({ member }: { member?: MemberData }) {
+function Container23({ member, onMemberUpdate }: { member?: MemberData; onMemberUpdate?: (member: MemberData) => void }) {
+  const { logout } = useAuth();
+  const { showToast } = useToast();
+
+  const handleNoteSave = async (note: string) => {
+    if (!member?.id) {
+      throw new Error('找不到會員資料');
+    }
+
+    const token = localStorage.getItem('auth_token');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`/api/v1/members/${member.id}/notes`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ internal_note: note }),
+    });
+
+    if (response.status === 401) {
+      showToast('登入已過期，請重新登入', 'error');
+      logout();
+      throw new Error('登入已過期');
+    }
+
+    if (!response.ok) {
+      let errorMessage = '儲存失敗';
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.detail || errorData.message || errorMessage;
+      } catch {
+        // ignore
+      }
+      throw new Error(errorMessage);
+    }
+
+    // 更新本地狀態
+    if (onMemberUpdate) {
+      onMemberUpdate({
+        ...member,
+        internal_note: note,
+      });
+    }
+  };
+
   return (
     <div className="basis-0 content-stretch flex gap-[32px] grow items-start min-h-px min-w-px relative rounded-[20px] shrink-0" data-name="Container">
-      <MemberNoteEditor initialValue={member?.internal_note || ''} />
+      <MemberNoteEditor
+        initialValue={member?.internal_note || ''}
+        onSave={handleNoteSave}
+      />
     </div>
   );
 }
 
-function Container24({ member }: { member?: MemberData }) {
+function Container24({ member, onMemberUpdate }: { member?: MemberData; onMemberUpdate?: (member: MemberData) => void }) {
   return (
     <div className="content-stretch flex gap-[32px] items-start relative rounded-[20px] shrink-0 w-full" data-name="Container">
-      <Container23 member={member} />
+      <Container23 member={member} onMemberUpdate={onMemberUpdate} />
     </div>
   );
 }
@@ -1482,7 +1568,7 @@ function Container25({ member, onMemberUpdate }: { member?: MemberData; onMember
     <div className="basis-0 content-stretch flex flex-col gap-[32px] grow items-start min-h-px min-w-px relative shrink-0" data-name="Container">
       <Container13 member={member} onMemberUpdate={onMemberUpdate} />
       <Container20 member={member} />
-      <Container24 member={member} />
+      <Container24 member={member} onMemberUpdate={onMemberUpdate} />
     </div>
   );
 }
