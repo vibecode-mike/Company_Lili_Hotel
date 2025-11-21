@@ -63,7 +63,7 @@ interface MessagesProviderProps {
 const transformBackendMessage = (item: any): Message => {
   return {
     id: item.id.toString(),
-    title: item.message_content || item.template?.name || '未命名訊息',
+    title: item.message_title || item.template?.name || '未命名訊息',
     tags: item.interaction_tags || [],
     platform: item.platform || 'LINE',
     status: item.send_status,

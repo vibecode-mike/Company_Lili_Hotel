@@ -235,7 +235,33 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
   // Load edit message data when editMessageData changes
   useEffect(() => {
-    if (editMessageData && editMessageData.flexMessageJson) {
+    if (!editMessageData) return;
+
+    console.log('🔍 EditMessageData useEffect triggered:', {
+      hasData: !!editMessageData,
+      hasFlexJson: !!editMessageData?.flexMessageJson,
+      title: editMessageData.title,
+      notificationMsg: editMessageData.notificationMsg
+    });
+
+    // ========== 步驟 1：始終還原基本欄位（不依賴 flexMessageJson）==========
+    setTitle(editMessageData.title || '');
+    setNotificationMsg(editMessageData.notificationMsg || '');
+    setScheduleType(editMessageData.scheduleType || 'immediate');
+    setTargetType(editMessageData.targetType || 'all');
+    setSelectedFilterTags(editMessageData.selectedFilterTags || []);
+    setFilterCondition(editMessageData.filterCondition || 'include');
+    setTemplateType(editMessageData.templateType || 'carousel');
+
+    if (editMessageData.scheduledDate) {
+      setScheduledDate(editMessageData.scheduledDate);
+    }
+    if (editMessageData.scheduledTime) {
+      setScheduledTime(editMessageData.scheduledTime);
+    }
+
+    // ========== 步驟 2：只有當 flexMessageJson 存在時才還原卡片 ==========
+    if (editMessageData.flexMessageJson) {
       try {
         const flexJson = editMessageData.flexMessageJson;
 
@@ -345,17 +371,29 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
               if (item.type === 'button' && btnIndex < 4) {
                 const buttonNum = btnIndex + 1;
                 card[`enableButton${buttonNum}`] = true;
-                card[`button${buttonNum}Text`] = item.action.label || '';
 
+                // ✅ 修復：同時賦值給 button{N} 和 button{N}Text
+                const buttonLabel = item.action.label || '';
+                card[`button${buttonNum}`] = buttonLabel;
+                card[`button${buttonNum}Text`] = buttonLabel;
+
+                // ✅ 修復：正確映射 action 類型
                 if (item.action.type === 'uri') {
-                  card[`button${buttonNum}Action`] = 'url';
+                  card[`button${buttonNum}Action`] = 'uri';
                   card[`button${buttonNum}Url`] = item.action.uri || '';
                 } else if (item.action.type === 'message') {
-                  card[`button${buttonNum}Action`] = 'text';
-                  card[`button${buttonNum}Text`] = item.action.text || item.action.label || '';
+                  card[`button${buttonNum}Action`] = 'message';
+                  card[`button${buttonNum}Text`] = item.action.text || buttonLabel;
+                } else if (item.action.type === 'postback') {
+                  card[`button${buttonNum}Action`] = 'postback';
+                  card[`button${buttonNum}Url`] = item.action.data || '';
                 }
 
-                card[`button${buttonNum}Mode`] = item.style === 'primary' ? 'primary' : 'secondary';
+                // ✅ 修復：完整解析 button mode (支持 primary/secondary/link)
+                card[`button${buttonNum}Mode`] =
+                  item.style === 'primary' ? 'primary' :
+                  item.style === 'link' ? 'link' :
+                  'secondary';
               }
             });
           }
@@ -365,22 +403,16 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
         const parsedCards = parseFlexMessageToCards(flexJson);
         setCards(parsedCards);
-
-        // Update all states explicitly
         setFlexMessageJson(flexJson);
-        setTemplateType(editMessageData.templateType || 'carousel');
-        setTitle(editMessageData.title || '');
-        setNotificationMsg(editMessageData.notificationMsg || '');
-        setScheduleType(editMessageData.scheduleType || 'immediate');
-        setTargetType(editMessageData.targetType || 'all');
-        setSelectedFilterTags(editMessageData.selectedFilterTags || []);
-        setFilterCondition(editMessageData.filterCondition || 'include');
-        setScheduledDate(editMessageData.scheduledDate);
-        setScheduledTime(editMessageData.scheduledTime || { hours: '12', minutes: '00' });
+
+        console.log('✅ Flex Message 卡片已還原，共', parsedCards.length, '張');
 
       } catch (error) {
-        console.error('Error parsing edit message data:', error);
+        console.error('❌ Error parsing flex message:', error);
+        // 即使解析失敗，基本欄位也已經還原了
       }
+    } else {
+      console.log('ℹ️ 無 Flex Message JSON，使用默認卡片');
     }
   }, [editMessageData]);
 
@@ -618,10 +650,11 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       const requestBody: any = {
         flex_message_json: JSON.stringify(flexMessage),
         target_type: targetType === 'all' ? 'all_friends' : 'filtered',
-        schedule_type: 'draft',  // 固定為 draft
+        schedule_type: 'draft',  // ✅ 必填欄位：固定為 draft
         notification_message: notificationMsg,
-        message_content: title || notificationMsg || '未命名訊息',
-        thumbnail: cards[0]?.uploadedImageUrl || cards[0]?.image || null
+        message_title: title || notificationMsg || '未命名訊息',
+        thumbnail: cards[0]?.uploadedImageUrl || cards[0]?.image || null,
+        interaction_tags: collectInteractionTags(),
       };
 
       // Add target filter for filtered audience
@@ -631,10 +664,35 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         };
       }
 
+      // ✅ 添加排程時間邏輯
+      if (scheduleType === 'scheduled' && scheduledDate) {
+        const year = scheduledDate.getFullYear();
+        const month = String(scheduledDate.getMonth() + 1).padStart(2, '0');
+        const day = String(scheduledDate.getDate()).padStart(2, '0');
+        const scheduledDateTimeString = `${year}-${month}-${day} ${scheduledTime.hours}:${scheduledTime.minutes}:00`;
+        requestBody.scheduled_at = scheduledDateTimeString;
+        console.log('📅 [Save Draft] Adding scheduled_at:', scheduledDateTimeString);
+      } else if (scheduleType === 'immediate') {
+        // 立即發送模式，清空排程時間
+        requestBody.scheduled_at = null;
+        console.log('⏰ [Save Draft] scheduleType is immediate, scheduled_at set to null');
+      }
+
       // Determine if this is a new draft or updating existing draft
       const isUpdate = !!editMessageId;
       const method = isUpdate ? 'PUT' : 'POST';
       const url = isUpdate ? `/api/v1/messages/${editMessageId}` : '/api/v1/messages';
+
+      console.log('💾 [Save Draft] Request details:', {
+        method,
+        url,
+        isUpdate,
+        editMessageId,
+        requestBody: {
+          ...requestBody,
+          flex_message_json: `${JSON.stringify(flexMessage).length} chars`
+        }
+      });
 
       // Create or update draft message
       const saveResponse = await fetch(url, {
@@ -648,9 +706,20 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
       if (!saveResponse.ok) {
         const errorData = await saveResponse.json().catch(() => ({ detail: '儲存草稿失敗' }));
+        console.error('❌ [Save Draft] API Error:', {
+          status: saveResponse.status,
+          statusText: saveResponse.statusText,
+          errorData
+        });
         toast.error(errorData.detail || '儲存草稿失敗');
         return;
       }
+
+      const responseData = await saveResponse.json();
+      console.log('✅ [Save Draft] Success:', {
+        status: saveResponse.status,
+        responseData
+      });
 
       // Show appropriate success message
       toast.success(isUpdate ? '草稿已更新' : '草稿已儲存');
@@ -661,11 +730,12 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
       // Navigate back to message list immediately
       if (onNavigate) {
+        console.log('🔄 [Save Draft] Navigating back to message-list');
         onNavigate('message-list');
       }
 
     } catch (error) {
-      console.error('儲存草稿錯誤:', error);
+      console.error('❌ [Save Draft] Exception:', error);
       toast.error('儲存草稿失敗，請檢查網絡連接');
     }
   };
@@ -1063,6 +1133,28 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     }
   };
 
+  // Collect unique interaction tags from all carousel cards/components
+  const collectInteractionTags = (cardsToScan = cards) => {
+    const tagSet = new Set<string>();
+
+    cardsToScan.forEach(card => {
+      [
+        card.imageTag,
+        card.button1Tag,
+        card.button2Tag,
+        card.button3Tag,
+        card.button4Tag,
+      ].forEach(tag => {
+        const normalized = typeof tag === 'string' ? tag.trim() : '';
+        if (normalized) {
+          tagSet.add(normalized);
+        }
+      });
+    });
+
+    return Array.from(tagSet);
+  };
+
   const handlePublish = async () => {
     // 驗證表單，如果有錯誤則停止發佈
     const isValid = validateForm();
@@ -1094,8 +1186,9 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         target_type: targetType === 'all' ? 'all_friends' : 'filtered',
         schedule_type: scheduleType,
         notification_message: notificationMsg,
-        message_content: title || notificationMsg || '未命名訊息',
-        thumbnail: cards[0]?.uploadedImageUrl || cards[0]?.image || null
+        message_title: title || notificationMsg || '未命名訊息',
+        thumbnail: cards[0]?.uploadedImageUrl || cards[0]?.image || null,
+        interaction_tags: collectInteractionTags(),
       };
 
       // Add target filter for filtered audience
@@ -1311,6 +1404,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                 </Label>
                 <div className="flex-1 flex flex-col gap-[2px]">
                   <Input
+                    aria-invalid={!title}
                     value={title}
                     onChange={(e) => {
                       setTitle(e.target.value);
@@ -1318,10 +1412,17 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                     }}
                     placeholder="輸入訊息"
                     maxLength={32}
-                    className="w-full h-[48px] rounded-[8px] border-neutral-100 bg-white"
+                    className={`w-full h-[48px] rounded-[8px] bg-white border ${
+                      title
+                        ? 'border-neutral-100 focus-visible:border-neutral-300 focus-visible:ring-[#0f6beb]/20'
+                        : 'border-[#f44336] focus-visible:border-[#f44336] focus-visible:ring-[#f44336]/30'
+                    }`}
                   />
-                  <div className="flex justify-end">
-                    <p className="text-[12px] leading-[1.5]">
+                  <div className="flex items-start mt-2 gap-2">
+                    {!title && (
+                      <p className="text-[12px] leading-[16px] text-[#f44336]">訊息標題為必填</p>
+                    )}
+                    <p className="text-[12px] leading-[1.5] ml-auto text-right">
                       <span className="text-[#6e6e6e]">{title.length}</span>
                       <span className="text-[#383838]">/32</span>
                     </p>
@@ -1354,6 +1455,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                 </Label>
                 <div className="flex-1 flex flex-col gap-[2px] w-full">
                   <Input
+                    aria-invalid={!notificationMsg}
                     value={notificationMsg}
                     onChange={(e) => {
                       setNotificationMsg(e.target.value);
@@ -1361,10 +1463,17 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                     }}
                     placeholder="顯示於裝置通知列的訊息內容"
                     maxLength={100}
-                    className="h-[48px] rounded-[8px] border-neutral-100 bg-white"
+                    className={`h-[48px] rounded-[8px] bg-white border ${
+                      notificationMsg
+                        ? 'border-neutral-100 focus-visible:border-neutral-300 focus-visible:ring-[#0f6beb]/20'
+                        : 'border-[#f44336] focus-visible:border-[#f44336] focus-visible:ring-[#f44336]/30'
+                    }`}
                   />
-                  <div className="flex justify-end">
-                    <p className="text-[12px] leading-[1.5]">
+                  <div className="flex items-start mt-2 gap-2">
+                    {!notificationMsg && (
+                      <p className="text-[12px] leading-[16px] text-[#f44336]">設定裝置列通知使用者的訊息</p>
+                    )}
+                    <p className="text-[12px] leading-[1.5] ml-auto text-right">
                       <span className="text-[#6e6e6e]">{notificationMsg.length}</span>
                       <span className="text-[#383838]">/100</span>
                     </p>
@@ -1395,94 +1504,96 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                   </TooltipContent>
                 </Tooltip>
               </Label>
-              <RadioGroup value={scheduleType} onValueChange={handleScheduleTypeChange} className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="immediate" id="immediate" />
-                  <Label htmlFor="immediate" className="cursor-pointer text-[16px] text-[#383838]">立即發送</Label>
-                </div>
-                <div className="flex items-center gap-3">
-                  <RadioGroupItem value="scheduled" id="scheduled" />
-                  <Label htmlFor="scheduled" className="cursor-pointer text-[16px] text-[#383838]">自訂時間</Label>
-                  <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-                    <PopoverTrigger asChild disabled={scheduleType === 'immediate'}>
-                      <div className={`bg-white border border-neutral-100 rounded-[8px] px-[8px] py-[8px] w-[298px] flex items-center gap-6 transition-colors ${scheduleType === 'immediate' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-neutral-200'}`}>
-                        <span className={`text-[16px] ${scheduledDate ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>
-                          {formatDate(scheduledDate)}
-                        </span>
-                        <span className={`text-[16px] ${scheduledDate ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>
-                          {scheduledDate ? `${scheduledTime.hours}:${scheduledTime.minutes}` : '時：分'}
-                        </span>
-                        <button className="ml-auto" disabled={scheduleType === 'immediate'}>
-                          <svg className="size-[24px]" fill="none" viewBox="0 0 24 24">
-                            <path d={svgPaths.p22990f00} fill="#0F6BEB" />
-                          </svg>
-                        </button>
-                      </div>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <div className="flex flex-col gap-4 p-4">
-                        <div className="space-y-2">
-                          <Label className="text-[14px] text-[#383838]">選擇日期</Label>
-                          <Calendar
-                            mode="single"
-                            selected={scheduledDate}
-                            onSelect={setScheduledDate}
-                            disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                            initialFocus
-                          />
+              <div className="flex-1 flex flex-col">
+                <RadioGroup value={scheduleType} onValueChange={handleScheduleTypeChange} className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="immediate" id="immediate" />
+                    <Label htmlFor="immediate" className="cursor-pointer text-[16px] text-[#383838]">立即發送</Label>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <RadioGroupItem value="scheduled" id="scheduled" />
+                    <Label htmlFor="scheduled" className="cursor-pointer text-[16px] text-[#383838]">自訂時間</Label>
+                    <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+                      <PopoverTrigger asChild disabled={scheduleType === 'immediate'}>
+                        <div className={`bg-white border border-neutral-100 rounded-[8px] px-[8px] py-[8px] w-[298px] flex items-center gap-6 transition-colors ${scheduleType === 'immediate' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-neutral-200'}`}>
+                          <span className={`text-[16px] ${scheduledDate ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>
+                            {formatDate(scheduledDate)}
+                          </span>
+                          <span className={`text-[16px] ${scheduledDate ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>
+                            {scheduledDate ? `${scheduledTime.hours}:${scheduledTime.minutes}` : '時：分'}
+                          </span>
+                          <button className="ml-auto" disabled={scheduleType === 'immediate'}>
+                            <svg className="size-[24px]" fill="none" viewBox="0 0 24 24">
+                              <path d={svgPaths.p22990f00} fill="#0F6BEB" />
+                            </svg>
+                          </button>
                         </div>
-                        <div className="space-y-2">
-                          <Label className="text-[14px] text-[#383838]">選擇時間</Label>
-                          <div className="flex items-center gap-2">
-                            <Select value={scheduledTime.hours} onValueChange={(value) => setScheduledTime(prev => ({ ...prev, hours: value }))}>
-                              <SelectTrigger className="w-[80px] h-[40px] rounded-[8px]">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')).map(hour => (
-                                  <SelectItem key={hour} value={hour}>{hour}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <span className="text-[16px] text-[#383838]">:</span>
-                            <Select value={scheduledTime.minutes} onValueChange={(value) => setScheduledTime(prev => ({ ...prev, minutes: value }))}>
-                              <SelectTrigger className="w-[80px] h-[40px] rounded-[8px]">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')).map(minute => (
-                                  <SelectItem key={minute} value={minute}>{minute}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <div className="flex flex-col gap-4 p-4">
+                          <div className="space-y-2">
+                            <Label className="text-[14px] text-[#383838]">選擇日期</Label>
+                            <Calendar
+                              mode="single"
+                              selected={scheduledDate}
+                              onSelect={setScheduledDate}
+                              disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                              initialFocus
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-[14px] text-[#383838]">選擇時間</Label>
+                            <div className="flex items-center gap-2">
+                              <Select value={scheduledTime.hours} onValueChange={(value) => setScheduledTime(prev => ({ ...prev, hours: value }))}>
+                                <SelectTrigger className="w-[80px] h-[40px] rounded-[8px]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')).map(hour => (
+                                    <SelectItem key={hour} value={hour}>{hour}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <span className="text-[16px] text-[#383838]">:</span>
+                              <Select value={scheduledTime.minutes} onValueChange={(value) => setScheduledTime(prev => ({ ...prev, minutes: value }))}>
+                                <SelectTrigger className="w-[80px] h-[40px] rounded-[8px]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')).map(minute => (
+                                    <SelectItem key={minute} value={minute}>{minute}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <div className="flex gap-2 justify-end pt-2">
+                            <Button
+                              variant="outline"
+                              onClick={() => setDatePickerOpen(false)}
+                              className="h-[40px] rounded-[8px]"
+                            >
+                              取消
+                            </Button>
+                            <Button
+                              onClick={handleDateTimeConfirm}
+                              className="h-[40px] rounded-[8px] bg-[#242424] hover:bg-[#383838]"
+                            >
+                              確認
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex gap-2 justify-end pt-2">
-                          <Button
-                            variant="outline"
-                            onClick={() => setDatePickerOpen(false)}
-                            className="h-[40px] rounded-[8px]"
-                          >
-                            取消
-                          </Button>
-                          <Button
-                            onClick={handleDateTimeConfirm}
-                            className="h-[40px] rounded-[8px] bg-[#242424] hover:bg-[#383838]"
-                          >
-                            確認
-                          </Button>
-                        </div>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              </RadioGroup>
-              {/* Error message when scheduled is selected but date/time not set */}
-              {scheduleType === 'scheduled' && !scheduledDate && (
-                <p className="text-[12px] leading-[16px] text-red-500 mt-2">
-                  自訂時間為必填
-                </p>
-              )}
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </RadioGroup>
+                {/* Error message when scheduled is selected but date/time not set */}
+                {scheduleType === 'scheduled' && !scheduledDate && (
+                  <p className="text-[12px] leading-[16px] text-red-500 mt-2">
+                    自訂時間為必填
+                  </p>
+                )}
+              </div>
             </div>
 
             {/* Target Audience Section */}
@@ -1600,7 +1711,6 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                 onAddCarousel={addCarousel}
                 onUpdateCard={updateCard}
                 onImageUpload={(file) => handleImageUpload(file, currentCard)}
-                previewMsg={notificationMsg}
                 errors={cardErrors.get(currentCard.id)}
                 onCopyCard={() => {
                   // Copy current card functionality

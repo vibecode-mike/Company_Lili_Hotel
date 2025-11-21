@@ -1,7 +1,6 @@
 import React from "react";
 import { Drawer, DrawerContent, DrawerClose, DrawerPortal, DrawerOverlay, DrawerTitle, DrawerDescription } from "./ui/drawer";
 import svgPaths from "../imports/svg-ukuy34kve3";
-import svgPathsPagination from "../imports/svg-0m1jkx8owp";
 import imgImageHero from "figma:asset/68b289cb927cef11d11501fd420bb560ad25c667.png";
 import { cn } from "./ui/utils";
 import { FlexMessageCardPreview, type CarouselCard } from "./CarouselMessageEditor";
@@ -18,9 +17,15 @@ interface MessageDetailDrawerProps {
 function CloseButton() {
   return (
     <DrawerClose asChild>
-      <div className="relative shrink-0 size-[32px] cursor-pointer rounded-full bg-[#F5F5F5] flex items-center justify-center hover:bg-gray-200 transition-colors" data-name="Close">
-        <svg className="size-[16px]" viewBox="0 0 32 32" fill="none">
-          <path d={svgPaths.p21a60700} fill="#6E6E6E" />
+      <div className="relative shrink-0 size-[32px] cursor-pointer rounded-full bg-gray-200 flex items-center justify-center hover:bg-gray-300 transition-colors" data-name="Close">
+        <svg className="size-[20px]" fill="none" viewBox="0 0 16 16">
+          <path
+            d="M4 4L12 12M12 4L4 12"
+            stroke="#6E6E6E"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </svg>
       </div>
     </DrawerClose>
@@ -513,7 +518,7 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
     }
 
     return {
-      title: messageData.message_content || messageData.template?.name || '訊息標題',
+      title: messageData.message_title || messageData.template?.name || '訊息標題',
       tags: messageData.interaction_tags || [],
       platform: messageData.platform || 'LINE',
       status: messageData.send_status || '草稿',
@@ -543,7 +548,13 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
   };
 
   return (
-    <Drawer open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }} direction="right">
+    <Drawer
+      open={open}
+      onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}
+      direction="right"
+      modal={true}
+      dismissible={true}
+    >
       <DrawerContent
         className="bg-white border-0 rounded-none w-[344px] h-screen p-0"
       >

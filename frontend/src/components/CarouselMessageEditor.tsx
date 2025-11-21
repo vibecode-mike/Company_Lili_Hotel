@@ -90,37 +90,8 @@ interface CarouselMessageEditorProps {
   onAddCarousel: () => void;
   onUpdateCard: (updates: Partial<CarouselCard>) => void;
   onCopyCard?: () => void;
-  previewMsg?: string; // altText for LINE chat list preview
   errors?: CardErrors; // 當前卡片的錯誤訊息
 }
-
-// altText 預覽組件 - 顯示 LINE 聊天列表中的預覽訊息
-export const AltTextPreview = memo(function AltTextPreview({ altText }: { altText?: string }) {
-  if (!altText) return null;
-
-  return (
-    <div className="mb-3 w-[300px]">
-      <div className="text-xs text-gray-500 mb-1 flex items-center gap-1">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
-          <path d="M7 0a7 7 0 100 14A7 7 0 007 0zm0 12.6A5.6 5.6 0 1112.6 7 5.607 5.607 0 017 12.6z"/>
-          <path d="M7 3.5a.7.7 0 00-.7.7v3.5a.7.7 0 101.4 0V4.2A.7.7 0 007 3.5zm0 5.6a.7.7 0 100 1.4.7.7 0 000-1.4z"/>
-        </svg>
-        <span>聊天列表預覽 (altText)</span>
-      </div>
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-        <div className="flex items-start gap-2">
-          <div className="w-8 h-8 rounded-full bg-[#06C755] flex items-center justify-center flex-shrink-0">
-            <span className="text-white text-xs font-bold">官</span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-xs font-medium text-gray-900 mb-0.5">官方帳號</div>
-            <div className="text-sm text-gray-700 line-clamp-2">{altText}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-});
 
 // LINE Flex Message 風格的卡片預覽組件
 export const FlexMessageCardPreview = memo(function FlexMessageCardPreview({ card }: { card: CarouselCard }) {
@@ -255,7 +226,6 @@ export default function CarouselMessageEditor({
   onAddCarousel,
   onUpdateCard,
   onCopyCard,
-  previewMsg,
   errors
 }: CarouselMessageEditorProps) {
   const imageUploadRef = useRef<HTMLInputElement>(null);
@@ -389,13 +359,41 @@ export default function CarouselMessageEditor({
     prevAspectRatioRef.current = null;
   }, [activeTab]);
 
+  const isEmpty = (value?: string | null) => {
+    if (value === undefined || value === null) return true;
+    return value.trim() === '';
+  };
+
+  const showTitleInlineError = currentCard.enableTitle && isEmpty(currentCard.cardTitle);
+  const showContentInlineError = currentCard.enableContent && isEmpty(currentCard.content);
+  const showPriceInlineError = currentCard.enablePrice && isEmpty(currentCard.price);
+  const showImageUrlInlineError = currentCard.enableImageUrl && isEmpty(currentCard.imageUrl);
+
+  const showButton1TextError = currentCard.enableButton1 && isEmpty(currentCard.button1);
+  const showButton1UrlError = currentCard.enableButton1 && isEmpty(currentCard.button1Url);
+  const showButton2TextError = currentCard.enableButton2 && isEmpty(currentCard.button2);
+  const showButton2UrlError = currentCard.enableButton2 && isEmpty(currentCard.button2Url);
+  const showButton3TextError = currentCard.enableButton3 && isEmpty(currentCard.button3);
+  const showButton3UrlError = currentCard.enableButton3 && isEmpty(currentCard.button3Url);
+  const showButton4TextError = currentCard.enableButton4 && isEmpty(currentCard.button4);
+  const showButton4UrlError = currentCard.enableButton4 && isEmpty(currentCard.button4Url);
+
+  const requiredFieldClasses = (hasError: boolean) =>
+    hasError
+      ? 'border-2 border-[#f44336] focus-visible:border-[#f44336] focus-visible:ring-[#f44336]/40 shadow-[0_0_0_1px_rgba(244,67,54,0.25)_inset]'
+      : 'border border-neutral-100 focus-visible:border-neutral-300 focus-visible:ring-[#0f6beb]/20';
+
+  const requiredFieldStyle = (hasError: boolean) =>
+    hasError
+      ? { borderColor: '#f44336', borderWidth: '2px' as const }
+      : undefined;
+
   return (
     <div className="w-full h-full bg-[#F8FAFC] overflow-y-auto">
       <div className="flex gap-[32px] items-start p-[40px] w-full">
         {/* Left: Preview Card */}
         <div className="shrink-0">
           <div className="bg-gradient-to-b from-[#a5d8ff] to-[#d0ebff] rounded-[20px] p-[24px] w-[460px] flex flex-col items-center justify-center">
-            <AltTextPreview altText={previewMsg} />
             <FlexMessageCardPreview card={currentCard} />
           </div>
         </div>
@@ -512,8 +510,17 @@ export default function CarouselMessageEditor({
                           value={currentCard.imageUrl}
                           onChange={(e) => onUpdateCard({ imageUrl: e.target.value })}
                           placeholder="https://example.com"
-                          className="w-full h-[36px] px-[12px] rounded-[8px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                          aria-invalid={showImageUrlInlineError}
+                          className={`w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
+                            requiredFieldClasses(showImageUrlInlineError)
+                          }`}
+                          style={requiredFieldStyle(showImageUrlInlineError)}
                         />
+                        {showImageUrlInlineError && (
+                          <p className="text-[12px] leading-[16px] text-[#f44336]">
+                            請輸入點擊後跳轉網址
+                          </p>
+                        )}
                         <p className="text-[12px] leading-[16px] text-[#6a7282]">使用者點擊圖片時會開啟此網址</p>
                       </div>
                       
@@ -556,15 +563,19 @@ export default function CarouselMessageEditor({
                     onChange={(e) => onUpdateCard({ cardTitle: e.target.value })}
                     placeholder="標題文字"
                     maxLength={20}
-                    className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                    aria-invalid={showTitleInlineError || Boolean(errors?.cardTitle)}
+                    className={`w-full h-[36px] px-[12px] rounded-[10px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
+                      requiredFieldClasses(showTitleInlineError || Boolean(errors?.cardTitle))
+                    }`}
+                    style={requiredFieldStyle(showTitleInlineError || Boolean(errors?.cardTitle))}
                   />
                   <span className="absolute right-[12px] top-[10px] text-[12px] leading-[16px] text-[#6a7282]">
                     {currentCard.cardTitle.length}/20
                   </span>
                 </div>
-                {errors?.cardTitle && (
-                  <p className="text-[12px] leading-[16px] text-red-500 mt-2">
-                    {errors.cardTitle}
+                {(showTitleInlineError || errors?.cardTitle) && (
+                  <p className="text-[12px] leading-[16px] text-[#f44336] mt-2">
+                    {showTitleInlineError ? '請輸入標題文字' : errors?.cardTitle}
                   </p>
                 )}
               </div>
@@ -590,15 +601,19 @@ export default function CarouselMessageEditor({
                     onChange={(e) => onUpdateCard({ content: e.target.value })}
                     placeholder="輸入內文文字說明"
                     maxLength={60}
-                    className="w-full h-[78px] px-[12px] py-[8px] rounded-[10px] border border-neutral-100 text-[14px] leading-[20px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all resize-none"
+                    aria-invalid={showContentInlineError || Boolean(errors?.content)}
+                    className={`w-full h-[78px] px-[12px] py-[8px] rounded-[10px] text-[14px] leading-[20px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all resize-none ${
+                      requiredFieldClasses(showContentInlineError || Boolean(errors?.content))
+                    }`}
+                    style={requiredFieldStyle(showContentInlineError || Boolean(errors?.content))}
                   />
                   <span className="absolute right-[12px] bottom-[8px] text-[12px] leading-[16px] text-[#6a7282]">
                     {currentCard.content.length}/60
                   </span>
                 </div>
-                {errors?.content && (
-                  <p className="text-[12px] leading-[16px] text-red-500 mt-2">
-                    {errors.content}
+                {(showContentInlineError || errors?.content) && (
+                  <p className="text-[12px] leading-[16px] text-[#f44336] mt-2">
+                    {showContentInlineError ? '請輸入內文' : errors?.content}
                   </p>
                 )}
               </div>
@@ -627,12 +642,16 @@ export default function CarouselMessageEditor({
                     value={currentCard.price}
                     onChange={(e) => onUpdateCard({ price: e.target.value })}
                     placeholder="0"
-                    className="w-full h-[36px] pl-[50px] pr-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                    aria-invalid={showPriceInlineError || Boolean(errors?.price)}
+                    className={`w-full h-[36px] pl-[50px] pr-[12px] rounded-[10px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
+                      requiredFieldClasses(showPriceInlineError || Boolean(errors?.price))
+                    }`}
+                    style={requiredFieldStyle(showPriceInlineError || Boolean(errors?.price))}
                   />
                 </div>
-                {errors?.price && (
-                  <p className="text-[12px] leading-[16px] text-red-500 mt-2">
-                    {errors.price}
+                {(showPriceInlineError || errors?.price) && (
+                  <p className="text-[12px] leading-[16px] text-[#f44336] mt-2">
+                    {showPriceInlineError ? '請輸入金額' : errors?.price}
                   </p>
                 )}
               </div>
@@ -723,15 +742,19 @@ export default function CarouselMessageEditor({
                       onChange={(e) => onUpdateCard({ button1: e.target.value })}
                       placeholder="按鈕文字"
                       maxLength={12}
-                      className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                      aria-invalid={showButton1TextError || Boolean(errors?.button1)}
+                      className={`w-full h-[36px] px-[12px] rounded-[10px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
+                        requiredFieldClasses(showButton1TextError || Boolean(errors?.button1))
+                      }`}
+                      style={requiredFieldStyle(showButton1TextError || Boolean(errors?.button1))}
                     />
                     <span className="absolute right-[12px] top-[10px] text-[12px] leading-[16px] text-[#6a7282]">
                       {currentCard.button1.length}/12
                     </span>
                   </div>
-                  {errors?.button1 && (
-                    <p className="text-[12px] leading-[16px] text-red-500 mt-2">
-                      {errors.button1}
+                  {(showButton1TextError || errors?.button1) && (
+                    <p className="text-[12px] leading-[16px] text-[#f44336] mt-2">
+                      {showButton1TextError ? '請輸入按鈕文字' : errors?.button1}
                     </p>
                   )}
                 </div>
@@ -744,11 +767,15 @@ export default function CarouselMessageEditor({
                     value={currentCard.button1Url}
                     onChange={(e) => onUpdateCard({ button1Url: e.target.value })}
                     placeholder="https://example.com"
-                    className="w-full h-[36px] px-[12px] rounded-[8px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                    aria-invalid={showButton1UrlError || Boolean(errors?.button1Url)}
+                    className={`w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
+                      requiredFieldClasses(showButton1UrlError || Boolean(errors?.button1Url))
+                    }`}
+                    style={requiredFieldStyle(showButton1UrlError || Boolean(errors?.button1Url))}
                   />
-                  {errors?.button1Url && (
-                    <p className="text-[12px] leading-[16px] text-red-500 mt-2">
-                      {errors.button1Url}
+                  {(showButton1UrlError || errors?.button1Url) && (
+                    <p className="text-[12px] leading-[16px] text-[#f44336] mt-2">
+                      {showButton1UrlError ? '請輸入連結網址' : errors?.button1Url}
                     </p>
                   )}
                 </div>
@@ -845,15 +872,19 @@ export default function CarouselMessageEditor({
                       onChange={(e) => onUpdateCard({ button2: e.target.value })}
                       placeholder="按鈕文字"
                       maxLength={12}
-                      className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                      aria-invalid={showButton2TextError || Boolean(errors?.button2)}
+                      className={`w-full h-[36px] px-[12px] rounded-[10px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
+                        requiredFieldClasses(showButton2TextError || Boolean(errors?.button2))
+                      }`}
+                      style={requiredFieldStyle(showButton2TextError || Boolean(errors?.button2))}
                     />
                     <span className="absolute right-[12px] top-[10px] text-[12px] leading-[16px] text-[#6a7282]">
                       {currentCard.button2.length}/12
                     </span>
                   </div>
-                  {errors?.button2 && (
-                    <p className="text-[12px] leading-[16px] text-red-500 mt-2">
-                      {errors.button2}
+                  {(showButton2TextError || errors?.button2) && (
+                    <p className="text-[12px] leading-[16px] text-[#f44336] mt-2">
+                      {showButton2TextError ? '請輸入按鈕文字' : errors?.button2}
                     </p>
                   )}
                 </div>
@@ -866,11 +897,15 @@ export default function CarouselMessageEditor({
                     value={currentCard.button2Url}
                     onChange={(e) => onUpdateCard({ button2Url: e.target.value })}
                     placeholder="https://example.com"
-                    className="w-full h-[36px] px-[12px] rounded-[8px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                    aria-invalid={showButton2UrlError || Boolean(errors?.button2Url)}
+                    className={`w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
+                      requiredFieldClasses(showButton2UrlError || Boolean(errors?.button2Url))
+                    }`}
+                    style={requiredFieldStyle(showButton2UrlError || Boolean(errors?.button2Url))}
                   />
-                  {errors?.button2Url && (
-                    <p className="text-[12px] leading-[16px] text-red-500 mt-2">
-                      {errors.button2Url}
+                  {(showButton2UrlError || errors?.button2Url) && (
+                    <p className="text-[12px] leading-[16px] text-[#f44336] mt-2">
+                      {showButton2UrlError ? '請輸入連結網址' : errors?.button2Url}
                     </p>
                   )}
                 </div>
@@ -962,15 +997,19 @@ export default function CarouselMessageEditor({
                       onChange={(e) => onUpdateCard({ button3: e.target.value })}
                       placeholder="按鈕文字"
                       maxLength={12}
-                      className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                      aria-invalid={showButton3TextError || Boolean(errors?.button3)}
+                      className={`w-full h-[36px] px-[12px] rounded-[10px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
+                        requiredFieldClasses(showButton3TextError || Boolean(errors?.button3))
+                      }`}
+                      style={requiredFieldStyle(showButton3TextError || Boolean(errors?.button3))}
                     />
                     <span className="absolute right-[12px] top-[10px] text-[12px] leading-[16px] text-[#6a7282]">
                       {currentCard.button3.length}/12
                     </span>
                   </div>
-                  {errors?.button3 && (
-                    <p className="text-[12px] leading-[16px] text-red-500 mt-2">
-                      {errors.button3}
+                  {(showButton3TextError || errors?.button3) && (
+                    <p className="text-[12px] leading-[16px] text-[#f44336] mt-2">
+                      {showButton3TextError ? '請輸入按鈕文字' : errors?.button3}
                     </p>
                   )}
                 </div>
@@ -983,11 +1022,15 @@ export default function CarouselMessageEditor({
                     value={currentCard.button3Url}
                     onChange={(e) => onUpdateCard({ button3Url: e.target.value })}
                     placeholder="https://example.com"
-                    className="w-full h-[36px] px-[12px] rounded-[8px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                    aria-invalid={showButton3UrlError || Boolean(errors?.button3Url)}
+                    className={`w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
+                      requiredFieldClasses(showButton3UrlError || Boolean(errors?.button3Url))
+                    }`}
+                    style={requiredFieldStyle(showButton3UrlError || Boolean(errors?.button3Url))}
                   />
-                  {errors?.button3Url && (
-                    <p className="text-[12px] leading-[16px] text-red-500 mt-2">
-                      {errors.button3Url}
+                  {(showButton3UrlError || errors?.button3Url) && (
+                    <p className="text-[12px] leading-[16px] text-[#f44336] mt-2">
+                      {showButton3UrlError ? '請輸入連結網址' : errors?.button3Url}
                     </p>
                   )}
                 </div>
@@ -1062,15 +1105,19 @@ export default function CarouselMessageEditor({
                       onChange={(e) => onUpdateCard({ button4: e.target.value })}
                       placeholder="按鈕文字"
                       maxLength={12}
-                      className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                      aria-invalid={showButton4TextError || Boolean(errors?.button4)}
+                      className={`w-full h-[36px] px-[12px] rounded-[10px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
+                        requiredFieldClasses(showButton4TextError || Boolean(errors?.button4))
+                      }`}
+                      style={requiredFieldStyle(showButton4TextError || Boolean(errors?.button4))}
                     />
                     <span className="absolute right-[12px] top-[10px] text-[12px] leading-[16px] text-[#6a7282]">
                       {currentCard.button4.length}/12
                     </span>
                   </div>
-                  {errors?.button4 && (
-                    <p className="text-[12px] leading-[16px] text-red-500 mt-2">
-                      {errors.button4}
+                  {(showButton4TextError || errors?.button4) && (
+                    <p className="text-[12px] leading-[16px] text-[#f44336] mt-2">
+                      {showButton4TextError ? '請輸入按鈕文字' : errors?.button4}
                     </p>
                   )}
                 </div>
@@ -1083,11 +1130,15 @@ export default function CarouselMessageEditor({
                     value={currentCard.button4Url}
                     onChange={(e) => onUpdateCard({ button4Url: e.target.value })}
                     placeholder="https://example.com"
-                    className="w-full h-[36px] px-[12px] rounded-[8px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                    aria-invalid={showButton4UrlError || Boolean(errors?.button4Url)}
+                    className={`w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
+                      requiredFieldClasses(showButton4UrlError || Boolean(errors?.button4Url))
+                    }`}
+                    style={requiredFieldStyle(showButton4UrlError || Boolean(errors?.button4Url))}
                   />
-                  {errors?.button4Url && (
-                    <p className="text-[12px] leading-[16px] text-red-500 mt-2">
-                      {errors.button4Url}
+                  {(showButton4UrlError || errors?.button4Url) && (
+                    <p className="text-[12px] leading-[16px] text-[#f44336] mt-2">
+                      {showButton4UrlError ? '請輸入連結網址' : errors?.button4Url}
                     </p>
                   )}
                 </div>
