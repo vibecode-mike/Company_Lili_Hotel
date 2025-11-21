@@ -6,7 +6,7 @@ import { useNavigation } from '../contexts/NavigationContext';
  * LINE Flex Message 編輯器頁面
  */
 export default function FlexEditorPage() {
-  const { params, navigate, goBack } = useNavigation();
+  const { params, navigate } = useNavigation();
   const [messageData, setMessageData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
@@ -134,18 +134,9 @@ export default function FlexEditorPage() {
     );
   }
 
-  // 決定返回的目標頁面
-  const handleBack = () => {
-    if (params.fromPage) {
-      navigate(params.fromPage);
-    } else {
-      goBack();
-    }
-  };
-
   return (
     <MessageCreation
-      onBack={handleBack}
+      onBack={() => navigate('message-list')}
       onNavigate={navigate}
       onNavigateToSettings={() => navigate('line-api-settings')}
       editMessageId={editMessageId}

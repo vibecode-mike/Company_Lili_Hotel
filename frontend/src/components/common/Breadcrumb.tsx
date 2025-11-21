@@ -58,10 +58,17 @@ function BreadcrumbDivider() {
  */
 function BreadcrumbAtomic({ label, onClick, active = false }: BreadcrumbItem) {
   const isClickable = !!onClick && !active;
-  
+
+  const handleClick = () => {
+    console.log('[Breadcrumb] Clicked:', label, 'isClickable:', isClickable);
+    if (isClickable && onClick) {
+      onClick();
+    }
+  };
+
   return (
-    <div 
-      onClick={isClickable ? onClick : undefined}
+    <div
+      onClick={handleClick}
       className={`content-stretch flex items-center justify-center relative shrink-0 ${
         isClickable ? 'cursor-pointer group' : 'cursor-default'
       }`}

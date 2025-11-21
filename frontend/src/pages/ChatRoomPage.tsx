@@ -7,7 +7,7 @@ import { useMembers } from '../contexts/MembersContext';
  * 聊天室頁面
  */
 export default function ChatRoomPage() {
-  const { params, goBack } = useNavigation();
+  const { params, navigate } = useNavigation();
   const { getMemberById } = useMembers();
 
   // 從 Context 獲取會員數據
@@ -17,7 +17,7 @@ export default function ChatRoomPage() {
     <MainLayout currentPage="members">
       <ChatRoom
         member={member}
-        onBack={goBack}
+        onBack={() => navigate('member-management')}
       />
     </MainLayout>
   );

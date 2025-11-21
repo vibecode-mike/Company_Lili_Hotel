@@ -15,10 +15,15 @@ interface ChatRoomProps {
 
 // 返回按钮组件
 function BackButtonWithArrow({ onClick }: { onClick: () => void }) {
+  const handleClick = () => {
+    console.log('[BackButton] Clicked!');
+    onClick();
+  };
+
   return (
-    <div 
-      onClick={onClick}
-      className="content-stretch flex gap-[4px] items-center relative shrink-0 cursor-pointer hover:opacity-70 transition-opacity" 
+    <div
+      onClick={handleClick}
+      className="content-stretch flex gap-[4px] items-center relative shrink-0 cursor-pointer hover:opacity-70 transition-opacity"
       data-name="Button_Icon 24+Typo H6"
     >
       <div className="overflow-clip relative shrink-0 size-[24px]" data-name="Arrow">
