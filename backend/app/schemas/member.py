@@ -26,6 +26,7 @@ class MemberBase(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     id_number: Optional[str] = None
+    passport_number: Optional[str] = None
     residence: Optional[str] = None  # 新增居住地
     receive_notification: bool = True
 
@@ -66,6 +67,7 @@ class MemberDetail(MemberListItem):
     gender: Optional[str] = None  # 0=不透漏/1=男/2=女
     birthday: Optional[date] = None
     id_number: Optional[str] = None
+    passport_number: Optional[str] = None
     residence: Optional[str] = None  # 新增居住地
     join_source: str = "LINE"  # 改名為 join_source
     receive_notification: bool = True
@@ -87,7 +89,13 @@ class MemberSearchParams(BaseModel):
 class AddTagsRequest(BaseModel):
     """添加標籤請求"""
 
-    tag_ids: List[int]
+    tag_ids: List[str]  # 標籤名稱列表
+
+
+class UpdateTagsRequest(BaseModel):
+    """批量更新標籤請求"""
+
+    tag_names: List[str]  # 完整的標籤名稱列表（會完全取代現有標籤）
 
 
 class UpdateNotesRequest(BaseModel):

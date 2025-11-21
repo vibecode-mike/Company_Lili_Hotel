@@ -15,7 +15,7 @@ from app.schemas.member import (
     MemberListItem,
     MemberDetail,
     MemberSearchParams,
-    AddTagsRequest,
+    UpdateTagsRequest,
     UpdateNotesRequest,
     TagInfo,
 )
@@ -93,7 +93,7 @@ async def get_members(
 
         # 查詢會員標籤（直接從 MemberTag 表查詢）
         member_tags_result = await db.execute(
-            select(MemberTag).where(MemberTag.member_id == member.id)
+            select(MemberTag).where(MemberTag.member_id == member.id).order_by(MemberTag.tag_name)
         )
         for tag in member_tags_result.scalars():
             tags.append(TagInfo(id=tag.id, name=tag.tag_name, type="member"))
@@ -104,6 +104,7 @@ async def get_members(
             .join(ComponentInteractionLog, InteractionTag.id == ComponentInteractionLog.interaction_tag_id)
             .where(ComponentInteractionLog.line_id == member.line_uid)
             .distinct()
+            .order_by(InteractionTag.tag_name)
         )
         for tag in interaction_tags_result.scalars():
             tags.append(TagInfo(id=tag.id, name=tag.tag_name, type="interaction"))
@@ -168,7 +169,7 @@ async def get_member(
 
     # 查詢會員標籤（直接從 MemberTag 表查詢）
     member_tags_result = await db.execute(
-        select(MemberTag).where(MemberTag.member_id == member.id)
+        select(MemberTag).where(MemberTag.member_id == member.id).order_by(MemberTag.tag_name)
     )
     for tag in member_tags_result.scalars():
         tags.append(TagInfo(id=tag.id, name=tag.tag_name, type="member"))
@@ -179,6 +180,7 @@ async def get_member(
         .join(ComponentInteractionLog, InteractionTag.id == ComponentInteractionLog.interaction_tag_id)
         .where(ComponentInteractionLog.line_id == member.line_uid)
         .distinct()
+        .order_by(InteractionTag.tag_name)
     )
     for tag in interaction_tags_result.scalars():
         tags.append(TagInfo(id=tag.id, name=tag.tag_name, type="interaction"))
@@ -274,14 +276,14 @@ async def delete_member(
     return SuccessResponse(message="會員刪除成功")
 
 
-@router.post("/{member_id}/tags", response_model=SuccessResponse)
-async def add_member_tags(
+@router.put("/{member_id}/tags", response_model=SuccessResponse)
+async def update_member_tags(
     member_id: int,
-    request: AddTagsRequest,
+    request: UpdateTagsRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """為會員添加標籤"""
+    """批量更新會員標籤（完全取代現有標籤）"""
     # 檢查會員是否存在
     result = await db.execute(select(Member).where(Member.id == member_id))
     member = result.scalar_one_or_none()
@@ -289,57 +291,21 @@ async def add_member_tags(
     if not member:
         raise HTTPException(status_code=404, detail="會員不存在")
 
-    # 添加標籤 - 使用新的單表設計
-    for tag_id in request.tag_ids:
-        # 注意：tag_id 現在應該是標籤名稱，或需要查詢標籤表獲取名稱
-        # 這裡假設 tag_id 實際上是標籤名稱（需要前端配合修改）
-        tag_name = str(tag_id)  # 臨時轉換
+    # 1. 刪除該會員的所有現有標籤
+    await db.execute(delete(MemberTag).where(MemberTag.member_id == member_id))
 
-        # 檢查標籤是否已存在
-        exists = await db.execute(
-            select(MemberTag).where(
-                and_(
-                    MemberTag.member_id == member_id,
-                    MemberTag.tag_name == tag_name,
-                )
-            )
+    # 2. 新增新的標籤
+    for tag_name in request.tag_names:
+        member_tag = MemberTag(
+            member_id=member_id,
+            tag_name=tag_name,
+            tag_source="CRM",  # 手動添加的標籤來源為 CRM
         )
-
-        if not exists.scalar_one_or_none():
-            member_tag = MemberTag(
-                member_id=member_id,
-                tag_name=tag_name,
-                tag_source="CRM",  # 手動添加的標籤來源為 CRM
-            )
-            db.add(member_tag)
+        db.add(member_tag)
 
     await db.commit()
 
-    return SuccessResponse(message="標籤添加成功")
-
-
-@router.delete("/{member_id}/tags/{tag_id}", response_model=SuccessResponse)
-async def remove_member_tag(
-    member_id: int,
-    tag_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """移除會員標籤"""
-    # tag_id 現在應該是標籤名稱
-    tag_name = str(tag_id)  # 臨時轉換
-
-    await db.execute(
-        delete(MemberTag).where(
-            and_(
-                MemberTag.member_id == member_id,
-                MemberTag.tag_name == tag_name,
-            )
-        )
-    )
-    await db.commit()
-
-    return SuccessResponse(message="標籤移除成功")
+    return SuccessResponse(message="標籤更新成功")
 
 
 @router.put("/{member_id}/notes", response_model=SuccessResponse)

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 同步 members 表與 line_friends 表數據
-- 清理：刪除 members 表中來源為 'line_oa' 但不在 line_friends 的會員
+- 清理：刪除指定 join_source 的 members 記錄（預設 'LINE'）中不在 line_friends 的會員
 - 合併：將 line_friends 數據同步到 members 表
-- 數據一致性：確保 join_source='line_oa' 的會員與 line_friends (is_following=1) 一致
+- 數據一致性：確保指定 join_source 的會員與 line_friends (is_following=1) 一致
 """
 import sys
 import os
@@ -22,6 +22,9 @@ engine = create_engine(database_url)
 SessionLocal = sessionmaker(bind=engine)
 
 
+TARGET_JOIN_SOURCE = "LINE"
+
+
 def sync_members_with_line_friends():
     """執行數據同步"""
     db = SessionLocal()
@@ -33,15 +36,15 @@ def sync_members_with_line_friends():
         print()
 
         # ============================================================
-        # 階段 1：清理不在 line_friends 的會員（僅針對 LINE OA 來源）
+        # 階段 1：清理不在 line_friends 的會員（僅針對指定來源）
         # ============================================================
-        print("[階段 1] 清理不在 line_friends 的 LINE OA 來源會員...")
+        print(f"[階段 1] 清理不在 line_friends 的 {TARGET_JOIN_SOURCE} 來源會員...")
 
-        # 查詢要刪除的會員（僅限 join_source = 'line_oa'）
+        # 查詢要刪除的會員（僅限指定 join_source）
         cleanup_query = text("""
             SELECT m.id, m.line_uid, m.line_name, m.join_source
             FROM members m
-            WHERE m.join_source = 'line_oa'
+            WHERE m.join_source = :join_source
               AND m.line_uid IS NOT NULL
               AND m.line_uid != ''
               AND m.line_uid NOT IN (
@@ -51,11 +54,11 @@ def sync_members_with_line_friends():
               )
         """)
 
-        to_delete = db.execute(cleanup_query).fetchall()
+        to_delete = db.execute(cleanup_query, {"join_source": TARGET_JOIN_SOURCE}).fetchall()
         deleted_count = len(to_delete)
 
         if deleted_count > 0:
-            print(f"  發現 {deleted_count} 筆不在 line_friends 的 LINE OA 會員（join_source='line_oa'）：")
+            print(f"  發現 {deleted_count} 筆不在 line_friends 的會員（join_source='{TARGET_JOIN_SOURCE}'）：")
             for row in to_delete[:5]:  # 只顯示前 5 筆
                 print(f"    - ID: {row.id}, line_uid: {row.line_uid}, name: {row.line_name}")
             if deleted_count > 5:
@@ -67,7 +70,7 @@ def sync_members_with_line_friends():
                 WHERE member_id IN (
                     SELECT m.id
                     FROM members m
-                    WHERE m.join_source = 'line_oa'
+                    WHERE m.join_source = :join_source
                       AND m.line_uid IS NOT NULL
                       AND m.line_uid != ''
                       AND m.line_uid NOT IN (
@@ -77,12 +80,12 @@ def sync_members_with_line_friends():
                       )
                 )
             """)
-            db.execute(delete_tags_query)
+            db.execute(delete_tags_query, {"join_source": TARGET_JOIN_SOURCE})
 
             # 刪除會員
             delete_members_query = text("""
                 DELETE FROM members
-                WHERE join_source = 'line_oa'
+                WHERE join_source = :join_source
                   AND line_uid IS NOT NULL
                   AND line_uid != ''
                   AND line_uid NOT IN (
@@ -91,11 +94,11 @@ def sync_members_with_line_friends():
                     WHERE is_following = 1
                   )
             """)
-            db.execute(delete_members_query)
+            db.execute(delete_members_query, {"join_source": TARGET_JOIN_SOURCE})
             db.commit()
-            print(f"  ✓ 已清理：{deleted_count} 筆（僅 LINE OA 來源）")
+            print(f"  ✓ 已清理：{deleted_count} 筆（僅 {TARGET_JOIN_SOURCE} 來源）")
         else:
-            print("  ✓ 無需清理（所有 LINE OA 會員都在 line_friends 中）")
+            print(f"  ✓ 無需清理（所有 {TARGET_JOIN_SOURCE} 會員都在 line_friends 中）")
 
         print()
 
@@ -165,7 +168,7 @@ def sync_members_with_line_friends():
                     "line_uid": line_uid,
                     "line_name": line_name,
                     "line_avatar": line_avatar,
-                    "join_source": "line_oa",
+                    "join_source": TARGET_JOIN_SOURCE,
                     "created_at": followed_at,
                     "updated_at": datetime.now()
                 })
@@ -183,15 +186,15 @@ def sync_members_with_line_friends():
         # ============================================================
         print("[階段 3] 驗證同步結果...")
 
-        # 統計 members 表（僅 LINE OA 來源）
+        # 統計 members 表（僅指定來源）
         members_count_query = text("""
             SELECT COUNT(*) as count
             FROM members
-            WHERE join_source = 'line_oa'
+            WHERE join_source = :join_source
               AND line_uid IS NOT NULL
               AND line_uid != ''
         """)
-        members_count = db.execute(members_count_query).scalar()
+        members_count = db.execute(members_count_query, {"join_source": TARGET_JOIN_SOURCE}).scalar()
 
         # 統計 line_friends 表
         friends_count_query = text("""
@@ -205,16 +208,16 @@ def sync_members_with_line_friends():
         other_sources_query = text("""
             SELECT join_source, COUNT(*) as count
             FROM members
-            WHERE join_source != 'line_oa' OR join_source IS NULL
+            WHERE join_source != :join_source OR join_source IS NULL
             GROUP BY join_source
         """)
-        other_sources = db.execute(other_sources_query).fetchall()
+        other_sources = db.execute(other_sources_query, {"join_source": TARGET_JOIN_SOURCE}).fetchall()
 
-        print(f"  Members 表（join_source='line_oa'）：{members_count} 筆")
+        print(f"  Members 表（join_source='{TARGET_JOIN_SOURCE}'）：{members_count} 筆")
         print(f"  LINE Friends（is_following=1）：{friends_count} 筆")
 
         if members_count == friends_count:
-            print(f"  ✅ LINE OA 會員與 LINE 好友數據一致！")
+            print(f"  ✅ {TARGET_JOIN_SOURCE} 會員與 LINE 好友數據一致！")
         else:
             print(f"  ⚠️  數據不一致！差異：{abs(members_count - friends_count)} 筆")
 
@@ -232,11 +235,11 @@ def sync_members_with_line_friends():
         print("=" * 60)
         print()
         print("統計摘要：")
-        print(f"  - 清理：{deleted_count} 筆（LINE OA 來源且不在 line_friends）")
+        print(f"  - 清理：{deleted_count} 筆（{TARGET_JOIN_SOURCE} 來源且不在 line_friends）")
         print(f"  - 新增：{inserted_count} 筆（新 LINE 好友）")
         print(f"  - 更新：{updated_count} 筆（已存在）")
         print(f"  - 跳過：{skipped_count} 筆（無變化）")
-        print(f"  - 最終 LINE OA 會員數：{members_count} 筆")
+        print(f"  - 最終 {TARGET_JOIN_SOURCE} 會員數：{members_count} 筆")
         print()
 
         return True
