@@ -47,7 +47,9 @@ class MessageService:
         campaign_id: Optional[int] = None,
         notification_message: Optional[str] = None,
         thumbnail: Optional[str] = None,
-        admin_id: Optional[int] = None
+        interaction_tags: Optional[List[str]] = None,
+        admin_id: Optional[int] = None,
+        message_title: Optional[str] = None
     ) -> Message:
         """创建群发消息
 
@@ -62,7 +64,9 @@ class MessageService:
             campaign_id: 关联活动 ID（可选）
             notification_message: 推送通知文字（可选）
             thumbnail: 缩略图 URL（可选）
+            interaction_tags: 互动标签列表（可选）
             admin_id: 创建者 ID（可选）
+            message_title: 消息标题（可选，用于列表显示）
 
         Returns:
             创建的消息对象
@@ -89,6 +93,8 @@ class MessageService:
         else:  # immediate
             send_status = "待發送"
 
+        normalized_tags = self._normalize_interaction_tags(interaction_tags)
+
         message = Message(
             template_id=template.id,
             target_type=target_type,
@@ -96,13 +102,26 @@ class MessageService:
             send_status=send_status,
             campaign_id=campaign_id,
             flex_message_json=flex_message_json,  # 直接存储 Flex Message JSON
-            message_content=notification_message or thumbnail,  # 使用 notification_message 作为摘要
+            message_title=message_title or notification_message or thumbnail,  # 优先使用前端传入的 message_title（訊息標題）
             notification_message=notification_message,  # 保存通知推播文字
             thumbnail=thumbnail,
+            interaction_tags=normalized_tags,
             # created_by=admin_id  # 如果 Message 模型有此字段
         )
         if scheduled_at:
             message.scheduled_datetime_utc = scheduled_at
+
+        try:
+            estimated_count = await self._calculate_target_count(
+                db,
+                target_type,
+                target_filter or {},
+            )
+        except Exception as e:
+            logger.error(f"❌ 計算預計發送人數失敗: {e}")
+            estimated_count = 0
+
+        message.estimated_send_count = estimated_count
         db.add(message)
         await db.commit()
 
@@ -137,10 +156,31 @@ class MessageService:
         if not message:
             raise ValueError(f"消息不存在: ID={message_id}")
 
+        if 'interaction_tags' in kwargs:
+            kwargs['interaction_tags'] = self._normalize_interaction_tags(kwargs.get('interaction_tags'))
+
+        # ✅ 添加：根據 scheduled_at 動態更新 send_status
+        if 'scheduled_at' in kwargs:
+            scheduled_at = kwargs.get('scheduled_at')
+            if scheduled_at:
+                # 有排程時間 → 已排程
+                kwargs['send_status'] = '已排程'
+                kwargs['scheduled_datetime_utc'] = scheduled_at
+            else:
+                # 沒有排程時間 → 草稿
+                kwargs['send_status'] = '草稿'
+                kwargs['scheduled_datetime_utc'] = None
+            # ✅ 重要：移除 scheduled_at，避免嘗試設置 read-only 屬性
+            del kwargs['scheduled_at']
+
         # 更新字段（flex_message_json 直接存储在 Message 对象中）
         for key, value in kwargs.items():
             if hasattr(message, key):
                 setattr(message, key, value)
+
+        # ✅ 添加：明確更新 updated_at
+        from datetime import datetime
+        message.updated_at = datetime.now()
 
         await db.commit()
 
@@ -154,6 +194,27 @@ class MessageService:
         logger.info(f"✅ 更新消息: ID={message_id}")
 
         return message
+
+    def _normalize_interaction_tags(
+        self,
+        tags: Optional[List[str]]
+    ) -> Optional[List[str]]:
+        """去除空值與重複的互動標籤"""
+        if not tags:
+            return None
+
+        normalized: List[str] = []
+        seen = set()
+        for tag in tags:
+            if tag is None:
+                continue
+            text = str(tag).strip()
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            normalized.append(text)
+
+        return normalized or None
 
     async def list_messages(
         self,
@@ -181,7 +242,7 @@ class MessageService:
                 search_pattern = f"%{search_value}%"
                 filters.append(
                     or_(
-                        Message.message_content.like(search_pattern),
+                        Message.message_title.like(search_pattern),
                         cast(Message.interaction_tags, String).like(search_pattern),
                     )
                 )
@@ -485,13 +546,28 @@ class MessageService:
         line_app_url = os.getenv("LINE_APP_URL", self.LINE_APP_URL)
         client = LineAppClient(base_url=line_app_url)
 
-        # 4. 调用 line_app API
+        # 4. 計算實際目標對象（依 line_friends 狀態）
+        try:
+            target_recipient_count = await self._calculate_target_count(
+                db,
+                message.target_type,
+                message.target_filter,
+            )
+        except Exception as e:
+            logger.error(f"❌ 計算目標受眾失敗，改用 line_app 結果: {e}")
+            target_recipient_count = 0
+
+        logger.info(
+            f"🎯 將以 line_friends.is_following=1 做為發送人數基準: {target_recipient_count}"
+        )
+
+        # 5. 调用 line_app API
         try:
             result = await client.broadcast_message(
                 flex_message_json=flex_message_json,
                 target_audience=target_audience,
                 target_tags=target_tags,
-                alt_text=message.message_content or "新訊息",
+                alt_text=message.message_title or "新訊息",
                 notification_message=message.notification_message,
                 campaign_id=message.id,
                 channel_id=channel_id
@@ -507,13 +583,36 @@ class MessageService:
             await db.commit()
             raise
 
-        # 5. 更新消息状态
-        message.send_status = "已發送" if result.get("ok") else "發送失敗"
-        message.send_count = result.get("sent", 0)
-        message.send_time = datetime.now()
+        # 6. 更新消息状态與發送統計
+        success = bool(result.get("ok"))
+        actual_sent = result.get("sent", 0) or 0
+        actual_failed = result.get("failed", 0) or 0
+
+        message.send_status = "已發送" if success else "發送失敗"
+        message.estimated_send_count = target_recipient_count
+
+        if success:
+            message.send_count = target_recipient_count
+            message.send_time = datetime.now()
+        else:
+            # 保留實際失敗原因以便排查
+            if result.get("errors"):
+                message.failure_reason = "; ".join(result.get("errors"))
+
         await db.commit()
 
-        return result
+        # 7. 回傳以 line_friends 為基準的結果，並附帶實際 line_app 數據
+        display_failed = max(target_recipient_count - actual_sent, 0)
+
+        return {
+            "ok": success,
+            "campaign_id": result.get("campaign_id"),
+            "sent": target_recipient_count,
+            "failed": display_failed,
+            "errors": result.get("errors"),
+            "actual_sent": actual_sent,
+            "actual_failed": actual_failed,
+        }
 
     async def get_message(
         self,

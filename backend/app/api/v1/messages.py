@@ -138,6 +138,8 @@ async def create_message(
             campaign_id=data.campaign_id,
             notification_message=data.notification_message,
             thumbnail=data.thumbnail,
+            interaction_tags=data.interaction_tags,
+            message_title=data.message_title,  # 传递消息标题
         )
 
         logger.info(f"✅ 消息创建成功: ID={message.id}")
@@ -276,7 +278,7 @@ async def get_message(
         # 处理可能为 None 的字段，使用默认值
         message_dict = {
             "id": message.id,
-            "message_content": message.message_content,
+            "message_title": message.message_title,
             "notification_message": message.notification_message,
             "thumbnail": message.thumbnail,
             "template": {
@@ -294,6 +296,7 @@ async def get_message(
             "scheduled_at": message.scheduled_datetime_utc,
             "send_time": message.send_time,
             "created_at": message.created_at,
+            "updated_at": message.updated_at,
             "template_id": message.template_id,
             "target_type": message.target_type,
             "target_filter": message.target_filter,

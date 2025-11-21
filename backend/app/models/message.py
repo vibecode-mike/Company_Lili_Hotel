@@ -34,7 +34,7 @@ class Message(Base):
         nullable=False,
         comment="訊息模板ID",
     )
-    message_content = Column(Text, comment="訊息內容（用於列表顯示）")
+    message_title = Column(Text, comment="訊息標題（用於列表顯示）")
     notification_message = Column(String(200), comment="通知推播訊息（顯示在手機通知欄）")
     thumbnail = Column(String(500), comment="縮圖 URL")
     send_time = Column(DateTime, index=True, comment="傳送時間")
