@@ -91,10 +91,21 @@ export function NavigationProvider({
   ]);
 
   const navigate = useCallback((page: Page, newParams: NavigationParams = {}) => {
-    // 添加到历史记录
+    // 先更新 localStorage 狀態，以便刷新後恢復到正確頁面
+    try {
+      localStorage.setItem('navigation_state', JSON.stringify({
+        page,
+        params: newParams
+      }));
+    } catch (error) {
+      console.error('Failed to save navigation state:', error);
+    }
+
+    // 觸發整頁刷新，清空所有 React 狀態
+    window.location.href = window.location.origin + window.location.pathname;
+
+    // 以下代碼在刷新後不會執行，但保留以防萬一
     setHistory(prev => [...prev, { page: currentPage, params }]);
-    
-    // 更新当前页面和参数
     setCurrentPage(page);
     setParams(newParams);
   }, [currentPage, params]);
