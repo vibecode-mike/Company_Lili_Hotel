@@ -10,7 +10,6 @@ from app.models.campaign import Campaign
 from app.models.template import MessageTemplate, TemplateCarouselItem
 from app.models.auto_response import AutoResponse, AutoResponseKeyword
 from app.models.auto_response_message import AutoResponseMessage
-from app.models.message_record import MessageRecord
 from app.models.consumption_record import ConsumptionRecord
 from app.models.pms_integration import PMSIntegration
 from app.models.tag_trigger_log import TagTriggerLog
@@ -31,7 +30,6 @@ __all__ = [
     "InteractionTag",
     "Message",
     "MessageDelivery",
-    "MessageRecord",
     "Campaign",
     "MessageTemplate",
     "TemplateCarouselItem",

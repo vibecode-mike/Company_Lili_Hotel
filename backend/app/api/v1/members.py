@@ -1,7 +1,7 @@
 """
 會員管理 API
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, and_, func, delete
 from app.database import get_db
@@ -22,7 +22,9 @@ from app.schemas.member import (
 from app.schemas.common import SuccessResponse
 from app.core.pagination import PageParams, PageResponse
 from app.api.v1.auth import get_current_user
+from app.clients.line_app_client import LineAppClient
 from datetime import datetime
+import os
 
 router = APIRouter()
 
@@ -326,3 +328,109 @@ async def update_member_notes(
     await db.commit()
 
     return SuccessResponse(message="備註更新成功")
+
+
+# ============================================
+# 1:1 聊天相關端點
+# ============================================
+
+@router.post("/{member_id}/chat/send")
+async def send_member_chat_message(
+    member_id: int,
+    text: str = Body(..., embed=True),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    發送訊息到會員聊天室
+
+    Args:
+        member_id: 會員 ID
+        text: 訊息文本
+
+    Returns:
+        {
+            "success": true,
+            "message_id": "msg_abc123",
+            "sent_at": "2025-11-22T10:30:00Z"
+        }
+    """
+    # 查詢會員
+    result = await db.execute(select(Member).where(Member.id == member_id))
+    member = result.scalar_one_or_none()
+
+    if not member:
+        raise HTTPException(status_code=404, detail="會員不存在")
+
+    if not member.line_uid:
+        raise HTTPException(status_code=400, detail="會員未綁定 LINE 帳號")
+
+    # 調用 line_app 發送訊息
+    line_app_url = os.getenv("LINE_APP_URL", "http://localhost:3001")
+    client = LineAppClient(base_url=line_app_url)
+
+    try:
+        send_result = await client.send_chat_message(
+            line_uid=member.line_uid,
+            text=text
+        )
+
+        if not send_result.get("ok"):
+            raise HTTPException(status_code=500, detail="發送訊息失敗")
+
+        return {
+            "success": True,
+            "message_id": send_result.get("message_id"),
+            "thread_id": send_result.get("thread_id"),
+            "sent_at": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"發送訊息失敗: {str(e)}")
+
+
+@router.put("/{member_id}/chat/mark-read")
+async def mark_member_chat_read(
+    member_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    標記與指定會員的聊天訊息為已讀
+
+    Args:
+        member_id: 會員 ID
+
+    Returns:
+        {
+            "success": true,
+            "marked_count": 3
+        }
+    """
+    # 查詢會員
+    result = await db.execute(select(Member).where(Member.id == member_id))
+    member = result.scalar_one_or_none()
+
+    if not member:
+        raise HTTPException(status_code=404, detail="會員不存在")
+
+    if not member.line_uid:
+        raise HTTPException(status_code=400, detail="會員未綁定 LINE 帳號")
+
+    # 調用 line_app 標記已讀
+    line_app_url = os.getenv("LINE_APP_URL", "http://localhost:3001")
+    client = LineAppClient(base_url=line_app_url)
+
+    try:
+        mark_result = await client.mark_chat_read(line_uid=member.line_uid)
+
+        if not mark_result.get("ok"):
+            raise HTTPException(status_code=500, detail="標記已讀失敗")
+
+        return {
+            "success": True,
+            "marked_count": mark_result.get("marked_count", 0)
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"標記已讀失敗: {str(e)}")

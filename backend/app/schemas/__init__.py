@@ -50,15 +50,6 @@ from app.schemas.template import (
     CarouselItemResponse,
 )
 
-# 一對一訊息記錄
-from app.schemas.message_record import (
-    MessageRecordBase,
-    MessageRecordCreate,
-    MessageRecordUpdate,
-    MessageRecordListItem,
-    MessageRecordDetail,
-)
-
 # 消費紀錄
 from app.schemas.consumption_record import (
     ConsumptionRecordBase,
@@ -129,12 +120,6 @@ __all__ = [
     "CarouselItemBase",
     "CarouselItemCreate",
     "CarouselItemResponse",
-    # 一對一訊息記錄
-    "MessageRecordBase",
-    "MessageRecordCreate",
-    "MessageRecordUpdate",
-    "MessageRecordListItem",
-    "MessageRecordDetail",
     # 消費紀錄
     "ConsumptionRecordBase",
     "ConsumptionRecordCreate",

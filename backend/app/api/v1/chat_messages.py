@@ -10,6 +10,7 @@ from datetime import datetime
 import logging
 
 from app.database import get_db
+from app.models.member import Member
 from app.schemas.common import SuccessResponse
 import json
 
@@ -79,7 +80,7 @@ from pydantic import BaseModel
 
 class ChatMessage(BaseModel):
     """聊天消息"""
-    id: int
+    id: str  # UUID in conversation_messages
     type: str  # 'user' | 'official'
     text: str
     time: str  # "上午 03:30"
@@ -108,7 +109,8 @@ async def get_chat_messages(
     """
     獲取會員的聊天紀錄
 
-    從 message_records 表查詢該會員的歷史對話
+    從 conversation_messages 表查詢該會員的歷史對話
+    透過 member.line_uid 作為 thread_id 查詢
     按 created_at 降序排列（最新在前）
 
     Args:
@@ -125,13 +127,24 @@ async def get_chat_messages(
 
         logger.info(f"📖 獲取會員聊天紀錄: member_id={member_id}, page={page}, page_size={page_size}")
 
+        # 先查詢會員的 line_uid
+        member_query = select(Member.line_uid).where(Member.id == member_id)
+        member_result = await db.execute(member_query)
+        line_uid = member_result.scalar_one_or_none()
+
+        if not line_uid:
+            logger.warning(f"⚠️ 會員 {member_id} 未綁定 LINE 帳號")
+            raise HTTPException(status_code=400, detail="會員未綁定 LINE 帳號")
+
+        logger.info(f"🔍 使用 line_uid={line_uid} 查詢 conversation_messages")
+
         # 計算總數
         count_query = text("""
             SELECT COUNT(*) as total
-            FROM message_records
-            WHERE member_id = :member_id
+            FROM conversation_messages
+            WHERE thread_id = :thread_id
         """)
-        count_result = await db.execute(count_query, {"member_id": member_id})
+        count_result = await db.execute(count_query, {"thread_id": line_uid})
         total = count_result.scalar() or 0
 
         # 計算分頁
@@ -143,11 +156,15 @@ async def get_chat_messages(
             SELECT
                 id,
                 direction,
-                message_content,
-                message_status,
+                CASE
+                    WHEN direction = 'outgoing' THEN response
+                    WHEN direction = 'incoming' THEN question
+                    ELSE ''
+                END as message_content,
+                status as message_status,
                 created_at
-            FROM message_records
-            WHERE member_id = :member_id
+            FROM conversation_messages
+            WHERE thread_id = :thread_id
             ORDER BY created_at DESC
             LIMIT :limit OFFSET :offset
         """)
@@ -155,7 +172,7 @@ async def get_chat_messages(
         result = await db.execute(
             query,
             {
-                "member_id": member_id,
+                "thread_id": line_uid,
                 "limit": page_size,
                 "offset": offset
             }
@@ -175,7 +192,7 @@ async def get_chat_messages(
 
             # 判斷是否已讀
             status = record.message_status if hasattr(record, 'message_status') else record[3]
-            is_read = status == '已讀' if status else False
+            is_read = status == 'read' if status else False
 
             # 獲取消息內容
             content = record.message_content if hasattr(record, 'message_content') else record[2]

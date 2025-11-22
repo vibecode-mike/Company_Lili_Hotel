@@ -1335,32 +1335,87 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
 
     # 依 target_audience 取得目標用戶（使用 members 表）
     target_audience = payload.get("target_audience", "all")
-    target_tags = payload.get("target_tags", [])
+    include_tags = payload.get("include_tags", [])
+    exclude_tags = payload.get("exclude_tags", [])
 
     logging.info(f"=== [Broadcast Start] ===")
     logging.info(f"Target audience: {target_audience}")
-    logging.info(f"Target tags: {target_tags}")
+    logging.info(f"Include tags: {include_tags}")
+    logging.info(f"Exclude tags: {exclude_tags}")
 
     if target_audience == "all":
-        # 發送給所有會員
+        # 情境 A: 發送給所有會員
         rs = fetchall("""
             SELECT m.line_uid, m.id
             FROM members m
             WHERE m.line_uid IS NOT NULL
               AND m.line_uid != ''
         """)
-    elif target_audience == "tags" and target_tags:
-        # 發送給擁有特定標籤的會員
-        tag_placeholders = ", ".join([f":tag{i}" for i in range(len(target_tags))])
-        tag_params = {f"tag{i}": tag for i, tag in enumerate(target_tags)}
-        rs = fetchall(f"""
-            SELECT DISTINCT m.line_uid, m.id
-            FROM members m
-            INNER JOIN member_tags mt ON m.id = mt.member_id
-            WHERE m.line_uid IS NOT NULL
-              AND m.line_uid != ''
-              AND mt.tag_name IN ({tag_placeholders})
-        """, tag_params)
+    elif target_audience == "filtered":
+        # 根據 include 和 exclude 標籤進行篩選
+        if include_tags and exclude_tags:
+            # 情境 B: 同時有包含和排除標籤
+            include_placeholders = ", ".join([f":inc{i}" for i in range(len(include_tags))])
+            exclude_placeholders = ", ".join([f":exc{i}" for i in range(len(exclude_tags))])
+
+            params = {}
+            params.update({f"inc{i}": tag for i, tag in enumerate(include_tags)})
+            params.update({f"exc{i}": tag for i, tag in enumerate(exclude_tags)})
+
+            rs = fetchall(f"""
+                SELECT DISTINCT m.line_uid, m.id
+                FROM members m
+                INNER JOIN member_tags mt ON m.id = mt.member_id
+                WHERE m.line_uid IS NOT NULL
+                  AND m.line_uid != ''
+                  AND mt.tag_name IN ({include_placeholders})
+                  AND m.id NOT IN (
+                      SELECT DISTINCT m2.id
+                      FROM members m2
+                      INNER JOIN member_tags mt2 ON m2.id = mt2.member_id
+                      WHERE mt2.tag_name IN ({exclude_placeholders})
+                  )
+            """, params)
+
+        elif include_tags:
+            # 情境 C: 僅包含標籤
+            include_placeholders = ", ".join([f":inc{i}" for i in range(len(include_tags))])
+            params = {f"inc{i}": tag for i, tag in enumerate(include_tags)}
+
+            rs = fetchall(f"""
+                SELECT DISTINCT m.line_uid, m.id
+                FROM members m
+                INNER JOIN member_tags mt ON m.id = mt.member_id
+                WHERE m.line_uid IS NOT NULL
+                  AND m.line_uid != ''
+                  AND mt.tag_name IN ({include_placeholders})
+            """, params)
+
+        elif exclude_tags:
+            # 情境 D: 僅排除標籤
+            exclude_placeholders = ", ".join([f":exc{i}" for i in range(len(exclude_tags))])
+            params = {f"exc{i}": tag for i, tag in enumerate(exclude_tags)}
+
+            rs = fetchall(f"""
+                SELECT DISTINCT m.line_uid, m.id
+                FROM members m
+                WHERE m.line_uid IS NOT NULL
+                  AND m.line_uid != ''
+                  AND m.id NOT IN (
+                      SELECT DISTINCT m2.id
+                      FROM members m2
+                      INNER JOIN member_tags mt ON m2.id = mt.member_id
+                      WHERE mt.tag_name IN ({exclude_placeholders})
+                  )
+            """, params)
+        else:
+            # 沒有指定標籤，發送給所有會員
+            rs = fetchall("""
+                SELECT m.line_uid, m.id
+                FROM members m
+                WHERE m.line_uid IS NOT NULL
+                  AND m.line_uid != ''
+            """)
     else:
         # 預設發送給所有會員
         rs = fetchall("""
@@ -1380,16 +1435,27 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
         total_members_result = fetchone("""
             SELECT COUNT(*) as cnt
             FROM members
-            WHERE line_uid IS NOT NULL AND line_uid != ''
+            WHERE line_uid IS NOT NULL
+              AND line_uid != ''
         """)
         total_members = total_members_result['cnt'] if total_members_result else 0
 
         # 生成更友好的錯誤消息
         if total_members == 0:
             error_msg = "目前沒有會員（members 表為空或無 line_uid），請先同步會員數據"
-        elif target_audience == "tags":
-            tags_str = ", ".join(target_tags) if target_tags else "無"
-            error_msg = f"沒有會員擁有指定的標籤: {tags_str}"
+        elif target_audience == "filtered":
+            if include_tags and exclude_tags:
+                include_str = ", ".join(include_tags)
+                exclude_str = ", ".join(exclude_tags)
+                error_msg = f"沒有同時符合包含標籤 [{include_str}] 且不包含排除標籤 [{exclude_str}] 的會員"
+            elif include_tags:
+                tags_str = ", ".join(include_tags)
+                error_msg = f"沒有會員擁有指定的包含標籤: {tags_str}"
+            elif exclude_tags:
+                tags_str = ", ".join(exclude_tags)
+                error_msg = f"所有會員都擁有排除標籤: {tags_str}"
+            else:
+                error_msg = "未找到符合篩選條件的會員"
         else:
             error_msg = "未找到符合條件的會員"
 
@@ -2346,6 +2412,117 @@ def api_broadcast():
     # 2) 足夠才真正送推播（沿用你現有的推播主流程）
     result = push_campaign(payload)  # 你現成的群發函式
     return jsonify({**result, "preflight": check})
+
+
+# ============================================
+# 1:1 聊天 API
+# ============================================
+@app.post("/api/v1/chat/send")
+def api_send_chat_message():
+    """
+    發送 1:1 聊天訊息給指定會員
+
+    Request Body:
+        {
+            "line_uid": "U1234567890abcdef",
+            "text": "您好，需要幫助嗎？"
+        }
+
+    Response:
+        {
+            "ok": true,
+            "message_id": "msg_abc123",
+            "thread_id": "U1234567890abcdef"
+        }
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        line_uid = data.get("line_uid", "").strip()
+        text = data.get("text", "").strip()
+
+        if not line_uid:
+            return jsonify({"ok": False, "error": "line_uid required"}), 400
+        if not text:
+            return jsonify({"ok": False, "error": "text required"}), 400
+
+        # 1. 發送訊息
+        messaging_api.push_message(
+            PushMessageRequest(
+                to=line_uid,
+                messages=[TextMessage(text=text)]
+            )
+        )
+        logging.info(f"[api_send_chat_message] 成功發送訊息給 {line_uid}")
+
+        # 2. 確保對話串存在
+        thread_id = ensure_thread_for_user(line_uid)
+
+        # 3. 記錄到資料庫
+        msg_id = uuid.uuid4().hex
+        insert_conversation_message(
+            thread_id=thread_id,
+            role="assistant",
+            direction="outgoing",
+            message_type="text",
+            response=text,
+            status="sent"
+        )
+        logging.info(f"[api_send_chat_message] 記錄訊息 {msg_id} 到 DB")
+
+        return jsonify({
+            "ok": True,
+            "message_id": msg_id,
+            "thread_id": thread_id
+        }), 200
+
+    except Exception as e:
+        logging.exception("[api_send_chat_message] 失敗")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.put("/api/v1/chat/mark-read")
+def api_mark_chat_read():
+    """
+    標記指定會員的聊天訊息為已讀
+
+    Request Body:
+        {
+            "line_uid": "U1234567890abcdef"
+        }
+
+    Response:
+        {
+            "ok": true,
+            "marked_count": 3
+        }
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        line_uid = data.get("line_uid", "").strip()
+
+        if not line_uid:
+            return jsonify({"ok": False, "error": "line_uid required"}), 400
+
+        # 更新該 thread 的所有 incoming 訊息為已讀
+        result = execute("""
+            UPDATE conversation_messages
+            SET status = 'read', updated_at = NOW()
+            WHERE thread_id = :thread_id
+              AND direction = 'incoming'
+              AND status != 'read'
+        """, {"thread_id": line_uid})
+
+        marked_count = result.rowcount if hasattr(result, 'rowcount') else 0
+        logging.info(f"[api_mark_chat_read] 標記 {marked_count} 則訊息為已讀，thread_id={line_uid}")
+
+        return jsonify({
+            "ok": True,
+            "marked_count": marked_count
+        }), 200
+
+    except Exception as e:
+        logging.exception("[api_mark_chat_read] 失敗")
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.post("/__survey_submit")

@@ -206,6 +206,7 @@ export default function ChatRoomLayout({ member: initialMember }: ChatRoomLayout
 
   const [messageInput, setMessageInput] = useState('');
   const [isComposing, setIsComposing] = useState(false); // IME composition state
+  const [isSending, setIsSending] = useState(false); // Sending message state
   const [isTagModalOpen, setIsTagModalOpen] = useState(false);
   const [memberTags, setMemberTags] = useState<string[]>(member?.memberTags || []); // ✅ 使用真實會員標籤
   const [interactionTags, setInteractionTags] = useState<string[]>(member?.interactionTags || []); // ✅ 使用真實互動標籤
@@ -372,18 +373,55 @@ export default function ChatRoomLayout({ member: initialMember }: ChatRoomLayout
     }
   }, [messages]);
 
-  const handleSendMessage = () => {
-    if (messageInput.trim()) {
-      const newMessage: ChatMessage = {
-        id: messages.length + 1,
-        type: 'official',
-        text: messageInput,
-        time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: true }),
-        isRead: false
-      };
-      
-      setMessages([...messages, newMessage]);
-      setMessageInput('');
+  const handleSendMessage = async () => {
+    const trimmedText = messageInput.trim();
+    if (!trimmedText || !member?.id || isSending) return;
+
+    setIsSending(true);
+
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(
+        `/api/v1/members/${member.id}/chat/send`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ text: trimmedText })
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('發送失敗');
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        // 清空輸入框
+        setMessageInput('');
+
+        // 重新載入訊息列表（確保顯示最新訊息）
+        await loadChatMessages(1, false);
+
+        // 可選：滾動到底部
+        setTimeout(() => {
+          if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+          }
+        }, 100);
+
+        console.log('訊息已發送:', result.message_id);
+      } else {
+        throw new Error(result.message || '發送失敗');
+      }
+    } catch (error) {
+      console.error('發送訊息失敗:', error);
+      showToast?.('發送訊息失敗，請重試', 'error');
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -883,13 +921,13 @@ export default function ChatRoomLayout({ member: initialMember }: ChatRoomLayout
                       <div className="content-stretch flex gap-[4px] items-start justify-end relative shrink-0 w-full">
                         <button
                           onClick={handleSendMessage}
-                          disabled={!messageInput.trim()}
+                          disabled={!messageInput.trim() || isSending}
                           className="bg-[#242424] disabled:opacity-50 relative rounded-[16px] min-h-[48px] min-w-[72px] shrink-0 transition-opacity disabled:cursor-not-allowed"
                         >
                           <div className="flex flex-row items-center justify-center min-h-inherit min-w-inherit size-full">
                             <div className="box-border content-stretch flex items-center justify-center min-h-inherit min-w-inherit px-[12px] py-[8px] relative size-full">
                               <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center text-white">
-                                傳送
+                                {isSending ? '發送中...' : '傳送'}
                               </p>
                             </div>
                           </div>

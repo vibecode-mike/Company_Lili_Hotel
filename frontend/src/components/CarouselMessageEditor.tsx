@@ -4,6 +4,7 @@ import { Checkbox } from './ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
 import { Button } from './ui/button';
+import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { toast } from 'sonner';
 import svgPaths from '../imports/svg-708vqjfcuf';
@@ -663,18 +664,25 @@ export default function CarouselMessageEditor({
             <div className="flex items-center gap-[12px]">
               <div className="flex items-center gap-[4px]">
                 <span className="text-[14px] leading-[20px] text-neutral-950">動作按鈕</span>
-                <svg className="size-[12px]" fill="none" viewBox="0 0 12 12">
-                  <g clipPath="url(#clip0_info)">
-                    <path d={svgPaths.p1bfb6800} stroke="#2B7FFF" fill="none" />
-                    <path d="M6 8V6" stroke="#2B7FFF" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                    <path d="M6 4H6.005" stroke="#2B7FFF" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                  </g>
-                  <defs>
-                    <clipPath id="clip0_info">
-                      <rect fill="white" height="12" width="12" />
-                    </clipPath>
-                  </defs>
-                </svg>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <svg className="size-[12px]" fill="none" viewBox="0 0 12 12">
+                      <g clipPath="url(#clip0_info)">
+                        <path d={svgPaths.p1bfb6800} stroke="#2B7FFF" fill="none" />
+                        <path d="M6 8V6" stroke="#2B7FFF" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                        <path d="M6 4H6.005" stroke="#2B7FFF" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                      </g>
+                      <defs>
+                        <clipPath id="clip0_info">
+                          <rect fill="white" height="12" width="12" />
+                        </clipPath>
+                      </defs>
+                    </svg>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>設定使用者點擊按鈕後要觸發的動作</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
               
               {!currentCard.enableButton1 && (

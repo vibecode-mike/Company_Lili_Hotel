@@ -38,7 +38,8 @@ class LineAppClient:
         self,
         flex_message_json: dict,
         target_audience: str,
-        target_tags: Optional[List[str]] = None,
+        include_tags: Optional[List[str]] = None,
+        exclude_tags: Optional[List[str]] = None,
         alt_text: str = "新訊息",
         notification_message: Optional[str] = None,
         campaign_id: Optional[int] = None,
@@ -51,8 +52,9 @@ class LineAppClient:
 
         Args:
             flex_message_json: Flex Message JSON
-            target_audience: "all" | "tags"
-            target_tags: 标签列表 (target_audience="tags" 时必填)
+            target_audience: "all" | "filtered"
+            include_tags: 包含标签列表（发送给拥有这些标签的会员）
+            exclude_tags: 排除标签列表（不发送给拥有这些标签的会员）
             alt_text: 替代文字
             notification_message: 推播通知文字
             campaign_id: 活动 ID
@@ -76,8 +78,10 @@ class LineAppClient:
                 "type": "FlexMessage",  # 添加类型字段，line_app 需要用此字段查找模板
             }
 
-            if target_tags:
-                payload["target_tags"] = target_tags
+            if include_tags:
+                payload["include_tags"] = include_tags
+            if exclude_tags:
+                payload["exclude_tags"] = exclude_tags
             if notification_message:
                 payload["notification_message"] = notification_message
             if campaign_id:
@@ -90,7 +94,7 @@ class LineAppClient:
                 payload["channel_id"] = channel_id
 
             logger.info(f"Sending broadcast via HTTP to {self.base_url}/api/v1/messages/broadcast")
-            logger.debug(f"Payload: target_audience={target_audience}, campaign_id={campaign_id}")
+            logger.debug(f"Payload: target_audience={target_audience}, include_tags={include_tags}, exclude_tags={exclude_tags}, campaign_id={campaign_id}")
 
             response = await client.post(
                 f"{self.base_url}/api/v1/messages/broadcast",
@@ -181,4 +185,65 @@ class LineAppClient:
             result = response.json()
 
             logger.info(f"Preflight result: status={result.get('status')}, remaining={result.get('remaining')}")
+            return result
+
+    async def send_chat_message(
+        self,
+        line_uid: str,
+        text: str
+    ) -> Dict[str, Any]:
+        """
+        发送 1:1 聊天消息
+
+        Args:
+            line_uid: LINE User ID
+            text: 消息文本
+
+        Returns:
+            {
+                "ok": bool,
+                "message_id": str,
+                "thread_id": str
+            }
+        """
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            logger.info(f"Sending chat message to {line_uid}")
+
+            response = await client.post(
+                f"{self.base_url}/api/v1/chat/send",
+                json={"line_uid": line_uid, "text": text}
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            logger.info(f"Chat message sent: ok={result.get('ok')}, message_id={result.get('message_id')}")
+            return result
+
+    async def mark_chat_read(
+        self,
+        line_uid: str
+    ) -> Dict[str, Any]:
+        """
+        标记聊天消息为已读
+
+        Args:
+            line_uid: LINE User ID
+
+        Returns:
+            {
+                "ok": bool,
+                "marked_count": int
+            }
+        """
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            logger.info(f"Marking chat as read for {line_uid}")
+
+            response = await client.put(
+                f"{self.base_url}/api/v1/chat/mark-read",
+                json={"line_uid": line_uid}
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            logger.info(f"Chat marked as read: ok={result.get('ok')}, count={result.get('marked_count')}")
             return result

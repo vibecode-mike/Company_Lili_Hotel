@@ -48,9 +48,6 @@ class Member(Base):
     member_tags = relationship(
         "MemberTag", back_populates="member", cascade="all, delete-orphan"
     )
-    message_records = relationship(
-        "MessageRecord", back_populates="member", cascade="all, delete-orphan"
-    )
     consumption_records = relationship(
         "ConsumptionRecord", back_populates="member", cascade="all, delete-orphan"
     )

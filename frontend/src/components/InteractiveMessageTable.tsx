@@ -84,13 +84,13 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange, status
             </div>
           </div>
 
-          {/* 標籤 */}
+          {/* 互動標籤 */}
           <div 
             className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[200px] cursor-pointer"
             onClick={() => onSortChange('tags')}
           >
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">標籤</p>
+              <p className="leading-[1.5] whitespace-pre">互動標籤</p>
             </div>
             <SortIcon active={isActive('tags')} order={sortConfig.order} />
           </div>
@@ -291,7 +291,7 @@ const MessageRow = memo(function MessageRow({
             </div>
           </div>
 
-          {/* 標籤 */}
+          {/* 互動標籤 */}
           <div className="box-border content-stretch flex flex-wrap gap-[4px] items-start px-[12px] py-0 relative shrink-0 w-[200px]">
             {message.tags.map((tag, index) => (
               <div key={index} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] px-[8px] py-[4px] relative rounded-[8px] shrink-0">
@@ -353,6 +353,19 @@ const MessageRow = memo(function MessageRow({
             onClick={() => onViewDetails(message.id)}
             variant="primary"
           />
+        </div>
+      </div>
+    </div>
+  );
+});
+
+const EmptyStateRow = memo(function EmptyStateRow() {
+  return (
+    <div className="bg-white relative shrink-0 w-full rounded-bl-[16px] rounded-br-[16px]" aria-live="polite">
+      <div aria-hidden="true" className="absolute border-[#dddddd] border border-solid inset-0 pointer-events-none rounded-bl-[16px] rounded-br-[16px]" />
+      <div className="flex flex-row items-center size-full">
+        <div className="box-border content-stretch flex items-center justify-center p-[40px] relative w-full">
+          <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[#a8a8a8] text-[16px]">尚無此資料</p>
         </div>
       </div>
     </div>
@@ -453,15 +466,19 @@ export default function InteractiveMessageTable({ messages, onEdit, onViewDetail
         
         {/* Table Body - Scrollable Container */}
         <div className="w-[1250px] flex-1 table-scroll">
-          {sortedMessages.map((message, index) => (
-            <MessageRow 
-              key={message.id} 
-              message={message} 
-              isLast={index === sortedMessages.length - 1}
-              onEdit={onEdit}
-              onViewDetails={onViewDetails}
-            />
-          ))}
+          {sortedMessages.length === 0 ? (
+            <EmptyStateRow />
+          ) : (
+            sortedMessages.map((message, index) => (
+              <MessageRow 
+                key={message.id} 
+                message={message} 
+                isLast={index === sortedMessages.length - 1}
+                onEdit={onEdit}
+                onViewDetails={onViewDetails}
+              />
+            ))
+          )}
         </div>
       </div>
     </div>

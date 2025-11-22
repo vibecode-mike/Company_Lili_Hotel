@@ -162,6 +162,16 @@ class MessageCreate(BaseModel):
                     raise ValueError(f'無效的日期時間格式: {v}')
         return v
 
+    @field_validator('scheduled_at')
+    @classmethod
+    def validate_scheduled_at_future(cls, v):
+        """驗證排程時間必須在未來"""
+        if v is not None:
+            now = datetime.now()
+            if v <= now:
+                raise ValueError('排程發送時間不可早於目前時間')
+        return v
+
     @field_validator('interaction_tags', mode='before')
     @classmethod
     def validate_interaction_tags(cls, value):

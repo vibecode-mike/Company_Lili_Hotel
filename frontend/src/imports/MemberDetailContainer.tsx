@@ -17,6 +17,28 @@ import { SimpleBreadcrumb } from "../components/common/Breadcrumb";
 import { useMembers } from "../contexts/MembersContext";
 import { useAuth } from "../components/auth/AuthContext";
 
+const formatTimestamp = (dateString?: string) => {
+  if (!dateString) return '未知';
+  try {
+    const normalized = dateString.includes('T') ? dateString : dateString.replace(' ', 'T');
+    const date = new Date(normalized);
+    if (Number.isNaN(date.getTime())) return '無效日期';
+    return new Intl.DateTimeFormat('zh-TW', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
+      .format(date)
+      .replace(/\//g, '-')
+      .replace('，', ' ');
+  } catch {
+    return '無效日期';
+  }
+};
+
 /**
  * 會員詳情頁面組件
  * 
@@ -1010,19 +1032,6 @@ function Container7({ member }: { member?: MemberData }) {
 }
 
 function Container8({ member }: { member?: MemberData }) {
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return '未知';
-    try {
-      return new Date(dateString).toLocaleDateString('zh-TW', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      });
-    } catch {
-      return '無效日期';
-    }
-  };
-
   return (
     <div className="content-stretch flex items-center relative shrink-0 w-full" data-name="Container">
       <div className="content-stretch flex items-center min-w-[120px] relative shrink-0" data-name="Modal/Title&Content">
@@ -1032,7 +1041,7 @@ function Container8({ member }: { member?: MemberData }) {
       </div>
       <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0" data-name="Modal/Title&Content">
         <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-          <p className="leading-[1.5] whitespace-pre">{formatDate(member?.createTime)}</p>
+          <p className="leading-[1.5] whitespace-pre">{formatTimestamp(member?.createTime)}</p>
         </div>
       </div>
     </div>
@@ -1040,19 +1049,6 @@ function Container8({ member }: { member?: MemberData }) {
 }
 
 function Container9({ member }: { member?: MemberData }) {
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return '未知';
-    try {
-      return new Date(dateString).toLocaleDateString('zh-TW', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      });
-    } catch {
-      return '無效日期';
-    }
-  };
-
   return (
     <div className="content-stretch flex items-center relative shrink-0 w-full" data-name="Container">
       <div className="content-stretch flex items-center min-w-[120px] relative shrink-0" data-name="Modal/Title&Content">
@@ -1062,7 +1058,7 @@ function Container9({ member }: { member?: MemberData }) {
       </div>
       <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0" data-name="Modal/Title&Content">
         <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-          <p className="leading-[1.5] whitespace-pre">{formatDate(member?.lastChatTime)}</p>
+          <p className="leading-[1.5] whitespace-pre">{formatTimestamp(member?.lastChatTime)}</p>
         </div>
       </div>
     </div>

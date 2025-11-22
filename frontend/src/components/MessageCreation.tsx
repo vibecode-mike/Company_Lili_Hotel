@@ -834,6 +834,27 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
     setCardErrors(newCardErrors);
 
+    // 驗證排程時間必須在未來
+    if (scheduleType === 'scheduled') {
+      if (!scheduledDate) {
+        // 已由現有的 UI 驗證處理（第 1591-1595 行）
+        hasError = true;
+      } else {
+        // 構建完整的排程日期時間
+        const scheduledDateTime = new Date(scheduledDate);
+        scheduledDateTime.setHours(parseInt(scheduledTime.hours));
+        scheduledDateTime.setMinutes(parseInt(scheduledTime.minutes));
+        scheduledDateTime.setSeconds(0);
+
+        const now = new Date();
+
+        if (scheduledDateTime <= now) {
+          toast.error('排程發送時間不可早於目前時間');
+          hasError = true;
+        }
+      }
+    }
+
     return !hasError;
   };
 

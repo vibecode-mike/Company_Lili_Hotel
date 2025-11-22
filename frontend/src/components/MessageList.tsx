@@ -438,8 +438,8 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
     setMemberView('detail');
   };
 
-  const handleNavigateFromDetail = (page: string, params?: { memberId?: string }) => {
-    if (page === 'member-chat') {
+  const handleNavigateFromDetail = (page: string) => {
+    if (page === 'member-chat' || page === 'chat-room') {
       setMemberView('chat');
     }
   };

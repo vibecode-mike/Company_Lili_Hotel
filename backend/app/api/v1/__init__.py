@@ -7,7 +7,7 @@ API v1 路由 - v0.2 統一新架構
 - /campaigns：活動管理（操作 campaigns 表）
 - /pms_integrations：PMS 系統整合
 - /consumption_records：消費紀錄
-- /chat-messages：聊天紀錄（操作 message_records 表）
+- /chat-messages：聊天紀錄（操作 conversation_messages 表）
 """
 from fastapi import APIRouter
 from app.api.v1 import (

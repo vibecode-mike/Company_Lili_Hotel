@@ -535,12 +535,16 @@ class MessageService:
 
         # 2. 处理目标筛选
         target_audience = "all"
-        target_tags = []
+        include_tags = []
+        exclude_tags = []
 
         if message.target_type == "filtered" and message.target_filter:
-            target_audience = "tags"
-            if "include" in message.target_filter:
-                target_tags = message.target_filter["include"]
+            target_audience = "filtered"
+            include_tags = message.target_filter.get("include", [])
+            exclude_tags = message.target_filter.get("exclude", [])
+
+            logger.info(f"🏷️  Include tags: {include_tags}")
+            logger.info(f"🚫 Exclude tags: {exclude_tags}")
 
         # 3. 创建 HTTP 客户端
         line_app_url = os.getenv("LINE_APP_URL", self.LINE_APP_URL)
@@ -566,7 +570,8 @@ class MessageService:
             result = await client.broadcast_message(
                 flex_message_json=flex_message_json,
                 target_audience=target_audience,
-                target_tags=target_tags,
+                include_tags=include_tags,
+                exclude_tags=exclude_tags,
                 alt_text=message.message_title or "新訊息",
                 notification_message=message.notification_message,
                 campaign_id=message.id,

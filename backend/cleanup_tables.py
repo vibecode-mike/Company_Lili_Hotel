@@ -15,7 +15,7 @@ async def cleanup_tables():
         'consumption_records',  # 依賴 pms_integrations
         'member_interaction_records',
         'message_deliveries',
-        'message_records',
+        # 'message_records',  # 已透過 migration 97c1b3771116 正式移除
         'pms_integrations',
     ]
 
