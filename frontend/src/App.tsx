@@ -41,17 +41,30 @@ function AppContent() {
   const hasLockedStateRef = useRef(true);
 
   useEffect(() => {
+    console.log('[App.tsx] useEffect triggered', {
+      isAuthenticated,
+      isStatusLoading,
+      hasFetchedOnce,
+      isConfigured,
+      currentPage,
+      hasLockedStateRef: hasLockedStateRef.current,
+      hasRoutedAfterUnlockRef: hasRoutedAfterUnlockRef.current
+    });
+
     if (!isAuthenticated) {
+      console.log('[App.tsx] Not authenticated, resetting refs');
       hasRoutedAfterUnlockRef.current = false;
       hasLockedStateRef.current = true;
       return;
     }
 
     if (!hasFetchedOnce || isStatusLoading) {
+      console.log('[App.tsx] Still loading channel status');
       return;
     }
 
     if (!isConfigured) {
+      console.log('[App.tsx] LINE not configured, navigating to settings');
       hasRoutedAfterUnlockRef.current = false;
       hasLockedStateRef.current = true;
       if (currentPage !== 'line-api-settings') {
@@ -65,15 +78,27 @@ function AppContent() {
       // 檢查是否有儲存的路由狀態 (重新整理的情況)
       const savedNavigationState = localStorage.getItem('navigation_state');
 
+      console.log('[App.tsx] Unlock navigation check:', {
+        savedNavigationState,
+        currentPage,
+        hasLockedStateRef: hasLockedStateRef.current,
+        hasRoutedAfterUnlockRef: hasRoutedAfterUnlockRef.current
+      });
+
       // 只在真正的首次登入時導航到會員管理頁
       // 條件：沒有保存的導航狀態 AND 當前頁面是初始頁面 (member-management)
       // 如果有保存的狀態或 currentPage 已變更，表示是重新整理或已導航，不應該強制導航
       if (!savedNavigationState && currentPage === 'member-management') {
+        console.log('[App.tsx] First login, navigating to member-management');
         navigate('member-management');
+      } else {
+        console.log('[App.tsx] Skipping navigation - either has saved state or already navigated');
       }
 
       hasLockedStateRef.current = false;
       hasRoutedAfterUnlockRef.current = true;
+    } else {
+      console.log('[App.tsx] Already unlocked, skipping navigation logic');
     }
   }, [isAuthenticated, isStatusLoading, hasFetchedOnce, isConfigured, currentPage, navigate]);
 

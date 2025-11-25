@@ -613,20 +613,10 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   };
 
   const handleSaveDraft = async () => {
-    // 草稿驗證 - 僅檢查基本必填欄位
-    const errors: string[] = [];
-
-    // Check basic required fields only for draft
-    if (!title || title.trim() === '') {
-      errors.push('訊息標題');
-    }
-    if (!notificationMsg || notificationMsg.trim() === '') {
-      errors.push('通知訊息');
-    }
-
-    if (errors.length > 0) {
-      setValidationErrors(errors);
-      setValidationDialogOpen(true);
+    // 使用與發布相同的完整驗證邏輯
+    const isValid = validateForm();
+    if (!isValid) {
+      toast.error('請修正表單錯誤後再儲存草稿');
       return;
     }
 
@@ -748,14 +738,14 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
     let hasError = false;
 
-    // 驗證基本必填欄位
+    // ✅ 群發訊息類型：title 和 notificationMsg 為必填欄位
+    // ✅ UI 已經有即時錯誤提示（紅色邊框 + 錯誤文字），不需要在這裡重複設置錯誤訊息
+    // ✅ 只需要簡單檢查是否為空，以阻止發布
     if (!title || title.trim() === '') {
-      setTitleError('請輸入訊息標題');
       hasError = true;
     }
 
     if (!notificationMsg || notificationMsg.trim() === '') {
-      setNotificationMsgError('請輸入通知推播訊息');
       hasError = true;
     }
 
@@ -833,6 +823,21 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     });
 
     setCardErrors(newCardErrors);
+
+    // 驗證至少有一張卡片包含有效內容
+    const hasValidContent = cards.some(card => {
+      return (
+        (card.enableImage && card.image) ||
+        (card.enableTitle && card.cardTitle && card.cardTitle.trim() !== '') ||
+        (card.enableContent && card.content && card.content.trim() !== '') ||
+        (card.enablePrice && card.price && card.price.trim() !== '')
+      );
+    });
+
+    if (!hasValidContent) {
+      toast.error('請至少填寫一項卡片內容（圖片、標題、內文或價格）');
+      hasError = true;
+    }
 
     // 驗證排程時間必須在未來
     if (scheduleType === 'scheduled') {

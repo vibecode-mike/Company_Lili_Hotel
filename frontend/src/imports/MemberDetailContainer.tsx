@@ -1345,23 +1345,48 @@ function Container20({ member }: { member?: MemberData }) {
         headers.Authorization = `Bearer ${token}`;
       }
 
-      // 使用批量更新 API - 一次性完全替換所有標籤
-      const response = await fetch(`/api/v1/members/${member.id}/tags`, {
+      // 更新會員標籤
+      const memberTagsResponse = await fetch(`/api/v1/members/${member.id}/tags`, {
         method: 'PUT',
         headers,
         body: JSON.stringify({ tag_names: newMemberTags }),
       });
 
-      if (response.status === 401) {
+      if (memberTagsResponse.status === 401) {
         showToast('登入已過期，請重新登入', 'error');
         logout();
         return false;
       }
 
-      if (!response.ok) {
-        let errorMessage = '標籤儲存失敗';
+      if (!memberTagsResponse.ok) {
+        let errorMessage = '會員標籤儲存失敗';
         try {
-          const errorData = await response.json();
+          const errorData = await memberTagsResponse.json();
+          errorMessage = errorData.detail || errorData.message || errorMessage;
+        } catch {
+          // ignore
+        }
+        showToast(errorMessage, 'error');
+        return false;
+      }
+
+      // 更新互動標籤（新增）
+      const interactionTagsResponse = await fetch(`/api/v1/members/${member.id}/interaction-tags`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ tag_names: newInteractionTags }),
+      });
+
+      if (interactionTagsResponse.status === 401) {
+        showToast('登入已過期，請重新登入', 'error');
+        logout();
+        return false;
+      }
+
+      if (!interactionTagsResponse.ok) {
+        let errorMessage = '互動標籤儲存失敗';
+        try {
+          const errorData = await interactionTagsResponse.json();
           errorMessage = errorData.detail || errorData.message || errorMessage;
         } catch {
           // ignore
@@ -1372,7 +1397,7 @@ function Container20({ member }: { member?: MemberData }) {
 
       // 更新本地狀態
       setMemberTags(newMemberTags);
-      setInteractionTags(newInteractionTags); // 互動標籤只更新本地狀態，不儲存到後端
+      setInteractionTags(newInteractionTags);
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : '標籤儲存失敗';
@@ -1392,11 +1417,13 @@ function Container20({ member }: { member?: MemberData }) {
               <div className="grid gap-y-4 lg:grid-cols-[auto,1fr] items-start w-full min-w-0" data-name="Container">
                 <ModalTitleContent8 />
                 <div className="flex flex-wrap gap-x-3 gap-y-2 items-start content-start relative min-w-0 max-w-full" data-name="Container">
-                  {memberTags.map((tag, index) => (
-                    <div key={index} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-                      <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-medium grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[14px] text-center">{tag}</p>
-                    </div>
-                  ))}
+                  {(member?.tagDetails || [])
+                    .filter(tag => tag.type === 'member')
+                    .map((tag, index) => (
+                      <div key={index} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
+                        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-medium grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[14px] text-center">{tag.name}</p>
+                      </div>
+                    ))}
                 </div>
               </div>
 
@@ -1404,11 +1431,18 @@ function Container20({ member }: { member?: MemberData }) {
               <div className="grid gap-y-4 lg:grid-cols-[auto,1fr] items-start w-full min-w-0" data-name="Container">
                 <ModalTitleContent9 />
                 <div className="flex flex-wrap gap-x-3 gap-y-2 items-start content-start relative min-w-0 max-w-full" data-name="Container">
-                  {interactionTags.map((tag, index) => (
-                    <div key={index} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-                      <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-medium grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[14px] text-center">{tag}</p>
-                    </div>
-                  ))}
+                  {(member?.tagDetails || [])
+                    .filter(tag => tag.type === 'interaction')
+                    .map((tag, index) => {
+                      // 根據 source 設定顏色：auto=黃色, manual=藍色
+                      const bgColor = tag.source === 'auto' ? 'bg-[#fff9e6]' : 'bg-[#f0f6ff]';
+                      const textColor = tag.source === 'auto' ? 'text-[#d4a827]' : 'text-[#0f6beb]';
+                      return (
+                        <div key={index} className={`${bgColor} box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0`} data-name="Tag">
+                          <p className={`basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-medium grow leading-[1.5] min-h-px min-w-px relative shrink-0 ${textColor} text-[14px] text-center`}>{tag.name}</p>
+                        </div>
+                      );
+                    })}
                 </div>
               </div>
             </div>

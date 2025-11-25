@@ -29,6 +29,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote_plus, quote
 from linebot.exceptions import InvalidSignatureError
 
+from manage_botinfo import bp as manage_botinfo_bp # 顯示透過「客戶自行輸入的 Messaging API Channel Access Token」呼叫 LINE 官方 `/v2/bot/info` 端點，並回傳該官方帳號的基本資料，包含 Basic ID（@xxxxxxx）、displayName、pictureUrl 等。
+
 from dotenv import load_dotenv
 from flask import Flask, request, abort, jsonify, render_template_string, redirect, send_from_directory
 
@@ -190,6 +192,8 @@ app = Flask(__name__, static_url_path=ASSET_ROUTE_PREFIX, static_folder=ASSET_LO
 app.register_blueprint(usage_monitor.bp)
 # 將LIFF 會員表單的 Blueprint 模組該模組註冊進 Flask 主應用，啟用其 API 路由
 app.register_blueprint(member_liff_bp)
+# 將的 manage_botinfo.py 顯示官方基本資料如ID等 Blueprint 模組該模組註冊進 Flask 主應用，啟用其 API 路由
+app.register_blueprint(manage_botinfo_bp)
 
 # LINE v3
 config = Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN)
@@ -474,15 +478,21 @@ def ensure_thread_for_user(line_uid: str) -> str:
     以 LINE userId 直接當作 conversation_threads.id 來使用。
     若不存在就建立一筆；存在則跳過。
     """
+    # 去除空白字元
+    line_uid = line_uid.strip() if line_uid else ""
+
     if not line_uid:
+        logging.warning("line_uid is empty in ensure_thread_for_user")
         return "anonymous"
+
     try:
         execute("""
             INSERT IGNORE INTO conversation_threads (id, conversation_name, created_at, updated_at)
             VALUES (:tid, :name, NOW(), NOW())
         """, {"tid": line_uid, "name": f"LINE:{line_uid}"})
-    except Exception:
-        pass
+    except Exception as e:
+        logging.warning(f"Failed to ensure thread: {e}")
+
     return line_uid
 
 
@@ -492,7 +502,20 @@ def insert_conversation_message(*, thread_id: str, role: str, direction: str,
                                 question: str | None = None,
                                 response: str | None = None,
                                 event_id: str | None = None,
-                                status: str = "received"):
+                                status: str = "received",
+                                message_source: str | None = None):
+    """
+    儲存對話訊息到 conversation_messages 表
+
+    Args:
+        message_source: 訊息來源 (manual|gpt|keyword|welcome|always)
+    """
+    # 確保 thread_id 去除前後空白字元
+    thread_id = thread_id.strip() if thread_id else ""
+
+    if not thread_id:
+        logging.warning("thread_id is empty, cannot insert message")
+        return None
 
     msg_id = uuid.uuid4().hex
 
@@ -500,9 +523,9 @@ def insert_conversation_message(*, thread_id: str, role: str, direction: str,
         execute("""
             INSERT INTO conversation_messages
                 (id, thread_id, role, direction, message_type,
-                 question, response, event_id, status, created_at, updated_at)
+                 question, response, event_id, status, message_source, created_at, updated_at)
             VALUES
-                (:id, :tid, :role, :dir, :mt, :q, :r, :eid, :st, NOW(), NOW())
+                (:id, :tid, :role, :dir, :mt, :q, :r, :eid, :st, :src, NOW(), NOW())
         """, {
             "id": msg_id,
             "tid": thread_id,
@@ -512,11 +535,15 @@ def insert_conversation_message(*, thread_id: str, role: str, direction: str,
             "q": question,
             "r": response,
             "eid": event_id,
-            "st": status
+            "st": status,
+            "src": message_source
         })
+        logging.info(f"Inserted message: {msg_id}, thread: {thread_id}, source: {message_source}")
+        return msg_id
 
     except Exception as e:
-        logging.warning(f"[conversation_messages insert error] {e}")
+        logging.exception(f"Failed to insert conversation message: {e}")
+        raise
 
 # -------------------------------------------------
 # Members / Messages
@@ -946,6 +973,93 @@ def _ask_gpt(messages):
         return resp.choices[0].message.content.strip()
     except Exception as e:
         return f"（抱歉，目前服務忙線中，請稍後再試）\n\nError: {e}"
+
+# -------------------------------------------------
+# Auto Response 檢查函數
+# -------------------------------------------------
+def check_keyword_trigger(line_uid: str, text: str):
+    """
+    檢查是否有匹配的關鍵字自動回應
+
+    Returns:
+        回應內容（如果有匹配且啟用）或 None
+    """
+    try:
+        result = execute("""
+            SELECT arm.message_content
+            FROM auto_responses ar
+            JOIN auto_response_keywords ark ON ar.id = ark.auto_response_id
+            JOIN auto_response_messages arm ON ar.id = arm.auto_response_id
+            WHERE ar.is_active = 1
+              AND ar.trigger_type = 'keyword'
+              AND ark.is_enabled = 1
+              AND LOWER(:text) LIKE CONCAT('%', LOWER(ark.keyword), '%')
+            ORDER BY arm.sequence_order
+            LIMIT 1
+        """, {"text": text})
+
+        row = result.fetchone()
+        if row:
+            logging.info(f"Keyword matched for user {line_uid}: {text}")
+            return row[0]
+        return None
+    except Exception as e:
+        logging.exception(f"check_keyword_trigger error: {e}")
+        return None
+
+def check_always_response():
+    """
+    檢查是否有啟用的一律回應
+
+    Returns:
+        回應內容（如果有啟用）或 None
+    """
+    try:
+        result = execute("""
+            SELECT arm.message_content
+            FROM auto_responses ar
+            JOIN auto_response_messages arm ON ar.id = arm.auto_response_id
+            WHERE ar.is_active = 1
+              AND ar.trigger_type = 'always'
+            ORDER BY arm.sequence_order
+            LIMIT 1
+        """)
+
+        row = result.fetchone()
+        if row:
+            logging.info("Always response is active")
+            return row[0]
+        return None
+    except Exception as e:
+        logging.exception(f"check_always_response error: {e}")
+        return None
+
+def check_welcome_response():
+    """
+    檢查是否有啟用的歡迎訊息
+
+    Returns:
+        回應內容（如果有啟用）或 None
+    """
+    try:
+        result = execute("""
+            SELECT arm.message_content
+            FROM auto_responses ar
+            JOIN auto_response_messages arm ON ar.id = arm.auto_response_id
+            WHERE ar.is_active = 1
+              AND ar.trigger_type = 'welcome'
+            ORDER BY arm.sequence_order
+            LIMIT 1
+        """)
+
+        row = result.fetchone()
+        if row:
+            logging.info("Welcome response is active")
+            return row[0]
+        return None
+    except Exception as e:
+        logging.exception(f"check_welcome_response error: {e}")
+        return None
 
 # -------------------------------------------------
 # Base64 圖片 → 檔案
@@ -2376,15 +2490,89 @@ def __track():
     except Exception as e:
         logging.exception(e)
 
-    # 互動明細紀錄（可保留你原來的邏輯）
-    try:
-        execute("""
-            INSERT INTO component_interaction_logs
-                (line_id, campaign_id, interaction_type, interaction_value, triggered_at)
-            VALUES (:uid, :cid, :itype, :to, NOW())
-        """, {"uid": uid, "cid": cid, "itype": ityp, "to": to})
-    except Exception as e:
-        logging.exception(e)
+    # ---- 4) 處理新的互動標籤追蹤機制 ----
+    # 對每個標籤：
+    # a) 確保 interaction_tags 表中存在該標籤
+    # b) 更新 interaction_tags 的統計數據
+    # c) 記錄到 component_interaction_logs 並關聯 interaction_tag_id
+
+    for tag_name in incoming:
+        try:
+            # 查詢或創建標籤
+            tag_row = fetchone(f"""
+                SELECT id FROM `{MYSQL_DB}`.`interaction_tags`
+                WHERE tag_name = :tag_name
+                LIMIT 1
+            """, {"tag_name": tag_name})
+
+            tag_id = None
+            if tag_row:
+                tag_id = tag_row.get("id")
+            else:
+                # 標籤不存在，自動創建（tag_source 設為 'auto_click'）
+                execute(f"""
+                    INSERT INTO `{MYSQL_DB}`.`interaction_tags`
+                        (tag_name, tag_source, trigger_count, trigger_member_count, last_triggered_at, created_at)
+                    VALUES
+                        (:tag_name, 'auto_click', 1, 1, NOW(), NOW())
+                """, {"tag_name": tag_name})
+
+                # 獲取新創建的標籤 ID
+                new_tag_row = fetchone(f"""
+                    SELECT id FROM `{MYSQL_DB}`.`interaction_tags`
+                    WHERE tag_name = :tag_name
+                    LIMIT 1
+                """, {"tag_name": tag_name})
+                if new_tag_row:
+                    tag_id = new_tag_row.get("id")
+
+            # 更新標籤統計數據
+            if tag_id:
+                # trigger_count: 總觸發次數 +1
+                # trigger_member_count: 需要去重計算（使用子查詢）
+                execute(f"""
+                    UPDATE `{MYSQL_DB}`.`interaction_tags`
+                    SET
+                        trigger_count = trigger_count + 1,
+                        trigger_member_count = (
+                            SELECT COUNT(DISTINCT line_id)
+                            FROM `{MYSQL_DB}`.`component_interaction_logs`
+                            WHERE interaction_tag_id = :tag_id
+                        ) + 1,
+                        last_triggered_at = NOW(),
+                        updated_at = NOW()
+                    WHERE id = :tag_id
+                """, {"tag_id": tag_id})
+
+                # 記錄到 component_interaction_logs 並關聯 interaction_tag_id
+                # campaign_id 轉為整數，如果不存在則設為 NULL
+                cid_value = None
+                try:
+                    if cid:
+                        cid_value = int(cid)
+                except (ValueError, TypeError):
+                    pass
+
+                execute(f"""
+                    INSERT INTO `{MYSQL_DB}`.`component_interaction_logs`
+                        (line_id, campaign_id, interaction_tag_id, interaction_type, interaction_value, triggered_at, created_at)
+                    VALUES (:uid, :cid, :tag_id, :itype, :to, NOW(), NOW())
+                """, {"uid": uid, "cid": cid_value, "tag_id": tag_id, "itype": ityp, "to": to})
+
+                logging.info(f"[TRACK] Updated tag '{tag_name}' (id={tag_id}) for user {uid}")
+        except Exception as e:
+            logging.exception(f"[TRACK] Failed to process tag '{tag_name}': {e}")
+
+    # 如果沒有標籤，仍然記錄基本互動（舊版邏輯）
+    if not incoming:
+        try:
+            execute(f"""
+                INSERT INTO `{MYSQL_DB}`.`component_interaction_logs`
+                    (line_id, campaign_id, interaction_type, interaction_value, triggered_at, created_at)
+                VALUES (:uid, :cid, :itype, :to, NOW(), NOW())
+            """, {"uid": uid, "cid": cid, "itype": ityp, "to": to})
+        except Exception as e:
+            logging.exception(e)
 
     if request.args.get("debug") == "1":
         return {"ok": True, "uid": uid, "cid": cid, "src": src, "merged": merged_str}
@@ -2458,13 +2646,13 @@ def api_send_chat_message():
         thread_id = ensure_thread_for_user(line_uid)
 
         # 3. 記錄到資料庫
-        msg_id = uuid.uuid4().hex
-        insert_conversation_message(
+        msg_id = insert_conversation_message(
             thread_id=thread_id,
             role="assistant",
             direction="outgoing",
             message_type="text",
             response=text,
+            message_source="manual",  # 標記為手動發送
             status="sent"
         )
         logging.info(f"[api_send_chat_message] 記錄訊息 {msg_id} 到 DB")
@@ -2757,25 +2945,50 @@ def _source_key(ev_source) -> str:
 
 
 def on_follow(event: FollowEvent):
-    welcome = (
-        "Hi~ 歡迎加入水漾月明度假文旅（Hana Mizu Tsuki Hotel）！\n"
-        "需要我協助什麼樣的服務呢?\n"
-    )
+    """
+    處理用戶加入好友事件
+    檢查是否有啟用的歡迎訊息自動回應
+    """
+    uid = getattr(event.source, "user_id", None)
+
+    # 確保 uid 去除空白字元
+    if uid:
+        uid = uid.strip()
+
+    logging.info(f"[on_follow] uid={uid}")
+
+    # === 1. 檢查是否有啟用的歡迎訊息 ===
+    welcome_msg = None
+    try:
+        welcome_msg = check_welcome_response()
+    except Exception as e:
+        logging.exception(f"[on_follow] Failed to check welcome response: {e}")
+
+    # 如果沒有啟用的歡迎訊息，使用預設訊息
+    if not welcome_msg:
+        welcome_msg = (
+            "Hi~ 歡迎加入水漾月明度假文旅（Hana Mizu Tsuki Hotel）！\n"
+            "需要我協助什麼樣的服務呢?\n"
+        )
+        logging.info("[on_follow] Using default welcome message")
+
+    # === 2. 發送歡迎訊息 ===
     try:
         messaging_api.reply_message(ReplyMessageRequest(
             reply_token=event.reply_token,
-            messages=[TextMessage(text=welcome)]
+            messages=[TextMessage(text=welcome_msg)]
         ))
+        logging.info(f"[on_follow] Welcome message sent to uid={uid}")
     except Exception:
-        logging.exception("reply follow failed")
+        logging.exception("[on_follow] Failed to send welcome message")
 
-    if getattr(event.source, "user_id", None):
+    # === 3. 更新會員和好友資訊 ===
+    if uid:
         try:
-            uid = event.source.user_id
-            # 取 profile
+            # 取得 LINE profile
             dn, pu = fetch_line_profile(uid)
 
-            # 创建/更新 LINE 好友记录（新架构）
+            # 創建/更新 LINE 好友記錄
             friend_id = upsert_line_friend(
                 line_uid=uid,
                 display_name=dn,
@@ -2783,19 +2996,37 @@ def on_follow(event: FollowEvent):
                 is_following=True
             )
 
-            # 兼容性：同时更新 members 表（如果需要）
+            # 兼容性：同時更新 members 表
             mid = upsert_member(uid, dn, pu)
 
-            # 关联 LINE 好友和会员
+            # 關聯 LINE 好友和會員
             if friend_id and mid:
                 execute(
                     "UPDATE line_friends SET member_id = :mid WHERE id = :fid",
                     {"mid": mid, "fid": friend_id}
                 )
 
-            insert_message(mid, "outgoing", "text", welcome)
+            # 儲存歡迎訊息到舊的 messages 表（兼容性）
+            insert_message(mid, "outgoing", "text", welcome_msg)
+
+            # === 4. 儲存歡迎訊息到 conversation_messages ===
+            try:
+                thread_id = ensure_thread_for_user(uid)
+                insert_conversation_message(
+                    thread_id=thread_id,
+                    role="assistant",
+                    direction="outgoing",
+                    message_type="text",
+                    response=welcome_msg,
+                    message_source="welcome",
+                    status="sent"
+                )
+                logging.info(f"[on_follow] Welcome message saved to conversation_messages for uid={uid}")
+            except Exception:
+                logging.exception("[on_follow] Failed to save welcome message to conversation_messages")
+
         except Exception:
-            logging.exception("on_follow error")
+            logging.exception("[on_follow] Failed to update member/line_friends")
 
 
 def on_unfollow(event: UnfollowEvent):
@@ -2851,13 +3082,23 @@ def on_postback(event: PostbackEvent):
 
 
 def on_text(event: MessageEvent):
-    # 先取 user_key、text_in、uid
+    """
+    處理 LINE 文字訊息 Webhook
+    處理順序：GPT (優先) → keyword trigger (後備) → always response (後備)
+    """
+    # 取得基本資訊
     user_key = _source_key(event.source)
     text_in  = event.message.text.strip()
     uid      = getattr(event.source, "user_id", None)
+
+    # 確保 uid 去除空白字元
+    if uid:
+        uid = uid.strip()
+
     logging.info(f"[on_text] uid={uid} text={text_in[:80]}")
 
-    # === 新增：建立 thread 並寫入 conversation_messages（user/incoming） ===
+    # === 1. 建立 thread 並儲存用戶的 incoming message ===
+    thread_id = None
     try:
         thread_id = ensure_thread_for_user(uid)
         insert_conversation_message(
@@ -2870,9 +3111,9 @@ def on_text(event: MessageEvent):
             status="received"
         )
     except Exception:
-        logging.exception("[on_text] write conversation_messages(user) failed")
+        logging.exception("[on_text] Failed to save incoming message")
 
-    # === 寫入 chat_logs ===
+    # === 2. 寫入 chat_logs ===
     try:
         with engine.begin() as conn:
             conn.execute(sql_text("""
@@ -2881,7 +3122,7 @@ def on_text(event: MessageEvent):
                 VALUES (:platform, :user_id, :direction, :message_type, :text, :content, :event_id, :status, NOW())
             """), {
                 "platform": "LINE",
-                "user_id": getattr(event.source, "user_id", None),
+                "user_id": uid,
                 "direction": "incoming",
                 "message_type": "text",
                 "text": text_in,
@@ -2893,13 +3134,13 @@ def on_text(event: MessageEvent):
                 "status": "received"
             })
     except Exception as e:
-        print(f"[chatlog insert error] {e}")
+        logging.exception(f"[on_text] Failed to save chat_log: {e}")
 
-    uid = getattr(event.source, "user_id", None)
+    # === 3. 更新會員資訊 ===
     mid = None
     if uid:
         try:
-            # 先讀目前 DB 值（members 裡既有的暱稱 / 頭像）
+            # 讀取現有 DB 資料
             cur = fetchone(
                 "SELECT line_display_name, line_picture_url FROM members WHERE line_uid=:u",
                 {"u": uid}
@@ -2907,66 +3148,97 @@ def on_text(event: MessageEvent):
             cur_dn = cur.get("line_display_name")
             cur_pu = cur.get("line_picture_url")
 
-            # 再從 LINE API 拿一次最新 profile
+            # 從 LINE API 取得最新 profile
             api_dn, api_pu = fetch_line_profile(uid)
 
-            # 防呆：只有在 DB 沒值或與最新不同時，才帶進 upsert 覆蓋
+            # 只在有變更時才更新
             dn_to_write = api_dn if (api_dn and api_dn != cur_dn) else None
             pu_to_write = api_pu if (api_pu and api_pu != cur_pu) else None
 
-            # 1) 先處理 members（問卷表）
+            # 更新 members 表
             mid = upsert_member(uid, dn_to_write, pu_to_write)
 
-            # 2) ★新增：只要有對話，就一定寫/更新到 line_friends
+            # 更新 line_friends 表
             upsert_line_friend(
                 line_uid=uid,
                 display_name=api_dn or cur_dn,
                 picture_url=api_pu or cur_pu,
                 member_id=mid,
-                is_following=True,  # 能傳訊息代表目前是好友
+                is_following=True,
             )
 
-            # 3) 原本就有的訊息紀錄
+            # 插入訊息記錄
             insert_message(mid, "incoming", "text", {"text": text_in})
         except Exception:
-            logging.exception("[on_text] update member/line_friends failed")
+            logging.exception("[on_text] Failed to update member/line_friends")
 
+    # === 4. 自動回應處理（順序：GPT → keyword → always）===
+    reply_text = None
+    message_source = None
 
-    # FAQ（包含 Rich Menu 四鍵）
-    if text_in in FAQ:
-        reply = FAQ[text_in]
+    # 4.1 優先：GPT 回應
+    try:
+        msgs = _build_messages(user_key, text_in)
+        reply_text = _ask_gpt(msgs)
+        message_source = "gpt"
+        logging.info(f"[on_text] GPT response generated for uid={uid}")
+    except Exception as e:
+        logging.exception(f"[on_text] GPT failed: {e}")
+
+    # 4.2 後備：關鍵字觸發
+    if not reply_text:
+        try:
+            reply_text = check_keyword_trigger(uid, text_in)
+            if reply_text:
+                message_source = "keyword"
+                logging.info(f"[on_text] Keyword response triggered for uid={uid}")
+        except Exception as e:
+            logging.exception(f"[on_text] Keyword check failed: {e}")
+
+    # 4.3 最後後備：一律回應
+    if not reply_text:
+        try:
+            reply_text = check_always_response()
+            if reply_text:
+                message_source = "always"
+                logging.info(f"[on_text] Always response triggered for uid={uid}")
+        except Exception as e:
+            logging.exception(f"[on_text] Always response check failed: {e}")
+
+    # === 5. 發送回覆訊息 ===
+    if reply_text:
+        # 截斷過長訊息
+        reply_text = reply_text[:5000]
+
         try:
             messaging_api.reply_message(ReplyMessageRequest(
                 reply_token=event.reply_token,
-                messages=[TextMessage(text=reply)]
+                messages=[TextMessage(text=reply_text)]
             ))
+            logging.info(f"[on_text] Reply sent successfully, source={message_source}")
         except Exception:
-            logging.exception("reply FAQ failed")
-        user_memory[user_key].append(("user", text_in)); user_memory[user_key].append(("assistant", reply))
-        return
+            logging.exception(f"[on_text] Failed to send reply via LINE API")
 
-    # 其他 → GPT
-    msgs = _build_messages(user_key, text_in)
-    answer = _ask_gpt(msgs)
-    try:
-        messaging_api.reply_message(ReplyMessageRequest(
-            reply_token=event.reply_token,
-            messages=[TextMessage(text=answer[:5000])]
-        ))
-    except Exception:
-        logging.exception("reply gpt failed")
-    user_memory[user_key].append(("user", text_in)); 
+        # 更新用戶記憶
+        user_memory[user_key].append(("user", text_in))
+        user_memory[user_key].append(("assistant", reply_text))
 
-    # 把 AI 回覆寫進 conversation_messages（role=assistant / outgoing）
-    insert_conversation_message(
-        thread_id=thread_id,
-        role="assistant",
-        direction="outgoing",
-        message_type="chat",
-        response=answer[:5000],
-        status="sent"
-    )
-    user_memory[user_key].append(("assistant", answer))
+        # 儲存 outgoing message 到資料庫
+        if thread_id:
+            try:
+                insert_conversation_message(
+                    thread_id=thread_id,
+                    role="assistant",
+                    direction="outgoing",
+                    message_type="chat" if message_source == "gpt" else "text",
+                    response=reply_text,
+                    message_source=message_source,
+                    status="sent"
+                )
+            except Exception:
+                logging.exception("[on_text] Failed to save outgoing message")
+    else:
+        logging.warning(f"[on_text] No response generated for uid={uid}, text={text_in[:50]}")
 
 # 處理使用者傳貼圖事件
 def on_sticker(event: MessageEvent):

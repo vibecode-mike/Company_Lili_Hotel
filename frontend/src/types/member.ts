@@ -1,4 +1,15 @@
 /**
+ * 標籤資訊
+ * 包含標籤的完整資訊，用於區分來源和顏色
+ */
+export interface TagInfo {
+  id: number;
+  name: string;
+  type: 'member' | 'interaction';
+  source?: 'auto' | 'manual';  // auto=自動產生(黃色), manual=手動新增(藍色)
+}
+
+/**
  * 基础会员信息
  * 包含所有会员的核心字段
  */
@@ -7,8 +18,9 @@ export interface Member {
   username: string;  // LINE user name
   realName: string;
   tags: string[];
-  memberTags?: string[];      // 會員標籤
-  interactionTags?: string[]; // 互動標籤
+  memberTags?: string[];      // 會員標籤（字串陣列，向後相容）
+  interactionTags?: string[]; // 互動標籤（字串陣列，向後相容）
+  tagDetails?: TagInfo[];     // 標籤詳細資訊（包含 source 用於顏色區分）
   phone: string;
   email: string;
   gender?: string;            // 性別：0=不透露/1=男/2=女 或 undisclosed/male/female

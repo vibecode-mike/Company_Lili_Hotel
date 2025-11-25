@@ -87,20 +87,11 @@ export function NavigationProvider({
   const navigate = useCallback((page: Page, newParams: NavigationParams = {}) => {
     console.log('[NavigationContext] navigate called:', page, 'params:', newParams);
 
-    // 先更新 localStorage 狀態，以便刷新後恢復到正確頁面
-    try {
-      const stateToSave = {
-        page,
-        params: newParams
-      };
-      console.log('[NavigationContext] Saving navigation state:', stateToSave);
-      localStorage.setItem('navigation_state', JSON.stringify(stateToSave));
-    } catch (error) {
-      console.error('Failed to save navigation state:', error);
-    }
+    // 直接更新當前頁面和參數（不觸發整頁刷新）
+    setCurrentPage(page);
+    setParams(newParams);
 
-    // 觸發整頁刷新，清空所有 React 狀態
-    window.location.href = window.location.origin + window.location.pathname;
+    // localStorage 的儲存由 useEffect 統一處理，避免重複儲存
   }, []);
 
   const reset = useCallback(() => {
@@ -111,11 +102,12 @@ export function NavigationProvider({
   // 當路由狀態變化時,儲存到 localStorage
   useEffect(() => {
     try {
-      localStorage.setItem('navigation_state', JSON.stringify({
+      const stateToSave = {
         page: currentPage,
         params
-      }));
-      console.log('[NavigationContext] useEffect saved state:', { page: currentPage, params });
+      };
+      localStorage.setItem('navigation_state', JSON.stringify(stateToSave));
+      console.log('[NavigationContext] useEffect saved state:', stateToSave);
     } catch (error) {
       console.error('Failed to save navigation state:', error);
     }

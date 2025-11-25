@@ -57,6 +57,7 @@ class ConversationMessage(Base):
     response = Column(Text, nullable=True, comment="回應內容")
     event_id = Column(String(100), nullable=True, comment="事件ID")
     status = Column(String(20), nullable=True, comment="狀態")
+    message_source = Column(String(20), nullable=True, comment="訊息來源：manual|gpt|keyword|welcome|always")
     created_at = Column(
         DateTime, server_default=func.now(), nullable=True, comment="建立時間"
     )

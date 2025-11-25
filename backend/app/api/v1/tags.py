@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.database import get_db
-from app.models.tag import MemberTag, InteractionTag, TagType, TagSource
+from app.models.tag import MemberTag, InteractionTag, MemberInteractionTag, TagType, TagSource
 from app.models.tag_trigger_log import TagTriggerLog
 from app.models.user import User
 from app.schemas.common import SuccessResponse
@@ -143,17 +143,28 @@ async def get_available_tag_options(
     member_result = await db.execute(member_tags_query)
     member_tag_names = [row[0] for row in member_result.all()]
 
-    # 查詢互動標籤 - 獲取所有不重複的標籤名稱
-    interaction_tags_query = (
-        select(InteractionTag.tag_name).distinct().order_by(InteractionTag.tag_name)
-    )
-    interaction_result = await db.execute(interaction_tags_query)
-    interaction_tag_names = [row[0] for row in interaction_result.all()]
+    # 查詢互動標籤 - 合併雙來源（自動產生 + 手動新增）
+    interaction_tag_names = set()
+
+    # 來源 1: 自動產生的互動標籤 (InteractionTag)
+    auto_tags_query = select(InteractionTag.tag_name).distinct()
+    auto_result = await db.execute(auto_tags_query)
+    for row in auto_result.all():
+        interaction_tag_names.add(row[0])
+
+    # 來源 2: 手動新增的互動標籤 (MemberInteractionTag)
+    manual_tags_query = select(MemberInteractionTag.tag_name).distinct()
+    manual_result = await db.execute(manual_tags_query)
+    for row in manual_result.all():
+        interaction_tag_names.add(row[0])
+
+    # 排序並轉換為列表
+    interaction_tag_list = sorted(list(interaction_tag_names))
 
     return SuccessResponse(
         data={
             "memberTags": member_tag_names,
-            "interactionTags": interaction_tag_names,
+            "interactionTags": interaction_tag_list,
         }
     )
 

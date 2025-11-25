@@ -109,7 +109,7 @@ function SortingIcon({ active, order }: { active: boolean; order: SortOrder }) {
         </svg>
       </div>
       <div
-        className={`absolute h-[8px] left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%] w-[12px] transition-transform ${active && order === 'asc' ? 'rotate-180' : ''}`}
+        className={`absolute h-[8px] left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%] w-[12px] ${active && order === 'asc' ? 'rotate-180' : ''}`}
         data-name="Vector"
       >
         <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 8">

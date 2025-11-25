@@ -85,6 +85,7 @@ class ChatMessage(BaseModel):
     text: str
     time: str  # "上午 03:30"
     isRead: bool = False
+    source: Optional[str] = None  # 'manual' | 'gpt' | 'keyword' | 'welcome' | 'always'
 
     class Config:
         from_attributes = True
@@ -162,7 +163,8 @@ async def get_chat_messages(
                     ELSE ''
                 END as message_content,
                 status as message_status,
-                created_at
+                created_at,
+                message_source
             FROM conversation_messages
             WHERE thread_id = :thread_id
             ORDER BY created_at DESC
@@ -203,12 +205,16 @@ async def get_chat_messages(
             # 獲取 ID
             msg_id = record.id if hasattr(record, 'id') else record[0]
 
+            # 獲取 message_source（新增）
+            msg_source = record.message_source if hasattr(record, 'message_source') else record[5]
+
             messages.append(ChatMessage(
                 id=msg_id,
                 type=msg_type,
                 text=text_content,
                 time=time_str,
-                isRead=is_read
+                isRead=is_read,
+                source=msg_source
             ))
 
         logger.info(f"✅ 成功獲取 {len(messages)} 筆聊天紀錄（共 {total} 筆）")

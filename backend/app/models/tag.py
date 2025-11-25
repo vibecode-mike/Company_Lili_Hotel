@@ -60,6 +60,7 @@ class MemberTag(Base):
         index=True,
         comment="觸發來源訊息ID（用於去重）",
     )
+    click_count = Column(Integer, nullable=False, server_default="1", comment="點擊次數，>= 1。預設值：1（首次點擊）。重複點擊同一組合時執行 UPDATE click_count = click_count + 1，累計點擊次數不去重")
     tagged_at = Column(DateTime, server_default=func.now(), comment="標記時間")
     created_at = Column(DateTime, server_default=func.now(), comment="建立時間")
     updated_at = Column(DateTime, onupdate=func.now(), comment="更新時間")
@@ -99,4 +100,48 @@ class InteractionTag(Base):
     )
     interaction_logs = relationship(
         "ComponentInteractionLog", back_populates="interaction_tag"
+    )
+
+
+class MemberInteractionTag(Base):
+    """會員互動標籤表（手動新增，單表設計，直接關聯會員）"""
+
+    __tablename__ = "member_interaction_tags"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    member_id = Column(
+        BigInteger,
+        ForeignKey("members.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="所屬會員ID",
+    )
+    tag_name = Column(String(20), nullable=False, comment="標籤名稱，不得超過 20 個字元（中英文皆計算，每個字元計 1）。格式限制：僅允許中文（\\u4e00-\\u9fa5）、英文（a-zA-Z）、數字（0-9）、空格，禁止特殊字元與 Emoji。驗證：前端使用正則表達式 /^[\\u4e00-\\u9fa5a-zA-Z0-9\\s]+$/ 即時驗證")
+    tag_source = Column(String(20), default="CRM", comment="標籤來源：固定為 CRM（手動新增）")
+    trigger_count = Column(Integer, default=0, comment="觸發次數")
+    trigger_member_count = Column(Integer, default=0, comment="觸發會員數")
+    last_triggered_at = Column(DateTime, comment="最近觸發時間")
+    message_id = Column(
+        BigInteger,
+        ForeignKey("messages.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="觸發來源訊息ID（用於去重）",
+    )
+    click_count = Column(Integer, nullable=False, server_default="1", comment="點擊次數，>= 1。預設值：1（首次點擊）。重複點擊同一組合時執行 UPDATE click_count = click_count + 1，累計點擊次數不去重。手動標籤此欄位固定為 1")
+    tagged_at = Column(DateTime, server_default=func.now(), comment="標記時間")
+    created_at = Column(DateTime, server_default=func.now(), comment="建立時間")
+    updated_at = Column(DateTime, onupdate=func.now(), comment="更新時間")
+
+    # 關聯關係
+    member = relationship("Member", back_populates="member_interaction_tags")
+    message = relationship("Message", foreign_keys=[message_id])
+
+    __table_args__ = (
+        UniqueConstraint(
+            "member_id",
+            "tag_name",
+            "message_id",
+            name="uq_member_interaction_tag_message",
+        ),
     )

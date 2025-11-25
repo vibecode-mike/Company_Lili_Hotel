@@ -13,6 +13,7 @@ import MemberTagEditModal from '../MemberTagEditModal';
 export interface Tag {
   id: string;
   name: string;
+  source?: 'auto' | 'manual' | null;  // 互動標籤來源：auto=自動, manual=手動
 }
 
 export interface MemberTagSectionProps {
@@ -64,12 +65,26 @@ function TagList({
     );
   }
 
+  // 根據 source 決定標籤顏色
+  const getTagStyle = (source?: 'auto' | 'manual' | null) => {
+    if (source === 'auto') {
+      // 自動產生 - 黃色
+      return 'bg-[#fff9e6] text-[#d4a827]';
+    } else if (source === 'manual') {
+      // 手動新增 - 藍色
+      return 'bg-[#f0f6ff] text-[#0f6beb]';
+    } else {
+      // 預設（會員標籤或無來源） - 藍色
+      return 'bg-[#f0f6ff] text-[#0f6beb]';
+    }
+  };
+
   return (
     <div className="flex flex-wrap gap-[8px]">
       {tags.map((tag) => (
         <div
           key={tag.id}
-          className="bg-[#f0f6ff] text-[#0f6beb] px-[8px] py-[4px] rounded-[8px] flex items-center gap-[4px] text-[16px] leading-[1.5]"
+          className={`${getTagStyle(tag.source)} px-[8px] py-[4px] rounded-[8px] flex items-center gap-[4px] text-[16px] leading-[1.5]`}
         >
           <span>{tag.name}</span>
           {onRemove && (

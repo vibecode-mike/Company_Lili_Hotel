@@ -35,13 +35,21 @@ const mockMessages_REMOVED: ChatMessage[] = [
   { id: 6, type: 'official', text: '官方文字訊息', time: '下午 05:40', isRead: true },
 ];
 
-// 用戶頭像（左側 OA）
-function UserAvatar() {
+// 用戶頭像（左側，顯示使用者 LINE 頭像）
+function UserAvatar({ avatar }: { avatar?: string }) {
   return (
-    <div className="bg-white content-stretch flex items-center justify-center relative rounded-[100px] shrink-0 size-[45px]">
-      <div className="h-[18px] relative shrink-0 w-[16.938px]">
-        <p className="font-['Inter:Regular',sans-serif] font-normal leading-[18px] text-[#383838] text-[12px] text-nowrap">OA</p>
-      </div>
+    <div className="bg-white border-2 border-white overflow-clip relative rounded-full shrink-0 size-[45px]">
+      {avatar ? (
+        <img
+          src={avatar}
+          alt="用戶頭像"
+          className="w-full h-full object-cover"
+        />
+      ) : (
+        <div className="w-full h-full bg-gray-200 flex items-center justify-center">
+          <span className="text-[16px] text-gray-500">U</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -56,12 +64,12 @@ function OfficialAvatar() {
 }
 
 // 消息氣泡組件
-function MessageBubble({ message }: { message: ChatMessage }) {
+function MessageBubble({ message, memberAvatar }: { message: ChatMessage; memberAvatar?: string }) {
   const isOfficial = message.type === 'official';
 
   return (
     <div className={`content-stretch flex gap-[20px] items-start ${isOfficial ? 'justify-end' : 'justify-start'} relative shrink-0 w-full`}>
-      {!isOfficial && <UserAvatar />}
+      {!isOfficial && <UserAvatar avatar={memberAvatar} />}
       
       <div className={`content-stretch flex flex-col gap-[2px] items-${isOfficial ? 'end' : 'start'} relative shrink-0`}>
         <div className={`${isOfficial ? 'bg-[#383838]' : 'bg-[#f6f9fd]'} content-stretch flex flex-col items-center max-w-[288px] overflow-clip relative rounded-[15px] shrink-0 w-[288px]`}>
@@ -302,7 +310,8 @@ export default function ChatRoomLayout({ member: initialMember }: ChatRoomLayout
 
       const result = await response.json();
 
-      if (result.success) {
+      // ✅ 修正：backend 使用 SuccessResponse，返回 code: 200，而非 success: true
+      if (result.code === 200 && result.data) {
         const { messages: newMessages, has_more } = result.data;
 
         // API 返回降序（最新在前），需反轉為升序（最舊在前）
@@ -318,6 +327,8 @@ export default function ChatRoomLayout({ member: initialMember }: ChatRoomLayout
 
         setHasMore(has_more);
         setPage(pageNum);
+      } else {
+        console.error('API 回應格式錯誤:', result);
       }
     } catch (error) {
       console.error('載入聊天訊息失敗:', error);
@@ -888,7 +899,11 @@ export default function ChatRoomLayout({ member: initialMember }: ChatRoomLayout
 
               {/* Messages list */}
               {messages.map((message) => (
-                <MessageBubble key={message.id} message={message} />
+                <MessageBubble
+                  key={message.id}
+                  message={message}
+                  memberAvatar={member?.lineAvatar}
+                />
               ))}
             </div>
 

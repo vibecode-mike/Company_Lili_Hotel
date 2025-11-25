@@ -1,8 +1,13 @@
-// 力麗飯店 LineOA CRM 管理後台 - 資料模型 (v0.2.1)
+// 力麗飯店 LineOA CRM 管理後台 - 資料模型 (v0.3.0)
 // 根據規格文檔萃取的實體關係模型
-// 版本: v0.2.1
-// 更新日期: 2025-11-17
+// 版本: v0.3.0
+// 更新日期: 2025-11-23
 // 變更摘要:
+//   - v0.3.0: 標籤系統三表架構設計（MemberTag + InteractionTag + MemberInteractionTag）
+//   - v0.3.0: MemberTag 表結構更新（移除訊息互動來源，調整欄位為 BigInt PK）
+//   - v0.3.0: InteractionTag 表更新（自動產生互動標籤定義，黃色標籤）
+//   - v0.3.0: 新增 MemberInteractionTag 表（手動新增互動標籤，藍色標籤）
+//   - v0.3.0: 明確定義三種標籤的查詢邏輯和視覺區分
 //   - v0.2.1: 新增 LineFriend 表（LINE 好友追蹤實體），用於管理所有加入 LINE 官方帳號的用戶
 //   - v0.2.1: 明確定義 LineFriend 與 Member 表的關係（即時雙向同步設計）
 //   - v0.2: Messages（群發訊息）與 Campaigns（活動管理）職責清晰分離
@@ -162,59 +167,68 @@ Table LineFriend {
 }
 
 Table MemberTag {
-  tag_id string(50) [pk, note: '標籤唯一識別碼，上限 50 字元']
-  tag_name string(20) [note: '標籤名稱，不得超過 20 個字元（中英文皆計算，每個字元計 1）。格式限制：僅允許中文（\u4e00-\u9fa5）、英文（a-zA-Z）、數字（0-9）、空格，禁止特殊字元與 Emoji。驗證：前端使用正則表達式 /^[\u4e00-\u9fa5a-zA-Z0-9\s]+$/ 即時驗證']
-  tag_source string(20) [note: '標籤來源，上限 20 字元：CRM / PMS / 問券 / 後台自訂']
-  trigger_count int [note: '觸發次數（匯總層級），累計該標籤所有會員的觸發總數，>= 0。計算邏輯：SUM(各會員的 trigger_count)，用於標籤總覽頁顯示該標籤的整體活躍度']
-  trigger_member_count int [note: '觸發會員數（匯總層級），擁有該標籤的不重複會員總數，>= 0。計算邏輯：COUNT(DISTINCT member_id)']
+  id bigint [pk, increment, note: '會員標籤唯一識別碼']
+  member_id bigint [ref: > Member.member_id, not null, note: '所屬會員 ID']
+  tag_name string(20) [not null, note: '標籤名稱，不得超過 20 個字元（中英文皆計算，每個字元計 1）。格式限制：僅允許中文（\u4e00-\u9fa5）、英文（a-zA-Z）、數字（0-9）、空格，禁止特殊字元與 Emoji。驗證：前端使用正則表達式 /^[\u4e00-\u9fa5a-zA-Z0-9\s]+$/ 即時驗證']
+  tag_source string(20) [note: '標籤來源，上限 20 字元：CRM / PMS / 問券 / 後台自訂（不包含訊息互動，訊息互動標籤使用 InteractionTag 和 MemberInteractionTag）']
+  trigger_count int [default: 0, note: '觸發次數（保留欄位，用於統計），>= 0']
+  trigger_member_count int [default: 0, note: '觸發會員數（保留欄位，用於統計），>= 0']
   last_triggered_at timestamp [note: '最近觸發時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串']
-  member_id string(50) [ref: > Member.member_id, note: '所屬會員']
-  message_id string(100) [not null, note: '觸發來源標識，上限 100 字元，用於去重判斷。訊息來源：實際 message_id；非訊息來源：固定標識（manual=後台手動、crm-sync=CRM同步、pms-sync=PMS同步、survey-{survey_id}=問券蒐集）。NOT NULL 約束確保 MySQL UNIQUE 索引有效運作']
-  click_count int [not null, default: 1, note: '點擊次數，>= 1。預設值：1（首次點擊）。重複點擊同一組合時執行 UPDATE click_count = click_count + 1，累計點擊次數不去重。僅適用於訊息互動來源（Interaction），其他來源（CRM/PMS/後台自訂）此欄位固定為 1']
+  message_id bigint [note: '觸發來源訊息 ID（用於去重判斷）。非訊息來源時為 NULL']
+  click_count int [not null, default: 1, note: '點擊次數，>= 1。預設值：1（首次點擊）。重複點擊同一組合時執行 UPDATE click_count = click_count + 1，累計點擊次數不去重']
+  tagged_at timestamp [default: `now()`, note: '標記時間（UTC）']
+  created_at timestamp [default: `now()`, note: '建立時間（UTC）']
+  updated_at timestamp [note: '更新時間（UTC）。on update CURRENT_TIMESTAMP']
 
   indexes {
-    unique_member_tag_trigger [unique, note: '確保 (member_id, tag_id, message_id) 組合唯一性，防止重複插入。同一組合重複觸發時執行 UPDATE click_count = click_count + 1，累加點擊次數（標籤點擊次數不去重）'] (member_id, tag_id, message_id)
+    member_id_index (member_id) [note: '優化會員標籤查詢']
+    tag_name_index (tag_name) [note: '優化標籤名稱查詢']
+    unique_member_tag_message [unique, note: '確保 (member_id, tag_name, message_id) 組合唯一性，防止重複插入'] (member_id, tag_name, message_id)
   }
 
   Note: '''
-  會員標籤實體，用於標記會員屬性或消費行為
-  來源1：外部系統串接（CRM/PMS）- 消費金額達門檻、房型分類、訪問頻率、上次互動時間
-  來源2：問券蒐集 - 性別、年齡區間、地區、生日月份
-  來源3：後台自訂 - 如 VIP、黑名單
-  來源4：訊息互動 - 點擊訊息模板的互動標籤
+  會員標籤實體（單表設計），用於標記會員屬性或消費行為
 
-  資料庫選型與約束設計：
-    - 使用 MySQL 8.0+（確保 UNIQUE 索引正確處理 NOT NULL 約束）
-    - message_id 強制 NOT NULL 約束，確保 UNIQUE 索引 (member_id, tag_id, message_id) 有效運作
-    - MySQL 8.0+ 對 UNIQUE 索引的 NULL 處理更完善，建議使用 NOT NULL 避免潛在問題
+  標籤來源（4種）：
+    1. 外部系統串接（CRM/PMS）：消費金額達門檻、房型分類、訪問頻率、上次互動時間
+    2. 問券蒐集：性別、年齡區間、地區、生日月份
+    3. 後台自訂：VIP、黑名單等自訂標籤
+    4. ❌ 訊息互動：已移至 InteractionTag 和 MemberInteractionTag 表
 
-  點擊計數與去重規則（方案 B：同一組合累加計數器）：
-    - UNIQUE 索引 (member_id, tag_id, message_id) 確保同一組合只有一筆記錄
-    - 重複點擊處理：執行 UPDATE click_count = click_count + 1（標籤點擊次數不去重）
-    - 訊息互動來源（Interaction）：click_count 累加計數，記錄該會員對該訊息標籤的總點擊次數
-    - 其他來源（CRM/PMS/後台自訂）：click_count 固定為 1（不涉及點擊行為）
-    - 不同訊息可累計：message_id 為實際訊息 ID，不同訊息產生不同記錄
-    - 非訊息來源使用固定標識：同一會員同一標籤同一來源只有一筆記錄
+  架構變更說明（v2 設計）：
+    - v1 設計：MemberTag 統一處理所有標籤（包含訊息互動）
+    - v2 設計：MemberTag 僅處理會員標籤，訊息互動標籤分離至 InteractionTag 和 MemberInteractionTag
+    - 變更原因：
+      * 前端需要區分自動產生（黃色）和手動新增（藍色）的互動標籤
+      * 自動產生的互動標籤透過 ComponentInteractionLog 關聯查詢
+      * 手動新增的互動標籤直接關聯會員，便於管理
 
-  message_id 填值策略（永不為 NULL）：
-    - 後台手動新增/移除：message_id = 'manual'
-    - CRM 系統同步：message_id = 'crm-sync'
-    - PMS 系統同步：message_id = 'pms-sync'
-    - 問券蒐集：message_id = 'survey-{survey_id}'（不同問券有不同 ID）
-    - 訊息互動：message_id = 實際訊息 ID（可累計不同訊息的觸發）
+  去重邏輯：
+    - UNIQUE 索引 (member_id, tag_name, message_id) 確保唯一性
+    - 相同會員、相同標籤、相同來源（message_id）只有一筆記錄
+    - message_id 為 NULL 時，同一會員同一標籤只有一筆記錄
 
-  統計邏輯（標籤總覽頁）：
-    - trigger_count：該標籤所有會員的累計觸發次數總和
-    - trigger_member_count：擁有該標籤的不重複會員數
+  message_id 填值策略：
+    - 後台手動新增/移除：message_id = NULL
+    - CRM 系統同步：message_id = NULL（或使用固定識別碼）
+    - PMS 系統同步：message_id = NULL（或使用固定識別碼）
+    - 問券蒐集：message_id = NULL（或使用 survey_id）
 
-  後台自訂標籤 CRUD 操作規則：
-    - 建立（Create）：管理員可建立新的自訂標籤（tag_source = '後台自訂'）
-    - 讀取（Read）：查詢所有標籤或指定標籤詳情
-    - 更新（Update）：可修改標籤名稱（tag_name）、來源（tag_source）等屬性
-    - 刪除（Delete）：支援刪除標籤，刪除時級聯刪除所有關聯的 MemberTag 記錄（ON DELETE CASCADE）
-    - 刪除影響：刪除標籤會導致所有擁有該標籤的會員失去該標籤記錄，無法復原
-    - 刪除確認：建議前端顯示確認對話框「該標籤已被 N 位會員使用，刪除後無法復原，是否繼續？」
-    - 權限控制：僅擁有「tag.delete」權限的管理員可執行刪除操作
+  API 端點：
+    - 查詢會員標籤：GET /api/v1/members/{id} → 包含 tags 陣列（僅會員標籤）
+    - 批量更新會員標籤：PUT /api/v1/members/{id}/tags → 完全取代現有標籤
+    - 標籤列表：GET /api/v1/tags?type=member
+
+  查詢邏輯（會員詳情頁）：
+    - 查詢順序：MemberTag → InteractionTag (auto) → MemberInteractionTag (manual)
+    - 合併去重：按 tag_name 去重，優先顯示最早建立的記錄
+    - 視覺區分：會員標籤（綠色）、自動互動標籤（黃色）、手動互動標籤（藍色）
+
+  資料完整性：
+    - ON DELETE CASCADE：刪除會員時自動刪除關聯標籤
+    - 標籤名稱驗證：前後端雙重驗證，確保格式正確
+
+  關係：MemberTag N:1 Member
   '''
 }
 
@@ -277,22 +291,97 @@ Table ClickTrackingDemo {
 }
 
 Table InteractionTag {
-  tag_id string [pk, note: '標籤唯一識別碼']
-  tag_name string [note: '標籤名稱，不得超過 20 個字元（中英文皆計算，每個字元計 1）。格式限制：僅允許中文（\u4e00-\u9fa5）、英文（a-zA-Z）、數字（0-9）、空格，禁止特殊字元與 Emoji。驗證：前端使用正則表達式 /^[\u4e00-\u9fa5a-zA-Z0-9\s]+$/ 即時驗證']
-  tag_source string [note: '標籤來源：訊息模板 / 問券模板']
-  trigger_count int [note: '觸發次數，累計所有不重複的 (member_id, tag_id, message_id) 組合數，>= 0。計算邏輯：COUNT(DISTINCT member_id, tag_id, message_id)，同一會員點擊不同訊息會累計，點擊相同訊息不重複計算']
-  trigger_member_count int [note: '觸發會員數，不重複會員總數，>= 0。計算邏輯：COUNT(DISTINCT member_id)，同一會員無論點擊多少次或多少訊息，僅計算一次']
+  id bigint [pk, increment, note: '互動標籤唯一識別碼']
+  tag_name string(20) [not null, note: '標籤名稱，不得超過 20 個字元（中英文皆計算，每個字元計 1）。格式限制：僅允許中文（\u4e00-\u9fa5）、英文（a-zA-Z）、數字（0-9）、空格，禁止特殊字元與 Emoji。驗證：前端使用正則表達式 /^[\u4e00-\u9fa5a-zA-Z0-9\s]+$/ 即時驗證']
+  tag_source string(20) [note: '標籤來源：訊息模板 / 問券模板']
+  trigger_count int [default: 0, note: '觸發次數，累計所有不重複的 (line_id, tag_id, message_id) 組合數，>= 0。計算邏輯：COUNT(DISTINCT ComponentInteractionLog)，同一會員點擊不同訊息會累計，點擊相同訊息不重複計算']
+  trigger_member_count int [default: 0, note: '觸發會員數，不重複會員總數，>= 0。計算邏輯：COUNT(DISTINCT line_id FROM ComponentInteractionLog)，同一會員無論點擊多少次或多少訊息，僅計算一次']
   last_triggered_at timestamp [note: '最近觸發時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串']
+  created_at timestamp [default: `now()`, note: '建立時間（UTC）']
+  updated_at timestamp [note: '更新時間（UTC）。on update CURRENT_TIMESTAMP']
+
+  indexes {
+    tag_name_index (tag_name) [note: '優化標籤名稱查詢']
+  }
 
   Note: '''
-  互動標籤定義實體，用於定義可用的互動標籤
-  來源1：訊息模板設定 - 檔期優惠、雙十、早鳥
-  來源2：會員互動模板 - 文字按鈕確認型、圖片點擊型、圖卡按鈕型、問券模板
+  互動標籤定義實體，用於定義可用的互動標籤（自動產生類型）
+
+  產生方式：
+    - 訊息模板設定：當訊息模板中定義了互動標籤時，系統自動建立 InteractionTag 定義
+    - 問券模板設定：問券模板中定義的互動標籤也會自動建立定義
+
+  觸發方式：
+    - 會員點擊訊息按鈕時，系統記錄到 ComponentInteractionLog 表
+    - 透過 ComponentInteractionLog 關聯，可查詢哪些會員觸發了此標籤
+
   統計邏輯：
-    - trigger_count：累計所有觸發（以 ComponentInteractionLog 唯一記錄為基準）
+    - trigger_count：累計所有觸發記錄（以 ComponentInteractionLog 唯一記錄為基準）
     - trigger_member_count：不重複會員數（同一會員多次觸發僅計一次）
     - 範例：會員A點擊訊息1、訊息2，會員B點擊訊息1 → trigger_count=3, trigger_member_count=2
+
+  視覺呈現：
+    - 前端顯示為黃色標籤（表示自動產生）
+    - 通過 source='auto' 區分
+
+  與 MemberInteractionTag 的區別：
+    - InteractionTag：自動產生，通過訊息互動觸發，查詢需 JOIN ComponentInteractionLog
+    - MemberInteractionTag：手動新增，CRM 管理員直接為會員打標籤，直接關聯會員
+
   關係：InteractionTag 1:N ComponentInteractionLog
+  '''
+}
+
+Table MemberInteractionTag {
+  id bigint [pk, increment, note: '會員互動標籤唯一識別碼']
+  member_id bigint [ref: > Member.member_id, not null, note: '所屬會員 ID']
+  tag_name string(20) [not null, note: '標籤名稱，不得超過 20 個字元（中英文皆計算，每個字元計 1）。格式限制：僅允許中文（\u4e00-\u9fa5）、英文（a-zA-Z）、數字（0-9）、空格，禁止特殊字元與 Emoji。驗證：前端使用正則表達式 /^[\u4e00-\u9fa5a-zA-Z0-9\s]+$/ 即時驗證']
+  tag_source string(20) [default: 'CRM', note: '標籤來源：固定為 CRM（手動新增）']
+  trigger_count int [default: 0, note: '觸發次數（保留欄位，手動標籤固定為 0）']
+  trigger_member_count int [default: 0, note: '觸發會員數（保留欄位，手動標籤固定為 0）']
+  last_triggered_at timestamp [note: '最近觸發時間（保留欄位，手動標籤為 NULL）']
+  message_id bigint [note: '觸發來源訊息 ID（用於去重，手動新增時為 NULL）']
+  click_count int [not null, default: 1, note: '點擊次數，>= 1。預設值：1（首次點擊）。手動標籤此欄位固定為 1，不累加']
+  tagged_at timestamp [default: `now()`, note: '標記時間（UTC）']
+  created_at timestamp [default: `now()`, note: '建立時間（UTC）']
+  updated_at timestamp [note: '更新時間（UTC）。on update CURRENT_TIMESTAMP']
+
+  indexes {
+    member_id_index (member_id) [note: '優化會員標籤查詢']
+    unique_member_tag_message [unique, note: '確保 (member_id, tag_name, message_id) 組合唯一性'] (member_id, tag_name, message_id)
+  }
+
+  Note: '''
+  會員互動標籤實體（手動新增類型），用於 CRM 管理員手動為會員打互動標籤
+
+  用途：
+    - CRM 管理員在會員詳情頁手動新增互動標籤
+    - 與自動產生的 InteractionTag 區分開來
+    - 直接關聯會員，無需透過 ComponentInteractionLog
+
+  新增方式：
+    - API 端點：PUT /api/v1/members/{member_id}/interaction-tags
+    - 管理員在前端標籤編輯器中選擇互動標籤並儲存
+    - 系統自動建立 MemberInteractionTag 記錄
+
+  去重邏輯：
+    - UNIQUE 索引 (member_id, tag_name, message_id) 確保唯一性
+    - 手動新增時 message_id 為 NULL，因此同一會員同一標籤只有一筆記錄
+    - 若未來支援從訊息模板手動打標籤，message_id 將記錄來源訊息
+
+  視覺呈現：
+    - 前端顯示為藍色標籤（表示手動新增）
+    - 通過 source='manual' 區分
+
+  與 InteractionTag 的區別：
+    - MemberInteractionTag：手動新增，CRM 管理員直接為會員打標籤，直接關聯會員
+    - InteractionTag：自動產生，通過訊息互動觸發，查詢需 JOIN ComponentInteractionLog
+
+  資料完整性：
+    - ON DELETE CASCADE：刪除會員時自動刪除關聯標籤
+    - tag_source 固定為 'CRM'，標示為手動新增
+
+  關係：MemberInteractionTag N:1 Member
   '''
 }
 

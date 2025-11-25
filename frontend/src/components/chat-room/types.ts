@@ -8,11 +8,12 @@ import type { Member } from '../../types/member';
 // ========== 聊天消息相关 ==========
 
 export interface ChatMessage {
-  id: number;
+  id: string;  // ✅ 修正：API 返回 UUID string，非 number
   type: 'user' | 'official';
   text: string;
   time: string;
   isRead: boolean;
+  source?: string | null;  // ✅ 新增：message_source 欄位 ('manual' | 'gpt' | 'keyword' | 'welcome' | 'always' | null)
 }
 
 // ========== 组件 Props 接口 ==========

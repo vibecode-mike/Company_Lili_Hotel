@@ -70,8 +70,8 @@ export default function MemberInfoPanel({ member }: MemberInfoPanelProps) {
         <div className="flex flex-col items-center gap-[12px]">
           <div className="relative">
             <div className="bg-white border-[3px] border-white overflow-clip relative rounded-full shrink-0 size-[100px]">
-              <img 
-                src={member.avatar} 
+              <img
+                src={member.lineAvatar}
                 alt={member.name}
                 className="w-full h-full object-cover"
               />

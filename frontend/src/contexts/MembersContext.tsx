@@ -40,6 +40,14 @@ const formatDateTime = (value?: string | null): string => {
 };
 
 const transformBackendMember = (item: any): Member => {
+  // 保留完整標籤資訊（包含 source）
+  const tagDetails = (item.tags || []).map((tag: any) => ({
+    id: tag.id,
+    name: tag.name,
+    type: tag.type,
+    source: tag.source,
+  }));
+
   const memberTags = (item.tags || [])
     .filter((tag: any) => tag.type === 'member')
     .map((tag: any) => tag.name);
@@ -55,6 +63,7 @@ const transformBackendMember = (item: any): Member => {
     tags: combinedTags,
     memberTags,
     interactionTags,
+    tagDetails,  // 新增完整標籤資訊
     phone: item.phone || '',
     email: item.email || '',
     gender: item.gender || '',

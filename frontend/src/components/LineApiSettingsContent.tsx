@@ -315,43 +315,52 @@ export default function LineApiSettingsContent() {
 
           {/* Reset Dialog */}
           {showResetDialog && (
-            <div className="fixed inset-0 bg-[rgba(0,0,0,0.3)] backdrop-blur-[1px] flex items-center justify-center z-50 transition-colors">
-              <div className="relative bg-white rounded-[10px] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.12),0px_4px_6px_-4px_rgba(0,0,0,0.08)] w-[90%] max-w-[512px] border border-[rgba(0,0,0,0.08)]">
-                <div className="absolute border border-[rgba(0,0,0,0.1)] border-solid inset-0 pointer-events-none rounded-[10px]" />
-                <div className="p-[25px] grid grid-cols-1 grid-rows-[56px_auto] gap-[16px]">
-                  {/* Header */}
-                  <div className="flex flex-col gap-[8px]">
-                    <h2 className="text-[18px] leading-[28px] text-neutral-950 font-semibold tracking-[-0.4395px]">
-                      重新設定
-                    </h2>
-                    <p className="text-[14px] leading-[20px] text-[#717182] tracking-[-0.1504px]">
-                      確定要解除與 @LINE 的連結嗎？解除後需要重新設定所有資料。
-                    </p>
-                  </div>
+            <>
+              {/* Backdrop */}
+              <div
+                className="fixed inset-0 bg-black/50 z-[9998]"
+                onClick={() => setShowResetDialog(false)}
+              />
 
-                  {/* Footer */}
-                  <div className="flex gap-[8px] justify-end">
-                    <button
-                      onClick={() => setShowResetDialog(false)}
-                      className="relative bg-white h-[36px] px-[17px] py-[9px] rounded-[8px] hover:bg-gray-50 transition-colors"
-                    >
-                      <div className="absolute border border-[rgba(0,0,0,0.1)] border-solid inset-0 pointer-events-none rounded-[8px]" />
-                      <span className="text-[14px] leading-[20px] text-neutral-950 font-medium tracking-[-0.1504px]">
-                        取消
-                      </span>
-                    </button>
-                    <button
-                      onClick={handleReset}
-                      className="bg-[#e7000b] h-[36px] px-[16px] py-[8px] rounded-[8px] hover:bg-[#c70009] transition-colors"
-                    >
-                      <span className="text-[14px] leading-[20px] text-white font-medium tracking-[-0.1504px]">
-                        確認解除
-                      </span>
-                    </button>
+              {/* Dialog Content */}
+              <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[9999] w-[90%] max-w-[512px]">
+                <div className="relative bg-white rounded-[10px] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.12),0px_4px_6px_-4px_rgba(0,0,0,0.08)] border border-[rgba(0,0,0,0.08)]">
+                  <div className="absolute border border-[rgba(0,0,0,0.1)] border-solid inset-0 pointer-events-none rounded-[10px]" />
+                  <div className="p-[25px] grid grid-cols-1 grid-rows-[56px_auto] gap-[16px]">
+                    {/* Header */}
+                    <div className="flex flex-col gap-[8px]">
+                      <h2 className="text-[18px] leading-[28px] text-neutral-950 font-semibold tracking-[-0.4395px]">
+                        重新設定
+                      </h2>
+                      <p className="text-[14px] leading-[20px] text-[#717182] tracking-[-0.1504px]">
+                        確定要解除與 @LINE 的連結嗎？解除後需要重新設定所有資料。
+                      </p>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="flex gap-[8px] justify-end">
+                      <button
+                        onClick={() => setShowResetDialog(false)}
+                        className="relative bg-white h-[36px] px-[17px] py-[9px] rounded-[8px] hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="absolute border border-[rgba(0,0,0,0.1)] border-solid inset-0 pointer-events-none rounded-[8px]" />
+                        <span className="text-[14px] leading-[20px] text-neutral-950 font-medium tracking-[-0.1504px]">
+                          取消
+                        </span>
+                      </button>
+                      <button
+                        onClick={handleReset}
+                        className="bg-[#e7000b] h-[36px] px-[16px] py-[8px] rounded-[8px] hover:bg-[#c70009] transition-colors"
+                      >
+                        <span className="text-[14px] leading-[20px] text-white font-medium tracking-[-0.1504px]">
+                          確認解除
+                        </span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            </>
           )}
         </div>
       </div>

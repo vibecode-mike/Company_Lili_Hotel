@@ -4,7 +4,7 @@
 from app.models.base import Base
 from app.models.user import User
 from app.models.member import Member
-from app.models.tag import MemberTag, InteractionTag
+from app.models.tag import MemberTag, InteractionTag, MemberInteractionTag
 from app.models.message import Message, MessageDelivery
 from app.models.campaign import Campaign
 from app.models.template import MessageTemplate, TemplateCarouselItem
@@ -28,6 +28,7 @@ __all__ = [
     "Member",
     "MemberTag",
     "InteractionTag",
+    "MemberInteractionTag",
     "Message",
     "MessageDelivery",
     "Campaign",

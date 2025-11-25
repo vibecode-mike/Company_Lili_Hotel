@@ -125,3 +125,24 @@ class TagSearchParams(BaseModel):
     order: str = "desc"
     page: int = 1
     page_size: int = 20
+
+
+class MemberInteractionTagCreate(TagBase):
+    """創建會員互動標籤"""
+
+    member_id: int
+    message_id: Optional[int] = None
+
+
+class MemberInteractionTagUpdate(BaseModel):
+    """更新會員互動標籤"""
+
+    tag_name: Optional[str] = None
+    tag_source: Optional[str] = None
+
+    @field_validator('tag_name')
+    @classmethod
+    def validate_tag_name(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            return TagNameValidator.validate_tag_name(v)
+        return v

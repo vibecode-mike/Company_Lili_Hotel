@@ -12,6 +12,7 @@ class TagInfo(BaseModel):
     id: int
     name: str
     type: str
+    source: Optional[str] = None  # "auto" 或 "manual"，用於前端判斷顏色
 
     class Config:
         from_attributes = True

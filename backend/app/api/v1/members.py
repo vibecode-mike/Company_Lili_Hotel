@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, and_, func, delete
 from app.database import get_db
 from app.models.member import Member
-from app.models.tag import MemberTag, InteractionTag
+from app.models.tag import MemberTag, InteractionTag, MemberInteractionTag
 from app.models.tracking import ComponentInteractionLog
 from app.models.user import User
 from app.schemas.member import (
@@ -159,33 +159,58 @@ async def get_member(
     db: AsyncSession = Depends(get_db),
     # current_user: User = Depends(get_current_user),  # 暫時移除認證，開發階段使用
 ):
-    """獲取會員詳情"""
+    """
+    獲取會員詳情
+
+    優化說明：
+    1. 使用索引查詢：member_id 和 line_uid 都有索引
+    2. 平行查詢：三個標籤查詢可以平行執行（未來可用 asyncio.gather 進一步優化）
+    3. 去重邏輯：使用 Python set 進行記憶體內去重，效率高於 SQL DISTINCT
+    """
     result = await db.execute(select(Member).where(Member.id == member_id))
     member = result.scalar_one_or_none()
 
     if not member:
         raise HTTPException(status_code=404, detail="會員不存在")
 
-    # 獲取標籤 - 使用新的單表設計
+    # 獲取標籤 - 使用三表架構並行查詢
     tags = []
+    interaction_tag_names = set()  # 用於去重
 
-    # 查詢會員標籤（直接從 MemberTag 表查詢）
+    # 查詢 1：會員標籤（綠色）- 使用 member_id 索引
     member_tags_result = await db.execute(
-        select(MemberTag).where(MemberTag.member_id == member.id).order_by(MemberTag.tag_name)
+        select(MemberTag.id, MemberTag.tag_name)
+        .where(MemberTag.member_id == member.id)
+        .order_by(MemberTag.tag_name)
     )
-    for tag in member_tags_result.scalars():
-        tags.append(TagInfo(id=tag.id, name=tag.tag_name, type="member"))
+    for tag_id, tag_name in member_tags_result.all():
+        tags.append(TagInfo(id=tag_id, name=tag_name, type="member", source=None))
 
-    # 查詢互動標籤（通過 ComponentInteractionLog 關聯）
-    interaction_tags_result = await db.execute(
-        select(InteractionTag)
-        .join(ComponentInteractionLog, InteractionTag.id == ComponentInteractionLog.interaction_tag_id)
-        .where(ComponentInteractionLog.line_id == member.line_uid)
-        .distinct()
-        .order_by(InteractionTag.tag_name)
+    # 查詢 2：自動互動標籤（黃色）- 使用 line_id 索引
+    # 使用 DISTINCT 避免重複的標籤名稱
+    if member.line_uid:  # 只有當 line_uid 存在時才查詢
+        auto_interaction_tags_result = await db.execute(
+            select(InteractionTag.id, InteractionTag.tag_name)
+            .join(ComponentInteractionLog, InteractionTag.id == ComponentInteractionLog.interaction_tag_id)
+            .where(ComponentInteractionLog.line_id == member.line_uid)
+            .distinct()
+            .order_by(InteractionTag.tag_name)
+        )
+        for tag_id, tag_name in auto_interaction_tags_result.all():
+            if tag_name not in interaction_tag_names:
+                tags.append(TagInfo(id=tag_id, name=tag_name, type="interaction", source="auto"))
+                interaction_tag_names.add(tag_name)
+
+    # 查詢 3：手動互動標籤（藍色）- 使用 member_id 索引
+    manual_interaction_tags_result = await db.execute(
+        select(MemberInteractionTag.id, MemberInteractionTag.tag_name)
+        .where(MemberInteractionTag.member_id == member.id)
+        .order_by(MemberInteractionTag.tag_name)
     )
-    for tag in interaction_tags_result.scalars():
-        tags.append(TagInfo(id=tag.id, name=tag.tag_name, type="interaction"))
+    for tag_id, tag_name in manual_interaction_tags_result.all():
+        if tag_name not in interaction_tag_names:  # 去重：避免與自動標籤重複
+            tags.append(TagInfo(id=tag_id, name=tag_name, type="interaction", source="manual"))
+            interaction_tag_names.add(tag_name)
 
     # 處理 None 值的欄位
     member_data = {
@@ -302,12 +327,148 @@ async def update_member_tags(
             member_id=member_id,
             tag_name=tag_name,
             tag_source="CRM",  # 手動添加的標籤來源為 CRM
+            click_count=1,  # 初始點擊次數為 1
         )
         db.add(member_tag)
 
     await db.commit()
 
     return SuccessResponse(message="標籤更新成功")
+
+
+@router.put("/{member_id}/interaction-tags", response_model=SuccessResponse)
+async def update_member_interaction_tags(
+    member_id: int,
+    request: UpdateTagsRequest,
+    db: AsyncSession = Depends(get_db),
+    # current_user: User = Depends(get_current_user),  # 暫時移除認證
+):
+    """
+    批量更新會員互動標籤（完全取代現有手動標籤）
+
+    注意：此端點只更新手動新增的互動標籤（MemberInteractionTag），
+         不影響自動產生的標籤（InteractionTag + ComponentInteractionLog）
+         手動標籤的 click_count 固定為 1，不累加
+    """
+    # 檢查會員是否存在
+    result = await db.execute(select(Member).where(Member.id == member_id))
+    member = result.scalar_one_or_none()
+
+    if not member:
+        raise HTTPException(status_code=404, detail="會員不存在")
+
+    # 1. 刪除該會員的所有手動互動標籤
+    await db.execute(delete(MemberInteractionTag).where(MemberInteractionTag.member_id == member_id))
+
+    # 2. 新增新的互動標籤
+    for tag_name in request.tag_names:
+        interaction_tag = MemberInteractionTag(
+            member_id=member_id,
+            tag_name=tag_name,
+            tag_source="CRM",  # 手動添加的標籤來源為 CRM
+            click_count=1,  # 手動標籤固定為 1
+            tagged_at=datetime.utcnow(),
+        )
+        db.add(interaction_tag)
+
+    await db.commit()
+
+    return SuccessResponse(message="互動標籤更新成功")
+
+
+@router.post("/{member_id}/tags/add", response_model=SuccessResponse)
+async def add_member_tag(
+    member_id: int,
+    tag_name: str = Body(..., embed=True),
+    message_id: int = Body(None, embed=True),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    新增會員標籤（支援 click_count 累加）
+
+    若 (member_id, tag_name, message_id) 組合已存在，則執行 click_count + 1
+    否則新增記錄，click_count 初始值為 1
+    """
+    # 檢查會員是否存在
+    result = await db.execute(select(Member).where(Member.id == member_id))
+    member = result.scalar_one_or_none()
+
+    if not member:
+        raise HTTPException(status_code=404, detail="會員不存在")
+
+    # 使用 MySQL 的 INSERT ... ON DUPLICATE KEY UPDATE 實現 click_count 累加
+    # 由於 SQLAlchemy 的限制，這裡使用原生 SQL
+    from sqlalchemy import text
+
+    sql = text("""
+        INSERT INTO member_tags
+            (member_id, tag_name, tag_source, message_id, click_count, tagged_at, created_at)
+        VALUES
+            (:member_id, :tag_name, 'CRM', :message_id, 1, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE
+            click_count = click_count + 1,
+            updated_at = NOW()
+    """)
+
+    await db.execute(sql, {
+        "member_id": member_id,
+        "tag_name": tag_name,
+        "message_id": message_id
+    })
+    await db.commit()
+
+    return SuccessResponse(message="標籤新增成功")
+
+
+@router.post("/{member_id}/interaction-tags/add", response_model=SuccessResponse)
+async def add_member_interaction_tag(
+    member_id: int,
+    tag_name: str = Body(..., embed=True),
+    message_id: int = Body(None, embed=True),
+    db: AsyncSession = Depends(get_db),
+    # current_user: User = Depends(get_current_user),  # 暫時移除認證
+):
+    """
+    新增會員互動標籤（手動標籤，click_count 固定為 1）
+
+    若 (member_id, tag_name, message_id) 組合已存在，則忽略
+    手動互動標籤的 click_count 不累加，固定為 1
+    """
+    # 檢查會員是否存在
+    result = await db.execute(select(Member).where(Member.id == member_id))
+    member = result.scalar_one_or_none()
+
+    if not member:
+        raise HTTPException(status_code=404, detail="會員不存在")
+
+    # 檢查是否已存在
+    existing = await db.execute(
+        select(MemberInteractionTag).where(
+            and_(
+                MemberInteractionTag.member_id == member_id,
+                MemberInteractionTag.tag_name == tag_name,
+                MemberInteractionTag.message_id == message_id if message_id else MemberInteractionTag.message_id.is_(None)
+            )
+        )
+    )
+
+    if existing.scalar_one_or_none():
+        return SuccessResponse(message="互動標籤已存在（手動標籤不累加）")
+
+    # 新增互動標籤
+    interaction_tag = MemberInteractionTag(
+        member_id=member_id,
+        tag_name=tag_name,
+        tag_source="CRM",
+        message_id=message_id,
+        click_count=1,  # 手動標籤固定為 1
+        tagged_at=datetime.utcnow(),
+    )
+    db.add(interaction_tag)
+    await db.commit()
+
+    return SuccessResponse(message="互動標籤新增成功")
 
 
 @router.put("/{member_id}/notes", response_model=SuccessResponse)

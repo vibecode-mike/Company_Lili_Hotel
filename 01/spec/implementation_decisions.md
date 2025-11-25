@@ -402,6 +402,103 @@ SELECT COUNT(*) FROM conversation_messages;  -- 返回 352
 
 ---
 
+### 8. 標籤系統三表架構設計
+
+**決策日期**: 2025-11-23
+**決策**: 採用三表架構設計（MemberTag + InteractionTag + MemberInteractionTag）
+
+**背景問題**:
+- 原規格（erm.dbml v0.2）設計 MemberTag 統一處理所有標籤（包含訊息互動）
+- 實作過程中發現前端需要區分自動產生和手動新增的互動標籤
+- 自動產生的互動標籤需透過 ComponentInteractionLog 關聯查詢
+- 手動新增的互動標籤需要直接關聯會員，便於 CRM 管理
+
+**實作方式**:
+
+#### 1. MemberTag 表（會員標籤）
+- **用途**: CRM/PMS/問券/後台自訂標籤
+- **來源**: 外部系統串接、問券蒐集、後台手動新增
+- **特性**: 直接關聯會員，單表查詢
+- **視覺**: 前端顯示為綠色標籤
+
+#### 2. InteractionTag 表（互動標籤定義 - 自動產生）
+- **用途**: 定義可用的互動標籤
+- **來源**: 訊息模板設定、問券模板設定
+- **產生**: 訊息模板中定義互動標籤時自動建立
+- **查詢**: 透過 ComponentInteractionLog 關聯，查詢哪些會員觸發了此標籤
+- **特性**: 不直接關聯會員，需 JOIN ComponentInteractionLog
+- **視覺**: 前端顯示為黃色標籤（source='auto'）
+
+#### 3. MemberInteractionTag 表（手動新增互動標籤）
+- **用途**: CRM 管理員手動為會員打互動標籤
+- **來源**: 後台手動新增（tag_source 固定為 'CRM'）
+- **特性**: 直接關聯會員，單表查詢
+- **視覺**: 前端顯示為藍色標籤（source='manual'）
+- **API**: `PUT /api/v1/members/{id}/interaction-tags`
+
+**查詢邏輯（會員詳情頁）**:
+```python
+# 1. 查詢會員標籤（綠色）
+member_tags = MemberTag.query.filter(member_id=id).all()
+
+# 2. 查詢自動互動標籤（黃色）
+auto_tags = InteractionTag.join(ComponentInteractionLog)
+    .filter(line_id=member.line_uid)
+    .distinct()
+    .all()
+
+# 3. 查詢手動互動標籤（藍色）
+manual_tags = MemberInteractionTag.query.filter(member_id=id).all()
+
+# 4. 合併去重
+tags = merge_and_deduplicate(member_tags, auto_tags, manual_tags)
+```
+
+**決策理由**:
+1. **業務需求**: 前端需要區分自動產生（訊息互動觸發）和手動新增（CRM 管理員）的互動標籤
+2. **視覺區分**: 黃色標籤（自動）vs 藍色標籤（手動），提升用戶體驗
+3. **資料來源分離**: 自動產生透過 ComponentInteractionLog，手動新增直接關聯會員
+4. **管理便利**: 手動互動標籤獨立管理，不影響自動產生的標籤
+
+**資料庫變更**:
+- ✅ 保留 MemberTag 表（調整欄位：BigInt PK，移除訊息互動來源）
+- ✅ 保留 InteractionTag 表（新增 created_at, updated_at 欄位）
+- ⭐ 新增 MemberInteractionTag 表（migration: `eb962a42ab7a_add_member_interaction_tags_table.py`）
+
+**前端變更**:
+```typescript
+// member.ts
+export interface TagInfo {
+  id: number;
+  name: string;
+  type: 'member' | 'interaction';
+  source?: 'auto' | 'manual';  // 區分自動/手動
+}
+```
+
+**影響範圍**:
+- **規格文件**: `erm.dbml` 更新為 v0.3.0，新增 MemberInteractionTag 表定義
+- **後端模型**: `backend/app/models/tag.py` 包含三個標籤模型
+- **API 端點**: 新增 `PUT /api/v1/members/{id}/interaction-tags`
+- **前端類型**: `frontend/src/types/member.ts` 新增 source 欄位
+
+**效益**:
+- ✅ 明確區分三種標籤類型，降低混淆
+- ✅ 視覺化區分提升用戶體驗（綠/黃/藍三色）
+- ✅ 管理便利：手動互動標籤獨立 CRUD
+- ✅ 查詢彈性：自動標籤可追蹤訊息來源
+
+**複雜度評估**:
+- ⚠️ 查詢複雜度增加：需要三次查詢 + 合併去重
+- ⚠️ 維護成本略增：三個表需要分別維護
+- ✅ 可透過建立資料庫視圖優化查詢效能（見階段 3）
+
+**風險評估**: 🟡 中等
+- 查詢效能需監控（三表 JOIN 可能較慢）
+- 建議後續建立 `member_tags_view` 視圖優化查詢
+
+---
+
 ## 決策影響摘要
 
 | 決策 | 版本 | 規格變更 | 代碼影響 | 效能影響 | 風險評估 |
@@ -413,6 +510,8 @@ SELECT COUNT(*) FROM conversation_messages;  -- 返回 352
 | **TagRule 不自動執行** | v1 | 無自動執行器 | 無需排程和執行邏輯 | ✅ 降低複雜度 | ⚠️ 低 |
 | **草稿編輯與即時更新** | v1 | 符合 BDD 規格 | 修改 3 個前端檔案 | ✅ 提升 UX | 🟢 極低 |
 | **移除 message_records 表** | v1 | 移除冗餘表 | 刪除 2 個檔案，更新 3 個引用 | ✅ 降低複雜度 20% | 🟢 極低 |
+| **標籤系統三表架構設計** | v1 | 新增 MemberInteractionTag 表 | 新增 1 個表、1 個 API、更新前端類型 | ⚠️ 查詢複雜度略增 | 🟡 中等 |
+| **訊息來源追蹤系統** | v1 | 新增 message_source 欄位 | 修改 8 個函數，新增 3 個檢查函數，前端類型修正 | ✅ 提升可觀測性 | 🟡 中等（已完成） |
 | **StayRecord 延後至 v2** | v2 | 暫存於 PMS JSON | 查詢效能略低 | ⚠️ 可接受 | 🟢 低 |
 | **Archive 延後至 v2** | v2 | 無歸檔機制 | 資料量持續增長 | ⚠️ 初期影響小 | 🟢 低 |
 
@@ -517,10 +616,247 @@ SELECT COUNT(*) FROM conversation_messages;  -- 返回 352
 
 ---
 
+### 9. 訊息來源追蹤系統（message_source）
+
+**決策日期**: 2025-11-24
+**決策**: 在 conversation_messages 表新增 message_source 欄位，追蹤訊息來源
+
+**背景問題**:
+- 原始系統無法區分訊息來源（手動發送 vs 自動回覆）
+- 缺乏訊息來源追蹤，難以分析自動回應效果
+- 前端顯示所有 outgoing 訊息格式相同，無法標示訊息類型
+- 運營團隊需要統計各類訊息的使用情況
+
+**實作方式**:
+
+#### 1. 資料庫設計
+- **新增欄位**: `conversation_messages.message_source VARCHAR(20)`
+- **允許值**:
+  * `'manual'` - 後台人員手動發送
+  * `'gpt'` - GPT 自動回覆
+  * `'keyword'` - 關鍵字觸發的自動回應
+  * `'welcome'` - 加入好友的歡迎訊息
+  * `'always'` - 一律回應訊息
+  * `NULL` - 使用者發送的 incoming 訊息
+
+#### 2. LINE App Webhook 處理順序
+```python
+# on_text() 處理順序（優先級由高到低）
+1. GPT 自動回覆（優先） → message_source='gpt'
+2. 關鍵字觸發（後備） → message_source='keyword'
+3. 一律回應（最後後備） → message_source='always'
+```
+
+#### 3. 相關函數修改
+
+**核心函數**:
+```python
+# line_app/app.py
+
+# 修改：insert_conversation_message() - 新增 message_source 參數
+def insert_conversation_message(*, message_source: str | None = None):
+    # 儲存訊息時記錄來源
+    ...
+
+# 新增：check_keyword_trigger() - 檢查關鍵字自動回應
+def check_keyword_trigger(line_uid: str, text: str):
+    # 查詢 is_active=1 的關鍵字觸發
+    ...
+
+# 新增：check_always_response() - 檢查一律回應
+def check_always_response():
+    # 查詢 is_active=1 的一律回應
+    ...
+
+# 新增：check_welcome_response() - 檢查歡迎訊息
+def check_welcome_response():
+    # 查詢 is_active=1 的歡迎訊息
+    ...
+
+# 重構：on_text() - 實現新處理順序
+def on_text(event: MessageEvent):
+    # 1. 儲存 incoming 訊息 (source=NULL)
+    # 2. 嘗試 GPT 回覆 → source='gpt'
+    # 3. 失敗則檢查關鍵字 → source='keyword'
+    # 4. 最後檢查一律回應 → source='always'
+    ...
+
+# 修改：on_follow() - 歡迎訊息標記
+def on_follow(event: FollowEvent):
+    # 檢查資料庫歡迎訊息設定
+    # 儲存時標記 source='welcome'
+    ...
+
+# 修改：api_send_chat_message() - 手動發送標記
+def api_send_chat_message(...):
+    # 手動發送標記 source='manual'
+    ...
+```
+
+#### 4. Backend API 更新
+
+**Model 更新**:
+```python
+# backend/app/models/conversation.py
+class ConversationMessage(Base):
+    message_source = Column(String(20), nullable=True,
+                           comment="訊息來源：manual|gpt|keyword|welcome|always")
+```
+
+**API 回應格式**:
+```json
+{
+  "code": 200,
+  "data": {
+    "messages": [
+      {
+        "id": "uuid",
+        "type": "official",
+        "text": "訊息內容",
+        "time": "下午 03:30",
+        "isRead": false,
+        "source": "manual"  // ← 新增欄位
+      }
+    ]
+  }
+}
+```
+
+#### 5. 前端 TypeScript 類型定義
+
+```typescript
+// frontend/src/components/chat-room/types.ts
+export interface ChatMessage {
+  id: string;  // ✅ 修正：UUID string（原為 number）
+  type: 'user' | 'official';
+  text: string;
+  time: string;
+  isRead: boolean;
+  source?: string | null;  // ✅ 新增：訊息來源
+}
+```
+
+**前端 API 檢查邏輯修正**:
+```typescript
+// frontend/src/components/chat-room/ChatRoomLayout.tsx
+// ✅ 修正：backend 使用 SuccessResponse，返回 code: 200
+if (result.code === 200 && result.data) {
+  // 處理訊息列表
+}
+```
+
+#### 6. Migration 執行
+
+**Migration 檔案**: `backend/migrations/versions/5b26a1084eda_add_message_source_to_conversation_.py`
+
+**內容**:
+```python
+def upgrade() -> None:
+    # 新增 message_source 欄位
+    op.add_column('conversation_messages',
+        sa.Column('message_source', sa.String(20), nullable=True,
+                  comment='訊息來源：manual|gpt|keyword|welcome|always'))
+
+    # 更新現有資料（推測來源）
+    op.execute("""
+        UPDATE conversation_messages
+        SET message_source = CASE
+            WHEN direction = 'incoming' THEN NULL
+            WHEN direction = 'outgoing' AND message_type = 'text' THEN 'manual'
+            WHEN direction = 'outgoing' AND message_type = 'chat' THEN 'gpt'
+            ELSE NULL
+        END
+        WHERE message_source IS NULL
+    """)
+
+def downgrade() -> None:
+    op.drop_column('conversation_messages', 'message_source')
+```
+
+**執行結果**:
+```bash
+$ alembic upgrade head
+INFO  [alembic.runtime.migration] Running upgrade 39c1651f1c68 -> 5b26a1084eda
+
+# 驗證
+mysql> SELECT direction, message_type, message_source, COUNT(*) FROM conversation_messages GROUP BY direction, message_type, message_source;
++----------+--------------+----------------+----------+
+| outgoing | chat         | gpt            | 177      |
+| outgoing | text         | manual         | 5        |
+| incoming | text         | NULL           | 70       |
+| incoming | chat         | NULL           | 108      |
+| incoming | sticker      | NULL           | 3        |
++----------+--------------+----------------+----------+
+```
+
+**決策理由**:
+1. **運營需求**: 需要統計各類訊息的使用情況和效果
+2. **用戶體驗**: 前端可根據 source 顯示不同樣式或圖標
+3. **資料分析**: 追蹤自動回應的觸發率和轉換率
+4. **問題診斷**: 快速定位訊息來源，幫助故障排除
+5. **未來擴展**: 為 A/B 測試和效果分析打基礎
+
+**影響範圍**:
+- **資料庫**: 新增 `message_source` 欄位，現有 363 筆資料已更新
+- **LINE App**: 修改 5 個函數，新增 3 個檢查函數，重構 2 個 webhook 處理器
+- **Backend API**: 更新 Model、Schema、API 回應格式
+- **Frontend**: 修正 TypeScript 類型定義，更新 API 檢查邏輯
+- **測試**: 創建測試腳本 `test_chat_display.sh` 驗證功能
+
+**效益**:
+- ✅ 完整的訊息來源追蹤（5 種類型 + NULL）
+- ✅ 明確的處理優先級（GPT → keyword → always）
+- ✅ 便於運營分析和效果評估
+- ✅ 支援未來的視覺化展示（不同來源不同圖標）
+- ✅ 提升系統可觀測性和可維護性
+
+**相關修復**:
+在實施過程中發現並修復了前端聊天記錄顯示問題：
+1. **API 回應格式不匹配**: 前端檢查 `result.success`，但 backend 返回 `code: 200`
+2. **TypeScript 類型錯誤**: `ChatMessage.id` 定義為 `number`，但 API 返回 UUID `string`
+
+詳細修復記錄請參考: [CHAT_FIX_SUMMARY.md](../../CHAT_FIX_SUMMARY.md)
+
+**複雜度評估**:
+- ⚠️ LINE App 程式碼修改較大（8 個函數受影響）
+- ⚠️ 需要協調前後端類型定義
+- ✅ Migration 安全（包含 downgrade 邏輯）
+- ✅ 資料完整性保證（現有資料正確遷移）
+
+**風險評估**: 🟡 中等（已完成）
+- LINE App 重構範圍大，需仔細測試各種訊息場景
+- 前端類型定義需要同步更新（已完成）
+- API 回應格式變更需要前端相容處理（已完成）
+- 所有功能已測試通過 ✅
+
+**驗證結果**:
+```bash
+# API 測試
+$ curl -s "http://127.0.0.1:8700/api/v1/members/7/chat-messages?page=1&page_size=3"
+# ✅ 正確返回 message_source 欄位
+
+# 資料庫驗證
+$ mysql -e "SELECT COUNT(*) FROM conversation_messages WHERE message_source IS NOT NULL;"
+# ✅ 182 筆訊息有 source（177 gpt + 5 manual）
+
+# 服務狀態
+$ curl http://127.0.0.1:3001/ && curl http://127.0.0.1:8700/health
+# ✅ LINE app 和 Backend API 正常運行
+```
+
+**技術文檔**:
+- 完整實施記錄: [IMPLEMENTATION_SUMMARY.md](../../IMPLEMENTATION_SUMMARY.md)
+- 聊天修復記錄: [CHAT_FIX_SUMMARY.md](../../CHAT_FIX_SUMMARY.md)
+- 測試腳本: `test_chat_display.sh`
+
+---
+
 ## 變更追蹤
 
 | 日期 | 版本 | 變更內容 | 負責人 |
 |------|------|---------|--------|
+| 2025-11-24 | v1.6 | 新增決策 9（訊息來源追蹤系統 message_source）| Claude |
+| 2025-11-23 | v1.5 | 新增決策 8（標籤系統三表架構設計）+ 更新 erm.dbml v0.3.0 | Claude |
 | 2025-11-22 | v1.4 | 新增決策 7（訊息記錄表整合，移除 message_records）| Claude |
 | 2025-11-20 | v1.3 | 新增決策 6（草稿編輯與即時更新策略）| Claude |
 | 2025-11-20 | v1.2 | 新增決策 5（TagRule 不實作自動執行器）+ v1 完成度更新為 100% | Claude |
