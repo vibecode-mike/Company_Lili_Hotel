@@ -6,8 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, and_, func, delete
 from app.database import get_db
 from app.models.member import Member
-from app.models.tag import MemberTag, InteractionTag, MemberInteractionTag
-from app.models.tracking import ComponentInteractionLog
+from app.models.tag import MemberTag, MemberInteractionTag
 from app.models.user import User
 from app.schemas.member import (
     MemberCreate,
@@ -18,6 +17,7 @@ from app.schemas.member import (
     UpdateTagsRequest,
     UpdateNotesRequest,
     TagInfo,
+    BatchUpdateTagsRequest,
 )
 from app.schemas.common import SuccessResponse
 from app.core.pagination import PageParams, PageResponse
@@ -90,7 +90,6 @@ async def get_members(
     # 獲取標籤信息
     items = []
     for member in members:
-        # 獲取會員標籤 - 使用新的單表設計
         tags = []
 
         # 查詢會員標籤（直接從 MemberTag 表查詢）
@@ -100,13 +99,11 @@ async def get_members(
         for tag in member_tags_result.scalars():
             tags.append(TagInfo(id=tag.id, name=tag.tag_name, type="member"))
 
-        # 查詢互動標籤（通過 ComponentInteractionLog 關聯）
+        # 查詢互動標籤 - 統一從 MemberInteractionTag 表查詢（自動+手動）
         interaction_tags_result = await db.execute(
-            select(InteractionTag)
-            .join(ComponentInteractionLog, InteractionTag.id == ComponentInteractionLog.interaction_tag_id)
-            .where(ComponentInteractionLog.line_id == member.line_uid)
-            .distinct()
-            .order_by(InteractionTag.tag_name)
+            select(MemberInteractionTag)
+            .where(MemberInteractionTag.member_id == member.id)
+            .order_by(MemberInteractionTag.click_count.desc(), MemberInteractionTag.tag_name)
         )
         for tag in interaction_tags_result.scalars():
             tags.append(TagInfo(id=tag.id, name=tag.tag_name, type="interaction"))
@@ -173,44 +170,27 @@ async def get_member(
     if not member:
         raise HTTPException(status_code=404, detail="會員不存在")
 
-    # 獲取標籤 - 使用三表架構並行查詢
+    # 獲取標籤 - 簡化為兩表查詢
     tags = []
-    interaction_tag_names = set()  # 用於去重
 
-    # 查詢 1：會員標籤（綠色）- 使用 member_id 索引
+    # 查詢 1：會員標籤 - 使用 member_id 索引
     member_tags_result = await db.execute(
         select(MemberTag.id, MemberTag.tag_name)
         .where(MemberTag.member_id == member.id)
         .order_by(MemberTag.tag_name)
     )
     for tag_id, tag_name in member_tags_result.all():
-        tags.append(TagInfo(id=tag_id, name=tag_name, type="member", source=None))
+        tags.append(TagInfo(id=tag_id, name=tag_name, type="member"))
 
-    # 查詢 2：自動互動標籤（黃色）- 使用 line_id 索引
-    # 使用 DISTINCT 避免重複的標籤名稱
-    if member.line_uid:  # 只有當 line_uid 存在時才查詢
-        auto_interaction_tags_result = await db.execute(
-            select(InteractionTag.id, InteractionTag.tag_name)
-            .join(ComponentInteractionLog, InteractionTag.id == ComponentInteractionLog.interaction_tag_id)
-            .where(ComponentInteractionLog.line_id == member.line_uid)
-            .distinct()
-            .order_by(InteractionTag.tag_name)
-        )
-        for tag_id, tag_name in auto_interaction_tags_result.all():
-            if tag_name not in interaction_tag_names:
-                tags.append(TagInfo(id=tag_id, name=tag_name, type="interaction", source="auto"))
-                interaction_tag_names.add(tag_name)
-
-    # 查詢 3：手動互動標籤（藍色）- 使用 member_id 索引
-    manual_interaction_tags_result = await db.execute(
+    # 查詢 2：互動標籤 - 統一從 MemberInteractionTag 表查詢（自動+手動）
+    # 按 click_count 降序排列，讓高互動的標籤排在前面
+    interaction_tags_result = await db.execute(
         select(MemberInteractionTag.id, MemberInteractionTag.tag_name)
         .where(MemberInteractionTag.member_id == member.id)
-        .order_by(MemberInteractionTag.tag_name)
+        .order_by(MemberInteractionTag.click_count.desc(), MemberInteractionTag.tag_name)
     )
-    for tag_id, tag_name in manual_interaction_tags_result.all():
-        if tag_name not in interaction_tag_names:  # 去重：避免與自動標籤重複
-            tags.append(TagInfo(id=tag_id, name=tag_name, type="interaction", source="manual"))
-            interaction_tag_names.add(tag_name)
+    for tag_id, tag_name in interaction_tags_result.all():
+        tags.append(TagInfo(id=tag_id, name=tag_name, type="interaction"))
 
     # 處理 None 值的欄位
     member_data = {
@@ -344,10 +324,9 @@ async def update_member_interaction_tags(
     # current_user: User = Depends(get_current_user),  # 暫時移除認證
 ):
     """
-    批量更新會員互動標籤（完全取代現有手動標籤）
+    批量更新會員互動標籤（完全取代現有標籤）
 
-    注意：此端點只更新手動新增的互動標籤（MemberInteractionTag），
-         不影響自動產生的標籤（InteractionTag + ComponentInteractionLog）
+    注意：此端點會刪除並重建所有互動標籤（MemberInteractionTag），
          手動標籤的 click_count 固定為 1，不累加
     """
     # 檢查會員是否存在
@@ -374,6 +353,179 @@ async def update_member_interaction_tags(
     await db.commit()
 
     return SuccessResponse(message="互動標籤更新成功")
+
+
+@router.post("/{member_id}/tags/batch-update", response_model=SuccessResponse)
+async def batch_update_member_tags(
+    member_id: int,
+    request: BatchUpdateTagsRequest,
+    db: AsyncSession = Depends(get_db),
+    # current_user: User = Depends(get_current_user),  # 暫時移除認證
+):
+    """
+    批量更新會員標籤（原子操作，保留 click_count）
+
+    UPSERT 邏輯：
+    - 新標籤：INSERT with click_count=1
+    - 現有標籤：保留（不修改 click_count）
+    - 刪除的標籤：DELETE
+
+    特點：
+    1. 單一原子操作（事務保護）
+    2. 保留 click_count 數據
+    3. 支援 message_id 去重機制
+    """
+    # 驗證會員存在
+    result = await db.execute(select(Member).where(Member.id == member_id))
+    member = result.scalar_one_or_none()
+
+    if not member:
+        raise HTTPException(status_code=404, detail="會員不存在")
+
+    try:
+        # === 處理會員標籤 (MemberTag) ===
+
+        # 1. 獲取當前標籤
+        current_member_tags_result = await db.execute(
+            select(MemberTag.tag_name, MemberTag.message_id)
+            .where(MemberTag.member_id == member_id)
+        )
+        current_member_tags = {
+            (row[0], row[1]) for row in current_member_tags_result.all()
+        }
+
+        # 2. 刪除不再需要的標籤（只刪除不在新列表中的標籤）
+        tags_to_delete = [
+            (tag_name, message_id)
+            for tag_name, message_id in current_member_tags
+            if tag_name not in request.member_tags
+        ]
+
+        if tags_to_delete:
+            for tag_name, message_id in tags_to_delete:
+                if message_id is not None:
+                    await db.execute(
+                        delete(MemberTag).where(
+                            and_(
+                                MemberTag.member_id == member_id,
+                                MemberTag.tag_name == tag_name,
+                                MemberTag.message_id == message_id
+                            )
+                        )
+                    )
+                else:
+                    await db.execute(
+                        delete(MemberTag).where(
+                            and_(
+                                MemberTag.member_id == member_id,
+                                MemberTag.tag_name == tag_name,
+                                MemberTag.message_id.is_(None)
+                            )
+                        )
+                    )
+
+        # 3. UPSERT 新標籤（保留 click_count）
+        # 由於 message_id 可以是 NULL，唯一約束不會生效，所以需要先檢查是否存在
+        member_tags_updated = 0
+        existing_tag_names = {tag_name for tag_name, _ in current_member_tags}
+
+        for tag_name in request.member_tags:
+            if tag_name not in existing_tag_names:
+                # 只有標籤不存在時才插入
+                new_tag = MemberTag(
+                    member_id=member_id,
+                    tag_name=tag_name,
+                    tag_source="會員資訊表",
+                    message_id=None,
+                    click_count=1,
+                    tagged_at=datetime.utcnow(),
+                )
+                db.add(new_tag)
+                member_tags_updated += 1
+            else:
+                # 標籤已存在，計入更新數
+                member_tags_updated += 1
+
+        # === 處理互動標籤 (MemberInteractionTag) ===
+
+        # 1. 獲取當前標籤
+        current_interaction_tags_result = await db.execute(
+            select(MemberInteractionTag.tag_name, MemberInteractionTag.message_id)
+            .where(MemberInteractionTag.member_id == member_id)
+        )
+        current_interaction_tags = {
+            (row[0], row[1]) for row in current_interaction_tags_result.all()
+        }
+
+        # 2. 刪除不再需要的標籤
+        interaction_tags_to_delete = [
+            (tag_name, message_id)
+            for tag_name, message_id in current_interaction_tags
+            if tag_name not in request.interaction_tags
+        ]
+
+        if interaction_tags_to_delete:
+            for tag_name, message_id in interaction_tags_to_delete:
+                if message_id is not None:
+                    await db.execute(
+                        delete(MemberInteractionTag).where(
+                            and_(
+                                MemberInteractionTag.member_id == member_id,
+                                MemberInteractionTag.tag_name == tag_name,
+                                MemberInteractionTag.message_id == message_id
+                            )
+                        )
+                    )
+                else:
+                    await db.execute(
+                        delete(MemberInteractionTag).where(
+                            and_(
+                                MemberInteractionTag.member_id == member_id,
+                                MemberInteractionTag.tag_name == tag_name,
+                                MemberInteractionTag.message_id.is_(None)
+                            )
+                        )
+                    )
+
+        # 3. UPSERT 新標籤
+        # 由於 message_id 可以是 NULL，唯一約束不會生效，所以需要先檢查是否存在
+        interaction_tags_updated = 0
+        existing_interaction_tag_names = {tag_name for tag_name, _ in current_interaction_tags}
+
+        for tag_name in request.interaction_tags:
+            if tag_name not in existing_interaction_tag_names:
+                # 只有標籤不存在時才插入
+                new_tag = MemberInteractionTag(
+                    member_id=member_id,
+                    tag_name=tag_name,
+                    tag_source="會員資訊表",
+                    message_id=None,
+                    click_count=1,
+                    tagged_at=datetime.utcnow(),
+                )
+                db.add(new_tag)
+                interaction_tags_updated += 1
+            else:
+                # 標籤已存在，計入更新數
+                interaction_tags_updated += 1
+
+        # 提交事務
+        await db.commit()
+
+        return SuccessResponse(
+            message="標籤更新成功",
+            data={
+                "updated_member_tags": member_tags_updated,
+                "updated_interaction_tags": interaction_tags_updated
+            }
+        )
+
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"標籤更新失敗: {str(e)}"
+        )
 
 
 @router.post("/{member_id}/tags/add", response_model=SuccessResponse)

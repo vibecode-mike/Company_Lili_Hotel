@@ -12,7 +12,8 @@ import logging
 from app.models.tracking import ComponentInteractionLog, InteractionType
 from app.models.message import Message
 from app.models.template import MessageTemplate, TemplateCarouselItem
-from app.models.tag import InteractionTag
+from app.models.tag import InteractionTag, MemberInteractionTag
+from app.models.member import Member
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,12 @@ class TrackingService:
             if interaction_tag_id:
                 await self._update_interaction_tag_stats(
                     db, interaction_tag_id
+                )
+
+            # 4. 寫入 member_interaction_tags（如果有互動標籤）
+            if interaction_tag_id:
+                await self._upsert_member_interaction_tag(
+                    db, line_uid, interaction_tag_id
                 )
 
             # 5. 提交事務
@@ -181,6 +188,89 @@ class TrackingService:
             f"📊 Updated interaction tag {interaction_tag_id} stats: "
             f"trigger_count={total_count}, members={unique_members}"
         )
+
+    async def _resolve_member_from_line_id(
+        self,
+        db: AsyncSession,
+        line_id: str,
+    ) -> Optional[int]:
+        """
+        從 line_id 解析 member_id
+
+        Args:
+            db: 資料庫 session
+            line_id: LINE 用戶 UID
+
+        Returns:
+            member_id 或 None（若會員不存在）
+        """
+        stmt = select(Member.id).where(Member.line_uid == line_id)
+        result = await db.execute(stmt)
+        member_id = result.scalar_one_or_none()
+        return member_id
+
+    async def _upsert_member_interaction_tag(
+        self,
+        db: AsyncSession,
+        line_uid: str,
+        interaction_tag_id: int,
+    ):
+        """
+        創建或更新 member_interaction_tag 記錄
+
+        - 若存在: click_count += 1, 更新 last_triggered_at
+        - 若不存在: 創建新記錄
+
+        Args:
+            db: 資料庫 session
+            line_uid: LINE 用戶 UID
+            interaction_tag_id: 互動標籤 ID
+        """
+        # 1. 解析 member_id
+        member_id = await self._resolve_member_from_line_id(db, line_uid)
+        if not member_id:
+            logger.debug(f"⏭️ Skipping member_interaction_tag: member not found for line_uid={line_uid}")
+            return
+
+        # 2. 獲取互動標籤資訊
+        stmt = select(InteractionTag).where(InteractionTag.id == interaction_tag_id)
+        result = await db.execute(stmt)
+        tag = result.scalar_one_or_none()
+
+        if not tag:
+            logger.warning(f"⚠️ InteractionTag not found: {interaction_tag_id}")
+            return
+
+        # 3. 查詢是否已存在該會員的該標籤（基於 member_id + tag_name）
+        existing_stmt = select(MemberInteractionTag).where(
+            MemberInteractionTag.member_id == member_id,
+            MemberInteractionTag.tag_name == tag.tag_name,
+        )
+        existing_result = await db.execute(existing_stmt)
+        existing_tag = existing_result.scalar_one_or_none()
+
+        if existing_tag:
+            # 4a. 已存在：累加 click_count
+            existing_tag.click_count = (existing_tag.click_count or 1) + 1
+            existing_tag.last_triggered_at = datetime.utcnow()
+            logger.info(
+                f"📈 Updated member_interaction_tag: member={member_id}, "
+                f"tag={tag.tag_name}, click_count={existing_tag.click_count}"
+            )
+        else:
+            # 4b. 不存在：創建新記錄
+            new_tag = MemberInteractionTag(
+                member_id=member_id,
+                tag_name=tag.tag_name,
+                tag_source=tag.tag_source,  # 保留原始來源（訊息模板/問券模板）
+                click_count=1,
+                last_triggered_at=datetime.utcnow(),
+            )
+            db.add(new_tag)
+            logger.info(
+                f"➕ Created member_interaction_tag: member={member_id}, "
+                f"tag={tag.tag_name}, source={tag.tag_source}"
+            )
 
     async def get_campaign_statistics(
         self,
