@@ -613,20 +613,6 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     }
   };
 
-  const copyCard = () => {
-    if (cards.length < 4) {
-      const cardToCopy = cards.find(c => c.id === activeTab);
-      if (cardToCopy) {
-        const newId = Math.max(...cards.map(c => c.id)) + 1;
-        setCards([...cards, { ...cardToCopy, id: newId }]);
-        setActiveTab(newId);
-        toast.success('已複製輪播');
-      }
-    } else {
-      toast.error('最多只能有 4 個輪播');
-    }
-  };
-
   const handleSaveDraft = async () => {
     // 使用與發布相同的完整驗證邏輯
     const isValid = validateForm();
@@ -1755,6 +1741,12 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                 errors={cardErrors.get(currentCard.id)}
                 onDeleteCarousel={deleteCard}
                 onCopyCard={() => {
+                  // 檢查是否已達到上限
+                  if (cards.length >= 10) {
+                    toast.error('最多可新增10個輪播');
+                    return;
+                  }
+
                   // Copy current card functionality
                   const newId = Math.max(...cards.map(c => c.id)) + 1;
                   const copiedCard = { ...currentCard, id: newId };
