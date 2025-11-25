@@ -511,9 +511,24 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
   const deleteCard = () => {
     if (cards.length > 1) {
+      const currentIndex = cards.findIndex(c => c.id === activeTab);
       const newCards = cards.filter(c => c.id !== activeTab);
+
+      // 智能切換邏輯
+      let newActiveTab: number;
+      if (currentIndex < newCards.length) {
+        // 如果有下一張，切換到下一張（索引位置相同）
+        newActiveTab = newCards[currentIndex].id;
+      } else if (currentIndex > 0) {
+        // 如果沒有下一張，切換到前一張
+        newActiveTab = newCards[currentIndex - 1].id;
+      } else {
+        // 保護：切換到第一張
+        newActiveTab = newCards[0].id;
+      }
+
       setCards(newCards);
-      setActiveTab(newCards[0].id);
+      setActiveTab(newActiveTab);
       toast.success('已刪除輪播');
     } else {
       toast.error('至少需保留一個輪播');
@@ -1738,6 +1753,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                 onUpdateCard={updateCard}
                 onImageUpload={(file) => handleImageUpload(file, currentCard)}
                 errors={cardErrors.get(currentCard.id)}
+                onDeleteCarousel={deleteCard}
                 onCopyCard={() => {
                   // Copy current card functionality
                   const newId = Math.max(...cards.map(c => c.id)) + 1;

@@ -91,6 +91,7 @@ interface CarouselMessageEditorProps {
   onAddCarousel: () => void;
   onUpdateCard: (updates: Partial<CarouselCard>) => void;
   onCopyCard?: () => void;
+  onDeleteCarousel?: () => void; // 刪除輪播回調
   errors?: CardErrors; // 當前卡片的錯誤訊息
 }
 
@@ -227,11 +228,18 @@ export default function CarouselMessageEditor({
   onAddCarousel,
   onUpdateCard,
   onCopyCard,
+  onDeleteCarousel,
   errors
 }: CarouselMessageEditorProps) {
   const imageUploadRef = useRef<HTMLInputElement>(null);
   const currentCard = cards.find(c => c.id === activeTab) || cards[0];
   const prevAspectRatioRef = useRef<"1:1" | "1.92:1" | null>(null);
+
+  // 計算卡片顯示編號（基於陣列索引）
+  const getCardDisplayNumber = (cardId: number): number => {
+    const index = cards.findIndex(c => c.id === cardId);
+    return index === -1 ? 1 : index + 1;
+  };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -401,6 +409,29 @@ export default function CarouselMessageEditor({
 
         {/* Right: Form Section */}
         <div className="flex-1 flex flex-col gap-[12px]">
+          {/* Header: 編輯狀態與刪除按鈕 */}
+          <div className="flex items-center justify-between h-[40px] px-[4px]">
+            {/* 左側：正在編輯狀態 */}
+            <div className="flex items-center gap-[8px]">
+              <span className="text-[14px] leading-[20px] text-[#383838]">
+                正在編輯：輪播 {getCardDisplayNumber(activeTab)} / {cards.length}
+              </span>
+            </div>
+
+            {/* 右側：刪除按鈕（僅在 >1 張輪播時顯示）*/}
+            {cards.length > 1 && onDeleteCarousel && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onDeleteCarousel}
+                className="gap-1 h-8 text-gray-600 hover:text-red-600 hover:bg-red-50"
+              >
+                <Trash2 className="h-4 w-4" />
+                刪除此輪播
+              </Button>
+            )}
+          </div>
+
           {/* Carousel Tabs */}
           <div className="relative h-[40px] w-full">
             <div className="flex items-center gap-[8px] flex-nowrap overflow-x-auto">
@@ -418,7 +449,7 @@ export default function CarouselMessageEditor({
                     <p className={`text-[14px] leading-[20px] whitespace-nowrap ${
                       card.id === activeTab ? 'text-[#101828]' : 'text-[#6a7282]'
                     }`}>
-                      輪播 {card.id}
+                      輪播 {getCardDisplayNumber(card.id)}
                     </p>
                   </button>
                 ))}
