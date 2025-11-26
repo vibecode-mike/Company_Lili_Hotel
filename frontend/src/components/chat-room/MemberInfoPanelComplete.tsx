@@ -13,6 +13,7 @@ import { format } from 'date-fns';
 import svgPathsInfo from '../../imports/svg-k0rlkn3s4y';
 import { useToast } from '../ToastProvider';
 import ButtonEdit from '../../imports/ButtonEdit';
+import { formatMemberDateTime, getLatestMemberChatTimestamp } from '../../utils/memberTime';
 
 export interface MemberInfoPanelCompleteProps {
   member: Member;
@@ -20,45 +21,6 @@ export interface MemberInfoPanelCompleteProps {
   interactionTags?: string[];
   onEditTags?: () => void;
 }
-
-const formatDateTime = (value?: string | null) => {
-  if (!value) return '未知';
-  try {
-    const normalized = value.includes('T') ? value : value.replace(' ', 'T');
-    const date = new Date(normalized);
-    if (Number.isNaN(date.getTime())) return '未知';
-    return new Intl.DateTimeFormat('zh-TW', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    })
-      .format(date)
-      .replace(/\//g, '-')
-      .replace('，', ' ');
-  } catch {
-    return '未知';
-  }
-};
-
-const getLatestChatTimestamp = (member?: Member) => {
-  if (!member) return undefined;
-  const fallbackFields = [
-    member.lastChatTime,
-    (member as any)?.lastMessageTime,
-    (member as any)?.last_message_time,
-    (member as any)?.lastMessageAt,
-    (member as any)?.last_message_at,
-    (member as any)?.lastInteractionAt,
-    (member as any)?.last_interaction_at,
-    (member as any)?.latestMessageAt,
-    (member as any)?.latest_message_at,
-    (member as any)?.lastMessage?.timestamp,
-  ];
-  return fallbackFields.find(Boolean);
-};
 
 const normalizeGender = (value?: string | null): 'male' | 'female' | 'undisclosed' => {
   if (!value) return 'undisclosed';
@@ -107,10 +69,10 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
   const hasInteractionTags = Boolean(interactionTags && interactionTags.length > 0);
   const shouldShowTagSection = hasMemberTags || hasInteractionTags || Boolean(onEditTags);
 
-  const createdTimeDisplay = formatDateTime(
+  const createdTimeDisplay = formatMemberDateTime(
     member?.createTime || (member as any)?.created_at || (member as any)?.create_time || (member as any)?.createdAt
   );
-  const latestChatTimeDisplay = formatDateTime(getLatestChatTimestamp(member));
+  const latestChatTimeDisplay = formatMemberDateTime(getLatestMemberChatTimestamp(member));
 
   // 錯誤狀態
   const [errors, setErrors] = React.useState<{

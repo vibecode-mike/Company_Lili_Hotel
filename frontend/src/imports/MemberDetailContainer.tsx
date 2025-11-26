@@ -18,28 +18,7 @@ import { useMembers } from "../contexts/MembersContext";
 import { useAuth } from "../components/auth/AuthContext";
 import type { Member, MemberData } from "../types/member";
 export type { MemberData } from "../types/member";
-
-const formatTimestamp = (dateString?: string) => {
-  if (!dateString) return '未知';
-  try {
-    const normalized = dateString.includes('T') ? dateString : dateString.replace(' ', 'T');
-    const date = new Date(normalized);
-    if (Number.isNaN(date.getTime())) return '無效日期';
-    return new Intl.DateTimeFormat('zh-TW', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    })
-      .format(date)
-      .replace(/\//g, '-')
-      .replace('，', ' ');
-  } catch {
-    return '無效日期';
-  }
-};
+import { formatMemberDateTime, getLatestMemberChatTimestamp } from "../utils/memberTime";
 
 const mapApiMemberToMemberData = (apiMember: any, fallback?: MemberData): MemberData => {
   const rawTags = Array.isArray(apiMember?.tags)
@@ -1322,7 +1301,7 @@ function Container8({ member }: { member?: MemberData }) {
       </div>
       <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0" data-name="Modal/Title&Content">
         <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-          <p className="leading-[1.5] whitespace-pre">{formatTimestamp(member?.createTime)}</p>
+          <p className="leading-[1.5] whitespace-pre">{formatMemberDateTime(member?.createTime)}</p>
         </div>
       </div>
     </div>
@@ -1339,7 +1318,7 @@ function Container9({ member }: { member?: MemberData }) {
       </div>
       <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0" data-name="Modal/Title&Content">
         <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-          <p className="leading-[1.5] whitespace-pre">{formatTimestamp(member?.lastChatTime)}</p>
+          <p className="leading-[1.5] whitespace-pre">{formatMemberDateTime(getLatestMemberChatTimestamp(member))}</p>
         </div>
       </div>
     </div>
