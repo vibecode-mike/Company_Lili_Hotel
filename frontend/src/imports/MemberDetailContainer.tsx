@@ -121,19 +121,6 @@ const extractMessageTimestamp = (message?: any): string | undefined => {
   return typeof raw === 'string' ? raw : String(raw);
 };
 
-const findLatestMessageTimestamp = (messages: any[]): string | undefined => {
-  if (!Array.isArray(messages) || messages.length === 0) {
-    return undefined;
-  }
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const timestamp = extractMessageTimestamp(messages[i]);
-    if (timestamp) {
-      return timestamp;
-    }
-  }
-  return undefined;
-};
-
 /**
  * 會員詳情頁面組件
  * 
@@ -1088,8 +1075,6 @@ function Container6({ member, onMemberUpdate }: { member?: MemberData; onMemberU
   };
 
   React.useEffect(() => {
-    console.log('=== useEffect triggered, member prop changed ===');
-    console.log('member.gender:', member?.gender);
     if (member) {
       setRealName(member.realName);
       setPhone(member.phone);
@@ -1099,7 +1084,6 @@ function Container6({ member, onMemberUpdate }: { member?: MemberData; onMemberU
       setPassportNumber(member.passport_number || "");
       setBirthday(member.birthday || undefined);
       const normalized = normalizeGender(member.gender);
-      console.log('Setting gender from useEffect:', { raw: member.gender, normalized });
       setGender(normalized);
     }
   }, [member]);
@@ -2154,12 +2138,14 @@ export default function MainContainer({
   onBack, 
   member, 
   onNavigate,
-  fallbackMemberName
+  fallbackMemberName,
+  autoRefresh = true,
 }: { 
   onBack?: () => void; 
   member?: MemberData;
   onNavigate?: (page: string, params?: { memberId?: string; memberName?: string }) => void;
   fallbackMemberName?: string;
+  autoRefresh?: boolean;
 } = {}) {
   const [currentMember, setCurrentMember] = useState<MemberData | undefined>(member);
   const { fetchMemberById } = useMembers();
@@ -2169,6 +2155,7 @@ export default function MainContainer({
   }, [member]);
 
   React.useEffect(() => {
+    if (!autoRefresh) return;
     const memberId = member?.id;
     if (!memberId) return;
     let isCancelled = false;
@@ -2188,7 +2175,7 @@ export default function MainContainer({
     return () => {
       isCancelled = true;
     };
-  }, [member?.id, fetchMemberById]);
+  }, [member?.id, fetchMemberById, autoRefresh]);
 
   React.useEffect(() => {
     if (!currentMember?.id) return;
@@ -2201,7 +2188,7 @@ export default function MainContainer({
         if (!token) return;
 
         const response = await fetch(
-          `/api/v1/members/${currentMember.id}/chat-messages?page=1&page_size=50`,
+          `/api/v1/members/${currentMember.id}/chat-messages?page=1&page_size=1`,
           {
             headers: { Authorization: `Bearer ${token}` },
           }
@@ -2212,22 +2199,14 @@ export default function MainContainer({
         }
 
         const result = await response.json();
-        const apiMessages: any[] = result?.data?.messages || [];
-        if (!Array.isArray(apiMessages) || apiMessages.length === 0) {
-          return;
-        }
-
-        // 聊天室邏輯：API 回傳最新在前，需反轉為舊→新
-        const normalizedMessages = [...apiMessages].reverse();
-        const timestamp = findLatestMessageTimestamp(normalizedMessages);
-
+        const latestMessage = result?.data?.messages?.[0];
+        const timestamp = extractMessageTimestamp(latestMessage);
         if (!timestamp || isCancelled) return;
 
         setCurrentMember(prev => {
-          if (!prev) {
+          if (!prev || prev.lastChatTime === timestamp) {
             return prev;
           }
-          if (prev.lastChatTime === timestamp) return prev;
           return { ...prev, lastChatTime: timestamp };
         });
       } catch (error) {

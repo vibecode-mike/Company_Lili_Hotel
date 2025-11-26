@@ -61,6 +61,7 @@ export default function MemberDetailPage() {
         member={memberData}
         onBack={() => navigate('member-management')}
         onNavigate={navigate}
+        autoRefresh={false}
       />
     </MainLayout>
   );

@@ -4,7 +4,7 @@
 """
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Dict, Any, List, Union
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 
@@ -170,10 +170,14 @@ class MessageCreate(BaseModel):
     def validate_scheduled_at_future(cls, v):
         """驗證排程時間必須在未來"""
         if v is not None:
-            # 確保時區一致性：移除時區資訊進行比較
-            now = datetime.now()
-            scheduled = v.replace(tzinfo=None) if v.tzinfo is not None else v
-            if scheduled <= now:
+            # 確保比較基準一致：統一轉換到本地時區
+            local_tz = datetime.now().astimezone().tzinfo or timezone.utc
+            now_local = datetime.now(local_tz)
+            if v.tzinfo is None:
+                scheduled_local = v.replace(tzinfo=local_tz)
+            else:
+                scheduled_local = v.astimezone(local_tz)
+            if scheduled_local <= now_local:
                 raise ValueError('排程發送時間不可早於目前時間')
         return v
 
