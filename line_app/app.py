@@ -3338,7 +3338,7 @@ def on_text(event: MessageEvent):
         # 儲存 outgoing message 到資料庫
         if thread_id:
             try:
-                insert_conversation_message(
+                msg_id = insert_conversation_message(
                     thread_id=thread_id,
                     role="assistant",
                     direction="outgoing",
@@ -3347,6 +3347,27 @@ def on_text(event: MessageEvent):
                     message_source=message_source,
                     status="sent"
                 )
+
+                # ✅ 通知後端自動回應（GPT/keyword/always 都要通知）
+                # 這樣前端聊天室可以即時顯示自動回應
+                try:
+                    backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8700")
+                    requests.post(
+                        f"{backend_url}/api/v1/line/message-notify",
+                        json={
+                            "line_uid": uid,
+                            "message_text": reply_text,
+                            "timestamp": int(datetime.datetime.now().timestamp() * 1000),
+                            "message_id": str(msg_id) if msg_id else f"auto_{int(datetime.datetime.now().timestamp())}",
+                            "direction": "outgoing",
+                            "source": message_source  # gpt/keyword/always
+                        },
+                        timeout=5
+                    )
+                    logging.info(f"[on_text] Notified backend about {message_source} response")
+                except Exception as e:
+                    logging.error(f"[on_text] Failed to notify auto response: {e}")
+
             except Exception:
                 logging.exception("[on_text] Failed to save outgoing message")
     else:

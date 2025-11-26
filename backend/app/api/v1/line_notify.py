@@ -23,6 +23,8 @@ class MessageNotification(BaseModel):
     message_text: str
     timestamp: int  # Unix timestamp (milliseconds)
     message_id: str
+    direction: str = "incoming"  # incoming=用戶訊息, outgoing=自動回應
+    source: str | None = None    # gpt/keyword/always/manual (僅 outgoing 有值)
 
 
 @router.post("/line/message-notify")
@@ -61,12 +63,16 @@ async def notify_new_message(
         time_str = f"{period} {hour_12:02d}:{minute:02d}"
 
         # 3. 構建前端訊息格式
+        # 根據 direction 判斷訊息類型: outgoing=官方回應, incoming=用戶訊息
+        msg_type = "official" if notification.direction == "outgoing" else "user"
+
         message_data = {
-            "id": notification.message_id,  # 使用 LINE event ID
-            "type": "user",
+            "id": notification.message_id,
+            "type": msg_type,
             "text": notification.message_text,
             "time": time_str,
-            "isRead": False
+            "isRead": False,
+            "source": notification.source  # 傳遞來源 (gpt/keyword/always)
         }
 
         # 4. 透過 WebSocket 推送給前端
