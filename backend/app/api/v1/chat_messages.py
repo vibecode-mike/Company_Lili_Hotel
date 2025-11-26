@@ -84,6 +84,7 @@ class ChatMessage(BaseModel):
     type: str  # 'user' | 'official'
     text: str
     time: str  # "上午 03:30"
+    timestamp: Optional[str] = None  # ISO 格式完整時間戳，用於日期顯示
     isRead: bool = False
     source: Optional[str] = None  # 'manual' | 'gpt' | 'keyword' | 'welcome' | 'always'
 
@@ -208,11 +209,15 @@ async def get_chat_messages(
             # 獲取 message_source（新增）
             msg_source = record.message_source if hasattr(record, 'message_source') else record[5]
 
+            # 轉換時間為 ISO 格式
+            timestamp_str = created_at.isoformat() if created_at else None
+
             messages.append(ChatMessage(
                 id=msg_id,
                 type=msg_type,
                 text=text_content,
                 time=time_str,
+                timestamp=timestamp_str,
                 isRead=is_read,
                 source=msg_source
             ))

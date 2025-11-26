@@ -12,6 +12,7 @@ export interface ChatMessage {
   type: 'user' | 'official';
   text: string;
   time: string;
+  timestamp?: string | null;  // ✅ 新增：ISO 格式完整時間戳，用於日期顯示
   isRead: boolean;
   source?: string | null;  // ✅ 新增：message_source 欄位 ('manual' | 'gpt' | 'keyword' | 'welcome' | 'always' | null)
 }

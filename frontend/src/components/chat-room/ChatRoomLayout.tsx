@@ -4,7 +4,7 @@
  * - 右側：聊天區域（藍色背景 + 對話氣泡 + 輸入框）
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { ChatRoomLayoutProps, ChatMessage } from './types';
 import type { Member } from '../../types/member';
 import { useWebSocket } from '../../hooks/useWebSocket';
@@ -26,6 +26,19 @@ import Container from '../../imports/Container-8548-103';
 
 // Chat messages constants
 const PAGE_SIZE = 6;  // 每次載入 6 條訊息（3 對問答）
+
+// 格式化日期為中文格式（2025/11/27（四））
+const formatDateWithWeekday = (dateStr?: string | null): string => {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return '';
+  const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const weekday = weekdays[date.getDay()];
+  return `${year}/${month}/${day}（${weekday}）`;
+};
 
 // Removed mock messages - will load from API
 const mockMessages_REMOVED: ChatMessage[] = [
@@ -335,6 +348,22 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
   // 建立 WebSocket 連線（優先使用 member?.id，其次使用傳入的 memberId）
   const wsTargetId = member?.id?.toString() || memberId;
   const { isConnected: isRealtimeConnected } = useWebSocket(wsTargetId, handleNewMessage);
+
+  // 計算最新訊息的日期（用於聊天框頂部日期標籤）
+  const latestChatDate = useMemo(() => {
+    // 使用最後一則訊息的時間戳
+    if (messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage.timestamp) {
+        return formatDateWithWeekday(lastMessage.timestamp);
+      }
+    }
+    // 備用：使用會員的最後聊天時間
+    if (member?.lastChatTime) {
+      return formatDateWithWeekday(member.lastChatTime);
+    }
+    return '';
+  }, [messages, member?.lastChatTime]);
 
   // Load chat messages from API
   // 支援兩種情況：1) member?.id 存在  2) 只有 memberId
@@ -1001,7 +1030,7 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
             <div className="absolute bg-[rgba(246,249,253,0.7)] left-[calc(50%+0.5px)] rounded-[28px] top-[16px] translate-x-[-50%] z-10">
               <div aria-hidden="true" className="absolute border-[#e8e8e8] border-[0.4px] border-solid inset-0 pointer-events-none rounded-[28px]" />
               <div className="bg-clip-padding border-0 border-[transparent] border-solid box-border content-stretch flex gap-[10px] items-center justify-center px-[8px] py-[2px] relative">
-                <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#6e6e6e] text-[12px] text-center text-nowrap whitespace-pre">2025/10/08（三）</p>
+                {latestChatDate && <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#6e6e6e] text-[12px] text-center text-nowrap whitespace-pre">{latestChatDate}</p>}
               </div>
             </div>
 
