@@ -1023,7 +1023,7 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
           <div
             className="bg-gradient-to-b from-[#a5d8ff] to-[#d0ebff] content-stretch flex flex-col gap-0 items-start relative w-full rounded-[20px] overflow-hidden"
             style={{
-              height: '800px',
+              height: '900px',
               minHeight: '400px'
             }}
           >
