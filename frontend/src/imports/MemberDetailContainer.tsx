@@ -106,7 +106,7 @@ const mapMemberToMemberData = (memberSource: Member, fallback?: MemberData): Mem
 
 const extractMessageTimestamp = (message?: any): string | undefined => {
   if (!message) return undefined;
-  return (
+  const raw =
     message?.timestamp ??
     message?.created_at ??
     message?.createdAt ??
@@ -114,8 +114,24 @@ const extractMessageTimestamp = (message?: any): string | undefined => {
     message?.sentAt ??
     message?.created_at_iso ??
     message?.createdAtIso ??
-    undefined
-  );
+    message?.time;
+  if (!raw) {
+    return undefined;
+  }
+  return typeof raw === 'string' ? raw : String(raw);
+};
+
+const findLatestMessageTimestamp = (messages: any[]): string | undefined => {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return undefined;
+  }
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const timestamp = extractMessageTimestamp(messages[i]);
+    if (timestamp) {
+      return timestamp;
+    }
+  }
+  return undefined;
 };
 
 /**
@@ -2185,7 +2201,7 @@ export default function MainContainer({
         if (!token) return;
 
         const response = await fetch(
-          `/api/v1/members/${currentMember.id}/chat-messages?page=1&page_size=1`,
+          `/api/v1/members/${currentMember.id}/chat-messages?page=1&page_size=50`,
           {
             headers: { Authorization: `Bearer ${token}` },
           }
@@ -2197,17 +2213,21 @@ export default function MainContainer({
 
         const result = await response.json();
         const apiMessages: any[] = result?.data?.messages || [];
-
-        if (apiMessages.length === 0) {
+        if (!Array.isArray(apiMessages) || apiMessages.length === 0) {
           return;
         }
 
-        const timestamp = extractMessageTimestamp(apiMessages[0]);
+        // 聊天室邏輯：API 回傳最新在前，需反轉為舊→新
+        const normalizedMessages = [...apiMessages].reverse();
+        const timestamp = findLatestMessageTimestamp(normalizedMessages);
 
         if (!timestamp || isCancelled) return;
 
         setCurrentMember(prev => {
-          if (!prev || prev.lastChatTime === timestamp) return prev;
+          if (!prev) {
+            return prev;
+          }
+          if (prev.lastChatTime === timestamp) return prev;
           return { ...prev, lastChatTime: timestamp };
         });
       } catch (error) {
