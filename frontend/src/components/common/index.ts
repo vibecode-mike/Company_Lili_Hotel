@@ -54,6 +54,13 @@ export type {
   SecondaryButtonProps,
 } from './buttons';
 
+// ========== 刪除組件 ==========
+export { DeleteButton } from './DeleteButton';
+export { DeleteConfirmationModal } from './DeleteConfirmationModal';
+
+export type { DeleteButtonProps } from './DeleteButton';
+export type { DeleteConfirmationModalProps } from './DeleteConfirmationModal';
+
 // ========== 图标组件 ==========
 export {
   ArrowIcon,

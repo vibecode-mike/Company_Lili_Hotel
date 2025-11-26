@@ -805,3 +805,50 @@ class MessageService:
 
         logger.debug(f"📊 消息 ID={message_id} 點擊次數: {total} (來自標籤: {tag_names})")
         return total
+
+    async def delete_message(
+        self,
+        db: AsyncSession,
+        message_id: int
+    ) -> bool:
+        """刪除消息（僅限草稿和已排程狀態）
+
+        Args:
+            db: 数据库 session
+            message_id: 消息 ID
+
+        Returns:
+            是否刪除成功
+
+        Raises:
+            ValueError: 消息不存在或狀態不允許刪除
+        """
+        # 1. 查詢消息
+        stmt = select(Message).where(Message.id == message_id).options(
+            selectinload(Message.template)
+        )
+        result = await db.execute(stmt)
+        message = result.scalar_one_or_none()
+
+        if not message:
+            raise ValueError(f"消息不存在: ID={message_id}")
+
+        # 2. 檢查狀態（僅允許刪除草稿和已排程）
+        allowed_statuses = ["草稿", "已排程"]
+        if message.send_status not in allowed_statuses:
+            raise ValueError(f"無法刪除狀態為「{message.send_status}」的消息，僅可刪除草稿或已排程消息")
+
+        logger.info(f"🗑️ 開始刪除消息: ID={message_id}, 狀態={message.send_status}")
+
+        # 3. 刪除關聯的 template（如果存在）
+        if message.template:
+            template_id = message.template.id
+            await db.delete(message.template)
+            logger.debug(f"🗑️ 刪除關聯模板: ID={template_id}")
+
+        # 4. 刪除消息本身
+        await db.delete(message)
+        await db.commit()
+
+        logger.info(f"✅ 消息刪除成功: ID={message_id}")
+        return True

@@ -21,7 +21,7 @@ import uploadIconPaths from '../imports/svg-wb8nmg8j6i';
 import messageTextSvgPaths from '../imports/svg-hbkooryl5v';
 import FlexMessageEditorNew from './flex-message/FlexMessageEditorNew';
 import CarouselMessageEditor, { type CarouselCard } from './CarouselMessageEditor';
-import { TriggerImagePreview, TriggerTextPreview, GradientPreviewContainer } from './common/PreviewContainers';
+import { TriggerImagePreview, TriggerTextPreview, GradientPreviewContainer, DeleteButton } from './common';
 import ActionTriggerTextMessage from '../imports/ActionTriggerTextMessage';
 import ActionTriggerImageMessage from '../imports/ActionTriggerImageMessage';
 import Sidebar from './Sidebar';
@@ -75,9 +75,11 @@ interface MessageCreationProps {
     scheduledDate?: Date;
     scheduledTime?: { hours: string; minutes: string };
   };
+  /** 刪除訊息回調（僅在編輯已排程或草稿時顯示刪除按鈕） */
+  onDelete?: () => Promise<void> | void;
 }
 
-export default function MessageCreation({ onBack, onNavigate, onNavigateToSettings, editMessageId, editMessageData }: MessageCreationProps = {}) {
+export default function MessageCreation({ onBack, onNavigate, onNavigateToSettings, editMessageId, editMessageData, onDelete }: MessageCreationProps = {}) {
   // Get quota status and refreshAll from MessagesContext
   const { quotaStatus, refreshAll } = useMessages();
 
@@ -1598,13 +1600,22 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                 <p className="text-[32px] text-[#383838]">群發訊息類型</p>
               </div>
               <div className="flex gap-[8px] items-center">
-                <Button 
+                {/* 刪除按鈕：僅在編輯已排程或草稿時顯示 */}
+                {editMessageId && onDelete && (
+                  <DeleteButton
+                    onDelete={onDelete}
+                    itemName={title || '此訊息'}
+                    title="確認刪除訊息"
+                    description={`確定要刪除「${title || '此訊息'}」嗎？刪除後將無法復原。`}
+                  />
+                )}
+                <Button
                   onClick={handleSaveDraft}
                   className="bg-[#f0f6ff] text-[#0f6beb] hover:bg-[#e0ecff] h-[48px] px-3 min-w-[72px] rounded-[16px]"
                 >
                   儲存草稿
                 </Button>
-                <Button 
+                <Button
                   onClick={handlePublish}
                   className="bg-[#242424] hover:bg-[#383838] text-white h-[48px] px-3 min-w-[72px] rounded-[16px]"
                 >
@@ -1908,7 +1919,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                                 <p className="basis-0 font-normal grow leading-[1.5] min-h-px min-w-px shrink-0 text-[#a8a8a8] text-[16px] text-center">＋ 新增標籤</p>
                               </button>
                             </DialogTrigger>
-                            <DialogContentNoClose className="max-w-[750px] max-h-[90vh] p-0 bg-transparent border-0">
+                            <DialogContentNoClose className="max-w-[1000px] max-h-[90vh] p-0 bg-transparent border-0">
                               <DialogTitle className="sr-only">篩選目標對象</DialogTitle>
                               <DialogDescription className="sr-only">選擇或建立標籤來篩選目標對象</DialogDescription>
                               <FilterModal 

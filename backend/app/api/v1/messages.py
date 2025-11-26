@@ -329,3 +329,36 @@ async def get_message(
     except Exception as e:
         logger.error(f"❌ 获取消息详情失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取消息详情失败: {str(e)}")
+
+
+@router.delete("/{message_id}", response_model=SuccessResponse)
+async def delete_message(
+    message_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    刪除群發消息（僅限草稿和已排程狀態）
+
+    只有狀態為「草稿」或「已排程」的消息才能刪除
+    已發送、發送中或失敗的消息不能刪除
+
+    Returns:
+        SuccessResponse: 刪除成功確認
+    """
+    try:
+        logger.info(f"🗑️ 刪除消息請求: ID={message_id}")
+
+        await message_service.delete_message(db, message_id)
+
+        logger.info(f"✅ 消息刪除成功: ID={message_id}")
+
+        return SuccessResponse(
+            data={"message": "訊息已刪除", "deleted_id": message_id}
+        )
+
+    except ValueError as e:
+        logger.warning(f"⚠️ 刪除消息失敗: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"❌ 刪除消息失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"刪除消息失敗: {str(e)}")

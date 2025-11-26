@@ -123,9 +123,9 @@ export default function LineApiSettingsContent() {
   };
 
   // 🆕 自動獲取 LINE Bot Basic ID
-  const fetchBasicId = async (token: string): Promise<void> => {
+  const fetchBasicId = async (token: string): Promise<boolean> => {
     if (!token || token.trim().length === 0) {
-      return;
+      return false;
     }
 
     setIsFetchingBasicId(true);
@@ -157,12 +157,14 @@ export default function LineApiSettingsContent() {
             body: JSON.stringify({ basic_id: data.basicId }),
           });
         }
+        return true;
       } else {
-        throw new Error(data.error || '無法獲取 Basic ID');
+        throw new Error(data.error?.message || data.error || '無法獲取 Basic ID');
       }
     } catch (error) {
       console.error('[ERROR] 獲取 Basic ID 失敗:', error);
       setBasicIdError('無法自動獲取 Basic ID，請確認 Token 是否正確');
+      return false;
     } finally {
       setIsFetchingBasicId(false);
     }
@@ -889,9 +891,15 @@ export default function LineApiSettingsContent() {
                     type="text"
                     placeholder="請輸入 Access Token"
                     value={channelAccessToken}
-                    onChange={(e) => setChannelAccessToken(e.target.value)}
-                    className="bg-[#f3f3f5] h-[36px] px-[12px] py-[4px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] border-none outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                    onChange={(e) => {
+                      setChannelAccessToken(e.target.value);
+                      setBasicIdError(''); // 清除錯誤訊息
+                    }}
+                    className={`bg-[#f3f3f5] h-[36px] px-[12px] py-[4px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] border-none outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all ${basicIdError ? 'ring-2 ring-red-500' : ''}`}
                   />
+                  {basicIdError && (
+                    <p className="text-[12px] text-red-500">{basicIdError}</p>
+                  )}
                 </div>
 
                 {/* Next Button */}
@@ -902,9 +910,12 @@ export default function LineApiSettingsContent() {
                       await saveSettings({ channel_access_token: channelAccessToken });
 
                       // 🆕 自動獲取 Basic ID
-                      await fetchBasicId(channelAccessToken);
+                      const success = await fetchBasicId(channelAccessToken);
 
-                      goToNextCard(5);
+                      // 只有成功時才跳到下一步
+                      if (success) {
+                        goToNextCard(5);
+                      }
                     }
                   }}
                   className={`h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] flex items-center justify-center transition-colors ${

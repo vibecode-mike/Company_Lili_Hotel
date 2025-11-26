@@ -4,7 +4,7 @@ import Sidebar from './Sidebar';
 import svgPathsModal from "../imports/svg-9n0wtrekj3";
 import KeywordTagsInput from './KeywordTagsInput';
 import TriggerTimeOptions, { TriggerTimeType } from './TriggerTimeOptions';
-import { SimpleBreadcrumb } from './common/Breadcrumb';
+import { SimpleBreadcrumb, DeleteButton } from './common';
 import { useAutoReplies, type AutoReply as AutoReplyRecord, type AutoReplyPayload } from '../contexts/AutoRepliesContext';
 
 interface CreateAutoReplyProps {
@@ -293,10 +293,9 @@ export default function CreateAutoReplyInteractive({
     });
   };
 
+  // 刪除自動回應的實際操作（由 DeleteButton 調用）
   const handleDeleteAutoReply = async () => {
     if (!autoReplyId) return;
-    const confirmed = window.confirm('確定要刪除此自動回應嗎？');
-    if (!confirmed) return;
 
     setIsDeleting(true);
     try {
@@ -358,34 +357,13 @@ export default function CreateAutoReplyInteractive({
                   </div>
                   <div className="content-stretch flex gap-[4px] items-center justify-end relative shrink-0">
                     {isEditing && autoReplyId && (
-                      <button
-                        type="button"
-                        onClick={handleDeleteAutoReply}
+                      <DeleteButton
+                        onDelete={handleDeleteAutoReply}
+                        itemName="此自動回應"
+                        title="確認刪除自動回應"
+                        description="確定要刪除此自動回應嗎？刪除後將無法復原。"
                         disabled={isDeleting || isHydrating}
-                        className={`box-border content-stretch flex gap-[10px] items-center p-[8px] relative rounded-[16px] shrink-0 transition-colors ${
-                          isDeleting || isHydrating
-                            ? 'cursor-not-allowed opacity-60'
-                            : 'cursor-pointer hover:bg-[#ffebee] active:bg-[#ffebee]'
-                        }`}
-                      >
-                        <div className="relative shrink-0 size-[32px]">
-                          <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
-                            <g clipPath="url(#clip0_delete_main)">
-                              <path
-                                d={svgPathsModal.pcbf700}
-                                fill="var(--fill-0, #6E6E6E)"
-                                className="transition-colors"
-                              />
-                            </g>
-                            <defs>
-                              <clipPath id="clip0_delete_main"><rect fill="white" height="32" width="32" /></clipPath>
-                            </defs>
-                          </svg>
-                        </div>
-                        <span className="font-['Noto_Sans_TC:Regular',sans-serif] text-[#F44336] text-[16px]">
-                          {isDeleting ? '刪除中…' : '刪除'}
-                        </span>
-                      </button>
+                      />
                     )}
                     <button
                       type="button"

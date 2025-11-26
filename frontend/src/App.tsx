@@ -30,6 +30,20 @@ const routes: Record<Page, React.ComponentType> = {
 };
 
 /**
+ * 頁面標題映射
+ * 用於動態更新瀏覽器標籤標題
+ */
+const pageTitles: Record<Page, string> = {
+  'message-list': '活動與訊息推播',
+  'flex-editor': 'Flex Message 編輯器',
+  'auto-reply': '自動回應',
+  'member-management': '會員管理',
+  'member-detail': '會員詳情',
+  'chat-room': '聊天室',
+  'line-api-settings': 'LINE API 設定',
+};
+
+/**
  * 主應用內容組件
  * 使用 Context 來管理路由和狀態，避免 prop drilling
  */
@@ -73,34 +87,21 @@ function AppContent() {
       return;
     }
 
-    // Unlock navigation once when設定完成
-    if (hasLockedStateRef.current || !hasRoutedAfterUnlockRef.current) {
-      // 檢查是否有儲存的路由狀態 (重新整理的情況)
-      const savedNavigationState = localStorage.getItem('navigation_state');
-
-      console.log('[App.tsx] Unlock navigation check:', {
-        savedNavigationState,
-        currentPage,
-        hasLockedStateRef: hasLockedStateRef.current,
-        hasRoutedAfterUnlockRef: hasRoutedAfterUnlockRef.current
-      });
-
-      // 只在真正的首次登入時導航到會員管理頁
-      // 條件：沒有保存的導航狀態 AND 當前頁面是初始頁面 (member-management)
-      // 如果有保存的狀態或 currentPage 已變更，表示是重新整理或已導航，不應該強制導航
-      if (!savedNavigationState && currentPage === 'member-management') {
-        console.log('[App.tsx] First login, navigating to member-management');
-        navigate('member-management');
-      } else {
-        console.log('[App.tsx] Skipping navigation - either has saved state or already navigated');
-      }
-
+    // LINE 已配置，解鎖導航
+    // NavigationContext 已經從 localStorage 恢復了正確的頁面狀態
+    // 這裡不需要再做任何導航操作，讓用戶保持在當前頁面
+    if (hasLockedStateRef.current) {
+      console.log('[App.tsx] LINE configured, unlocking navigation. Current page:', currentPage);
       hasLockedStateRef.current = false;
       hasRoutedAfterUnlockRef.current = true;
-    } else {
-      console.log('[App.tsx] Already unlocked, skipping navigation logic');
     }
   }, [isAuthenticated, isStatusLoading, hasFetchedOnce, isConfigured, currentPage, navigate]);
+
+  // 動態更新頁面標題
+  useEffect(() => {
+    const pageTitle = pageTitles[currentPage] || '會員管理';
+    document.title = `${pageTitle} | Lili Hotel`;
+  }, [currentPage]);
 
   // Check authentication status
   if (!isAuthenticated) {

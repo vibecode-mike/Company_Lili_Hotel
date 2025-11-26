@@ -1,17 +1,52 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import MessageCreation from '../components/MessageCreation';
 import { useNavigation } from '../contexts/NavigationContext';
+import { useMessages } from '../contexts/MessagesContext';
 
 /**
  * LINE Flex Message 編輯器頁面
  */
 export default function FlexEditorPage() {
   const { params, navigate } = useNavigation();
+  const { deleteMessage, refreshAll } = useMessages();
   const [messageData, setMessageData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
   // Get message data if editing
   const editMessageId = params.messageId;
+
+  // 刪除訊息處理函數
+  const handleDeleteMessage = async () => {
+    if (!editMessageId) return;
+
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`/api/v1/messages/${editMessageId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || '刪除失敗');
+      }
+
+      // 更新本地狀態
+      deleteMessage(editMessageId);
+      // 刷新訊息列表
+      refreshAll();
+      toast.success('訊息已刪除');
+      navigate('message-list');
+    } catch (error) {
+      console.error('刪除訊息失敗:', error);
+      toast.error(error instanceof Error ? error.message : '刪除訊息失敗，請稍後再試');
+      throw error;
+    }
+  };
 
   // Fetch message data from API when editing
   useEffect(() => {
@@ -141,6 +176,7 @@ export default function FlexEditorPage() {
       onNavigateToSettings={() => navigate('line-api-settings')}
       editMessageId={editMessageId}
       editMessageData={messageData}
+      onDelete={editMessageId ? handleDeleteMessage : undefined}
     />
   );
 }

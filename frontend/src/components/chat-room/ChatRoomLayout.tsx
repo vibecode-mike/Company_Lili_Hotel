@@ -203,7 +203,7 @@ function ReadOnlyInfo({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function ChatRoomLayout({ member: initialMember }: ChatRoomLayoutProps) {
+export default function ChatRoomLayout({ member: initialMember, memberId }: ChatRoomLayoutProps) {
   const { fetchMemberById } = useMembers();
   const [member, setMember] = useState<Member | undefined>(initialMember);
   const [isLoadingMember, setIsLoadingMember] = useState(false);
@@ -263,12 +263,14 @@ export default function ChatRoomLayout({ member: initialMember }: ChatRoomLayout
   };
 
   // Fetch full member details when component mounts
+  // 支援兩種情況：1) initialMember 存在  2) 只有 memberId
   useEffect(() => {
-    if (!initialMember?.id) return;
+    const targetId = initialMember?.id || memberId;
+    if (!targetId) return;
 
     const loadMemberDetail = async () => {
       setIsLoadingMember(true);
-      const fullMember = await fetchMemberById(initialMember.id);
+      const fullMember = await fetchMemberById(targetId);
       if (fullMember) {
         setMember(fullMember);
       }
@@ -276,7 +278,7 @@ export default function ChatRoomLayout({ member: initialMember }: ChatRoomLayout
     };
 
     loadMemberDetail();
-  }, [initialMember?.id, fetchMemberById]);
+  }, [initialMember?.id, memberId, fetchMemberById]);
 
   // Sync member data to formData when member changes
   useEffect(() => {
@@ -330,18 +332,21 @@ export default function ChatRoomLayout({ member: initialMember }: ChatRoomLayout
     }
   }, [member]);
 
-  // 建立 WebSocket 連線
-  useWebSocket(member?.id?.toString(), handleNewMessage);
+  // 建立 WebSocket 連線（優先使用 member?.id，其次使用傳入的 memberId）
+  const wsTargetId = member?.id?.toString() || memberId;
+  useWebSocket(wsTargetId, handleNewMessage);
 
   // Load chat messages from API
+  // 支援兩種情況：1) member?.id 存在  2) 只有 memberId
   const loadChatMessages = useCallback(async (pageNum: number = 1, append: boolean = false) => {
-    if (!member?.id) return;
+    const targetId = member?.id?.toString() || memberId;
+    if (!targetId) return;
 
     setIsLoading(true);
     try {
       const token = localStorage.getItem('auth_token');
       const response = await fetch(
-        `/api/v1/members/${member.id}/chat-messages?page=${pageNum}&page_size=${PAGE_SIZE}`,
+        `/api/v1/members/${targetId}/chat-messages?page=${pageNum}&page_size=${PAGE_SIZE}`,
         {
           headers: { 'Authorization': `Bearer ${token}` }
         }
@@ -374,7 +379,7 @@ export default function ChatRoomLayout({ member: initialMember }: ChatRoomLayout
     } finally {
       setIsLoading(false);
     }
-  }, [member?.id]);
+  }, [member?.id, memberId]);
 
   // Handle scroll for infinite scrolling
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
@@ -398,12 +403,13 @@ export default function ChatRoomLayout({ member: initialMember }: ChatRoomLayout
     }
   }, [hasMore, isLoading, page, loadChatMessages]);
 
-  // Load initial messages when member changes
+  // Load initial messages when member changes or memberId is available
   useEffect(() => {
-    if (member?.id) {
+    const targetId = member?.id?.toString() || memberId;
+    if (targetId) {
       loadChatMessages(1, false);
     }
-  }, [member?.id, loadChatMessages]);
+  }, [member?.id, memberId, loadChatMessages]);
 
   // Auto-scroll to bottom on initial load
   useEffect(() => {

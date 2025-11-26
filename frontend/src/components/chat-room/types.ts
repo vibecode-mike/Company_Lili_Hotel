@@ -49,7 +49,8 @@ export interface ChatInputProps {
 }
 
 export interface ChatRoomLayoutProps {
-  member: Member;
+  member?: Member;
+  memberId?: string;  // 支援直接傳入 memberId，用於 WebSocket 連線
 }
 
 // ========== 标签相关 ==========

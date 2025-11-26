@@ -10,7 +10,10 @@ import { ChatRoomLayout } from './chat-room';
 
 interface ChatRoomProps {
   member: Member | undefined;
+  memberId?: string;  // 支援直接傳入 memberId，用於 WebSocket 連線
+  memberName?: string; // 會員名稱（用於麵包屑顯示）
   onBack: () => void;
+  onNavigateToMemberDetail?: () => void; // 導航到會員詳情頁
 }
 
 // 返回按钮组件
@@ -44,9 +47,22 @@ function BackButtonWithArrow({ onClick }: { onClick: () => void }) {
   );
 }
 
-export default function ChatRoom({ member, onBack }: ChatRoomProps) {
-  // Handle case when member is undefined
-  if (!member) {
+export default function ChatRoom({ member, memberId, memberName, onBack, onNavigateToMemberDetail }: ChatRoomProps) {
+  // 顯示名稱優先順序：傳入的 memberName > member.username > member.realName > '會員'
+  const displayName = memberName || member?.username || member?.realName || '會員';
+
+  // Debug log
+  console.log('[ChatRoom] Props:', {
+    memberId,
+    memberName,
+    displayName,
+    hasOnBack: !!onBack,
+    hasOnNavigateToMemberDetail: !!onNavigateToMemberDetail
+  });
+
+  // 只有當 member 和 memberId 都沒有時，才顯示錯誤頁面
+  // 有 memberId 時，即使 member 還沒載入，也可以先建立 WebSocket 連線
+  if (!member && !memberId) {
     return (
       <div className="bg-slate-50 content-stretch flex flex-col items-start relative w-full h-full overflow-y-auto" data-name="Main Container">
         <div className="flex-1 flex items-center justify-center">
@@ -67,31 +83,39 @@ export default function ChatRoom({ member, onBack }: ChatRoomProps) {
 
   return (
     <div className="bg-slate-50 content-stretch flex flex-col items-start relative w-full h-full overflow-y-auto" data-name="Main Container">
-      {/* Breadcrumb */}
+      {/* Breadcrumb - 三層：會員管理 > 會員資訊 > 聊天 */}
       <div className="relative shrink-0 w-full">
         <div className="flex flex-row items-center size-full">
           <div className="box-border content-stretch flex gap-[4px] items-center pb-0 pt-[48px] px-[40px] relative w-full">
-            <Breadcrumb 
+            <Breadcrumb
               items={[
-                { label: '會員管理', onClick: onBack },
-                { label: member.username, active: true }
-              ]} 
+                {
+                  label: '會員管理',
+                  onClick: () => {
+                    console.log('[ChatRoom Breadcrumb] 會員管理 clicked');
+                    onBack();
+                  }
+                },
+                {
+                  label: displayName,
+                  onClick: onNavigateToMemberDetail ? () => {
+                    console.log('[ChatRoom Breadcrumb] 會員詳情 clicked');
+                    onNavigateToMemberDetail();
+                  } : undefined
+                },
+                { label: '聊天', active: true }
+              ]}
             />
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* Main Content - 移除返回按鈕 */}
       <div className="relative shrink-0 w-full">
         <div className="size-full">
           <div className="box-border content-stretch flex flex-col gap-[32px] items-start p-[40px] relative w-full">
-            {/* Back Button */}
-            <div className="content-stretch flex flex-col gap-[8px] items-start relative shrink-0 w-full">
-              <BackButtonWithArrow onClick={onBack} />
-            </div>
-
             {/* Chat Room Layout */}
-            <ChatRoomLayout member={member} onBack={onBack} />
+            <ChatRoomLayout member={member} memberId={memberId} onBack={onBack} />
           </div>
         </div>
       </div>
