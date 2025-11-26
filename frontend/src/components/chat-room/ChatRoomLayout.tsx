@@ -1089,7 +1089,7 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
 
               {/* Messages list */}
               {messages.map((message) => (
-                <div key={message.id} data-timestamp={message.timestamp || ''}>
+                <div key={message.id} data-timestamp={message.timestamp || ''} className="w-full">
                   <MessageBubble
                     message={message}
                     memberAvatar={member?.lineAvatar}
