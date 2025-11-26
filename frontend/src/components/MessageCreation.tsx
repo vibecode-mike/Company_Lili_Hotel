@@ -47,7 +47,7 @@ function DialogContentNoClose({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg",
+          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border shadow-lg duration-200",
           className
         )}
         {...props}
@@ -1919,7 +1919,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                                 <p className="basis-0 font-normal grow leading-[1.5] min-h-px min-w-px shrink-0 text-[#a8a8a8] text-[16px] text-center">＋ 新增標籤</p>
                               </button>
                             </DialogTrigger>
-                            <DialogContentNoClose className="max-w-[1000px] max-h-[90vh] p-0 bg-transparent border-0">
+                            <DialogContentNoClose className="p-0 bg-transparent border-0 !w-auto !max-w-none !h-auto">
                               <DialogTitle className="sr-only">篩選目標對象</DialogTitle>
                               <DialogDescription className="sr-only">選擇或建立標籤來篩選目標對象</DialogDescription>
                               <FilterModal 

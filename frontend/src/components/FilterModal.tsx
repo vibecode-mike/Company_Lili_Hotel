@@ -6,6 +6,7 @@ import { Tag as TagComponent } from './common';
 interface Tag {
   id: string;
   name: string;
+  type?: 'member' | 'interaction';
 }
 
 interface FilterModalProps {
@@ -15,43 +16,81 @@ interface FilterModalProps {
   initialIsInclude?: boolean;
 }
 
-const initialTags: Tag[] = [
-  // { id: '1', name: '中秋' },
-  // { id: '2', name: '送禮' },
-  // { id: '3', name: 'KOL' },
-  // { id: '4', name: '旅遊' },
-  // { id: '5', name: '減醣' },
-  // { id: '6', name: '有機' },
-];
-
 const MAX_TAGS = 20; // 标签数量上限
 const MAX_TAG_LENGTH = 20; // 标签名称字符数上限
 
 export default function FilterModal({ onClose, onConfirm, initialSelectedTags, initialIsInclude }: FilterModalProps) {
-  const [availableTags, setAvailableTags] = useState<Tag[]>(initialTags);
+  const [memberTags, setMemberTags] = useState<Tag[]>([]);
+  const [interactionTags, setInteractionTags] = useState<Tag[]>([]);
+  const [activeTab, setActiveTab] = useState<'member' | 'interaction'>('member');
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedTags, setSelectedTags] = useState<Tag[]>(initialSelectedTags || []);
   const [searchInput, setSearchInput] = useState('');
-  const [isInclude, setIsInclude] = useState(initialIsInclude || true);
-  const [filteredTags, setFilteredTags] = useState<Tag[]>(initialTags);
+  const [isInclude, setIsInclude] = useState(initialIsInclude ?? true);
   const [scrollTop, setScrollTop] = useState(0);
   const [isDraggingScrollbar, setIsDraggingScrollbar] = useState(false);
   const [scrollbarStyles, setScrollbarStyles] = useState({ top: 225, height: 60 });
+
+  // 獲取可用標籤 API
+  useEffect(() => {
+    const fetchAvailableTags = async () => {
+      setIsLoading(true);
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch('/api/v1/tags/available-options', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          console.log('Tags API response:', result);
+          const memberTagsData = result.data?.memberTags || [];
+          const interactionTagsData = result.data?.interactionTags || [];
+
+          setMemberTags(memberTagsData.map((name: string) => ({
+            id: `member-${name}`,
+            name,
+            type: 'member' as const
+          })));
+          setInteractionTags(interactionTagsData.map((name: string) => ({
+            id: `interaction-${name}`,
+            name,
+            type: 'interaction' as const
+          })));
+        } else {
+          console.error('Tags API error:', response.status, response.statusText);
+        }
+      } catch (error) {
+        console.error('Failed to fetch tags:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchAvailableTags();
+  }, []);
+
+  // 根據當前 Tab 獲取顯示的標籤
+  const displayTags = activeTab === 'member' ? memberTags : interactionTags;
+  const availableTags = [...memberTags, ...interactionTags];
   
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollbarRef = useRef<HTMLDivElement>(null);
 
   const handleSearchChange = (value: string) => {
     setSearchInput(value);
-    if (value.trim()) {
-      const filtered = availableTags.filter(tag =>
-        tag.name.toLowerCase().includes(value.toLowerCase()) &&
-        !selectedTags.find(st => st.id === tag.id)
-      );
-      setFilteredTags(filtered);
-    } else {
-      setFilteredTags(availableTags.filter(tag => !selectedTags.find(st => st.id === tag.id)));
-    }
   };
+
+  // 計算過濾後的標籤（基於當前 Tab 和搜尋條件）
+  const filteredTags = searchInput.trim()
+    ? displayTags.filter(tag =>
+        tag.name.toLowerCase().includes(searchInput.toLowerCase()) &&
+        !selectedTags.find(st => st.id === tag.id)
+      )
+    : displayTags.filter(tag => !selectedTags.find(st => st.id === tag.id));
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -68,22 +107,26 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
           return;
         }
 
-        // Check if tag already exists
+        // Check if tag already exists in all available tags
         const existingTag = availableTags.find(t => t.name === searchInput.trim());
         if (existingTag && !selectedTags.find(st => st.id === existingTag.id)) {
           setSelectedTags([...selectedTags, existingTag]);
         } else if (!existingTag) {
-          // Create new tag
+          // Create new tag - add to current tab's type
           const newTag: Tag = {
-            id: Date.now().toString(),
-            name: searchInput.trim()
+            id: `${activeTab}-${Date.now()}`,
+            name: searchInput.trim(),
+            type: activeTab
           };
-          // Add to both selected tags and available tags
+          // Add to both selected tags and corresponding tag list
           setSelectedTags([...selectedTags, newTag]);
-          setAvailableTags([...availableTags, newTag]);
+          if (activeTab === 'member') {
+            setMemberTags([...memberTags, newTag]);
+          } else {
+            setInteractionTags([...interactionTags, newTag]);
+          }
         }
         setSearchInput('');
-        setFilteredTags(availableTags.filter(tag => !selectedTags.find(st => st.id === tag.id)));
       } else {
         // If input is empty, confirm the selection
         onConfirm?.(selectedTags, isInclude);
@@ -115,7 +158,6 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
     if (!selectedTags.find(st => st.id === tag.id)) {
       setSelectedTags([...selectedTags, tag]);
       setSearchInput('');
-      setFilteredTags(availableTags.filter(t => t.id !== tag.id && !selectedTags.find(st => st.id === t.id)));
     }
   };
 
@@ -124,7 +166,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
   };
 
   const isActionState = selectedTags.length > 0 || searchInput.trim().length > 0;
-  const showScrollbar = !isActionState && availableTags.length >= 6;
+  const showScrollbar = displayTags.length >= 6;
 
   // Handle scroll
   const handleScroll = () => {
@@ -173,7 +215,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
       updateScrollbarStyles();
     }, 0);
     return () => clearTimeout(timeoutId);
-  }, [availableTags.length, scrollTop]);
+  }, [displayTags.length, scrollTop, activeTab]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -232,17 +274,25 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
     </div>
   );
 
-  const showNewTagCreation = searchInput.trim() && !availableTags.find(t => t.name.toLowerCase() === searchInput.toLowerCase());
+  const showNewTagCreation = searchInput.trim() && !displayTags.find(t => t.name.toLowerCase() === searchInput.toLowerCase());
 
   return (
-    <div className="bg-white relative rounded-[16px] w-full h-full max-h-[90vh] flex flex-col">
-      <div className="flex flex-col h-full overflow-hidden">
-        <div className="box-border content-stretch flex flex-col items-start p-[32px] relative flex-1 overflow-hidden">
-          {/* Main Content */}
-          <div className="content-stretch flex flex-col gap-[32px] items-start relative shrink-0 w-full">
+    <div
+      className="bg-white relative rounded-[16px] flex flex-col"
+      style={{
+        width: 'min(800px, 95vw)',
+        height: 'min(600px, 85vh)',
+        minHeight: '500px',
+        maxHeight: '85vh'
+      }}
+    >
+      <div className="flex flex-col h-full rounded-[16px]">
+        <div className="box-border flex flex-col items-start p-[32px] relative h-full overflow-hidden">
+          {/* Header Content - Fixed, never shrinks */}
+          <div className="flex flex-col gap-[20px] items-start w-full flex-shrink-0 flex-grow-0">
             {/* Title */}
             <div className="content-stretch flex items-center justify-between relative shrink-0 w-full">
-              <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[32px]">
+              <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[24px]">
                 <p className="leading-[1.5]">篩選目標對象</p>
               </div>
               <div className="flex items-center gap-2">
@@ -253,9 +303,9 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
             </div>
 
             {/* Search Bar and Toggle */}
-            <div className="flex gap-[24px] items-start w-full">
+            <div className="flex flex-col sm:flex-row gap-[16px] items-stretch sm:items-start w-full">
               {/* Search Bar */}
-              <div className="bg-white flex-1 min-w-[700px] rounded-[16px] border border-[#e1ebf9]">
+              <div className="bg-white flex-1 min-w-0 rounded-[16px] border border-[#e1ebf9]">
                 <div className="flex flex-wrap gap-[4px] items-center px-[12px] py-[8px] min-h-[48px]">
                   <IconSearch />
                   {selectedTags.map(tag => (
@@ -270,7 +320,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
                     onKeyDown={handleKeyDown}
                     placeholder={selectedTags.length === 0 ? "輸入或按 Enter 新增標籤" : ""}
                     maxLength={20}
-                    className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] flex-1 min-w-[200px] outline-none text-[#383838] text-[20px] placeholder:text-[#a8a8a8] bg-transparent"
+                    className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] flex-1 min-w-[120px] outline-none text-[#383838] text-[16px] placeholder:text-[#a8a8a8] bg-transparent"
                   />
                 </div>
               </div>
@@ -305,17 +355,43 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
             </div>
 
             {/* Tags List Label */}
-            <div className="flex flex-col font-['Noto_Sans_TC:Regular',_sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#6e6e6e] text-[14px] w-[410px]">
+            <div className="flex flex-col font-['Noto_Sans_TC:Regular',_sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#6e6e6e] text-[14px] w-full">
               <p className="leading-[1.5]">選擇或建立標籤</p>
+            </div>
+
+            {/* Tab 切換 */}
+            <div className="flex gap-[24px] border-b border-[#e1ebf9] w-full">
+              <button
+                type="button"
+                className={`pb-[8px] text-[14px] font-['Noto_Sans_TC:Regular',_sans-serif] transition-colors ${
+                  activeTab === 'member'
+                    ? 'text-[#0F6BEB] border-b-2 border-[#0F6BEB] -mb-[1px]'
+                    : 'text-[#6e6e6e] hover:text-[#383838]'
+                }`}
+                onClick={() => setActiveTab('member')}
+              >
+                會員標籤 ({memberTags.length})
+              </button>
+              <button
+                type="button"
+                className={`pb-[8px] text-[14px] font-['Noto_Sans_TC:Regular',_sans-serif] transition-colors ${
+                  activeTab === 'interaction'
+                    ? 'text-[#0F6BEB] border-b-2 border-[#0F6BEB] -mb-[1px]'
+                    : 'text-[#6e6e6e] hover:text-[#383838]'
+                }`}
+                onClick={() => setActiveTab('interaction')}
+              >
+                互動標籤 ({interactionTags.length})
+              </button>
             </div>
           </div>
 
-          {/* Scrollable Tags Container - takes remaining space */}
-          <div className="flex-1 w-full mt-[12px] mb-[32px] overflow-hidden relative">
-            <div 
+          {/* Scrollable Tags Container - fills remaining space, fixed layout */}
+          <div className="flex-1 w-full mt-[12px] mb-[20px] overflow-hidden relative min-h-0">
+            <div
               ref={scrollContainerRef}
               onScroll={handleScroll}
-              className={`content-stretch flex gap-[10px] items-start justify-center w-full h-full ${showScrollbar ? 'overflow-y-auto pr-2' : 'overflow-y-auto'}`}
+              className={`flex gap-[10px] items-start justify-start w-full h-full overflow-y-auto ${showScrollbar ? 'pr-2' : ''}`}
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
               <style>{`
@@ -323,58 +399,47 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
                   display: none;
                 }
               `}</style>
-              {!isActionState && availableTags.length === 0 ? (
+              {isLoading ? (
+                // Loading state
+                <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#a8a8a8] text-[16px] text-center">
+                  載入中...
+                </p>
+              ) : displayTags.length === 0 && !searchInput.trim() ? (
                 // Blank state
-                <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#a8a8a8] text-[20px] text-center text-nowrap whitespace-pre">
-                  尚無標<span className="tracking-[-0.2px]">籤，於上方輸入並</span>開始建立
+                <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#a8a8a8] text-[16px] text-center">
+                  尚無{activeTab === 'member' ? '會員' : '互動'}標籤，於上方輸入並開始建立
                 </p>
               ) : (
                 <div className="flex flex-col gap-[12px] w-full">
-                  {/* Show available tags or filtered results */}
-                  {!isActionState ? (
-                    // Normal state - show all available tags with dividers
-                    <>
-                      {availableTags.map((tag, index) => (
-                        <div key={tag.id}>
-                          <div className="content-stretch flex flex-col gap-[10px] items-start justify-center relative shrink-0 w-full cursor-pointer" onClick={() => handleTagClick(tag)}>
-                            <TagComponent variant="blue">{tag.name}</TagComponent>
-                          </div>
-                          {index < availableTags.length - 1 && (
-                            <div className="flex h-[calc(1px*((var(--transform-inner-width)*1)+(var(--transform-inner-height)*0)))] items-center justify-center relative shrink-0 w-[calc(1px*((var(--transform-inner-height)*1)+(var(--transform-inner-width)*0)))]" style={{ "--transform-inner-width": "0", "--transform-inner-height": "736" } as React.CSSProperties}>
-                              <div className="flex-none rotate-[270deg]">
-                                <div className="h-[736px] relative w-0">
-                                  <div className="absolute inset-[-0.05%_-0.4px]">
-                                    <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 737">
-                                      <path d="M0.4 0.4V736.4" stroke="var(--stroke-0, #DDDDDD)" strokeLinecap="round" strokeWidth="0.8" />
-                                    </svg>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          )}
+                  {/* Show filtered tags based on current tab - wrap layout */}
+                  <div className="flex flex-wrap gap-[8px] w-full">
+                    {filteredTags.map((tag) => (
+                      <div
+                        key={tag.id}
+                        className="cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => handleTagClick(tag)}
+                      >
+                        <TagComponent variant="blue">{tag.name}</TagComponent>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Show create new tag option */}
+                  {showNewTagCreation && (
+                    <div className="bg-slate-50 relative rounded-[4px] shrink-0 w-full mt-[4px]">
+                      <div className="flex flex-row items-center size-full">
+                        <div className="box-border content-stretch flex gap-[10px] items-center px-[8px] py-[6px] relative w-full">
+                          <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[14px] text-center text-nowrap whitespace-pre">建立</p>
+                          <TagComponent variant="blue">{searchInput}</TagComponent>
+                          <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[14px] text-center text-nowrap whitespace-pre">的{activeTab === 'member' ? '會員' : '互動'}標籤</p>
                         </div>
-                      ))}
-                    </>
-                  ) : (
-                    // Action state - show filtered results and create option
-                    <>
-                      {filteredTags.map(tag => (
-                        <div key={tag.id} className="content-stretch flex flex-col gap-[10px] items-start justify-center relative shrink-0 w-full cursor-pointer" onClick={() => handleTagClick(tag)}>
-                          <TagComponent variant="blue">{tag.name}</TagComponent>
-                        </div>
-                      ))}
-                      {showNewTagCreation && (
-                        <div className="bg-slate-50 relative rounded-[4px] shrink-0 w-full">
-                          <div className="flex flex-row items-center size-full">
-                            <div className="box-border content-stretch flex gap-[10px] items-center px-[8px] py-[4px] relative w-full">
-                              <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[20px] text-center text-nowrap whitespace-pre">建立</p>
-                              <TagComponent variant="blue">{searchInput}</TagComponent>
-                              <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[20px] text-center text-nowrap whitespace-pre">的標籤</p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </>
+                      </div>
+                    </div>
+                  )}
+                  {/* Show message when no matches found */}
+                  {filteredTags.length === 0 && searchInput.trim() && !showNewTagCreation && (
+                    <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] text-[#a8a8a8] text-[14px] text-center py-[16px]">
+                      找不到符合的標籤
+                    </p>
                   )}
                 </div>
               )}
@@ -394,8 +459,8 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
             )}
           </div>
 
-          {/* Buttons - Fixed at bottom */}
-          <div className="content-stretch flex gap-[8px] items-center justify-center relative shrink-0 w-full">
+          {/* Buttons - Fixed at bottom, never shrinks */}
+          <div className="content-stretch flex gap-[8px] items-center justify-center relative flex-shrink-0 flex-grow-0 w-full">
             <div className="basis-0 content-stretch flex gap-[8px] grow items-center justify-end min-h-px min-w-px relative shrink-0">
               <div className="bg-neutral-100 box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer hover:bg-neutral-200 transition-colors" onClick={onClose}>
                 <p className="basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] text-center">取消</p>
