@@ -421,23 +421,28 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const container = e.currentTarget;
 
-    // 更新當前可見訊息的日期
+    // 更新當前可見訊息的日期（找最後一個可見訊息）
     const messageElements = container.querySelectorAll('[data-timestamp]');
     const containerRect = container.getBoundingClientRect();
     const dateHeaderHeight = 60; // 日期標籤高度 + padding
 
+    let lastVisibleTimestamp: string | null = null;
+
     for (const el of messageElements) {
       const rect = el.getBoundingClientRect();
-      // 找到第一個在可見區域內（日期標籤下方）的訊息
-      if (rect.top >= containerRect.top + dateHeaderHeight && rect.top < containerRect.bottom) {
+      // 訊息在可見區域內（底部高於頂部 + header，頂部低於底部）
+      if (rect.bottom > containerRect.top + dateHeaderHeight && rect.top < containerRect.bottom) {
         const timestamp = el.getAttribute('data-timestamp');
         if (timestamp) {
-          const newDate = formatDateWithWeekday(timestamp);
-          if (newDate && newDate !== visibleDate) {
-            setVisibleDate(newDate);
-          }
+          lastVisibleTimestamp = timestamp;
         }
-        break;
+      }
+    }
+
+    if (lastVisibleTimestamp) {
+      const newDate = formatDateWithWeekday(lastVisibleTimestamp);
+      if (newDate && newDate !== visibleDate) {
+        setVisibleDate(newDate);
       }
     }
 
