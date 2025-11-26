@@ -73,6 +73,13 @@ class Message(Base):
         comment="關聯活動ID（選填）",
         index=True,
     )
+    source_draft_id = Column(
+        BigInteger,
+        ForeignKey("messages.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="來源草稿ID（從草稿發布時記錄原始草稿）",
+        index=True,
+    )
     created_by = Column(BigInteger, ForeignKey("users.id"), comment="創建者ID")
     flex_message_json = Column(MEDIUMTEXT, nullable=True, comment="Flex Message JSON 內容（最大 16MB）")
 

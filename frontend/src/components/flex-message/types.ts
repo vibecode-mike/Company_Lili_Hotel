@@ -30,6 +30,10 @@ export interface FlexBubble {
   _metadata?: {
     heroActionLabel?: string;
     buttonLabels?: { [index: number]: string };
+    interactionTags?: {
+      heroTag?: string | null;
+      buttonTags?: Array<string | null>;
+    };
   };
 }
 

@@ -110,12 +110,17 @@ async def create_message(
     创建群发消息
 
     Request Body:
+        - draft_id: 来源草稿 ID（可选，有值时复制草稿发布，原草稿保留）
         - flex_message_json: 前端生成的 Flex Message JSON（必填）
         - target_type: 发送对象类型 ("all_friends" | "filtered")
         - target_filter: 筛选条件（可选）
         - schedule_type: 发送方式 ("immediate" | "scheduled" | "draft")
         - scheduled_at: 排程时间（可选）
         - ...其他字段
+
+    行为说明:
+        - 无 draft_id: 直接创建新消息
+        - 有 draft_id: 复制草稿内容到新记录，原草稿保留在草稿列表中
 
     Returns:
         创建的消息对象详情
@@ -125,7 +130,10 @@ async def create_message(
         if not data.flex_message_json:
             raise ValueError("flex_message_json 是必填字段")
 
-        logger.info(f"📤 创建群发消息: schedule_type={data.schedule_type}")
+        if data.draft_id:
+            logger.info(f"📤 从草稿发布: draft_id={data.draft_id}, schedule_type={data.schedule_type}")
+        else:
+            logger.info(f"📤 创建群发消息: schedule_type={data.schedule_type}")
 
         message = await message_service.create_message(
             db=db,
@@ -139,7 +147,8 @@ async def create_message(
             notification_message=data.notification_message,
             thumbnail=data.thumbnail,
             interaction_tags=data.interaction_tags,
-            message_title=data.message_title,  # 传递消息标题
+            message_title=data.message_title,
+            draft_id=data.draft_id,  # 新增：来源草稿 ID
         )
 
         logger.info(f"✅ 消息创建成功: ID={message.id}")
@@ -295,6 +304,7 @@ async def get_message(
             "click_rate": None,
             "scheduled_at": message.scheduled_datetime_utc,
             "send_time": message.send_time,
+            "source_draft_id": message.source_draft_id,  # 来源草稿 ID
             "created_at": message.created_at,
             "updated_at": message.updated_at,
             "template_id": message.template_id,

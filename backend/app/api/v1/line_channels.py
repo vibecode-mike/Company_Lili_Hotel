@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Optional, List
 import logging
+import requests
 
 from app.database import get_db
 from app.models.line_channel import LineChannel
@@ -33,6 +34,50 @@ REQUIRED_FIELDS = (
 
 def _has_value(value: Optional[str]) -> bool:
     return bool(value and value.strip())
+
+
+def fetch_basic_id_from_line(channel_access_token: str) -> Optional[str]:
+    """
+    調用 Flask line_app 的 /api/bot/basic-id 端點獲取 LINE Bot Basic ID
+
+    Args:
+        channel_access_token: LINE Messaging API Channel Access Token
+
+    Returns:
+        Basic ID (格式: @xxxxxxx) 或 None（如果獲取失敗）
+    """
+    try:
+        # Flask line_app 運行在 port 3001
+        flask_url = "http://127.0.0.1:3001/api/bot/basic-id"
+
+        response = requests.post(
+            flask_url,
+            json={"channel_access_token": channel_access_token},
+            timeout=10
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("ok") and data.get("basicId"):
+                logger.info(f"✅ 成功獲取 Basic ID: {data['basicId']}")
+                return data["basicId"]
+
+        # 記錄錯誤但不中斷流程
+        logger.warning(f"⚠️ 無法獲取 Basic ID: status={response.status_code}, response={response.text[:200]}")
+        return None
+
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"❌ 無法連接到 Flask line_app (port 3001): {str(e)}")
+        return None
+    except requests.exceptions.Timeout as e:
+        logger.error(f"❌ 請求 Flask line_app 超時: {str(e)}")
+        return None
+    except requests.exceptions.RequestException as e:
+        logger.error(f"❌ 請求 Basic ID 時發生網路錯誤: {str(e)}")
+        return None
+    except Exception as e:
+        logger.error(f"❌ 獲取 Basic ID 時發生未預期錯誤: {str(e)}", exc_info=True)
+        return None
 
 
 def _collect_missing_fields(channel: LineChannel) -> List[str]:
@@ -148,6 +193,14 @@ async def create_channel(
 
         # 創建新設定
         channel = LineChannel(**data.model_dump())
+
+        # 🆕 自動獲取 Basic ID
+        if data.channel_access_token:
+            basic_id = fetch_basic_id_from_line(data.channel_access_token)
+            if basic_id:
+                channel.basic_id = basic_id
+                logger.info(f"✅ 自動獲取並設定 Basic ID: {basic_id}")
+
         db.add(channel)
         await db.commit()
         await db.refresh(channel)
@@ -187,6 +240,15 @@ async def update_channel(
 
         # 更新欄位（只更新提供的欄位）
         update_data = data.model_dump(exclude_unset=True)
+
+        # 🆕 當 token 更新時，自動重新獲取 Basic ID
+        if "channel_access_token" in update_data:
+            new_token = update_data["channel_access_token"]
+            basic_id = fetch_basic_id_from_line(new_token)
+            if basic_id:
+                update_data["basic_id"] = basic_id
+                logger.info(f"✅ Token 更新後重新獲取 Basic ID: {basic_id}")
+
         for field, value in update_data.items():
             setattr(channel, field, value)
 

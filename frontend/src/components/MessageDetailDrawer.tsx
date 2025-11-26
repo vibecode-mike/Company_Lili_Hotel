@@ -6,6 +6,7 @@ import { cn } from "./ui/utils";
 import { FlexMessageCardPreview, type CarouselCard } from "./CarouselMessageEditor";
 import { ArrowButton } from "./ArrowButton";
 import { SecondaryButton } from "./common/SecondaryButton";
+import { normalizeInteractionTags } from "../utils/interactionTags";
 
 interface MessageDetailDrawerProps {
   open: boolean;
@@ -501,6 +502,7 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
         clicks: 0,
         opens: 0,
         sendTime: '-',
+        updatedTime: '-',
       };
     }
 
@@ -514,18 +516,22 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
         clicks: 0,
         opens: 0,
         sendTime: '-',
+        updatedTime: '-',
       };
     }
 
+    const lastUpdated = messageData.updated_at || messageData.updatedAt;
+
     return {
       title: messageData.message_title || messageData.template?.name || '訊息標題',
-      tags: messageData.interaction_tags || [],
+      tags: normalizeInteractionTags(messageData.interaction_tags ?? messageData.interactionTags ?? messageData.tags),
       platform: messageData.platform || 'LINE',
       status: messageData.send_status || '草稿',
       recipients: messageData.send_count || 0,
       clicks: messageData.click_count || 0,
       opens: messageData.open_count || 0,
       sendTime: formatDateTime(messageData.send_time || messageData.scheduled_at),
+      updatedTime: formatDateTime(lastUpdated),
     };
   }, [messageData, loading, error]);
 
@@ -605,18 +611,18 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
                 </div>
               </InfoRow>
 
-              <InfoRow label="點擊次數">
-                <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0" data-name="Table/List-atomic">
-                  <div className="flex flex-col font-['Inter:Regular',sans-serif] font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] text-nowrap tracking-[0.22px]">
-                    <p className="leading-[24px] whitespace-pre">{displayData.clicks}</p>
-                  </div>
-                </div>
-              </InfoRow>
-
               <InfoRow label="已開啟次數">
                 <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0" data-name="Table/List-atomic">
                   <div className="flex flex-col font-['Inter:Regular',sans-serif] font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] text-nowrap tracking-[0.22px]">
                     <p className="leading-[24px] whitespace-pre">{displayData.opens}</p>
+                  </div>
+                </div>
+              </InfoRow>
+
+              <InfoRow label="點擊次數">
+                <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0" data-name="Table/List-atomic">
+                  <div className="flex flex-col font-['Inter:Regular',sans-serif] font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] text-nowrap tracking-[0.22px]">
+                    <p className="leading-[24px] whitespace-pre">{displayData.clicks}</p>
                   </div>
                 </div>
               </InfoRow>
@@ -628,6 +634,15 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
                   </div>
                 </div>
               </InfoRow>
+              {displayData.status === '草稿' && (
+                <InfoRow label="最後更新時間">
+                  <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0">
+                    <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
+                      <p className="leading-[1.5] whitespace-pre">{displayData.updatedTime}</p>
+                    </div>
+                  </div>
+                </InfoRow>
+              )}
             </div>
           </div>
         </DrawerContent>

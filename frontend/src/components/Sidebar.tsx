@@ -59,7 +59,7 @@ const SectionHeader = memo(function SectionHeader({ icon, label }: { icon: strin
   );
 });
 
-const Sidebar = memo(function Sidebar({ 
+const Sidebar = memo(function Sidebar({
   currentPage = 'messages',
   onNavigateToMessages,
   onNavigateToAutoReply,

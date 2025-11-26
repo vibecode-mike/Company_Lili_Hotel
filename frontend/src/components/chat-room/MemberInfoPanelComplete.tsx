@@ -517,7 +517,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
                   {interactionTags.map((tag, index) => (
                     <span
                       key={index}
-                      className="bg-[#fff4e6] text-[#ff9800] px-[12px] py-[4px] rounded-[8px] text-[14px] font-medium"
+                      className="bg-[#f0f6ff] text-[#0f6beb] px-[12px] py-[4px] rounded-[8px] text-[14px] font-medium"
                     >
                       {tag}
                     </span>

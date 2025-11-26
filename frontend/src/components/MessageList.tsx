@@ -360,25 +360,49 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
   }, [currentPage, fetchMessages, fetchQuota]);
 
   // Transform context messages to match InteractiveMessageTable format
+  const formatDateTime = (value?: string | null) => {
+    if (!value || value === '-') return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleString('zh-TW', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).replace(/\//g, '-');
+  };
+
   const transformedMessages = useMemo(() => {
-    return contextMessages.map(msg => ({
-      id: msg.id,
-      title: msg.title,
-      tags: msg.tags,
-      platform: msg.platform,
-      status: msg.status,
-      sentCount: msg.recipientCount > 0 ? msg.recipientCount.toString() : '-',
-      openCount: msg.openCount > 0 ? msg.openCount.toString() : '-',
-      clickCount: msg.clickCount > 0 ? msg.clickCount.toString() : '-',
-      sendTime: msg.sendTime !== '-' ? new Date(msg.sendTime).toLocaleString('zh-TW', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      }).replace(/\//g, '-') : '-'
-    }));
+    const determineTimeSource = (msg: typeof contextMessages[number]) => {
+      if (msg.status === '草稿') {
+        return msg.updatedAt || msg.createdAt || null;
+      }
+      if (msg.status === '已排程' && msg.sendTime && msg.sendTime !== '-') {
+        return msg.sendTime;
+      }
+      if (msg.sendTime && msg.sendTime !== '-') {
+        return msg.sendTime;
+      }
+      return msg.updatedAt || msg.createdAt || null;
+    };
+
+    return contextMessages.map(msg => {
+      const timeSource = determineTimeSource(msg);
+      return {
+        id: msg.id,
+        title: msg.title,
+        tags: msg.tags,
+        platform: msg.platform,
+        status: msg.status,
+        sentCount: msg.recipientCount > 0 ? msg.recipientCount.toString() : '-',
+        openCount: msg.openCount > 0 ? msg.openCount.toString() : '-',
+        clickCount: msg.clickCount > 0 ? msg.clickCount.toString() : '-',
+        sendTime: formatDateTime(timeSource),
+        timeValue: timeSource
+      };
+    });
   }, [contextMessages]);
 
   // Filter messages based on search value and status filter
@@ -444,6 +468,11 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
     }
   };
 
+  const handleNavigateMemberDetailFromChat = (memberId: string) => {
+    if (!memberId) return;
+    setMemberView('detail');
+  };
+
   return (
     <div className="bg-slate-50 min-h-screen flex">
       {/* Sidebar */}
@@ -503,9 +532,15 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
               onBack={handleBackToMemberList}
               member={selectedMember}
               onNavigate={handleNavigateFromDetail}
+              fallbackMemberName={selectedMember?.username || selectedMember?.realName}
             />
           ) : (
-            <ChatRoom member={selectedMember} onBack={handleBackToMemberList} />
+            <ChatRoom 
+              member={selectedMember} 
+              onNavigateMembers={handleBackToMemberList} 
+              onNavigateMemberDetail={handleNavigateMemberDetailFromChat}
+              fallbackMemberName={selectedMember?.username || selectedMember?.realName}
+            />
           )
         )}
       </main>

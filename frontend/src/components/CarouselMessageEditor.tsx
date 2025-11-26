@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import svgPaths from '../imports/svg-708vqjfcuf';
 import imgImageHero from "figma:asset/68b289cb927cef11d11501fd420bb560ad25c667.png";
 import { cropImage, createBlobUrl, revokeBlobUrl } from '../utils/imageCropper';
+import { CAROUSEL_STRUCTURE_FIELDS } from './carouselStructure';
 
 // Calculate aspect ratio based on card content
 const calculateAspectRatio = (card: CarouselCard): "1:1" | "1.92:1" => {
@@ -18,6 +19,8 @@ const calculateAspectRatio = (card: CarouselCard): "1:1" | "1.92:1" => {
                      card.enableButton3 || card.enableButton4;
   return hasContent ? "1.92:1" : "1:1";
 };
+
+const STRUCTURE_FIELD_SET = new Set<string>(CAROUSEL_STRUCTURE_FIELDS);
 
 export interface CarouselCard {
   id: number;
@@ -234,6 +237,17 @@ export default function CarouselMessageEditor({
   const imageUploadRef = useRef<HTMLInputElement>(null);
   const currentCard = cards.find(c => c.id === activeTab) || cards[0];
   const prevAspectRatioRef = useRef<"1:1" | "1.92:1" | null>(null);
+  const masterCardId = cards[0]?.id;
+  const isMasterCard = currentCard?.id === masterCardId;
+  const structureLocked = !isMasterCard;
+
+  const preventStructureEdit = () => {
+    if (structureLocked) {
+      toast.info('請在輪播 1 調整此欄位');
+      return true;
+    }
+    return false;
+  };
 
   // 計算卡片顯示編號（基於陣列索引）
   const getCardDisplayNumber = (cardId: number): number => {
@@ -287,6 +301,10 @@ export default function CarouselMessageEditor({
   };
 
   const handleCheckboxChange = (field: keyof CarouselCard, checked: boolean) => {
+    if (STRUCTURE_FIELD_SET.has(field as string) && preventStructureEdit()) {
+      return;
+    }
+
     // Check if trying to uncheck one of the three required fields
     const requiredFields: (keyof CarouselCard)[] = ['enableImage', 'enableTitle', 'enableContent'];
 
@@ -470,11 +488,12 @@ export default function CarouselMessageEditor({
           {/* Image Section */}
           <div className="flex flex-col gap-[12px]">
             <div className="flex items-center gap-[8px]">
-              <Checkbox
-                checked={currentCard.enableImage}
-                onCheckedChange={(checked) => handleCheckboxChange('enableImage', checked as boolean)}
-                className="size-[16px]"
-              />
+                <Checkbox
+                  checked={currentCard.enableImage}
+                  onCheckedChange={(checked) => handleCheckboxChange('enableImage', checked as boolean)}
+                  className="size-[16px]"
+                  disabled={structureLocked}
+                />
               <span className="text-[14px] leading-[20px] text-neutral-950">選擇圖片</span>
             </div>
 
@@ -525,8 +544,9 @@ export default function CarouselMessageEditor({
                   <div className="flex items-center gap-[8px]">
                     <Checkbox
                       checked={currentCard.enableImageUrl}
-                      onCheckedChange={(checked) => onUpdateCard({ enableImageUrl: checked as boolean })}
+                      onCheckedChange={(checked) => handleCheckboxChange('enableImageUrl', checked as boolean)}
                       className="size-[16px]"
+                      disabled={structureLocked}
                     />
                     <span className="text-[14px] leading-[20px] text-neutral-950">點擊圖片觸發 URL</span>
                   </div>
@@ -582,6 +602,7 @@ export default function CarouselMessageEditor({
                 checked={currentCard.enableTitle}
                 onCheckedChange={(checked) => handleCheckboxChange('enableTitle', checked as boolean)}
                 className="size-[16px]"
+                disabled={structureLocked}
               />
               <span className="text-[14px] leading-[20px] text-neutral-950">標題文字</span>
             </div>
@@ -621,6 +642,7 @@ export default function CarouselMessageEditor({
                 checked={currentCard.enableContent}
                 onCheckedChange={(checked) => handleCheckboxChange('enableContent', checked as boolean)}
                 className="size-[16px]"
+                disabled={structureLocked}
               />
               <span className="text-[14px] leading-[20px] text-neutral-950">內文文字說明</span>
             </div>
@@ -659,6 +681,7 @@ export default function CarouselMessageEditor({
                 checked={currentCard.enablePrice}
                 onCheckedChange={(checked) => handleCheckboxChange('enablePrice', checked as boolean)}
                 className="size-[16px]"
+                disabled={structureLocked}
               />
               <span className="text-[14px] leading-[20px] text-neutral-950">金額</span>
             </div>
@@ -718,8 +741,12 @@ export default function CarouselMessageEditor({
               
               {!currentCard.enableButton1 && (
                 <button
-                  onClick={() => onUpdateCard({ enableButton1: true, button1Mode: 'primary' })}
-                  className="bg-white h-[32px] px-[13px] rounded-[10px] border border-[rgba(0,0,0,0.1)] flex items-center gap-[6px] hover:bg-gray-50 transition-colors"
+                  onClick={() => {
+                    if (preventStructureEdit()) return;
+                    onUpdateCard({ enableButton1: true, button1Mode: 'primary' });
+                  }}
+                  className="bg-white h-[32px] px-[13px] rounded-[10px] border border-[rgba(0,0,0,0.1)] flex items-center gap-[6px] hover:bg-gray-50 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={structureLocked}
                 >
                   <Plus className="size-[16px]" strokeWidth={1.33} />
                   <span className="text-[14px] leading-[20px] text-neutral-950">新增按鈕</span>
@@ -734,6 +761,7 @@ export default function CarouselMessageEditor({
                   <span className="text-[14px] leading-[20px] text-neutral-950 font-medium">動作按鈕一</span>
                   <button
                     onClick={() => {
+                      if (preventStructureEdit()) return;
                       if (currentCard.enableButton2) {
                         // Move button2 to button1
                         onUpdateCard({
@@ -766,7 +794,8 @@ export default function CarouselMessageEditor({
                         });
                       }
                     }}
-                    className="text-[12px] text-[#f44336] hover:underline"
+                    className="text-[12px] text-[#f44336] hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={structureLocked}
                   >
                     刪除
                   </button>
@@ -855,8 +884,12 @@ export default function CarouselMessageEditor({
             {/* Button 2 Config */}
             {currentCard.enableButton1 && !currentCard.enableButton2 && (
               <button
-                onClick={() => onUpdateCard({ enableButton2: true, button2Mode: 'secondary' })}
-                className="bg-white h-[32px] px-[13px] rounded-[10px] border border-[rgba(0,0,0,0.1)] flex items-center gap-[6px] hover:bg-gray-50 transition-colors ml-[24px]"
+                onClick={() => {
+                  if (preventStructureEdit()) return;
+                  onUpdateCard({ enableButton2: true, button2Mode: 'secondary' });
+                }}
+                className="bg-white h-[32px] px-[13px] rounded-[10px] border border-[rgba(0,0,0,0.1)] flex items-center gap-[6px] hover:bg-gray-50 transition-colors ml-[24px] disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={structureLocked}
               >
                 <Plus className="size-[16px]" strokeWidth={1.33} />
                 <span className="text-[14px] leading-[20px] text-neutral-950">新增按鈕二</span>
@@ -869,6 +902,7 @@ export default function CarouselMessageEditor({
                   <span className="text-[14px] leading-[20px] text-neutral-950 font-medium">動作按鈕二</span>
                   <button
                     onClick={() => {
+                      if (preventStructureEdit()) return;
                       if (currentCard.enableButton3) {
                         // Move button3 to button2
                         onUpdateCard({
@@ -896,7 +930,8 @@ export default function CarouselMessageEditor({
                         });
                       }
                     }}
-                    className="text-[12px] text-[#f44336] hover:underline"
+                    className="text-[12px] text-[#f44336] hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={structureLocked}
                   >
                     刪除
                   </button>
@@ -985,8 +1020,12 @@ export default function CarouselMessageEditor({
             {/* Button 3 Config */}
             {currentCard.enableButton2 && !currentCard.enableButton3 && (
               <button
-                onClick={() => onUpdateCard({ enableButton3: true, button3Mode: 'secondary' })}
-                className="bg-white h-[32px] px-[13px] rounded-[10px] border border-[rgba(0,0,0,0.1)] flex items-center gap-[6px] hover:bg-gray-50 transition-colors ml-[24px]"
+                onClick={() => {
+                  if (preventStructureEdit()) return;
+                  onUpdateCard({ enableButton3: true, button3Mode: 'secondary' });
+                }}
+                className="bg-white h-[32px] px-[13px] rounded-[10px] border border-[rgba(0,0,0,0.1)] flex items-center gap-[6px] hover:bg-gray-50 transition-colors ml-[24px] disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={structureLocked}
               >
                 <Plus className="size-[16px]" strokeWidth={1.33} />
                 <span className="text-[14px] leading-[20px] text-neutral-950">新增按鈕三</span>
@@ -999,6 +1038,7 @@ export default function CarouselMessageEditor({
                   <span className="text-[14px] leading-[20px] text-neutral-950 font-medium">動作按鈕三</span>
                   <button
                     onClick={() => {
+                      if (preventStructureEdit()) return;
                       if (currentCard.enableButton4) {
                         // Move button4 to button3
                         onUpdateCard({
@@ -1021,7 +1061,8 @@ export default function CarouselMessageEditor({
                         });
                       }
                     }}
-                    className="text-[12px] text-[#f44336] hover:underline"
+                    className="text-[12px] text-[#f44336] hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={structureLocked}
                   >
                     刪除
                   </button>
@@ -1110,8 +1151,12 @@ export default function CarouselMessageEditor({
             {/* Button 4 Config */}
             {currentCard.enableButton3 && !currentCard.enableButton4 && (
               <button
-                onClick={() => onUpdateCard({ enableButton4: true, button4Mode: 'secondary' })}
-                className="bg-white h-[32px] px-[13px] rounded-[10px] border border-[rgba(0,0,0,0.1)] flex items-center gap-[6px] hover:bg-gray-50 transition-colors ml-[24px]"
+                onClick={() => {
+                  if (preventStructureEdit()) return;
+                  onUpdateCard({ enableButton4: true, button4Mode: 'secondary' });
+                }}
+                className="bg-white h-[32px] px-[13px] rounded-[10px] border border-[rgba(0,0,0,0.1)] flex items-center gap-[6px] hover:bg-gray-50 transition-colors ml-[24px] disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={structureLocked}
               >
                 <Plus className="size-[16px]" strokeWidth={1.33} />
                 <span className="text-[14px] leading-[20px] text-neutral-950">新增按鈕四</span>
@@ -1123,13 +1168,17 @@ export default function CarouselMessageEditor({
                 <div className="flex items-center justify-between">
                   <span className="text-[14px] leading-[20px] text-neutral-950 font-medium">動作按鈕四</span>
                   <button
-                    onClick={() => onUpdateCard({ 
-                      enableButton4: false, 
-                      button4: '', 
-                      button4Url: '', 
-                      button4Tag: '' 
-                    })}
-                    className="text-[12px] text-[#f44336] hover:underline"
+                    onClick={() => {
+                      if (preventStructureEdit()) return;
+                      onUpdateCard({ 
+                        enableButton4: false, 
+                        button4: '', 
+                        button4Url: '', 
+                        button4Tag: '' 
+                      });
+                    }}
+                    className="text-[12px] text-[#f44336] hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={structureLocked}
                   >
                     刪除
                   </button>

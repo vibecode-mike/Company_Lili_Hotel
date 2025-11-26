@@ -106,6 +106,9 @@ class MessageBase(BaseModel):
 class MessageCreate(BaseModel):
     """創建群發訊息"""
 
+    # 草稿發布功能
+    draft_id: Optional[int] = None  # 來源草稿ID（有值時複製草稿發布，原草稿保留）
+
     # 基本欄位
     template_id: Optional[int] = None  # 模板ID（可選，服務會自動創建）
     message_title: Optional[str] = None  # 訊息標題（用於列表顯示）
@@ -221,6 +224,7 @@ class MessageListItem(BaseModel):
     platform: str = "LINE"  # 平台名稱（目前固定為 LINE）
     send_count: int = 0  # 傳送人數
     open_count: int = 0  # 開啟次數（不重複）
+    click_count: int = 0  # 點擊次數（互動標籤 trigger_member_count 加總）
     open_rate: Optional[float] = None
     click_rate: Optional[float] = None
     scheduled_at: Optional[datetime] = Field(
@@ -229,6 +233,7 @@ class MessageListItem(BaseModel):
         description="排程發送時間（UTC）",
     )
     send_time: Optional[datetime] = None  # 傳送時間
+    source_draft_id: Optional[int] = None  # 來源草稿ID
     created_at: datetime
     updated_at: Optional[datetime] = None  # 最後更新時間
 

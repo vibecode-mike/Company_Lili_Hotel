@@ -15,6 +15,7 @@ class LineChannelBase(BaseModel):
     login_channel_id: Optional[str] = Field(None, max_length=100, description="LINE Login Channel ID")
     login_channel_secret: Optional[str] = Field(None, max_length=100, description="LINE Login Channel Secret")
     channel_name: Optional[str] = Field(None, max_length=100, description="頻道名稱")
+    basic_id: Optional[str] = Field(None, max_length=100, description="LINE Bot Basic ID (format: @xxxxxxx)")
     is_active: Optional[bool] = Field(True, description="是否啟用")
 
 
@@ -34,6 +35,7 @@ class LineChannelUpdate(BaseModel):
     login_channel_id: Optional[str] = Field(None, max_length=100, description="LINE Login Channel ID")
     login_channel_secret: Optional[str] = Field(None, max_length=100, description="LINE Login Channel Secret")
     channel_name: Optional[str] = Field(None, max_length=100, description="頻道名稱")
+    basic_id: Optional[str] = Field(None, max_length=100, description="LINE Bot Basic ID (format: @xxxxxxx)")
     is_active: Optional[bool] = Field(None, description="是否啟用")
 
 

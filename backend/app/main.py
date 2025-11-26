@@ -55,6 +55,9 @@ async def startup_event():
         scheduler.start()
         logger.info("✅ Scheduler started successfully")
 
+        # 從資料庫恢復排程任務
+        await scheduler.restore_scheduled_jobs()
+
         # 顯示已排程的任務
         jobs = scheduler.get_scheduled_jobs()
         if jobs:

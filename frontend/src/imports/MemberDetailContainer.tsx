@@ -186,9 +186,11 @@ function Container({ member }: { member?: MemberData }) {
   );
 }
 
-function Container1({ member, onNavigate }: { member?: MemberData; onNavigate?: (page: string, params?: { memberId?: string }) => void }) {
+function Container1({ member, onNavigate, fallbackMemberName }: { member?: MemberData; onNavigate?: (page: string, params?: { memberId?: string; memberName?: string }) => void; fallbackMemberName?: string }) {
   const handleChatClick = () => {
-    onNavigate?.("chat-room", { memberId: member?.id });
+    if (!member?.id) return;
+    const targetName = member.username || member.realName || fallbackMemberName;
+    onNavigate?.("chat-room", { memberId: member.id, memberName: targetName });
   };
 
   return (
@@ -206,10 +208,10 @@ function Container1({ member, onNavigate }: { member?: MemberData; onNavigate?: 
   );
 }
 
-function Container2({ member, onNavigate }: { member?: MemberData; onNavigate?: (page: string, params?: { memberId?: string }) => void }) {
+function Container2({ member, onNavigate, fallbackMemberName }: { member?: MemberData; onNavigate?: (page: string, params?: { memberId?: string; memberName?: string }) => void; fallbackMemberName?: string }) {
   return (
     <div className="basis-0 content-stretch flex flex-col gap-[24px] grow items-center max-w-[360px] min-h-px min-w-px relative self-stretch shrink-0" data-name="Container">
-      <Container1 member={member} onNavigate={onNavigate} />
+      <Container1 member={member} onNavigate={onNavigate} fallbackMemberName={fallbackMemberName} />
     </div>
   );
 }
@@ -1319,7 +1321,7 @@ function SaveCancelButtonsTags({ onSave, onCancel }: { onSave: () => void; onCan
   );
 }
 
-function Container20({ member }: { member?: MemberData }) {
+function Container20({ member, onMemberUpdate }: { member?: MemberData; onMemberUpdate?: (member: MemberData) => void }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [memberTags, setMemberTags] = useState<string[]>(member?.memberTags || []); // ✅ 使用真實數據
   const [interactionTags, setInteractionTags] = useState<string[]>(member?.interactionTags || []); // ✅ 使用真實數據
@@ -1345,23 +1347,26 @@ function Container20({ member }: { member?: MemberData }) {
         headers.Authorization = `Bearer ${token}`;
       }
 
-      // 更新會員標籤
-      const memberTagsResponse = await fetch(`/api/v1/members/${member.id}/tags`, {
-        method: 'PUT',
+      // 使用新的批量更新端點（單一原子操作，保留 click_count）
+      const response = await fetch(`/api/v1/members/${member.id}/tags/batch-update`, {
+        method: 'POST',
         headers,
-        body: JSON.stringify({ tag_names: newMemberTags }),
+        body: JSON.stringify({
+          member_tags: newMemberTags,
+          interaction_tags: newInteractionTags
+        }),
       });
 
-      if (memberTagsResponse.status === 401) {
+      if (response.status === 401) {
         showToast('登入已過期，請重新登入', 'error');
         logout();
         return false;
       }
 
-      if (!memberTagsResponse.ok) {
-        let errorMessage = '會員標籤儲存失敗';
+      if (!response.ok) {
+        let errorMessage = '標籤儲存失敗';
         try {
-          const errorData = await memberTagsResponse.json();
+          const errorData = await response.json();
           errorMessage = errorData.detail || errorData.message || errorMessage;
         } catch {
           // ignore
@@ -1370,34 +1375,51 @@ function Container20({ member }: { member?: MemberData }) {
         return false;
       }
 
-      // 更新互動標籤（新增）
-      const interactionTagsResponse = await fetch(`/api/v1/members/${member.id}/interaction-tags`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({ tag_names: newInteractionTags }),
+      // 保存成功後，重新獲取最新的會員資料
+      const memberResponse = await fetch(`/api/v1/members/${member.id}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 
-      if (interactionTagsResponse.status === 401) {
-        showToast('登入已過期，請重新登入', 'error');
-        logout();
-        return false;
+      if (memberResponse.ok) {
+        const memberData = await memberResponse.json();
+        const updatedMember = memberData.data;
+
+        // 轉換後端數據格式為前端格式
+        const transformedMember: MemberData = {
+          id: updatedMember.id,
+          line_uid: updatedMember.line_uid,
+          line_name: updatedMember.line_name,
+          line_avatar: updatedMember.line_avatar,
+          name: updatedMember.name,
+          gender: updatedMember.gender,
+          birthday: updatedMember.birthday,
+          email: updatedMember.email,
+          phone: updatedMember.phone,
+          id_number: updatedMember.id_number,
+          passport_number: updatedMember.passport_number,
+          residence: updatedMember.residence,
+          join_source: updatedMember.join_source,
+          receive_notification: updatedMember.receive_notification,
+          internal_note: updatedMember.internal_note,
+          created_at: updatedMember.created_at,
+          last_interaction_at: updatedMember.last_interaction_at,
+          memberTags: updatedMember.tags?.filter((t: { type: string }) => t.type === 'member').map((t: { name: string }) => t.name) || [],
+          interactionTags: updatedMember.tags?.filter((t: { type: string }) => t.type === 'interaction').map((t: { name: string }) => t.name) || [],
+          tagDetails: updatedMember.tags || [],
+        };
+
+        // 更新本地狀態
+        setMemberTags(transformedMember.memberTags);
+        setInteractionTags(transformedMember.interactionTags);
+
+        // 通知父組件更新
+        onMemberUpdate?.(transformedMember);
+      } else {
+        // 如果獲取失敗，至少更新本地狀態
+        setMemberTags(newMemberTags);
+        setInteractionTags(newInteractionTags);
       }
 
-      if (!interactionTagsResponse.ok) {
-        let errorMessage = '互動標籤儲存失敗';
-        try {
-          const errorData = await interactionTagsResponse.json();
-          errorMessage = errorData.detail || errorData.message || errorMessage;
-        } catch {
-          // ignore
-        }
-        showToast(errorMessage, 'error');
-        return false;
-      }
-
-      // 更新本地狀態
-      setMemberTags(newMemberTags);
-      setInteractionTags(newInteractionTags);
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : '標籤儲存失敗';
@@ -1434,9 +1456,9 @@ function Container20({ member }: { member?: MemberData }) {
                   {(member?.tagDetails || [])
                     .filter(tag => tag.type === 'interaction')
                     .map((tag, index) => {
-                      // 根據 source 設定顏色：auto=黃色, manual=藍色
-                      const bgColor = tag.source === 'auto' ? 'bg-[#fff9e6]' : 'bg-[#f0f6ff]';
-                      const textColor = tag.source === 'auto' ? 'text-[#d4a827]' : 'text-[#0f6beb]';
+                      // 互動標籤統一使用藍色
+                      const bgColor = 'bg-[#f0f6ff]';
+                      const textColor = 'text-[#0f6beb]';
                       return (
                         <div key={index} className={`${bgColor} box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0`} data-name="Tag">
                           <p className={`basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-medium grow leading-[1.5] min-h-px min-w-px relative shrink-0 ${textColor} text-[14px] text-center`}>{tag.name}</p>
@@ -1597,16 +1619,16 @@ function Container25({ member, onMemberUpdate }: { member?: MemberData; onMember
   return (
     <div className="basis-0 content-stretch flex flex-col gap-[32px] grow items-start min-h-px min-w-px relative shrink-0" data-name="Container">
       <Container13 member={member} onMemberUpdate={onMemberUpdate} />
-      <Container20 member={member} />
+      <Container20 member={member} onMemberUpdate={onMemberUpdate} />
       <Container24 member={member} onMemberUpdate={onMemberUpdate} />
     </div>
   );
 }
 
-function Container26({ member, onNavigate, onMemberUpdate }: { member?: MemberData; onNavigate?: (page: string, params?: { memberId?: string }) => void; onMemberUpdate?: (member: MemberData) => void }) {
+function Container26({ member, onNavigate, onMemberUpdate, fallbackMemberName }: { member?: MemberData; onNavigate?: (page: string, params?: { memberId?: string; memberName?: string }) => void; onMemberUpdate?: (member: MemberData) => void; fallbackMemberName?: string }) {
   return (
     <div className="content-stretch flex gap-[32px] items-start relative shrink-0 w-full" data-name="Container">
-      <Container2 member={member} onNavigate={onNavigate} />
+      <Container2 member={member} onNavigate={onNavigate} fallbackMemberName={fallbackMemberName} />
       <Container25 member={member} onMemberUpdate={onMemberUpdate} />
     </div>
   );
@@ -1836,7 +1858,7 @@ function ConsumptionRecordsSection() {
   );
 }
 
-function MainContent({ member, onNavigate, onMemberUpdate }: { member?: MemberData; onNavigate?: (page: string, params?: { memberId?: string }) => void; onMemberUpdate?: (member: MemberData) => void }) {
+function MainContent({ member, onNavigate, onMemberUpdate, fallbackMemberName }: { member?: MemberData; onNavigate?: (page: string, params?: { memberId?: string; memberName?: string }) => void; onMemberUpdate?: (member: MemberData) => void; fallbackMemberName?: string }) {
   return (
     <div className="relative shrink-0 w-full" data-name="Main Content">
       <div className="size-full">
@@ -1846,7 +1868,7 @@ function MainContent({ member, onNavigate, onMemberUpdate }: { member?: MemberDa
               <TitleWrapper />
             </SharedTitleContainer>
           </SharedHeaderContainer>
-          <Container26 member={member} onNavigate={onNavigate} onMemberUpdate={onMemberUpdate} />
+          <Container26 member={member} onNavigate={onNavigate} onMemberUpdate={onMemberUpdate} fallbackMemberName={fallbackMemberName} />
           <ConsumptionRecordsSection />
         </div>
       </div>
@@ -1861,17 +1883,21 @@ import type { MemberData } from "../types/member";
 export default function MainContainer({ 
   onBack, 
   member, 
-  onNavigate 
+  onNavigate,
+  fallbackMemberName
 }: { 
   onBack?: () => void; 
   member?: MemberData;
-  onNavigate?: (page: string, params?: { memberId?: string }) => void;
+  onNavigate?: (page: string, params?: { memberId?: string; memberName?: string }) => void;
+  fallbackMemberName?: string;
 } = {}) {
   const [currentMember, setCurrentMember] = useState<MemberData | undefined>(member);
 
   React.useEffect(() => {
     setCurrentMember(member);
   }, [member]);
+
+  const memberBreadcrumbLabel = currentMember?.username || currentMember?.realName || fallbackMemberName || '會員資訊';
 
   return (
     <div className="bg-slate-50 content-stretch flex flex-col items-start relative size-full" data-name="Main Container">
@@ -1882,7 +1908,7 @@ export default function MainContainer({
             <SimpleBreadcrumb 
               items={[
                 { label: '會員管理', onClick: onBack },
-                { label: '會員資訊', active: true }
+                { label: memberBreadcrumbLabel, active: true }
               ]} 
             />
           </div>
@@ -1892,6 +1918,7 @@ export default function MainContainer({
         member={currentMember}
         onNavigate={onNavigate}
         onMemberUpdate={(updatedMember) => setCurrentMember(updatedMember)}
+        fallbackMemberName={fallbackMemberName}
       />
     </div>
   );

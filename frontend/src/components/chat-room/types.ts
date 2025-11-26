@@ -50,7 +50,6 @@ export interface ChatInputProps {
 
 export interface ChatRoomLayoutProps {
   member: Member;
-  onBack: () => void;
 }
 
 // ========== 标签相关 ==========

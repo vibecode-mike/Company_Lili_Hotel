@@ -44,7 +44,7 @@ const DrawerOverlay = React.forwardRef<
       style={{
         top: 0,
         left: 0,
-        right: '344px',
+        right: '382px',
         bottom: 0
       }}
       {...props}

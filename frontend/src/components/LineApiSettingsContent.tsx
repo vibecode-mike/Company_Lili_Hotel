@@ -28,6 +28,9 @@ export default function LineApiSettingsContent() {
   const [showResetDialog, setShowResetDialog] = useState<boolean>(false);
   const [lineChannelDbId, setLineChannelDbId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [basicId, setBasicId] = useState<string>('');
+  const [isFetchingBasicId, setIsFetchingBasicId] = useState<boolean>(false);
+  const [basicIdError, setBasicIdError] = useState<string>('');
   const { showToast } = useToast();
 
   // Refs for each card
@@ -54,6 +57,7 @@ export default function LineApiSettingsContent() {
             setChannelAccessToken(data.channel_access_token || '');
             setLoginChannelId(data.login_channel_id || '');
             setLoginChannelSecret(data.login_channel_secret || '');
+            setBasicId(data.basic_id || '');
 
             // 如果所有必填欄位都有值，顯示完成頁面
             if (data.channel_id && data.channel_secret && data.channel_access_token &&
@@ -115,6 +119,52 @@ export default function LineApiSettingsContent() {
       console.error('保存 LINE 頻道設定失敗:', error);
       showToast('保存失敗，請稍後再試', 'error');
       return false;
+    }
+  };
+
+  // 🆕 自動獲取 LINE Bot Basic ID
+  const fetchBasicId = async (token: string): Promise<void> => {
+    if (!token || token.trim().length === 0) {
+      return;
+    }
+
+    setIsFetchingBasicId(true);
+    setBasicIdError('');
+
+    try {
+      // 調用現有的 Flask endpoint
+      const response = await fetch('/api/bot/basic-id', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          channel_access_token: token,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.ok && data.basicId) {
+        setBasicId(data.basicId);
+        console.log('[INFO] Basic ID 獲取成功:', data.basicId);
+
+        // 同時更新到資料庫
+        if (lineChannelDbId) {
+          await fetch(`/api/v1/line_channels/${lineChannelDbId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ basic_id: data.basicId }),
+          });
+        }
+      } else {
+        throw new Error(data.error || '無法獲取 Basic ID');
+      }
+    } catch (error) {
+      console.error('[ERROR] 獲取 Basic ID 失敗:', error);
+      setBasicIdError('無法自動獲取 Basic ID，請確認 Token 是否正確');
+    } finally {
+      setIsFetchingBasicId(false);
     }
   };
 
@@ -244,7 +294,17 @@ export default function LineApiSettingsContent() {
                   </div>
                   <div className="flex flex-col gap-0 min-w-0 flex-1">
                     <p className="text-[16px] leading-[24px] text-[#101828] font-medium tracking-[-0.3125px]">LINE 官方帳號</p>
-                    <p className="text-[14px] leading-[20px] text-[#6a7282] tracking-[-0.1504px]">@ˇˇˇˇ</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-[14px] leading-[20px] text-[#6a7282] tracking-[-0.1504px]">
+                        {basicId || '@ˇˇˇˇ'}
+                      </p>
+                      {isFetchingBasicId && (
+                        <span className="text-xs text-gray-500">驗證中...</span>
+                      )}
+                      {basicIdError && (
+                        <span className="text-xs text-red-500">{basicIdError}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="bg-green-100 px-[12px] py-[4px] rounded-full shrink-0">
@@ -836,20 +896,24 @@ export default function LineApiSettingsContent() {
 
                 {/* Next Button */}
                 <button
-                  disabled={!channelAccessToken.trim()}
+                  disabled={!channelAccessToken.trim() || isFetchingBasicId}
                   onClick={async () => {
                     if (channelAccessToken.trim()) {
                       await saveSettings({ channel_access_token: channelAccessToken });
+
+                      // 🆕 自動獲取 Basic ID
+                      await fetchBasicId(channelAccessToken);
+
                       goToNextCard(5);
                     }
                   }}
                   className={`h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] flex items-center justify-center transition-colors ${
-                    channelAccessToken.trim()
+                    channelAccessToken.trim() && !isFetchingBasicId
                       ? 'bg-[#0f6beb] hover:bg-[#0d5bbf]'
                       : 'bg-[#d1d5dc] opacity-50 cursor-not-allowed'
                   }`}
                 >
-                  下一步
+                  {isFetchingBasicId ? '驗證中...' : '下一步'}
                 </button>
               </div>
             )}

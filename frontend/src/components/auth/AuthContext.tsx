@@ -18,25 +18,30 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [user, setUser] = useState<User | null>(null);
+// 同步檢查初始認證狀態（避免重新整理時的狀態閃爍）
+const getInitialAuthState = () => {
+  const token = localStorage.getItem('auth_token');
+  const userEmail = localStorage.getItem('user_email');
+  const loginMethod = localStorage.getItem('login_method') as 'email' | 'google' | 'line' || 'email';
 
-  // Check authentication status on mount
-  useEffect(() => {
-    const token = localStorage.getItem('auth_token');
-    const userEmail = localStorage.getItem('user_email');
-    const loginMethod = localStorage.getItem('login_method') as 'email' | 'google' | 'line' || 'email';
-
-    if (token && userEmail) {
-      setIsAuthenticated(true);
-      setUser({
+  if (token && userEmail) {
+    return {
+      isAuthenticated: true,
+      user: {
         email: userEmail,
         name: userEmail.split('@')[0],
         loginMethod: loginMethod
-      });
-    }
-  }, []);
+      }
+    };
+  }
+  return { isAuthenticated: false, user: null };
+};
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  // 使用同步初始化，避免重新整理時的狀態不一致
+  const initialState = getInitialAuthState();
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(initialState.isAuthenticated);
+  const [user, setUser] = useState<User | null>(initialState.user);
 
   // Email/Password login
   const login = async (email: string, password: string): Promise<boolean> => {

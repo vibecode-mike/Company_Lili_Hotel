@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '../components/auth/AuthContext';
+import { normalizeInteractionTags } from '../utils/interactionTags';
 
 /**
  * 訊息數據 Context
@@ -64,15 +65,15 @@ const transformBackendMessage = (item: any): Message => {
   return {
     id: item.id.toString(),
     title: item.message_title || item.template?.name || '未命名訊息',
-    tags: item.interaction_tags || [],
+    tags: normalizeInteractionTags(item.interaction_tags ?? item.interactionTags ?? item.tags),
     platform: item.platform || 'LINE',
     status: item.send_status,
     recipientCount: item.send_count || 0,
     openCount: item.open_count || 0,
-    clickCount: 0, // 後端暫無此欄位
+    clickCount: item.click_count || 0,
     sendTime: item.send_time || item.scheduled_at || '-',
     createdAt: item.created_at,
-    updatedAt: item.created_at,
+    updatedAt: item.updated_at,
     thumbnail: item.thumbnail,
   };
 };

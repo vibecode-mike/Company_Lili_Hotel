@@ -7,6 +7,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { ChatRoomLayoutProps, ChatMessage } from './types';
 import type { Member } from '../../types/member';
+import { useWebSocket } from '../../hooks/useWebSocket';
 import MemberAvatar from './MemberAvatar';
 import MemberInfoPanelComplete from './MemberInfoPanelComplete';
 import MemberTagEditModal from '../MemberTagEditModal';
@@ -16,6 +17,7 @@ import svgPathsInfo from '../../imports/svg-k0rlkn3s4y';
 import svgPaths from '../../imports/svg-bzzivawqvx';
 import svgPathsForm from '../../imports/svg-htq1l2704k';
 import { useToast } from '../ToastProvider';
+import { useAuth } from '../auth/AuthContext';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
 import MemberNoteEditor from '../shared/MemberNoteEditor';
@@ -244,6 +246,7 @@ export default function ChatRoomLayout({ member: initialMember }: ChatRoomLayout
   
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
+  const { logout } = useAuth();
 
   // Convert backend gender format to frontend format
   const convertGenderToFrontend = (backendGender?: string): 'male' | 'female' | 'other' => {
@@ -293,6 +296,42 @@ export default function ChatRoomLayout({ member: initialMember }: ChatRoomLayout
       setInteractionTags(member.interactionTags || []);
     }
   }, [member]);
+
+  // WebSocket 監聽新訊息
+  const handleNewMessage = useCallback((wsMessage: any) => {
+    if (wsMessage.type === 'new_message' && wsMessage.data) {
+      console.log('📨 Received new message via WebSocket:', wsMessage.data);
+
+      // 將新訊息添加到列表末尾
+      setMessages(prev => {
+        // 避免重複添加 (檢查 message_id)
+        const exists = prev.some(msg => msg.id === wsMessage.data.id);
+        if (exists) {
+          console.log('⚠️  Message already exists, skipping');
+          return prev;
+        }
+        return [...prev, wsMessage.data];
+      });
+
+      // 同步更新會員的最後聊天時間
+      if (member) {
+        setMember({
+          ...member,
+          lastChatTime: new Date().toISOString()
+        });
+      }
+
+      // 自動滾動到底部
+      setTimeout(() => {
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        }
+      }, 100);
+    }
+  }, [member]);
+
+  // 建立 WebSocket 連線
+  useWebSocket(member?.id?.toString(), handleNewMessage);
 
   // Load chat messages from API
   const loadChatMessages = useCallback(async (pageNum: number = 1, append: boolean = false) => {
@@ -442,10 +481,39 @@ export default function ChatRoomLayout({ member: initialMember }: ChatRoomLayout
 
   const handleSaveTags = async (newMemberTags: string[], newInteractionTags: string[]): Promise<boolean> => {
     try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        showToast('請先登入', 'error');
+        return false;
+      }
+
+      // 調用後端 batch-update API
+      const response = await fetch(`/api/v1/members/${member.id}/tags/batch-update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          member_tags: newMemberTags,
+          interaction_tags: newInteractionTags,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('標籤更新失敗:', errorData);
+        showToast(errorData.detail || '標籤更新失敗', 'error');
+        return false;
+      }
+
+      // API 成功後更新本地狀態
       setMemberTags(newMemberTags);
       setInteractionTags(newInteractionTags);
       return true;
     } catch (error) {
+      console.error('標籤更新錯誤:', error);
+      showToast('標籤更新失敗，請稍後再試', 'error');
       return false;
     }
   };
@@ -832,11 +900,56 @@ export default function ChatRoomLayout({ member: initialMember }: ChatRoomLayout
           
           {/* User Note Section */}
           <div className="content-stretch flex gap-[32px] items-start relative rounded-[20px] shrink-0 w-full">
-            <MemberNoteEditor 
+            <MemberNoteEditor
               initialValue={note}
               onSave={async (newNote) => {
+                if (!member?.id) {
+                  showToast('找不到會員資料', 'error');
+                  throw new Error('找不到會員資料');
+                }
+
+                const token = localStorage.getItem('auth_token');
+                const headers: Record<string, string> = {
+                  'Content-Type': 'application/json',
+                };
+                if (token) {
+                  headers.Authorization = `Bearer ${token}`;
+                }
+
+                const response = await fetch(`/api/v1/members/${member.id}/notes`, {
+                  method: 'PUT',
+                  headers,
+                  body: JSON.stringify({ internal_note: newNote }),
+                });
+
+                if (response.status === 401) {
+                  showToast('登入已過期，請重新登入', 'error');
+                  logout();
+                  throw new Error('登入已過期');
+                }
+
+                if (!response.ok) {
+                  let errorMessage = '儲存失敗';
+                  try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.detail || errorData.message || errorMessage;
+                  } catch {
+                    // ignore json parse errors
+                  }
+                  showToast(errorMessage, 'error');
+                  throw new Error(errorMessage);
+                }
+
+                // Update local state only after successful API call
                 setNote(newNote);
-                // API call would go here
+
+                // Update member object with new note
+                if (member) {
+                  setMember({
+                    ...member,
+                    internal_note: newNote,
+                  });
+                }
               }}
               containerClassName="basis-0 bg-white grow min-h-[48px] min-w-px relative rounded-[20px] shrink-0"
               innerClassName="box-border content-stretch flex gap-[4px] items-start justify-end min-h-inherit p-[20px] pb-[72px] relative w-full"

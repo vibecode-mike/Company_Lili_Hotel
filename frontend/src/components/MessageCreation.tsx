@@ -20,7 +20,7 @@ import closeIconPaths from '../imports/svg-b62f9l13m2';
 import uploadIconPaths from '../imports/svg-wb8nmg8j6i';
 import messageTextSvgPaths from '../imports/svg-hbkooryl5v';
 import FlexMessageEditorNew from './flex-message/FlexMessageEditorNew';
-import CarouselMessageEditor from './CarouselMessageEditor';
+import CarouselMessageEditor, { type CarouselCard } from './CarouselMessageEditor';
 import { TriggerImagePreview, TriggerTextPreview, GradientPreviewContainer } from './common/PreviewContainers';
 import ActionTriggerTextMessage from '../imports/ActionTriggerTextMessage';
 import ActionTriggerImageMessage from '../imports/ActionTriggerImageMessage';
@@ -29,6 +29,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { ScheduleSettings, TargetAudienceSelector, PreviewPanel } from './message-creation';
 import type { Tag } from './message-creation';
 import { useMessages } from '../contexts/MessagesContext';
+import { CAROUSEL_STRUCTURE_FIELDS } from './carouselStructure';
 
 // Custom DialogContent without close button
 function DialogContentNoClose({
@@ -171,9 +172,9 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   const button2TriggerImageInputRef = useRef<HTMLInputElement>(null);
   
   // Card states
-  const [cards, setCards] = useState([
-    { 
-      id: 1, 
+  const [cards, setCards] = useState<CarouselCard[]>([
+    {
+      id: 1,
       enableImage: true,
       enableTitle: true,
       enableContent: true,
@@ -182,10 +183,10 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       enableButton2: false,
       enableButton3: false,
       enableButton4: false,
-      image: '', 
-      cardTitle: '', 
-      content: '', 
-      price: '', 
+      image: '',
+      cardTitle: '',
+      content: '',
+      price: '',
       currency: 'ntd',
       button1: '',
       button2: '',
@@ -195,30 +196,30 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       button1Url: '',
       button1Tag: '',
       button1Text: '',
-      button1TriggerImage: null as File | null,
+      button1TriggerImage: null,
       button1TriggerImageUrl: '',
-      button1Mode: 'primary' as 'primary' | 'secondary' | 'link',
+      button1Mode: 'primary',
       button2Action: 'uri',
       button2Url: '',
       button2Tag: '',
       button2Text: '',
-      button2TriggerImage: null as File | null,
+      button2TriggerImage: null,
       button2TriggerImageUrl: '',
-      button2Mode: 'secondary' as 'primary' | 'secondary' | 'link',
+      button2Mode: 'secondary',
       button3Action: 'uri',
       button3Url: '',
       button3Tag: '',
       button3Text: '',
-      button3TriggerImage: null as File | null,
+      button3TriggerImage: null,
       button3TriggerImageUrl: '',
-      button3Mode: 'secondary' as 'primary' | 'secondary' | 'link',
+      button3Mode: 'secondary',
       button4Action: 'uri',
       button4Url: '',
       button4Tag: '',
       button4Text: '',
-      button4TriggerImage: null as File | null,
+      button4TriggerImage: null,
       button4TriggerImageUrl: '',
-      button4Mode: 'secondary' as 'primary' | 'secondary' | 'link',
+      button4Mode: 'secondary',
       enableImageUrl: false,
       imageUrl: '',
       imageTag: ''
@@ -227,10 +228,39 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
   const currentCard = cards.find(c => c.id === activeTab) || cards[0];
 
-  const updateCard = (updates: Partial<typeof currentCard>) => {
-    setCards(cards.map(card =>
-      card.id === activeTab ? { ...card, ...updates } : card
-    ));
+  const updateCard = (updates: Partial<CarouselCard>) => {
+    setCards(prevCards => {
+      if (prevCards.length === 0) {
+        return prevCards;
+      }
+
+      const masterCardId = prevCards[0].id;
+
+      const nextCards = prevCards.map(card =>
+        card.id === activeTab ? { ...card, ...updates } : card
+      );
+
+      if (activeTab === masterCardId) {
+        const masterCard = nextCards.find(card => card.id === masterCardId);
+        if (!masterCard) {
+          return nextCards;
+        }
+
+        return nextCards.map(card => {
+          if (card.id === masterCardId) {
+            return card;
+          }
+
+          const updatedCard: CarouselCard = { ...card };
+          CAROUSEL_STRUCTURE_FIELDS.forEach((field) => {
+            (updatedCard as any)[field] = (masterCard as any)[field];
+          });
+          return updatedCard;
+        });
+      }
+
+      return nextCards;
+    });
   };
 
   // Load edit message data when editMessageData changes
@@ -341,6 +371,11 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
           if (bubble.hero && bubble.hero.url) {
             card.enableImage = true;
             card.image = bubble.hero.url;
+
+            if (bubble.hero.action && bubble.hero.action.type === 'uri' && bubble.hero.action.uri) {
+              card.enableImageUrl = true;
+              card.imageUrl = bubble.hero.action.uri;
+            }
           }
 
           // Parse body contents
@@ -396,6 +431,22 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                   'secondary';
               }
             });
+          }
+
+          const interactionMeta = bubble._metadata?.interactionTags || (bubble._metadata as any)?.interaction_tags;
+          if (interactionMeta) {
+            if (interactionMeta.heroTag) {
+              card.imageTag = interactionMeta.heroTag;
+            }
+            if (Array.isArray(interactionMeta.buttonTags)) {
+              interactionMeta.buttonTags.forEach((tag: string | null | undefined, index: number) => {
+                const buttonIndex = index + 1;
+                if (buttonIndex >= 1 && buttonIndex <= 4) {
+                  const tagKey = `button${buttonIndex}Tag` as keyof typeof card;
+                  card[tagKey] = tag || '';
+                }
+              });
+            }
           }
 
           return card;
@@ -1002,6 +1053,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         type: "bubble",
         size: "mega"
       };
+      const buttonTagsMeta: Array<string | null> = [];
 
       // Hero image
       const imageUrl = card.uploadedImageUrl || card.image; // 優先使用已上傳的 URL
@@ -1079,6 +1131,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         const textKey = `button${buttonNum}Text` as keyof typeof card;
         const modeKey = `button${buttonNum}Mode` as keyof typeof card;
         const triggerImageUrlKey = `button${buttonNum}TriggerImageUrl` as keyof typeof card;
+        const tagKey = `button${buttonNum}Tag` as keyof typeof card;
 
         if (!card[enableKey]) return;
 
@@ -1129,6 +1182,9 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         };
 
         footerContents.push(button);
+
+        const tagValue = typeof card[tagKey] === 'string' ? (card[tagKey] as string).trim() : '';
+        buttonTagsMeta[buttonNum - 1] = tagValue || null;
       };
 
       addButton(1);
@@ -1143,6 +1199,28 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
           spacing: "sm",
           contents: footerContents,
           flex: 0
+        };
+      }
+
+      const interactionMetadata: { heroTag?: string | null; buttonTags?: Array<string | null> } = {};
+      const normalizedImageTag = typeof card.imageTag === 'string' ? card.imageTag.trim() : '';
+      if (normalizedImageTag) {
+        interactionMetadata.heroTag = normalizedImageTag;
+      }
+      const hasButtonTags = buttonTagsMeta.some(tag => typeof tag === 'string' && tag.trim().length > 0);
+      if (hasButtonTags) {
+        interactionMetadata.buttonTags = buttonTagsMeta.map(tag => {
+          if (typeof tag === 'string') {
+            const trimmed = tag.trim();
+            return trimmed || null;
+          }
+          return tag ?? null;
+        });
+      }
+      if (interactionMetadata.heroTag || (interactionMetadata.buttonTags && interactionMetadata.buttonTags.some(Boolean))) {
+        bubble._metadata = {
+          ...(bubble._metadata || {}),
+          interactionTags: interactionMetadata
         };
       }
 
@@ -1234,9 +1312,30 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         requestBody.scheduled_at = scheduledDateTimeString;
       }
 
-      // Create broadcast message
-      const createResponse = await fetch('/api/v1/messages', {
-        method: 'POST',
+      // 判斷是否從草稿發布（編輯草稿 + 非草稿模式 = 從草稿發布）
+      const isEditingDraft = Boolean(editMessageId);
+      const isPublishingFromDraft = isEditingDraft && scheduleType !== 'draft';
+
+      let method: string;
+      let url: string;
+
+      if (isPublishingFromDraft) {
+        // 從草稿發布：POST + draft_id（複製成新記錄，原草稿保留）
+        method = 'POST';
+        url = '/api/v1/messages';
+        requestBody.draft_id = parseInt(editMessageId, 10);
+      } else if (isEditingDraft) {
+        // 編輯草稿並儲存為草稿：PUT 更新同一筆
+        method = 'PUT';
+        url = `/api/v1/messages/${editMessageId}`;
+      } else {
+        // 新建訊息
+        method = 'POST';
+        url = '/api/v1/messages';
+      }
+
+      const createResponse = await fetch(url, {
+        method,
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -1251,14 +1350,13 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       }
 
       const createResult = await createResponse.json();
-      const messageId = createResult.data?.id || createResult.id;
+      const messageId = createResult.data?.id || createResult.id || editMessageId;
 
       if (!messageId) {
         toast.error('無法取得訊息 ID');
         return;
       }
 
-      // Send immediately if schedule type is "immediate"
       if (scheduleType === 'immediate') {
         const sendResponse = await fetch(`/api/v1/messages/${messageId}/send`, {
           method: 'POST',
@@ -1277,9 +1375,19 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         const sendResult = await sendResponse.json();
         const sentCount = sendResult.data?.sent_count || sendResult.sent_count || 0;
 
-        toast.success(`發佈成功！已發送 ${sentCount} 則訊息`);
+        if (isPublishingFromDraft) {
+          toast.success(`發佈成功！已發送 ${sentCount} 則訊息（原草稿已保留）`);
+        } else {
+          toast.success(`發佈成功！已發送 ${sentCount} 則訊息`);
+        }
+      } else if (scheduleType === 'scheduled') {
+        if (isPublishingFromDraft) {
+          toast.success('已排程，將於指定時間發送（原草稿已保留）');
+        } else {
+          toast.success('已排程，將於指定時間發送');
+        }
       } else {
-        toast.success('草稿已儲存，將於排程時間發送');
+        toast.success('草稿已儲存');
       }
 
       setIsDirty(false); // 發佈後清除未儲存標記
@@ -1325,7 +1433,100 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     return `${year}/${month}/${day}`;
   };
 
+  // 檢查是否為今天
+  const isToday = (date: Date | undefined): boolean => {
+    if (!date) return false;
+    const today = new Date();
+    return (
+      date.getFullYear() === today.getFullYear() &&
+      date.getMonth() === today.getMonth() &&
+      date.getDate() === today.getDate()
+    );
+  };
+
+  // 檢查小時是否應該禁用（僅限今天）
+  const isHourDisabled = (hour: string): boolean => {
+    if (!scheduledDate || !isToday(scheduledDate)) return false;
+
+    const now = new Date();
+    const currentHour = now.getHours();
+    const selectedHour = parseInt(hour);
+
+    return selectedHour < currentHour;
+  };
+
+  // 檢查分鐘是否應該禁用（僅限今天且當前小時）
+  const isMinuteDisabled = (minute: string): boolean => {
+    if (!scheduledDate || !isToday(scheduledDate)) return false;
+
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const selectedHour = parseInt(scheduledTime.hours);
+    const selectedMinute = parseInt(minute);
+
+    // 只有在當前小時才禁用分鐘
+    if (selectedHour !== currentHour) return false;
+
+    return selectedMinute < currentMinute;
+  };
+
+  // 實時驗證排程日期時間
+  const validateScheduledDateTime = (date: Date | undefined, time: { hours: string; minutes: string }): boolean => {
+    if (!date) return true;
+
+    const scheduledDateTime = new Date(date);
+    scheduledDateTime.setHours(parseInt(time.hours));
+    scheduledDateTime.setMinutes(parseInt(time.minutes));
+    scheduledDateTime.setSeconds(0);
+
+    const now = new Date();
+
+    if (scheduledDateTime <= now) {
+      toast.error('排程發送時間不可早於目前時間');
+      return false;
+    }
+
+    return true;
+  };
+
+  // 當日期變更為今天且選定時間已過去時自動調整時間
+  useEffect(() => {
+    if (scheduledDate && isToday(scheduledDate)) {
+      const now = new Date();
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+      const selectedHour = parseInt(scheduledTime.hours);
+      const selectedMinute = parseInt(scheduledTime.minutes);
+
+      let needsUpdate = false;
+      let newTime = { ...scheduledTime };
+
+      // 如果選定的小時已過去，更新為當前小時
+      if (selectedHour < currentHour) {
+        newTime.hours = String(currentHour).padStart(2, '0');
+        needsUpdate = true;
+      }
+
+      // 如果是同一小時但分鐘已過去，更新為當前分鐘+1
+      if (selectedHour === currentHour && selectedMinute <= currentMinute) {
+        newTime.minutes = String(currentMinute + 1).padStart(2, '0');
+        needsUpdate = true;
+      }
+
+      if (needsUpdate) {
+        setScheduledTime(newTime);
+        toast.info('時間已自動調整為最近的可選時間');
+      }
+    }
+  }, [scheduledDate]);
+
   const handleDateTimeConfirm = () => {
+    // 確認前先驗證
+    if (scheduledDate && !validateScheduledDateTime(scheduledDate, scheduledTime)) {
+      return; // 驗證失敗時不關閉彈窗
+    }
+
     setDatePickerOpen(false);
     if (scheduledDate) {
       toast.success(`已設定排程時間：${formatDate(scheduledDate)} ${scheduledTime.hours}:${scheduledTime.minutes}`);
@@ -1571,24 +1772,44 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                           <div className="space-y-2">
                             <Label className="text-[14px] text-[#383838]">選擇時間</Label>
                             <div className="flex items-center gap-2">
-                              <Select value={scheduledTime.hours} onValueChange={(value) => setScheduledTime(prev => ({ ...prev, hours: value }))}>
+                              <Select value={scheduledTime.hours} onValueChange={(value) => {
+                                const newTime = { ...scheduledTime, hours: value };
+                                setScheduledTime(newTime);
+                                setTimeout(() => validateScheduledDateTime(scheduledDate, newTime), 0);
+                              }}>
                                 <SelectTrigger className="w-[80px] h-[40px] rounded-[8px]">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
                                   {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')).map(hour => (
-                                    <SelectItem key={hour} value={hour}>{hour}</SelectItem>
+                                    <SelectItem
+                                      key={hour}
+                                      value={hour}
+                                      disabled={isHourDisabled(hour)}
+                                    >
+                                      {hour}
+                                    </SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
                               <span className="text-[16px] text-[#383838]">:</span>
-                              <Select value={scheduledTime.minutes} onValueChange={(value) => setScheduledTime(prev => ({ ...prev, minutes: value }))}>
+                              <Select value={scheduledTime.minutes} onValueChange={(value) => {
+                                const newTime = { ...scheduledTime, minutes: value };
+                                setScheduledTime(newTime);
+                                setTimeout(() => validateScheduledDateTime(scheduledDate, newTime), 0);
+                              }}>
                                 <SelectTrigger className="w-[80px] h-[40px] rounded-[8px]">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
                                   {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')).map(minute => (
-                                    <SelectItem key={minute} value={minute}>{minute}</SelectItem>
+                                    <SelectItem
+                                      key={minute}
+                                      value={minute}
+                                      disabled={isMinuteDisabled(minute)}
+                                    >
+                                      {minute}
+                                    </SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
@@ -1687,7 +1908,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                                 <p className="basis-0 font-normal grow leading-[1.5] min-h-px min-w-px shrink-0 text-[#a8a8a8] text-[16px] text-center">＋ 新增標籤</p>
                               </button>
                             </DialogTrigger>
-                            <DialogContentNoClose className="max-w-[800px] max-h-[90vh] p-0 bg-transparent border-0">
+                            <DialogContentNoClose className="max-w-[750px] max-h-[90vh] p-0 bg-transparent border-0">
                               <DialogTitle className="sr-only">篩選目標對象</DialogTitle>
                               <DialogDescription className="sr-only">選擇或建立標籤來篩選目標對象</DialogDescription>
                               <FilterModal 

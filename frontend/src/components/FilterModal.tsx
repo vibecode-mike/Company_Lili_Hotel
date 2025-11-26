@@ -253,56 +253,42 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
             </div>
 
             {/* Search Bar and Toggle */}
-            <div className="content-stretch flex gap-[36px] items-center relative shrink-0 w-full">
+            <div className="flex gap-[24px] items-start w-full">
               {/* Search Bar */}
-              <div className="basis-0 bg-white grow min-h-px min-w-[292px] relative rounded-[16px] shrink-0">
-                <div className="flex flex-row items-center min-w-inherit size-full">
-                  <div className="box-border content-stretch flex gap-[28px] items-center min-w-inherit px-[12px] py-[8px] relative w-full">
-                    <div className="content-stretch flex gap-[4px] items-center relative shrink-0 flex-1">
-                      <IconSearch />
-                      {selectedTags.map(tag => (
-                        <TagComponent key={tag.id} variant="blue" onRemove={() => handleRemoveTag(tag.id)}>
-                          {tag.name}
-                        </TagComponent>
-                      ))}
-                      <input
-                        type="text"
-                        value={searchInput}
-                        onChange={(e) => handleSearchChange(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        placeholder={selectedTags.length === 0 ? "輸入或按Enter 新增標籤" : ""}
-                        maxLength={20}
-                        className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] flex-1 outline-none text-[#383838] text-[20px] placeholder:text-[#a8a8a8] bg-transparent"
-                      />
-                    </div>
-                  </div>
+              <div className="bg-white flex-1 min-w-[700px] rounded-[16px] border border-[#e1ebf9]">
+                <div className="flex flex-wrap gap-[4px] items-center px-[12px] py-[8px] min-h-[48px]">
+                  <IconSearch />
+                  {selectedTags.map(tag => (
+                    <TagComponent key={tag.id} variant="blue" onRemove={() => handleRemoveTag(tag.id)}>
+                      {tag.name}
+                    </TagComponent>
+                  ))}
+                  <input
+                    type="text"
+                    value={searchInput}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder={selectedTags.length === 0 ? "輸入或按 Enter 新增標籤" : ""}
+                    maxLength={20}
+                    className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] flex-1 min-w-[200px] outline-none text-[#383838] text-[20px] placeholder:text-[#a8a8a8] bg-transparent"
+                  />
                 </div>
               </div>
 
               {/* Toggle Section */}
-              <div className="content-stretch flex items-center relative shrink-0">
-                <div className="content-stretch flex gap-[2px] items-center min-w-[60px] relative shrink-0">
-                  <div className="content-stretch flex items-center relative shrink-0">
-                    <div className="flex flex-col font-['Noto_Sans_TC:Regular',_sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[16px] text-nowrap">
-                      <p className="leading-[1.5] whitespace-pre">條件</p>
-                    </div>
-                  </div>
-                  <div className="content-stretch flex items-center relative shrink-0">
-                    <div className="flex flex-col font-['Noto_Sans_TC:Regular',_sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#f44336] text-[16px] text-nowrap">
-                      <p className="leading-[1.5] whitespace-pre">*</p>
-                    </div>
-                  </div>
+              <div className="flex items-center shrink-0 h-[48px]">
+                <div className="flex gap-[2px] items-center">
+                  <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px]">條件</p>
+                  <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] text-[#f44336] text-[16px]">*</p>
                 </div>
-                <div className="content-stretch flex gap-[4px] items-center relative shrink-0">
-                  <p className={`font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[16px] text-nowrap whitespace-pre ${!isInclude ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>排除</p>
-                  <div className="relative shrink-0 size-[40px] cursor-pointer" onClick={() => setIsInclude(!isInclude)}>
+                <div className="flex gap-[4px] items-center ml-[8px]">
+                  <p className={`font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] text-[16px] ${!isInclude ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>排除</p>
+                  <div className="relative size-[40px] cursor-pointer" onClick={() => setIsInclude(!isInclude)}>
                     <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 40 40">
                       <g clipPath="url(#clip0_8236_31)">
-                        <g id="Vector"></g>
-                        <path 
+                        <path
                           d={isInclude ? toggleSvgPaths.p13e42a00 : "M28.3333 11.6667H11.6667C7.06667 11.6667 3.33333 15.4 3.33333 20C3.33333 24.6 7.06667 28.3333 11.6667 28.3333H28.3333C32.9333 28.3333 36.6667 24.6 36.6667 20C36.6667 15.4 32.9333 11.6667 28.3333 11.6667ZM11.6667 25C8.9 25 6.66667 22.7667 6.66667 20C6.66667 17.2333 8.9 15 11.6667 15C14.4333 15 16.6667 17.2333 16.6667 20C16.6667 22.7667 14.4333 25 11.6667 25Z"}
-                          fill="var(--fill-0, #0F6BEB)" 
-                          id="Vector_2"
+                          fill="var(--fill-0, #0F6BEB)"
                           className="transition-all duration-300 ease-in-out"
                         />
                       </g>
@@ -313,7 +299,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
                       </defs>
                     </svg>
                   </div>
-                  <p className={`font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[16px] text-nowrap whitespace-pre ${isInclude ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>符合</p>
+                  <p className={`font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] text-[16px] ${isInclude ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>符合</p>
                 </div>
               </div>
             </div>

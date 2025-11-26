@@ -272,5 +272,70 @@ class CampaignScheduler:
             # 這裡可以加入重試邏輯或通知管理員
 
 
+    async def restore_scheduled_jobs(self):
+        """
+        從資料庫恢復所有待發送的排程任務
+        在應用啟動時調用
+
+        注意：資料庫中的 scheduled_datetime_utc 實際存儲的是本地時間（台灣 UTC+8）
+        """
+        from app.database import AsyncSessionLocal
+        from app.models.message import Message
+        from sqlalchemy import select
+
+        try:
+            async with AsyncSessionLocal() as db:
+                # 查詢所有「已排程」的訊息
+                stmt = select(Message).where(
+                    Message.send_status == "已排程",
+                    Message.scheduled_datetime_utc != None
+                )
+                result = await db.execute(stmt)
+                campaigns = result.scalars().all()
+
+                # 使用本地時間比較（資料庫存的是本地時間）
+                now = datetime.now()
+                restored_count = 0
+                expired_count = 0
+
+                logger.info(f"🔍 Found {len(campaigns)} scheduled campaigns to process")
+                logger.info(f"📍 Current local time: {now}")
+
+                for campaign in campaigns:
+                    scheduled_at = campaign.scheduled_datetime_utc
+
+                    # 移除 timezone 資訊以便比較（資料庫存的是 naive datetime）
+                    if scheduled_at.tzinfo is not None:
+                        scheduled_at = scheduled_at.replace(tzinfo=None)
+
+                    logger.info(f"📋 Campaign {campaign.id}: scheduled for {scheduled_at}")
+
+                    if scheduled_at > now:
+                        # 未過期：重新排程
+                        await self.schedule_campaign(campaign.id, scheduled_at)
+                        restored_count += 1
+                        logger.info(f"📅 Restored campaign {campaign.id} for {scheduled_at}")
+                    else:
+                        # 已過期：改為草稿狀態
+                        campaign.send_status = "草稿"
+                        campaign.scheduled_datetime_utc = None
+                        expired_count += 1
+                        logger.warning(
+                            f"⚠️ Campaign {campaign.id} expired (was scheduled for {scheduled_at}), "
+                            f"reverted to draft"
+                        )
+
+                if expired_count > 0:
+                    await db.commit()
+                    logger.info(f"💾 Committed {expired_count} expired campaigns as drafts")
+
+                logger.info(
+                    f"✅ Scheduler restoration complete: "
+                    f"{restored_count} restored, {expired_count} reverted to draft"
+                )
+        except Exception as e:
+            logger.error(f"❌ Failed to restore scheduled jobs: {e}", exc_info=True)
+
+
 # 全局排程器實例
 scheduler = CampaignScheduler()

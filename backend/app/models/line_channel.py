@@ -28,6 +28,7 @@ class LineChannel(Base):
     login_channel_secret = Column(String(100), nullable=True, comment="LINE Login Channel Secret")
     liff_id_open = Column(String(100), nullable=True, comment="LIFF ID")
     channel_name = Column(String(100), nullable=True, comment="頻道名稱")
+    basic_id = Column(String(100), nullable=True, comment="LINE Bot Basic ID (format: @xxxxxxx)")
     is_active = Column(Boolean, default=True, nullable=False, comment="是否啟用")
     created_at = Column(
         DateTime, server_default=func.now(), nullable=True, comment="建立時間"

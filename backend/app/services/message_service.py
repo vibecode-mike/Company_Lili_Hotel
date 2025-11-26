@@ -14,7 +14,7 @@ import os
 from app.models.message import Message
 from app.models.template import MessageTemplate
 from app.models.member import Member
-from app.models.tag import MemberTag
+from app.models.tag import MemberTag, InteractionTag
 from app.models.tracking import ComponentInteractionLog
 from app.adapters.line_app_adapter import LineAppAdapter
 from app.clients.line_app_client import LineAppClient
@@ -49,7 +49,8 @@ class MessageService:
         thumbnail: Optional[str] = None,
         interaction_tags: Optional[List[str]] = None,
         admin_id: Optional[int] = None,
-        message_title: Optional[str] = None
+        message_title: Optional[str] = None,
+        draft_id: Optional[int] = None
     ) -> Message:
         """创建群发消息
 
@@ -67,10 +68,27 @@ class MessageService:
             interaction_tags: 互动标签列表（可选）
             admin_id: 创建者 ID（可选）
             message_title: 消息标题（可选，用于列表显示）
+            draft_id: 来源草稿 ID（可选，有值时复制草稿发布，原草稿保留）
 
         Returns:
             创建的消息对象
         """
+        # 如果有 draft_id，使用复制草稿发布逻辑
+        if draft_id:
+            return await self._publish_from_draft(
+                db=db,
+                draft_id=draft_id,
+                flex_message_json=flex_message_json,
+                target_type=target_type,
+                schedule_type=schedule_type,
+                target_filter=target_filter,
+                scheduled_at=scheduled_at,
+                notification_message=notification_message,
+                thumbnail=thumbnail,
+                interaction_tags=interaction_tags,
+                message_title=message_title,
+            )
+
         # 1. 创建基础模板（仅用于关联，实际内容存储在 Message.flex_message_json）
         if not template_name:
             template_name = f"消息_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -216,6 +234,114 @@ class MessageService:
 
         return normalized or None
 
+    async def _publish_from_draft(
+        self,
+        db: AsyncSession,
+        draft_id: int,
+        flex_message_json: str,
+        target_type: str,
+        schedule_type: str,
+        target_filter: Optional[Dict] = None,
+        scheduled_at: Optional[datetime] = None,
+        notification_message: Optional[str] = None,
+        thumbnail: Optional[str] = None,
+        interaction_tags: Optional[List[str]] = None,
+        message_title: Optional[str] = None,
+    ) -> Message:
+        """从草稿发布 - 复制成新记录，原草稿保留
+
+        Args:
+            db: 数据库 session
+            draft_id: 来源草稿 ID
+            flex_message_json: Flex Message JSON（可覆盖草稿内容）
+            target_type: 发送对象类型
+            schedule_type: 发送方式 ("immediate" | "scheduled")
+            target_filter: 筛选条件
+            scheduled_at: 排程时间
+            notification_message: 推送通知文字
+            thumbnail: 缩略图 URL
+            interaction_tags: 互动标签列表
+            message_title: 消息标题
+
+        Returns:
+            新创建的消息对象（原草稿保持不变）
+        """
+        # 1. 取得原草稿
+        draft = await db.get(Message, draft_id)
+        if not draft:
+            raise ValueError(f"草稿不存在: ID={draft_id}")
+        if draft.send_status != '草稿':
+            raise ValueError(f"只能从草稿状态发布，当前状态: {draft.send_status}")
+
+        logger.info(f"📋 从草稿发布: draft_id={draft_id}")
+
+        # 2. 创建新模板（复制草稿的模板信息）
+        template_name = f"消息_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        template = MessageTemplate(
+            name=template_name,
+            template_type="FlexMessage",
+        )
+        db.add(template)
+        await db.flush()
+
+        # 3. 确定发送状态
+        if schedule_type == "scheduled":
+            send_status = "已排程"
+        else:  # immediate
+            send_status = "待發送"
+
+        # 4. 复制草稿内容到新记录（使用传入参数覆盖，否则使用草稿原值）
+        normalized_tags = self._normalize_interaction_tags(
+            interaction_tags if interaction_tags is not None else draft.interaction_tags
+        )
+
+        new_message = Message(
+            template_id=template.id,
+            target_type=target_type or draft.target_type,
+            target_filter=target_filter if target_filter is not None else draft.target_filter,
+            send_status=send_status,
+            campaign_id=draft.campaign_id,
+            flex_message_json=flex_message_json or draft.flex_message_json,
+            message_title=message_title or draft.message_title,
+            notification_message=notification_message or draft.notification_message,
+            thumbnail=thumbnail or draft.thumbnail,
+            interaction_tags=normalized_tags,
+            source_draft_id=draft_id,  # 记录来源草稿
+        )
+
+        if scheduled_at and schedule_type == "scheduled":
+            new_message.scheduled_datetime_utc = scheduled_at
+
+        # 5. 计算预计发送人数
+        try:
+            estimated_count = await self._calculate_target_count(
+                db,
+                new_message.target_type,
+                new_message.target_filter or {},
+            )
+        except Exception as e:
+            logger.error(f"❌ 計算預計發送人數失敗: {e}")
+            estimated_count = 0
+
+        new_message.estimated_send_count = estimated_count
+
+        db.add(new_message)
+        await db.commit()
+
+        # 6. 重新加载 message 及其 template 关系
+        stmt = select(Message).where(Message.id == new_message.id).options(
+            selectinload(Message.template)
+        )
+        result = await db.execute(stmt)
+        new_message = result.scalar_one()
+
+        logger.info(
+            f"✅ 从草稿发布成功: 新消息 ID={new_message.id}, "
+            f"来源草稿 ID={draft_id}, 状态={send_status}"
+        )
+
+        return new_message
+
     async def list_messages(
         self,
         db: AsyncSession,
@@ -288,10 +414,14 @@ class MessageService:
         result = await db.execute(query)
         messages = result.scalars().all()
 
-        message_items = [
-            MessageListItem.model_validate(message)
-            for message in messages
-        ]
+        # 為每條訊息計算 click_count
+        message_items = []
+        for message in messages:
+            item = MessageListItem.model_validate(message)
+            # 計算該訊息的點擊次數（互動標籤 trigger_member_count 加總）
+            click_count = await self.get_message_click_count(db, message.id)
+            item.click_count = click_count
+            message_items.append(item)
 
         page_response = PageResponse[MessageListItem].create(
             items=message_items,
@@ -645,20 +775,33 @@ class MessageService:
         db: AsyncSession,
         message_id: int
     ) -> int:
-        """获取消息的点击次数
+        """获取消息的点击次数（互動標籤的 trigger_member_count 加總）
 
         Args:
             db: 数据库 session
             message_id: 消息 ID
 
         Returns:
-            点击次数总计
+            点击次数总计（各互動標籤的 trigger_member_count 加總）
         """
-        # 统计该消息的所有互动记录数
-        stmt = select(func.count()).select_from(ComponentInteractionLog).where(
-            ComponentInteractionLog.message_id == message_id
+        # 1. 先取得訊息的 interaction_tags
+        msg_stmt = select(Message.interaction_tags).where(Message.id == message_id)
+        msg_result = await db.execute(msg_stmt)
+        interaction_tags_json = msg_result.scalar_one_or_none()
+
+        if not interaction_tags_json:
+            return 0
+
+        # 2. 查詢這些標籤的 trigger_member_count 加總
+        tag_names = interaction_tags_json  # JSON 已經是 list
+        if not tag_names:
+            return 0
+
+        stmt = select(func.sum(InteractionTag.trigger_member_count)).where(
+            InteractionTag.tag_name.in_(tag_names)
         )
         result = await db.execute(stmt)
-        count = result.scalar() or 0
-        logger.debug(f"📊 消息 ID={message_id} 点击次数: {count}")
-        return count
+        total = result.scalar() or 0
+
+        logger.debug(f"📊 消息 ID={message_id} 點擊次數: {total} (來自標籤: {tag_names})")
+        return total

@@ -12,7 +12,6 @@ class TagInfo(BaseModel):
     id: int
     name: str
     type: str
-    source: Optional[str] = None  # "auto" 或 "manual"，用於前端判斷顏色
 
     class Config:
         from_attributes = True
@@ -97,6 +96,21 @@ class UpdateTagsRequest(BaseModel):
     """批量更新標籤請求"""
 
     tag_names: List[str]  # 完整的標籤名稱列表（會完全取代現有標籤）
+
+
+class BatchUpdateTagsRequest(BaseModel):
+    """批量更新會員標籤請求（原子操作，保留 click_count）"""
+
+    member_tags: List[str] = []  # 會員標籤名稱列表
+    interaction_tags: List[str] = []  # 互動標籤名稱列表
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "member_tags": ["VIP", "常客"],
+                "interaction_tags": ["已點擊優惠", "參與活動"]
+            }
+        }
 
 
 class UpdateNotesRequest(BaseModel):

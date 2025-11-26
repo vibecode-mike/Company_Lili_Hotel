@@ -1222,18 +1222,21 @@ def build_user_messages_from_payload(payload: dict, campaign_id: int, line_user_
     # 追蹤 URL 注入函數
     # -----------------------------
     def inject_tracking_into_flex_json(flex_json, campaign_id, line_user_id, payload):
-        """遞迴注入追蹤 URL 到 Flex JSON 的所有 action.uri"""
+        """
+        遞迴注入追蹤 URL 到 Flex JSON 的所有 action.uri
 
-        def make_tracking_url(original_url, interaction_type="image_click"):
+        修復：從每個 bubble 的 _metadata.interactionTags 讀取標籤
+        - heroTag: 圖片點擊標籤
+        - buttonTags: [按鈕1標籤, 按鈕2標籤, ...]
+        """
+
+        def make_tracking_url(original_url, interaction_type="image_click", tag_val=None):
             """生成追蹤 URL"""
             # &src (來源活動 ID)
             src = payload.get("source_campaign_id")
             src_q = f"&src={src}" if src is not None else ""
 
-            # &tag (互動標籤)
-            tag_val = payload.get("interaction_tags")
-            if isinstance(tag_val, list):
-                tag_val = ",".join([str(x).strip() for x in tag_val if str(x).strip()])
+            # &tag (互動標籤) - 使用傳入的 tag_val
             if isinstance(tag_val, str):
                 tag_val = tag_val.strip()
             tag_q = f"&tag={quote(tag_val, safe='')}" if tag_val else ""
@@ -1245,33 +1248,56 @@ def build_user_messages_from_payload(payload: dict, campaign_id: int, line_user_
                 f"&type={interaction_type}&to={quote(original_url, safe='')}"
                 f"{src_q}{tag_q}"
             )
-            logging.info(f"[TRACKING] {interaction_type}: {original_url} -> {tracking_url}")
+            logging.info(f"[TRACKING] {interaction_type}: {original_url} -> {tracking_url[:100]}...")
             return tracking_url
 
-        def walk_and_replace(obj):
-            """遞迴替換所有 action.uri"""
-            if isinstance(obj, dict):
-                # 檢查是否有 action.uri
-                if "action" in obj and isinstance(obj["action"], dict):
-                    if obj["action"].get("type") == "uri" and "uri" in obj["action"]:
-                        original_uri = obj["action"]["uri"]
-                        # 根據父元素類型判斷互動類型
-                        interaction_type = "button_url" if obj.get("type") == "button" else "image_click"
-                        obj["action"]["uri"] = make_tracking_url(original_uri, interaction_type)
+        def process_bubble(bubble):
+            """處理單一 bubble，從其 _metadata 取得標籤"""
+            # 取得此 bubble 的互動標籤
+            metadata = bubble.get("_metadata", {})
+            interaction_tags = metadata.get("interactionTags", {})
+            hero_tag = interaction_tags.get("heroTag")
+            button_tags = interaction_tags.get("buttonTags", [])
 
-                # 遞迴處理所有嵌套物件
-                for key, value in obj.items():
-                    obj[key] = walk_and_replace(value)
+            logging.info(f"[TRACKING] Processing bubble with heroTag={hero_tag}, buttonTags={button_tags}")
 
-            elif isinstance(obj, list):
-                return [walk_and_replace(item) for item in obj]
+            # 處理 hero 區塊（圖片）
+            hero = bubble.get("hero")
+            if hero and isinstance(hero, dict):
+                action = hero.get("action", {})
+                if action.get("type") == "uri" and "uri" in action:
+                    original_uri = action["uri"]
+                    action["uri"] = make_tracking_url(original_uri, "image_click", hero_tag)
 
-            return obj
+            # 處理 footer 區塊（按鈕）
+            footer = bubble.get("footer")
+            if footer and isinstance(footer, dict):
+                contents = footer.get("contents", [])
+                button_index = 0
+                for item in contents:
+                    if isinstance(item, dict) and item.get("type") == "button":
+                        action = item.get("action", {})
+                        if action.get("type") == "uri" and "uri" in action:
+                            original_uri = action["uri"]
+                            # 取對應索引的標籤
+                            tag = button_tags[button_index] if button_index < len(button_tags) else None
+                            action["uri"] = make_tracking_url(original_uri, "button_url", tag)
+                        button_index += 1
+
+            return bubble
 
         # 深度複製避免修改原始資料
         import copy
         flex_copy = copy.deepcopy(flex_json)
-        return walk_and_replace(flex_copy)
+
+        # 判斷是 carousel 還是單一 bubble
+        if flex_copy.get("type") == "carousel":
+            contents = flex_copy.get("contents", [])
+            flex_copy["contents"] = [process_bubble(b) for b in contents]
+        elif flex_copy.get("type") == "bubble":
+            flex_copy = process_bubble(flex_copy)
+
+        return flex_copy
 
     # -----------------------------
     # 使用 flex_message_json
@@ -2545,19 +2571,55 @@ def __track():
                 """, {"tag_id": tag_id})
 
                 # 記錄到 component_interaction_logs 並關聯 interaction_tag_id
-                # campaign_id 轉為整數，如果不存在則設為 NULL
-                cid_value = None
+                # cid 實際上是 messages.id，使用 message_id 欄位
+                message_id_value = None
                 try:
                     if cid:
-                        cid_value = int(cid)
+                        message_id_value = int(cid)
                 except (ValueError, TypeError):
                     pass
 
                 execute(f"""
                     INSERT INTO `{MYSQL_DB}`.`component_interaction_logs`
-                        (line_id, campaign_id, interaction_tag_id, interaction_type, interaction_value, triggered_at, created_at)
-                    VALUES (:uid, :cid, :tag_id, :itype, :to, NOW(), NOW())
-                """, {"uid": uid, "cid": cid_value, "tag_id": tag_id, "itype": ityp, "to": to})
+                        (line_id, message_id, interaction_tag_id, interaction_type, interaction_value, triggered_at, created_at)
+                    VALUES (:uid, :msg_id, :tag_id, :itype, :to, NOW(), NOW())
+                """, {"uid": uid, "msg_id": message_id_value, "tag_id": tag_id, "itype": ityp, "to": to})
+
+                # ---- 寫入 member_interaction_tags（會員互動標籤）----
+                # 根據 line_uid 查找 member_id
+                member_row = fetchone(f"""
+                    SELECT id FROM `{MYSQL_DB}`.`members`
+                    WHERE line_uid = :uid
+                    LIMIT 1
+                """, {"uid": uid})
+
+                if member_row:
+                    member_id = member_row.get("id")
+                    # 查詢是否已存在該會員的該標籤
+                    existing_mit = fetchone(f"""
+                        SELECT id, click_count FROM `{MYSQL_DB}`.`member_interaction_tags`
+                        WHERE member_id = :mid AND tag_name = :tag_name
+                        LIMIT 1
+                    """, {"mid": member_id, "tag_name": tag_name})
+
+                    if existing_mit:
+                        # 已存在：累加 click_count
+                        execute(f"""
+                            UPDATE `{MYSQL_DB}`.`member_interaction_tags`
+                            SET click_count = click_count + 1,
+                                last_triggered_at = NOW(),
+                                updated_at = NOW()
+                            WHERE id = :mit_id
+                        """, {"mit_id": existing_mit.get("id")})
+                        logging.info(f"[TRACK] Updated member_interaction_tag for member {member_id}, tag '{tag_name}'")
+                    else:
+                        # 不存在：創建新記錄
+                        execute(f"""
+                            INSERT INTO `{MYSQL_DB}`.`member_interaction_tags`
+                                (member_id, tag_name, tag_source, click_count, last_triggered_at, created_at)
+                            VALUES (:mid, :tag_name, 'auto_click', 1, NOW(), NOW())
+                        """, {"mid": member_id, "tag_name": tag_name})
+                        logging.info(f"[TRACK] Created member_interaction_tag for member {member_id}, tag '{tag_name}'")
 
                 logging.info(f"[TRACK] Updated tag '{tag_name}' (id={tag_id}) for user {uid}")
         except Exception as e:
@@ -2566,11 +2628,18 @@ def __track():
     # 如果沒有標籤，仍然記錄基本互動（舊版邏輯）
     if not incoming:
         try:
+            # cid 實際上是 messages.id，使用 message_id 欄位
+            msg_id = None
+            try:
+                if cid:
+                    msg_id = int(cid)
+            except (ValueError, TypeError):
+                pass
             execute(f"""
                 INSERT INTO `{MYSQL_DB}`.`component_interaction_logs`
-                    (line_id, campaign_id, interaction_type, interaction_value, triggered_at, created_at)
-                VALUES (:uid, :cid, :itype, :to, NOW(), NOW())
-            """, {"uid": uid, "cid": cid, "itype": ityp, "to": to})
+                    (line_id, message_id, interaction_type, interaction_value, triggered_at, created_at)
+                VALUES (:uid, :msg_id, :itype, :to, NOW(), NOW())
+            """, {"uid": uid, "msg_id": msg_id, "itype": ityp, "to": to})
         except Exception as e:
             logging.exception(e)
 
@@ -3239,6 +3308,26 @@ def on_text(event: MessageEvent):
                 logging.exception("[on_text] Failed to save outgoing message")
     else:
         logging.warning(f"[on_text] No response generated for uid={uid}, text={text_in[:50]}")
+
+    # === 通知 Backend 有新訊息 (不阻塞主流程) ===
+    # 移除 mid 條件：line_notify.py 會自己根據 line_uid 查詢 member_id
+    if uid:
+        try:
+            import requests
+            backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8700")
+            resp = requests.post(
+                f"{backend_url}/api/v1/line/message-notify",
+                json={
+                    "line_uid": uid,
+                    "message_text": text_in,
+                    "timestamp": int(datetime.datetime.now().timestamp() * 1000),
+                    "message_id": event.message.id
+                },
+                timeout=5
+            )
+            logging.info(f"[on_text] Backend notify response: {resp.status_code} - {resp.text[:200]}")
+        except Exception as e:
+            logging.error(f"[on_text] Failed to notify backend: {e}")
 
 # 處理使用者傳貼圖事件
 def on_sticker(event: MessageEvent):

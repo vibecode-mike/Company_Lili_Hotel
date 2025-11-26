@@ -16,6 +16,7 @@ export interface Message {
   openCount: string;
   clickCount: string;
   sendTime: string;
+  timeValue?: string | null;
 }
 
 interface InteractiveMessageTableProps {
@@ -105,14 +106,16 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange, status
           </div>
 
           {/* 平台 */}
-          <div 
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px] cursor-pointer"
-            onClick={() => onSortChange('platform')}
+          <div
+            className={`box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px] ${statusFilter === '已發送' || statusFilter === '已排程' || statusFilter === '草稿' ? '' : 'cursor-pointer'}`}
+            onClick={statusFilter === '已發送' || statusFilter === '已排程' || statusFilter === '草稿' ? undefined : () => onSortChange('platform')}
           >
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">平台</p>
             </div>
-            <SortIcon active={isActive('platform')} order={sortConfig.order} />
+            {!(statusFilter === '已發送' || statusFilter === '已排程' || statusFilter === '草稿') && (
+              <SortIcon active={isActive('platform')} order={sortConfig.order} />
+            )}
           </div>
 
           {/* Divider */}
@@ -125,14 +128,16 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange, status
           </div>
 
           {/* 狀態 */}
-          <div 
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px] cursor-pointer"
-            onClick={() => onSortChange('status')}
+          <div
+            className={`box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px] ${statusFilter === '已發送' || statusFilter === '已排程' || statusFilter === '草稿' ? '' : 'cursor-pointer'}`}
+            onClick={statusFilter === '已發送' || statusFilter === '已排程' || statusFilter === '草稿' ? undefined : () => onSortChange('status')}
           >
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">狀態</p>
             </div>
-            <SortIcon active={isActive('status')} order={sortConfig.order} />
+            {!(statusFilter === '已發送' || statusFilter === '已排程' || statusFilter === '草稿') && (
+              <SortIcon active={isActive('status')} order={sortConfig.order} />
+            )}
           </div>
 
           {/* Divider */}
@@ -445,7 +450,7 @@ export default function InteractiveMessageTable({ messages, onEdit, onViewDetail
           comparison = parseNumber(a.clickCount) - parseNumber(b.clickCount);
           break;
         case 'sendTime':
-          comparison = parseTime(a.sendTime) - parseTime(b.sendTime);
+          comparison = parseTime(a.timeValue ?? a.sendTime) - parseTime(b.timeValue ?? b.sendTime);
           break;
         default:
           comparison = 0;

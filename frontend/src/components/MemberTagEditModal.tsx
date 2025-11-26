@@ -217,10 +217,10 @@ export default function MemberTagEditModal({
       />
 
       {/* Modal */}
-      <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[9999] w-[836px] max-h-[90vh]">
-        <div className="bg-white relative rounded-[16px] size-full" data-name="Member Tag#Modal">
-          <div className="min-h-inherit min-w-inherit size-full">
-            <div className="box-border content-stretch flex flex-col gap-[60px] items-start min-h-inherit min-w-inherit p-[32px] relative size-full">
+      <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[9999] w-[836px] max-h-[90vh] flex flex-col">
+        <div className="bg-white relative rounded-[16px] h-full flex flex-col overflow-hidden" data-name="Member Tag#Modal">
+          <div className="flex flex-col h-full overflow-hidden">
+            <div className="box-border content-stretch flex flex-col items-start p-[32px] relative flex-1 overflow-hidden">
               {/* Header */}
               <div className="content-stretch flex flex-col gap-[32px] items-start relative shrink-0 w-full">
                 <div className="content-stretch flex items-center relative shrink-0 w-full" data-name="Header">
@@ -230,11 +230,11 @@ export default function MemberTagEditModal({
                 </div>
 
                 {/* Search Bar */}
-                <div className="content-stretch flex gap-[36px] items-center relative shrink-0 w-full" data-name="Container">
-                  <div className="basis-0 bg-white grow min-h-px min-w-[292px] relative rounded-[16px] shrink-0" data-name="Search Bar">
-                    <div className="flex flex-row items-center min-w-inherit size-full">
-                      <div className="box-border content-stretch flex gap-[28px] items-center min-w-inherit px-[12px] py-[8px] relative w-full">
-                        <div className="content-stretch flex gap-[4px] items-center relative grow" data-name="Search Container">
+                <div className="w-full" data-name="Container">
+                  <div className="bg-white w-full rounded-[16px] border border-[#e1ebf9]" data-name="Search Bar">
+                    <div className="flex flex-row items-center w-full">
+                      <div className="flex gap-[8px] items-center px-[12px] py-[8px] w-full">
+                        <div className="flex gap-[4px] items-center w-full" data-name="Search Container">
                           <div className="overflow-clip relative shrink-0 size-[32px]" data-name="Search Icon">
                             <div className="absolute h-[17.575px] left-[calc(50%-0.2px)] top-[calc(50%-0.212px)] translate-x-[-50%] translate-y-[-50%] w-[17.6px]" data-name="Vector">
                               <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 18 18">
@@ -249,7 +249,7 @@ export default function MemberTagEditModal({
                             onKeyDown={handleKeyDown}
                             placeholder="輸入或按 Enter 新增標籤，可多組輸入"
                             maxLength={20}
-                            className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative grow text-[#383838] text-[20px] outline-none placeholder:text-[#a8a8a8]"
+                            className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] flex-1 text-[#383838] text-[20px] outline-none placeholder:text-[#a8a8a8] min-w-0"
                           />
                         </div>
                       </div>
@@ -297,11 +297,11 @@ export default function MemberTagEditModal({
                   </div>
 
                   {/* Selected Tags */}
-                  <div className="content-stretch flex flex-col gap-[12px] items-start relative shrink-0 w-full" data-name="Container">
-                    <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#6e6e6e] text-[14px] w-full">
+                  <div className="flex flex-col gap-[12px] items-start w-full" data-name="Container">
+                    <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] text-[#6e6e6e] text-[14px]">
                       <p className="leading-[1.5]">已選擇的標籤</p>
                     </div>
-                    <div className="content-center flex flex-wrap gap-[4px] items-center relative shrink-0 w-full" data-name="Selected Tags Container">
+                    <div className="flex flex-wrap gap-[4px] items-start w-full max-h-[120px] overflow-y-auto" data-name="Selected Tags Container" style={{ scrollbarWidth: 'thin', scrollbarColor: '#dddddd transparent' }}>
                       {currentSelectedTags.length === 0 ? (
                         <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#a8a8a8] text-[16px]">
                           尚未選擇標籤
@@ -317,19 +317,20 @@ export default function MemberTagEditModal({
                   </div>
                 </div>
 
-                {/* Available Tags */}
-                <div className="content-stretch flex flex-col gap-[12px] items-start relative shrink-0 w-full" data-name="Container">
-                  <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] min-w-full relative shrink-0 text-[#6e6e6e] text-[14px] w-[min-content]">
-                    <p className="leading-[1.5]">選擇或建立標籤</p>
-                  </div>
+                {/* "選擇或建立標籤" label */}
+                <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] min-w-full relative shrink-0 text-[#6e6e6e] text-[14px] w-[min-content]">
+                  <p className="leading-[1.5]">選擇或建立標籤</p>
+                </div>
+              </div>
 
-                  {/* Scrollable area */}
-                  <div className="w-full max-h-[240px] overflow-y-auto pr-[8px]" style={{ scrollbarWidth: 'thin', scrollbarColor: '#dddddd transparent' }}>
+              {/* Flexible Scrollable Section - Available Tags */}
+              <div className="flex-1 w-full mt-[12px] mb-[32px] overflow-hidden relative">
+                <div className="w-full h-full overflow-y-auto pr-[8px]" style={{ scrollbarWidth: 'thin', scrollbarColor: '#dddddd transparent' }}>
                     <div className="content-stretch flex flex-col gap-[10px] items-start justify-center relative shrink-0 w-full">
                       {/* Create Tag Option */}
                       {showCreateOption && (
-                        <div 
-                          className="bg-slate-50 relative rounded-[4px] shrink-0 w-full cursor-pointer hover:bg-slate-100 transition-colors" 
+                        <div
+                          className="bg-slate-50 relative rounded-[4px] shrink-0 w-full cursor-pointer hover:bg-slate-100 transition-colors"
                           data-name="Create Tags Container"
                           onClick={handleCreateTag}
                         >
@@ -379,11 +380,10 @@ export default function MemberTagEditModal({
                         </p>
                       )}
                     </div>
-                  </div>
                 </div>
               </div>
 
-              {/* Footer Buttons */}
+              {/* Fixed Footer Section - Buttons */}
               <div className="content-stretch flex gap-[8px] items-center justify-center relative shrink-0 w-full" data-name="Container">
                 <div className="basis-0 content-stretch flex gap-[8px] grow items-center justify-end min-h-px min-w-px relative shrink-0" data-name="Button Container">
                   <div 
