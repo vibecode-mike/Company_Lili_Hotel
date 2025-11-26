@@ -16,6 +16,8 @@ import { TitleContainer as SharedTitleContainer, HeaderContainer as SharedHeader
 import { SimpleBreadcrumb } from "../components/common/Breadcrumb";
 import { useMembers } from "../contexts/MembersContext";
 import { useAuth } from "../components/auth/AuthContext";
+import type { Member, MemberData } from "../types/member";
+export type { MemberData } from "../types/member";
 
 const formatTimestamp = (dateString?: string) => {
   if (!dateString) return '未知';
@@ -37,6 +39,83 @@ const formatTimestamp = (dateString?: string) => {
   } catch {
     return '無效日期';
   }
+};
+
+const mapApiMemberToMemberData = (apiMember: any, fallback?: MemberData): MemberData => {
+  const rawTags = Array.isArray(apiMember?.tags)
+    ? apiMember.tags
+    : fallback?.tagDetails || [];
+  const memberTags =
+    rawTags
+      .filter((tag: any) => tag?.type === 'member')
+      .map((tag: any) => tag.name) || [];
+  const interactionTags =
+    rawTags
+      .filter((tag: any) => tag?.type === 'interaction')
+      .map((tag: any) => tag.name) || [];
+  const combinedTags = Array.from(new Set([...(memberTags || []), ...(interactionTags || [])]));
+
+  return {
+    id: apiMember?.id?.toString() ?? fallback?.id ?? '',
+    username: apiMember?.line_name || apiMember?.name || fallback?.username || '未命名會員',
+    realName: apiMember?.name || fallback?.realName || apiMember?.line_name || '未命名會員',
+    tags: combinedTags,
+    memberTags,
+    interactionTags,
+    tagDetails: rawTags,
+    phone: apiMember?.phone ?? fallback?.phone ?? '',
+    email: apiMember?.email ?? fallback?.email ?? '',
+    gender: apiMember?.gender ?? fallback?.gender,
+    birthday: apiMember?.birthday ?? fallback?.birthday,
+    createTime: apiMember?.created_at ?? fallback?.createTime ?? '',
+    lastChatTime: apiMember?.last_interaction_at ?? fallback?.lastChatTime ?? '',
+    lineUid: apiMember?.line_uid ?? fallback?.lineUid,
+    lineAvatar: apiMember?.line_avatar ?? fallback?.lineAvatar,
+    join_source: apiMember?.join_source ?? fallback?.join_source,
+    id_number: apiMember?.id_number ?? fallback?.id_number,
+    residence: apiMember?.residence ?? fallback?.residence,
+    passport_number: apiMember?.passport_number ?? fallback?.passport_number,
+    internal_note: apiMember?.internal_note ?? fallback?.internal_note,
+    status: fallback?.status,
+  };
+};
+
+const mapMemberToMemberData = (memberSource: Member, fallback?: MemberData): MemberData => ({
+  id: memberSource.id,
+  username: memberSource.username,
+  realName: memberSource.realName,
+  tags: memberSource.tags,
+  memberTags: memberSource.memberTags ?? fallback?.memberTags ?? [],
+  interactionTags: memberSource.interactionTags ?? fallback?.interactionTags ?? [],
+  tagDetails: memberSource.tagDetails ?? fallback?.tagDetails ?? [],
+  phone: memberSource.phone,
+  email: memberSource.email,
+  gender: memberSource.gender ?? fallback?.gender,
+  birthday: memberSource.birthday ?? fallback?.birthday,
+  createTime: memberSource.createTime,
+  lastChatTime: memberSource.lastChatTime,
+  lineUid: memberSource.lineUid ?? fallback?.lineUid,
+  lineAvatar: memberSource.lineAvatar ?? fallback?.lineAvatar,
+  join_source: memberSource.join_source ?? fallback?.join_source,
+  id_number: memberSource.id_number ?? fallback?.id_number,
+  residence: memberSource.residence ?? fallback?.residence,
+  passport_number: memberSource.passport_number ?? fallback?.passport_number,
+  internal_note: memberSource.internal_note ?? fallback?.internal_note,
+  status: fallback?.status ?? 'active',
+});
+
+const extractMessageTimestamp = (message?: any): string | undefined => {
+  if (!message) return undefined;
+  return (
+    message?.timestamp ??
+    message?.created_at ??
+    message?.createdAt ??
+    message?.sent_at ??
+    message?.sentAt ??
+    message?.created_at_iso ??
+    message?.createdAtIso ??
+    undefined
+  );
 };
 
 /**
@@ -268,26 +347,41 @@ function Frame({ value, onChange }: { value: string; onChange: (value: string) =
   );
 }
 
-function DropdownItem({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function DropdownItem({ value, onChange, error, placeholder = "輸入姓名" }: { value: string; onChange: (value: string) => void; error?: string; placeholder?: string }) {
   return (
     <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0" data-name="Dropdown Item">
       <div className="bg-white group h-[48px] min-h-[48px] relative rounded-[8px] shrink-0 w-full" data-name="Text area">
-        <div aria-hidden="true" className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]" />
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none rounded-[8px] border border-solid border-neutral-100 group-focus-within:border-[#6e6e6e] group-focus-within:border-2"
+          style={error ? { border: '2px solid #f44336' } : undefined}
+        />
         <div className="flex flex-col justify-center min-h-inherit size-full">
           <div className="box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center min-h-inherit p-[8px] relative w-full">
-            <Frame value={value} onChange={onChange} />
+            <div className="content-stretch flex gap-[10px] items-start relative shrink-0 w-full">
+              <input
+                type="text"
+                placeholder={placeholder}
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] placeholder:text-[#a8a8a8] bg-transparent border-0 outline-none w-full"
+              />
+            </div>
           </div>
         </div>
       </div>
+      {error && (
+        <p className="text-[12px] leading-[16px] text-[#f44336]">{error}</p>
+      )}
     </div>
   );
 }
 
-function DropdownItem1({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function DropdownItem1({ value, onChange, error }: { value: string; onChange: (value: string) => void; error?: string }) {
   return (
     <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[8px] 2xl:gap-x-2 2xl:gap-y-0 relative shrink-0 w-full" data-name="Dropdown Item">
       <ModalTitleContent />
-      <DropdownItem value={value} onChange={onChange} />
+      <DropdownItem value={value} onChange={onChange} error={error} placeholder="輸入姓名" />
     </div>
   );
 }
@@ -528,26 +622,33 @@ function Frame1({ value, onChange }: { value: string; onChange: (value: string) 
   );
 }
 
-function DropdownItem4({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function DropdownItem4({ value, onChange, error }: { value: string; onChange: (value: string) => void; error?: string }) {
   return (
     <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0" data-name="Dropdown Item">
       <div className="bg-white group h-[48px] min-h-[48px] relative rounded-[8px] shrink-0 w-full" data-name="Text area">
-        <div aria-hidden="true" className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]" />
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none rounded-[8px] border border-solid border-neutral-100 group-focus-within:border-[#6e6e6e] group-focus-within:border-2"
+          style={error ? { border: '2px solid #f44336' } : undefined}
+        />
         <div className="flex flex-col justify-center min-h-inherit size-full">
           <div className="box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center min-h-inherit p-[8px] relative w-full">
             <Frame1 value={value} onChange={onChange} />
           </div>
         </div>
       </div>
+      {error && (
+        <p className="text-[12px] leading-[16px] text-[#f44336]">{error}</p>
+      )}
     </div>
   );
 }
 
-function DropdownItem5({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function DropdownItem5({ value, onChange, error }: { value: string; onChange: (value: string) => void; error?: string }) {
   return (
     <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[8px] 2xl:gap-x-2 2xl:gap-y-0 relative shrink-0 w-full" data-name="Dropdown Item">
       <ModalTitleContent3 />
-      <DropdownItem4 value={value} onChange={onChange} />
+      <DropdownItem4 value={value} onChange={onChange} error={error} />
     </div>
   );
 }
@@ -604,26 +705,33 @@ function Frame2({ value, onChange }: { value: string; onChange: (value: string) 
   );
 }
 
-function DropdownItem6({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function DropdownItem6({ value, onChange, error }: { value: string; onChange: (value: string) => void; error?: string }) {
   return (
     <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0" data-name="Dropdown Item">
       <div className="bg-white group h-[48px] min-h-[48px] relative rounded-[8px] shrink-0 w-full" data-name="Text area">
-        <div aria-hidden="true" className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]" />
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none rounded-[8px] border border-solid border-neutral-100 group-focus-within:border-[#6e6e6e] group-focus-within:border-2"
+          style={error ? { border: '2px solid #f44336' } : undefined}
+        />
         <div className="flex flex-col justify-center min-h-inherit size-full">
           <div className="box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center min-h-inherit p-[8px] relative w-full">
             <Frame2 value={value} onChange={onChange} />
           </div>
         </div>
       </div>
+      {error && (
+        <p className="text-[12px] leading-[16px] text-[#f44336]">{error}</p>
+      )}
     </div>
   );
 }
 
-function DropdownItem7({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function DropdownItem7({ value, onChange, error }: { value: string; onChange: (value: string) => void; error?: string }) {
   return (
     <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[8px] 2xl:gap-x-2 2xl:gap-y-0 relative shrink-0 w-full" data-name="Dropdown Item">
       <ModalTitleContent4 />
-      <DropdownItem6 value={value} onChange={onChange} />
+      <DropdownItem6 value={value} onChange={onChange} error={error} />
     </div>
   );
 }
@@ -680,26 +788,33 @@ function Frame3({ value, onChange }: { value: string; onChange: (value: string) 
   );
 }
 
-function DropdownItem8({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function DropdownItem8({ value, onChange, error }: { value: string; onChange: (value: string) => void; error?: string }) {
   return (
     <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0" data-name="Dropdown Item">
       <div className="bg-white group h-[48px] min-h-[48px] relative rounded-[8px] shrink-0 w-full" data-name="Text area">
-        <div aria-hidden="true" className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]" />
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none rounded-[8px] border border-solid border-neutral-100 group-focus-within:border-[#6e6e6e] group-focus-within:border-2"
+          style={error ? { border: '2px solid #f44336' } : undefined}
+        />
         <div className="flex flex-col justify-center min-h-inherit size-full">
           <div className="box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center min-h-inherit p-[8px] relative w-full">
             <Frame3 value={value} onChange={onChange} />
           </div>
         </div>
       </div>
+      {error && (
+        <p className="text-[12px] leading-[16px] text-[#f44336]">{error}</p>
+      )}
     </div>
   );
 }
 
-function DropdownItem9({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function DropdownItem9({ value, onChange, error }: { value: string; onChange: (value: string) => void; error?: string }) {
   return (
     <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[8px] 2xl:gap-x-2 2xl:gap-y-0 relative shrink-0 w-full" data-name="Dropdown Item">
       <ModalTitleContent5 />
-      <DropdownItem8 value={value} onChange={onChange} />
+      <DropdownItem8 value={value} onChange={onChange} error={error} />
     </div>
   );
 }
@@ -737,26 +852,33 @@ function Frame4({ value, onChange }: { value: string; onChange: (value: string) 
   );
 }
 
-function DropdownItem10({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function DropdownItem10({ value, onChange, error }: { value: string; onChange: (value: string) => void; error?: string }) {
   return (
     <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0" data-name="Dropdown Item">
       <div className="bg-white group h-[48px] min-h-[48px] relative rounded-[8px] shrink-0 w-full" data-name="Text area">
-        <div aria-hidden="true" className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]" />
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none rounded-[8px] border border-solid border-neutral-100 group-focus-within:border-[#6e6e6e] group-focus-within:border-2"
+          style={error ? { border: '2px solid #f44336' } : undefined}
+        />
         <div className="flex flex-col justify-center min-h-inherit size-full">
           <div className="box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center min-h-inherit p-[8px] relative w-full">
             <Frame4 value={value} onChange={onChange} />
           </div>
         </div>
       </div>
+      {error && (
+        <p className="text-[12px] leading-[16px] text-[#f44336]">{error}</p>
+      )}
     </div>
   );
 }
 
-function DropdownItem11({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function DropdownItem11({ value, onChange, error }: { value: string; onChange: (value: string) => void; error?: string }) {
   return (
     <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[8px] 2xl:gap-x-2 2xl:gap-y-0 relative shrink-0 w-full" data-name="Dropdown Item">
       <ModalTitleContent6 />
-      <DropdownItem10 value={value} onChange={onChange} />
+      <DropdownItem10 value={value} onChange={onChange} error={error} />
     </div>
   );
 }
@@ -794,26 +916,33 @@ function Frame5({ value, onChange }: { value: string; onChange: (value: string) 
   );
 }
 
-function DropdownItem12({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function DropdownItem12({ value, onChange, error }: { value: string; onChange: (value: string) => void; error?: string }) {
   return (
     <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0" data-name="Dropdown Item">
       <div className="bg-white group h-[48px] min-h-[48px] relative rounded-[8px] shrink-0 w-full" data-name="Text area">
-        <div aria-hidden="true" className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]" />
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none rounded-[8px] border border-solid border-neutral-100 group-focus-within:border-[#6e6e6e] group-focus-within:border-2"
+          style={error ? { border: '2px solid #f44336' } : undefined}
+        />
         <div className="flex flex-col justify-center min-h-inherit size-full">
           <div className="box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center min-h-inherit p-[8px] relative w-full">
             <Frame5 value={value} onChange={onChange} />
           </div>
         </div>
       </div>
+      {error && (
+        <p className="text-[12px] leading-[16px] text-[#f44336]">{error}</p>
+      )}
     </div>
   );
 }
 
-function DropdownItem13({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function DropdownItem13({ value, onChange, error }: { value: string; onChange: (value: string) => void; error?: string }) {
   return (
     <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[8px] 2xl:gap-x-2 2xl:gap-y-0 relative shrink-0 w-full" data-name="Dropdown Item">
       <ModalTitleContent7 />
-      <DropdownItem12 value={value} onChange={onChange} />
+      <DropdownItem12 value={value} onChange={onChange} error={error} />
     </div>
   );
 }
@@ -839,6 +968,108 @@ function Container6({ member, onMemberUpdate }: { member?: MemberData; onMemberU
   const { showToast } = useToast();
   const { fetchMemberById } = useMembers();
   const { logout } = useAuth();
+
+  // 錯誤狀態
+  const [errors, setErrors] = React.useState<{
+    realName?: string;
+    residence?: string;
+    phone?: string;
+    email?: string;
+    idNumber?: string;
+    passportNumber?: string;
+  }>({});
+
+  // 驗證函數
+  const validateNoSpecialChars = (value: string): boolean => {
+    return /^[\u4e00-\u9fa5a-zA-Z0-9\s]*$/.test(value);
+  };
+
+  const validatePhone = (value: string): boolean => {
+    return /^09\d{8}$/.test(value);
+  };
+
+  const validateEmail = (value: string): boolean => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  };
+
+  // 身分證字號驗證（1 英文字母 + 9 數字）
+  const validateIdNumber = (value: string): boolean => {
+    return /^[A-Za-z]\d{9}$/.test(value);
+  };
+
+  // 護照號碼驗證（英文字母與數字組合）
+  const validatePassport = (value: string): boolean => {
+    return /^[A-Za-z0-9]+$/.test(value);
+  };
+
+  // 即時驗證 handlers
+  const handleRealNameChange = (value: string) => {
+    setRealName(value);
+    if (!value || !value.trim()) {
+      // 必填欄位為空，即時顯示錯誤
+      setErrors(prev => ({ ...prev, realName: '姓名為必填' }));
+    } else if (!validateNoSpecialChars(value)) {
+      setErrors(prev => ({ ...prev, realName: '姓名格式錯誤，請避免使用特殊符號' }));
+    } else {
+      setErrors(prev => ({ ...prev, realName: undefined }));
+    }
+  };
+
+  const handleResidenceChange = (value: string) => {
+    setResidence(value);
+    if (!value || !value.trim()) {
+      // 必填欄位為空，即時顯示錯誤
+      setErrors(prev => ({ ...prev, residence: '居住地為必填' }));
+    } else if (!validateNoSpecialChars(value)) {
+      setErrors(prev => ({ ...prev, residence: '居住地格式錯誤，請避免使用特殊符號' }));
+    } else {
+      setErrors(prev => ({ ...prev, residence: undefined }));
+    }
+  };
+
+  const handlePhoneChange = (value: string) => {
+    setPhone(value);
+    if (!value || !value.trim()) {
+      // 必填欄位為空，即時顯示錯誤
+      setErrors(prev => ({ ...prev, phone: '手機號碼為必填' }));
+    } else if (!validatePhone(value)) {
+      setErrors(prev => ({ ...prev, phone: '手機號碼格式錯誤，請輸入 09 開頭的 10 位數字' }));
+    } else {
+      setErrors(prev => ({ ...prev, phone: undefined }));
+    }
+  };
+
+  const handleEmailChange = (value: string) => {
+    setEmail(value);
+    if (!value || !value.trim()) {
+      // 必填欄位為空，即時顯示錯誤
+      setErrors(prev => ({ ...prev, email: 'Email 為必填' }));
+    } else if (!validateEmail(value)) {
+      setErrors(prev => ({ ...prev, email: 'Email 格式錯誤，格式如：starbit@gmail.com' }));
+    } else {
+      setErrors(prev => ({ ...prev, email: undefined }));
+    }
+  };
+
+  const handleIdNumberChange = (value: string) => {
+    setIdNumber(value);
+    // 身分證字號非必填，只檢查格式
+    if (value && !validateIdNumber(value)) {
+      setErrors(prev => ({ ...prev, idNumber: '身分證字號格式錯誤，請輸入正確的英文字母與 9 碼數字組合' }));
+    } else {
+      setErrors(prev => ({ ...prev, idNumber: undefined }));
+    }
+  };
+
+  const handlePassportChange = (value: string) => {
+    setPassportNumber(value);
+    // 護照號碼非必填，只檢查格式
+    if (value && !validatePassport(value)) {
+      setErrors(prev => ({ ...prev, passportNumber: '護照號碼格式錯誤，請輸入正確的英文字母與數字組合' }));
+    } else {
+      setErrors(prev => ({ ...prev, passportNumber: undefined }));
+    }
+  };
 
   React.useEffect(() => {
     console.log('=== useEffect triggered, member prop changed ===');
@@ -868,6 +1099,7 @@ function Container6({ member, onMemberUpdate }: { member?: MemberData; onMemberU
       setBirthday(member.birthday || undefined);
       setGender(normalizeGender(member.gender));
     }
+    setErrors({}); // 清除所有錯誤
     setIsEditing(false);
   };
 
@@ -887,6 +1119,53 @@ function Container6({ member, onMemberUpdate }: { member?: MemberData; onMemberU
   const handleSave = async () => {
     if (!member?.id) {
       showToast("找不到會員資料，無法儲存", "error");
+      return;
+    }
+
+    // 驗證必填欄位和格式
+    const newErrors: typeof errors = {};
+
+    // 姓名驗證
+    if (!realName || !realName.trim()) {
+      newErrors.realName = '姓名為必填';
+    } else if (!validateNoSpecialChars(realName)) {
+      newErrors.realName = '姓名格式錯誤，請避免使用特殊符號';
+    }
+
+    // 手機號碼驗證
+    if (!phone || !phone.trim()) {
+      newErrors.phone = '手機號碼為必填';
+    } else if (!validatePhone(phone)) {
+      newErrors.phone = '手機號碼格式錯誤，請輸入 09 開頭的 10 位數字';
+    }
+
+    // Email 驗證
+    if (!email || !email.trim()) {
+      newErrors.email = 'Email 為必填';
+    } else if (!validateEmail(email)) {
+      newErrors.email = 'Email 格式錯誤，格式如：starbit@gmail.com';
+    }
+
+    // 居住地驗證（必填）
+    if (!residence || !residence.trim()) {
+      newErrors.residence = '居住地為必填';
+    } else if (!validateNoSpecialChars(residence)) {
+      newErrors.residence = '居住地格式錯誤，請避免使用特殊符號';
+    }
+
+    // 身分證字號驗證（非必填，只檢查格式）
+    if (idNumber && !validateIdNumber(idNumber)) {
+      newErrors.idNumber = '身分證字號格式錯誤，請輸入正確的英文字母與 9 碼數字組合';
+    }
+
+    // 護照號碼驗證（非必填，只檢查格式）
+    if (passportNumber && !validatePassport(passportNumber)) {
+      newErrors.passportNumber = '護照號碼格式錯誤，請輸入正確的英文字母與數字組合';
+    }
+
+    // 有錯誤則不繼續儲存
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
 
@@ -967,18 +1246,18 @@ function Container6({ member, onMemberUpdate }: { member?: MemberData; onMemberU
       data-name="Container"
       onClick={() => !isSaving && setIsEditing(true)}
     >
-      <DropdownItem1 value={realName} onChange={setRealName} />
+      <DropdownItem1 value={realName} onChange={handleRealNameChange} error={errors.realName} />
       <DropdownItem3
         birthday={birthday}
         onBirthdayChange={setBirthday}
         gender={gender}
         onGenderChange={setGender}
       />
-      <DropdownItem5 value={residence} onChange={setResidence} />
-      <DropdownItem7 value={phone} onChange={setPhone} />
-      <DropdownItem9 value={email} onChange={setEmail} />
-      <DropdownItem11 value={idNumber} onChange={setIdNumber} />
-      <DropdownItem13 value={passportNumber} onChange={setPassportNumber} />
+      <DropdownItem5 value={residence} onChange={handleResidenceChange} error={errors.residence} />
+      <DropdownItem7 value={phone} onChange={handlePhoneChange} error={errors.phone} />
+      <DropdownItem9 value={email} onChange={handleEmailChange} error={errors.email} />
+      <DropdownItem11 value={idNumber} onChange={handleIdNumberChange} error={errors.idNumber} />
+      <DropdownItem13 value={passportNumber} onChange={handlePassportChange} error={errors.passportNumber} />
 
       {isEditing && (
         <div className="content-stretch flex gap-[8px] items-center justify-end relative shrink-0 w-full" data-name="Modal Footer">
@@ -1385,32 +1664,11 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
         const updatedMember = memberData.data;
 
         // 轉換後端數據格式為前端格式
-        const transformedMember: MemberData = {
-          id: updatedMember.id,
-          line_uid: updatedMember.line_uid,
-          line_name: updatedMember.line_name,
-          line_avatar: updatedMember.line_avatar,
-          name: updatedMember.name,
-          gender: updatedMember.gender,
-          birthday: updatedMember.birthday,
-          email: updatedMember.email,
-          phone: updatedMember.phone,
-          id_number: updatedMember.id_number,
-          passport_number: updatedMember.passport_number,
-          residence: updatedMember.residence,
-          join_source: updatedMember.join_source,
-          receive_notification: updatedMember.receive_notification,
-          internal_note: updatedMember.internal_note,
-          created_at: updatedMember.created_at,
-          last_interaction_at: updatedMember.last_interaction_at,
-          memberTags: updatedMember.tags?.filter((t: { type: string }) => t.type === 'member').map((t: { name: string }) => t.name) || [],
-          interactionTags: updatedMember.tags?.filter((t: { type: string }) => t.type === 'interaction').map((t: { name: string }) => t.name) || [],
-          tagDetails: updatedMember.tags || [],
-        };
+        const transformedMember = mapApiMemberToMemberData(updatedMember, member);
 
         // 更新本地狀態
-        setMemberTags(transformedMember.memberTags);
-        setInteractionTags(transformedMember.interactionTags);
+        setMemberTags(transformedMember.memberTags || []);
+        setInteractionTags(transformedMember.interactionTags || []);
 
         // 通知父組件更新
         onMemberUpdate?.(transformedMember);
@@ -1876,10 +2134,6 @@ function MainContent({ member, onNavigate, onMemberUpdate, fallbackMemberName }:
   );
 }
 
-// 使用共享的 MemberData 类型
-export type { MemberData } from "../types/member";
-import type { MemberData } from "../types/member";
-
 export default function MainContainer({ 
   onBack, 
   member, 
@@ -1892,10 +2146,81 @@ export default function MainContainer({
   fallbackMemberName?: string;
 } = {}) {
   const [currentMember, setCurrentMember] = useState<MemberData | undefined>(member);
+  const { fetchMemberById } = useMembers();
 
   React.useEffect(() => {
     setCurrentMember(member);
   }, [member]);
+
+  React.useEffect(() => {
+    const memberId = member?.id;
+    if (!memberId) return;
+    let isCancelled = false;
+
+    const loadMemberDetail = async () => {
+      try {
+        const fullMember = await fetchMemberById(memberId);
+        if (!fullMember || isCancelled) return;
+        setCurrentMember((prev) => mapMemberToMemberData(fullMember, prev));
+      } catch (error) {
+        console.error('Failed to refresh member detail:', error);
+      }
+    };
+
+    loadMemberDetail();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [member?.id, fetchMemberById]);
+
+  React.useEffect(() => {
+    if (!currentMember?.id) return;
+
+    let isCancelled = false;
+
+    const fetchLatestChatTimestamp = async () => {
+      try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+
+        const response = await fetch(
+          `/api/v1/members/${currentMember.id}/chat-messages?page=1&page_size=1`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        if (!response.ok) {
+          return;
+        }
+
+        const result = await response.json();
+        const apiMessages: any[] = result?.data?.messages || [];
+
+        if (apiMessages.length === 0) {
+          return;
+        }
+
+        const timestamp = extractMessageTimestamp(apiMessages[0]);
+
+        if (!timestamp || isCancelled) return;
+
+        setCurrentMember(prev => {
+          if (!prev || prev.lastChatTime === timestamp) return prev;
+          return { ...prev, lastChatTime: timestamp };
+        });
+      } catch (error) {
+        console.error('Failed to fetch latest chat timestamp:', error);
+      }
+    };
+
+    fetchLatestChatTimestamp();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentMember?.id]);
 
   const memberBreadcrumbLabel = currentMember?.username || currentMember?.realName || fallbackMemberName || '會員資訊';
 

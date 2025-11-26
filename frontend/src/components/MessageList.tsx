@@ -14,6 +14,7 @@ interface MessageListProps {
   onCreateMessage: () => void;
   onEditMessage?: (messageId: string) => void;
   onNavigateToAutoReply?: () => void;
+  onNavigateToMembers?: () => void;
   onNavigateToSettings?: () => void;
 }
 
@@ -332,7 +333,7 @@ const MainContent = memo(function MainContent({
   );
 });
 
-export default function MessageList({ onCreateMessage, onEditMessage, onNavigateToAutoReply, onNavigateToSettings }: MessageListProps) {
+export default function MessageList({ onCreateMessage, onEditMessage, onNavigateToAutoReply, onNavigateToMembers, onNavigateToSettings }: MessageListProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [searchValue, setSearchValue] = useState('');
   const [currentPage, setCurrentPage] = useState<'messages' | 'members'>('messages');
@@ -480,10 +481,7 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
         currentPage={currentPage}
         onNavigateToMessages={() => setCurrentPage('messages')}
         onNavigateToAutoReply={onNavigateToAutoReply}
-        onNavigateToMembers={() => {
-          setCurrentPage('members');
-          setMemberView('list');
-        }}
+        onNavigateToMembers={onNavigateToMembers}
         onNavigateToSettings={onNavigateToSettings}
         sidebarOpen={sidebarOpen}
         onToggleSidebar={setSidebarOpen}

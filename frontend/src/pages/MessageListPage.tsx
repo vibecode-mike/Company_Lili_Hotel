@@ -12,6 +12,7 @@ export default function MessageListPage() {
       onCreateMessage={() => navigate('flex-editor')}
       onEditMessage={(messageId) => navigate('flex-editor', { messageId })}
       onNavigateToAutoReply={() => navigate('auto-reply')}
+      onNavigateToMembers={() => navigate('member-management')}
       onNavigateToSettings={() => navigate('line-api-settings')}
     />
   );

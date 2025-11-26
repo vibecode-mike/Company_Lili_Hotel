@@ -12,6 +12,7 @@ import { Label } from '../ui/label';
 import { format } from 'date-fns';
 import svgPathsInfo from '../../imports/svg-k0rlkn3s4y';
 import { useToast } from '../ToastProvider';
+import ButtonEdit from '../../imports/ButtonEdit';
 
 export interface MemberInfoPanelCompleteProps {
   member: Member;
@@ -20,37 +21,194 @@ export interface MemberInfoPanelCompleteProps {
   onEditTags?: () => void;
 }
 
+const formatDateTime = (value?: string | null) => {
+  if (!value) return '未知';
+  try {
+    const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+    const date = new Date(normalized);
+    if (Number.isNaN(date.getTime())) return '未知';
+    return new Intl.DateTimeFormat('zh-TW', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
+      .format(date)
+      .replace(/\//g, '-')
+      .replace('，', ' ');
+  } catch {
+    return '未知';
+  }
+};
+
+const getLatestChatTimestamp = (member?: Member) => {
+  if (!member) return undefined;
+  const fallbackFields = [
+    member.lastChatTime,
+    (member as any)?.lastMessageTime,
+    (member as any)?.last_message_time,
+    (member as any)?.lastMessageAt,
+    (member as any)?.last_message_at,
+    (member as any)?.lastInteractionAt,
+    (member as any)?.last_interaction_at,
+    (member as any)?.latestMessageAt,
+    (member as any)?.latest_message_at,
+    (member as any)?.lastMessage?.timestamp,
+  ];
+  return fallbackFields.find(Boolean);
+};
+
+const normalizeGender = (value?: string | null): 'male' | 'female' | 'undisclosed' => {
+  if (!value) return 'undisclosed';
+  const normalized = value.toString().toLowerCase();
+  if (normalized === '1' || normalized === 'male') return 'male';
+  if (normalized === '2' || normalized === 'female') return 'female';
+  if (normalized === 'undisclosed' || normalized === '0') return 'undisclosed';
+  return 'undisclosed';
+};
+
+const getMemberString = (member?: Member, keys: string[] = [], fallback = ''): string => {
+  if (!member) return fallback;
+  for (const key of keys) {
+    const value = (member as any)?.[key];
+    if (value !== undefined && value !== null && value !== '') {
+      return value;
+    }
+  }
+  return fallback;
+};
+
 export default function MemberInfoPanelComplete({ member, memberTags, interactionTags, onEditTags }: MemberInfoPanelCompleteProps) {
   const [isEditing, setIsEditing] = React.useState(false);
   const [birthdayPopoverOpen, setBirthdayPopoverOpen] = React.useState(false);
-  const [realName, setRealName] = React.useState(member?.realName || '');
-  const [birthday, setBirthday] = React.useState<Date | undefined>(
-    member?.birthday ? new Date(member.birthday) : new Date(2000, 11, 12)
+  const [realName, setRealName] = React.useState(
+    member?.realName || (member as any)?.name || ''
   );
-  const [gender, setGender] = React.useState<'male' | 'female' | 'undisclosed'>('female');
-  const [location, setLocation] = React.useState(member?.location || '台北市');
+  const [birthday, setBirthday] = React.useState<Date | undefined>(
+    member?.birthday ? new Date(member.birthday) : undefined
+  );
+  const [gender, setGender] = React.useState<'male' | 'female' | 'undisclosed'>(normalizeGender(member?.gender));
+  const [location, setLocation] = React.useState(
+    getMemberString(member, ['location', 'residence'], '')
+  );
   const [phone, setPhone] = React.useState(member?.phone || '');
   const [email, setEmail] = React.useState(member?.email || '');
-  const [idNumber, setIdNumber] = React.useState(member?.idNumber || 'IDDDDD090909');
-  const [passportNumber, setPassportNumber] = React.useState(member?.passportNumber || '399999999');
+  const [idNumber, setIdNumber] = React.useState(
+    getMemberString(member, ['idNumber', 'id_number'], '')
+  );
+  const [passportNumber, setPassportNumber] = React.useState(
+    getMemberString(member, ['passportNumber', 'passport_number'], '')
+  );
   const { showToast } = useToast();
+
+  const hasMemberTags = Boolean(memberTags && memberTags.length > 0);
+  const hasInteractionTags = Boolean(interactionTags && interactionTags.length > 0);
+  const shouldShowTagSection = hasMemberTags || hasInteractionTags || Boolean(onEditTags);
+
+  const createdTimeDisplay = formatDateTime(
+    member?.createTime || (member as any)?.created_at || (member as any)?.create_time || (member as any)?.createdAt
+  );
+  const latestChatTimeDisplay = formatDateTime(getLatestChatTimestamp(member));
+
+  // 錯誤狀態
+  const [errors, setErrors] = React.useState<{
+    realName?: string;
+    location?: string;
+    phone?: string;
+    email?: string;
+    idNumber?: string;
+    passportNumber?: string;
+  }>({});
+
+  // 驗證函數
+  const validateNoSpecialChars = (value: string): boolean => {
+    return /^[\u4e00-\u9fa5a-zA-Z0-9\s]*$/.test(value);
+  };
+
+  const validatePhone = (value: string): boolean => {
+    return /^09\d{8}$/.test(value);
+  };
+
+  const validateEmail = (value: string): boolean => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  };
+
+  // 身分證字號驗證（1 英文字母 + 9 數字）
+  const validateIdNumber = (value: string): boolean => {
+    return /^[A-Za-z]\d{9}$/.test(value);
+  };
+
+  // 護照號碼驗證（英文字母與數字組合）
+  const validatePassport = (value: string): boolean => {
+    return /^[A-Za-z0-9]+$/.test(value);
+  };
+
+  const lineUid = getMemberString(member, ['lineUid', 'line_uid'], '');
+  const joinSource = getMemberString(member, ['join_source'], 'LINE');
 
   React.useEffect(() => {
     if (member) {
-      setRealName(member.realName || '');
-      setBirthday(member.birthday ? new Date(member.birthday) : new Date(2000, 11, 12));
-      setLocation(member.location || '台北市');
+      setRealName(member.realName || (member as any)?.name || '');
+      setBirthday(member.birthday ? new Date(member.birthday) : undefined);
+      setLocation(getMemberString(member, ['location', 'residence'], ''));
       setPhone(member.phone || '');
       setEmail(member.email || '');
-      setIdNumber(member.idNumber || 'IDDDDD090909');
-      setPassportNumber(member.passportNumber || '399999999');
+      setIdNumber(getMemberString(member, ['idNumber', 'id_number'], ''));
+      setPassportNumber(getMemberString(member, ['passportNumber', 'passport_number'], ''));
+      setGender(normalizeGender(member.gender));
     }
   }, [member]);
 
   const handleSave = async () => {
+    const newErrors: typeof errors = {};
+
+    // 檢查必填欄位
+    if (!realName) {
+      newErrors.realName = '姓名為必填';
+    } else if (!validateNoSpecialChars(realName)) {
+      newErrors.realName = '姓名格式錯誤，請避免使用特殊符號';
+    }
+
+    if (!phone) {
+      newErrors.phone = '手機號碼為必填';
+    } else if (!validatePhone(phone)) {
+      newErrors.phone = '手機號碼格式錯誤，請輸入 09 開頭的 10 位數字';
+    }
+
+    if (!email) {
+      newErrors.email = 'Email 為必填';
+    } else if (!validateEmail(email)) {
+      newErrors.email = 'Email 格式錯誤，格式如：starbit@gmail.com';
+    }
+
+    // 居住地驗證（必填）
+    if (!location || !location.trim()) {
+      newErrors.location = '居住地為必填';
+    } else if (!validateNoSpecialChars(location)) {
+      newErrors.location = '居住地格式錯誤，請避免使用特殊符號';
+    }
+
+    // 身分證字號驗證（非必填，只檢查格式）
+    if (idNumber && !validateIdNumber(idNumber)) {
+      newErrors.idNumber = '身分證字號格式錯誤，請輸入正確的英文字母與 9 碼數字組合';
+    }
+
+    // 護照號碼驗證（非必填，只檢查格式）
+    if (passportNumber && !validatePassport(passportNumber)) {
+      newErrors.passportNumber = '護照號碼格式錯誤，請輸入正確的英文字母與數字組合';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
     try {
       setIsEditing(false);
       setBirthdayPopoverOpen(false);
+      setErrors({});
       showToast('儲存成功', 'success');
     } catch (error) {
       showToast('儲存失敗', 'error');
@@ -59,16 +217,18 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
 
   const handleCancel = () => {
     if (member) {
-      setRealName(member.realName || '');
-      setBirthday(member.birthday ? new Date(member.birthday) : new Date(2000, 11, 12));
-      setLocation(member.location || '台北市');
+      setRealName(member.realName || (member as any)?.name || '');
+      setBirthday(member.birthday ? new Date(member.birthday) : undefined);
+      setLocation(getMemberString(member, ['location', 'residence'], ''));
       setPhone(member.phone || '');
       setEmail(member.email || '');
-      setIdNumber(member.idNumber || 'IDDDDD090909');
-      setPassportNumber(member.passportNumber || '399999999');
+      setIdNumber(getMemberString(member, ['idNumber', 'id_number'], ''));
+      setPassportNumber(getMemberString(member, ['passportNumber', 'passport_number'], ''));
+      setGender(normalizeGender(member.gender));
     }
     setIsEditing(false);
     setBirthdayPopoverOpen(false);
+    setErrors({});
   };
 
   return (
@@ -96,7 +256,11 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
         </div>
         <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0">
           <div className="bg-white group h-[48px] min-h-[48px] relative rounded-[8px] shrink-0 w-full">
-            <div aria-hidden="true" className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]" />
+            <div
+              aria-hidden="true"
+              className="absolute border border-solid border-neutral-100 group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]"
+              style={errors.realName ? { border: '2px solid #f44336' } : undefined}
+            />
             <div className="flex flex-col justify-center min-h-inherit size-full">
               <div className="box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center min-h-inherit p-[8px] relative w-full">
                 <div className="content-stretch flex gap-[10px] items-start relative shrink-0 w-full">
@@ -104,7 +268,17 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
                     <input
                       type="text"
                       value={realName}
-                      onChange={(e) => setRealName(e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setRealName(value);
+                        if (!value || !value.trim()) {
+                          setErrors(prev => ({ ...prev, realName: '姓名為必填' }));
+                        } else if (!validateNoSpecialChars(value)) {
+                          setErrors(prev => ({ ...prev, realName: '姓名格式錯誤，請避免使用特殊符號' }));
+                        } else {
+                          setErrors(prev => ({ ...prev, realName: undefined }));
+                        }
+                      }}
                       placeholder="輸入姓名"
                       className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] placeholder:text-[#a8a8a8] bg-transparent border-0 outline-none w-full"
                       onClick={(e) => e.stopPropagation()}
@@ -116,6 +290,9 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
               </div>
             </div>
           </div>
+          {errors.realName && (
+            <p className="text-[12px] leading-[16px] text-[#f44336]">{errors.realName}</p>
+          )}
         </div>
       </div>
 
@@ -252,7 +429,11 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
         </div>
         <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0">
           <div className="bg-white group h-[48px] min-h-[48px] relative rounded-[8px] shrink-0 w-full">
-            <div aria-hidden="true" className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]" />
+            <div
+              aria-hidden="true"
+              className="absolute border border-solid border-neutral-100 group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]"
+              style={errors.location ? { border: '2px solid #f44336' } : undefined}
+            />
             <div className="flex flex-col justify-center min-h-inherit size-full">
               <div className="box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center min-h-inherit p-[8px] relative w-full">
                 <div className="content-stretch flex gap-[10px] items-start relative shrink-0 w-full">
@@ -260,7 +441,17 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
                     <input
                       type="text"
                       value={location}
-                      onChange={(e) => setLocation(e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setLocation(value);
+                        if (!value || !value.trim()) {
+                          setErrors(prev => ({ ...prev, location: '居住地為必填' }));
+                        } else if (!validateNoSpecialChars(value)) {
+                          setErrors(prev => ({ ...prev, location: '居住地格式錯誤，請避免使用特殊符號' }));
+                        } else {
+                          setErrors(prev => ({ ...prev, location: undefined }));
+                        }
+                      }}
                       placeholder="輸入居住地"
                       className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] placeholder:text-[#a8a8a8] bg-transparent border-0 outline-none w-full"
                       onClick={(e) => e.stopPropagation()}
@@ -272,6 +463,9 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
               </div>
             </div>
           </div>
+          {errors.location && (
+            <p className="text-[12px] leading-[16px] text-[#f44336]">{errors.location}</p>
+          )}
         </div>
       </div>
 
@@ -298,7 +492,11 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
         </div>
         <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0">
           <div className="bg-white group h-[48px] min-h-[48px] relative rounded-[8px] shrink-0 w-full">
-            <div aria-hidden="true" className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]" />
+            <div
+              aria-hidden="true"
+              className="absolute border border-solid border-neutral-100 group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]"
+              style={errors.phone ? { border: '2px solid #f44336' } : undefined}
+            />
             <div className="flex flex-col justify-center min-h-inherit size-full">
               <div className="box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center min-h-inherit p-[8px] relative w-full">
                 <div className="content-stretch flex gap-[10px] items-start relative shrink-0 w-full">
@@ -306,7 +504,17 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
                     <input
                       type="tel"
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setPhone(value);
+                        if (!value || !value.trim()) {
+                          setErrors(prev => ({ ...prev, phone: '手機號碼為必填' }));
+                        } else if (!validatePhone(value)) {
+                          setErrors(prev => ({ ...prev, phone: '手機號碼格式錯誤，請輸入 09 開頭的 10 位數字' }));
+                        } else {
+                          setErrors(prev => ({ ...prev, phone: undefined }));
+                        }
+                      }}
                       placeholder="輸入手機號碼"
                       className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] placeholder:text-[#a8a8a8] bg-transparent border-0 outline-none w-full"
                       onClick={(e) => e.stopPropagation()}
@@ -318,6 +526,9 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
               </div>
             </div>
           </div>
+          {errors.phone && (
+            <p className="text-[12px] leading-[16px] text-[#f44336]">{errors.phone}</p>
+          )}
         </div>
       </div>
 
@@ -344,7 +555,11 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
         </div>
         <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0">
           <div className="bg-white group h-[48px] min-h-[48px] relative rounded-[8px] shrink-0 w-full">
-            <div aria-hidden="true" className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]" />
+            <div
+              aria-hidden="true"
+              className="absolute border border-solid border-neutral-100 group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]"
+              style={errors.email ? { border: '2px solid #f44336' } : undefined}
+            />
             <div className="flex flex-col justify-center min-h-inherit size-full">
               <div className="box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center min-h-inherit p-[8px] relative w-full">
                 <div className="content-stretch flex gap-[10px] items-start relative shrink-0 w-full">
@@ -352,7 +567,17 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
                     <input
                       type="email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setEmail(value);
+                        if (!value || !value.trim()) {
+                          setErrors(prev => ({ ...prev, email: 'Email 為必填' }));
+                        } else if (!validateEmail(value)) {
+                          setErrors(prev => ({ ...prev, email: 'Email 格式錯誤，格式如：starbit@gmail.com' }));
+                        } else {
+                          setErrors(prev => ({ ...prev, email: undefined }));
+                        }
+                      }}
                       placeholder="example@mail.com"
                       className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] placeholder:text-[#a8a8a8] bg-transparent border-0 outline-none w-full"
                       onClick={(e) => e.stopPropagation()}
@@ -364,6 +589,9 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
               </div>
             </div>
           </div>
+          {errors.email && (
+            <p className="text-[12px] leading-[16px] text-[#f44336]">{errors.email}</p>
+          )}
         </div>
       </div>
 
@@ -385,7 +613,11 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
         </div>
         <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0">
           <div className="bg-white group h-[48px] min-h-[48px] relative rounded-[8px] shrink-0 w-full">
-            <div aria-hidden="true" className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]" />
+            <div
+              aria-hidden="true"
+              className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]"
+              style={errors.idNumber ? { border: '2px solid #f44336' } : undefined}
+            />
             <div className="flex flex-col justify-center min-h-inherit size-full">
               <div className="box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center min-h-inherit p-[8px] relative w-full">
                 <div className="content-stretch flex gap-[10px] items-start relative shrink-0 w-full">
@@ -393,7 +625,15 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
                     <input
                       type="text"
                       value={idNumber}
-                      onChange={(e) => setIdNumber(e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setIdNumber(value);
+                        if (value && !validateIdNumber(value)) {
+                          setErrors(prev => ({ ...prev, idNumber: '身分證字號格式錯誤，請輸入正確的英文字母與 9 碼數字組合' }));
+                        } else {
+                          setErrors(prev => ({ ...prev, idNumber: undefined }));
+                        }
+                      }}
                       placeholder="輸入身分證字號"
                       className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] placeholder:text-[#a8a8a8] bg-transparent border-0 outline-none w-full"
                       onClick={(e) => e.stopPropagation()}
@@ -405,6 +645,9 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
               </div>
             </div>
           </div>
+          {errors.idNumber && (
+            <p className="text-[12px] leading-[16px] text-[#f44336]">{errors.idNumber}</p>
+          )}
         </div>
       </div>
 
@@ -426,7 +669,11 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
         </div>
         <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0">
           <div className="bg-white group h-[48px] min-h-[48px] relative rounded-[8px] shrink-0 w-full">
-            <div aria-hidden="true" className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]" />
+            <div
+              aria-hidden="true"
+              className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]"
+              style={errors.passportNumber ? { border: '2px solid #f44336' } : undefined}
+            />
             <div className="flex flex-col justify-center min-h-inherit size-full">
               <div className="box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center min-h-inherit p-[8px] relative w-full">
                 <div className="content-stretch flex gap-[10px] items-start relative shrink-0 w-full">
@@ -434,7 +681,15 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
                     <input
                       type="text"
                       value={passportNumber}
-                      onChange={(e) => setPassportNumber(e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setPassportNumber(value);
+                        if (value && !validatePassport(value)) {
+                          setErrors(prev => ({ ...prev, passportNumber: '護照號碼格式錯誤，請輸入正確的英文字母與數字組合' }));
+                        } else {
+                          setErrors(prev => ({ ...prev, passportNumber: undefined }));
+                        }
+                      }}
                       placeholder="輸入外籍人士護照號碼"
                       className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] placeholder:text-[#a8a8a8] bg-transparent border-0 outline-none w-full"
                       onClick={(e) => e.stopPropagation()}
@@ -446,6 +701,9 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
               </div>
             </div>
           </div>
+          {errors.passportNumber && (
+            <p className="text-[12px] leading-[16px] text-[#f44336]">{errors.passportNumber}</p>
+          )}
         </div>
       </div>
 
@@ -476,7 +734,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
       )}
 
       {/* Tags Section */}
-      {((memberTags && memberTags.length > 0) || (interactionTags && interactionTags.length > 0)) && (
+      {shouldShowTagSection && (
         <>
           {/* Divider */}
           <div className="h-0 relative shrink-0 w-full">
@@ -488,53 +746,57 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
           </div>
 
           <div className="content-stretch flex flex-col gap-[20px] items-start relative shrink-0 w-full">
-            {/* Member Tags */}
-            {memberTags && memberTags.length > 0 && (
-              <div className="flex flex-col gap-[8px] w-full">
-                <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] text-[#383838]">
-                  會員標籤
-                </p>
-                <div className="flex flex-wrap gap-[8px]">
-                  {memberTags.map((tag, index) => (
-                    <span
-                      key={index}
-                      className="bg-[#f0f6ff] text-[#0f6beb] px-[12px] py-[4px] rounded-[8px] text-[14px] font-medium"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Interaction Tags */}
-            {interactionTags && interactionTags.length > 0 && (
-              <div className="flex flex-col gap-[8px] w-full">
-                <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] text-[#383838]">
-                  互動標籤
-                </p>
+            <div className="flex flex-col gap-[8px] w-full">
+              <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] text-[#383838]">
+                互動標籤
+              </p>
+              {hasInteractionTags && interactionTags ? (
                 <div className="flex flex-wrap gap-[8px]">
                   {interactionTags.map((tag, index) => (
                     <span
-                      key={index}
+                      key={`interaction-${index}`}
                       className="bg-[#f0f6ff] text-[#0f6beb] px-[12px] py-[4px] rounded-[8px] text-[14px] font-medium"
                     >
                       {tag}
                     </span>
                   ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <p className="text-[#6e6e6e] text-[14px]">尚未設定互動標籤</p>
+              )}
+            </div>
 
-            {/* Edit Tags Button */}
-            {onEditTags && (
-              <button
-                onClick={onEditTags}
-                className="text-[#0f6beb] text-[16px] hover:underline cursor-pointer"
-              >
-                編輯標籤
-              </button>
-            )}
+            {/* Member Tags */}
+            <div className="flex flex-col gap-[8px] w-full relative pb-[4px]">
+              <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] text-[#383838]">
+                會員標籤
+              </p>
+              {hasMemberTags && memberTags ? (
+                <div className="flex flex-wrap gap-[8px]">
+                  {memberTags.map((tag, index) => (
+                    <span
+                      key={`member-${index}`}
+                      className="bg-[#f0f6ff] text-[#0f6beb] px-[12px] py-[4px] rounded-[8px] text-[14px] font-medium"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[#6e6e6e] text-[14px]">尚未設定會員標籤</p>
+              )}
+              {onEditTags && (
+                <button
+                  type="button"
+                  onClick={onEditTags}
+                  aria-label="編輯會員標籤"
+                  className="absolute bottom-0 right-0 translate-y-[50%] shrink-0 size-[28px] cursor-pointer hover:opacity-80 transition-opacity"
+                >
+                  <ButtonEdit />
+                </button>
+              )}
+            </div>
           </div>
         </>
       )}
@@ -558,8 +820,8 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
             </div>
           </div>
           <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0">
-            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">LINE (LINE UID: 000000000)</p>
+            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[1.5] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
+              <p className="whitespace-pre">{joinSource}</p>
             </div>
           </div>
         </div>
@@ -573,7 +835,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
           </div>
           <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0">
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">2025-01-01</p>
+              <p className="leading-[1.5] whitespace-pre">{createdTimeDisplay}</p>
             </div>
           </div>
         </div>
@@ -587,7 +849,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
           </div>
           <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0">
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">2025-08-08</p>
+              <p className="leading-[1.5] whitespace-pre">{latestChatTimeDisplay}</p>
             </div>
           </div>
         </div>

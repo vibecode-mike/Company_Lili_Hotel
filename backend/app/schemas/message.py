@@ -170,8 +170,10 @@ class MessageCreate(BaseModel):
     def validate_scheduled_at_future(cls, v):
         """驗證排程時間必須在未來"""
         if v is not None:
+            # 確保時區一致性：移除時區資訊進行比較
             now = datetime.now()
-            if v <= now:
+            scheduled = v.replace(tzinfo=None) if v.tzinfo is not None else v
+            if scheduled <= now:
                 raise ValueError('排程發送時間不可早於目前時間')
         return v
 

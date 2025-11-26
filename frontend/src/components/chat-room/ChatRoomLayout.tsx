@@ -11,15 +11,11 @@ import { useWebSocket } from '../../hooks/useWebSocket';
 import MemberAvatar from './MemberAvatar';
 import MemberInfoPanelComplete from './MemberInfoPanelComplete';
 import MemberTagEditModal from '../MemberTagEditModal';
-import ButtonEdit from '../../imports/ButtonEdit';
 import ButtonEditAvatar from '../../imports/ButtonEdit-8025-230';
 import svgPathsInfo from '../../imports/svg-k0rlkn3s4y';
 import svgPaths from '../../imports/svg-bzzivawqvx';
-import svgPathsForm from '../../imports/svg-htq1l2704k';
 import { useToast } from '../ToastProvider';
 import { useAuth } from '../auth/AuthContext';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { Calendar } from '../ui/calendar';
 import MemberNoteEditor from '../shared/MemberNoteEditor';
 import { useMembers } from '../../contexts/MembersContext';
 import Container from '../../imports/Container-8548-103';
@@ -45,10 +41,33 @@ const mockMessages_REMOVED: ChatMessage[] = [
   { id: 1, type: 'user', text: '文字訊息', time: '下午 03:30', isRead: false },
   { id: 2, type: 'official', text: '官方文字訊息', time: '下午 03:40', isRead: true },
   { id: 3, type: 'user', text: '文字訊息', time: '下午 04:30', isRead: false },
-  { id: 4, type: 'official', text: '官方文字訊息', time: '���午 04:50', isRead: true },
+  { id: 4, type: 'official', text: '官方文字訊息', time: '下午 04:50', isRead: true },
   { id: 5, type: 'user', text: '文字訊息', time: '下午 05:30', isRead: false },
   { id: 6, type: 'official', text: '官方文字訊息', time: '下午 05:40', isRead: true },
 ];
+
+const extractMessageTimestamp = (message: ChatMessage): string | undefined => {
+  return (
+    message.timestamp ||
+    (message as any)?.created_at ||
+    (message as any)?.createdAt ||
+    (message as any)?.sent_at ||
+    (message as any)?.sentAt ||
+    (message as any)?.created_at_iso ||
+    (message as any)?.createdAtIso ||
+    undefined
+  ) ?? undefined;
+};
+
+const findLatestMessageTimestamp = (messages: ChatMessage[]): string | undefined => {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const ts = extractMessageTimestamp(messages[i]);
+    if (ts) {
+      return ts;
+    }
+  }
+  return undefined;
+};
 
 // 用戶頭像（左側，顯示使用者 LINE 頭像）
 function UserAvatar({ avatar }: { avatar?: string }) {
@@ -110,112 +129,6 @@ function MessageBubble({ message, memberAvatar }: { message: ChatMessage; member
   );
 }
 
-// 標籤組件
-function TagBadge({ text }: { text: string }) {
-  return (
-    <div className="bg-[#FDF5DB] box-border content-stretch flex items-center px-[12px] py-[4px] relative rounded-[32px] shrink-0">
-      <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#7F6C00] text-[14px] text-nowrap whitespace-pre">
-        {text}
-      </p>
-    </div>
-  );
-}
-
-// Figma Tag Component (Blue theme to match spec)
-function FigmaTag({ text }: { text: string }) {
-  return (
-    <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0">
-      <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">
-        {text}
-      </p>
-    </div>
-  );
-}
-
-// Member Info Field Component
-function MemberInfoField({ label, required, value, onChange, onFocus }: { label: string; required?: boolean; value: string; onChange: (val: string) => void; onFocus?: () => void }) {
-  return (
-    <div className="content-stretch flex items-start relative shrink-0 w-full">
-      <div className="content-stretch flex gap-[2px] items-center min-w-[120px] relative shrink-0">
-        <div className="content-stretch flex items-center relative shrink-0">
-          <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[16px] text-nowrap">
-            <p className="leading-[1.5] whitespace-pre">{label}</p>
-          </div>
-        </div>
-        {required && (
-          <div className="content-stretch flex items-center relative shrink-0">
-            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#f44336] text-[16px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">*</p>
-            </div>
-          </div>
-        )}
-      </div>
-      <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0">
-        <div className="bg-white h-[48px] min-h-[48px] relative rounded-[8px] shrink-0 w-full">
-          <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-[8px]" />
-          <div className="flex flex-col justify-center min-h-inherit size-full">
-            <div className="box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center min-h-inherit p-[8px] relative w-full">
-              <div className="content-stretch flex gap-[10px] items-start relative shrink-0 w-full">
-                <input
-                  type="text"
-                  value={value}
-                  onChange={(e) => onChange(e.target.value)}
-                  onFocus={onFocus}
-                  className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] bg-transparent border-0 outline-none"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Gender Radio Button Component
-function GenderRadio({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
-  return (
-    <div className="content-stretch flex gap-[8px] items-center relative shrink-0 cursor-pointer" onClick={onClick}>
-      <div className="relative shrink-0 size-[24px]">
-        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
-          <g clipPath="url(#clip0_gender)">
-            <path d={svgPaths.p26f9ce00} fill={selected ? "#0F6BEB" : "#383838"} />
-            {selected && <path d={svgPaths.pee04100} fill="#0F6BEB" />}
-          </g>
-          <defs>
-            <clipPath id="clip0_gender">
-              <rect fill="white" height="24" width="24" />
-            </clipPath>
-          </defs>
-        </svg>
-      </div>
-      <div className="content-stretch flex items-center relative shrink-0">
-        <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[16px] text-nowrap">
-          <p className="leading-[1.5] whitespace-pre">{label}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Read-only Info Component
-function ReadOnlyInfo({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="content-stretch flex items-center relative shrink-0 w-full">
-      <div className="content-stretch flex items-center min-w-[120px] relative shrink-0">
-        <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px]">
-          <p className="leading-[1.5]">{label}</p>
-        </div>
-      </div>
-      <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0">
-        <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-          <p className="leading-[1.5] whitespace-pre">{value}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function ChatRoomLayout({ member: initialMember, memberId }: ChatRoomLayoutProps) {
   const { fetchMemberById } = useMembers();
   const [member, setMember] = useState<Member | undefined>(initialMember);
@@ -236,23 +149,6 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
   const [interactionTags, setInteractionTags] = useState<string[]>(member?.interactionTags || []); // ✅ 使用真實互動標籤
   const [note, setNote] = useState(member?.internal_note || '');
 
-  // Form field states
-  const [formData, setFormData] = useState({
-    realName: member?.realName || '',
-    birthday: member?.birthday || '',
-    gender: member?.gender || '0',
-    residence: member?.residence || '',
-    phone: member?.phone || '',
-    email: member?.email || '',
-    id_number: member?.id_number || '',
-    passport_number: member?.passport_number || ''
-  });
-  
-  // Editing state for form
-  const [isFormEditing, setIsFormEditing] = useState(false);
-  const [originalFormData, setOriginalFormData] = useState(formData);
-  const [birthdayPopoverOpen, setBirthdayPopoverOpen] = useState(false);
-  
   // Avatar interaction states
   const [isAvatarHovered, setIsAvatarHovered] = useState(false);
   const [isAvatarPressed, setIsAvatarPressed] = useState(false);
@@ -262,19 +158,21 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
   const { showToast } = useToast();
   const { logout } = useAuth();
 
-  // Convert backend gender format to frontend format
-  const convertGenderToFrontend = (backendGender?: string): 'male' | 'female' | 'other' => {
-    if (backendGender === '1') return 'male';
-    if (backendGender === '2') return 'female';
-    return 'other'; // '0' or undefined
-  };
+  const memberLastInteractionRaw = member ? (member as any).last_interaction_at : null;
 
-  // Convert frontend gender format to backend format
-  const convertGenderToBackend = (frontendGender: string): string => {
-    if (frontendGender === 'male') return '1';
-    if (frontendGender === 'female') return '2';
-    return '0'; // 'other'
-  };
+  const latestChatTimestamp = useMemo(() => {
+    const messageTimestamp = findLatestMessageTimestamp(messages);
+    if (messageTimestamp) return messageTimestamp;
+    return member?.lastChatTime || memberLastInteractionRaw || null;
+  }, [messages, member?.lastChatTime, memberLastInteractionRaw]);
+
+  const panelMember = useMemo(() => {
+    if (!member) return undefined;
+    if (!latestChatTimestamp || latestChatTimestamp === member.lastChatTime) {
+      return member;
+    }
+    return { ...member, lastChatTime: latestChatTimestamp };
+  }, [member, latestChatTimestamp]);
 
   // Fetch full member details when component mounts
   // 支援兩種情況：1) initialMember 存在  2) 只有 memberId
@@ -294,19 +192,9 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
     loadMemberDetail();
   }, [initialMember?.id, memberId, fetchMemberById]);
 
-  // Sync member data to formData when member changes
+  // Sync member data for related UI pieces when member changes
   useEffect(() => {
     if (member) {
-      setFormData({
-        realName: member.realName || '',
-        birthday: member.birthday || '',
-        gender: convertGenderToFrontend(member.gender),
-        residence: member.residence || '',
-        phone: member.phone || '',
-        email: member.email || '',
-        id_number: member.id_number || '',
-        passport_number: member.passport_number || ''
-      });
       setNote(member.internal_note || '');
       setMemberTags(member.memberTags || []);
       setInteractionTags(member.interactionTags || []);
@@ -352,16 +240,20 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
 
   // 初始載入訊息後設定 visibleDate（顯示最新訊息的日期）
   useEffect(() => {
-    if (messages.length > 0 && !visibleDate) {
+    if (visibleDate) return;
+    if (messages.length > 0) {
       // 初次載入時，顯示最後一則（最新）訊息的日期
       const lastMessage = messages[messages.length - 1];
-      if (lastMessage.timestamp) {
-        setVisibleDate(formatDateWithWeekday(lastMessage.timestamp));
-      } else if (member?.lastChatTime) {
-        setVisibleDate(formatDateWithWeekday(member.lastChatTime));
+      const timestampFromMessage = extractMessageTimestamp(lastMessage);
+      if (timestampFromMessage) {
+        setVisibleDate(formatDateWithWeekday(timestampFromMessage));
+        return;
       }
     }
-  }, [messages, member?.lastChatTime, visibleDate]);
+    if (latestChatTimestamp) {
+      setVisibleDate(formatDateWithWeekday(latestChatTimestamp));
+    }
+  }, [messages, latestChatTimestamp, visibleDate]);
 
   // Load chat messages from API
   // 支援兩種情況：1) member?.id 存在  2) 只有 memberId
@@ -599,46 +491,6 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
     }
   };
 
-  const handleEditForm = () => {
-    setIsFormEditing(true);
-    setOriginalFormData(formData);
-  };
-
-  const handleSaveForm = async () => {
-    try {
-      // Simulate save operation (90% success rate for demo)
-      const saveSuccess = Math.random() > 0.1;
-      
-      if (saveSuccess) {
-        setIsFormEditing(false);
-        showToast('儲存成功', 'success');
-      } else {
-        throw new Error('Save failed');
-      }
-    } catch (error) {
-      showToast('儲存失敗', 'error');
-    }
-  };
-
-  const handleCancelForm = () => {
-    setIsFormEditing(false);
-    setFormData(originalFormData);
-    setBirthdayPopoverOpen(false);
-  };
-
-  const handleBirthdaySelect = (date: Date | undefined) => {
-    if (date) {
-      handleEditForm();
-      // 使用本地時區格式化日期，避免時區轉換問題
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const formattedDate = `${year}-${month}-${day}`;
-      setFormData({ ...formData, birthday: formattedDate });
-      setBirthdayPopoverOpen(false);
-    }
-  };
-
   // Avatar upload handlers
   const handleAvatarClick = () => {
     avatarFileInputRef.current?.click();
@@ -748,233 +600,23 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
             </div>
           </div>
           
-          {/* Member Info Form - White Card */}
+          {/* Member Info Panel */}
           <div className="relative rounded-[20px] shrink-0 w-full">
             <div aria-hidden="true" className="absolute border border-[#e1ebf9] border-solid inset-0 pointer-events-none rounded-[20px]" />
             <div className="size-full">
               <div className="box-border content-stretch flex flex-col gap-[32px] items-start p-[28px] relative w-full">
-                <div className="content-stretch flex flex-col gap-[20px] items-start relative shrink-0 w-full">
-                  {/* Editable Fields Container */}
-                  <div className="content-stretch flex flex-col gap-[20px] items-start relative shrink-0 w-full">
-                    {/* Name Field */}
-                    <MemberInfoField
-                      label="姓名"
-                      required
-                      value={formData.realName}
-                      onChange={(val) => setFormData({ ...formData, realName: val })}
-                      onFocus={handleEditForm}
-                    />
-                    
-                    {/* Birthday Field */}
-                    <div className="content-start flex flex-wrap gap-[40px] items-start relative shrink-0 w-full">
-                      <div className="basis-0 content-stretch flex grow items-start min-h-px min-w-px relative shrink-0">
-                        <div className="content-stretch flex gap-[2px] items-center min-w-[120px] relative shrink-0">
-                          <div className="content-stretch flex items-center relative shrink-0">
-                            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[16px] text-nowrap">
-                              <p className="leading-[1.5] whitespace-pre">生日</p>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="basis-0 bg-white grow min-h-px min-w-[298px] relative rounded-[8px] shrink-0">
-                          <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-[8px]" />
-                          <div className="flex flex-col justify-center min-w-inherit size-full">
-                            <div className="box-border content-stretch flex flex-col gap-[4px] items-start justify-center min-w-inherit p-[8px] relative w-full">
-                              <Popover open={birthdayPopoverOpen} onOpenChange={setBirthdayPopoverOpen}>
-                                <div className="content-stretch flex gap-[24px] items-center relative shrink-0 w-full">
-                                  <div className="basis-0 content-stretch flex gap-[8px] grow items-center min-h-px min-w-px relative shrink-0">
-                                    <input
-                                      type="text"
-                                      value={formData.birthday}
-                                      readOnly
-                                      onFocus={handleEditForm}
-                                      className="w-full font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[16px] text-nowrap whitespace-pre bg-transparent border-0 outline-none cursor-pointer"
-                                    />
-                                  </div>
-                                  <PopoverTrigger asChild>
-                                    <div 
-                                      className="content-stretch flex items-center justify-center min-h-[16px] min-w-[16px] relative rounded-[8px] shrink-0 size-[28px] cursor-pointer"
-                                      onClick={handleEditForm}
-                                    >
-                                      <div className="relative shrink-0 size-[24px]">
-                                        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
-                                          <path d={svgPathsForm.p22990f00} fill="#0F6BEB" />
-                                        </svg>
-                                      </div>
-                                    </div>
-                                  </PopoverTrigger>
-                                </div>
-                                <PopoverContent className="w-auto p-0" align="end">
-                                  <Calendar
-                                    mode="single"
-                                    selected={formData.birthday ? (() => {
-                                      const [year, month, day] = formData.birthday.split('-').map(Number);
-                                      return new Date(year, month - 1, day);
-                                    })() : undefined}
-                                    onSelect={handleBirthdaySelect}
-                                    disabled={(date) => {
-                                      const today = new Date();
-                                      today.setHours(23, 59, 59, 999);
-                                      return date > today;
-                                    }}
-                                    initialFocus
-                                  />
-                                </PopoverContent>
-                              </Popover>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Gender Field */}
-                    <div className="content-stretch flex gap-[20px] h-[44px] items-center relative shrink-0 w-full">
-                      <div className="basis-0 content-stretch flex grow items-start min-h-px min-w-px relative shrink-0">
-                        <div className="content-stretch flex gap-[2px] items-center min-w-[120px] relative shrink-0">
-                          <div className="content-stretch flex items-center relative shrink-0">
-                            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[16px] text-nowrap">
-                              <p className="leading-[1.5] whitespace-pre">生理性別</p>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="content-stretch flex gap-[16px] items-center relative shrink-0">
-                          <GenderRadio label="男性" selected={formData.gender === 'male'} onClick={() => { handleEditForm(); setFormData({ ...formData, gender: 'male' }); }} />
-                          <GenderRadio label="女性" selected={formData.gender === 'female'} onClick={() => { handleEditForm(); setFormData({ ...formData, gender: 'female' }); }} />
-                          <GenderRadio label="不透露" selected={formData.gender === 'other'} onClick={() => { handleEditForm(); setFormData({ ...formData, gender: 'other' }); }} />
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Location Field */}
-                    <MemberInfoField
-                      label="居住地"
-                      value={formData.residence}
-                      onChange={(val) => setFormData({ ...formData, residence: val })}
-                      onFocus={handleEditForm}
-                    />
-                    
-                    {/* Phone Field */}
-                    <MemberInfoField 
-                      label="手機號碼" 
-                      required 
-                      value={formData.phone} 
-                      onChange={(val) => setFormData({ ...formData, phone: val })}
-                      onFocus={handleEditForm}
-                    />
-                    
-                    {/* Email Field */}
-                    <MemberInfoField 
-                      label="Email" 
-                      required 
-                      value={formData.email} 
-                      onChange={(val) => setFormData({ ...formData, email: val })}
-                      onFocus={handleEditForm}
-                    />
-                    
-                    {/* ID Number Field */}
-                    <MemberInfoField
-                      label="身分證字號"
-                      value={formData.id_number}
-                      onChange={(val) => setFormData({ ...formData, id_number: val })}
-                      onFocus={handleEditForm}
-                    />
-
-                    {/* Passport Field */}
-                    <MemberInfoField
-                      label="護照號碼"
-                      value={formData.passport_number}
-                      onChange={(val) => setFormData({ ...formData, passport_number: val })}
-                      onFocus={handleEditForm}
-                    />
+                {panelMember ? (
+                  <MemberInfoPanelComplete
+                    member={panelMember}
+                    memberTags={memberTags}
+                    interactionTags={interactionTags}
+                    onEditTags={handleEditTags}
+                  />
+                ) : (
+                  <div className="w-full text-center text-[#6e6e6e] text-[16px]">
+                    載入會員資料中...
                   </div>
-                  
-                  {/* Cancel and Save Buttons - Show when editing */}
-                  {isFormEditing && (
-                    <div className="content-stretch flex gap-[8px] items-center justify-end relative shrink-0 w-full">
-                      <button
-                        onClick={handleCancelForm}
-                        className="bg-[#f0f6ff] hover:bg-[#e3f0ff] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 transition-colors cursor-pointer"
-                      >
-                        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">取消</p>
-                      </button>
-                      <button
-                        onClick={handleSaveForm}
-                        className="bg-[#242424] hover:bg-[#383838] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 transition-colors cursor-pointer"
-                      >
-                        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center text-white">儲存變更</p>
-                      </button>
-                    </div>
-                  )}
-                  
-                  {/* Divider */}
-                  <div className="h-0 relative shrink-0 w-full">
-                    <div className="absolute bottom-0 left-0 right-0 top-[-1px]">
-                      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 502 1">
-                        <line stroke="#E1EBF9" strokeLinecap="round" x1="0.5" x2="501.5" y1="0.5" y2="0.5" />
-                      </svg>
-                    </div>
-                  </div>
-                  
-                  {/* Read-only Info Container */}
-                  <div className="content-stretch flex flex-col gap-[12px] items-start relative shrink-0 w-full">
-                    <ReadOnlyInfo
-                      label="加入來源"
-                      value={member?.join_source || 'LINE'}
-                    />
-                    <ReadOnlyInfo label="建立時間" value={member?.createTime || '未提供'} />
-                    <ReadOnlyInfo label="最近聊天時間" value={member?.lastChatTime || '未提供'} />
-                    <ReadOnlyInfo label="會員 ID" value={member?.id || '未提供'} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Member Tags & Interaction Tags Section */}
-          <div className="relative rounded-[20px] shrink-0 w-full">
-            <div aria-hidden="true" className="absolute border border-[#e1ebf9] border-solid inset-0 pointer-events-none rounded-[20px]" />
-            <div className="size-full">
-              <div className="box-border content-stretch flex items-start p-[28px] relative w-full">
-                <div className="basis-0 content-stretch flex flex-col gap-[20px] grow items-start min-h-px min-w-px relative shrink-0">
-                  {/* Member Tags */}
-                  <div className="content-stretch flex items-start relative shrink-0 w-full">
-                    <div className="content-stretch flex gap-[2px] items-start min-w-[120px] relative self-stretch shrink-0">
-                      <div className="content-stretch flex items-center relative shrink-0">
-                        <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[16px] text-nowrap">
-                          <p className="leading-[1.5] whitespace-pre">會員標籤</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="basis-0 content-center flex flex-wrap gap-[4px] grow items-center min-h-px min-w-px relative shrink-0">
-                      {memberTags.map((tag, index) => (
-                        <FigmaTag key={index} text={tag} />
-                      ))}
-                    </div>
-                  </div>
-                  
-                  {/* Interaction Tags */}
-                  <div className="content-stretch flex items-start relative shrink-0 w-full">
-                    <div className="content-stretch flex gap-[2px] items-start min-w-[120px] relative self-stretch shrink-0">
-                      <div className="content-stretch flex items-center relative shrink-0">
-                        <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[16px] text-nowrap">
-                          <p className="leading-[1.5] whitespace-pre">互動標籤</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="basis-0 content-center flex flex-wrap gap-[4px] grow items-center min-h-px min-w-px relative shrink-0">
-                      {interactionTags.map((tag, index) => (
-                        <FigmaTag key={index} text={tag} />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div className="content-end flex flex-wrap gap-[10px] items-end relative self-stretch shrink-0">
-                  <div 
-                    onClick={handleEditTags}
-                    className="relative shrink-0 size-[28px] cursor-pointer hover:opacity-80 transition-opacity"
-                  >
-                    <ButtonEdit />
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           </div>

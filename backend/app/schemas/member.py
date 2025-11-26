@@ -28,7 +28,7 @@ class MemberBase(BaseModel):
     id_number: Optional[str] = None
     passport_number: Optional[str] = None
     residence: Optional[str] = None  # 新增居住地
-    receive_notification: bool = True
+    receive_notification: Optional[bool] = True
 
 
 class MemberCreate(MemberBase):
@@ -70,7 +70,7 @@ class MemberDetail(MemberListItem):
     passport_number: Optional[str] = None
     residence: Optional[str] = None  # 新增居住地
     join_source: str = "LINE"  # 改名為 join_source
-    receive_notification: bool = True
+    receive_notification: Optional[bool] = True
     internal_note: Optional[str] = None  # 改名為 internal_note
 
 
