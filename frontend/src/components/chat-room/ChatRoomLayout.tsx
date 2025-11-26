@@ -230,6 +230,7 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
   const [messageInput, setMessageInput] = useState('');
   const [isComposing, setIsComposing] = useState(false); // IME composition state
   const [isSending, setIsSending] = useState(false); // Sending message state
+  const [visibleDate, setVisibleDate] = useState<string>(''); // 當前可見訊息的日期
   const [isTagModalOpen, setIsTagModalOpen] = useState(false);
   const [memberTags, setMemberTags] = useState<string[]>(member?.memberTags || []); // ✅ 使用真實會員標籤
   const [interactionTags, setInteractionTags] = useState<string[]>(member?.interactionTags || []); // ✅ 使用真實互動標籤
@@ -349,21 +350,18 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
   const wsTargetId = member?.id?.toString() || memberId;
   const { isConnected: isRealtimeConnected } = useWebSocket(wsTargetId, handleNewMessage);
 
-  // 計算最新訊息的日期（用於聊天框頂部日期標籤）
-  const latestChatDate = useMemo(() => {
-    // 使用最後一則訊息的時間戳
-    if (messages.length > 0) {
+  // 初始載入訊息後設定 visibleDate（顯示最新訊息的日期）
+  useEffect(() => {
+    if (messages.length > 0 && !visibleDate) {
+      // 初次載入時，顯示最後一則（最新）訊息的日期
       const lastMessage = messages[messages.length - 1];
       if (lastMessage.timestamp) {
-        return formatDateWithWeekday(lastMessage.timestamp);
+        setVisibleDate(formatDateWithWeekday(lastMessage.timestamp));
+      } else if (member?.lastChatTime) {
+        setVisibleDate(formatDateWithWeekday(member.lastChatTime));
       }
     }
-    // 備用：使用會員的最後聊天時間
-    if (member?.lastChatTime) {
-      return formatDateWithWeekday(member.lastChatTime);
-    }
-    return '';
-  }, [messages, member?.lastChatTime]);
+  }, [messages, member?.lastChatTime, visibleDate]);
 
   // Load chat messages from API
   // 支援兩種情況：1) member?.id 存在  2) 只有 memberId
@@ -419,9 +417,29 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
     }
   }, [member?.id, memberId]);
 
-  // Handle scroll for infinite scrolling
+  // Handle scroll for infinite scrolling and visible date update
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const container = e.currentTarget;
+
+    // 更新當前可見訊息的日期
+    const messageElements = container.querySelectorAll('[data-timestamp]');
+    const containerRect = container.getBoundingClientRect();
+    const dateHeaderHeight = 60; // 日期標籤高度 + padding
+
+    for (const el of messageElements) {
+      const rect = el.getBoundingClientRect();
+      // 找到第一個在可見區域內（日期標籤下方）的訊息
+      if (rect.top >= containerRect.top + dateHeaderHeight && rect.top < containerRect.bottom) {
+        const timestamp = el.getAttribute('data-timestamp');
+        if (timestamp) {
+          const newDate = formatDateWithWeekday(timestamp);
+          if (newDate && newDate !== visibleDate) {
+            setVisibleDate(newDate);
+          }
+        }
+        break;
+      }
+    }
 
     // 滾動到頂部 + 還有更多訊息 + 不在載入中
     if (container.scrollTop === 0 && hasMore && !isLoading) {
@@ -439,7 +457,7 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
 
       loadMore();
     }
-  }, [hasMore, isLoading, page, loadChatMessages]);
+  }, [hasMore, isLoading, page, loadChatMessages, visibleDate]);
 
   // Load initial messages when member changes or memberId is available
   useEffect(() => {
@@ -1031,7 +1049,7 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
             <div className="absolute bg-[rgba(246,249,253,0.7)] left-[calc(50%+0.5px)] rounded-[28px] top-[16px] translate-x-[-50%] z-10">
               <div aria-hidden="true" className="absolute border-[#e8e8e8] border-[0.4px] border-solid inset-0 pointer-events-none rounded-[28px]" />
               <div className="bg-clip-padding border-0 border-[transparent] border-solid box-border content-stretch flex gap-[10px] items-center justify-center px-[8px] py-[2px] relative">
-                {latestChatDate && <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#6e6e6e] text-[12px] text-center text-nowrap whitespace-pre">{latestChatDate}</p>}
+                {visibleDate && <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#6e6e6e] text-[12px] text-center text-nowrap whitespace-pre">{visibleDate}</p>}
               </div>
             </div>
 
@@ -1071,11 +1089,12 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
 
               {/* Messages list */}
               {messages.map((message) => (
-                <MessageBubble
-                  key={message.id}
-                  message={message}
-                  memberAvatar={member?.lineAvatar}
-                />
+                <div key={message.id} data-timestamp={message.timestamp || ''}>
+                  <MessageBubble
+                    message={message}
+                    memberAvatar={member?.lineAvatar}
+                  />
+                </div>
               ))}
             </div>
 
