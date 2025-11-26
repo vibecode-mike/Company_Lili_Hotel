@@ -12,6 +12,7 @@
 # ============================================================
 
 import os
+import sys
 import re
 import io
 import json
@@ -21,15 +22,26 @@ import logging
 import datetime
 import requests
 import uuid
-import usage_monitor #群發餘額量顯示
 import time  # 用來在 backfill 抓所有好友個資時 時稍微 sleep，避免打太兇
-from member_liff import bp as member_liff_bp # 載入 LIFF 會員表單的 Blueprint 模組  
+from pathlib import Path
+
+# 確保以任何工作目錄啟動時都能匯入同目錄模組
+# 取得 app.py 所在目錄的絕對路徑
+BASE_DIR = Path(__file__).resolve().parent
+
+# 強制將此目錄加到 sys.path 最前面（即使已存在也重新插入確保優先權）
+if str(BASE_DIR) in sys.path:
+    sys.path.remove(str(BASE_DIR))
+sys.path.insert(0, str(BASE_DIR))
+
+# 現在才開始匯入同目錄模組
+import usage_monitor #群發餘額量顯示
+from member_liff import bp as member_liff_bp # 載入 LIFF 會員表單的 Blueprint 模組
+from manage_botinfo import bp as manage_botinfo_bp # 顯示透過「客戶自行輸入的 Messaging API Channel Access Token」呼叫 LINE 官方 `/v2/bot/info` 端點，並回傳該官方帳號的基本資料，包含 Basic ID（@xxxxxxx）、displayName、pictureUrl 等。
 from collections import defaultdict, deque
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote_plus, quote
 from linebot.exceptions import InvalidSignatureError
-
-from manage_botinfo import bp as manage_botinfo_bp # 顯示透過「客戶自行輸入的 Messaging API Channel Access Token」呼叫 LINE 官方 `/v2/bot/info` 端點，並回傳該官方帳號的基本資料，包含 Basic ID（@xxxxxxx）、displayName、pictureUrl 等。
 
 from dotenv import load_dotenv
 from flask import Flask, request, abort, jsonify, render_template_string, redirect, send_from_directory
@@ -663,19 +675,26 @@ def upsert_member(line_uid: str,
     return int(mid)
 
 
-def insert_message(member_id: Optional[int], direction: str, message_type: str, content_obj: Any,
-                   campaign_id: Optional[int] = None, sender_type: Optional[str] = None):
-    # 注意：為避免 ENUM 撞型，這裡 message_type 儘量使用 "text" 或你既有允許的值
-    fields = ["member_id","direction","message_type","content"]
-    ph = [":mid",":dir",":mt",":ct"]
-    p = {"mid": member_id, "dir": direction, "mt": message_type, "ct": jdump(content_obj)}
-    if _table_has("messages","campaign_id") and campaign_id is not None:
-        fields.append("campaign_id"); ph.append(":cid"); p["cid"]=campaign_id
-    if _table_has("messages","sender_type") and sender_type:
-        fields.append("sender_type"); ph.append(":st"); p["st"]=sender_type
-    if _col_required("messages","created_at"):
-        fields.append("created_at"); ph.append(":cat"); p["cat"]=utcnow()
-    execute(f"INSERT INTO messages ({', '.join(fields)}) VALUES ({', '.join(ph)})", p)
+# 註解：insert_message() 已移除
+# 原因：此函數使用錯誤的 schema，試圖將 member_id 寫入 messages 表，但該表無此欄位
+#
+# 正確做法：
+# - 1:1 對話：使用 insert_conversation_message() 寫入 conversation_messages 表
+# - 群發訊息：在 campaign 層級處理，使用 _create_campaign_row() 和 _add_campaign_recipients()
+#
+# def insert_message(member_id: Optional[int], direction: str, message_type: str, content_obj: Any,
+#                    campaign_id: Optional[int] = None, sender_type: Optional[str] = None):
+#     # 注意：為避免 ENUM 撞型，這裡 message_type 儘量使用 "text" 或你既有允許的值
+#     fields = ["member_id","direction","message_type","content"]
+#     ph = [":mid",":dir",":mt",":ct"]
+#     p = {"mid": member_id, "dir": direction, "mt": message_type, "ct": jdump(content_obj)}
+#     if _table_has("messages","campaign_id") and campaign_id is not None:
+#         fields.append("campaign_id"); ph.append(":cid"); p["cid"]=campaign_id
+#     if _table_has("messages","sender_type") and sender_type:
+#         fields.append("sender_type"); ph.append(":st"); p["st"]=sender_type
+#     if _col_required("messages","created_at"):
+#         fields.append("created_at"); ph.append(":cat"); p["cat"]=utcnow()
+#     execute(f"INSERT INTO messages ({', '.join(fields)}) VALUES ({', '.join(ph)})", p)
 
 def upsert_line_friend(line_uid: str,
                        display_name: Optional[str] = None,
@@ -1676,17 +1695,19 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
                 logging.info(f"[{idx}/{total_targets}] ✓ Success to {uid}")
 
                 # 記錄 outgoing log
-                if mid is not None:
-                    payload_for_log = dict(payload)
-                    payload_for_log.pop("image_base64", None)
-                    payload_for_log.pop("image_url", None)
-                    insert_message(
-                        mid,
-                        "outgoing",
-                        "flex",
-                        {"campaign_id": cid, "payload": payload_for_log},
-                        campaign_id=cid,
-                    )
+                # 註解：群發記錄已在 _create_campaign_row() 和 _add_campaign_recipients() 中處理
+                # insert_message() 使用錯誤的 schema (試圖寫 member_id 到 messages 表)
+                # if mid is not None:
+                #     payload_for_log = dict(payload)
+                #     payload_for_log.pop("image_base64", None)
+                #     payload_for_log.pop("image_url", None)
+                #     insert_message(
+                #         mid,
+                #         "outgoing",
+                #         "flex",
+                #         {"campaign_id": cid, "payload": payload_for_log},
+                #         campaign_id=cid,
+                #     )
 
             except Exception as e:
                 logging.exception(f"[{idx}/{total_targets}] ✗ Failed to {uid}: {e}")
@@ -1697,17 +1718,18 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
             logging.info(f"[{idx}/{total_targets}] ✓ Success to {uid}")
 
             # 紀錄一筆 outgoing 訊息（清掉大欄位避免塞爆）
-            if mid is not None:
-                payload_for_log = dict(payload)
-                payload_for_log.pop("image_base64", None)
-                payload_for_log.pop("image_url", None)
-                insert_message(
-                    mid,
-                    "outgoing",
-                    "text",
-                    {"campaign_id": cid, "payload": payload_for_log},
-                    campaign_id=cid,
-                )
+            # 註解：群發記錄已在 _create_campaign_row() 和 _add_campaign_recipients() 中處理
+            # if mid is not None:
+            #     payload_for_log = dict(payload)
+            #     payload_for_log.pop("image_base64", None)
+            #     payload_for_log.pop("image_url", None)
+            #     insert_message(
+            #         mid,
+            #         "outgoing",
+            #         "text",
+            #         {"campaign_id": cid, "payload": payload_for_log},
+            #         campaign_id=cid,
+            #     )
 
         except Exception as e:
             logging.exception(f"[{idx}/{total_targets}] ✗ Failed to {uid}: {e}")
@@ -2335,8 +2357,9 @@ def push_survey_entry(
 
         try:
             api.push_message(PushMessageRequest(to=uid, messages=msgs))
-            insert_message(r.get("id"), "outgoing", "text",
-                           {"survey_id": survey_id, "payload": {"liff_url": liff_url, "title": title}})
+            # 註解：push_message 是群發性質，記錄應在 campaign 層級，不應使用 insert_message()
+            # insert_message(r.get("id"), "outgoing", "text",
+            #                {"survey_id": survey_id, "payload": {"liff_url": liff_url, "title": title}})
             sent += 1
             logging.info(f"✅ Successfully pushed to {uid}")
         except Exception as e:
@@ -2420,16 +2443,17 @@ def __click():
         except Exception:
             pass
 
-    try:
-        if mid is not None:
-            insert_message(
-                mid,
-                "incoming",
-                "text",
-                {"event": "campaign_click", "campaign_id": cid, "target": to},
-                campaign_id=cid
-            )
-    except Exception:
+    # 註解：campaign_click 追蹤應使用專用的 click tracking 系統，不應使用 insert_message()
+    # try:
+    #     if mid is not None:
+    #         insert_message(
+    #             mid,
+    #             "incoming",
+    #             "text",
+    #             {"event": "campaign_click", "campaign_id": cid, "target": to},
+    #             campaign_id=cid
+    #         )
+    # except Exception:
         pass
 
     try:
@@ -3076,7 +3100,8 @@ def on_follow(event: FollowEvent):
                 )
 
             # 儲存歡迎訊息到舊的 messages 表（兼容性）
-            insert_message(mid, "outgoing", "text", welcome_msg)
+            # 註解：insert_message() 使用錯誤的 schema，改用下方的 conversation_messages
+            # insert_message(mid, "outgoing", "text", welcome_msg)
 
             # === 4. 儲存歡迎訊息到 conversation_messages ===
             try:
@@ -3143,8 +3168,17 @@ def on_postback(event: PostbackEvent):
                 is_following=True,
             )
 
-            # 3) 原本就有的訊息紀錄
-            insert_message(mid, "incoming", "postback", {"data": data})
+            # 3) 原本就有的訊息紀錄到 conversation_messages 表（1:1 對話）
+            thread_id = ensure_thread_for_user(uid)
+            insert_conversation_message(
+                thread_id=thread_id,
+                role="user",
+                direction="incoming",
+                message_type="postback",
+                question=json.dumps({"data": data}),
+                message_source="webhook",
+                status="received"
+            )
         except Exception:
             # 建議留 log，比較好除錯，不要完全吃掉
             logging.exception("[on_postback] update member/line_friends failed")
@@ -3236,8 +3270,17 @@ def on_text(event: MessageEvent):
                 is_following=True,
             )
 
-            # 插入訊息記錄
-            insert_message(mid, "incoming", "text", {"text": text_in})
+            # 插入訊息記錄到 conversation_messages 表（1:1 對話）
+            thread_id = ensure_thread_for_user(uid)
+            insert_conversation_message(
+                thread_id=thread_id,
+                role="user",
+                direction="incoming",
+                message_type="text",
+                question=text_in,
+                message_source="webhook",
+                status="received"
+            )
         except Exception:
             logging.exception("[on_text] Failed to update member/line_friends")
 
@@ -3435,10 +3478,6 @@ def test_push():
     result = push_campaign(payload)
     return jsonify(result)
 
-@app.route("/callback/<line_channel_id>", methods=["POST"])
-def callback_with_id(line_channel_id):
-    return callback()  # 先轉用你原本的處理；之後要做多租戶再改成用 id 驗章
-
 # -------------------------------------------------
 # Serve static files (uploads)
 # -------------------------------------------------
@@ -3451,4 +3490,5 @@ def serve_uploads(filename):
 # -------------------------------------------------
 if __name__ == "__main__":
     # 依你之前：port 3001
-    app.run(host="0.0.0.0", port=3001, debug=True)
+    # 生產環境：停用 debug 和 reloader 避免重啟時路徑問題
+    app.run(host="0.0.0.0", port=3001, debug=False, use_reloader=False)

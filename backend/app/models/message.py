@@ -117,6 +117,9 @@ class MessageDelivery(Base):
 
     __tablename__ = "message_deliveries"
 
+    # 覆蓋 Base 的 id，此表使用 delivery_id 作為主鍵
+    id = None
+
     delivery_id = Column(
         String(50),
         primary_key=True,

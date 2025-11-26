@@ -334,15 +334,22 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
 
   // 建立 WebSocket 連線（優先使用 member?.id，其次使用傳入的 memberId）
   const wsTargetId = member?.id?.toString() || memberId;
-  useWebSocket(wsTargetId, handleNewMessage);
+  const { isConnected: isRealtimeConnected } = useWebSocket(wsTargetId, handleNewMessage);
 
   // Load chat messages from API
   // 支援兩種情況：1) member?.id 存在  2) 只有 memberId
-  const loadChatMessages = useCallback(async (pageNum: number = 1, append: boolean = false) => {
+  const loadChatMessages = useCallback(async (
+    pageNum: number = 1,
+    append: boolean = false,
+    options?: { silent?: boolean },
+  ) => {
     const targetId = member?.id?.toString() || memberId;
     if (!targetId) return;
 
-    setIsLoading(true);
+    const silent = options?.silent ?? false;
+    if (!silent) {
+      setIsLoading(true);
+    }
     try {
       const token = localStorage.getItem('auth_token');
       const response = await fetch(
@@ -377,7 +384,9 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
     } catch (error) {
       console.error('載入聊天訊息失敗:', error);
     } finally {
-      setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+      }
     }
   }, [member?.id, memberId]);
 
@@ -410,6 +419,20 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
       loadChatMessages(1, false);
     }
   }, [member?.id, memberId, loadChatMessages]);
+
+  // Fallback polling when WebSocket 無法建立，仍定期刷新訊息
+  useEffect(() => {
+    const targetId = member?.id?.toString() || memberId;
+    if (!targetId || isRealtimeConnected) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      loadChatMessages(1, false, { silent: true });
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [isRealtimeConnected, member?.id, memberId, loadChatMessages]);
 
   // Auto-scroll to bottom on initial load
   useEffect(() => {

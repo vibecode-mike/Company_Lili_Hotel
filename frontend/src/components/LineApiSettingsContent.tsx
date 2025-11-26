@@ -4,6 +4,7 @@ import { Checkbox } from './ui/checkbox';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useToast } from './ToastProvider';
 import { useLineChannelStatus } from '../contexts/LineChannelStatusContext';
+import { useNavigation } from '../contexts/NavigationContext';
 import imgStep1 from "figma:asset/bf4ffd108c2e836b466874e959531fdf5c9bd8b1.png";
 import imgStep1New from "figma:asset/146d0c4e38c1dc2f05fd32c9740151e0eaaee326.png";
 import imgStep2 from "figma:asset/88076181b402df2ffcba98c51345afaaa2165468.png";
@@ -24,13 +25,15 @@ export default function LineApiSettingsContent() {
   const [loginChannelId, setLoginChannelId] = useState<string>('');
   const [loginChannelSecret, setLoginChannelSecret] = useState<string>('');
   const { isConfigured, refreshStatus } = useLineChannelStatus();
+  const { navigate } = useNavigation();
   const [isSetupComplete, setIsSetupComplete] = useState<boolean>(isConfigured);
-  const [showResetDialog, setShowResetDialog] = useState<boolean>(false);
   const [lineChannelDbId, setLineChannelDbId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [basicId, setBasicId] = useState<string>('');
   const [isFetchingBasicId, setIsFetchingBasicId] = useState<boolean>(false);
   const [basicIdError, setBasicIdError] = useState<string>('');
+  const [isStep5Confirmed, setIsStep5Confirmed] = useState<boolean>(false);
+  const [isVerifyingUsage, setIsVerifyingUsage] = useState<boolean>(false);
   const { showToast } = useToast();
 
   // Refs for each card
@@ -195,18 +198,57 @@ export default function LineApiSettingsContent() {
 
   // 驗證所有必填欄位
   const validateAllFields = () => {
-    if (!channelId.trim() || !channelSecret.trim() || !channelAccessToken.trim() ||
-        !loginChannelId.trim() || !loginChannelSecret.trim()) {
+    const requiredFields = [
+      channelId.trim(),
+      channelSecret.trim(),
+      channelAccessToken.trim(),
+      loginChannelId.trim(),
+      loginChannelSecret.trim(),
+    ];
+    const isValid = requiredFields.every(Boolean);
+    if (!isValid) {
       showToast('填寫內容有誤', 'error');
-      return false;
     }
-    return true;
+    return isValid;
+  };
+
+  // 驗證是否能順利抓取本月訊息用量
+  const verifyMessageUsage = async () => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      throw new Error('尚未登入，請重新登入再試');
+    }
+
+    const response = await fetch('/api/v1/messages/quota', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        target_type: 'all_friends'
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('無法抓取本月訊息用量，請確認設定後再試');
+    }
+
+    const result = await response.json();
+    if (typeof result.used !== 'number') {
+      throw new Error('取得的訊息用量格式不正確，請稍後再試');
+    }
   };
 
   // 處理建立連結
   const handleCreateConnection = async () => {
-    if (validateAllFields()) {
-      const success = await saveSettings({
+    if (!validateAllFields()) {
+      return;
+    }
+
+    setIsVerifyingUsage(true);
+    try {
+      const saved = await saveSettings({
         channel_id: channelId,
         channel_secret: channelSecret,
         channel_access_token: channelAccessToken,
@@ -214,42 +256,23 @@ export default function LineApiSettingsContent() {
         login_channel_secret: loginChannelSecret
       });
 
-      if (success) {
-        setIsSetupComplete(true);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
-    }
-  };
-
-  // 處理重新設定
-  const handleReset = async () => {
-    try {
-      if (lineChannelDbId) {
-        const response = await fetch(`/api/v1/line_channels/${lineChannelDbId}`, {
-          method: 'DELETE'
-        });
-
-        if (!response.ok) {
-          throw new Error('刪除失敗');
-        }
+      if (!saved) {
+        return;
       }
 
-      setShowResetDialog(false);
-      setIsSetupComplete(false);
-      setExpandedCard(1);
-      setLineChannelDbId(null);
-      setChannelId('');
-      setChannelSecret('');
-      setChannelAccessToken('');
-      setLoginChannelId('');
-      setLoginChannelSecret('');
-      await refreshStatus();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      await verifyMessageUsage();
+      setIsSetupComplete(true);
+      showToast('設定完成，帶您前往會員管理頁', 'success');
+      navigate('member-management');
     } catch (error) {
-      console.error('重新設定失敗:', error);
-      showToast('重新設定失敗，請稍後再試', 'error');
+      const message = error instanceof Error ? error.message : '無法抓取本月訊息用量，請確認設定後再試';
+      showToast(message, 'error');
+    } finally {
+      setIsVerifyingUsage(false);
     }
   };
+
+  const canSubmitConnection = Boolean(loginChannelSecret.trim()) && !isVerifyingUsage;
 
   // 如果已完成設定，顯示完成頁面
   if (isSetupComplete) {
@@ -364,66 +387,10 @@ export default function LineApiSettingsContent() {
               </div>
             </div>
 
-            {/* 重新設定按鈕 - 文字連結樣式 */}
-            <div className="flex justify-center">
-              <button
-                onClick={() => setShowResetDialog(true)}
-                className="text-[14px] leading-[20px] text-[#0f6beb] tracking-[-0.1504px] font-medium hover:underline transition-all"
-              >
-                重新設定
-              </button>
-            </div>
+            <p className="text-center text-[14px] leading-[20px] text-[#717182]">
+              如需重新設定或解除連結，請洽系統服務商協助處理。
+            </p>
           </div>
-
-          {/* Reset Dialog */}
-          {showResetDialog && (
-            <>
-              {/* Backdrop */}
-              <div
-                className="fixed inset-0 bg-black/50 z-[9998]"
-                onClick={() => setShowResetDialog(false)}
-              />
-
-              {/* Dialog Content */}
-              <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[9999] w-[90%] max-w-[512px]">
-                <div className="relative bg-white rounded-[10px] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.12),0px_4px_6px_-4px_rgba(0,0,0,0.08)] border border-[rgba(0,0,0,0.08)]">
-                  <div className="absolute border border-[rgba(0,0,0,0.1)] border-solid inset-0 pointer-events-none rounded-[10px]" />
-                  <div className="p-[25px] grid grid-cols-1 grid-rows-[56px_auto] gap-[16px]">
-                    {/* Header */}
-                    <div className="flex flex-col gap-[8px]">
-                      <h2 className="text-[18px] leading-[28px] text-neutral-950 font-semibold tracking-[-0.4395px]">
-                        重新設定
-                      </h2>
-                      <p className="text-[14px] leading-[20px] text-[#717182] tracking-[-0.1504px]">
-                        確定要解除與 @LINE 的連結嗎？解除後需要重新設定所有資料。
-                      </p>
-                    </div>
-
-                    {/* Footer */}
-                    <div className="flex gap-[8px] justify-end">
-                      <button
-                        onClick={() => setShowResetDialog(false)}
-                        className="relative bg-white h-[36px] px-[17px] py-[9px] rounded-[8px] hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="absolute border border-[rgba(0,0,0,0.1)] border-solid inset-0 pointer-events-none rounded-[8px]" />
-                        <span className="text-[14px] leading-[20px] text-neutral-950 font-medium tracking-[-0.1504px]">
-                          取消
-                        </span>
-                      </button>
-                      <button
-                        onClick={handleReset}
-                        className="bg-[#e7000b] h-[36px] px-[16px] py-[8px] rounded-[8px] hover:bg-[#c70009] transition-colors"
-                      >
-                        <span className="text-[14px] leading-[20px] text-white font-medium tracking-[-0.1504px]">
-                          確認解除
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
         </div>
       </div>
     );
@@ -1020,8 +987,14 @@ export default function LineApiSettingsContent() {
                 <div className="bg-white border-[0.8px] border-[#bedbff] rounded-[10px] px-[12.8px] py-[12.8px]">
                   <div className="flex items-center gap-[8px]">
                     <Checkbox
-                      checked={false}
-                      onCheckedChange={() => {}}
+                      checked={isStep5Confirmed}
+                      onCheckedChange={(checked) => {
+                        const isChecked = checked === true;
+                        setIsStep5Confirmed(isChecked);
+                        if (isChecked) {
+                          goToNextCard(6);
+                        }
+                      }}
                       className="size-[16px]"
                     />
                     <span className="text-[14px] leading-[14px] text-neutral-950">我已完成聊天機器人與 Webhook 設定</span>
@@ -1319,15 +1292,15 @@ export default function LineApiSettingsContent() {
 
                 {/* Next Button */}
                 <button
-                  disabled={!loginChannelSecret.trim()}
-                  onClick={() => loginChannelSecret.trim() && handleCreateConnection()}
+                  disabled={!canSubmitConnection}
+                  onClick={canSubmitConnection ? handleCreateConnection : undefined}
                   className={`h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] flex items-center justify-center transition-colors ${
-                    loginChannelSecret.trim()
+                    canSubmitConnection
                       ? 'bg-[#0f6beb] hover:bg-[#0d5bbf]'
                       : 'bg-[#d1d5dc] opacity-50 cursor-not-allowed'
                   }`}
                 >
-                  建立連結
+                  {isVerifyingUsage ? '驗證中...' : '建立連結'}
                 </button>
               </div>
             )}

@@ -91,6 +91,7 @@ export default defineConfig({
           target: 'http://127.0.0.1:8700',
           changeOrigin: true,
           secure: false,
+          ws: true,  // 啟用 WebSocket 代理
         },
       },
     },

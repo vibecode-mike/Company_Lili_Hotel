@@ -2,7 +2,7 @@
  * WebSocket Hook
  * 用於建立和管理與 Backend 的 WebSocket 連線,接收即時訊息推送
  */
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 
 export interface WebSocketMessage {
   type: 'new_message' | 'pong';
@@ -15,17 +15,23 @@ export interface WebSocketMessage {
   };
 }
 
+interface UseWebSocketResult {
+  isConnected: boolean;
+}
+
 export function useWebSocket(
   memberId: string | undefined,
   onMessage: (message: WebSocketMessage) => void
-) {
+): UseWebSocketResult {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
   const pingIntervalRef = useRef<NodeJS.Timeout>();
+  const [isConnected, setIsConnected] = useState(false);
 
   const connect = useCallback(() => {
     if (!memberId) {
       console.log('⏸️  No memberId provided, skipping WebSocket connection');
+      setIsConnected(false);
       return;
     }
 
@@ -43,6 +49,7 @@ export function useWebSocket(
     ws.onopen = () => {
       console.log('✅ WebSocket connected');
       wsRef.current = ws;
+      setIsConnected(true);
 
       // 啟動 ping/pong 保活機制 (每 30 秒)
       pingIntervalRef.current = setInterval(() => {
@@ -72,6 +79,7 @@ export function useWebSocket(
     ws.onclose = (event) => {
       console.log(`🔌 WebSocket closed (code: ${event.code}, reason: ${event.reason})`);
       wsRef.current = null;
+      setIsConnected(false);
 
       // 清理 ping 定時器
       if (pingIntervalRef.current) {
@@ -110,5 +118,5 @@ export function useWebSocket(
     };
   }, [connect]);
 
-  return wsRef.current;
+  return { isConnected };
 }

@@ -188,19 +188,18 @@ class CampaignScheduler:
         ]
 
     async def _send_campaign_job(self, campaign_id: int):
-        """
-        背景任務：發送活動
-
-        Args:
-            campaign_id: 活動 ID
-        """
+        """背景任務：發送已排程的群發訊息"""
         try:
             logger.info(f"🚀 Executing scheduled campaign {campaign_id}")
 
-            from app.services.linebot_service import LineBotService
+            # 動態導入以避免循環依賴
+            from app.database import AsyncSessionLocal
+            from app.services.message_service import MessageService
 
-            linebot_service = LineBotService()
-            result = await linebot_service.send_campaign(campaign_id)
+            message_service = MessageService()
+
+            async with AsyncSessionLocal() as db:
+                result = await message_service.send_message(db, campaign_id)
 
             sent_count = 0
             failed_count = 0
@@ -208,45 +207,27 @@ class CampaignScheduler:
             if isinstance(result, dict):
                 sent_count = result.get("sent", 0) or 0
                 failed_count = result.get("failed", 0) or 0
-                ok = bool(result.get("ok")) and sent_count > 0
+                ok = bool(result.get("ok"))
 
-            from app.database import AsyncSessionLocal
-            from app.models.message import Message
-            from sqlalchemy import select
-
-            async with AsyncSessionLocal() as db:
-                stmt = select(Message).where(Message.id == campaign_id)
-                campaign_result = await db.execute(stmt)
-                campaign = campaign_result.scalar_one_or_none()
-
-                if not campaign:
-                    logger.error(f"❌ Campaign {campaign_id} not found when updating status")
-                    return
-
-                campaign.send_count = sent_count
-
-                if ok:
-                    campaign.send_status = "已發送"
-                    campaign.send_time = datetime.now()
-                    if failed_count:
-                        logger.warning(
-                            "⚠️ Campaign %s sent to %s users with %s failures",
-                            campaign_id,
-                            sent_count,
-                            failed_count,
-                        )
-                    else:
-                        logger.info(
-                            "✅ Campaign %s sent to %s users", campaign_id, sent_count
-                        )
+            if ok:
+                if failed_count:
+                    logger.warning(
+                        "⚠️ Campaign %s sent with partial failures: %s", campaign_id, failed_count
+                    )
                 else:
-                    campaign.send_status = "發送失敗"
-                    logger.warning("⚠️ Campaign %s failed to send during schedule", campaign_id)
-
-                await db.commit()
+                    logger.info(
+                        "✅ Campaign %s sent successfully to %s users", campaign_id, sent_count
+                    )
+            else:
+                logger.warning(
+                    "⚠️ Campaign %s schedule finished but reported failure", campaign_id
+                )
 
         except Exception as e:
-            logger.error(f"❌ Failed to send campaign {campaign_id}: {e}")
+            logger.error(
+                f"❌ Failed to send campaign {campaign_id}: {e}",
+                exc_info=True,
+            )
             # 這裡可以加入重試邏輯或通知管理員
 
     async def _send_survey_job(self, survey_id: int):

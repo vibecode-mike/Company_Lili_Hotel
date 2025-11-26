@@ -30,6 +30,14 @@ class MessageService:
     负责群发消息的创建、更新、发送和配额管理
     """
 
+    @staticmethod
+    def _is_scheduled(message: Message) -> bool:
+        return (
+            message is not None
+            and message.send_status == "已排程"
+            and bool(message.scheduled_datetime_utc)
+        )
+
     # ============================================================
     # line_app 配置
     # ============================================================
@@ -152,6 +160,8 @@ class MessageService:
 
         logger.info(f"✅ 创建消息: ID={message.id}, Status={send_status}")
 
+        await self._sync_scheduler_job(message)
+
         return message
 
     async def update_message(
@@ -173,6 +183,8 @@ class MessageService:
         message = await db.get(Message, message_id)
         if not message:
             raise ValueError(f"消息不存在: ID={message_id}")
+
+        was_scheduled = self._is_scheduled(message)
 
         if 'interaction_tags' in kwargs:
             kwargs['interaction_tags'] = self._normalize_interaction_tags(kwargs.get('interaction_tags'))
@@ -210,6 +222,8 @@ class MessageService:
         message = result.scalar_one()
 
         logger.info(f"✅ 更新消息: ID={message_id}")
+
+        await self._sync_scheduler_job(message, was_scheduled)
 
         return message
 
@@ -339,6 +353,8 @@ class MessageService:
             f"✅ 从草稿发布成功: 新消息 ID={new_message.id}, "
             f"来源草稿 ID={draft_id}, 状态={send_status}"
         )
+
+        await self._sync_scheduler_job(new_message)
 
         return new_message
 
@@ -603,6 +619,50 @@ class MessageService:
 
         return 0
 
+    async def _sync_scheduler_job(self, message: Optional[Message], was_scheduled: bool = False) -> None:
+        if not message or not message.id:
+            return
+
+        is_scheduled_now = self._is_scheduled(message)
+        if is_scheduled_now:
+            await self._schedule_message_job(message.id, message.scheduled_datetime_utc)
+        elif was_scheduled:
+            await self._cancel_message_job(message.id)
+
+    async def _schedule_message_job(self, message_id: int, scheduled_at: Optional[datetime]) -> None:
+        if not scheduled_at:
+            logger.warning(
+                "⚠️ Tried to schedule message %s without scheduled_at", message_id
+            )
+            return
+
+        try:
+            from app.services.scheduler import scheduler  # 動態導入避免循環依賴
+        except Exception as exc:
+            logger.error(f"❌ Scheduler import failed: {exc}")
+            return
+
+        success = await scheduler.schedule_campaign(message_id, scheduled_at)
+        if success:
+            logger.info(
+                "📅 Message %s scheduled for %s", message_id, scheduled_at
+            )
+        else:
+            logger.error(
+                "❌ Failed to register scheduler job for message %s", message_id
+            )
+
+    async def _cancel_message_job(self, message_id: int) -> None:
+        try:
+            from app.services.scheduler import scheduler  # 動態導入避免循環依賴
+        except Exception as exc:
+            logger.error(f"❌ Scheduler import failed when canceling job: {exc}")
+            return
+
+        canceled = await scheduler.cancel_campaign(message_id)
+        if canceled:
+            logger.info(f"🗑️  Removed scheduled job for message {message_id}")
+
     async def send_message(
         self,
         db: AsyncSession,
@@ -631,6 +691,11 @@ class MessageService:
 
         if not message.flex_message_json:
             raise ValueError(f"消息缺少 Flex Message JSON 内容")
+
+        if self._is_scheduled(message):
+            await self._cancel_message_job(message_id)
+            message.scheduled_datetime_utc = None
+            logger.info(f"⏹️  Cleared scheduler job before sending message {message_id}")
 
         # 2. 发送消息
         logger.info(f"📤 准备发送消息: ID={message_id}")
@@ -839,6 +904,9 @@ class MessageService:
             raise ValueError(f"無法刪除狀態為「{message.send_status}」的消息，僅可刪除草稿或已排程消息")
 
         logger.info(f"🗑️ 開始刪除消息: ID={message_id}, 狀態={message.send_status}")
+
+        if self._is_scheduled(message):
+            await self._cancel_message_job(message.id)
 
         # 3. 刪除關聯的 template（如果存在）
         if message.template:
