@@ -79,43 +79,6 @@ class CampaignScheduler:
             logger.error(f"❌ Failed to schedule campaign {campaign_id}: {e}")
             return False
 
-    async def schedule_survey(self, survey_id: int, scheduled_at: datetime) -> bool:
-        """
-        排程發送問卷
-
-        Args:
-            survey_id: 問卷 ID
-            scheduled_at: 排程時間
-
-        Returns:
-            bool: 是否排程成功
-        """
-        try:
-            job_id = f"survey_{survey_id}"
-
-            # 檢查是否已存在相同任務
-            existing_job = self._scheduler.get_job(job_id)
-            if existing_job:
-                logger.warning(f"⚠️  Job {job_id} already exists, replacing...")
-                existing_job.remove()
-
-            # 添加新任務
-            self._scheduler.add_job(
-                func=self._send_survey_job,
-                trigger=DateTrigger(run_date=scheduled_at),
-                args=[survey_id],
-                id=job_id,
-                name=f"Send Survey {survey_id}",
-                replace_existing=True,
-            )
-
-            logger.info(f"✅ Survey {survey_id} scheduled for {scheduled_at}")
-            return True
-
-        except Exception as e:
-            logger.error(f"❌ Failed to schedule survey {survey_id}: {e}")
-            return False
-
     async def cancel_campaign(self, campaign_id: int) -> bool:
         """
         取消活動排程
@@ -140,32 +103,6 @@ class CampaignScheduler:
 
         except Exception as e:
             logger.error(f"❌ Failed to cancel campaign {campaign_id}: {e}")
-            return False
-
-    async def cancel_survey(self, survey_id: int) -> bool:
-        """
-        取消問卷排程
-
-        Args:
-            survey_id: 問卷 ID
-
-        Returns:
-            bool: 是否取消成功
-        """
-        try:
-            job_id = f"survey_{survey_id}"
-            job = self._scheduler.get_job(job_id)
-
-            if job:
-                job.remove()
-                logger.info(f"✅ Survey {survey_id} schedule canceled")
-                return True
-            else:
-                logger.warning(f"⚠️  Survey {survey_id} schedule not found")
-                return False
-
-        except Exception as e:
-            logger.error(f"❌ Failed to cancel survey {survey_id}: {e}")
             return False
 
     def get_scheduled_jobs(self) -> list:
@@ -233,28 +170,6 @@ class CampaignScheduler:
                 exc_info=True,
             )
             # 這裡可以加入重試邏輯或通知管理員
-
-    async def _send_survey_job(self, survey_id: int) -> None:
-        """背景任務：發送問卷
-
-        Args:
-            survey_id: 問卷 ID
-        """
-        try:
-            logger.info(f"🚀 Executing scheduled survey {survey_id}")
-
-            # 動態導入避免循環依賴
-            from app.services.linebot_service import LineBotService
-
-            linebot_service = LineBotService()
-            await linebot_service.send_survey(survey_id)
-
-            logger.info(f"✅ Survey {survey_id} sent successfully")
-
-        except Exception as e:
-            logger.error(f"❌ Failed to send survey {survey_id}: {e}")
-            # 這裡可以加入重試邏輯或通知管理員
-
 
     async def restore_scheduled_jobs(self) -> None:
         """從資料庫恢復所有待發送的排程任務

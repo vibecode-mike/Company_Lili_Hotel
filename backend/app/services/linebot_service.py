@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 from app.database import AsyncSessionLocal
 from app.models.message import Message
-from app.models.survey import Survey, SurveyStatus
 from app.models.template import MessageTemplate
 from app.models.tag import MemberTag
 from app.utils.image_handler import file_path_to_base64
@@ -69,8 +68,6 @@ class LineBotService:
             # 驗證必要的函數存在
             if not hasattr(hotel_bot_module, 'push_campaign'):
                 raise RuntimeError("hotel_bot_module.push_campaign function not found")
-            if not hasattr(hotel_bot_module, 'push_survey_entry'):
-                raise RuntimeError("hotel_bot_module.push_survey_entry function not found")
 
             logger.info("✅ LINE Bot service initialized successfully")
         except Exception as e:
@@ -162,61 +159,6 @@ class LineBotService:
             except Exception as e:
                 await db.rollback()
                 error_msg = f"Failed to send campaign: {str(e)}"
-                logger.error(f"❌ {error_msg}")
-                return {"ok": False, "sent": 0, "error": error_msg}
-
-    async def send_survey(self, survey_id: int) -> Dict[str, Any]:
-        """
-        發送問卷到 LINE
-
-        Args:
-            survey_id: 問卷 ID
-
-        Returns:
-            Dict: 發送結果 {ok: bool, sent: int, error: str}
-        """
-        async with AsyncSessionLocal() as db:
-            try:
-                logger.info(f"📤 Sending survey {survey_id}...")
-
-                # 1. 讀取 survey 及題目
-                stmt = (
-                    select(Survey)
-                    .options(selectinload(Survey.questions))
-                    .where(Survey.id == survey_id)
-                )
-                result = await db.execute(stmt)
-                survey = result.scalar_one_or_none()
-
-                if not survey:
-                    error_msg = f"Survey {survey_id} not found"
-                    logger.error(f"❌ {error_msg}")
-                    return {"ok": False, "sent": 0, "error": error_msg}
-
-                # 2. 構建 payload
-                payload = self._build_survey_payload(survey)
-
-                # 3. 獲取 line_app 模組並調用 push_survey_entry
-                hotel_bot_module = _get_line_app_module()
-                sent_count = hotel_bot_module.push_survey_entry(
-                    survey_id=survey_id,
-                    title=survey.name,
-                    notification_message=survey.description
-                )
-
-                # 4. 更新資料庫狀態 (確保狀態為 PUBLISHED 且記錄發送時間)
-                survey.status = SurveyStatus.PUBLISHED
-                survey.sent_at = datetime.now()
-                await db.commit()
-
-                logger.info(
-                    f"✅ Survey {survey_id} sent to {sent_count} users"
-                )
-                return {"ok": True, "sent": sent_count}
-
-            except Exception as e:
-                await db.rollback()
-                error_msg = f"Failed to send survey: {str(e)}"
                 logger.error(f"❌ {error_msg}")
                 return {"ok": False, "sent": 0, "error": error_msg}
 
@@ -410,54 +352,3 @@ class LineBotService:
         logger.info(f"📦 Built campaign payload: {payload.get('name')}")
         return payload
 
-    def _build_survey_payload(self, survey: Survey) -> Dict[str, Any]:
-        """
-        構建 survey payload 給 HotelBot
-
-        Args:
-            survey: Survey 物件
-
-        Returns:
-            Dict: HotelBot 所需的 payload 格式
-        """
-        # 基本資料
-        payload = {
-            "name": survey.name,
-            "title": survey.name,
-            "description": survey.description,
-            "target_audience": survey.target_audience.value
-            if hasattr(survey.target_audience, "value")
-            else str(survey.target_audience),
-        }
-
-        # 處理題目
-        questions = []
-        for q in sorted(survey.questions, key=lambda x: x.order):
-            question_data = {
-                "question_text": q.question_text,
-                "question_type": q.question_type.value
-                if hasattr(q.question_type, "value")
-                else str(q.question_type),
-                "options": q.options or [],
-                "is_required": q.is_required,
-                "order": q.order,
-            }
-
-            # 處理圖片（如果有）
-            if q.image_base64:
-                question_data["image_base64"] = q.image_base64
-            elif q.image_link:
-                # 如果是檔案路徑，轉為 Base64
-                if q.image_link.startswith("/uploads"):
-                    question_data["image_base64"] = file_path_to_base64(q.image_link)
-                else:
-                    question_data["image_link"] = q.image_link
-
-            questions.append(question_data)
-
-        payload["questions"] = questions
-
-        logger.info(
-            f"📦 Built survey payload: {payload.get('name')} ({len(questions)} questions)"
-        )
-        return payload
