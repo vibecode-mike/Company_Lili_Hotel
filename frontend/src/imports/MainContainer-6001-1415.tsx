@@ -6,6 +6,7 @@ import TooltipComponent from "./Tooltip";
 import { PageHeaderWithBreadcrumb } from "../components/common/Breadcrumb";
 import { TextIconButton, ArrowRightIcon, Tag } from "../components/common";
 import { useMembers } from "../contexts/MembersContext";
+import { formatMemberDateTime, getLatestMemberChatTimestamp } from "../utils/memberTime";
 
 /**
  * 會員管理列表頁面組件
@@ -478,14 +479,14 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Membe
           </div>
           <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[140px]" data-name="Table/List-atomic">
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">{member.createTime || '-'}</p>
+              <p className="leading-[1.5] whitespace-pre">{formatMemberDateTime(member.createTime) || '-'}</p>
             </div>
           </div>
           <div className="basis-0 grow min-h-px min-w-px relative shrink-0" data-name="Table/List-atomic">
             <div className="flex flex-row items-center size-full">
               <div className="box-border content-stretch flex items-center px-[12px] py-0 relative w-full">
                 <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-                  <p className="leading-[1.5]">{member.lastChatTime || '-'}</p>
+                  <p className="leading-[1.5]">{formatMemberDateTime(getLatestMemberChatTimestamp(member)) || '-'}</p>
                 </div>
               </div>
             </div>

@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models.member import Member
 from app.models.tag import MemberTag, MemberInteractionTag
 from app.models.user import User
+from app.models.chat_log import ChatLog
 from app.schemas.member import (
     MemberCreate,
     MemberUpdate,
@@ -108,8 +109,24 @@ async def get_members(
         for tag in interaction_tags_result.scalars():
             tags.append(TagInfo(id=tag.id, name=tag.tag_name, type="interaction"))
 
+        # 查詢該會員最後一條聊天訊息的時間
+        last_chat_time = None
+        if member.line_uid:
+            last_chat_result = await db.execute(
+                select(ChatLog.created_at)
+                .where(ChatLog.user_id == member.line_uid)
+                .order_by(ChatLog.created_at.desc())
+                .limit(1)
+            )
+            last_chat_row = last_chat_result.scalar()
+            if last_chat_row:
+                last_chat_time = last_chat_row
+
         member_dict = MemberListItem.model_validate(member).model_dump()
         member_dict["tags"] = tags
+        # 使用聊天記錄的時間，如果沒有則用原本的 last_interaction_at
+        if last_chat_time:
+            member_dict["last_interaction_at"] = last_chat_time
         items.append(member_dict)
 
     page_response = PageResponse.create(
@@ -192,6 +209,19 @@ async def get_member(
     for tag_id, tag_name in interaction_tags_result.all():
         tags.append(TagInfo(id=tag_id, name=tag_name, type="interaction"))
 
+    # 查詢該會員最後一條聊天訊息的時間
+    last_chat_time = member.last_interaction_at
+    if member.line_uid:
+        last_chat_result = await db.execute(
+            select(ChatLog.created_at)
+            .where(ChatLog.user_id == member.line_uid)
+            .order_by(ChatLog.created_at.desc())
+            .limit(1)
+        )
+        last_chat_row = last_chat_result.scalar()
+        if last_chat_row:
+            last_chat_time = last_chat_row
+
     # 處理 None 值的欄位
     member_data = {
         "id": member.id,
@@ -210,7 +240,7 @@ async def get_member(
         "receive_notification": member.receive_notification if member.receive_notification is not None else True,
         "internal_note": member.internal_note,
         "created_at": member.created_at,
-        "last_interaction_at": member.last_interaction_at,
+        "last_interaction_at": last_chat_time,
         "tags": tags,
     }
 
