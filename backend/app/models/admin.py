@@ -36,18 +36,6 @@ class Admin(Base):
     admin_roles = relationship(
         "AdminRole", back_populates="admin", cascade="all, delete-orphan"
     )
-    line_oa_configs = relationship(
-        "LineOAConfig", back_populates="admin", cascade="all, delete-orphan"
-    )
-    login_configs = relationship(
-        "LoginConfig", back_populates="admin", cascade="all, delete-orphan"
-    )
-    login_sessions = relationship(
-        "LoginSession", back_populates="admin", cascade="all, delete-orphan"
-    )
-    system_authorizations = relationship(
-        "SystemAuthorization", back_populates="admin", cascade="all, delete-orphan"
-    )
 
 
 class Role(Base):

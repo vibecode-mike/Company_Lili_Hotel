@@ -16,7 +16,6 @@ from app.models.tag_trigger_log import TagTriggerLog
 from app.models.chat_log import ChatLog
 from app.models.tag_rule import TagRule
 from app.models.admin import Admin, Role, Permission, AdminRole, RolePermission
-from app.models.line_config import LineOAConfig, LoginConfig, LoginSession, SystemAuthorization
 from app.models.survey import Survey, SurveyTemplate, SurveyQuestion, SurveyResponse
 from app.models.tracking import ComponentInteractionLog, InteractionType, ClickTrackingDemo
 from app.models.line_channel import LineChannel
@@ -47,10 +46,6 @@ __all__ = [
     "Permission",
     "AdminRole",
     "RolePermission",
-    "LineOAConfig",
-    "LoginConfig",
-    "LoginSession",
-    "SystemAuthorization",
     "Survey",
     "SurveyTemplate",
     "SurveyQuestion",
