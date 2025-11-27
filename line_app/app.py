@@ -34,6 +34,30 @@ if str(BASE_DIR) in sys.path:
     sys.path.remove(str(BASE_DIR))
 sys.path.insert(0, str(BASE_DIR))
 
+# 使用共用的配置和資料庫模組
+from config import (
+    LINE_CHANNEL_SECRET,
+    LINE_CHANNEL_ACCESS_TOKEN,
+    OPENAI_API_KEY,
+    OPENAI_MODEL,
+    MEMORY_TURNS,
+    PUBLIC_BASE,
+    LIFF_ID,
+    LIFF_ID_OPEN,
+    AUTO_BACKFILL_FRIENDS,
+    MYSQL_DB,
+    ASSET_LOCAL_DIR,
+    ASSET_ROUTE_PREFIX,
+)
+from db import (
+    engine,
+    fetchone,
+    fetchall,
+    execute,
+    table_has_column as _table_has,
+    column_is_required as _col_required,
+)
+
 # 現在才開始匯入同目錄模組
 import usage_monitor #群發餘額量顯示
 from member_liff import bp as member_liff_bp # 載入 LIFF 會員表單的 Blueprint 模組
@@ -43,7 +67,6 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote_plus, quote
 from linebot.exceptions import InvalidSignatureError
 
-from dotenv import load_dotenv
 from flask import Flask, request, abort, jsonify, render_template_string, redirect, send_from_directory
 
 # LINE Bot SDK v3
@@ -74,37 +97,9 @@ from linebot.v3.messaging.models import FlexContainer
 from openai import OpenAI
 
 # SQLAlchemy Core
-from sqlalchemy import create_engine, text as sql_text
-from sqlalchemy.engine import Engine
 from sqlalchemy import text
-# -------------------------------------------------
-# env
-# -------------------------------------------------
-load_dotenv()
 
-LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET", "")
-LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
-MEMORY_TURNS = int(os.getenv("MEMORY_TURNS", "5"))
-PUBLIC_BASE = (os.getenv("PUBLIC_BASE") or "").rstrip("/")
-LIFF_ID = os.getenv("LIFF_ID", "").strip()
-LIFF_ID_OPEN = os.getenv("LIFF_ID_OPEN", "").strip()
-
-AUTO_BACKFILL_FRIENDS = os.getenv("AUTO_BACKFILL_FRIENDS", "1") == "1"  # 抓全部 LINE 好友的 backfill 開關
-
-# DB（沿用你原先的命名與預設，避免 (using password: NO)）
-MYSQL_USER = os.getenv("MYSQL_USER", os.getenv("DB_USER", "root"))
-MYSQL_PASS = os.getenv("MYSQL_PASS", os.getenv("DB_PASS", "123456"))
-MYSQL_HOST = os.getenv("MYSQL_HOST", os.getenv("DB_HOST", "192.168.50.123"))
-MYSQL_PORT = int(os.getenv("MYSQL_PORT", os.getenv("DB_PORT", "3306")))
-MYSQL_DB   = os.getenv("MYSQL_DB",   os.getenv("DB_NAME", "lili_hotel"))
-
-DATABASE_URL = f"mysql+pymysql://{MYSQL_USER}:{quote_plus(MYSQL_PASS)}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DB}?charset=utf8mb4"
-
-# 本機存 Base64 圖檔；Nginx 可對外 /uploads → /data2/lili_hotel/backend/public/uploads
-ASSET_LOCAL_DIR    = "/data2/lili_hotel/backend/public/uploads"
-ASSET_ROUTE_PREFIX = "/uploads"
+# 確保上傳目錄存在
 os.makedirs(ASSET_LOCAL_DIR, exist_ok=True)
 
 # -------------------------------------------------
@@ -216,8 +211,7 @@ messaging_api = MessagingApi(api_client)
 # OpenAI
 oai = OpenAI(api_key=OPENAI_API_KEY)
 
-# DB
-engine: Engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=3600, future=True)
+# DB engine 已在 db.py 中建立並匯入
 
 def utcnow():
     return datetime.datetime.utcnow()
@@ -453,36 +447,8 @@ def _map_question_for_liff(q: dict) -> dict:
     return mapped
 
 
-def _table_has(table: str, col: str) -> bool:
-    with engine.begin() as conn:
-        r = conn.execute(text("""
-            SELECT COUNT(*) FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA=:db AND TABLE_NAME=:t AND COLUMN_NAME=:c
-        """), {"db": MYSQL_DB, "t": table, "c": col}).scalar()
-    return bool(r)
-
-def _col_required(table: str, col: str) -> bool:
-    with engine.begin() as conn:
-        r = conn.execute(text("""
-            SELECT IS_NULLABLE, COLUMN_DEFAULT
-              FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA=:db AND TABLE_NAME=:t AND COLUMN_NAME=:c
-        """), {"db": MYSQL_DB, "t": table, "c": col}).mappings().first()
-    if not r: return False
-    return (r["IS_NULLABLE"] == "NO" and r["COLUMN_DEFAULT"] is None)
-
-def fetchall(sql, p=None):
-    with engine.begin() as conn:
-        return [dict(r) for r in conn.execute(text(sql), p or {}).mappings().all()]
-
-def fetchone(sql, p=None):
-    with engine.begin() as conn:
-        r = conn.execute(text(sql), p or {}).mappings().first()
-        return dict(r) if r else None
-
-def execute(sql, p=None):
-    with engine.begin() as conn:
-        conn.execute(text(sql), p or {})
+# DB helpers (_table_has, _col_required, fetchall, fetchone, execute)
+# 已移至共用模組 db.py
 
 # [新增] 依 LINE 使用者建立/取得 thread（用 userId 當 thread_id，簡單且穩定）
 def ensure_thread_for_user(line_uid: str) -> str:

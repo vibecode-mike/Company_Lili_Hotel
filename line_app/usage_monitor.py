@@ -5,54 +5,27 @@
 #
 # 說明：
 # - 這支檔案獨立於 app.py，透過 Blueprint 方式被 app 載入。
-# - 不直接 import app.py 以避免循環依賴；自行建立最小 DB 連線。
+# - 使用共用的 config.py 和 db.py 模組。
 # - 若查不到指定頻道的 token，會回退至 .env 的 LINE_CHANNEL_ACCESS_TOKEN。
 
 from __future__ import annotations
 
-import os
 import datetime as dt
 from typing import Optional, Dict, Any
 
 import requests
-from flask import Blueprint, request, jsonify, render_template
-from dotenv import load_dotenv
+from flask import Blueprint, request, jsonify
 
-from sqlalchemy import create_engine, text
-from urllib.parse import quote_plus
-
-load_dotenv()
+# 使用共用的配置和資料庫模組
+from config import LINE_CHANNEL_ACCESS_TOKEN
+from db import fetchone, fetchall
 
 bp = Blueprint("usage_monitor", __name__)
 
 # -------------------------------------------------
-# DB 連線（與 app.py 相同環境變數，保持一致）
-# -------------------------------------------------
-MYSQL_USER = os.getenv("MYSQL_USER", os.getenv("DB_USER", "root"))
-MYSQL_PASS = os.getenv("MYSQL_PASS", os.getenv("DB_PASS", "123456"))
-MYSQL_HOST = os.getenv("MYSQL_HOST", os.getenv("DB_HOST", "127.0.0.1"))
-MYSQL_PORT = int(os.getenv("MYSQL_PORT", os.getenv("DB_PORT", "3306")))
-MYSQL_DB   = os.getenv("MYSQL_DB",   os.getenv("DB_NAME", "lili_hotel"))
-
-DATABASE_URL = (
-    f"mysql+pymysql://{MYSQL_USER}:{quote_plus(MYSQL_PASS)}@"
-    f"{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DB}?charset=utf8mb4"
-)
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=3600, future=True)
-
-def fetchone(sql: str, p: dict | None = None) -> dict | None:
-    with engine.begin() as conn:
-        r = conn.execute(text(sql), p or {}).mappings().first()
-        return dict(r) if r else None
-
-def fetchall(sql: str, p: dict | None = None) -> list[dict]:
-    with engine.begin() as conn:
-        return [dict(r) for r in conn.execute(text(sql), p or {}).mappings().all()]
-
-# -------------------------------------------------
 # LINE Token 解析（多租戶）
 # -------------------------------------------------
-ENV_FALLBACK_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "").strip()
+ENV_FALLBACK_TOKEN = LINE_CHANNEL_ACCESS_TOKEN
 
 def resolve_access_token(channel_id: Optional[str]) -> Optional[str]:
     """

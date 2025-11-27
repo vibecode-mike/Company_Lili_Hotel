@@ -32,8 +32,8 @@
 # ----------------------------------------------------------------------
 
 from __future__ import annotations
-import os
 from flask import Blueprint, request, jsonify
+from sqlalchemy import text
 
 from liff_page import (
     exchange_access_token,
@@ -43,33 +43,16 @@ from liff_page import (
     get_all_valid_user_ids,
     multicast_liff_url,
 )
-from sqlalchemy import create_engine, text
-from urllib.parse import quote_plus
+
+# 使用共用的配置和資料庫模組
+from config import (
+    DEFAULT_MEMBER_FORM_URL as DEFAULT_FORM_URL,
+    DEFAULT_LIFF_ID as ENV_DEFAULT_LIFF_ID,
+    LINE_CHANNEL_ACCESS_TOKEN as ENV_MSG_ACCESS_TOKEN,
+)
+from db import engine
 
 bp = Blueprint("member_liff", __name__)
-
-# 問卷 HTML 放 /uploads（對外 URL 寫在這）
-DEFAULT_FORM_URL = os.getenv(
-    "DEFAULT_MEMBER_FORM_URL",
-    "http://192.168.50.123:3001/uploads/member_form.html"  # ← 實際問卷頁網址
-)
-
-# 所有客戶共用的問卷 LIFF App（請在 .env 設 DEFAULT_LIFF_ID）
-ENV_DEFAULT_LIFF_ID = (os.getenv("DEFAULT_LIFF_ID") or "").strip()
-ENV_MSG_ACCESS_TOKEN = (os.getenv("LINE_CHANNEL_ACCESS_TOKEN") or "").strip()
-
-# === 以下 DB 相關：若你要對 ryan_line_channels 存/取 liff_id，可沿用 ===
-MYSQL_USER = os.getenv("MYSQL_USER", os.getenv("DB_USER", "root"))
-MYSQL_PASS = os.getenv("MYSQL_PASS", os.getenv("DB_PASS", "123456"))
-MYSQL_HOST = os.getenv("MYSQL_HOST", os.getenv("DB_HOST", "127.0.0.1"))
-MYSQL_PORT = int(os.getenv("MYSQL_PORT", os.getenv("DB_PORT", "3306")))
-MYSQL_DB   = os.getenv("MYSQL_DB",   os.getenv("DB_NAME", "lili_hotel"))
-
-DATABASE_URL = (
-    f"mysql+pymysql://{MYSQL_USER}:{quote_plus(MYSQL_PASS)}@"
-    f"{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DB}?charset=utf8mb4"
-)
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=3600, future=True)
 
 
 def db_get_liff_id(channel_id: str) -> str | None:

@@ -5,31 +5,15 @@
 # - 用 Messaging API 群發 LIFF 連結
 # - 從 DB 撈出有效 userId（U 開頭、長度 33）
 
-import os, math, requests
+import math
+import requests
 from typing import List, Optional, Dict, Any
 
 from linebot import LineBotApi
 from linebot.models import TextSendMessage
 
-from sqlalchemy import create_engine, text
-from urllib.parse import quote_plus
-
-# ===== DB 連線（沿用你現有的環境參數）=====
-MYSQL_USER = os.getenv("MYSQL_USER", os.getenv("DB_USER", "root"))
-MYSQL_PASS = os.getenv("MYSQL_PASS", os.getenv("DB_PASS", "123456"))
-MYSQL_HOST = os.getenv("MYSQL_HOST", os.getenv("DB_HOST", "127.0.0.1"))
-MYSQL_PORT = int(os.getenv("MYSQL_PORT", os.getenv("DB_PORT", "3306")))
-MYSQL_DB   = os.getenv("MYSQL_DB",   os.getenv("DB_NAME", "lili_hotel"))
-
-DATABASE_URL = (
-    f"mysql+pymysql://{MYSQL_USER}:{quote_plus(MYSQL_PASS)}@"
-    f"{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DB}?charset=utf8mb4"
-)
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=3600, future=True)
-
-def fetchall(sql: str, p: dict | None = None) -> list[dict]:
-    with engine.begin() as conn:
-        return [dict(r) for r in conn.execute(text(sql), p or {}).mappings().all()]
+# 使用共用的配置和資料庫模組
+from db import fetchall
 
 # ===== OAuth2：用 Channel ID + Secret 取 access_token =====
 # ===== OAuth2：用 Login/LIFF Channel ID + Secret 換短期 access_token =====
