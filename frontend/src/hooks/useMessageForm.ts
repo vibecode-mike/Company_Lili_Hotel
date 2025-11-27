@@ -1,8 +1,8 @@
 /**
  * useMessageForm Hook
- * 
+ *
  * 用途：管理 MessageCreation 组件的复杂表单状态
- * 
+ *
  * 优化效果：
  * - 将 20+ 个 useState 合并为 1 个 useReducer
  * - 代码量减少 62%
@@ -11,6 +11,8 @@
  */
 
 import { useReducer, useCallback } from 'react';
+import type { FlexMessage, FlexBubble } from '../types/api';
+import type { CarouselCard } from '../components/CarouselMessageEditor';
 
 // ===== 类型定义 =====
 
@@ -31,8 +33,8 @@ export interface CardData {
   description: string;
   messageType: 'text' | 'carousel' | 'flex';
   textMessage: string;
-  carouselCards: any[];
-  flexMessage: any;
+  carouselCards: CarouselCard[];
+  flexMessage: FlexMessage | null;
 }
 
 export type TemplateType = 'select' | 'text' | 'image' | 'carousel' | 'imagemap' | 'flex';
@@ -56,7 +58,7 @@ export interface MessageFormState {
   scheduleType: ScheduleType;
   targetType: TargetType;
   messageText: string;
-  flexMessageJson: any;
+  flexMessageJson: FlexMessage | null;
   
   // 筛选条件
   selectedFilterTags: Tag[];
@@ -147,7 +149,7 @@ export type MessageFormAction =
   | { type: 'SET_SCHEDULE_TYPE'; payload: ScheduleType }
   | { type: 'SET_TARGET_TYPE'; payload: TargetType }
   | { type: 'SET_MESSAGE_TEXT'; payload: string }
-  | { type: 'SET_FLEX_MESSAGE_JSON'; payload: any }
+  | { type: 'SET_FLEX_MESSAGE_JSON'; payload: FlexMessage | null }
   
   // 筛选条件
   | { type: 'SET_FILTER_TAGS'; payload: Tag[] }
@@ -328,7 +330,7 @@ export function useMessageForm(initialData?: Partial<MessageFormState>) {
     setScheduleType: useCallback((type: ScheduleType) => dispatch({ type: 'SET_SCHEDULE_TYPE', payload: type }), []),
     setTargetType: useCallback((type: TargetType) => dispatch({ type: 'SET_TARGET_TYPE', payload: type }), []),
     setMessageText: useCallback((text: string) => dispatch({ type: 'SET_MESSAGE_TEXT', payload: text }), []),
-    setFlexMessageJson: useCallback((json: any) => dispatch({ type: 'SET_FLEX_MESSAGE_JSON', payload: json }), []),
+    setFlexMessageJson: useCallback((json: FlexMessage | null) => dispatch({ type: 'SET_FLEX_MESSAGE_JSON', payload: json }), []),
     
     // 筛选条件
     setFilterTags: useCallback((tags: Tag[]) => dispatch({ type: 'SET_FILTER_TAGS', payload: tags }), []),

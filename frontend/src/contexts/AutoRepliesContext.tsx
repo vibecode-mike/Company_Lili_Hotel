@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
+import type { BackendAutoReply, BackendKeyword, BackendReplyMessage } from '../types/api';
 
 /**
  * 自動回覆數據 Context
@@ -73,16 +74,16 @@ function sortByCreatedAt(list: AutoReply[]) {
 
 const generateTempId = () => `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-function mapAutoResponse(item: any): AutoReply {
+function mapAutoResponse(item: BackendAutoReply & { content?: string; messages?: BackendReplyMessage[] }): AutoReply {
   const keywords = Array.isArray(item?.keywords)
     ? item.keywords
-        .map((kw: any) => kw?.keyword ?? kw?.name ?? '')
+        .map((kw: BackendKeyword) => kw?.keyword ?? kw?.name ?? '')
         .filter((kw: string) => kw)
     : [];
   const messages = Array.isArray(item?.messages) && item.messages.length > 0
     ? item.messages
-        .sort((a: any, b: any) => (a?.sequence_order ?? 0) - (b?.sequence_order ?? 0))
-        .map((msg: any) => msg?.content ?? '')
+        .sort((a: BackendReplyMessage, b: BackendReplyMessage) => (a?.sequence_order ?? 0) - (b?.sequence_order ?? 0))
+        .map((msg: BackendReplyMessage) => msg?.content ?? '')
         .filter((msg: string) => msg)
     : (item?.content ? [item.content] : []);
 

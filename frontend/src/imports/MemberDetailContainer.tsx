@@ -18,20 +18,31 @@ import { useMembers } from "../contexts/MembersContext";
 import { useAuth } from "../components/auth/AuthContext";
 import type { Member, MemberData } from "../types/member";
 export type { MemberData } from "../types/member";
+import type { BackendMember, BackendTag } from "../types/api";
 import { formatMemberDateTime, getLatestMemberChatTimestamp } from "../utils/memberTime";
 
-const mapApiMemberToMemberData = (apiMember: any, fallback?: MemberData): MemberData => {
+interface MessageWithTimestamp {
+  timestamp?: string;
+  created_at?: string;
+  createdAt?: string;
+  sent_at?: string;
+  sentAt?: string;
+  date?: string;
+  time?: string;
+}
+
+const mapApiMemberToMemberData = (apiMember: BackendMember, fallback?: MemberData): MemberData => {
   const rawTags = Array.isArray(apiMember?.tags)
     ? apiMember.tags
     : fallback?.tagDetails || [];
   const memberTags =
     rawTags
-      .filter((tag: any) => tag?.type === 'member')
-      .map((tag: any) => tag.name) || [];
+      .filter((tag: BackendTag) => tag?.type === 'member')
+      .map((tag: BackendTag) => tag.name) || [];
   const interactionTags =
     rawTags
-      .filter((tag: any) => tag?.type === 'interaction')
-      .map((tag: any) => tag.name) || [];
+      .filter((tag: BackendTag) => tag?.type === 'interaction')
+      .map((tag: BackendTag) => tag.name) || [];
   const combinedTags = Array.from(new Set([...(memberTags || []), ...(interactionTags || [])]));
 
   return {
@@ -83,7 +94,7 @@ const mapMemberToMemberData = (memberSource: Member, fallback?: MemberData): Mem
   status: fallback?.status ?? 'active',
 });
 
-const extractMessageTimestamp = (message?: any): string | undefined => {
+const extractMessageTimestamp = (message?: MessageWithTimestamp): string | undefined => {
   if (!message) return undefined;
   const raw =
     message?.timestamp ??

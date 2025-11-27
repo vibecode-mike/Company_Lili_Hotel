@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, ReactNode, useCallback, use
 import { toast } from 'sonner';
 import { useAuth } from '../components/auth/AuthContext';
 import { normalizeInteractionTags } from '../utils/interactionTags';
+import type { BackendMessage, FlexMessage } from '../types/api';
 
 /**
  * 訊息數據 Context
@@ -23,7 +24,7 @@ export interface Message {
   sendTime: string;
   createdAt: string;
   updatedAt: string;
-  content?: any; // Flex Message 內容
+  content?: FlexMessage;
   thumbnail?: string;
 }
 
@@ -61,7 +62,7 @@ interface MessagesProviderProps {
 }
 
 // 轉換後端數據為前端格式
-const transformBackendMessage = (item: any): Message => {
+const transformBackendMessage = (item: BackendMessage): Message => {
   return {
     id: item.id.toString(),
     title: item.message_title || item.template?.name || '未命名訊息',

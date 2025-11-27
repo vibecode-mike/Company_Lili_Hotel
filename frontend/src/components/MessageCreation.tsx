@@ -30,6 +30,7 @@ import { ScheduleSettings, TargetAudienceSelector, PreviewPanel } from './messag
 import type { Tag } from './message-creation';
 import { useMessages } from '../contexts/MessagesContext';
 import { CAROUSEL_STRUCTURE_FIELDS } from './carouselStructure';
+import type { FlexMessage, FlexBubble } from '../types/api';
 
 // Custom DialogContent without close button
 function DialogContentNoClose({
@@ -69,7 +70,7 @@ interface MessageCreationProps {
     scheduleType: string;
     targetType: string;
     templateType: string;
-    flexMessageJson?: any;
+    flexMessageJson?: FlexMessage;
     selectedFilterTags?: Array<{ id: string; name: string }>;
     filterCondition?: 'include' | 'exclude';
     scheduledDate?: Date;
@@ -92,7 +93,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   const [messageText, setMessageText] = useState('');
   const [activeTab, setActiveTab] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
-  const [flexMessageJson, setFlexMessageJson] = useState<any>(null);
+  const [flexMessageJson, setFlexMessageJson] = useState<FlexMessage | null>(null);
   const [selectedFilterTags, setSelectedFilterTags] = useState<Array<{ id: string; name: string }>>([]);
   const [filterCondition, setFilterCondition] = useState<'include' | 'exclude'>('include');
   const [scheduledDate, setScheduledDate] = useState<Date | undefined>(undefined);

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
-import type { Member } from '../types/member';
+import type { Member, TagInfo } from '../types/member';
+import type { BackendMember, BackendTag } from '../types/api';
 
 /**
  * 會員數據 Context
@@ -39,21 +40,21 @@ const formatDateTime = (value?: string | null): string => {
   return `${year}-${month}-${day} ${hours}:${minutes}`;
 };
 
-const transformBackendMember = (item: any): Member => {
+const transformBackendMember = (item: BackendMember): Member => {
   // 保留完整標籤資訊（包含 source）
-  const tagDetails = (item.tags || []).map((tag: any) => ({
-    id: tag.id,
+  const tagDetails: (TagInfo & { source?: string })[] = (item.tags || []).map((tag: BackendTag & { source?: string }) => ({
+    id: tag.id || 0,
     name: tag.name,
     type: tag.type,
     source: tag.source,
   }));
 
   const memberTags = (item.tags || [])
-    .filter((tag: any) => tag.type === 'member')
-    .map((tag: any) => tag.name);
+    .filter((tag: BackendTag) => tag.type === 'member')
+    .map((tag: BackendTag) => tag.name);
   const interactionTags = (item.tags || [])
-    .filter((tag: any) => tag.type === 'interaction')
-    .map((tag: any) => tag.name);
+    .filter((tag: BackendTag) => tag.type === 'interaction')
+    .map((tag: BackendTag) => tag.name);
   const combinedTags = Array.from(new Set([...(memberTags || []), ...(interactionTags || [])]));
 
   return {
