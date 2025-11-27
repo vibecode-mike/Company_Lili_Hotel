@@ -40,6 +40,7 @@ export default function MemberDetailPage() {
     tags: member.tags,
     memberTags: member.memberTags,           // ✅ 添加會員標籤
     interactionTags: member.interactionTags, // ✅ 添加互動標籤
+    tagDetails: member.tagDetails,           // ✅ 添加標籤詳細資訊
     phone: member.phone,
     email: member.email,
     gender: member.gender,                   // ✅ 添加性別

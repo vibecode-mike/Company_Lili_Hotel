@@ -138,8 +138,8 @@ export default function MemberTagSection({
             編輯
           </button>
         </div>
-        <TagList 
-          tags={memberTags} 
+        <TagList
+          tags={memberTags}
           onRemove={handleRemoveMemberTag}
           emptyMessage="尚無會員標籤"
         />
@@ -159,8 +159,8 @@ export default function MemberTagSection({
             編輯
           </button>
         </div>
-        <TagList 
-          tags={interactionTags} 
+        <TagList
+          tags={interactionTags}
           onRemove={handleRemoveInteractionTag}
           emptyMessage="尚無互動標籤"
         />

@@ -708,8 +708,27 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
           </div>
 
           <div className="content-stretch flex flex-col gap-[20px] items-start relative shrink-0 w-full">
-            {/* Interaction Tags */}
+            {/* Member Tags */}
             <div className="flex flex-col gap-[8px] w-full">
+              <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] text-[#383838]">
+                會員標籤
+              </p>
+              {hasMemberTags && memberTags && (
+                <div className="flex flex-wrap gap-[8px]">
+                  {memberTags.map((tag, index) => (
+                    <span
+                      key={`member-${index}`}
+                      className="bg-[#f0f6ff] text-[#0f6beb] px-[12px] py-[4px] rounded-[8px] text-[14px] font-medium"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Interaction Tags */}
+            <div className="flex flex-col gap-[8px] w-full relative pb-[4px]">
               <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] text-[#383838]">
                 互動標籤
               </p>
@@ -726,27 +745,6 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
                 </div>
               ) : (
                 <p className="text-[#6e6e6e] text-[14px]">尚未設定互動標籤</p>
-              )}
-            </div>
-
-            {/* Member Tags */}
-            <div className="flex flex-col gap-[8px] w-full relative pb-[4px]">
-              <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] text-[#383838]">
-                會員標籤
-              </p>
-              {hasMemberTags && memberTags ? (
-                <div className="flex flex-wrap gap-[8px]">
-                  {memberTags.map((tag, index) => (
-                    <span
-                      key={`member-${index}`}
-                      className="bg-[#f0f6ff] text-[#0f6beb] px-[12px] py-[4px] rounded-[8px] text-[14px] font-medium"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-[#6e6e6e] text-[14px]">尚未設定會員標籤</p>
               )}
               {onEditTags && (
                 <button
