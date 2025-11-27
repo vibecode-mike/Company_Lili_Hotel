@@ -4,6 +4,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, and_, func, delete
+from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.models.member import Member
 from app.models.tag import MemberTag, MemberInteractionTag
@@ -21,10 +22,10 @@ from app.schemas.member import (
     BatchUpdateTagsRequest,
 )
 from app.schemas.common import SuccessResponse
-from app.core.pagination import PageParams, PageResponse
+from app.core.pagination import PageParams, PageResponse, paginate_query
 from app.api.v1.auth import get_current_user
 from app.clients.line_app_client import LineAppClient
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 
 router = APIRouter()
@@ -40,15 +41,22 @@ async def get_members(
     """獲取會員列表"""
     query = select(Member)
 
-    # 搜索條件
+    # 搜索條件（已在 Schema 層驗證和清理）
     if params.search:
-        search_pattern = f"%{params.search}%"
+        # 使用 escape 參數防止 LIKE 通配符注入
+        # params.search 已經過 InputValidator.sanitize_search_input() 驗證
+        from app.utils.validators import InputValidator
+
+        # 轉義 LIKE 特殊字符
+        escaped_search = InputValidator.escape_like_pattern(params.search)
+        search_pattern = f"%{escaped_search}%"
+
         query = query.where(
             or_(
-                Member.name.like(search_pattern),
-                Member.email.like(search_pattern),
-                Member.phone.like(search_pattern),
-                Member.line_name.like(search_pattern),
+                Member.name.like(search_pattern, escape='\\'),
+                Member.email.like(search_pattern, escape='\\'),
+                Member.phone.like(search_pattern, escape='\\'),
+                Member.line_name.like(search_pattern, escape='\\'),
             )
         )
 
@@ -78,55 +86,66 @@ async def get_members(
         # 默認按創建時間倒序排列
         query = query.order_by(Member.created_at.desc())
 
-    # 計算總數
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar()
+    # 預加載關聯數據（解決 N+1 查詢問題）
+    query = query.options(
+        selectinload(Member.member_tags),
+        selectinload(Member.member_interaction_tags)
+    )
 
-    # 分頁
-    query = query.offset(page_params.offset).limit(page_params.limit)
-    result = await db.execute(query)
-    members = result.scalars().all()
+    # 使用通用分頁函數
+    members, total = await paginate_query(db, query, page_params)
 
-    # 獲取標籤信息
+    # 批量查詢所有會員的最後聊天時間（避免 N+1）
+    member_line_uids = [m.line_uid for m in members if m.line_uid]
+    last_chat_times = {}
+
+    if member_line_uids:
+        # 使用子查詢找出每個 user_id 的最新聊天時間
+        from sqlalchemy import and_
+
+        subq = (
+            select(
+                ChatLog.user_id,
+                func.max(ChatLog.created_at).label('max_created_at')
+            )
+            .where(ChatLog.user_id.in_(member_line_uids))
+            .group_by(ChatLog.user_id)
+        ).subquery()
+
+        chat_result = await db.execute(
+            select(ChatLog.user_id, ChatLog.created_at)
+            .join(subq, and_(
+                ChatLog.user_id == subq.c.user_id,
+                ChatLog.created_at == subq.c.max_created_at
+            ))
+        )
+
+        for user_id, created_at in chat_result:
+            last_chat_times[user_id] = created_at
+
+    # 組裝響應數據
     items = []
     for member in members:
         tags = []
 
-        # 查詢會員標籤（直接從 MemberTag 表查詢）
-        member_tags_result = await db.execute(
-            select(MemberTag).where(MemberTag.member_id == member.id).order_by(MemberTag.tag_name)
-        )
-        for tag in member_tags_result.scalars():
+        # 使用預加載的會員標籤（已經在內存中，無需額外查詢）
+        for tag in sorted(member.member_tags, key=lambda t: t.tag_name):
             tags.append(TagInfo(id=tag.id, name=tag.tag_name, type="member"))
 
-        # 查詢互動標籤 - 統一從 MemberInteractionTag 表查詢（自動+手動）
-        interaction_tags_result = await db.execute(
-            select(MemberInteractionTag)
-            .where(MemberInteractionTag.member_id == member.id)
-            .order_by(MemberInteractionTag.click_count.desc(), MemberInteractionTag.tag_name)
-        )
-        for tag in interaction_tags_result.scalars():
+        # 使用預加載的互動標籤（已經在內存中，無需額外查詢）
+        for tag in sorted(
+            member.member_interaction_tags,
+            key=lambda t: (-t.click_count, t.tag_name)
+        ):
             tags.append(TagInfo(id=tag.id, name=tag.tag_name, type="interaction"))
-
-        # 查詢該會員最後一條聊天訊息的時間
-        last_chat_time = None
-        if member.line_uid:
-            last_chat_result = await db.execute(
-                select(ChatLog.created_at)
-                .where(ChatLog.user_id == member.line_uid)
-                .order_by(ChatLog.created_at.desc())
-                .limit(1)
-            )
-            last_chat_row = last_chat_result.scalar()
-            if last_chat_row:
-                last_chat_time = last_chat_row
 
         member_dict = MemberListItem.model_validate(member).model_dump()
         member_dict["tags"] = tags
-        # 使用聊天記錄的時間，如果沒有則用原本的 last_interaction_at
-        if last_chat_time:
-            member_dict["last_interaction_at"] = last_chat_time
+
+        # 使用批量查詢的聊天時間（無需額外查詢）
+        if member.line_uid and member.line_uid in last_chat_times:
+            member_dict["last_interaction_at"] = last_chat_times[member.line_uid]
+
         items.append(member_dict)
 
     page_response = PageResponse.create(
@@ -376,7 +395,7 @@ async def update_member_interaction_tags(
             tag_name=tag_name,
             tag_source="CRM",  # 手動添加的標籤來源為 CRM
             click_count=1,  # 手動標籤固定為 1
-            tagged_at=datetime.utcnow(),
+            tagged_at=datetime.now(timezone.utc),
         )
         db.add(interaction_tag)
 
@@ -468,7 +487,7 @@ async def batch_update_member_tags(
                     tag_source="會員資訊表",
                     message_id=None,
                     click_count=1,
-                    tagged_at=datetime.utcnow(),
+                    tagged_at=datetime.now(timezone.utc),
                 )
                 db.add(new_tag)
                 member_tags_updated += 1
@@ -531,7 +550,7 @@ async def batch_update_member_tags(
                     tag_source="會員資訊表",
                     message_id=None,
                     click_count=1,
-                    tagged_at=datetime.utcnow(),
+                    tagged_at=datetime.now(timezone.utc),
                 )
                 db.add(new_tag)
                 interaction_tags_updated += 1
@@ -645,7 +664,7 @@ async def add_member_interaction_tag(
         tag_source="CRM",
         message_id=message_id,
         click_count=1,  # 手動標籤固定為 1
-        tagged_at=datetime.utcnow(),
+        tagged_at=datetime.now(timezone.utc),
     )
     db.add(interaction_tag)
     await db.commit()

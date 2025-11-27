@@ -3,7 +3,7 @@
 職責：處理追蹤相關的業務邏輯，記錄用戶互動並更新統計數據
 """
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, update
 from sqlalchemy.orm import selectinload
@@ -99,15 +99,12 @@ class TrackingService:
             await db.commit()
             await db.refresh(interaction_log)
 
-            logger.info(
-                f"✅ Tracked interaction: line_uid={line_uid}, "
-                f"campaign={campaign_id}, type={interaction_type}"
-            )
+            logger.info(f"Tracked interaction: line_uid={line_uid}, campaign_id={campaign_id}, type={interaction_type}")
             return interaction_log
 
         except Exception as e:
             await db.rollback()
-            logger.error(f"❌ Failed to track interaction: {e}")
+            logger.error(f"Failed to track interaction: {e}", exc_info=True)
             raise
 
     async def _update_carousel_item_stats(
@@ -136,14 +133,11 @@ class TrackingService:
             .values(
                 click_count=total_count,
                 unique_click_count=unique_count,
-                last_clicked_at=datetime.utcnow(),
+                last_clicked_at=datetime.now(timezone.utc),
             )
         )
 
-        logger.info(
-            f"📊 Updated carousel item {carousel_item_id} stats. "
-            f"click_count={total_count}, unique_click_count={unique_count}"
-        )
+        logger.debug(f"Updated carousel item {carousel_item_id} stats: click_count={total_count}, unique_click_count={unique_count}")
 
     async def _update_interaction_tag_stats(
         self,
@@ -157,7 +151,7 @@ class TrackingService:
         tag = result.scalar_one_or_none()
 
         if not tag:
-            logger.warning(f"⚠️ Interaction tag not found: {interaction_tag_id}")
+            logger.warning(f"Interaction tag not found: {interaction_tag_id}")
             return
 
         total_count_stmt = (
@@ -180,14 +174,11 @@ class TrackingService:
             .values(
                 trigger_count=total_count,
                 member_count=unique_members,
-                last_triggered_at=datetime.utcnow(),
+                last_triggered_at=datetime.now(timezone.utc),
             )
         )
 
-        logger.info(
-            f"📊 Updated interaction tag {interaction_tag_id} stats: "
-            f"trigger_count={total_count}, members={unique_members}"
-        )
+        logger.debug(f"Updated interaction tag {interaction_tag_id} stats: trigger_count={total_count}, members={unique_members}")
 
     async def _resolve_member_from_line_id(
         self,
@@ -229,7 +220,7 @@ class TrackingService:
         # 1. 解析 member_id
         member_id = await self._resolve_member_from_line_id(db, line_uid)
         if not member_id:
-            logger.debug(f"⏭️ Skipping member_interaction_tag: member not found for line_uid={line_uid}")
+            logger.debug(f"Skipping member_interaction_tag: member not found for line_uid={line_uid}")
             return
 
         # 2. 獲取互動標籤資訊
@@ -238,7 +229,7 @@ class TrackingService:
         tag = result.scalar_one_or_none()
 
         if not tag:
-            logger.warning(f"⚠️ InteractionTag not found: {interaction_tag_id}")
+            logger.warning(f"InteractionTag not found: {interaction_tag_id}")
             return
 
         # 3. 查詢是否已存在該會員的該標籤（基於 member_id + tag_name）
@@ -252,11 +243,8 @@ class TrackingService:
         if existing_tag:
             # 4a. 已存在：累加 click_count
             existing_tag.click_count = (existing_tag.click_count or 1) + 1
-            existing_tag.last_triggered_at = datetime.utcnow()
-            logger.info(
-                f"📈 Updated member_interaction_tag: member={member_id}, "
-                f"tag={tag.tag_name}, click_count={existing_tag.click_count}"
-            )
+            existing_tag.last_triggered_at = datetime.now(timezone.utc)
+            logger.debug(f"Updated member_interaction_tag: member_id={member_id}, tag={tag.tag_name}, click_count={existing_tag.click_count}")
         else:
             # 4b. 不存在：創建新記錄
             new_tag = MemberInteractionTag(
@@ -264,13 +252,10 @@ class TrackingService:
                 tag_name=tag.tag_name,
                 tag_source=tag.tag_source,  # 保留原始來源（訊息模板/問券模板）
                 click_count=1,
-                last_triggered_at=datetime.utcnow(),
+                last_triggered_at=datetime.now(timezone.utc),
             )
             db.add(new_tag)
-            logger.info(
-                f"➕ Created member_interaction_tag: member={member_id}, "
-                f"tag={tag.tag_name}, source={tag.tag_source}"
-            )
+            logger.info(f"Created member_interaction_tag: member_id={member_id}, tag={tag.tag_name}, source={tag.tag_source}")
 
     async def get_campaign_statistics(
         self,

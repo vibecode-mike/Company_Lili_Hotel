@@ -50,7 +50,7 @@ class TemplateService:
         result = await db.execute(query)
         templates = result.scalars().all()
 
-        logger.info(f"📚 浏览模板库: 找到 {len(templates)} 个模板，排序方式={sort_by}")
+        logger.debug(f"Browse template library: found {len(templates)} templates, sort_by={sort_by}")
 
         return list(templates)
 
@@ -78,7 +78,7 @@ class TemplateService:
         if not source_template:
             raise ValueError(f"模板不存在: ID={template_id}")
 
-        logger.info(f"📋 开始复制模板: ID={template_id}, Name={source_template.name}")
+        logger.debug(f"Copying template ID: {template_id}, Name: {source_template.name}")
 
         # 2. 创建副本（复制所有字段，但不包括 id 和系统字段）
         new_template = MessageTemplate(
@@ -117,10 +117,7 @@ class TemplateService:
         await db.commit()
         await db.refresh(new_template)
 
-        logger.info(
-            f"✅ 模板复制成功: 新模板 ID={new_template.id}, "
-            f"源模板使用次数={source_template.usage_count}"
-        )
+        logger.info(f"Copied template ID: {template_id} -> new ID: {new_template.id}, source usage_count: {source_template.usage_count}")
 
         return new_template
 
@@ -154,8 +151,8 @@ class TemplateService:
         await db.commit()
         await db.refresh(template)
 
-        action = "添加到" if add else "从库中移除"
-        logger.info(f"✅ {action}模板库: ID={template_id}, Name={template.name}")
+        action = "Added to" if add else "Removed from"
+        logger.info(f"{action} template library ID: {template_id}")
 
         return template
 

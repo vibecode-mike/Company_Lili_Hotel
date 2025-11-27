@@ -433,8 +433,12 @@ class CampaignService:
             )
             db.add(carousel_item)
 
-    async def _schedule_campaign(self, campaign: Message):
-        """排程活动发送"""
+    async def _schedule_campaign(self, campaign: Message) -> None:
+        """排程活動發送
+
+        Args:
+            campaign: 訊息/活動對象
+        """
         if campaign.scheduled_datetime_utc:
             success = await scheduler.schedule_campaign(
                 campaign.id,

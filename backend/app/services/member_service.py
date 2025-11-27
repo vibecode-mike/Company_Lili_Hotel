@@ -70,7 +70,8 @@ class MemberService:
         await db.flush()
         await db.refresh(member)
 
-        logger.info(f"✅ Created member: {member.first_name} {member.last_name} (ID: {member.id})")
+        logger.info(f"Created member ID: {member.id}, source: {member.source}")
+        logger.debug(f"Member details - Name: {member.first_name} {member.last_name}, Email: {member.email}")
         return member
 
     async def get_member_by_id(
@@ -197,7 +198,7 @@ class MemberService:
         await db.commit()
         await db.refresh(member)
 
-        logger.info(f"✅ Updated member {member_id}")
+        logger.info(f"Updated member ID: {member_id}")
         return member
 
     async def delete_member(
@@ -213,7 +214,7 @@ class MemberService:
         await db.delete(member)
         await db.commit()
 
-        logger.info(f"✅ Deleted member {member_id}")
+        logger.info(f"Deleted member ID: {member_id}")
         return True
 
     # ========== 标签管理方法 ==========
@@ -239,7 +240,7 @@ class MemberService:
             # 检查是否已存在关联
             existing = await self._check_tag_relation(db, member_id, tag_id, tag.type)
             if existing:
-                logger.info(f"Tag {tag_id} already added to member {member_id}")
+                logger.debug(f"Tag {tag_id} already added to member {member_id}, skipping")
                 continue
 
             # 创建关联
@@ -252,7 +253,7 @@ class MemberService:
             db.add(relation)
 
         await db.commit()
-        logger.info(f"✅ Added {len(tag_ids)} tags to member {member_id}")
+        logger.info(f"Added {len(tag_ids)} tags to member ID: {member_id}")
         return await self.get_member_by_id(db, member_id)
 
     async def remove_tag_from_member(
@@ -367,8 +368,20 @@ class MemberService:
 
         return tags
 
-    async def _get_tag_by_id(self, db: AsyncSession, tag_id: int):
-        """获取标签（可能是会员标签或互动标签）"""
+    async def _get_tag_by_id(
+        self,
+        db: AsyncSession,
+        tag_id: int
+    ) -> Optional[MemberTag | InteractionTag]:
+        """获取标签（可能是会員標籤或互動標籤）
+
+        Args:
+            db: 數據庫 session
+            tag_id: 標籤 ID
+
+        Returns:
+            Optional[MemberTag | InteractionTag]: 找到的標籤對象或 None
+        """
         # 先尝试查询会员标签
         member_tag_query = select(MemberTag).where(MemberTag.id == tag_id)
         result = await db.execute(member_tag_query)

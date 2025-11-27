@@ -1,7 +1,7 @@
 """
 標籤管理 API
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.database import get_db
@@ -9,8 +9,9 @@ from app.models.tag import MemberTag, InteractionTag, MemberInteractionTag, TagT
 from app.models.tag_trigger_log import TagTriggerLog
 from app.models.user import User
 from app.schemas.common import SuccessResponse
-from app.core.pagination import PageParams, PageResponse
+from app.core.pagination import PageParams, PageResponse, paginate_query
 from app.api.v1.auth import get_current_user
+from app.utils.validators import InputValidator
 from pydantic import BaseModel
 from typing import Optional
 
@@ -32,18 +33,32 @@ class TagUpdate(BaseModel):
 async def get_tags(
     type: Optional[TagType] = None,
     source: Optional[TagSource] = None,
-    search: Optional[str] = None,
-    sort_by: Optional[str] = None,  # trigger_count, last_triggered_at, created_at
-    sort_order: Optional[str] = "desc",  # asc, desc
+    search: Optional[str] = Query(None, max_length=50, description="標籤名稱搜索"),
+    sort_by: Optional[str] = Query(None, pattern="^(trigger_count|member_count|last_triggered_at|created_at)$"),
+    sort_order: Optional[str] = Query("desc", pattern="^(asc|desc)$"),
     page_params: PageParams = Depends(),
     db: AsyncSession = Depends(get_db),
     # current_user: User = Depends(get_current_user),  # 暫時移除認證，開發階段使用
 ):
-    """獲取標籤列表"""
+    """
+    獲取標籤列表
+
+    支持搜索、篩選和排序功能
+    輸入已進行安全驗證，防止注入攻擊
+    """
+    # 驗證並清理搜索輸入
+    if search:
+        try:
+            search = InputValidator.sanitize_tag_name(search)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
     if type == TagType.MEMBER or type is None:
         query = select(MemberTag)
         if search:
-            query = query.where(MemberTag.tag_name.like(f"%{search}%"))
+            # 使用轉義的 LIKE 模式
+            escaped_search = InputValidator.escape_like_pattern(search)
+            query = query.where(MemberTag.tag_name.like(f"%{escaped_search}%", escape='\\'))
         if source:
             query = query.where(MemberTag.tag_source == source)
 
@@ -60,13 +75,8 @@ async def get_tags(
         else:
             query = query.order_by(order_col.desc())
 
-        count_query = select(func.count()).select_from(query.subquery())
-        total_result = await db.execute(count_query)
-        total = total_result.scalar()
-
-        query = query.offset(page_params.offset).limit(page_params.limit)
-        result = await db.execute(query)
-        tags = result.scalars().all()
+        # 使用通用分頁函數
+        tags, total = await paginate_query(db, query, page_params)
 
         items = [
             {
@@ -83,7 +93,9 @@ async def get_tags(
     else:
         query = select(InteractionTag)
         if search:
-            query = query.where(InteractionTag.tag_name.like(f"%{search}%"))
+            # 使用轉義的 LIKE 模式
+            escaped_search = InputValidator.escape_like_pattern(search)
+            query = query.where(InteractionTag.tag_name.like(f"%{escaped_search}%", escape='\\'))
 
         # 排序
         if sort_by == "trigger_count":
@@ -100,13 +112,8 @@ async def get_tags(
         else:
             query = query.order_by(order_col.desc())
 
-        count_query = select(func.count()).select_from(query.subquery())
-        total_result = await db.execute(count_query)
-        total = total_result.scalar()
-
-        query = query.offset(page_params.offset).limit(page_params.limit)
-        result = await db.execute(query)
-        tags = result.scalars().all()
+        # 使用通用分頁函數
+        tags, total = await paginate_query(db, query, page_params)
 
         items = [
             {

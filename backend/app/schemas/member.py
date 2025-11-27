@@ -1,7 +1,7 @@
 """
 會員相關 Schema
 """
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List
 from datetime import datetime, date
 
@@ -77,13 +77,74 @@ class MemberDetail(MemberListItem):
 class MemberSearchParams(BaseModel):
     """會員搜索參數"""
 
-    search: Optional[str] = None  # 姓名/Email/手機
-    tags: Optional[str] = None  # 標籤ID列表（逗號分隔）
-    join_source: Optional[str] = None  # LINE/CRM/PMS/ERP/系統
-    sort_by: str = "last_interaction_at"
-    order: str = "desc"
-    page: int = 1
-    page_size: int = 20
+    search: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="姓名/Email/手機搜索關鍵字",
+        examples=["張三", "test@example.com", "0912345678"]
+    )
+    tags: Optional[str] = Field(
+        None,
+        max_length=500,
+        description="標籤名稱列表（逗號分隔）",
+        examples=["VIP,新客戶"]
+    )
+    join_source: Optional[str] = Field(
+        None,
+        pattern="^(LINE|CRM|PMS|ERP|系統)$",
+        description="加入來源篩選"
+    )
+    sort_by: str = Field(
+        "last_interaction_at",
+        pattern="^(last_interaction_at|created_at)$",
+        description="排序欄位"
+    )
+    order: str = Field(
+        "desc",
+        pattern="^(asc|desc)$",
+        description="排序方向"
+    )
+    page: int = Field(1, ge=1, le=10000, description="頁碼")
+    page_size: int = Field(20, ge=1, le=200, description="每頁數量")
+
+    @field_validator('search')
+    @classmethod
+    def validate_search(cls, v: Optional[str]) -> Optional[str]:
+        """驗證搜索輸入"""
+        if v is None:
+            return None
+
+        from app.utils.validators import InputValidator
+        try:
+            return InputValidator.sanitize_search_input(v)
+        except ValueError as e:
+            raise ValueError(f"搜索參數無效: {str(e)}")
+
+    @field_validator('tags')
+    @classmethod
+    def validate_tags(cls, v: Optional[str]) -> Optional[str]:
+        """驗證標籤列表"""
+        if v is None:
+            return None
+
+        from app.utils.validators import InputValidator
+
+        # 分割標籤並驗證每個標籤
+        tag_list = [tag.strip() for tag in v.split(',') if tag.strip()]
+
+        if len(tag_list) > 20:
+            raise ValueError("標籤數量不能超過 20 個")
+
+        validated_tags = []
+        for tag in tag_list:
+            try:
+                validated_tag = InputValidator.sanitize_tag_name(tag)
+                if validated_tag:
+                    validated_tags.append(validated_tag)
+            except ValueError as e:
+                raise ValueError(f"標籤 '{tag}' 無效: {str(e)}")
+
+        return ','.join(validated_tags) if validated_tags else None
 
 
 class AddTagsRequest(BaseModel):

@@ -3,7 +3,11 @@
 """
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import declarative_base
+from sqlalchemy import exc as sqlalchemy_exc
 from app.config import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 # 創建非同步引擎
 # SQLite 不支持 pool_size 和 max_overflow 參數
@@ -35,13 +39,38 @@ Base = declarative_base()
 
 
 async def get_db() -> AsyncSession:
-    """獲取資料庫 session"""
+    """
+    獲取資料庫 session（依賴注入）
+
+    Yields:
+        AsyncSession: 資料庫異步會話
+
+    Raises:
+        HTTPException: 資料庫操作失敗時
+    """
     async with AsyncSessionLocal() as session:
         try:
             yield session
             await session.commit()
-        except Exception:
+        except sqlalchemy_exc.IntegrityError as e:
             await session.rollback()
+            logger.error(f"Database integrity error: {e}", exc_info=True)
+            raise  # 讓上層處理具體的完整性錯誤
+        except sqlalchemy_exc.OperationalError as e:
+            await session.rollback()
+            logger.error(f"Database operational error (connection/timeout): {e}", exc_info=True)
+            raise  # 資料庫連接或超時錯誤
+        except sqlalchemy_exc.DataError as e:
+            await session.rollback()
+            logger.error(f"Database data error (invalid data type): {e}", exc_info=True)
+            raise
+        except sqlalchemy_exc.DBAPIError as e:
+            await session.rollback()
+            logger.error(f"Database API error: {e}", exc_info=True)
+            raise
+        except Exception as e:
+            await session.rollback()
+            logger.exception(f"Unexpected database error: {e}")
             raise
         finally:
             await session.close()

@@ -102,7 +102,8 @@ class SurveyService:
             await self._schedule_survey(survey)
 
         await db.commit()
-        logger.info(f"✅ Created survey: {survey.name} (ID: {survey.id})")
+        logger.info(f"Created survey ID: {survey.id}")
+        logger.debug(f"Survey details - Name: {survey.name}")
         return survey
 
     async def get_survey_by_id(
@@ -203,7 +204,7 @@ class SurveyService:
         await db.commit()
         await db.refresh(survey)
 
-        logger.info(f"✅ Updated survey {survey_id}")
+        logger.info(f"Updated survey ID: {survey_id}")
         return survey
 
     async def delete_survey(
@@ -222,7 +223,7 @@ class SurveyService:
         await db.delete(survey)
         await db.commit()
 
-        logger.info(f"✅ Deleted survey {survey_id}")
+        logger.info(f"Deleted survey ID: {survey_id}")
         return True
 
     # ========== Survey Send Methods ==========
@@ -259,7 +260,7 @@ class SurveyService:
         survey.sent_at = datetime.now()
         await db.commit()
 
-        logger.info(f"✅ Survey {survey_id} sent successfully")
+        logger.info(f"Survey ID: {survey_id} sent successfully")
         return result
 
     # ========== Survey Response Methods ==========
@@ -291,7 +292,7 @@ class SurveyService:
         survey.response_count += 1
         await db.commit()
 
-        logger.info(f"✅ Member {member_id} submitted response for survey {survey_id}")
+        logger.info(f"Member ID: {member_id} submitted response for survey ID: {survey_id}")
         return response
 
     async def get_survey_statistics(
@@ -364,8 +365,12 @@ class SurveyService:
         # 创建新题目
         await self._create_survey_questions(db, survey, questions_data)
 
-    async def _schedule_survey(self, survey: Survey):
-        """排程问卷发送"""
+    async def _schedule_survey(self, survey: Survey) -> None:
+        """排程問卷發送
+
+        Args:
+            survey: 問卷對象
+        """
         if survey.scheduled_at:
             success = await scheduler.schedule_survey(
                 survey.id,

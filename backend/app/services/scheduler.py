@@ -187,8 +187,12 @@ class CampaignScheduler:
             for job in jobs
         ]
 
-    async def _send_campaign_job(self, campaign_id: int):
-        """背景任務：發送已排程的群發訊息"""
+    async def _send_campaign_job(self, campaign_id: int) -> None:
+        """背景任務：發送已排程的群發訊息
+
+        Args:
+            campaign_id: 活動 ID
+        """
         try:
             logger.info(f"🚀 Executing scheduled campaign {campaign_id}")
 
@@ -230,9 +234,8 @@ class CampaignScheduler:
             )
             # 這裡可以加入重試邏輯或通知管理員
 
-    async def _send_survey_job(self, survey_id: int):
-        """
-        背景任務：發送問卷
+    async def _send_survey_job(self, survey_id: int) -> None:
+        """背景任務：發送問卷
 
         Args:
             survey_id: 問卷 ID
@@ -253,12 +256,13 @@ class CampaignScheduler:
             # 這裡可以加入重試邏輯或通知管理員
 
 
-    async def restore_scheduled_jobs(self):
-        """
-        從資料庫恢復所有待發送的排程任務
-        在應用啟動時調用
+    async def restore_scheduled_jobs(self) -> None:
+        """從資料庫恢復所有待發送的排程任務
 
-        注意：資料庫中的 scheduled_datetime_utc 實際存儲的是本地時間（台灣 UTC+8）
+        在應用啟動時調用。
+
+        Note:
+            資料庫中的 scheduled_datetime_utc 實際存儲的是本地時間（台灣 UTC+8）
         """
         from app.database import AsyncSessionLocal
         from app.models.message import Message

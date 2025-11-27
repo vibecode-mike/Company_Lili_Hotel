@@ -37,13 +37,20 @@ def ensure_upload_dir() -> None:
     確保上傳目錄存在
 
     在每次上傳前調用，確保目錄創建成功
+
+    Raises:
+        OSError: 目錄創建失敗時
+        PermissionError: 權限不足時
     """
     try:
         UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
         logger.debug(f"📁 Upload directory ready: {UPLOAD_DIR}")
-    except Exception as e:
-        logger.error(f"❌ Failed to create upload directory: {e}")
-        raise
+    except PermissionError as e:
+        logger.error(f"❌ Permission denied creating upload directory {UPLOAD_DIR}: {e}")
+        raise PermissionError(f"無法創建上傳目錄，權限不足: {UPLOAD_DIR}")
+    except OSError as e:
+        logger.error(f"❌ OS error creating upload directory {UPLOAD_DIR}: {e}")
+        raise OSError(f"創建上傳目錄失敗: {str(e)}")
 
 
 # 初始化時創建上傳目錄
@@ -105,12 +112,14 @@ def save_base64_image(base64_str: str) -> Tuple[str, str]:
     # 解碼 Base64
     try:
         raw = base64.b64decode(b64, validate=True)
-    except Exception:
+    except (ValueError, base64.binascii.Error) as e:
         # 如果解碼失敗，嘗試添加 padding 後再解碼
+        logger.warning(f"Initial Base64 decode failed, trying with padding: {e}")
         try:
-            raw = base64.b64decode(b64 + "===")
-        except Exception as e:
-            raise ValueError(f"Base64 解碼失敗: {str(e)}")
+            raw = base64.b64decode(b64 + "===", validate=False)
+        except (ValueError, base64.binascii.Error) as retry_error:
+            logger.error(f"Base64 decode failed after retry: {retry_error}")
+            raise ValueError(f"Base64 解碼失敗: 無效的 Base64 字符串 - {str(retry_error)}")
 
     # 計算文件 hash（24 個字符）
     h = get_file_hash(raw)
@@ -121,8 +130,16 @@ def save_base64_image(base64_str: str) -> Tuple[str, str]:
 
     # 保存文件（如果不存在）
     if not abs_path.exists():
-        with open(abs_path, "wb") as f:
-            f.write(raw)
+        try:
+            with open(abs_path, "wb") as f:
+                f.write(raw)
+            logger.debug(f"💾 Saved image: {abs_path}")
+        except PermissionError as e:
+            logger.error(f"❌ Permission denied saving file {abs_path}: {e}")
+            raise PermissionError(f"無法保存圖片文件，權限不足")
+        except IOError as e:
+            logger.error(f"❌ IO error saving file {abs_path}: {e}")
+            raise IOError(f"保存圖片文件失敗: {str(e)}")
 
     # 生成公開訪問 URL
     public_url = f"{PUBLIC_BASE}{rel}"
@@ -291,9 +308,16 @@ def file_path_to_base64(file_path: str) -> Optional[str]:
             return None
 
         # 讀取檔案並轉為 Base64
-        with open(full_path, "rb") as f:
-            image_data = f.read()
-            base64_str = base64.b64encode(image_data).decode("utf-8")
+        try:
+            with open(full_path, "rb") as f:
+                image_data = f.read()
+                base64_str = base64.b64encode(image_data).decode("utf-8")
+        except PermissionError as e:
+            logger.error(f"❌ Permission denied reading file {full_path}: {e}")
+            return None
+        except IOError as e:
+            logger.error(f"❌ IO error reading file {full_path}: {e}")
+            return None
 
         # 判斷檔案類型
         suffix = full_path.suffix.lower()
@@ -327,11 +351,14 @@ def url_to_base64(url: str) -> Optional[str]:
     Returns:
         str: Base64 編碼的圖片
         None: 如果下載失敗
+
+    Raises:
+        None: 所有異常都被捕獲並返回 None
     """
     try:
         import httpx
 
-        response = httpx.get(url, timeout=10)
+        response = httpx.get(url, timeout=10, follow_redirects=True)
         response.raise_for_status()
 
         image_data = response.content
@@ -344,6 +371,15 @@ def url_to_base64(url: str) -> Optional[str]:
         logger.info(f"✅ Downloaded and converted {url} to base64")
         return data_uri
 
+    except httpx.HTTPStatusError as e:
+        logger.error(f"❌ HTTP error downloading {url}: {e.response.status_code} - {e}")
+        return None
+    except httpx.TimeoutException as e:
+        logger.error(f"❌ Timeout downloading {url}: {e}")
+        return None
+    except httpx.RequestError as e:
+        logger.error(f"❌ Request error downloading {url}: {e}")
+        return None
     except Exception as e:
-        logger.error(f"❌ Failed to download {url}: {e}")
+        logger.exception(f"❌ Unexpected error downloading {url}: {e}")
         return None

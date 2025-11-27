@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict
 from app.database import get_db
 from app.models.user import User
@@ -84,8 +84,8 @@ async def login(
             detail="用戶已被停用",
         )
 
-    # 更新最後登入時間
-    user.last_login_at = datetime.utcnow()
+    # 更新最後登入時間（使用 timezone-aware datetime）
+    user.last_login_at = datetime.now(timezone.utc)
     await db.commit()
 
     # 創建訪問令牌
