@@ -150,7 +150,6 @@ export default function LineApiSettingsContent() {
 
       if (response.ok && data.ok && data.basicId) {
         setBasicId(data.basicId);
-        console.log('[INFO] Basic ID 獲取成功:', data.basicId);
 
         // 同時更新到資料庫
         if (lineChannelDbId) {

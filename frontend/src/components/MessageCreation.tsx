@@ -269,13 +269,6 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   useEffect(() => {
     if (!editMessageData) return;
 
-    console.log('🔍 EditMessageData useEffect triggered:', {
-      hasData: !!editMessageData,
-      hasFlexJson: !!editMessageData?.flexMessageJson,
-      title: editMessageData.title,
-      notificationMsg: editMessageData.notificationMsg
-    });
-
     // ========== 步驟 1：始終還原基本欄位（不依賴 flexMessageJson）==========
     setTitle(editMessageData.title || '');
     setNotificationMsg(editMessageData.notificationMsg || '');
@@ -458,14 +451,10 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         setCards(parsedCards);
         setFlexMessageJson(flexJson);
 
-        console.log('✅ Flex Message 卡片已還原，共', parsedCards.length, '張');
-
       } catch (error) {
         console.error('❌ Error parsing flex message:', error);
         // 即使解析失敗，基本欄位也已經還原了
       }
-    } else {
-      console.log('ℹ️ 無 Flex Message JSON，使用默認卡片');
     }
   }, [editMessageData]);
 
@@ -715,28 +704,15 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         const day = String(scheduledDate.getDate()).padStart(2, '0');
         const scheduledDateTimeString = `${year}-${month}-${day} ${scheduledTime.hours}:${scheduledTime.minutes}:00`;
         requestBody.scheduled_at = scheduledDateTimeString;
-        console.log('📅 [Save Draft] Adding scheduled_at:', scheduledDateTimeString);
       } else if (scheduleType === 'immediate') {
         // 立即發送模式，清空排程時間
         requestBody.scheduled_at = null;
-        console.log('⏰ [Save Draft] scheduleType is immediate, scheduled_at set to null');
       }
 
       // Determine if this is a new draft or updating existing draft
       const isUpdate = !!editMessageId;
       const method = isUpdate ? 'PUT' : 'POST';
       const url = isUpdate ? `/api/v1/messages/${editMessageId}` : '/api/v1/messages';
-
-      console.log('💾 [Save Draft] Request details:', {
-        method,
-        url,
-        isUpdate,
-        editMessageId,
-        requestBody: {
-          ...requestBody,
-          flex_message_json: `${JSON.stringify(flexMessage).length} chars`
-        }
-      });
 
       // Create or update draft message
       const saveResponse = await fetch(url, {
@@ -760,10 +736,6 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       }
 
       const responseData = await saveResponse.json();
-      console.log('✅ [Save Draft] Success:', {
-        status: saveResponse.status,
-        responseData
-      });
 
       // Show appropriate success message
       toast.success(isUpdate ? '草稿已更新' : '草稿已儲存');
@@ -774,7 +746,6 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
       // Navigate back to message list immediately
       if (onNavigate) {
-        console.log('🔄 [Save Draft] Navigating back to message-list');
         onNavigate('message-list');
       }
 

@@ -204,14 +204,11 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
   // WebSocket 監聽新訊息
   const handleNewMessage = useCallback((wsMessage: any) => {
     if (wsMessage.type === 'new_message' && wsMessage.data) {
-      console.log('📨 Received new message via WebSocket:', wsMessage.data);
-
       // 將新訊息添加到列表末尾
       setMessages(prev => {
         // 避免重複添加 (檢查 message_id)
         const exists = prev.some(msg => msg.id === wsMessage.data.id);
         if (exists) {
-          console.log('⚠️  Message already exists, skipping');
           return prev;
         }
         return [...prev, wsMessage.data];
@@ -435,8 +432,6 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
             chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
           }
         }, 100);
-
-        console.log('訊息已發送:', result.message_id);
       } else {
         throw new Error(result.message || '發送失敗');
       }

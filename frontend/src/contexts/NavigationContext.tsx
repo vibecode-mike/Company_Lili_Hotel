@@ -104,7 +104,6 @@ const getInitialNavigationState = () => {
   // 優先從 URL 獲取狀態
   const urlState = getPageFromUrl();
   if (urlState) {
-    console.log('[NavigationContext] Restored from URL:', urlState);
     return urlState;
   }
 
@@ -139,18 +138,10 @@ export function NavigationProvider({
   const startPage = savedState?.page || initialPage;
   const startParams = savedState?.params || initialParams;
 
-  console.log('[NavigationContext] Initializing with:', {
-    savedState,
-    startPage,
-    startParams
-  });
-
   const [currentPage, setCurrentPage] = useState<Page>(startPage);
   const [params, setParams] = useState<NavigationParams>(startParams);
 
   const navigate = useCallback((page: Page, newParams: NavigationParams = {}) => {
-    console.log('[NavigationContext] navigate called:', page, 'params:', newParams);
-
     // 直接更新當前頁面和參數（不觸發整頁刷新）
     setCurrentPage(page);
     setParams(newParams);
@@ -183,7 +174,6 @@ export function NavigationProvider({
         params
       };
       localStorage.setItem('navigation_state', JSON.stringify(stateToSave));
-      console.log('[NavigationContext] useEffect saved state:', stateToSave);
     } catch (error) {
       console.error('Failed to save navigation state:', error);
     }
@@ -192,7 +182,6 @@ export function NavigationProvider({
   // 監聽瀏覽器後退/前進按鈕
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
-      console.log('[NavigationContext] popstate event:', event.state);
       if (event.state?.page) {
         setCurrentPage(event.state.page);
         setParams(event.state.params || {});
@@ -224,7 +213,6 @@ export function NavigationProvider({
       const queryString = searchParams.toString();
       const newUrl = queryString ? `${expectedPath}?${queryString}` : expectedPath;
       window.history.replaceState({ page: currentPage, params }, '', newUrl);
-      console.log('[NavigationContext] URL synced to:', newUrl);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 只在初始化時執行一次

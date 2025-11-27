@@ -55,30 +55,17 @@ function AppContent() {
   const hasLockedStateRef = useRef(true);
 
   useEffect(() => {
-    console.log('[App.tsx] useEffect triggered', {
-      isAuthenticated,
-      isStatusLoading,
-      hasFetchedOnce,
-      isConfigured,
-      currentPage,
-      hasLockedStateRef: hasLockedStateRef.current,
-      hasRoutedAfterUnlockRef: hasRoutedAfterUnlockRef.current
-    });
-
     if (!isAuthenticated) {
-      console.log('[App.tsx] Not authenticated, resetting refs');
       hasRoutedAfterUnlockRef.current = false;
       hasLockedStateRef.current = true;
       return;
     }
 
     if (!hasFetchedOnce || isStatusLoading) {
-      console.log('[App.tsx] Still loading channel status');
       return;
     }
 
     if (!isConfigured) {
-      console.log('[App.tsx] LINE not configured, navigating to settings');
       hasRoutedAfterUnlockRef.current = false;
       hasLockedStateRef.current = true;
       if (currentPage !== 'line-api-settings') {
@@ -91,7 +78,6 @@ function AppContent() {
     // NavigationContext 已經從 localStorage 恢復了正確的頁面狀態
     // 這裡不需要再做任何導航操作，讓用戶保持在當前頁面
     if (hasLockedStateRef.current) {
-      console.log('[App.tsx] LINE configured, unlocking navigation. Current page:', currentPage);
       hasLockedStateRef.current = false;
       hasRoutedAfterUnlockRef.current = true;
     }

@@ -30,7 +30,6 @@ export function useWebSocket(
 
   const connect = useCallback(() => {
     if (!memberId) {
-      console.log('⏸️  No memberId provided, skipping WebSocket connection');
       setIsConnected(false);
       return;
     }
@@ -43,11 +42,9 @@ export function useWebSocket(
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/api/v1/ws/chat/${memberId}`;
 
-    console.log(`🔌 Connecting WebSocket to: ${wsUrl}`);
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      console.log('✅ WebSocket connected');
       wsRef.current = ws;
       setIsConnected(true);
 
@@ -77,7 +74,6 @@ export function useWebSocket(
     };
 
     ws.onclose = (event) => {
-      console.log(`🔌 WebSocket closed (code: ${event.code}, reason: ${event.reason})`);
       wsRef.current = null;
       setIsConnected(false);
 
@@ -89,7 +85,6 @@ export function useWebSocket(
 
       // 自動重連 (3秒後)
       if (!event.wasClean) {
-        console.log('🔄 Reconnecting in 3 seconds...');
         reconnectTimeoutRef.current = setTimeout(connect, 3000);
       }
     };

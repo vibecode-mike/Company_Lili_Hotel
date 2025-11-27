@@ -18,13 +18,11 @@ export default function ChatRoomPage() {
 
   // 導航到會員管理列表（第一層麵包屑點擊）
   const handleNavigateToMemberManagement = () => {
-    console.log('[ChatRoomPage] Navigate to member-management');
     navigate('member-management');
   };
 
   // 導航到會員詳情頁（第二層麵包屑點擊）
   const handleNavigateToMemberDetail = () => {
-    console.log('[ChatRoomPage] Navigate to member-detail, memberId:', params.memberId);
     if (params.memberId) {
       navigate('member-detail', { memberId: params.memberId });
     }

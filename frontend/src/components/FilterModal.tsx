@@ -46,7 +46,6 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
 
         if (response.ok) {
           const result = await response.json();
-          console.log('Tags API response:', result);
           const memberTagsData = result.data?.memberTags || [];
           const interactionTagsData = result.data?.interactionTags || [];
 

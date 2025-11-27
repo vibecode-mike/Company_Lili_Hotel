@@ -60,7 +60,6 @@ function BreadcrumbAtomic({ label, onClick, active = false }: BreadcrumbItem) {
   const isClickable = !!onClick && !active;
 
   const handleClick = () => {
-    console.log('[Breadcrumb] Clicked:', label, 'isClickable:', isClickable);
     if (isClickable && onClick) {
       onClick();
     }

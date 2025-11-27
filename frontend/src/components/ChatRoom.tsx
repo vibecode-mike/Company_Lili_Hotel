@@ -19,7 +19,6 @@ interface ChatRoomProps {
 // 返回按钮组件
 function BackButtonWithArrow({ onClick }: { onClick: () => void }) {
   const handleClick = () => {
-    console.log('[BackButton] Clicked!');
     onClick();
   };
 
@@ -50,15 +49,6 @@ function BackButtonWithArrow({ onClick }: { onClick: () => void }) {
 export default function ChatRoom({ member, memberId, memberName, onBack, onNavigateToMemberDetail }: ChatRoomProps) {
   // 顯示名稱優先順序：傳入的 memberName > member.username > member.realName > '會員'
   const displayName = memberName || member?.username || member?.realName || '會員';
-
-  // Debug log
-  console.log('[ChatRoom] Props:', {
-    memberId,
-    memberName,
-    displayName,
-    hasOnBack: !!onBack,
-    hasOnNavigateToMemberDetail: !!onNavigateToMemberDetail
-  });
 
   // 只有當 member 和 memberId 都沒有時，才顯示錯誤頁面
   // 有 memberId 時，即使 member 還沒載入，也可以先建立 WebSocket 連線
@@ -92,14 +82,12 @@ export default function ChatRoom({ member, memberId, memberName, onBack, onNavig
                 {
                   label: '會員管理',
                   onClick: () => {
-                    console.log('[ChatRoom Breadcrumb] 會員管理 clicked');
                     onBack();
                   }
                 },
                 {
                   label: displayName,
                   onClick: onNavigateToMemberDetail ? () => {
-                    console.log('[ChatRoom Breadcrumb] 會員詳情 clicked');
                     onNavigateToMemberDetail();
                   } : undefined
                 },
