@@ -1318,18 +1318,24 @@ export default function LineApiSettingsContent() {
 
       {/* Enlarged Image Modal */}
       {enlargedImage && (
-        <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="relative">
-            <img 
-              src={enlargedImage} 
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-16"
+          onClick={() => setEnlargedImage(null)}
+        >
+          <div
+            className="relative inline-block"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={enlargedImage}
               alt="Enlarged Screenshot"
-              className="max-w-[90%] max-h-[90%] rounded-[10px] object-cover"
+              className="max-w-[900px] max-h-[600px] rounded-[10px] object-contain shadow-2xl"
             />
             <button
               onClick={() => setEnlargedImage(null)}
-              className="absolute top-2 right-2 bg-white rounded-full size-[24px] flex items-center justify-center shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)]"
+              className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 rounded-full w-8 h-8 flex items-center justify-center shadow-lg cursor-pointer z-10"
             >
-              <X className="size-[16px] text-[#6A7282]" />
+              <X className="w-5 h-5 text-white" />
             </button>
           </div>
         </div>
