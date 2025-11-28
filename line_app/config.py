@@ -17,11 +17,20 @@ from __future__ import annotations
 
 import os
 from urllib.parse import quote_plus
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 # 載入 .env 檔案
 load_dotenv()
+
+# 專案根目錄
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+# -------------------------------------------------
+# 公開 URL 配置
+# -------------------------------------------------
+PUBLIC_BASE = (os.getenv("PUBLIC_BASE") or "").rstrip("/")
 
 # -------------------------------------------------
 # LINE 相關配置
@@ -33,7 +42,7 @@ LIFF_ID_OPEN = os.getenv("LIFF_ID_OPEN", "").strip()
 DEFAULT_LIFF_ID = os.getenv("DEFAULT_LIFF_ID", "").strip()
 DEFAULT_MEMBER_FORM_URL = os.getenv(
     "DEFAULT_MEMBER_FORM_URL",
-    "http://192.168.50.123:3001/uploads/member_form.html"
+    f"{PUBLIC_BASE}/uploads/member_form.html"
 )
 
 # -------------------------------------------------
@@ -42,11 +51,6 @@ DEFAULT_MEMBER_FORM_URL = os.getenv(
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 MEMORY_TURNS = int(os.getenv("MEMORY_TURNS", "5"))
-
-# -------------------------------------------------
-# 公開 URL 配置
-# -------------------------------------------------
-PUBLIC_BASE = (os.getenv("PUBLIC_BASE") or "").rstrip("/")
 
 # -------------------------------------------------
 # 資料庫配置
@@ -65,7 +69,10 @@ DATABASE_URL = (
 # -------------------------------------------------
 # 檔案儲存配置
 # -------------------------------------------------
-ASSET_LOCAL_DIR = "/data2/lili_hotel/backend/public/uploads"
+ASSET_LOCAL_DIR = os.getenv(
+    "ASSET_LOCAL_DIR",
+    str(PROJECT_ROOT / "backend" / "public" / "uploads")
+)
 ASSET_ROUTE_PREFIX = "/uploads"
 
 # -------------------------------------------------

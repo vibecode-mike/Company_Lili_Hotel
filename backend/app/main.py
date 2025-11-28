@@ -157,7 +157,7 @@ async def health_check():
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 # 掛載靜態文件目錄（上傳的圖片）
-UPLOAD_DIR = Path("/data2/lili_hotel/backend/public/uploads")
+UPLOAD_DIR = settings.upload_dir_path
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 

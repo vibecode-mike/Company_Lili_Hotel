@@ -14,8 +14,9 @@ logger = logging.getLogger(__name__)
 # 线程池（用于运行同步函数）
 _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="line_app_")
 
-# 动态导入 line_app 模块
-LINE_APP_PATH = "/data2/lili_hotel/line_app"
+# 从配置导入路径
+from app.config import settings
+LINE_APP_PATH = str(settings.project_root / "line_app")
 
 
 def _import_line_app_modules():

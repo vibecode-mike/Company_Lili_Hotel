@@ -5,20 +5,21 @@ line_app HTTP 客户端
 import httpx
 from typing import Dict, List, Optional, Any
 import logging
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 class LineAppClient:
     """line_app HTTP 客户端"""
 
-    def __init__(self, base_url: str = "http://localhost:3001"):
+    def __init__(self, base_url: str = None):
         """
         初始化 line_app HTTP 客户端
 
         Args:
-            base_url: line_app 服务地址 (默认: http://localhost:3001)
+            base_url: line_app 服务地址 (默认从 settings 读取)
         """
-        self.base_url = base_url
+        self.base_url = base_url or settings.LINE_APP_URL
         self.timeout = httpx.Timeout(300.0)  # 5分钟超时
         logger.info(f"LineAppClient initialized with base_url: {base_url}")
 

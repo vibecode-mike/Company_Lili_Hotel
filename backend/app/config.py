@@ -3,6 +3,8 @@
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
+from pathlib import Path
+import os
 
 
 class Settings(BaseSettings):
@@ -46,8 +48,23 @@ class Settings(BaseSettings):
     ALLOWED_IMAGE_TYPES: str = "jpg,jpeg,png,webp"
     PUBLIC_BASE: str = "https://linebot.star-bit.io"  # 公開訪問的基礎URL
 
+    # LINE App 服務 URL
+    LINE_APP_URL: str = "http://localhost:3001"
+
     # CORS
     ALLOWED_ORIGINS: str = "*"
+
+    @property
+    def project_root(self) -> Path:
+        """專案根目錄"""
+        return Path(__file__).resolve().parent.parent.parent
+
+    @property
+    def upload_dir_path(self) -> Path:
+        """上傳目錄的完整路徑"""
+        if os.path.isabs(self.UPLOAD_DIR):
+            return Path(self.UPLOAD_DIR)
+        return self.project_root / "backend" / "public" / self.UPLOAD_DIR
 
     @property
     def allowed_origins_list(self) -> List[str]:

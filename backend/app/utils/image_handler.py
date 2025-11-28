@@ -17,11 +17,9 @@ logger = logging.getLogger(__name__)
 # 正則表達式用於解析 Data URI 格式的 Base64 圖片
 _data_uri_re = re.compile(r"^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$")
 
-# 上傳目錄配置
-UPLOAD_DIR = Path("/data2/lili_hotel/backend/public/uploads")
-
-# 公開訪問 URL 基礎路徑 - 從 Settings 導入
+# 從 Settings 導入配置
 from app.config import settings
+UPLOAD_DIR = settings.upload_dir_path
 PUBLIC_BASE = settings.PUBLIC_BASE
 
 # 路由前綴

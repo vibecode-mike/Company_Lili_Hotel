@@ -5,10 +5,11 @@
 import asyncio
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
+from app.config import settings
 
 async def cleanup_tables():
     """刪除部分創建的表"""
-    DATABASE_URL = "mysql+aiomysql://root:l123456@127.0.0.1:3306/lili_hotel"
+    DATABASE_URL = settings.DATABASE_URL
     engine = create_async_engine(DATABASE_URL, echo=False)
 
     tables_to_drop = [

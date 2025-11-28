@@ -17,7 +17,7 @@ from app.config import settings
 router = APIRouter()
 
 # 配置
-UPLOAD_DIR = Path("/data2/lili_hotel/backend/public/uploads")
+UPLOAD_DIR = settings.upload_dir_path
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif"}
 BASE_URL = settings.PUBLIC_BASE  # 从环境变量读取：https://linebot.star-bit.io

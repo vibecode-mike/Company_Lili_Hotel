@@ -48,7 +48,8 @@ def fetch_basic_id_from_line(channel_access_token: str) -> Optional[str]:
     """
     try:
         # Flask line_app 運行在 port 3001
-        flask_url = "http://127.0.0.1:3001/api/bot/basic-id"
+        from app.config import settings
+        flask_url = f"{settings.LINE_APP_URL}/api/bot/basic-id"
 
         response = requests.post(
             flask_url,
