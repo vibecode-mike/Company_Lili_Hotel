@@ -401,6 +401,30 @@ def maybe_update_member_profile(uid: str) -> None:
 
 
 # 將 DB 題型映成 LIFF 前端支援的題型
+def is_gpt_enabled_for_user(line_uid: str) -> bool:
+    """
+    檢查指定 LINE 使用者是否啟用 GPT 自動回應
+
+    Args:
+        line_uid: LINE 使用者 UID
+
+    Returns:
+        bool: True 表示啟用 GPT，False 表示停用
+
+    Note:
+        - 預設值為 True (啟用)
+        - 若查詢失敗，也回傳 True (安全降級)
+    """
+    try:
+        row = fetchone("SELECT gpt_enabled FROM members WHERE line_uid=:u", {"u": line_uid})
+        if row:
+            return bool(row[0])
+        return True  # 會員不存在，預設啟用
+    except Exception as e:
+        logging.warning(f"[GPT] Failed to fetch gpt_enabled for uid={line_uid}: {e}")
+        return True  # 查詢失敗，安全降級為啟用
+
+
 def _map_question_for_liff(q: dict) -> dict:
     t = (q.get("question_type") or "").upper()
     mapped = dict(q)  # 不破壞原資料
@@ -3255,13 +3279,16 @@ def on_text(event: MessageEvent):
     message_source = None
 
     # 4.1 優先：GPT 回應
-    try:
-        msgs = _build_messages(user_key, text_in)
-        reply_text = _ask_gpt(msgs)
-        message_source = "gpt"
-        logging.info(f"[on_text] GPT response generated for uid={uid}")
-    except Exception as e:
-        logging.exception(f"[on_text] GPT failed: {e}")
+    if is_gpt_enabled_for_user(uid):
+        try:
+            msgs = _build_messages(user_key, text_in)
+            reply_text = _ask_gpt(msgs)
+            message_source = "gpt"
+            logging.info(f"[on_text] GPT response generated for uid={uid}")
+        except Exception as e:
+            logging.exception(f"[on_text] GPT failed: {e}")
+    else:
+        logging.info(f"[on_text] GPT disabled for uid={uid}")
 
     # 4.2 後備：關鍵字觸發
     if not reply_text:

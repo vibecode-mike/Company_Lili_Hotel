@@ -38,6 +38,7 @@ class Member(Base):
         index=True,
     )
     receive_notification = Column(Boolean, default=True, comment="是否接收優惠通知")
+    gpt_enabled = Column(Boolean, default=True, comment="是否啟用 GPT 自動回應")
     internal_note = Column(Text, comment="內部備註")
     last_interaction_at = Column(DateTime, index=True, comment="最後互動時間")
 
