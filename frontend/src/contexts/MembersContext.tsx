@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, ReactNode, useCallback, useMemo, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useMemo, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import type { Member, TagInfo } from '../types/member';
 import type { BackendMember, BackendTag } from '../types/api';
+import { useAuth } from '../components/auth/AuthContext';
 
 /**
  * 會員數據 Context
@@ -91,6 +92,8 @@ export function MembersProvider({ children }: MembersProviderProps) {
   const [members, setMembers] = useState<Member[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { isAuthenticated } = useAuth();
+  const hasFetchedRef = useRef(false);
 
   const fetchMembers = useCallback(async () => {
     const token = localStorage.getItem('auth_token');
@@ -128,8 +131,16 @@ export function MembersProvider({ children }: MembersProviderProps) {
   }, []);
 
   useEffect(() => {
-    fetchMembers();
-  }, [fetchMembers]);
+    if (isAuthenticated && !hasFetchedRef.current) {
+      hasFetchedRef.current = true;
+      fetchMembers();
+    }
+    if (!isAuthenticated) {
+      hasFetchedRef.current = false;
+      setMembers([]);
+      setError(null);
+    }
+  }, [isAuthenticated, fetchMembers]);
 
   const addMember = useCallback((member: Member) => {
     setMembers(prev => [...prev, member]);

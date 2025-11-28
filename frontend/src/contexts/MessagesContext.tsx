@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode, useCallback, useMemo, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useMemo, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '../components/auth/AuthContext';
 import { normalizeInteractionTags } from '../utils/interactionTags';
@@ -85,6 +85,7 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [quotaStatus, setQuotaStatus] = useState<QuotaStatus | null>(null);
   const { isAuthenticated } = useAuth();
+  const hasFetchedRef = useRef(false);
 
   const fetchMessages = useCallback(async () => {
     setIsLoading(true);
@@ -163,10 +164,13 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
 
   // 初始載入數據
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !hasFetchedRef.current) {
+      hasFetchedRef.current = true;
       fetchMessages();
       fetchQuota();
-    } else {
+    }
+    if (!isAuthenticated) {
+      hasFetchedRef.current = false;
       setMessages([]);
       setQuotaStatus(null);
     }

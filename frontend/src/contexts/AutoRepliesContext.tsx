@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, ReactNode, useCallback, useMemo, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useMemo, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import type { BackendAutoReply, BackendKeyword, BackendReplyMessage } from '../types/api';
+import { useAuth } from '../components/auth/AuthContext';
 
 /**
  * 自動回覆數據 Context
@@ -118,6 +119,8 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
   const [autoReplies, setAutoReplies] = useState<AutoReply[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { isAuthenticated } = useAuth();
+  const hasFetchedRef = useRef(false);
 
   const addAutoReply = useCallback((reply: AutoReply) => {
     setAutoReplies(prev => sortByCreatedAt([...prev, reply]));
@@ -304,8 +307,16 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
   );
 
   useEffect(() => {
-    fetchAutoReplies();
-  }, [fetchAutoReplies]);
+    if (isAuthenticated && !hasFetchedRef.current) {
+      hasFetchedRef.current = true;
+      fetchAutoReplies();
+    }
+    if (!isAuthenticated) {
+      hasFetchedRef.current = false;
+      setAutoReplies([]);
+      setError(null);
+    }
+  }, [isAuthenticated, fetchAutoReplies]);
 
   const value = useMemo<AutoRepliesContextType>(() => ({
     autoReplies,
