@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     # LINE App 服務 URL
     LINE_APP_URL: str = "http://localhost:3001"
 
+    # 路由配置
+    UPLOAD_ROUTE_PREFIX: str = "/uploads"
+
     # CORS
     ALLOWED_ORIGINS: str = "*"
 
@@ -65,6 +68,15 @@ class Settings(BaseSettings):
         if os.path.isabs(self.UPLOAD_DIR):
             return Path(self.UPLOAD_DIR)
         return self.project_root / "backend" / "public" / self.UPLOAD_DIR
+
+    @property
+    def line_app_path(self) -> Path:
+        """LINE App 目錄路徑"""
+        return self.project_root / "line_app"
+
+    def get_public_url(self, filename: str) -> str:
+        """生成檔案的公開訪問 URL"""
+        return f"{self.PUBLIC_BASE}{self.UPLOAD_ROUTE_PREFIX}/{filename}"
 
     @property
     def allowed_origins_list(self) -> List[str]:

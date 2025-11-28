@@ -15,6 +15,7 @@ from sqlalchemy.orm import selectinload
 # 設置 logger
 logger = logging.getLogger(__name__)
 
+from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.message import Message
 from app.models.template import MessageTemplate
@@ -34,8 +35,7 @@ def _get_line_app_module():
     from pathlib import Path
     from dotenv import load_dotenv
 
-    project_root = Path(__file__).parent.parent.parent.parent
-    line_app_path = project_root / "line_app"
+    line_app_path = settings.line_app_path
     line_app_py = line_app_path / "app.py"
 
     # 加載環境變量

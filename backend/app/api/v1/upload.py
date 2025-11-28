@@ -17,10 +17,8 @@ from app.config import settings
 router = APIRouter()
 
 # 配置
-UPLOAD_DIR = settings.upload_dir_path
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif"}
-BASE_URL = settings.PUBLIC_BASE  # 从环境变量读取：https://linebot.star-bit.io
 
 
 def get_file_extension(filename: str) -> str:
@@ -106,17 +104,17 @@ async def upload_image(file: UploadFile = File(...)):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         unique_id = str(uuid.uuid4())[:8]
         unique_filename = f"{timestamp}_{unique_id}.jpg"
-        file_path = UPLOAD_DIR / unique_filename
+        file_path = settings.upload_dir_path / unique_filename
 
         # 6. 确保上传目录存在
-        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        settings.upload_dir_path.mkdir(parents=True, exist_ok=True)
 
         # 7. 保存文件
         with open(file_path, "wb") as f:
             f.write(contents)
 
         # 8. 生成访问URL
-        file_url = f"{BASE_URL}/uploads/{unique_filename}"
+        file_url = settings.get_public_url(unique_filename)
 
         # 9. 返回成功响应
         return JSONResponse(
@@ -150,7 +148,7 @@ async def delete_image(filename: str):
         {"code": 200, "message": "删除成功"}
     """
     try:
-        file_path = UPLOAD_DIR / filename
+        file_path = settings.upload_dir_path / filename
 
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="文件不存在")

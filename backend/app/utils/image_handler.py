@@ -19,11 +19,6 @@ _data_uri_re = re.compile(r"^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$")
 
 # 從 Settings 導入配置
 from app.config import settings
-UPLOAD_DIR = settings.upload_dir_path
-PUBLIC_BASE = settings.PUBLIC_BASE
-
-# 路由前綴
-ASSET_ROUTE_PREFIX = "/uploads"
 
 # 允許的圖片格式
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
@@ -41,13 +36,13 @@ def ensure_upload_dir() -> None:
         PermissionError: 權限不足時
     """
     try:
-        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-        logger.debug(f"📁 Upload directory ready: {UPLOAD_DIR}")
+        settings.upload_dir_path.mkdir(parents=True, exist_ok=True)
+        logger.debug(f"📁 Upload directory ready: {settings.upload_dir_path}")
     except PermissionError as e:
-        logger.error(f"❌ Permission denied creating upload directory {UPLOAD_DIR}: {e}")
-        raise PermissionError(f"無法創建上傳目錄，權限不足: {UPLOAD_DIR}")
+        logger.error(f"❌ Permission denied creating upload directory {settings.upload_dir_path}: {e}")
+        raise PermissionError(f"無法創建上傳目錄，權限不足: {settings.upload_dir_path}")
     except OSError as e:
-        logger.error(f"❌ OS error creating upload directory {UPLOAD_DIR}: {e}")
+        logger.error(f"❌ OS error creating upload directory {settings.upload_dir_path}: {e}")
         raise OSError(f"創建上傳目錄失敗: {str(e)}")
 
 
@@ -123,8 +118,9 @@ def save_base64_image(base64_str: str) -> Tuple[str, str]:
     h = get_file_hash(raw)
 
     # 生成相對路徑和絕對路徑
-    rel = f"{ASSET_ROUTE_PREFIX}/{h}.{ext}"
-    abs_path = UPLOAD_DIR / f"{h}.{ext}"
+    filename = f"{h}.{ext}"
+    rel = f"{settings.UPLOAD_ROUTE_PREFIX}/{filename}"
+    abs_path = settings.upload_dir_path / filename
 
     # 保存文件（如果不存在）
     if not abs_path.exists():
@@ -140,7 +136,7 @@ def save_base64_image(base64_str: str) -> Tuple[str, str]:
             raise IOError(f"保存圖片文件失敗: {str(e)}")
 
     # 生成公開訪問 URL
-    public_url = f"{PUBLIC_BASE}{rel}"
+    public_url = settings.get_public_url(filename)
 
     return public_url, rel
 
@@ -199,7 +195,7 @@ def image_url_from_item(item: dict) -> Optional[str]:
         return path
 
     # 相對路徑，拼接 PUBLIC_BASE
-    return f"{PUBLIC_BASE}{path}"
+    return f"{settings.PUBLIC_BASE}{path}"
 
 
 def get_public_url(filename: str) -> str:
@@ -217,7 +213,7 @@ def get_public_url(filename: str) -> str:
         >>> print(url)
         http://localhost:8700/uploads/abc123.jpg
     """
-    return f"{PUBLIC_BASE}{ASSET_ROUTE_PREFIX}/{filename}"
+    return settings.get_public_url(filename)
 
 
 def validate_image_file(filename: str, content: bytes) -> Tuple[bool, Optional[str]]:
@@ -248,9 +244,6 @@ def validate_image_file(filename: str, content: bytes) -> Tuple[bool, Optional[s
 # ============================================================
 # 以下為向後兼容的舊函數（用於 linebot_service.py 等模組）
 # ============================================================
-
-# 專案根目錄
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 
 
 def file_path_to_base64(file_path: str) -> Optional[str]:
@@ -290,11 +283,11 @@ def file_path_to_base64(file_path: str) -> Optional[str]:
             else:
                 relative_path = Path(relative_path)
 
-            full_path = UPLOAD_DIR / relative_path
+            full_path = settings.upload_dir_path / relative_path
 
         # 若主要位置不存在，再嘗試舊版的 backend/public/* 位置
         if not full_path.exists():
-            legacy_path = PROJECT_ROOT / "backend" / "public" / normalized_path.lstrip("/")
+            legacy_path = settings.project_root / "backend" / "public" / normalized_path.lstrip("/")
             if legacy_path.exists():
                 full_path = legacy_path
             else:

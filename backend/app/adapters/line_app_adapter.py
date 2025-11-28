@@ -16,7 +16,7 @@ _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="line_app_")
 
 # 从配置导入路径
 from app.config import settings
-LINE_APP_PATH = str(settings.project_root / "line_app")
+LINE_APP_PATH = str(settings.line_app_path)
 
 
 def _import_line_app_modules():
