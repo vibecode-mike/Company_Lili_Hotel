@@ -10,6 +10,7 @@ from app.models.member import Member
 from app.models.tag import MemberTag, MemberInteractionTag
 from app.models.user import User
 from app.models.chat_log import ChatLog
+from app.models.line_channel import LineChannel
 from app.schemas.member import (
     MemberCreate,
     MemberUpdate,
@@ -95,6 +96,12 @@ async def get_members(
     # 使用通用分頁函數
     members, total = await paginate_query(db, query, page_params)
 
+    # 查詢 LINE channel_id（假設同一家只有一個 channel）
+    channel_result = await db.execute(
+        select(LineChannel.channel_id).where(LineChannel.is_active == True).limit(1)
+    )
+    channel_id = channel_result.scalar()
+
     # 批量查詢所有會員的最後聊天時間（避免 N+1）
     member_line_uids = [m.line_uid for m in members if m.line_uid]
     last_chat_times = {}
@@ -141,6 +148,9 @@ async def get_members(
 
         member_dict = MemberListItem.model_validate(member).model_dump()
         member_dict["tags"] = tags
+
+        # 添加 channel_id
+        member_dict["channel_id"] = channel_id
 
         # 使用批量查詢的聊天時間（無需額外查詢）
         if member.line_uid and member.line_uid in last_chat_times:
@@ -206,6 +216,15 @@ async def get_member(
     if not member:
         raise HTTPException(status_code=404, detail="會員不存在")
 
+    # 查詢 LINE channel_id（所有會員使用同一個 LINE channel）
+    from app.models.line_channel import LineChannel
+    channel_result = await db.execute(
+        select(LineChannel.channel_id)
+        .where(LineChannel.is_active == True)
+        .limit(1)
+    )
+    channel_id = channel_result.scalar()
+
     # 獲取標籤 - 簡化為兩表查詢
     tags = []
 
@@ -247,6 +266,7 @@ async def get_member(
         "line_uid": member.line_uid,
         "line_name": member.line_name,
         "line_avatar": member.line_avatar,
+        "channel_id": channel_id,
         "name": member.name,
         "email": member.email,
         "phone": member.phone,

@@ -51,9 +51,11 @@ class MemberListItem(BaseModel):
     line_uid: Optional[str] = None
     line_name: Optional[str] = None  # 改名為 line_name
     line_avatar: Optional[str] = None  # 改名為 line_avatar
+    channel_id: Optional[str] = None  # LINE channel ID
     name: Optional[str] = None  # 統一單欄位
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
+    join_source: str = "LINE"  # 加入來源：LINE/CRM/PMS/ERP/系統
     tags: List[TagInfo] = []
     created_at: datetime
     last_interaction_at: Optional[datetime] = None

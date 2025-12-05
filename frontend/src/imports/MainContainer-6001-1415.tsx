@@ -5,6 +5,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "../components/ui/toolti
 import TooltipComponent from "./Tooltip";
 import { PageHeaderWithBreadcrumb } from "../components/common/Breadcrumb";
 import { TextIconButton, ArrowRightIcon, Tag } from "../components/common";
+import { MemberSourceIconLarge } from "../components/common/icons";
 import { useMembers } from "../contexts/MembersContext";
 import { formatMemberDateTime, getLatestMemberChatTimestamp } from "../utils/memberTime";
 
@@ -197,8 +198,8 @@ function Container6({
               </svg>
             </div>
           </div>
-          <div 
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[140px] cursor-pointer" 
+          <div
+            className="hidden box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[140px] cursor-pointer"
             data-name="Table/Title-atomic"
             onClick={() => onSortChange('phone')}
           >
@@ -207,15 +208,15 @@ function Container6({
             </div>
             <SortingIcon active={isActive('phone')} order={sortConfig.order} />
           </div>
-          <div className="h-[12px] relative shrink-0 w-0" data-name="Divier">
+          <div className="hidden h-[12px] relative shrink-0 w-0" data-name="Divier">
             <div className="absolute inset-[-3.33%_-0.4px]">
               <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
                 <path d="M0.4 0.4V12.4" id="Divier" stroke="var(--stroke-0, #DDDDDD)" strokeLinecap="round" strokeWidth="0.8" />
               </svg>
             </div>
           </div>
-          <div 
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[200px] cursor-pointer" 
+          <div
+            className="hidden box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[200px] cursor-pointer"
             data-name="Table/Title-atomic"
             onClick={() => onSortChange('email')}
           >
@@ -224,7 +225,7 @@ function Container6({
             </div>
             <SortingIcon active={isActive('email')} order={sortConfig.order} />
           </div>
-          <div className="h-[12px] relative shrink-0 w-0" data-name="Divier">
+          <div className="hidden h-[12px] relative shrink-0 w-0" data-name="Divier">
             <div className="absolute inset-[-3.33%_-0.4px]">
               <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
                 <path d="M0.4 0.4V12.4" id="Divier" stroke="var(--stroke-0, #DDDDDD)" strokeLinecap="round" strokeWidth="0.8" />
@@ -238,8 +239,24 @@ function Container6({
               </svg>
             </div>
           </div>
-          <div 
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[140px] cursor-pointer" 
+          {/* 平台欄位表頭 */}
+          <div
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[120px]"
+            data-name="Table/Title-atomic"
+          >
+            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
+              <p className="leading-[1.5] whitespace-pre">平台</p>
+            </div>
+          </div>
+          <div className="h-[12px] relative shrink-0 w-0" data-name="Divier">
+            <div className="absolute inset-[-3.33%_-0.4px]">
+              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
+                <path d="M0.4 0.4V12.4" id="Divier" stroke="var(--stroke-0, #DDDDDD)" strokeLinecap="round" strokeWidth="0.8" />
+              </svg>
+            </div>
+          </div>
+          <div
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[140px] cursor-pointer"
             data-name="Table/Title-atomic"
             onClick={() => onSortChange('createTime')}
           >
@@ -467,14 +484,20 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Membe
             </div>
           </div>
           <MemberTags member={member} />
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[140px]" data-name="Table/List-atomic">
+          <div className="hidden box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[140px]" data-name="Table/List-atomic">
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] w-[90px]">
               <p className="leading-[1.5]">{member.phone || '-'}</p>
             </div>
           </div>
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[200px]" data-name="Table/List-atomic">
+          <div className="hidden box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[200px]" data-name="Table/List-atomic">
             <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
               <p className="leading-[1.5]">{member.email || '-'}</p>
+            </div>
+          </div>
+          {/* 平台欄位內容 */}
+          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[120px]" data-name="Table/List-atomic">
+            <div className="flex items-center justify-start font-['Noto_Sans_TC:Regular',sans-serif] relative text-[#383838]">
+              <MemberSourceIconLarge source={member.join_source || 'LINE'} />
             </div>
           </div>
           <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[140px]" data-name="Table/List-atomic">
@@ -903,12 +926,12 @@ function Table8Columns3Actions({
       {/* Table Container with Border - Fixed height container with horizontal scroll */}
       <div className="bg-white rounded-[16px] w-full flex flex-col max-h-[600px] overflow-x-auto table-scroll">
         {/* Table Header - Fixed */}
-        <div className="relative shrink-0 w-[1510px]">
+        <div className="relative shrink-0 w-[1630px]">
           <Container6 sortConfig={sortConfig} onSortChange={onSortChange} />
         </div>
         
         {/* Table Body - Scrollable Container */}
-        <div className="w-[1510px] flex-1 overflow-y-auto table-scroll">
+        <div className="w-[1630px] flex-1 overflow-y-auto table-scroll">
           {members.map((member, index) => (
             <MemberRow 
               key={member.id} 

@@ -28,6 +28,7 @@ export interface Member {
   lastChatTime: string;
   lineUid?: string;
   lineAvatar?: string;
+  channel_id?: string;        // LINE channel ID
   join_source?: string;       // 加入來源：LINE/CRM/PMS/ERP/系統
   id_number?: string;         // 身分證字號
   residence?: string;         // 居住地

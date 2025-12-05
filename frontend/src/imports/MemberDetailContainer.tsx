@@ -14,6 +14,7 @@ import { useToast } from "../components/ToastProvider";
 import MemberTagEditModal from "../components/MemberTagEditModal";
 import { TitleContainer as SharedTitleContainer, HeaderContainer as SharedHeaderContainer } from "../components/common/Containers";
 import { SimpleBreadcrumb } from "../components/common/Breadcrumb";
+import { MemberSourceIconSmall } from "../components/common/icons";
 import { useMembers } from "../contexts/MembersContext";
 import { useAuth } from "../components/auth/AuthContext";
 import type { Member, MemberData } from "../types/member";
@@ -61,6 +62,7 @@ const mapApiMemberToMemberData = (apiMember: BackendMember, fallback?: MemberDat
     lastChatTime: apiMember?.last_interaction_at ?? fallback?.lastChatTime ?? '',
     lineUid: apiMember?.line_uid ?? fallback?.lineUid,
     lineAvatar: apiMember?.line_avatar ?? fallback?.lineAvatar,
+    channel_id: apiMember?.channel_id ?? fallback?.channel_id,
     join_source: apiMember?.join_source ?? fallback?.join_source,
     id_number: apiMember?.id_number ?? fallback?.id_number,
     residence: apiMember?.residence ?? fallback?.residence,
@@ -71,28 +73,29 @@ const mapApiMemberToMemberData = (apiMember: BackendMember, fallback?: MemberDat
 };
 
 const mapMemberToMemberData = (memberSource: Member, fallback?: MemberData): MemberData => ({
-  id: memberSource.id,
-  username: memberSource.username,
-  realName: memberSource.realName,
-  tags: memberSource.tags,
-  memberTags: memberSource.memberTags ?? fallback?.memberTags ?? [],
-  interactionTags: memberSource.interactionTags ?? fallback?.interactionTags ?? [],
-  tagDetails: memberSource.tagDetails ?? fallback?.tagDetails ?? [],
-  phone: memberSource.phone,
-  email: memberSource.email,
-  gender: memberSource.gender ?? fallback?.gender,
-  birthday: memberSource.birthday ?? fallback?.birthday,
-  createTime: memberSource.createTime,
-  lastChatTime: memberSource.lastChatTime,
-  lineUid: memberSource.lineUid ?? fallback?.lineUid,
-  lineAvatar: memberSource.lineAvatar ?? fallback?.lineAvatar,
-  join_source: memberSource.join_source ?? fallback?.join_source,
-  id_number: memberSource.id_number ?? fallback?.id_number,
-  residence: memberSource.residence ?? fallback?.residence,
-  passport_number: memberSource.passport_number ?? fallback?.passport_number,
-  internal_note: memberSource.internal_note ?? fallback?.internal_note,
-  status: fallback?.status ?? 'active',
-});
+    id: memberSource.id,
+    username: memberSource.username,
+    realName: memberSource.realName,
+    tags: memberSource.tags,
+    memberTags: memberSource.memberTags ?? fallback?.memberTags ?? [],
+    interactionTags: memberSource.interactionTags ?? fallback?.interactionTags ?? [],
+    tagDetails: memberSource.tagDetails ?? fallback?.tagDetails ?? [],
+    phone: memberSource.phone,
+    email: memberSource.email,
+    gender: memberSource.gender ?? fallback?.gender,
+    birthday: memberSource.birthday ?? fallback?.birthday,
+    createTime: memberSource.createTime,
+    lastChatTime: memberSource.lastChatTime,
+    lineUid: memberSource.lineUid ?? fallback?.lineUid,
+    lineAvatar: memberSource.lineAvatar ?? fallback?.lineAvatar,
+    channel_id: memberSource.channel_id ?? fallback?.channel_id,
+    join_source: memberSource.join_source ?? fallback?.join_source,
+    id_number: memberSource.id_number ?? fallback?.id_number,
+    residence: memberSource.residence ?? fallback?.residence,
+    passport_number: memberSource.passport_number ?? fallback?.passport_number,
+    internal_note: memberSource.internal_note ?? fallback?.internal_note,
+    status: fallback?.status ?? 'active',
+  });
 
 const extractMessageTimestamp = (message?: MessageWithTimestamp): string | undefined => {
   if (!message) return undefined;
@@ -1286,6 +1289,35 @@ function Container6({ member, onMemberUpdate }: { member?: MemberData; onMemberU
 }
 
 function Container7({ member }: { member?: MemberData }) {
+  const [channelId, setChannelId] = React.useState<string>('LINE');
+
+  React.useEffect(() => {
+    const fetchChannelId = async () => {
+      try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+
+        const response = await fetch('/api/v1/line_channels/current', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) return;
+
+        const result = await response.json();
+        // API 直接回傳單一頻道物件
+        if (result?.channel_id) {
+          setChannelId(result.channel_id);
+        }
+      } catch (error) {
+        console.error('Failed to fetch channel_id:', error);
+      }
+    };
+
+    fetchChannelId();
+  }, []);
+
   return (
     <div className="content-stretch flex items-center relative shrink-0 w-full" data-name="Container">
       <div className="content-stretch flex items-center min-w-[120px] relative shrink-0" data-name="Modal/Title&Content">
@@ -1294,8 +1326,16 @@ function Container7({ member }: { member?: MemberData }) {
         </div>
       </div>
       <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0" data-name="Modal/Title&Content">
-        <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-          <p className="leading-[1.5] whitespace-pre">LINE (LINE UID: {member?.lineUid || '未提供'})</p>
+        <div className="flex items-center gap-2 font-['Noto_Sans_TC:Regular',sans-serif] font-normal relative">
+          <MemberSourceIconSmall source={member?.join_source || 'LINE'} />
+          <span className="text-[14px] text-[#383838]">
+            {channelId}
+          </span>
+          {member?.lineUid && (
+            <span className="text-[12px] text-[#666666]">
+              (LINE UID: {member.lineUid})
+            </span>
+          )}
         </div>
       </div>
     </div>

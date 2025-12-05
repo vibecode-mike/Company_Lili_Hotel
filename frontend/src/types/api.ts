@@ -25,13 +25,17 @@ export interface BackendMember {
   birthday?: string;
   created_at: string;
   last_chat_time?: string;
+  last_interaction_at?: string;
   line_uid?: string;
+  line_name?: string;
   line_avatar?: string;
+  channel_id?: string;
   join_source?: string;
   id_number?: string;
   residence?: string;
   passport_number?: string;
   internal_note?: string;
+  name?: string;
 }
 
 /**

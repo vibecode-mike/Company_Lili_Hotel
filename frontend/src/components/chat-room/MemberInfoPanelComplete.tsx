@@ -12,6 +12,7 @@ import { Label } from '../ui/label';
 import { format } from 'date-fns';
 import svgPathsInfo from '../../imports/svg-k0rlkn3s4y';
 import { useToast } from '../ToastProvider';
+import { MemberSourceIconSmall } from '../common/icons';
 import ButtonEdit from '../../imports/ButtonEdit';
 import { formatMemberDateTime, getLatestMemberChatTimestamp } from '../../utils/memberTime';
 
@@ -109,6 +110,35 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
 
   const lineUid = getMemberString(member, ['lineUid', 'line_uid'], '');
   const joinSource = getMemberString(member, ['join_source'], 'LINE');
+  const lineName = getMemberString(member, ['lineName', 'line_name'], '');
+  const [channelId, setChannelId] = React.useState<string>('LINE');
+
+  // 從 API 取得 channel_id
+  React.useEffect(() => {
+    const fetchChannelId = async () => {
+      try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+
+        const response = await fetch('/api/v1/line_channels/current', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) return;
+
+        const result = await response.json();
+        if (result?.channel_id) {
+          setChannelId(result.channel_id);
+        }
+      } catch (error) {
+        console.error('Failed to fetch channel_id:', error);
+      }
+    };
+
+    fetchChannelId();
+  }, []);
 
   React.useEffect(() => {
     if (member) {
@@ -780,8 +810,11 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
             </div>
           </div>
           <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0">
-            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[1.5] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="whitespace-pre">{joinSource}</p>
+            <div className="flex items-center gap-2 font-['Noto_Sans_TC:Regular',sans-serif] font-normal relative">
+              <MemberSourceIconSmall source={joinSource} />
+              <span className="text-[14px] text-[#383838]">
+                {channelId}
+              </span>
             </div>
           </div>
         </div>

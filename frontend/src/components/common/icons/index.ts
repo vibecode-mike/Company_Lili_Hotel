@@ -4,11 +4,18 @@
  * 提供可复用的图标组件，统一样式和行为
  */
 
-export { 
-  ArrowIcon, 
-  ArrowRightIcon, 
-  ArrowLeftIcon, 
-  ArrowUpIcon, 
-  ArrowDownIcon 
+export {
+  ArrowIcon,
+  ArrowRightIcon,
+  ArrowLeftIcon,
+  ArrowUpIcon,
+  ArrowDownIcon
 } from './ArrowIcon';
 export type { ArrowIconProps } from './ArrowIcon';
+
+export {
+  MemberSourceIcon,
+  MemberSourceIconSmall,
+  MemberSourceIconLarge
+} from './MemberSourceIcon';
+export type { MemberSourceIconProps, MemberSourceType, IconSize } from './MemberSourceIcon';

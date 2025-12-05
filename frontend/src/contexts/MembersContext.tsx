@@ -74,6 +74,7 @@ const transformBackendMember = (item: BackendMember): Member => {
     lastChatTime: formatDateTime(item.last_interaction_at),
     lineUid: item.line_uid || '',
     lineAvatar: item.line_avatar || '',
+    channel_id: item.channel_id || '',
     join_source: item.join_source || '',
     id_number: item.id_number || '',
     residence: item.residence || '',
