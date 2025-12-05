@@ -111,6 +111,33 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
   const lineUid = getMemberString(member, ['lineUid', 'line_uid'], '');
   const joinSource = getMemberString(member, ['join_source'], 'LINE');
   const lineName = getMemberString(member, ['lineName', 'line_name'], '');
+  const [channelId, setChannelId] = React.useState<string>('LINE');
+
+  React.useEffect(() => {
+    const fetchChannelId = async () => {
+      try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+
+        const response = await fetch('/api/v1/line_channels/current', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) return;
+
+        const result = await response.json();
+        if (result?.channel_id) {
+          setChannelId(result.channel_id);
+        }
+      } catch (error) {
+        console.error('Failed to fetch channel_id:', error);
+      }
+    };
+
+    fetchChannelId();
+  }, []);
 
   React.useEffect(() => {
     if (member) {
@@ -785,7 +812,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
             <div className="flex items-center gap-2 font-['Noto_Sans_TC:Regular',sans-serif] font-normal relative">
               <MemberSourceIconSmall source={joinSource} />
               <span className="text-[14px] text-[#383838]">
-                {lineName || joinSource || 'LINE'}
+                {channelId}
               </span>
             </div>
           </div>

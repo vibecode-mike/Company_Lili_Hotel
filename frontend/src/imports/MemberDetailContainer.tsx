@@ -1289,6 +1289,34 @@ function Container6({ member, onMemberUpdate }: { member?: MemberData; onMemberU
 }
 
 function Container7({ member }: { member?: MemberData }) {
+  const [channelId, setChannelId] = React.useState<string>('LINE');
+
+  React.useEffect(() => {
+    const fetchChannelId = async () => {
+      try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+
+        const response = await fetch('/api/v1/line_channels/current', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) return;
+
+        const result = await response.json();
+        if (result?.channel_id) {
+          setChannelId(result.channel_id);
+        }
+      } catch (error) {
+        console.error('Failed to fetch channel_id:', error);
+      }
+    };
+
+    fetchChannelId();
+  }, []);
+
   return (
     <div className="content-stretch flex items-center relative shrink-0 w-full" data-name="Container">
       <div className="content-stretch flex items-center min-w-[120px] relative shrink-0" data-name="Modal/Title&Content">
@@ -1300,8 +1328,13 @@ function Container7({ member }: { member?: MemberData }) {
         <div className="flex items-center gap-2 font-['Noto_Sans_TC:Regular',sans-serif] font-normal relative">
           <MemberSourceIconSmall source={member?.join_source || 'LINE'} />
           <span className="text-[14px] text-[#383838]">
-            {member?.lineName || member?.join_source || 'LINE'}
+            {channelId}
           </span>
+          {member?.lineUid && (
+            <span className="text-[12px] text-[#666666]">
+              (LINE UID: {member.lineUid})
+            </span>
+          )}
         </div>
       </div>
     </div>
