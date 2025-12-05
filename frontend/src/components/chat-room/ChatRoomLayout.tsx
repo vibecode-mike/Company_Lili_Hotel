@@ -147,16 +147,141 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
   const [isTagModalOpen, setIsTagModalOpen] = useState(false);
   const [memberTags, setMemberTags] = useState<string[]>(member?.memberTags || []); // ✅ 使用真實會員標籤
   const [interactionTags, setInteractionTags] = useState<string[]>(member?.interactionTags || []); // ✅ 使用真實互動標籤
+
+  // GPT 計時器狀態
+  const [isGptManualMode, setIsGptManualMode] = useState(false);
+  const gptTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const MANUAL_MODE_DURATION = 10 * 60 * 1000; // 10 分鐘
   const [note, setNote] = useState(member?.internal_note || '');
 
   // Avatar interaction states
   const [isAvatarHovered, setIsAvatarHovered] = useState(false);
   const [isAvatarPressed, setIsAvatarPressed] = useState(false);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
-  
+  const messageTextareaRef = useRef<HTMLTextAreaElement>(null);
+
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
   const { logout } = useAuth();
+
+  // GPT 計時器函式：恢復自動模式（必須在 useEffect 之前定義）
+  const restoreGptMode = useCallback(async () => {
+    if (!member?.id) return;
+
+    console.log('🔄 [GPT Timer] 恢復自動模式, member_id:', member.id);
+
+    try {
+      // 呼叫 API 設置 gpt_enabled = true
+      const token = localStorage.getItem('auth_token');
+      console.log('📡 [GPT Timer] 發送 API 請求 (恢復):', {
+        url: `/api/v1/members/${member.id}`,
+        method: 'PUT',
+        body: { gpt_enabled: true },
+        hasToken: !!token
+      });
+
+      const response = await fetch(`/api/v1/members/${member.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ gpt_enabled: true })
+      });
+
+      console.log('📥 [GPT Timer] API 回應狀態 (恢復):', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ [GPT Timer] API 錯誤 (恢復):', errorData);
+        throw new Error(`API 錯誤: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ [GPT Timer] API 成功 (恢復):', data);
+
+      // 清除 localStorage 狀態
+      localStorage.removeItem(`gpt_timer_${member.id}`);
+
+      // 更新 UI 狀態
+      setIsGptManualMode(false);
+
+      // 清除計時器
+      if (gptTimerRef.current) {
+        clearTimeout(gptTimerRef.current);
+        gptTimerRef.current = null;
+      }
+
+      console.log('✅ [GPT Timer] GPT 自動模式已恢復');
+
+    } catch (error) {
+      console.error('❌ [GPT Timer] 恢復 GPT 自動模式失敗:', error);
+    }
+  }, [member?.id]);
+
+  // GPT 計時器函式：啟動手動模式
+  const startGptTimer = useCallback(async () => {
+    if (!member?.id) return;
+
+    console.log('🔄 [GPT Timer] 啟動手動模式, member_id:', member.id);
+
+    // 清除現有計時器
+    if (gptTimerRef.current) {
+      clearTimeout(gptTimerRef.current);
+    }
+
+    try {
+      // 呼叫 API 設置 gpt_enabled = false
+      const token = localStorage.getItem('auth_token');
+      console.log('📡 [GPT Timer] 發送 API 請求:', {
+        url: `/api/v1/members/${member.id}`,
+        method: 'PUT',
+        body: { gpt_enabled: false },
+        hasToken: !!token
+      });
+
+      const response = await fetch(`/api/v1/members/${member.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ gpt_enabled: false })
+      });
+
+      console.log('📥 [GPT Timer] API 回應狀態:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ [GPT Timer] API 錯誤:', errorData);
+        throw new Error(`API 錯誤: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ [GPT Timer] API 成功:', data);
+
+      // 儲存狀態到 localStorage（用於多分頁同步）
+      localStorage.setItem(`gpt_timer_${member.id}`, JSON.stringify({
+        memberId: member.id,
+        isManualMode: true,
+        startTime: Date.now()
+      }));
+
+      // 更新 UI 狀態
+      setIsGptManualMode(true);
+
+      // 啟動 10 分鐘計時器
+      gptTimerRef.current = setTimeout(() => {
+        restoreGptMode();
+      }, MANUAL_MODE_DURATION);
+
+      console.log('⏱️  [GPT Timer] 計時器已啟動, 將在', MANUAL_MODE_DURATION / 1000, '秒後恢復');
+
+    } catch (error) {
+      console.error('❌ [GPT Timer] 啟動 GPT 手動模式失敗:', error);
+      showToast?.('操作失敗,請重試', 'error');
+    }
+  }, [member?.id, MANUAL_MODE_DURATION, restoreGptMode, showToast]);
 
   const memberLastInteractionRaw = member ? (member as any).last_interaction_at : null;
 
@@ -393,6 +518,93 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
     }
   }, [messages]);
 
+  // GPT 計時器 useEffect：多分頁同步
+  useEffect(() => {
+    if (!member?.id) return;
+
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === `gpt_timer_${member.id}`) {
+        if (event.newValue) {
+          // 其他分頁啟動了計時器
+          setIsGptManualMode(true);
+        } else {
+          // 其他分頁清除了計時器
+          setIsGptManualMode(false);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [member?.id]);
+
+  // GPT 計時器 useEffect：頁面重新整理時清除手動模式狀態
+  useEffect(() => {
+    if (!member?.id) return;
+
+    // 頁面載入時，檢查是否有殘留的計時器狀態
+    const timerKey = `gpt_timer_${member.id}`;
+    const storedTimer = localStorage.getItem(timerKey);
+
+    if (storedTimer) {
+      console.log('🔄 [GPT Timer] 偵測到頁面重新整理，清除手動模式狀態');
+      // 清除 localStorage 中的計時器資料
+      localStorage.removeItem(timerKey);
+      // 確保狀態為自動模式（已經是 false，但明確設置）
+      setIsGptManualMode(false);
+      // 清除任何可能殘留的計時器
+      if (gptTimerRef.current) {
+        clearTimeout(gptTimerRef.current);
+        gptTimerRef.current = null;
+      }
+    }
+  }, [member?.id]);
+
+  // GPT 計時器 useEffect：頁面載入時從資料庫同步 GPT 模式狀態
+  useEffect(() => {
+    if (!member?.id) return;
+
+    // 從資料庫載入的 gpt_enabled 值來設定初始狀態
+    if (member.gpt_enabled !== undefined) {
+      // gpt_enabled = true → 自動模式 → isGptManualMode = false
+      // gpt_enabled = false → 手動模式 → isGptManualMode = true
+      const shouldBeManualMode = !member.gpt_enabled;
+
+      if (shouldBeManualMode !== isGptManualMode) {
+        console.log(`🔄 [GPT Timer] 頁面載入：從資料庫同步 GPT 模式 (gpt_enabled=${member.gpt_enabled})`);
+        setIsGptManualMode(shouldBeManualMode);
+
+        // 如果是手動模式，需要啟動計時器
+        if (shouldBeManualMode) {
+          startGptTimer();
+        }
+      }
+    }
+  }, [member?.id, member?.gpt_enabled]);
+
+  // GPT 計時器 useEffect：會員切換時清理
+  useEffect(() => {
+    // 當會員變更時，恢復上一個會員的 GPT 模式
+    return () => {
+      if (member?.id && isGptManualMode) {
+        restoreGptMode();
+      }
+    };
+  }, [member?.id, isGptManualMode, restoreGptMode]);
+
+  // GPT 計時器 useEffect：組件卸載時清理
+  useEffect(() => {
+    return () => {
+      // 組件卸載時清除計時器
+      if (gptTimerRef.current) {
+        clearTimeout(gptTimerRef.current);
+      }
+    };
+  }, []);
+
   const handleSendMessage = async () => {
     const trimmedText = messageInput.trim();
     if (!trimmedText || !member?.id || isSending) return;
@@ -422,6 +634,18 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
       if (result.success) {
         // 清空輸入框
         setMessageInput('');
+
+        // ⭐ 根據輸入框焦點狀態決定 GPT 模式
+        // - 如果仍聚焦（用戶還在輸入框內）→ 重置計時器，繼續手動模式
+        // - 如果已失焦（用戶離開輸入框）→ 立即恢復自動模式
+        if (isGptManualMode) {
+          const isStillFocused = messageTextareaRef.current === document.activeElement;
+          if (isStillFocused) {
+            startGptTimer();  // 仍聚焦 → 重置 10 分鐘計時器
+          } else {
+            restoreGptMode();  // 已失焦 → 恢復自動模式
+          }
+        }
 
         // 重新載入訊息列表（確保顯示最新訊息）
         await loadChatMessages(1, false);
@@ -695,6 +919,7 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
               </div>
             </div>
 
+
             {/* Messages Scroll Container */}
             <div
               ref={chatContainerRef}
@@ -745,12 +970,15 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
               <div className="bg-white relative rounded-[20px] shrink-0">
                 <div className="flex flex-row justify-end min-h-inherit size-full">
                   <div className="box-border content-stretch flex gap-[4px] items-start justify-end min-h-inherit p-[20px] relative w-full">
-                    <div className="basis-0 content-stretch flex flex-col gap-[12px] grow h-[168px] items-start min-h-[96px] min-w-px relative shrink-0">
+                    <div className="basis-0 content-stretch flex flex-col gap-[12px] grow items-start min-h-[96px] min-w-px relative shrink-0">
                       {/* Text Input */}
                       <div className="basis-0 content-stretch flex flex-wrap gap-[10px] grow items-center justify-center min-h-[108px] min-w-px relative shrink-0 w-full">
                         <textarea
+                          ref={messageTextareaRef}
                           value={messageInput}
                           onChange={(e) => setMessageInput(e.target.value)}
+                          onFocus={startGptTimer}
+                          onBlur={restoreGptMode}
                           onKeyDown={(e) => {
                             // Prevent sending message during IME composition (Chinese, Japanese, Korean input)
                             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !isComposing) {
@@ -764,9 +992,29 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
                           className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow h-full leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] placeholder:text-[#a8a8a8] bg-transparent border-0 outline-none resize-none [&::-webkit-scrollbar]:w-[8px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/60 [&::-webkit-scrollbar-thumb]:rounded-full"
                         />
                       </div>
-                      
-                      {/* Buttons */}
-                      <div className="content-stretch flex gap-[4px] items-start justify-end relative shrink-0 w-full">
+
+                      {/* 底部列：GPT 狀態指示 + 傳送按鈕 (同一列) */}
+                      <div className="content-stretch flex gap-[12px] items-center justify-between relative shrink-0 w-full">
+                        {/* GPT 狀態指示 (左側) */}
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-[rgba(34,197,94,0.08)] border border-[#22c55e]/30 rounded-[8px] whitespace-nowrap shrink-0">
+                          {isGptManualMode ? (
+                            <>
+                              <svg className="w-3 h-3 text-[#ff9800] flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                              </svg>
+                              <span className="text-xs font-medium text-[#f57c00]">手動模式</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-3 h-3 text-[#22c55e] flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                              </svg>
+                              <span className="text-xs font-medium text-[#16a34a]">自動模式</span>
+                            </>
+                          )}
+                        </div>
+
+                        {/* 傳送按鈕 (右側) */}
                         <button
                           onClick={handleSendMessage}
                           disabled={!messageInput.trim() || isSending}

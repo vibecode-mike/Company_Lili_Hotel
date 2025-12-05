@@ -418,11 +418,17 @@ def is_gpt_enabled_for_user(line_uid: str) -> bool:
     try:
         row = fetchone("SELECT gpt_enabled FROM members WHERE line_uid=:u", {"u": line_uid})
         if row:
-            return bool(row[0])
-        return True  # 會員不存在，預設啟用
+            # 修正：從 dict 中正確取值
+            gpt_enabled = row.get("gpt_enabled", True)
+            logging.debug(f"[GPT Check] uid={line_uid}, gpt_enabled={gpt_enabled}")
+            return bool(gpt_enabled)
+        # 會員不存在於資料庫
+        logging.debug(f"[GPT Check] uid={line_uid} not found, default=True")
+        return True
     except Exception as e:
-        logging.warning(f"[GPT] Failed to fetch gpt_enabled for uid={line_uid}: {e}")
-        return True  # 查詢失敗，安全降級為啟用
+        # 查詢失敗，記錄錯誤並安全降級
+        logging.error(f"[GPT Check] DB query failed for uid={line_uid}: {e}")
+        return True
 
 
 def _map_question_for_liff(q: dict) -> dict:
@@ -977,11 +983,14 @@ def _build_messages(user_key: str, user_text: str):
     return msgs
 
 def _ask_gpt(messages):
+    """調用 OpenAI GPT API，失敗時返回 None 讓系統使用回退機制"""
     try:
         resp = oai.chat.completions.create(model=OPENAI_MODEL, messages=messages, temperature=0.6, max_tokens=500)
         return resp.choices[0].message.content.strip()
     except Exception as e:
-        return f"（抱歉，目前服務忙線中，請稍後再試）\n\nError: {e}"
+        # 記錄錯誤但返回 None，讓系統自動切換到關鍵字/總是回應
+        logging.error(f"❌ [GPT API] 調用失敗: {e}")
+        return None
 
 # -------------------------------------------------
 # Auto Response 檢查函數
@@ -3278,20 +3287,26 @@ def on_text(event: MessageEvent):
     reply_text = None
     message_source = None
 
-    # 4.1 優先：GPT 回應
-    if is_gpt_enabled_for_user(uid):
+    # 檢查是否啟用 GPT
+    gpt_enabled = is_gpt_enabled_for_user(uid)
+
+    # 4.1 優先：GPT 回應（僅當 gpt_enabled = TRUE 時）
+    if gpt_enabled:
         try:
             msgs = _build_messages(user_key, text_in)
             reply_text = _ask_gpt(msgs)
-            message_source = "gpt"
-            logging.info(f"[on_text] GPT response generated for uid={uid}")
+            if reply_text:  # 只有成功時才設置 source
+                message_source = "gpt"
+                logging.info(f"[on_text] GPT response generated for uid={uid}")
+            else:
+                logging.warning(f"[on_text] GPT API 失敗，切換到回退機制 for uid={uid}")
         except Exception as e:
-            logging.exception(f"[on_text] GPT failed: {e}")
+            logging.exception(f"[on_text] GPT exception: {e}")
     else:
-        logging.info(f"[on_text] GPT disabled for uid={uid}")
+        logging.info(f"[on_text] ⏸️ 手動模式：GPT 已停用 for uid={uid}")
 
-    # 4.2 後備：關鍵字觸發
-    if not reply_text:
+    # 4.2 後備：關鍵字觸發（gpt_enabled = TRUE 且 GPT 失敗時，或 gpt_enabled = FALSE 時都不觸發）
+    if gpt_enabled and not reply_text:
         try:
             reply_text = check_keyword_trigger(uid, text_in)
             if reply_text:
@@ -3300,8 +3315,8 @@ def on_text(event: MessageEvent):
         except Exception as e:
             logging.exception(f"[on_text] Keyword check failed: {e}")
 
-    # 4.3 最後後備：一律回應
-    if not reply_text:
+    # 4.3 最後後備：一律回應（gpt_enabled = TRUE 且前兩者都失敗時，或 gpt_enabled = FALSE 時都不觸發）
+    if gpt_enabled and not reply_text:
         try:
             reply_text = check_always_response()
             if reply_text:

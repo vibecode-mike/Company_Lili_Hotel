@@ -33,6 +33,7 @@ export interface Member {
   residence?: string;         // 居住地
   passport_number?: string;   // 護照號碼
   internal_note?: string;     // 會員備註
+  gpt_enabled?: boolean;      // GPT 自動回覆模式 (true=自動, false=手動)
 }
 
 /**

@@ -303,12 +303,24 @@ async def update_member(
     if not member:
         raise HTTPException(status_code=404, detail="會員不存在")
 
+    # 添加調試日誌
+    update_data = member_data.model_dump(exclude_unset=True)
+    print(f"🔍 [Update Member] member_id={member_id}, user={current_user.username}")
+    print(f"🔍 [Update Member] Received data: {update_data}")
+    print(f"🔍 [Update Member] Current gpt_enabled: {member.gpt_enabled}")
+
     # 更新欄位
-    for field, value in member_data.model_dump(exclude_unset=True).items():
+    for field, value in update_data.items():
+        print(f"🔍 [Update Member] Setting {field} = {value}")
         setattr(member, field, value)
+
+    print(f"🔍 [Update Member] After update gpt_enabled: {member.gpt_enabled}")
 
     await db.commit()
     await db.refresh(member)
+
+    print(f"🔍 [Update Member] After commit gpt_enabled: {member.gpt_enabled}")
+    print(f"✅ [Update Member] Successfully updated member {member_id}")
 
     return SuccessResponse(data=MemberDetail.model_validate(member).model_dump())
 

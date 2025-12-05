@@ -79,6 +79,7 @@ const transformBackendMember = (item: BackendMember): Member => {
     residence: item.residence || '',
     passport_number: item.passport_number || '',
     internal_note: item.internal_note || '',
+    gpt_enabled: item.gpt_enabled ?? true,  // 預設為 true (自動模式)
   };
 };
 

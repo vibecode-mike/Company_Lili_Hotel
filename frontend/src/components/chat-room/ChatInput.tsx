@@ -9,8 +9,9 @@ import { useState } from 'react';
 import type { ChatInputProps } from './types';
 import svgPaths from '../../imports/svg-9tjcfsdo1d';
 
-export default function ChatInput({ 
-  onSendMessage, 
+export default function ChatInput({
+  onSendMessage,
+  onFocus,
   placeholder = '輸入訊息',
   maxLength = 500
 }: ChatInputProps) {
@@ -49,6 +50,7 @@ export default function ChatInput({
                   value={message}
                   onChange={(e) => setMessage(e.target.value.slice(0, maxLength))}
                   onKeyPress={handleKeyPress}
+                  onFocus={onFocus}
                   placeholder={placeholder}
                   maxLength={maxLength}
                   className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] placeholder:text-[#a8a8a8] bg-transparent border-0 outline-none w-full"

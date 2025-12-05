@@ -45,6 +45,7 @@ export interface ChatMessageListProps {
 
 export interface ChatInputProps {
   onSendMessage: (message: string) => void;
+  onFocus?: () => void;
   placeholder?: string;
   maxLength?: number;
 }
