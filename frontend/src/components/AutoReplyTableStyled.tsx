@@ -1,6 +1,8 @@
 import { memo, useMemo, useState } from 'react';
 import svgPaths from "../imports/svg-wbwsye31ry";
 import ButtonEdit from '../imports/ButtonEdit';
+import { MemberSourceIcon } from './common/icons/MemberSourceIcon';
+import type { MemberSourceType } from '../types/channel';
 
 export interface AutoReplyData {
   id: string;
@@ -265,7 +267,9 @@ const AutoReplyRow = memo(function AutoReplyRow({
           {/* 平台 */}
           <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[100px]">
             <div className="basis-0 flex flex-col grow justify-center leading-[0] min-h-px min-w-px not-italic relative shrink-0 text-[#383838] text-[14px] tracking-[0.22px]">
-              <p className="leading-[24px]">{row.platform}</p>
+              <div className="leading-[24px]">
+                <MemberSourceIcon source={row.platform as MemberSourceType} size={28} />
+              </div>
             </div>
           </div>
 

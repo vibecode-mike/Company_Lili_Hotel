@@ -5,6 +5,8 @@ import { ArrowRightIcon } from './common/icons/ArrowIcon';
 import ButtonEdit from '../imports/ButtonEdit';
 import IcInfo from '../imports/IcInfo';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { MemberSourceIcon } from './common/icons/MemberSourceIcon';
+import type { MemberSourceType } from '../types/channel';
 
 export interface Message {
   id: string;
@@ -308,7 +310,9 @@ const MessageRow = memo(function MessageRow({
           {/* 平台 */}
           <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[100px]">
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[24px]">{message.platform}</p>
+              <div className="leading-[24px]">
+                <MemberSourceIcon source={message.platform as MemberSourceType} size={28} />
+              </div>
             </div>
           </div>
 
