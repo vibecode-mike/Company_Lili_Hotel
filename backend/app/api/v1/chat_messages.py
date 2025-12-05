@@ -66,13 +66,13 @@ def extract_message_text(message_content: str) -> str:
         if isinstance(data, str):
             return data
 
-        # 無法解析，返回原始內容前100字
-        return str(message_content)[:100]
+        # 無法解析，返回原始內容（完整）
+        return str(message_content)
 
     except (json.JSONDecodeError, TypeError, KeyError) as e:
         logger.warning(f"無法解析消息內容: {e}")
-        # 如果解析失敗，返回原始內容前100字
-        return str(message_content)[:100]
+        # 如果解析失敗，返回原始內容（完整）
+        return str(message_content)
 
 
 # Schema 定義
