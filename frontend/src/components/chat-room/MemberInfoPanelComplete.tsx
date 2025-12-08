@@ -812,16 +812,11 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
             </div>
           </div>
           <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0">
-            <div className="flex items-center gap-2 font-['Noto_Sans_TC:Regular',sans-serif] font-normal relative flex-wrap">
+            <div className="flex items-center gap-2 font-['Noto_Sans_TC:Regular',sans-serif] font-normal relative">
               <MemberSourceIconSmall source={joinSource} />
               <span className="text-[14px] text-[#383838]">
                 {channelName}
               </span>
-              {lineUid && (
-                <span className="text-[12px] text-[#6E6E6E]">
-                  (LINE UID: {lineUid})
-                </span>
-              )}
             </div>
           </div>
         </div>
