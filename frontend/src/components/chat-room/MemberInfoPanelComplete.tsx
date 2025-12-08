@@ -111,10 +111,10 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
   const lineUid = getMemberString(member, ['lineUid', 'line_uid'], '');
   const joinSource = getMemberString(member, ['join_source'], 'LINE');
   const lineName = getMemberString(member, ['lineName', 'line_name'], '');
-  const [channelId, setChannelId] = React.useState<string>('LINE');
+  const [channelName, setChannelName] = React.useState<string>('LINE');
 
   React.useEffect(() => {
-    const fetchChannelId = async () => {
+    const fetchChannelInfo = async () => {
       try {
         const token = localStorage.getItem('auth_token');
         if (!token) return;
@@ -128,15 +128,18 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
         if (!response.ok) return;
 
         const result = await response.json();
-        if (result?.channel_id) {
-          setChannelId(result.channel_id);
+        // 優先使用 channel_name，如果沒有則使用 channel_id，最後使用 'LINE'
+        if (result?.channel_name) {
+          setChannelName(result.channel_name);
+        } else if (result?.channel_id) {
+          setChannelName(result.channel_id);
         }
       } catch (error) {
-        console.error('Failed to fetch channel_id:', error);
+        console.error('Failed to fetch channel info:', error);
       }
     };
 
-    fetchChannelId();
+    fetchChannelInfo();
   }, []);
 
   React.useEffect(() => {
@@ -809,11 +812,16 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
             </div>
           </div>
           <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0">
-            <div className="flex items-center gap-2 font-['Noto_Sans_TC:Regular',sans-serif] font-normal relative">
+            <div className="flex items-center gap-2 font-['Noto_Sans_TC:Regular',sans-serif] font-normal relative flex-wrap">
               <MemberSourceIconSmall source={joinSource} />
               <span className="text-[14px] text-[#383838]">
-                {channelId}
+                {channelName}
               </span>
+              {lineUid && (
+                <span className="text-[12px] text-[#6E6E6E]">
+                  (LINE UID: {lineUid})
+                </span>
+              )}
             </div>
           </div>
         </div>

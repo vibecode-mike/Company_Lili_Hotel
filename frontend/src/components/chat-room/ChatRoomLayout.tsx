@@ -693,9 +693,9 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
   return (
     <>
       {/* Main Layout: Two Columns (Figma 3.png: 左大右小) */}
-      <div className="content-stretch flex gap-[24px] items-start relative w-full">
+      <div className="content-stretch flex gap-[24px] items-start relative w-full h-full">
         {/* Left Column: Member Info Card (完整資料 + 標籤 + 備註) */}
-        <div className="content-stretch flex flex-col gap-[24px] items-center relative self-stretch shrink-0 flex-1 min-w-[450px]">
+        <div className="content-stretch flex flex-col gap-[24px] items-center relative self-stretch flex-1">
           {/* Avatar + Username */}
           <div className="content-stretch flex flex-col gap-[16px] items-center relative shrink-0 w-full">
             {/* Avatar */}
@@ -852,7 +852,7 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
         </div>
 
         {/* Right Column: Chat Area - Figma 3.png 布局 */}
-        <div className="content-stretch flex flex-col gap-0 items-start relative self-stretch shrink-0 w-[480px]" style={{ height: '900px' }}>
+        <div className="content-stretch flex flex-col gap-0 items-start relative self-stretch flex-1" style={{ height: '900px' }}>
           {/* 頂部白色工具列 - 平台選擇器（左）+ 日期（中） */}
           <div className="bg-white w-full px-[16px] py-[12px] flex items-center justify-between rounded-t-[20px]">
             {/* 平台選擇器（左側） */}

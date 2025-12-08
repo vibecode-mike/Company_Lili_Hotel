@@ -130,8 +130,8 @@ export function PlatformSwitcher({
           isHovered && !isOpen ? 'bg-[#e2edfd]' : ''
         }`}
       >
-        <PlatformIcon platform={value} size={20} />
-        <span className="font-['Noto_Sans_TC:Regular',sans-serif] text-[12px] text-[#6e6e6e] whitespace-nowrap">
+        <PlatformIcon platform={value} size={28} />
+        <span className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] text-[#6e6e6e] whitespace-nowrap">
           {currentPlatform.label}
         </span>
         <ChevronDownIcon isOpen={isOpen} />

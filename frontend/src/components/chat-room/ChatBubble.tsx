@@ -107,9 +107,8 @@ export function ChatBubble({
       >
         {/* 氣泡 - Figma 3.png 規格 */}
         <div
-          className={`${
-            isOfficial ? 'bg-[#9CCEFF]' : 'bg-white'
-          } flex flex-col items-center max-w-[288px] w-fit overflow-clip relative rounded-[16px] shrink-0`}
+          className="flex flex-col items-center max-w-[288px] w-fit overflow-clip relative rounded-[16px] shrink-0"
+          style={{ backgroundColor: isOfficial ? '#A8E6CF' : '#FFFFFF' }}
         >
           <div className="box-border content-center flex flex-wrap gap-0 items-center p-[16px] relative w-full">
             <p

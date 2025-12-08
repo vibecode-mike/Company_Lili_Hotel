@@ -54,13 +54,13 @@ const MODE_CONFIG: Record<ResponseMode, { label: string; tooltip: string }> = {
 
 /**
  * Info 圖標 SVG
- * 20px, #6E6E6E
+ * 可調整大小, #6E6E6E
  */
-function InfoIcon() {
+function InfoIcon({ size = 24 }: { size?: number }) {
   return (
     <svg
-      width="20"
-      height="20"
+      width={size}
+      height={size}
       viewBox="0 0 20 20"
       fill="none"
       className="shrink-0"
@@ -91,10 +91,10 @@ export function ResponseModeIndicator({
           <div
             className={`flex items-center gap-[4px] px-[8px] py-[4px] rounded-[16px] cursor-help ${className}`}
           >
-            <span className="font-['Noto_Sans_TC:Regular',sans-serif] text-[12px] text-[#6E6E6E] leading-[1.5] whitespace-nowrap">
+            <span className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] text-[#6E6E6E] leading-[1.5] whitespace-nowrap">
               {config.label}
             </span>
-            <InfoIcon />
+            <InfoIcon size={24} />
           </div>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={4}>
