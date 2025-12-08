@@ -18,6 +18,11 @@ export { default as ChatMessageList } from './ChatMessageList';
 export { default as ChatInput } from './ChatInput';
 export { default as ChatRoomLayout } from './ChatRoomLayout';
 
+// Figma v1087 新增組件
+export { default as ChatBubble } from './ChatBubble';
+export { default as ResponseModeIndicator } from './ResponseModeIndicator';
+export { default as PlatformSwitcher } from './PlatformSwitcher';
+
 // ========== 旧组件兼容性导出（标记为废弃） ==========
 // 以下导出仅用于向后兼容，建议使用新的组件名称
 

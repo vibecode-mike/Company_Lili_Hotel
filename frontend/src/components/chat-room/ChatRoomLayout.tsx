@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import type { ChatRoomLayoutProps, ChatMessage } from './types';
+import type { ChatRoomLayoutProps, ChatMessage, ChatPlatform } from './types';
 import type { Member } from '../../types/member';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import MemberAvatar from './MemberAvatar';
@@ -19,6 +19,10 @@ import { useAuth } from '../auth/AuthContext';
 import MemberNoteEditor from '../shared/MemberNoteEditor';
 import { useMembers } from '../../contexts/MembersContext';
 import Container from '../../imports/Container-8548-103';
+// 新組件導入 (Figma v1087)
+import { ChatBubble } from './ChatBubble';
+import { ResponseModeIndicator } from './ResponseModeIndicator';
+import { PlatformSwitcher } from './PlatformSwitcher';
 
 // Chat messages constants
 const PAGE_SIZE = 6;  // 每次載入 6 條訊息（3 對問答）
@@ -69,65 +73,8 @@ const findLatestMessageTimestamp = (messages: ChatMessage[]): string | undefined
   return undefined;
 };
 
-// 用戶頭像（左側，顯示使用者 LINE 頭像）
-function UserAvatar({ avatar }: { avatar?: string }) {
-  return (
-    <div className="bg-white border-2 border-white overflow-clip relative rounded-full shrink-0 size-[45px]">
-      {avatar ? (
-        <img
-          src={avatar}
-          alt="用戶頭像"
-          className="w-full h-full object-cover"
-        />
-      ) : (
-        <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-          <span className="text-[16px] text-gray-500">U</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// 官方頭像（右側，使用設計稿 Container）
-function OfficialAvatar() {
-  return (
-    <div className="relative shrink-0 size-[45px]">
-      <Container />
-    </div>
-  );
-}
-
-// 消息氣泡組件
-function MessageBubble({ message, memberAvatar }: { message: ChatMessage; memberAvatar?: string }) {
-  const isOfficial = message.type === 'official';
-
-  return (
-    <div className={`content-stretch flex gap-[20px] items-start ${isOfficial ? 'justify-end' : 'justify-start'} relative shrink-0 w-full`}>
-      {!isOfficial && <UserAvatar avatar={memberAvatar} />}
-      
-      <div className={`content-stretch flex flex-col gap-[2px] items-${isOfficial ? 'end' : 'start'} relative shrink-0`}>
-        <div className={`${isOfficial ? 'bg-[#383838]' : 'bg-[#f6f9fd]'} content-stretch flex flex-col items-center max-w-[288px] overflow-clip relative rounded-[15px] shrink-0 w-[288px]`}>
-          <div className="relative shrink-0 w-full">
-            <div className="flex flex-row items-center size-full">
-              <div className="box-border content-center flex flex-wrap gap-0 items-center p-[16px] relative w-full">
-                <p className={`basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] break-words ${isOfficial ? 'text-right text-white' : 'text-[#383838]'}`} style={{ overflowWrap: 'anywhere' }}>
-                  {message.text}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="h-[18px] relative shrink-0 w-full">
-          <p className={`absolute font-['Noto_Sans_TC:Regular',sans-serif] font-normal inset-0 leading-[1.5] text-[12px] ${isOfficial ? 'text-right' : 'text-left'} text-white`}>
-            {message.time}{message.isRead ? ' 已讀' : ''}
-          </p>
-        </div>
-      </div>
-
-      {isOfficial && <OfficialAvatar />}
-    </div>
-  );
-}
+// 內嵌組件已移至獨立檔案:
+// - UserAvatar, OfficialAvatar, MessageBubble → ChatBubble.tsx
 
 export default function ChatRoomLayout({ member: initialMember, memberId }: ChatRoomLayoutProps) {
   const { fetchMemberById } = useMembers();
@@ -147,6 +94,9 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
   const [isTagModalOpen, setIsTagModalOpen] = useState(false);
   const [memberTags, setMemberTags] = useState<string[]>(member?.memberTags || []); // ✅ 使用真實會員標籤
   const [interactionTags, setInteractionTags] = useState<string[]>(member?.interactionTags || []); // ✅ 使用真實互動標籤
+
+  // 平台切換狀態 (Figma v1087)
+  const [currentPlatform, setCurrentPlatform] = useState<ChatPlatform>('LINE');
 
   // GPT 計時器狀態
   const [isGptManualMode, setIsGptManualMode] = useState(false);
@@ -742,10 +692,10 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
 
   return (
     <>
-      {/* Main Layout: Two Columns */}
-      <div className="content-stretch flex gap-[32px] items-start relative w-full">
+      {/* Main Layout: Two Columns (Figma 3.png: 左大右小) */}
+      <div className="content-stretch flex gap-[24px] items-start relative w-full">
         {/* Left Column: Member Info Card (完整資料 + 標籤 + 備註) */}
-        <div className="content-stretch flex flex-col gap-[24px] items-center relative self-stretch shrink-0" style={{ width: '460px' }}>
+        <div className="content-stretch flex flex-col gap-[24px] items-center relative self-stretch shrink-0 flex-1 min-w-[450px]">
           {/* Avatar + Username */}
           <div className="content-stretch flex flex-col gap-[16px] items-center relative shrink-0 w-full">
             {/* Avatar */}
@@ -901,30 +851,44 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
           </div>
         </div>
 
-        {/* Right Column: Chat Area (藍色背景 + 對話) */}
-        <div className="content-stretch flex flex-col gap-0 items-start min-h-px relative self-stretch flex-1">
-          {/* Chat Messages Area with Blue Gradient Background */}
+        {/* Right Column: Chat Area - Figma 3.png 布局 */}
+        <div className="content-stretch flex flex-col gap-0 items-start relative self-stretch shrink-0 w-[480px]" style={{ height: '900px' }}>
+          {/* 頂部白色工具列 - 平台選擇器（左）+ 日期（中） */}
+          <div className="bg-white w-full px-[16px] py-[12px] flex items-center justify-between rounded-t-[20px]">
+            {/* 平台選擇器（左側） */}
+            <PlatformSwitcher
+              value={currentPlatform}
+              onChange={setCurrentPlatform}
+            />
+
+            {/* 日期（中間） */}
+            <div className="absolute left-1/2 transform -translate-x-1/2">
+              {visibleDate && (
+                <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[14px] text-center whitespace-nowrap">
+                  {visibleDate}
+                </p>
+              )}
+            </div>
+
+            {/* 右側留空保持平衡 */}
+            <div className="w-[100px]"></div>
+          </div>
+
+          {/* 聊天訊息區域 - 淺藍色背景 */}
           <div
-            className="bg-gradient-to-b from-[#a5d8ff] to-[#d0ebff] content-stretch flex flex-col gap-0 items-start relative w-full rounded-[20px] overflow-hidden"
+            className="content-stretch flex flex-col gap-0 items-start relative w-full rounded-b-[20px] overflow-hidden"
             style={{
-              height: '900px',
+              backgroundColor: '#CDEAFD',
+              height: 'calc(100% - 48px)',
               minHeight: '400px'
             }}
           >
-            {/* Date Label (Positioned Absolutely at Top) */}
-            <div className="absolute bg-[rgba(246,249,253,0.7)] left-[calc(50%+0.5px)] rounded-[28px] top-[16px] translate-x-[-50%] z-10">
-              <div aria-hidden="true" className="absolute border-[#e8e8e8] border-[0.4px] border-solid inset-0 pointer-events-none rounded-[28px]" />
-              <div className="bg-clip-padding border-0 border-[transparent] border-solid box-border content-stretch flex gap-[10px] items-center justify-center px-[8px] py-[2px] relative">
-                {visibleDate && <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#6e6e6e] text-[12px] text-center text-nowrap whitespace-pre">{visibleDate}</p>}
-              </div>
-            </div>
-
-
-            {/* Messages Scroll Container */}
+            {/* Messages Scroll Container - 可滾動區域 */}
             <div
               ref={chatContainerRef}
               onScroll={handleScroll}
-              className="box-border content-stretch flex flex-col gap-[20px] items-start overflow-y-auto p-[24px] pt-[60px] relative w-full flex-1"
+              className="box-border content-stretch flex flex-col gap-[12px] items-start overflow-y-auto p-[16px] relative w-full"
+              style={{ height: 'calc(100% - 180px)' }}
             >
               {/* Loading more messages indicator (top) */}
               {isLoading && page > 1 && (
@@ -954,12 +918,13 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
                 </div>
               )}
 
-              {/* Messages list */}
+              {/* Messages list (使用 ChatBubble - Figma v1087) */}
               {messages.map((message) => (
                 <div key={message.id} data-timestamp={message.timestamp || ''} className="w-full">
-                  <MessageBubble
+                  <ChatBubble
                     message={message}
                     memberAvatar={member?.lineAvatar}
+                    platform={currentPlatform}
                   />
                 </div>
               ))}
@@ -993,26 +958,12 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
                         />
                       </div>
 
-                      {/* 底部列：GPT 狀態指示 + 傳送按鈕 (同一列) */}
+                      {/* 底部列：回覆模式指示 + 傳送按鈕 (同一列) - Figma v1087 */}
                       <div className="content-stretch flex gap-[12px] items-center justify-between relative shrink-0 w-full">
-                        {/* GPT 狀態指示 (左側) */}
-                        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-[rgba(34,197,94,0.08)] border border-[#22c55e]/30 rounded-[8px] whitespace-nowrap shrink-0">
-                          {isGptManualMode ? (
-                            <>
-                              <svg className="w-3 h-3 text-[#ff9800] flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                              </svg>
-                              <span className="text-xs font-medium text-[#f57c00]">手動模式</span>
-                            </>
-                          ) : (
-                            <>
-                              <svg className="w-3 h-3 text-[#22c55e] flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                              </svg>
-                              <span className="text-xs font-medium text-[#16a34a]">自動模式</span>
-                            </>
-                          )}
-                        </div>
+                        {/* 回覆模式指示 (左側) - 保留原有 GPT 計時器邏輯 */}
+                        <ResponseModeIndicator
+                          mode={isGptManualMode ? 'manual' : 'ai_auto'}
+                        />
 
                         {/* 傳送按鈕 (右側) */}
                         <button

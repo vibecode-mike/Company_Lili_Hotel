@@ -68,3 +68,11 @@ export type MessageSendHandler = (message: string) => void;
 export type TagSaveHandler = (memberTags: string[], interactionTags: string[]) => Promise<boolean>;
 export type NoteSaveHandler = (note: string) => void;
 export type AvatarUploadHandler = (file: File) => void;
+
+// ========== 回覆模式相關 ==========
+
+export type ResponseMode = 'manual' | 'ai_auto' | 'auto';
+
+// ========== 聊天平台相關 ==========
+
+export type ChatPlatform = 'LINE' | 'Facebook' | 'WebChat';

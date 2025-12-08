@@ -23,5 +23,8 @@ export type { MemberSourceIconProps, MemberSourceType, IconSize } from './Member
 export { ChannelIcon } from './ChannelIcon';
 export type { ChannelIconProps } from './ChannelIcon';
 
+export { PlatformIcon } from './PlatformIcon';
+export type { PlatformIconProps } from './PlatformIcon';
+
 // 導出渠道相關類型（從統一類型定義）
 export type { ChannelPlatform, AutoReplyChannel, MessagePlatform } from '../../../types/channel';
