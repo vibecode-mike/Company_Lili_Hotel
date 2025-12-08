@@ -114,7 +114,7 @@ export interface BackendMessage {
   interaction_tags?: string[];
   interactionTags?: string[];
   tags?: string[];
-  platform?: string;
+  platform?: string; // 注意：這裡保持 string 以兼容後端，在 Context 層進行類型守衛
   thumbnail?: string;
   template?: {
     name?: string;

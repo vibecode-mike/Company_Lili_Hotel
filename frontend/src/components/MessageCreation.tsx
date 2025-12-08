@@ -31,6 +31,7 @@ import type { Tag } from './message-creation';
 import { useMessages } from '../contexts/MessagesContext';
 import { CAROUSEL_STRUCTURE_FIELDS } from './carouselStructure';
 import type { FlexMessage, FlexBubble } from '../types/api';
+import type { MessagePlatform } from '../types/channel';
 
 // Custom DialogContent without close button
 function DialogContentNoClose({
@@ -70,6 +71,7 @@ interface MessageCreationProps {
     scheduleType: string;
     targetType: string;
     templateType: string;
+    platform?: MessagePlatform;
     flexMessageJson?: FlexMessage;
     selectedFilterTags?: Array<{ id: string; name: string }>;
     filterCondition?: 'include' | 'exclude';
@@ -99,6 +101,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   const [scheduledDate, setScheduledDate] = useState<Date | undefined>(undefined);
   const [scheduledTime, setScheduledTime] = useState({ hours: '12', minutes: '00' });
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [selectedPlatform, setSelectedPlatform] = useState<MessagePlatform>('LINE');
   // 個別欄位錯誤狀態
   const [titleError, setTitleError] = useState('');
   const [notificationMsgError, setNotificationMsgError] = useState('');
@@ -123,6 +126,12 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null); // 待執行的導航
   const [estimatedRecipientCount, setEstimatedRecipientCount] = useState<number | null>(null); // 預計發送人數
   const cardRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
+
+  // Platform selector options
+  const platformOptions: Array<{ value: MessagePlatform; label: string; disabled: boolean }> = [
+    { value: 'LINE', label: 'LINE', disabled: false },
+    { value: 'Facebook', label: 'Facebook', disabled: false },
+  ];
 
   // Monitor flexMessageJson changes
   useEffect(() => {
@@ -278,6 +287,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     setSelectedFilterTags(editMessageData.selectedFilterTags || []);
     setFilterCondition(editMessageData.filterCondition || 'include');
     setTemplateType(editMessageData.templateType || 'carousel');
+    setSelectedPlatform((editMessageData.platform as MessagePlatform) || 'LINE');
 
     if (editMessageData.scheduledDate) {
       setScheduledDate(editMessageData.scheduledDate);
@@ -687,6 +697,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         schedule_type: 'draft',  // ✅ 必填欄位：固定為 draft
         notification_message: notificationMsg,
         message_title: title || notificationMsg || '未命名訊息',
+        platform: selectedPlatform,
         thumbnail: cards[0]?.uploadedImageUrl || cards[0]?.image || null,
         interaction_tags: collectInteractionTags(),
       };
@@ -806,8 +817,24 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         if (!card.button1 || card.button1.trim() === '') {
           errors.button1 = '請輸入按鈕文字';
         }
-        if (!card.button1Url || card.button1Url.trim() === '') {
-          errors.button1Url = '請輸入連結網址';
+
+        // Facebook specific validation
+        if (selectedPlatform === 'Facebook') {
+          if (card.button1ActionType === 'url') {
+            if (!card.button1Url || card.button1Url.trim() === '') {
+              errors.button1Url = '請輸入連結網址';
+            }
+          } else if (card.button1ActionType === 'tag') {
+            if (!card.button1Tag || card.button1Tag.trim() === '') {
+              errors.button1Tag = '請選擇互動標籤';
+            }
+            // Trigger message is optional, no validation needed
+          }
+        } else {
+          // LINE validation (existing logic)
+          if (!card.button1Url || card.button1Url.trim() === '') {
+            errors.button1Url = '請輸入連結網址';
+          }
         }
       }
 
@@ -816,8 +843,23 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         if (!card.button2 || card.button2.trim() === '') {
           errors.button2 = '請輸入按鈕文字';
         }
-        if (!card.button2Url || card.button2Url.trim() === '') {
-          errors.button2Url = '請輸入連結網址';
+
+        // Facebook specific validation
+        if (selectedPlatform === 'Facebook') {
+          if (card.button2ActionType === 'url') {
+            if (!card.button2Url || card.button2Url.trim() === '') {
+              errors.button2Url = '請輸入連結網址';
+            }
+          } else if (card.button2ActionType === 'tag') {
+            if (!card.button2Tag || card.button2Tag.trim() === '') {
+              errors.button2Tag = '請選擇互動標籤';
+            }
+          }
+        } else {
+          // LINE validation
+          if (!card.button2Url || card.button2Url.trim() === '') {
+            errors.button2Url = '請輸入連結網址';
+          }
         }
       }
 
@@ -826,18 +868,23 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         if (!card.button3 || card.button3.trim() === '') {
           errors.button3 = '請輸入按鈕文字';
         }
-        if (!card.button3Url || card.button3Url.trim() === '') {
-          errors.button3Url = '請輸入連結網址';
-        }
-      }
 
-      // 驗證動作按鈕 4
-      if (card.enableButton4) {
-        if (!card.button4 || card.button4.trim() === '') {
-          errors.button4 = '請輸入按鈕文字';
-        }
-        if (!card.button4Url || card.button4Url.trim() === '') {
-          errors.button4Url = '請輸入連結網址';
+        // Facebook specific validation
+        if (selectedPlatform === 'Facebook') {
+          if (card.button3ActionType === 'url') {
+            if (!card.button3Url || card.button3Url.trim() === '') {
+              errors.button3Url = '請輸入連結網址';
+            }
+          } else if (card.button3ActionType === 'tag') {
+            if (!card.button3Tag || card.button3Tag.trim() === '') {
+              errors.button3Tag = '請選擇互動標籤';
+            }
+          }
+        } else {
+          // LINE validation
+          if (!card.button3Url || card.button3Url.trim() === '') {
+            errors.button3Url = '請輸入連結網址';
+          }
         }
       }
 
@@ -890,14 +937,14 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   };
 
   // Calculate aspect ratio based on card content
-  const calculateAspectRatio = (card: any): "1:1" | "1.92:1" => {
+  const calculateAspectRatio = (card: any): "1:1" | "1.91:1" => {
     // 檢查是否有勾選其他欄位（標題、內容、金額、按鈕）
     const hasContent = card.enableTitle || card.enableContent || card.enablePrice ||
                        card.enableButton1 || card.enableButton2 ||
-                       card.enableButton3 || card.enableButton4;
+                       card.enableButton3;
 
-    // 如果有內容，使用 1.92:1，否則使用 1:1
-    return hasContent ? "1.92:1" : "1:1";
+    // 如果有內容，使用 1.91:1，否則使用 1:1
+    return hasContent ? "1.91:1" : "1:1";
   };
 
   // Image upload handler - uploads to backend and returns URL
@@ -917,7 +964,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       }
 
       // 計算裁切比例
-      const aspectRatio = card ? calculateAspectRatio(card) : "1.92:1";
+      const aspectRatio = card ? calculateAspectRatio(card) : "1.91:1";
 
       const formData = new FormData();
       formData.append('file', file);
@@ -1100,65 +1147,71 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       const addButton = (buttonNum: 1 | 2 | 3 | 4) => {
         const enableKey = `enableButton${buttonNum}` as keyof typeof card;
         const buttonKey = `button${buttonNum}` as keyof typeof card;
-        const actionKey = `button${buttonNum}Action` as keyof typeof card;
+        const actionTypeKey = `button${buttonNum}ActionType` as keyof typeof card;
         const urlKey = `button${buttonNum}Url` as keyof typeof card;
-        const textKey = `button${buttonNum}Text` as keyof typeof card;
         const modeKey = `button${buttonNum}Mode` as keyof typeof card;
-        const triggerImageUrlKey = `button${buttonNum}TriggerImageUrl` as keyof typeof card;
         const tagKey = `button${buttonNum}Tag` as keyof typeof card;
+        const triggerMessageKey = `button${buttonNum}TriggerMessage` as keyof typeof card;
 
         if (!card[enableKey]) return;
 
         const buttonText = card[buttonKey] as string;
-        const action = card[actionKey] as string;
+        const actionType = card[actionTypeKey] as string;
         const mode = card[modeKey] as string;
-
-        // Get the URL for this button
         const url = card[urlKey] as string;
+        const tag = card[tagKey] as string;
+        const triggerMessage = card[triggerMessageKey] as string;
 
-        // Only create button if both text and URL are provided
-        if (!buttonText || !url) return;
+        // Validate button has required fields
+        if (!buttonText) return;
 
-        // Determine action type based on buttonAction field
-        // Default to 'uri' for backward compatibility
-        const actionType = action || 'uri';
+        // Facebook Tag mode: use postback action
+        if (selectedPlatform === 'Facebook' && actionType === 'tag') {
+          if (!tag) return; // Tag is required for Facebook tag mode
 
-        let buttonAction: any;
-        if (actionType === 'postback') {
-          // Postback action: triggers webhook with data
-          buttonAction = {
+          const buttonAction: any = {
             type: "postback",
             label: buttonText,
-            data: url, // Use URL field as postback data
-            displayText: buttonText
+            data: JSON.stringify({
+              action: 'add_tag',
+              tag: tag,
+              trigger_message: triggerMessage || null
+            })
           };
-        } else if (actionType === 'message') {
-          // Message action: sends text as user message
-          buttonAction = {
-            type: "message",
-            label: buttonText,
-            text: url // Use URL field as message text
+
+          const button: any = {
+            type: "button",
+            action: buttonAction,
+            style: mode === 'primary' ? 'primary' : (mode === 'link' ? 'link' : 'secondary'),
+            height: "sm"
           };
-        } else {
-          // URI action: opens URL (default)
-          buttonAction = {
+
+          footerContents.push(button);
+          buttonTagsMeta[buttonNum - 1] = tag || null;
+        }
+        // LINE mode or Facebook URL mode: use URI action
+        else {
+          if (!url) return; // URL is required for URI action
+
+          const buttonAction: any = {
             type: "uri",
             label: buttonText,
             uri: url
           };
+
+          const button: any = {
+            type: "button",
+            action: buttonAction,
+            style: mode === 'primary' ? 'primary' : (mode === 'link' ? 'link' : 'secondary'),
+            height: "sm"
+          };
+
+          footerContents.push(button);
+
+          // For LINE mode, still store tag metadata for backend tracking
+          const tagValue = typeof card[tagKey] === 'string' ? (card[tagKey] as string).trim() : '';
+          buttonTagsMeta[buttonNum - 1] = tagValue || null;
         }
-
-        const button: any = {
-          type: "button",
-          action: buttonAction,
-          style: mode === 'primary' ? 'primary' : (mode === 'link' ? 'link' : 'secondary'),
-          height: "sm"
-        };
-
-        footerContents.push(button);
-
-        const tagValue = typeof card[tagKey] === 'string' ? (card[tagKey] as string).trim() : '';
-        buttonTagsMeta[buttonNum - 1] = tagValue || null;
       };
 
       addButton(1);
@@ -1266,6 +1319,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         schedule_type: scheduleType,
         notification_message: notificationMsg,
         message_title: title || notificationMsg || '未命名訊息',
+        platform: selectedPlatform,
         thumbnail: cards[0]?.uploadedImageUrl || cards[0]?.image || null,
         interaction_tags: collectInteractionTags(),
       };
@@ -1593,6 +1647,38 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                 >
                   發佈
                 </Button>
+              </div>
+            </div>
+
+            {/* Form Fields Row 0 - Platform Selector */}
+            <div className="flex flex-col xl:flex-row gap-[32px] xl:gap-[120px] items-start w-full">
+              <div className="flex-1 flex flex-col sm:flex-row items-start gap-4 w-full">
+                <Label className="min-w-[120px] sm:min-w-[140px] lg:min-w-[160px] pt-3 flex items-center gap-1">
+                  <span className="text-[16px] text-[#383838]">發佈渠道</span>
+                  <span className="text-[16px] text-[#f44336]">*</span>
+                </Label>
+                <div className="flex-1 flex flex-col gap-[2px]">
+                  <Select
+                    value={selectedPlatform}
+                    onValueChange={(value) => setSelectedPlatform(value as MessagePlatform)}
+                  >
+                    <SelectTrigger className="w-full h-[48px] rounded-[8px] bg-white border border-neutral-100">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {platformOptions.map((option) => (
+                        <SelectItem
+                          key={option.value}
+                          value={option.value}
+                          disabled={option.disabled}
+                          className={option.disabled ? 'opacity-50 cursor-not-allowed' : ''}
+                        >
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 
@@ -1944,6 +2030,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                 onImageUpload={(file) => handleImageUpload(file, currentCard)}
                 errors={cardErrors.get(currentCard.id)}
                 onDeleteCarousel={deleteCard}
+                selectedPlatform={selectedPlatform}
                 onCopyCard={() => {
                   // 檢查是否已達到上限
                   if (cards.length >= 10) {

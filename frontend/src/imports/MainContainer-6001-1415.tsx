@@ -293,10 +293,10 @@ function Container6({
               </svg>
             </div>
           </div>
-          <div className="basis-0 grow min-h-px min-w-px relative shrink-0" data-name="Table/Title-atomic">
+          <div className="basis-0 grow min-h-px min-w-[200px] relative shrink-0" data-name="Table/Title-atomic">
             <div className="flex flex-row items-center size-full">
               <div 
-                className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative w-full cursor-pointer"
+                className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative w-full min-w-[200px] cursor-pointer"
                 onClick={() => onSortChange('lastChatTime')}
               >
                 <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
@@ -505,11 +505,11 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Membe
               <p className="leading-[1.5] whitespace-pre">{formatMemberDateTime(member.createTime) || '-'}</p>
             </div>
           </div>
-          <div className="basis-0 grow min-h-px min-w-px relative shrink-0" data-name="Table/List-atomic">
+          <div className="basis-0 grow min-h-px min-w-[200px] relative shrink-0" data-name="Table/List-atomic">
             <div className="flex flex-row items-center size-full">
               <div className="box-border content-stretch flex items-center px-[12px] py-0 relative w-full">
-                <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-                  <p className="leading-[1.5]">{formatMemberDateTime(getLatestMemberChatTimestamp(member)) || '-'}</p>
+                <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px] whitespace-nowrap">
+                  <p className="leading-[1.5] whitespace-pre">{formatMemberDateTime(getLatestMemberChatTimestamp(member)) || '-'}</p>
                 </div>
               </div>
             </div>

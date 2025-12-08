@@ -60,7 +60,7 @@ export default function ConfigPanel({
       const processedImage = await processImage(file, targetRatio);
       updateBubble({ imageUrl: processedImage });
       
-      const ratioText = hasContent ? '1.92:1' : '1:1';
+      const ratioText = hasContent ? '1.91:1' : '1:1';
       alert(`圖片已自動調整為 ${ratioText} 比例並上傳`);
     } catch (error) {
       alert('圖片處理失敗，請重試');
@@ -254,7 +254,7 @@ export default function ConfigPanel({
               <div className="space-y-0.5 text-xs text-gray-500">
                 <p>• 圖片格式 JPG, JPEG, PNG</p>
                 <p>• 檔案最大不可超過 5 MB</p>
-                <p>• 圖片會自動調整為 1.92:1 或 1:1 比例</p>
+                <p>• 圖片會自動調整為 1.91:1 或 1:1 比例</p>
               </div>
 
               {/* Image Action Checkbox */}

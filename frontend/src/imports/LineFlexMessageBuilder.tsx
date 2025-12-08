@@ -269,7 +269,7 @@ function Paragraph() {
     <div className="font-['Arimo:Regular','Noto_Sans_JP:Regular',sans-serif] font-normal h-[47.962px] leading-[16px] relative shrink-0 text-[#6a7282] text-[12px] text-nowrap w-full whitespace-pre" data-name="Paragraph">
       <p className="absolute left-0 top-[-1px]">• 圖片格式 JPG, JPEG, PNG</p>
       <p className="absolute left-0 top-[14.99px]">• 檔案最大不可下載超過 5 MB</p>
-      <p className="absolute left-0 top-[30.98px]">• 圖片會自動調整為 1.92:1 或 1:1 比例</p>
+      <p className="absolute left-0 top-[30.98px]">• 圖片會自動調整為 1.91:1 或 1:1 比例</p>
     </div>
   );
 }

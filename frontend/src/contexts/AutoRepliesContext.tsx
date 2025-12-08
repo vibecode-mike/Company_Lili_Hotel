@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, ReactNode, useCallback, use
 import { toast } from 'sonner';
 import type { BackendAutoReply, BackendKeyword, BackendReplyMessage } from '../types/api';
 import { useAuth } from '../components/auth/AuthContext';
+import type { AutoReplyChannel } from '../types/channel';
 
 /**
  * 自動回覆數據 Context
@@ -10,6 +11,12 @@ import { useAuth } from '../components/auth/AuthContext';
  */
 
 export type AutoReplyTriggerType = 'welcome' | 'keyword' | 'follow' | 'time';
+
+/**
+ * 渠道類型別名（向後兼容）
+ * 實際定義在 ../types/channel.ts
+ */
+export type ChannelType = AutoReplyChannel;
 
 export interface AutoReply {
   id: string;
@@ -27,6 +34,7 @@ export interface AutoReply {
   triggerTimeEnd?: string | null;
   dateRangeStart?: string | null;
   dateRangeEnd?: string | null;
+  channels?: AutoReplyChannel[]; // 新增：支持的回應渠道
 }
 
 export interface AutoReplyPayload {
@@ -39,6 +47,7 @@ export interface AutoReplyPayload {
   triggerTimeEnd?: string | null;
   dateRangeStart?: string | null;
   dateRangeEnd?: string | null;
+  channels?: AutoReplyChannel[]; // 新增：支持的回應渠道
 }
 
 interface AutoRepliesContextType {
@@ -104,6 +113,7 @@ function mapAutoResponse(item: BackendAutoReply & { content?: string; messages?:
     triggerTimeEnd: item?.trigger_time_end ?? null,
     dateRangeStart: item?.date_range_start ?? null,
     dateRangeEnd: item?.date_range_end ?? null,
+    channels: item?.channels || undefined,  // 新增：渠道列表映射
   };
 }
 
@@ -221,6 +231,7 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
             trigger_time_end: payload.triggerTimeEnd ?? null,
             date_range_start: payload.dateRangeStart ?? null,
             date_range_end: payload.dateRangeEnd ?? null,
+            channels: payload.channels ?? undefined,  // 新增：渠道列表
           }),
         });
 

@@ -1,3 +1,5 @@
+import type { MemberSourceType } from './channel';
+
 /**
  * 標籤資訊
  * 包含標籤的完整資訊
@@ -29,7 +31,7 @@ export interface Member {
   lineUid?: string;
   lineAvatar?: string;
   channel_id?: string;        // LINE channel ID
-  join_source?: string;       // 加入來源：LINE/CRM/PMS/ERP/系統
+  join_source?: MemberSourceType; // 加入來源：LINE/CRM/PMS/ERP/系統 - 使用統一類型
   id_number?: string;         // 身分證字號
   residence?: string;         // 居住地
   passport_number?: string;   // 護照號碼

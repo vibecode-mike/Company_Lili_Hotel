@@ -18,12 +18,15 @@
  */
 
 import React from 'react';
+import type { MemberSourceType, ChannelPlatform } from '../../../types/channel';
+import { getMemberSourceConfig, isChannelPlatform } from '../../../types/channel';
+import { ChannelIcon } from './ChannelIcon';
 
-// 會員來源類型定義
-export type MemberSourceType = 'LINE' | 'CRM' | 'PMS' | 'ERP' | '系統' | string;
+// 重新導出類型（向後兼容）
+export type { MemberSourceType };
 
-// 圖標尺寸類型
-export type IconSize = 20 | 28;
+// 圖標尺寸類型 - 現在支持任意數值
+export type IconSize = number;
 
 // 組件 Props 定義
 export interface MemberSourceIconProps {
@@ -38,70 +41,10 @@ export interface MemberSourceIconProps {
 }
 
 /**
- * 根據來源類型和尺寸獲取 SVG 檔案路徑
- */
-function getSourceSvgPath(source: string, size: IconSize): string | null {
-  const normalizedSource = source.toUpperCase();
-
-  switch (normalizedSource) {
-    case 'LINE':
-      return `/src/components/common/icons/assets/source-line-${size}.svg`;
-    case 'FACEBOOK':
-      return `/src/components/common/icons/assets/source-facebook-${size}.svg`;
-    // 未來擴展：
-    // case 'CRM':
-    //   return `/src/components/common/icons/assets/source-crm-${size}.svg`;
-    // case 'PMS':
-    //   return `/src/components/common/icons/assets/source-pms-${size}.svg`;
-    // case 'ERP':
-    //   return `/src/components/common/icons/assets/source-erp-${size}.svg`;
-    // case '系統':
-    //   return `/src/components/common/icons/assets/source-system-${size}.svg`;
-    default:
-      return null;
-  }
-}
-
-/**
- * 獲取來源對應的 Emoji 圖標（降級方案）
- */
-function getEmojiIcon(source?: string | null): string {
-  if (!source) return '📱';
-
-  const iconMap: Record<string, string> = {
-    'LINE': '📱',
-    'FACEBOOK': '👥',
-    'CRM': '👥',
-    'PMS': '🏨',
-    'ERP': '💼',
-    '系統': '⚙️'
-  };
-
-  return iconMap[source.toUpperCase()] || '📱';
-}
-
-/**
- * 獲取來源的顯示名稱（用於無障礙標籤）
- */
-function getSourceDisplayName(source?: string | null): string {
-  if (!source) return 'LINE';
-
-  const nameMap: Record<string, string> = {
-    'LINE': 'LINE',
-    'FACEBOOK': 'Facebook',
-    'CRM': 'CRM 系統',
-    'PMS': 'PMS 系統',
-    'ERP': 'ERP 系統',
-    '系統': '系統'
-  };
-
-  return nameMap[source.toUpperCase()] || source;
-}
-
-/**
  * 會員來源圖標組件
  *
- * 優先使用 SVG 圖標，不可用時降級為 Emoji
+ * - 渠道來源（LINE, Facebook, Instagram）：使用 ChannelIcon 組件
+ * - 非渠道來源（CRM, PMS, ERP, 系統）：直接使用 Emoji
  */
 export function MemberSourceIcon({
   source,
@@ -109,53 +52,23 @@ export function MemberSourceIcon({
   className = '',
   alt
 }: MemberSourceIconProps): React.ReactElement {
-  const svgPath = getSourceSvgPath(source, size);
-  const displayName = alt || getSourceDisplayName(source);
+  const config = getMemberSourceConfig(source);
+  const displayName = alt || config.label;
   const ariaLabel = `會員來源：${displayName}`;
 
-  // 如果有 SVG 圖標，使用 img 標籤載入
-  if (svgPath) {
+  // 如果是渠道平台，使用 ChannelIcon
+  if (isChannelPlatform(source)) {
     return (
-      <img
-        src={svgPath}
+      <ChannelIcon
+        channel={source as ChannelPlatform}
+        size={size}
+        className={className}
         alt={displayName}
-        width={size}
-        height={size}
-        className={`inline-block ${className}`}
-        aria-label={ariaLabel}
-        style={{
-          width: `${size}px`,
-          height: `${size}px`,
-          flexShrink: 0
-        }}
-        onError={(e) => {
-          // SVG 載入失敗時，降級為 Emoji
-          const target = e.target as HTMLImageElement;
-          const emoji = getEmojiIcon(source);
-
-          // 創建一個包含 Emoji 的臨時元素
-          const span = document.createElement('span');
-          span.textContent = emoji;
-          span.className = `inline-block ${className}`;
-          span.setAttribute('aria-label', ariaLabel);
-          span.setAttribute('role', 'img');
-          span.style.fontSize = `${size}px`;
-          span.style.lineHeight = '1';
-          span.style.width = `${size}px`;
-          span.style.height = `${size}px`;
-          span.style.display = 'inline-flex';
-          span.style.alignItems = 'center';
-          span.style.justifyContent = 'center';
-
-          // 替換 img 為 span
-          target.parentNode?.replaceChild(span, target);
-        }}
       />
     );
   }
 
-  // 沒有 SVG 圖標，直接使用 Emoji
-  const emoji = getEmojiIcon(source);
+  // 非渠道來源（CRM, PMS, ERP, 系統），直接使用 Emoji
   return (
     <span
       role="img"
@@ -169,7 +82,7 @@ export function MemberSourceIcon({
         flexShrink: 0
       }}
     >
-      {emoji}
+      {config.emoji}
     </span>
   );
 }

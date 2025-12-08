@@ -27,6 +27,7 @@ class AutoResponseCreate(BaseModel):
     trigger_time_end: Optional[time] = None
     date_range_start: Optional[date] = None
     date_range_end: Optional[date] = None
+    channels: Optional[List[str]] = None  # 新增：支持的渠道列表
 
 
 class AutoResponseUpdate(BaseModel):
@@ -40,6 +41,7 @@ class AutoResponseUpdate(BaseModel):
     trigger_time_end: Optional[time] = None
     date_range_start: Optional[date] = None
     date_range_end: Optional[date] = None
+    channels: Optional[List[str]] = None  # 新增：支持的渠道列表
 
 
 def _serialize_keywords(keyword_relations: Sequence[AutoResponseKeyword]) -> List[Dict[str, Any]]:
@@ -76,6 +78,21 @@ def _normalize_keywords(keywords: Optional[List[str]]) -> List[str]:
     if len(cleaned) > 20:
         raise HTTPException(status_code=400, detail="關鍵字數量已達上限 20 組")
     return cleaned
+
+
+def _validate_channels(channels: Optional[List[str]]) -> Optional[List[str]]:
+    """驗證渠道列表"""
+    if not channels:
+        return None
+    allowed_channels = {'LINE', 'Facebook'}
+    invalid = [ch for ch in channels if ch not in allowed_channels]
+    if invalid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"無效的渠道: {', '.join(invalid)}。允許的渠道: LINE, Facebook"
+        )
+    # 去重
+    return list(set(channels))
 
 
 @router.get("", response_model=SuccessResponse)
@@ -121,6 +138,7 @@ async def get_auto_responses(
                 "trigger_time_end": ar.trigger_time_end.isoformat() if ar.trigger_time_end else None,
                 "date_range_start": ar.date_range_start.isoformat() if ar.date_range_start else None,
                 "date_range_end": ar.date_range_end.isoformat() if ar.date_range_end else None,
+                "channels": ar.channels,  # 新增：渠道列表
             }
         )
 
@@ -163,6 +181,7 @@ async def get_auto_response(
             "trigger_time_end": auto_response.trigger_time_end.isoformat() if auto_response.trigger_time_end else None,
             "date_range_start": auto_response.date_range_start.isoformat() if auto_response.date_range_start else None,
             "date_range_end": auto_response.date_range_end.isoformat() if auto_response.date_range_end else None,
+            "channels": auto_response.channels,  # 新增：渠道列表
         }
     )
 
@@ -177,6 +196,7 @@ async def create_auto_response(
     if not message_list:
         raise HTTPException(status_code=400, detail="請至少輸入一則訊息內容")
     keywords = _normalize_keywords(data.keywords)
+    channels = _validate_channels(data.channels)
 
     auto_response = AutoResponse(
         name=data.name,
@@ -188,6 +208,7 @@ async def create_auto_response(
         date_range_start=data.date_range_start,
         date_range_end=data.date_range_end,
         response_count=len(message_list),
+        channels=channels,  # 新增：渠道列表
     )
     db.add(auto_response)
     await db.flush()  # Get the ID before adding keywords

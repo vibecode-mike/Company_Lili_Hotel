@@ -55,6 +55,14 @@ class AutoResponse(Base):
     # 關鍵字設定（JSON 格式，最多20組）
     keywords = Column(JSON, comment="關鍵字（JSON格式，最多20組）")
 
+    # 渠道設定（新增）
+    channels = Column(
+        JSON,
+        nullable=True,
+        default=None,
+        comment="支持的渠道列表（['LINE', 'Facebook']），null 表示全部渠道",
+    )
+
     # 時間設定
     trigger_time_start = Column(Time, comment="指定時間區間起始")
     trigger_time_end = Column(Time, comment="指定時間區間結束")

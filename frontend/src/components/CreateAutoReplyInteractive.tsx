@@ -18,6 +18,7 @@ interface CreateAutoReplyProps {
 }
 
 type ReplyType = 'welcome' | 'keyword' | 'follow';
+type ChannelType = 'LINE' | 'Facebook';
 
 interface MessageItem {
   id: number;
@@ -65,9 +66,11 @@ export default function CreateAutoReplyInteractive({
   const [isHydrating, setIsHydrating] = useState<boolean>(Boolean(autoReplyId));
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [replyType, setReplyType] = useState<ReplyType>('welcome');
+  const [selectedChannel, setSelectedChannel] = useState<ChannelType>('LINE');
   const [isEnabled, setIsEnabled] = useState(true);
   const [messages, setMessages] = useState<MessageItem[]>([{ id: 1, text: '' }]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
   const [keywordTags, setKeywordTags] = useState<string[]>([]);
   const [triggerTime, setTriggerTime] = useState<TriggerTimeType>('immediate');
   const [scheduledDateTime, setScheduledDateTime] = useState(() => ({ ...INITIAL_SCHEDULE }));
@@ -95,6 +98,13 @@ export default function CreateAutoReplyInteractive({
     }));
     setMessages(hydratedMessages);
     setKeywordTags(record.keywords);
+
+    // 設定渠道（如果記錄中有渠道信息，使用第一個；否則預設為 LINE）
+    if (record.channels && record.channels.length > 0) {
+      setSelectedChannel(record.channels[0] as ChannelType);
+    } else {
+      setSelectedChannel('LINE');
+    }
 
     const hasSchedule =
       normalizedType === 'follow' &&
@@ -140,8 +150,17 @@ export default function CreateAutoReplyInteractive({
     { value: 'follow', label: '一律回應' }
   ];
 
+  const channelOptions: { value: ChannelType; label: string }[] = [
+    { value: 'LINE', label: 'LINE' },
+    { value: 'Facebook', label: 'Facebook' }
+  ];
+
   const getReplyTypeLabel = (type: ReplyType) => {
     return replyTypeOptions.find(opt => opt.value === type)?.label || '';
+  };
+
+  const getChannelLabel = (channel: ChannelType) => {
+    return channelOptions.find(opt => opt.value === channel)?.label || '';
   };
 
   const handleInsertVariable = (index: number) => {
@@ -226,6 +245,7 @@ export default function CreateAutoReplyInteractive({
       triggerTimeEnd: shouldSendSchedule ? scheduledDateTime.endTime || null : null,
       dateRangeStart: shouldSendSchedule ? normalizeDateForApi(scheduledDateTime.startDate) : null,
       dateRangeEnd: shouldSendSchedule ? normalizeDateForApi(scheduledDateTime.endDate) : null,
+      channels: [selectedChannel], // 新增：包含選擇的渠道
     };
 
     setIsSaving(true);
@@ -454,6 +474,38 @@ export default function CreateAutoReplyInteractive({
                                   <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-neutral-100 rounded-[8px] shadow-lg z-10">
                                     {replyTypeOptions.map(opt => (
                                       <div key={opt.value} className="py-[12px] px-[8px] hover:bg-slate-50 cursor-pointer flex items-center" onClick={(e) => { e.stopPropagation(); setReplyType(opt.value); setIsDropdownOpen(false); }}>
+                                        <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#383838] text-[16px] leading-[1.5] whitespace-nowrap">{opt.label}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 回應渠道 */}
+                        <div className="content-stretch flex items-start relative shrink-0 w-full flex-col xl:flex-row gap-[8px] xl:gap-0">
+                          <div className="content-stretch flex gap-[2px] items-center min-w-[160px] relative shrink-0 w-full xl:w-auto">
+                            <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] whitespace-nowrap">回應渠道</p>
+                            <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#f44336] text-[16px] whitespace-nowrap">*</p>
+                          </div>
+                          <div className="basis-0 bg-white grow min-h-[48px] relative rounded-[8px] shrink-0 w-full xl:w-auto">
+                            <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-[8px]" />
+                            <div className="flex flex-col justify-center min-h-inherit size-full">
+                              <div className="box-border content-stretch flex flex-col gap-[4px] items-start justify-center min-h-inherit p-[8px] relative w-full cursor-pointer" onClick={() => setIsChannelDropdownOpen(!isChannelDropdownOpen)}>
+                                <div className="content-stretch flex gap-[8px] items-start relative shrink-0 w-full">
+                                  <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] whitespace-nowrap overflow-hidden text-ellipsis">{getChannelLabel(selectedChannel)}</p>
+                                  <div className="relative shrink-0 size-[24px]">
+                                    <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
+                                      <path d={svgPathsModal.p2b927b00} fill="var(--fill-0, #6E6E6E)" />
+                                    </svg>
+                                  </div>
+                                </div>
+                                {isChannelDropdownOpen && (
+                                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-neutral-100 rounded-[8px] shadow-lg z-10">
+                                    {channelOptions.map(opt => (
+                                      <div key={opt.value} className="py-[12px] px-[8px] hover:bg-slate-50 cursor-pointer flex items-center" onClick={(e) => { e.stopPropagation(); setSelectedChannel(opt.value); setIsChannelDropdownOpen(false); }}>
                                         <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#383838] text-[16px] leading-[1.5] whitespace-nowrap">{opt.label}</p>
                                       </div>
                                     ))}

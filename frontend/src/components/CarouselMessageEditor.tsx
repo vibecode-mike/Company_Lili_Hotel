@@ -4,6 +4,7 @@ import { Checkbox } from './ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
 import { Button } from './ui/button';
+import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { toast } from 'sonner';
@@ -13,11 +14,11 @@ import { cropImage, createBlobUrl, revokeBlobUrl } from '../utils/imageCropper';
 import { CAROUSEL_STRUCTURE_FIELDS } from './carouselStructure';
 
 // Calculate aspect ratio based on card content
-const calculateAspectRatio = (card: CarouselCard): "1:1" | "1.92:1" => {
+const calculateAspectRatio = (card: CarouselCard): "1:1" | "1.91:1" => {
   const hasContent = card.enableTitle || card.enableContent || card.enablePrice ||
                      card.enableButton1 || card.enableButton2 ||
-                     card.enableButton3 || card.enableButton4;
-  return hasContent ? "1.92:1" : "1:1";
+                     card.enableButton3;
+  return hasContent ? "1.91:1" : "1:1";
 };
 
 const STRUCTURE_FIELD_SET = new Set<string>(CAROUSEL_STRUCTURE_FIELDS);
@@ -49,18 +50,24 @@ export interface CarouselCard {
   button1Text: string;
   button1TriggerImage: File | null;
   button1Mode: 'primary' | 'secondary' | 'link';
+  button1ActionType?: 'url' | 'tag';
+  button1TriggerMessage?: string;
   button2Action: string;
   button2Url: string;
   button2Tag: string;
   button2Text: string;
   button2TriggerImage: File | null;
   button2Mode: 'primary' | 'secondary' | 'link';
+  button2ActionType?: 'url' | 'tag';
+  button2TriggerMessage?: string;
   button3Action: string;
   button3Url: string;
   button3Tag: string;
   button3Text: string;
   button3TriggerImage: File | null;
   button3Mode: 'primary' | 'secondary' | 'link';
+  button3ActionType?: 'url' | 'tag';
+  button3TriggerMessage?: string;
   button4Action: string;
   button4Url: string;
   button4Tag: string;
@@ -96,6 +103,7 @@ interface CarouselMessageEditorProps {
   onCopyCard?: () => void;
   onDeleteCarousel?: () => void; // 刪除輪播回調
   errors?: CardErrors; // 當前卡片的錯誤訊息
+  selectedPlatform?: 'LINE' | 'Facebook' | 'Instagram';
 }
 
 // LINE Flex Message 風格的卡片預覽組件
@@ -195,27 +203,14 @@ export const FlexMessageCardPreview = memo(function FlexMessageCardPreview({ car
           {card.enableButton3 && (
             <button
               className={`w-full rounded-[4px] text-[14px] transition-colors text-center py-[10px] px-[16px] ${
-                card.button3Mode === 'primary' 
-                  ? 'bg-[#06C755] text-white hover:bg-[#05b34d]' 
+                card.button3Mode === 'primary'
+                  ? 'bg-[#06C755] text-white hover:bg-[#05b34d]'
                   : card.button3Mode === 'secondary'
                   ? 'bg-gray-200 text-gray-900 hover:bg-gray-300'
                   : 'bg-white text-[#06C755] border-2 border-[#06C755] hover:bg-gray-50'
               }`}
             >
               {card.button3 || "動作按鈕三"}
-            </button>
-          )}
-          {card.enableButton4 && (
-            <button
-              className={`w-full rounded-[4px] text-[14px] transition-colors text-center py-[10px] px-[16px] ${
-                card.button4Mode === 'primary' 
-                  ? 'bg-[#06C755] text-white hover:bg-[#05b34d]' 
-                  : card.button4Mode === 'secondary'
-                  ? 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-                  : 'bg-white text-[#06C755] border-2 border-[#06C755] hover:bg-gray-50'
-              }`}
-            >
-              {card.button4 || "動作按鈕四"}
             </button>
           )}
         </div>
@@ -232,11 +227,12 @@ export default function CarouselMessageEditor({
   onUpdateCard,
   onCopyCard,
   onDeleteCarousel,
-  errors
+  errors,
+  selectedPlatform = 'LINE'
 }: CarouselMessageEditorProps) {
   const imageUploadRef = useRef<HTMLInputElement>(null);
   const currentCard = cards.find(c => c.id === activeTab) || cards[0];
-  const prevAspectRatioRef = useRef<"1:1" | "1.92:1" | null>(null);
+  const prevAspectRatioRef = useRef<"1:1" | "1.91:1" | null>(null);
   const masterCardId = cards[0]?.id;
   const isMasterCard = currentCard?.id === masterCardId;
   const structureLocked = !isMasterCard;
@@ -529,7 +525,7 @@ export default function CarouselMessageEditor({
                 <div className="flex flex-col gap-0">
                   <p className="text-[12px] leading-[16px] text-[#6a7282]">• 圖片格式 JPG, JPEG, PNG</p>
                   <p className="text-[12px] leading-[16px] text-[#6a7282]">• 檔案最大不可超過 5 MB</p>
-                  <p className="text-[12px] leading-[16px] text-[#6a7282]">• 圖片會自動調整為 1.92:1 或 1:1 比例</p>
+                  <p className="text-[12px] leading-[16px] text-[#6a7282]">• 圖片會自動調整為 1.91:1 或 1:1 比例</p>
                 </div>
 
                 {/* Image Error */}
@@ -743,7 +739,11 @@ export default function CarouselMessageEditor({
                 <button
                   onClick={() => {
                     if (preventStructureEdit()) return;
-                    onUpdateCard({ enableButton1: true, button1Mode: 'primary' });
+                    onUpdateCard({
+                      enableButton1: true,
+                      button1Mode: 'primary',
+                      button1ActionType: selectedPlatform === 'Facebook' ? 'url' : undefined
+                    });
                   }}
                   className="bg-white h-[32px] px-[13px] rounded-[10px] border border-[rgba(0,0,0,0.1)] flex items-center gap-[6px] hover:bg-gray-50 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={structureLocked}
@@ -827,39 +827,110 @@ export default function CarouselMessageEditor({
                   )}
                 </div>
 
-                {/* 連結網址 */}
-                <div className="flex flex-col gap-[4px]">
-                  <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">連結網址</p>
-                  <input
-                    type="text"
-                    value={currentCard.button1Url}
-                    onChange={(e) => onUpdateCard({ button1Url: e.target.value })}
-                    placeholder="https://example.com"
-                    aria-invalid={showButton1UrlError || Boolean(errors?.button1Url)}
-                    className={`w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
-                      requiredFieldClasses(showButton1UrlError || Boolean(errors?.button1Url))
-                    }`}
-                    style={requiredFieldStyle(showButton1UrlError || Boolean(errors?.button1Url))}
-                  />
-                  {(showButton1UrlError || errors?.button1Url) && (
-                    <p className="text-[12px] leading-[16px] text-[#f44336] mt-2">
-                      {showButton1UrlError ? '請輸入連結網址' : errors?.button1Url}
-                    </p>
-                  )}
-                </div>
+                {/* 按鈕行為選擇器 - 僅 Facebook 顯示 */}
+                {selectedPlatform === 'Facebook' && (
+                  <div className="flex flex-col gap-[4px]">
+                    <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">按鈕行為</p>
+                    <RadioGroup
+                      value={currentCard.button1ActionType || 'url'}
+                      onValueChange={(value: 'url' | 'tag') => {
+                        if (value === 'url') {
+                          onUpdateCard({
+                            button1ActionType: 'url',
+                            button1Tag: '',
+                            button1TriggerMessage: ''
+                          });
+                        } else {
+                          onUpdateCard({
+                            button1ActionType: 'tag',
+                            button1Url: ''
+                          });
+                        }
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="url" id="btn1-url" />
+                        <Label htmlFor="btn1-url" className="text-[14px] font-normal cursor-pointer">開啟連結網址</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="tag" id="btn1-tag" />
+                        <Label htmlFor="btn1-tag" className="text-[14px] font-normal cursor-pointer">貼上互動標籤</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                )}
 
-                {/* 互動標籤 */}
-                <div className="flex flex-col gap-[4px]">
-                  <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">互動標籤</p>
-                  <input
-                    type="text"
-                    value={currentCard.button1Tag}
-                    onChange={(e) => onUpdateCard({ button1Tag: e.target.value })}
-                    placeholder="輸入互動標籤（僅供後台紀錄）"
-                    className="w-full h-[36px] px-[12px] rounded-[8px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
-                  />
-                  <p className="text-xs text-gray-500">此欄位不影響 Flex Message，僅供後台紀錄使用</p>
-                </div>
+                {/* 連結網址 - 條件顯示 */}
+                {(selectedPlatform === 'LINE' || (selectedPlatform === 'Facebook' && currentCard.button1ActionType === 'url')) && (
+                  <div className="flex flex-col gap-[4px]">
+                    <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">連結網址</p>
+                    <input
+                      type="text"
+                      value={currentCard.button1Url}
+                      onChange={(e) => onUpdateCard({ button1Url: e.target.value })}
+                      placeholder="https://example.com"
+                      aria-invalid={showButton1UrlError || Boolean(errors?.button1Url)}
+                      className={`w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
+                        requiredFieldClasses(showButton1UrlError || Boolean(errors?.button1Url))
+                      }`}
+                      style={requiredFieldStyle(showButton1UrlError || Boolean(errors?.button1Url))}
+                    />
+                    {(showButton1UrlError || errors?.button1Url) && (
+                      <p className="text-[12px] leading-[16px] text-[#f44336] mt-2">
+                        {showButton1UrlError ? '請輸入連結網址' : errors?.button1Url}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* 互動標籤 + 觸發訊息 - Facebook Tag 模式專用 */}
+                {selectedPlatform === 'Facebook' && currentCard.button1ActionType === 'tag' && (
+                  <>
+                    {/* 互動標籤 */}
+                    <div className="flex flex-col gap-[4px]">
+                      <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">互動標籤</p>
+                      <input
+                        type="text"
+                        value={currentCard.button1Tag}
+                        onChange={(e) => onUpdateCard({ button1Tag: e.target.value })}
+                        placeholder="輸入互動標籤，例如：#訂房行為"
+                        maxLength={50}
+                        className="w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all border border-neutral-200"
+                      />
+                    </div>
+
+                    {/* 觸發訊息文字（選填） */}
+                    <div className="flex flex-col gap-[4px]">
+                      <p className="text-[12px] leading-[16px] text-[#4a5565]">觸發訊息文字（選填）</p>
+                      <textarea
+                        value={currentCard.button1TriggerMessage || ''}
+                        onChange={(e) => onUpdateCard({ button1TriggerMessage: e.target.value })}
+                        placeholder="例如：快來看看吧 http://example.com"
+                        maxLength={200}
+                        className="w-full min-h-[72px] px-[12px] py-[8px] rounded-[8px] border border-neutral-200 text-[14px] resize-none focus:outline-none focus-visible:ring-2 transition-all"
+                      />
+                      <p className="text-[12px] text-[#6a7282] text-right">
+                        {(currentCard.button1TriggerMessage || '').length}/200
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                {/* LINE 模式的互動標籤（僅後台記錄用） */}
+                {selectedPlatform === 'LINE' && (
+                  <div className="flex flex-col gap-[4px]">
+                    <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">互動標籤</p>
+                    <input
+                      type="text"
+                      value={currentCard.button1Tag}
+                      onChange={(e) => onUpdateCard({ button1Tag: e.target.value })}
+                      placeholder="輸入互動標籤（僅供後台紀錄）"
+                      maxLength={50}
+                      className="w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all border border-neutral-200"
+                    />
+                    <p className="text-xs text-gray-500">此欄位不影響 Flex Message，僅供後台紀錄使用</p>
+                  </div>
+                )}
 
                 {/* 按鈕樣式 */}
                 <div className="flex flex-col gap-[4px]">
@@ -886,7 +957,11 @@ export default function CarouselMessageEditor({
               <button
                 onClick={() => {
                   if (preventStructureEdit()) return;
-                  onUpdateCard({ enableButton2: true, button2Mode: 'secondary' });
+                  onUpdateCard({
+                    enableButton2: true,
+                    button2Mode: 'secondary',
+                    button2ActionType: selectedPlatform === 'Facebook' ? 'url' : undefined
+                  });
                 }}
                 className="bg-white h-[32px] px-[13px] rounded-[10px] border border-[rgba(0,0,0,0.1)] flex items-center gap-[6px] hover:bg-gray-50 transition-colors ml-[24px] disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={structureLocked}
@@ -911,22 +986,17 @@ export default function CarouselMessageEditor({
                           button2Url: currentCard.button3Url,
                           button2Tag: currentCard.button3Tag,
                           button2Mode: currentCard.button3Mode,
-                          enableButton3: currentCard.enableButton4,
-                          button3: currentCard.button4,
-                          button3Url: currentCard.button4Url,
-                          button3Tag: currentCard.button4Tag,
-                          button3Mode: currentCard.button4Mode,
-                          enableButton4: false,
-                          button4: '',
-                          button4Url: '',
-                          button4Tag: '',
+                          enableButton3: false,
+                          button3: '',
+                          button3Url: '',
+                          button3Tag: '',
                         });
                       } else {
-                        onUpdateCard({ 
-                          enableButton2: false, 
-                          button2: '', 
-                          button2Url: '', 
-                          button2Tag: '' 
+                        onUpdateCard({
+                          enableButton2: false,
+                          button2: '',
+                          button2Url: '',
+                          button2Tag: ''
                         });
                       }
                     }}
@@ -963,39 +1033,110 @@ export default function CarouselMessageEditor({
                   )}
                 </div>
 
-                {/* 連結網址 */}
-                <div className="flex flex-col gap-[4px]">
-                  <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">連結網址</p>
-                  <input
-                    type="text"
-                    value={currentCard.button2Url}
-                    onChange={(e) => onUpdateCard({ button2Url: e.target.value })}
-                    placeholder="https://example.com"
-                    aria-invalid={showButton2UrlError || Boolean(errors?.button2Url)}
-                    className={`w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
-                      requiredFieldClasses(showButton2UrlError || Boolean(errors?.button2Url))
-                    }`}
-                    style={requiredFieldStyle(showButton2UrlError || Boolean(errors?.button2Url))}
-                  />
-                  {(showButton2UrlError || errors?.button2Url) && (
-                    <p className="text-[12px] leading-[16px] text-[#f44336] mt-2">
-                      {showButton2UrlError ? '請輸入連結網址' : errors?.button2Url}
-                    </p>
-                  )}
-                </div>
+                {/* 按鈕行為選擇器 - 僅 Facebook 顯示 */}
+                {selectedPlatform === 'Facebook' && (
+                  <div className="flex flex-col gap-[4px]">
+                    <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">按鈕行為</p>
+                    <RadioGroup
+                      value={currentCard.button2ActionType || 'url'}
+                      onValueChange={(value: 'url' | 'tag') => {
+                        if (value === 'url') {
+                          onUpdateCard({
+                            button2ActionType: 'url',
+                            button2Tag: '',
+                            button2TriggerMessage: ''
+                          });
+                        } else {
+                          onUpdateCard({
+                            button2ActionType: 'tag',
+                            button2Url: ''
+                          });
+                        }
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="url" id="btn2-url" />
+                        <Label htmlFor="btn2-url" className="text-[14px] font-normal cursor-pointer">開啟連結網址</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="tag" id="btn2-tag" />
+                        <Label htmlFor="btn2-tag" className="text-[14px] font-normal cursor-pointer">貼上互動標籤</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                )}
 
-                {/* 互動標籤 */}
-                <div className="flex flex-col gap-[4px]">
-                  <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">互動標籤</p>
-                  <input
-                    type="text"
-                    value={currentCard.button2Tag}
-                    onChange={(e) => onUpdateCard({ button2Tag: e.target.value })}
-                    placeholder="輸入互動標籤（僅供後台紀錄）"
-                    className="w-full h-[36px] px-[12px] rounded-[8px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
-                  />
-                  <p className="text-xs text-gray-500">此欄位不影響 Flex Message，僅供後台紀錄使用</p>
-                </div>
+                {/* 連結網址 - 條件顯示 */}
+                {(selectedPlatform === 'LINE' || (selectedPlatform === 'Facebook' && currentCard.button2ActionType === 'url')) && (
+                  <div className="flex flex-col gap-[4px]">
+                    <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">連結網址</p>
+                    <input
+                      type="text"
+                      value={currentCard.button2Url}
+                      onChange={(e) => onUpdateCard({ button2Url: e.target.value })}
+                      placeholder="https://example.com"
+                      aria-invalid={showButton2UrlError || Boolean(errors?.button2Url)}
+                      className={`w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
+                        requiredFieldClasses(showButton2UrlError || Boolean(errors?.button2Url))
+                      }`}
+                      style={requiredFieldStyle(showButton2UrlError || Boolean(errors?.button2Url))}
+                    />
+                    {(showButton2UrlError || errors?.button2Url) && (
+                      <p className="text-[12px] leading-[16px] text-[#f44336] mt-2">
+                        {showButton2UrlError ? '請輸入連結網址' : errors?.button2Url}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* 互動標籤 + 觸發訊息 - Facebook Tag 模式專用 */}
+                {selectedPlatform === 'Facebook' && currentCard.button2ActionType === 'tag' && (
+                  <>
+                    {/* 互動標籤 */}
+                    <div className="flex flex-col gap-[4px]">
+                      <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">互動標籤</p>
+                      <input
+                        type="text"
+                        value={currentCard.button2Tag}
+                        onChange={(e) => onUpdateCard({ button2Tag: e.target.value })}
+                        placeholder="輸入互動標籤，例如：#訂房行為"
+                        maxLength={50}
+                        className="w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all border border-neutral-200"
+                      />
+                    </div>
+
+                    {/* 觸發訊息文字（選填） */}
+                    <div className="flex flex-col gap-[4px]">
+                      <p className="text-[12px] leading-[16px] text-[#4a5565]">觸發訊息文字（選填）</p>
+                      <textarea
+                        value={currentCard.button2TriggerMessage || ''}
+                        onChange={(e) => onUpdateCard({ button2TriggerMessage: e.target.value })}
+                        placeholder="例如：快來看看吧 http://example.com"
+                        maxLength={200}
+                        className="w-full min-h-[72px] px-[12px] py-[8px] rounded-[8px] border border-neutral-200 text-[14px] resize-none focus:outline-none focus-visible:ring-2 transition-all"
+                      />
+                      <p className="text-[12px] text-[#6a7282] text-right">
+                        {(currentCard.button2TriggerMessage || '').length}/200
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                {/* LINE 模式的互動標籤（僅後台記錄用） */}
+                {selectedPlatform === 'LINE' && (
+                  <div className="flex flex-col gap-[4px]">
+                    <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">互動標籤</p>
+                    <input
+                      type="text"
+                      value={currentCard.button2Tag}
+                      onChange={(e) => onUpdateCard({ button2Tag: e.target.value })}
+                      placeholder="輸入互動標籤（僅供後台紀錄）"
+                      maxLength={50}
+                      className="w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all border border-neutral-200"
+                    />
+                    <p className="text-xs text-gray-500">此欄位不影響 Flex Message，僅供後台紀錄使用</p>
+                  </div>
+                )}
 
                 {/* 按鈕樣式 */}
                 <div className="flex flex-col gap-[4px]">
@@ -1022,7 +1163,11 @@ export default function CarouselMessageEditor({
               <button
                 onClick={() => {
                   if (preventStructureEdit()) return;
-                  onUpdateCard({ enableButton3: true, button3Mode: 'secondary' });
+                  onUpdateCard({
+                    enableButton3: true,
+                    button3Mode: 'secondary',
+                    button3ActionType: selectedPlatform === 'Facebook' ? 'url' : undefined
+                  });
                 }}
                 className="bg-white h-[32px] px-[13px] rounded-[10px] border border-[rgba(0,0,0,0.1)] flex items-center gap-[6px] hover:bg-gray-50 transition-colors ml-[24px] disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={structureLocked}
@@ -1039,27 +1184,12 @@ export default function CarouselMessageEditor({
                   <button
                     onClick={() => {
                       if (preventStructureEdit()) return;
-                      if (currentCard.enableButton4) {
-                        // Move button4 to button3
-                        onUpdateCard({
-                          enableButton3: true,
-                          button3: currentCard.button4,
-                          button3Url: currentCard.button4Url,
-                          button3Tag: currentCard.button4Tag,
-                          button3Mode: currentCard.button4Mode,
-                          enableButton4: false,
-                          button4: '',
-                          button4Url: '',
-                          button4Tag: '',
-                        });
-                      } else {
-                        onUpdateCard({ 
-                          enableButton3: false, 
-                          button3: '', 
-                          button3Url: '', 
-                          button3Tag: '' 
-                        });
-                      }
+                      onUpdateCard({
+                        enableButton3: false,
+                        button3: '',
+                        button3Url: '',
+                        button3Tag: ''
+                      });
                     }}
                     className="text-[12px] text-[#f44336] hover:underline disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={structureLocked}
@@ -1094,39 +1224,110 @@ export default function CarouselMessageEditor({
                   )}
                 </div>
 
-                {/* 連結網址 */}
-                <div className="flex flex-col gap-[4px]">
-                  <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">連結網址</p>
-                  <input
-                    type="text"
-                    value={currentCard.button3Url}
-                    onChange={(e) => onUpdateCard({ button3Url: e.target.value })}
-                    placeholder="https://example.com"
-                    aria-invalid={showButton3UrlError || Boolean(errors?.button3Url)}
-                    className={`w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
-                      requiredFieldClasses(showButton3UrlError || Boolean(errors?.button3Url))
-                    }`}
-                    style={requiredFieldStyle(showButton3UrlError || Boolean(errors?.button3Url))}
-                  />
-                  {(showButton3UrlError || errors?.button3Url) && (
-                    <p className="text-[12px] leading-[16px] text-[#f44336] mt-2">
-                      {showButton3UrlError ? '請輸入連結網址' : errors?.button3Url}
-                    </p>
-                  )}
-                </div>
+                {/* 按鈕行為選擇器 - 僅 Facebook 顯示 */}
+                {selectedPlatform === 'Facebook' && (
+                  <div className="flex flex-col gap-[4px]">
+                    <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">按鈕行為</p>
+                    <RadioGroup
+                      value={currentCard.button3ActionType || 'url'}
+                      onValueChange={(value: 'url' | 'tag') => {
+                        if (value === 'url') {
+                          onUpdateCard({
+                            button3ActionType: 'url',
+                            button3Tag: '',
+                            button3TriggerMessage: ''
+                          });
+                        } else {
+                          onUpdateCard({
+                            button3ActionType: 'tag',
+                            button3Url: ''
+                          });
+                        }
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="url" id="btn3-url" />
+                        <Label htmlFor="btn3-url" className="text-[14px] font-normal cursor-pointer">開啟連結網址</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="tag" id="btn3-tag" />
+                        <Label htmlFor="btn3-tag" className="text-[14px] font-normal cursor-pointer">貼上互動標籤</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                )}
 
-                {/* 互動標籤 */}
-                <div className="flex flex-col gap-[4px]">
-                  <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">互動標籤</p>
-                  <input
-                    type="text"
-                    value={currentCard.button3Tag}
-                    onChange={(e) => onUpdateCard({ button3Tag: e.target.value })}
-                    placeholder="輸入互動標籤（僅供後台紀錄）"
-                    className="w-full h-[36px] px-[12px] rounded-[8px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
-                  />
-                  <p className="text-xs text-gray-500">此欄位不影響 Flex Message，僅供後台紀錄使用</p>
-                </div>
+                {/* 連結網址 - 條件顯示 */}
+                {(selectedPlatform === 'LINE' || (selectedPlatform === 'Facebook' && currentCard.button3ActionType === 'url')) && (
+                  <div className="flex flex-col gap-[4px]">
+                    <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">連結網址</p>
+                    <input
+                      type="text"
+                      value={currentCard.button3Url}
+                      onChange={(e) => onUpdateCard({ button3Url: e.target.value })}
+                      placeholder="https://example.com"
+                      aria-invalid={showButton3UrlError || Boolean(errors?.button3Url)}
+                      className={`w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
+                        requiredFieldClasses(showButton3UrlError || Boolean(errors?.button3Url))
+                      }`}
+                      style={requiredFieldStyle(showButton3UrlError || Boolean(errors?.button3Url))}
+                    />
+                    {(showButton3UrlError || errors?.button3Url) && (
+                      <p className="text-[12px] leading-[16px] text-[#f44336] mt-2">
+                        {showButton3UrlError ? '請輸入連結網址' : errors?.button3Url}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* 互動標籤 + 觸發訊息 - Facebook Tag 模式專用 */}
+                {selectedPlatform === 'Facebook' && currentCard.button3ActionType === 'tag' && (
+                  <>
+                    {/* 互動標籤 */}
+                    <div className="flex flex-col gap-[4px]">
+                      <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">互動標籤</p>
+                      <input
+                        type="text"
+                        value={currentCard.button3Tag}
+                        onChange={(e) => onUpdateCard({ button3Tag: e.target.value })}
+                        placeholder="輸入互動標籤，例如：#訂房行為"
+                        maxLength={50}
+                        className="w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all border border-neutral-200"
+                      />
+                    </div>
+
+                    {/* 觸發訊息文字（選填） */}
+                    <div className="flex flex-col gap-[4px]">
+                      <p className="text-[12px] leading-[16px] text-[#4a5565]">觸發訊息文字（選填）</p>
+                      <textarea
+                        value={currentCard.button3TriggerMessage || ''}
+                        onChange={(e) => onUpdateCard({ button3TriggerMessage: e.target.value })}
+                        placeholder="例如：快來看看吧 http://example.com"
+                        maxLength={200}
+                        className="w-full min-h-[72px] px-[12px] py-[8px] rounded-[8px] border border-neutral-200 text-[14px] resize-none focus:outline-none focus-visible:ring-2 transition-all"
+                      />
+                      <p className="text-[12px] text-[#6a7282] text-right">
+                        {(currentCard.button3TriggerMessage || '').length}/200
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                {/* LINE 模式的互動標籤（僅後台記錄用） */}
+                {selectedPlatform === 'LINE' && (
+                  <div className="flex flex-col gap-[4px]">
+                    <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">互動標籤</p>
+                    <input
+                      type="text"
+                      value={currentCard.button3Tag}
+                      onChange={(e) => onUpdateCard({ button3Tag: e.target.value })}
+                      placeholder="輸入互動標籤（僅供後台紀錄）"
+                      maxLength={50}
+                      className="w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all border border-neutral-200"
+                    />
+                    <p className="text-xs text-gray-500">此欄位不影響 Flex Message，僅供後台紀錄使用</p>
+                  </div>
+                )}
 
                 {/* 按鈕樣式 */}
                 <div className="flex flex-col gap-[4px]">
@@ -1134,122 +1335,6 @@ export default function CarouselMessageEditor({
                   <Select
                     value={currentCard.button3Mode}
                     onValueChange={(value: 'primary' | 'secondary' | 'link') => onUpdateCard({ button3Mode: value })}
-                  >
-                    <SelectTrigger className="text-sm bg-white border-[#F5F5F5]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="primary">Primary（綠色實心）</SelectItem>
-                      <SelectItem value="secondary">Secondary（灰色實心）</SelectItem>
-                      <SelectItem value="link">Link（綠色外框）</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            )}
-
-            {/* Button 4 Config */}
-            {currentCard.enableButton3 && !currentCard.enableButton4 && (
-              <button
-                onClick={() => {
-                  if (preventStructureEdit()) return;
-                  onUpdateCard({ enableButton4: true, button4Mode: 'secondary' });
-                }}
-                className="bg-white h-[32px] px-[13px] rounded-[10px] border border-[rgba(0,0,0,0.1)] flex items-center gap-[6px] hover:bg-gray-50 transition-colors ml-[24px] disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={structureLocked}
-              >
-                <Plus className="size-[16px]" strokeWidth={1.33} />
-                <span className="text-[14px] leading-[20px] text-neutral-950">新增按鈕四</span>
-              </button>
-            )}
-
-            {currentCard.enableButton4 && (
-              <div className="flex flex-col gap-[12px] pl-[24px] border-l-2 border-neutral-200">
-                <div className="flex items-center justify-between">
-                  <span className="text-[14px] leading-[20px] text-neutral-950 font-medium">動作按鈕四</span>
-                  <button
-                    onClick={() => {
-                      if (preventStructureEdit()) return;
-                      onUpdateCard({ 
-                        enableButton4: false, 
-                        button4: '', 
-                        button4Url: '', 
-                        button4Tag: '' 
-                      });
-                    }}
-                    className="text-[12px] text-[#f44336] hover:underline disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={structureLocked}
-                  >
-                    刪除
-                  </button>
-                </div>
-                
-                {/* 按鈕文字 */}
-                <div className="flex flex-col gap-[2px]">
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={currentCard.button4}
-                      onChange={(e) => onUpdateCard({ button4: e.target.value })}
-                      placeholder="按鈕文字"
-                      maxLength={12}
-                      aria-invalid={showButton4TextError || Boolean(errors?.button4)}
-                      className={`w-full h-[36px] px-[12px] rounded-[10px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
-                        requiredFieldClasses(showButton4TextError || Boolean(errors?.button4))
-                      }`}
-                      style={requiredFieldStyle(showButton4TextError || Boolean(errors?.button4))}
-                    />
-                    <span className="absolute right-[12px] top-[10px] text-[12px] leading-[16px] text-[#6a7282]">
-                      {currentCard.button4.length}/12
-                    </span>
-                  </div>
-                  {(showButton4TextError || errors?.button4) && (
-                    <p className="text-[12px] leading-[16px] text-[#f44336] mt-2">
-                      {showButton4TextError ? '請輸入按鈕文字' : errors?.button4}
-                    </p>
-                  )}
-                </div>
-
-                {/* 連結網址 */}
-                <div className="flex flex-col gap-[4px]">
-                  <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">連結網址</p>
-                  <input
-                    type="text"
-                    value={currentCard.button4Url}
-                    onChange={(e) => onUpdateCard({ button4Url: e.target.value })}
-                    placeholder="https://example.com"
-                    aria-invalid={showButton4UrlError || Boolean(errors?.button4Url)}
-                    className={`w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
-                      requiredFieldClasses(showButton4UrlError || Boolean(errors?.button4Url))
-                    }`}
-                    style={requiredFieldStyle(showButton4UrlError || Boolean(errors?.button4Url))}
-                  />
-                  {(showButton4UrlError || errors?.button4Url) && (
-                    <p className="text-[12px] leading-[16px] text-[#f44336] mt-2">
-                      {showButton4UrlError ? '請輸入連結網址' : errors?.button4Url}
-                    </p>
-                  )}
-                </div>
-
-                {/* 互動標籤 */}
-                <div className="flex flex-col gap-[4px]">
-                  <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">互動標籤</p>
-                  <input
-                    type="text"
-                    value={currentCard.button4Tag}
-                    onChange={(e) => onUpdateCard({ button4Tag: e.target.value })}
-                    placeholder="輸入互動標籤（僅供後台紀錄）"
-                    className="w-full h-[36px] px-[12px] rounded-[8px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
-                  />
-                  <p className="text-xs text-gray-500">此欄位不影響 Flex Message，僅供後台紀錄使用</p>
-                </div>
-
-                {/* 按鈕樣式 */}
-                <div className="flex flex-col gap-[4px]">
-                  <Label className="text-xs">按鈕樣式</Label>
-                  <Select
-                    value={currentCard.button4Mode}
-                    onValueChange={(value: 'primary' | 'secondary' | 'link') => onUpdateCard({ button4Mode: value })}
                   >
                     <SelectTrigger className="text-sm bg-white border-[#F5F5F5]">
                       <SelectValue />

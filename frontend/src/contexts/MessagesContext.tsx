@@ -3,6 +3,8 @@ import { toast } from 'sonner';
 import { useAuth } from '../components/auth/AuthContext';
 import { normalizeInteractionTags } from '../utils/interactionTags';
 import type { BackendMessage, FlexMessage } from '../types/api';
+import type { MessagePlatform } from '../types/channel';
+import { isMessagePlatform } from '../types/channel';
 
 /**
  * 訊息數據 Context
@@ -16,7 +18,7 @@ export interface Message {
   id: string;
   title: string;
   tags: string[];
-  platform: 'LINE' | 'Facebook' | 'Instagram';
+  platform: MessagePlatform;
   status: '已排程' | '草稿' | '已發送' | '發送失敗';
   recipientCount: number;
   openCount: number;
@@ -63,11 +65,16 @@ interface MessagesProviderProps {
 
 // 轉換後端數據為前端格式
 const transformBackendMessage = (item: BackendMessage): Message => {
+  // 使用類型守衛確保 platform 是有效的 MessagePlatform
+  const platform: MessagePlatform = isMessagePlatform(item.platform)
+    ? item.platform
+    : 'LINE'; // 默認為 LINE
+
   return {
     id: item.id.toString(),
     title: item.message_title || item.template?.name || '未命名訊息',
     tags: normalizeInteractionTags(item.interaction_tags ?? item.interactionTags ?? item.tags),
-    platform: item.platform || 'LINE',
+    platform,
     status: item.send_status,
     recipientCount: item.send_count || 0,
     openCount: item.open_count || 0,

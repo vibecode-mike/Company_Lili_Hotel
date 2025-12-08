@@ -83,6 +83,14 @@ class Message(Base):
     created_by = Column(BigInteger, ForeignKey("users.id"), comment="創建者ID")
     flex_message_json = Column(MEDIUMTEXT, nullable=True, comment="Flex Message JSON 內容（最大 16MB）")
 
+    # 平台設定（新增）
+    platform = Column(
+        String(20),
+        nullable=True,
+        default="LINE",
+        comment="發送平台：LINE/Facebook/Instagram",
+    )
+
     # 相容 line_app/app.py 的欄位
     interaction_tags = Column(JSON, comment="互動標籤（相容舊程式）")
 

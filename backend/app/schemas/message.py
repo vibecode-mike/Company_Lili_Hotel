@@ -79,6 +79,9 @@ class MessageBase(BaseModel):
 
     trigger_condition: Optional[Dict[str, Any]] = None  # 特定觸發條件
 
+    # 平台設定（新增）
+    platform: Optional[str] = Field(default="LINE", description="發送平台：LINE/Facebook/Instagram")
+
     @field_validator('scheduled_at', mode='before')
     @classmethod
     def parse_scheduled_at(cls, v):
@@ -95,6 +98,16 @@ class MessageBase(BaseModel):
                     return datetime.fromisoformat(v.replace('Z', '+00:00'))
                 except ValueError:
                     raise ValueError(f'無效的日期時間格式: {v}')
+        return v
+
+    @field_validator('platform', mode='before')
+    @classmethod
+    def validate_platform(cls, v):
+        """驗證平台值"""
+        if v is None:
+            return "LINE"  # 默認值
+        if v not in ['LINE', 'Facebook', 'Instagram']:
+            raise ValueError(f'無效的平台值: {v}，必須是 LINE、Facebook 或 Instagram')
         return v
 
     @field_validator('interaction_tags', mode='before')

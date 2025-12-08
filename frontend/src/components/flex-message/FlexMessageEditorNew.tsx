@@ -42,7 +42,7 @@ export default function FlexMessageEditorNew({ onFlexMessageChange }: FlexMessag
           type: 'image',
           url: config.imageUrl,
           size: 'full',
-          aspectRatio: hasContent ? '1.92:1' : '1:1',
+          aspectRatio: hasContent ? '1.91:1' : '1:1',
           aspectMode: 'cover',
         };
 
@@ -302,7 +302,7 @@ export default function FlexMessageEditorNew({ onFlexMessageChange }: FlexMessag
       type: 'image',
       url: currentBubble.imageUrl || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&q=80',
       size: 'full',
-      aspectRatio: hasContent ? '1.92:1' : '1:1',
+      aspectRatio: hasContent ? '1.91:1' : '1:1',
       aspectMode: 'cover',
     };
   }
@@ -562,7 +562,7 @@ export default function FlexMessageEditorNew({ onFlexMessageChange }: FlexMessag
                     <div className="text-xs text-[#6a7282] space-y-0">
                       <p>• 圖片格式 JPG, JPEG, PNG</p>
                       <p>• 檔案最大不可超過 5 MB</p>
-                      <p>• 圖片會自動調整為 1.92:1 或 1:1 比例</p>
+                      <p>• 圖片會自動調整為 1.91:1 或 1:1 比例</p>
                     </div>
 
                     <div className="border-t border-[rgba(0,0,0,0.1)] pt-2.5">

@@ -1,10 +1,11 @@
-import { useMemo, useState, memo } from 'react';
+import { useMemo, useState, memo, useEffect } from 'react';
 import AutoReplyTableStyled, { AutoReplyData } from './AutoReplyTableStyled';
 import svgPaths from "../imports/svg-icons-common";
 import { PageWithSidebar } from './Sidebar';
 import { PageHeaderWithBreadcrumb } from './common/Breadcrumb';
 import CreateAutoReplyInteractive from './CreateAutoReplyInteractive';
 import { useAutoReplies } from '../contexts/AutoRepliesContext';
+import { useNavigation } from '../contexts/NavigationContext';
 
 interface AutoReplyProps {
   onBack: () => void;
@@ -71,10 +72,13 @@ const CancelCircleIcon = memo(function CancelCircleIcon({ onClick }: { onClick: 
 });
 
 export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNavigateToMembers, onNavigateToSettings }: AutoReplyProps) {
-  const [view, setView] = useState<'list' | 'editor'>('list');
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const { params, navigate } = useNavigation();
   const [searchTerm, setSearchTerm] = useState('');
   const { autoReplies, isLoading, error, toggleAutoReply } = useAutoReplies();
+
+  // 從 URL 參數讀取狀態
+  const view = params.view === 'edit' ? 'editor' : 'list';
+  const editingId = params.replyId || null;
 
   const tableData = useMemo<AutoReplyData[]>(() => {
     return autoReplies.map((reply) => ({
@@ -106,13 +110,16 @@ export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNav
   };
 
   const openEditor = (id?: string) => {
-    setEditingId(id ?? null);
-    setView('editor');
+    // 更新 URL 參數來顯示編輯頁面
+    navigate('auto-reply', {
+      view: 'edit',
+      ...(id && { replyId: id })
+    });
   };
 
   const closeEditor = () => {
-    setEditingId(null);
-    setView('list');
+    // 清除 URL 參數回到列表頁面
+    navigate('auto-reply', {});
   };
 
   const handleToggleStatus = async (id: string, nextState: boolean) => {
