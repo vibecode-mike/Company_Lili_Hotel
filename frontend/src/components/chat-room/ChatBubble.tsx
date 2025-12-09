@@ -3,7 +3,7 @@
  *
  * Figma 3.png 規格：
  * - 用戶訊息背景: #FFFFFF（白色）
- * - 官方訊息背景: #D4EDFC（淺藍）
+ * - 官方訊息背景: #9ED5FF（淺藍）
  * - 圓角: 16px
  * - 內邊距: 16px
  * - 文字顏色: #383838
@@ -24,6 +24,7 @@ import React from 'react';
 import type { ChatMessage, ChatPlatform } from './types';
 import Container from '../../imports/Container-8548-103';
 import { PlatformIcon } from '../common/icons/PlatformIcon';
+import WebChatIcon from '../../assets/Icon-web-chat-16.png';
 
 // Props 定義
 export interface ChatBubbleProps {
@@ -37,7 +38,8 @@ export interface ChatBubbleProps {
 
 /**
  * 用戶頭像組件（左側）
- * Figma 3.png: 白色圓形 + "OA" 文字
+ * - LINE/Facebook: 優先使用會員頭像，找不到則顯示 OA
+ * - WebChat: 顯示專用圖標
  */
 function UserAvatar({
   avatar,
@@ -46,7 +48,29 @@ function UserAvatar({
   avatar?: string;
   platform?: ChatPlatform;
 }) {
-  // 統一顯示 OA 文字（根據 Figma 3.png 設計）
+  // WebChat 平台：顯示專用圖標
+  if (platform === 'WebChat') {
+    return (
+      <div className="bg-white overflow-clip relative rounded-full shrink-0 size-[45px] flex items-center justify-center shadow-sm">
+        <img src={WebChatIcon} alt="WebChat" className="w-[16px] h-[16px]" />
+      </div>
+    );
+  }
+
+  // LINE/Facebook 平台：優先使用頭像，否則顯示 OA
+  if (avatar) {
+    return (
+      <div className="bg-white overflow-clip relative rounded-full shrink-0 size-[45px] shadow-sm">
+        <img
+          src={avatar}
+          alt="用戶頭像"
+          className="w-full h-full object-cover rounded-full"
+        />
+      </div>
+    );
+  }
+
+  // 預設：顯示 OA
   return (
     <div className="bg-white overflow-clip relative rounded-full shrink-0 size-[45px] flex items-center justify-center shadow-sm">
       <span className="font-['Noto_Sans_TC:Regular',sans-serif] text-[14px] text-[#6E6E6E] font-medium">
@@ -108,7 +132,7 @@ export function ChatBubble({
         {/* 氣泡 - Figma 3.png 規格 */}
         <div
           className="flex flex-col items-center max-w-[288px] w-fit overflow-clip relative rounded-[16px] shrink-0"
-          style={{ backgroundColor: isOfficial ? '#A8E6CF' : '#FFFFFF' }}
+          style={{ backgroundColor: isOfficial ? '#9ED5FF' : '#FFFFFF' }}
         >
           <div className="box-border content-center flex flex-wrap gap-0 items-center p-[16px] relative w-full">
             <p
