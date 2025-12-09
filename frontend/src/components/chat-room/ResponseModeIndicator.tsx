@@ -27,6 +27,7 @@ import {
   TooltipProvider
 } from '../ui/tooltip';
 import type { ResponseMode } from './types';
+import InfoIconImage from '../../assets/Icon-Info-20.png';
 
 // Props 定義
 export interface ResponseModeIndicatorProps {
@@ -53,25 +54,18 @@ const MODE_CONFIG: Record<ResponseMode, { label: string; tooltip: string }> = {
 };
 
 /**
- * Info 圖標 SVG
- * 可調整大小, #6E6E6E
+ * Info 圖標組件
+ * 使用 Icon-Info-20.png 圖片
  */
-function InfoIcon({ size = 24 }: { size?: number }) {
+function InfoIcon({ size = 20 }: { size?: number }) {
   return (
-    <svg
+    <img
+      src={InfoIconImage}
+      alt="info"
       width={size}
       height={size}
-      viewBox="0 0 20 20"
-      fill="none"
       className="shrink-0"
-    >
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-12a1 1 0 011 1v4a1 1 0 11-2 0V7a1 1 0 011-1zm0 8a1 1 0 100-2 1 1 0 000 2z"
-        fill="#6E6E6E"
-      />
-    </svg>
+    />
   );
 }
 
@@ -91,10 +85,10 @@ export function ResponseModeIndicator({
           <div
             className={`flex items-center gap-[4px] px-[8px] py-[4px] rounded-[16px] cursor-help ${className}`}
           >
-            <span className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] text-[#6E6E6E] leading-[1.5] whitespace-nowrap">
+            <span className="font-['Noto_Sans_TC:Regular',sans-serif] text-[14px] text-[#A8A8A8] leading-[1.5] whitespace-nowrap">
               {config.label}
             </span>
-            <InfoIcon size={24} />
+            <InfoIcon size={20} />
           </div>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={4}>

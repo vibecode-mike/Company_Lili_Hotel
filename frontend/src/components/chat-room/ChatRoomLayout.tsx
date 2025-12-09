@@ -852,9 +852,9 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
         </div>
 
         {/* Right Column: Chat Area - Figma 3.png 布局 */}
-        <div className="content-stretch flex flex-col gap-0 items-start relative self-stretch flex-1" style={{ height: '900px' }}>
+        <div className="content-stretch flex flex-col gap-0 items-start relative self-stretch flex-1 rounded-[20px] overflow-hidden" style={{ height: '900px' }}>
           {/* 頂部白色工具列 - 平台選擇器（左）+ 日期（中） */}
-          <div className="bg-white w-full px-[16px] py-[12px] flex items-center justify-between rounded-t-[20px]">
+          <div className="w-full px-[16px] py-[12px] flex items-center justify-between rounded-t-[20px] bg-white">
             {/* 平台選擇器（左側） */}
             <PlatformSwitcher
               value={currentPlatform}

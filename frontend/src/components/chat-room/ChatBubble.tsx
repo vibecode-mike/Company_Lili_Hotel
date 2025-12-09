@@ -112,9 +112,7 @@ export function ChatBubble({
         >
           <div className="box-border content-center flex flex-wrap gap-0 items-center p-[16px] relative w-full">
             <p
-              className={`font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[16px] text-[#383838] break-words whitespace-pre-wrap ${
-                isOfficial ? 'text-right' : 'text-left'
-              }`}
+              className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[16px] text-[#383838] break-words whitespace-pre-wrap text-left"
               style={{ overflowWrap: 'anywhere' }}
             >
               {message.text}
