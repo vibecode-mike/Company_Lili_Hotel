@@ -1,0 +1,77 @@
+kind: pipeline
+type: kubernetes
+name: ci-meta
+
+steps:
+  - name: Public
+    image: plugins/docker
+    environment:
+      GITEA_USERNAME:
+        from_secret: gitea_username
+      GITEA_TOKEN:
+        from_secret: gitea_token
+    settings:
+      username:
+        from_secret: docker-username
+      password:
+        from_secret: docker-password
+      repo: harbor.star-bit.io/meta/backend
+      tags: v0.0.1
+      registry: harbor.star-bit.io
+      build_args_from_env:
+        - GITEA_USERNAME
+        - GITEA_TOKEN
+    when:
+      event:
+        - push
+      branch:
+        - develop
+      
+# prod
+  - name: Publish-prod
+    image: plugins/ecr
+    environment:
+      GITEA_USERNAME:
+        from_secret: gitea_username
+      GITEA_TOKEN:
+        from_secret: gitea_token
+    settings:
+      access_key: 
+        from_secret: access-key
+      secret_key: 
+        from_secret: secret-key
+      repo: 043660568366.dkr.ecr.ap-northeast-1.amazonaws.com/meta-backend
+      tags: v0.0.1
+      registry: 043660568366.dkr.ecr.ap-northeast-1.amazonaws.com
+      region: ap-northeast-1
+      build_args_from_env:
+        - GITEA_USERNAME
+        - GITEA_TOKEN
+    when:
+       branch:
+        - master
+
+  - name: slack
+    image: plugins/slack
+    settings:
+      webhook:
+        from_secret: slack_webhook
+      channel: drone-ci
+      link_names: true
+      template: >
+        {{#success build.status}} ✔ {{ else }} :x: {{/success}} {{ uppercasefirst build.status }}: Build #{{ build.number }} * (type: `{{ build.event }}`)
+
+        Project: meta-backend
+
+        Commit: <https://gitea.star-bit.io/{{ repo.owner }}/{{ repo.name }}/commit/{{ build.commit }}|{{ truncate build.commit 8 }}>
+
+        Branch: <https://gitea.star-bit.io/{{ repo.owner }}/{{ repo.name }}/commits/{{ build.branch }}|{{ build.branch }}>
+
+        Author: {{ build.author }}
+
+        Build: <{{ build.link }}| Drone Build {{ build.number }} ↗>   
+    depends_on:
+    - Public
+    - Publish-prod      
+    when:
+      status: [success, failure]

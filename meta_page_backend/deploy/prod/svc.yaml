@@ -1,0 +1,14 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: meta-svc-prod
+  namespace: meta
+  labels:
+    app: meta-prod
+spec:
+  selector:
+    app: meta-prod
+  type: NodePort
+  ports:
+    - name: http
+      port: 11204

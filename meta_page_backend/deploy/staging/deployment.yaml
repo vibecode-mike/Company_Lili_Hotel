@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: meta-deployment-staging
+  namespace:
+  labels:
+    app: meta-staging
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: meta-staging
+  template:
+    metadata:
+      labels:
+        app: meta-staging
+    spec:
+      containers:
+        - name: meta-staging
+          image: harbor.star-bit.io/meta/backend:v0.0.1
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 11204
+              name: https
+          securityContext:
+            allowPrivilegeEscalation: false
+          env:
+            - name: API_VERSION
+              valueFrom:
+                secretKeyRef:
+                  name: meta-backend
+                  key: API_VERSION
+            - name: page_id
+              valueFrom:
+                secretKeyRef:
+                  name: meta-backend
+                  key: page_id
+            - name: page_access_token
+              valueFrom:
+                secretKeyRef:
+                  name: meta-backend
+                  key: page_access_token
+      automountServiceAccountToken: false
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 3000
