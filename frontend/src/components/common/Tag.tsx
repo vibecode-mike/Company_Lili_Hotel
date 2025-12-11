@@ -49,7 +49,7 @@ const Tag = memo(function Tag({
       case 'blue':
         return 'bg-[#f0f6ff] text-[#0f6beb]';
       case 'yellow':
-        return 'bg-[floralwhite] text-[#eba20f]';
+        return 'bg-[#f0f6ff] text-[#0f6beb]';
       case 'gray':
         return 'bg-neutral-100 text-neutral-700';
       default:
@@ -63,7 +63,7 @@ const Tag = memo(function Tag({
       case 'blue':
         return '#0f6beb';
       case 'yellow':
-        return '#eba20f';
+        return '#0f6beb';
       case 'gray':
         return '#404040';
       default:

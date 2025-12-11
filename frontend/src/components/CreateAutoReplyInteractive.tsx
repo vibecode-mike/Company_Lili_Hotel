@@ -203,7 +203,7 @@ export default function CreateAutoReplyInteractive({
         {parts.map((part, i) => {
           if (part === '{好友的顯示名稱}') {
             return (
-              <span key={i} className="bg-[#FFFAF0] text-[#EBA20F] px-[4px] py-[2px] rounded-[8px] inline-block">
+              <span key={i} className="bg-[#f0f6ff] text-[#0f6beb] px-[4px] py-[2px] rounded-[8px] inline-block">
                 好友的顯示名稱
               </span>
             );
@@ -625,41 +625,22 @@ export default function CreateAutoReplyInteractive({
                                     <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-[8px]" />
                                     <div className="flex flex-col justify-center min-h-inherit size-full">
                                       <div className="box-border content-stretch flex flex-col gap-[4px] items-start justify-center min-h-inherit p-[16px] relative w-full">
-                                        {/* 顯示層：帶樣式的文本渲染 */}
-                                        <div className="w-full min-h-[84px] relative">
-                                          {/* 實際的 textarea（用於輸入） */}
-                                          <textarea 
-                                            ref={el => (textareaRefs.current[msg.id] = el)} 
-                                            value={msg.text} 
-                                            onChange={(e) =>
-                                              setMessages(prev =>
-                                                prev.map((m, i) =>
-                                                  i === index ? { ...m, text: e.target.value.slice(0, 100) } : m
-                                                )
+                                        {/* 純文字輸入框 */}
+                                        <textarea
+                                          ref={el => (textareaRefs.current[msg.id] = el)}
+                                          value={msg.text}
+                                          onChange={(e) =>
+                                            setMessages(prev =>
+                                              prev.map((m, i) =>
+                                                i === index ? { ...m, text: e.target.value.slice(0, 100) } : m
                                               )
-                                            } 
-                                            placeholder="輸入訊息文字" 
-                                            className={`w-full min-h-[84px] font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] border-none outline-none resize-none bg-transparent ${msg.text ? 'text-transparent caret-[#383838]' : 'placeholder:text-[#a8a8a8]'}`}
-                                            rows={3} 
-                                          />
-                                          
-                                          {/* 覆蓋層：顯示帶樣式的文本 */}
-                                          {msg.text && (
-                                            <div className="absolute inset-0 pointer-events-none font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] whitespace-pre-wrap break-words flex flex-wrap items-start content-start gap-[4px]">
-                                              {msg.text.split(/(\{好友的顯示名稱\})/g).map((part, i) => {
-                                                if (part === '{好友的顯示名稱}') {
-                                                  return (
-                                                    <span key={i} className="bg-[#FFFAF0] text-[#EBA20F] px-[4px] py-[2px] rounded-[8px] inline-block">
-                                                      好友的顯示名稱
-                                                    </span>
-                                                  );
-                                                }
-                                                return part ? <span key={i}>{part}</span> : null;
-                                              })}
-                                            </div>
-                                          )}
-                                        </div>
-                                        
+                                            )
+                                          }
+                                          placeholder="輸入訊息文字"
+                                          className="w-full min-h-[84px] font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] border-none outline-none resize-none bg-transparent placeholder:text-[#a8a8a8]"
+                                          rows={3}
+                                        />
+
                                         <div className="bg-neutral-100 box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer hover:bg-neutral-200 transition-colors" onClick={() => handleInsertVariable(index)}>
                                           <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] text-center">好友的顯示名稱</p>
                                         </div>

@@ -32,8 +32,8 @@ function MessageCard() {
 
 function Tag() {
   return (
-    <div className="absolute bg-[floralwhite] box-border content-stretch flex gap-[2px] items-center justify-center left-[37px] min-w-[32px] px-[4px] py-[2px] rounded-[8px] top-[14px]" data-name="Tag">
-      <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#eba20f] text-[16px] text-center">好友的顯示名稱</p>
+    <div className="absolute bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center left-[37px] min-w-[32px] px-[4px] py-[2px] rounded-[8px] top-[14px]" data-name="Tag">
+      <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">好友的顯示名稱</p>
     </div>
   );
 }
