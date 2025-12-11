@@ -766,3 +766,45 @@ Feature: 會員管理
       When 內部人員刪除該會員備註
       Then 系統清空該會員備註欄位
       And 系統保留備註刪除記錄於歷史中
+
+  Rule: 問卷填答完成後即時覆蓋會員資料（新值覆蓋，空白不覆蓋）
+
+    Example: 問卷填答後覆蓋會員資料
+      Given 會員「王小明」目前資料
+        | 欄位      | 值                |
+        | name      | 王小明            |
+        | gender    | 男                |
+        | birthday  | 1990-01-01        |
+        | email     | user@example.com  |
+      And 問卷填答結果（SurveyResponse）
+        | 欄位      | 值                |
+        | name      | 王小明先生        |
+        | gender    | 男                |
+        | birthday  | 1990-01-01        |
+        | email     | user@example.com  |
+      When 問卷提交完成
+      Then 系統即時更新 Member 對應欄位（以新值覆蓋既有值）
+        | 欄位      | 更新後值          |
+        | name      | 王小明先生        |
+        | gender    | 男                |
+        | birthday  | 1990-01-01        |
+      And 若問卷欄位值為空白則不覆蓋既有值
+
+    Example: 問卷填答部分空白僅補空欄位
+      Given 會員「李小華」目前資料
+        | 欄位      | 值                |
+        | name      | 李小華            |
+        | gender    | 女                |
+        | birthday  | (空白)            |
+        | email     | alice@example.com |
+      And 問卷填答結果
+        | 欄位      | 值                |
+        | name      | (空白)            |
+        | gender    | 女                |
+        | birthday  | 1992-03-05        |
+      When 問卷提交完成
+      Then 系統僅補生日欄位，其他空白不覆蓋
+        | 欄位      | 更新後值          |
+        | name      | 李小華            |
+        | gender    | 女                |
+        | birthday  | 1992-03-05        |

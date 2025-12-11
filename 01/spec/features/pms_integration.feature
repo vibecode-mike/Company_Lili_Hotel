@@ -232,6 +232,33 @@ Feature: PMS 系統整合
       And 系統保留既有的 PMS_Integration 記錄
       And 系統保留 stay_records、room_type、stay_date 等歷史資料
 
+  Rule: 跨系統同步欄位衝突處理（依最新時間覆蓋，空白不覆蓋）
+
+    Example: PMS 與 CRM 同時回傳會員資料，採用最新事件
+      Given 現有會員「王小明」資料
+        | 欄位      | 值              | updated_at           |
+        | name      | 王小明          | 2025/01/10 10:00:00 |
+        | phone     | 0911222333      | 2025/01/10 10:00:00 |
+        | birthday  | 1990-01-01      | 2025/01/10 10:00:00 |
+      And PMS 同步事件（較早）
+        | 欄位      | 值              | source_time          |
+        | name      | 王小明          | 2025/01/11 09:00:00 |
+        | phone     | （空白）        | 2025/01/11 09:00:00 |
+        | birthday  | 1990-01-01      | 2025/01/11 09:00:00 |
+      And CRM 同步事件（較晚）
+        | 欄位      | 值              | source_time          |
+        | name      | 王小明先生      | 2025/01/12 08:00:00 |
+        | phone     | 0922333444      | 2025/01/12 08:00:00 |
+        | birthday  | （空白）        | 2025/01/12 08:00:00 |
+      When 系統處理兩個事件
+      Then 系統依 source_time/received_at 以最新資料覆蓋非空欄位
+        | 欄位      | 更新後值        |
+        | name      | 王小明先生      |  # 取 CRM（較晚）
+        | phone     | 0922333444      |  # 取 CRM（較晚且有值）
+        | birthday  | 1990-01-01      |  # PMS 與 CRM 為空白不覆蓋既有值
+      And 空白欄位不覆蓋既有值
+      And 每次覆蓋時更新對應欄位的 updated_at
+
   Rule: 安全性與敏感資訊保護
 
     Example: config_json 不儲存敏感資訊
@@ -246,3 +273,14 @@ Feature: PMS 系統整合
       Then 系統使用 HTTPS 加密連線
       And 系統驗證 SSL 憑證有效性
       And 系統拒絕不安全的 HTTP 連線
+
+  Rule: 大批量同步拆批與超時處理
+
+    Example: 超過 10K 筆自動拆批，並設定每批超時
+      Given PMS 端回傳 12000 筆會員資料
+      When 系統處理同步
+      Then 系統自動拆分為批次，每批 2000 筆（共 6 批）
+      And 每批處理設定超時 5 分鐘，超時則標記該批失敗並記錄 log
+      And 失敗批次可重新排入佇列重試（手動或自動）
+      And 批次間使用背景佇列執行，避免阻塞同步請求
+      And 成功批次立即持久化，不因其他批次失敗而回滾

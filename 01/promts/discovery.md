@@ -1,64 +1,271 @@
-# Discovery Notes – LINE CRM Spec
+---
+description: 掃描當前規格，識別所有未釐清、未覆蓋之處，並將釐清項目以結構化格式記錄於 .clarify/ 資料夾中，供後續 formulation 階段使用。
+---
 
-This document distills the materials under `01/spec/` (API contract, ERM, and feature files) to clarify the scope, dependencies, and remaining questions before implementation.
+目標：偵測作用中規格（specification）的歧義或遺漏決策點，將釐清問題以檔案形式記錄到 `.clarify/` 資料夾，產生 `overview.md` 說明釐清優先順序策略。
 
-## Source Inputs
-- `01/spec/api_line_message_interface.md`: FastAPI contract for pushing single/batch LINE Flex messages, including validation, logging, and error handling strategies.
-- `01/spec/erm.dbml`: v0.2.1 ER model covering CRM (Member/LineFriend), messaging, tagging, campaigns, and auth tables with indexing/retention notes.
-- `01/spec/features/*.feature`: Gherkin specs for Auto Response, Message Template Builder, Tag Rule Management, and LINE OA reconfiguration.
+# 執行步驟
 
-## Domain Snapshot
-- **Channel & Identity**: `LineFriend` tracks every OA follower (never deleted) with follow/unfollow timestamps and linkage to `Member` records (CRM profile) via `line_uid`. `MemberTag`, `TagRule`, and `InteractionTag` capture segmentation signals.
-- **Messaging Stack**: Content lives in `MessageTemplate`, `TemplateCarouselItem`, `TemplateButton`, and is sent through `Message`, `MessageDelivery`, and `MessageRecord`. Auto-response content is normalized through `AutoResponse`, `AutoResponseMessage`, and `AutoResponseKeyword`.
-- **Execution Surfaces**: 
-  - `line_app/app.py` exposes `/api/line/send-message` and `/api/line/send-batch-message`, mapping `notification_message` → LINE `altText` and persisting request/response data for analytics.
-  - Admin UI modules: auto-response manager, visual template builder, manual tag-rule executor, and LINE OA settings page.
+## 1. 歧義與覆蓋度掃描
 
-## Feature Highlights
+針對目前的規格檔，使用以下檢查清單進行結構化掃描。對每一檢查項標記狀態：Clear（清楚）/ Partial（部分）/ Missing（缺失）。產生內部覆蓋度地圖以供優先級排序。
 
-### 1. Messaging API Contract
-- Single send requires `line_uid` (must start with `U`, length 33), `notification_message`, `preview_message`, and a valid Flex payload; batch send accepts `line_uids` (1–500) and loops through the single-send logic.
-- `notification_message` doubles as the LINE `altText`; `preview_message` is retained for CRM analytics only, so both must be persisted.
-- Errors differentiate validation (422), LINE API failures (relay status/code), and internal faults (500) with structured logging.
-- Batch responses return per-UID success/failure metadata, now enriched with `attempts`, `last_status_code`, and `last_error` so ops can see retry history.
-- Throttling & retries: each `line_app` instance enforces a 15 req/s (≈900 req/min) token bucket to stay under LINE’s limit; 429/5xx/network errors trigger up to three retries with 1s/2s/4s backoff per UID. Clients must split pushes beyond 500 recipients into multiple calls.
+### A. 領域與資料模型檢查（對應至 spec/erm.dbml）
 
-### 2. Auto Response Engine
-- Trigger types: **welcome** (follow event), **keyword** (exact match, case-insensitive, up to 20 keywords per rule, OR logic), and **time-based** windows (date + time range, supports cross-midnight comparisons).
-- Response payloads: text-only, 1–5 messages per rule, 5,000 characters max per message, stored via `AutoResponseMessage.sequence_order` with drag-to-reorder behavior; deletions resequence records and update `response_count`.
-- Keyword governance: managed in `AutoResponseKeyword`, enforcing uniqueness per rule, trimming whitespace-only entries, tracking `trigger_count` and `last_triggered_at`, and respecting per-keyword enable/disable flags without deleting history.
-- Runtime logging: system records which keyword fired, member info, and timestamps for analytics; disabled rules or keywords simply skip matching but retain statistics.
-- Time-window logic explicitly handles same-day vs. cross-day intervals (`time_range_start`/`end`) and ensures date-range gating (campaign periods, after-hours auto-replies).
-- Collision handling: one inbound event yields at most one auto response using priority **keyword > time-window > welcome**; if multiple rules exist within the same tier, the oldest rule wins and the skipped candidates are logged for analysis.
+#### A1. 實體完整性
+- [ ] 所有核心業務概念是否都已建模為實體？
+- [ ] 實體命名是否清晰且無歧義？
+- [ ] 是否存在隱含但未明確定義的實體？
 
-### 3. Visual Message Template Builder
-- Front-end-only editing experience (v0): users fill structured fields (text ≤2000 chars, cropped images ≤1 MB, title, description, amount as non-negative integer, required notification/preview strings); the UI generates `flex_message_json`, while the backend validates/stores it.
-- Buttons support only the “open URL” action type; drafts may omit URLs, but sending enforces presence per button. Buttons and carousel cards auto-resequence after deletions to keep contiguous indices.
-- Carousel constraints: enabled only for 2–9 cards; single-image templates default to non-carousel mode.
-- Interaction tags can be assigned per button (comma-separated for multi-tag cases) and should flow into `InteractionTag`/`ComponentInteractionLog` for downstream analytics.
-- Saving a template persists all structured fields plus the generated Flex JSON into `MessageTemplate`; later sends should couple template metadata with message delivery tracking tables.
+#### A2. 屬性定義
+- [ ] 每個屬性是否都有明確的資料型別 (int, long, float, bool, string)？
+- [ ] 每個屬性是否都有充足的定義說明（使用 note）？
+- [ ] 屬性命名是否清晰且無歧義？
 
-### 4. Tag Rule Management
-- `TagRule` records define conditions (e.g., `ConsumptionRecord` totals) but **never auto-run**; creation, enabling, or member data changes do not trigger execution. Admins must press “run rule”, which timestamps `last_executed_at`, reports affected member counts, and logs history.
-- Deleting a rule only removes the `TagRule` record; previously assigned `MemberTag` entries remain.
-- UI affordances: search by name keyword, sort by created/updated timestamps, surface execution history, and expose explicit status cues (“created, not executed”, “enabled”).
-- Failure handling is manual: if a scheduled/manual run fails (DB outage, conflicting logic), the system records the error and asks admins to resolve and rerun—no automated retries or conflict detection beyond a warning banner.
+#### A3. 屬性值邊界條件
+- [ ] 數值屬性的範圍限制是否明確（>=、<=、=、≠）？
+- [ ] 最小值/最大值是否已定義？
+- [ ] 邊界情況是否已釐清（剛好達標 vs. 差一點沒達標）？
+- [ ] 特殊值處理是否已定義（空值、零、負值）？
 
-### 5. LINE OA Reconfiguration
-- The settings page never exposes “wipe & rebind”; admins can only replace Messaging/Login API credentials, preserving all CRM data.
-- The “reconfigure” button appears only after the OA is fully set up; otherwise it remains hidden.
-- Clicking the button opens a confirmation modal (“確定要解除與 @LINE 的連結嗎？請聯繫系統服務商。”) to stress that vendor support is required.
+#### A4. 跨屬性不變條件
+- [ ] 屬性間的計算關係是否明確（例如：總額 = 單價 × 數量）？
+- [ ] 衍生屬性的定義公式是否清楚？
+- [ ] 是否存在必須同時滿足的多屬性約束？
 
-## Constraints & Dependencies
-- **Data consistency**: `LineFriend` ↔ `Member` relationships hinge on `line_uid` synchronization (questionnaire completion or manual imports). Auto-responses and send APIs must tolerate unlinked friends.
-- **Sequence integrity**: Both `AutoResponseMessage.sequence_order` and carousel/button ordering rely on server-side resequencing after CRUD operations to avoid gaps.
-- **Validation parity**: Front-end builders perform length/format checks, but backend APIs (message send, template save, rule execute) must mirror them to prevent inconsistent states.
-- **Observability**: Specs call for detailed logging—success logs capture notification/preview pairs, batch summaries show counts plus per-UID retry data, and keyword triggers record member/time context for analytics dashboards.
-- **Retention discipline**: `MessageDelivery` keeps only 90 days online; a daily 02:00 job moves older rows into `MessageDeliveryArchive`, so downstream analytics need to read from the archive for long-range history.
+#### A5. 關係與唯一性
+- [ ] 實體間的關聯關係是否完整（一對一、一對多、多對多）？
+- [ ] 主鍵與唯一性規則是否明確？
+- [ ] 外鍵關聯是否正確定義？
 
-## Open Questions & Follow-ups
-1. **Template lifecycle**: Are there status states beyond “draft” vs “ready to send” (e.g., versioning, approval workflows)? How do template edits propagate to already scheduled messages?
-2. **Batch queue UX**: With throttling and per-UID retries, do admins need a progress UI, cancellation capability, or alerting when batches take longer than expected?
-3. **OA credential rotation**: After reconfiguration, do we need to invalidate cached Channel Access Tokens in running services or notify downstream systems (e.g., `line_app` deployment) automatically?
+#### A6. 生命週期與狀態
+- [ ] 具有狀態的實體是否定義了所有可能狀態？
+- [ ] 狀態轉換規則是否完整（哪些轉換合法、哪些不合法）？
+- [ ] 初始狀態與終止狀態是否明確？
 
-Answering the questions above (or updating the specs) will ensure implementation teams share the same expectations when they begin coding against `01/spec/`.
+### B. 功能模型檢查（對應至 spec/features/*.feature）
+
+#### B1. 功能識別
+- [ ] 所有使用者與系統的交互點是否都已識別為功能？
+- [ ] 功能定義是否真的存在交互時機（而非只是規則）？
+- [ ] 功能命名是否清晰且反映使用者意圖？
+- [ ] 功能間的界線是否清楚（無重疊或遺漏）？
+
+#### B2. 規則完整性
+- [ ] 每個功能是否至少有一條規則？
+- [ ] 規則是否已原子化（分割到不可分割為止，每一個 Rule 只驗證一件事）？
+- [ ] 每個前置條件是否為一條獨立的 Rule？
+- [ ] 每個後置條件是否為一條獨立的 Rule？
+- [ ] 前置條件是否完整（所有必要驗證都已列出）？
+- [ ] 後置條件是否完整（所有狀態變更都已列出）？
+- [ ] 規則描述是否可驗證（非模糊的形容詞）？
+
+#### B3. 例子覆蓋度（必須做到，不可妥協）
+- [ ] 每條規則是否至少有一個 Example？
+- [ ] Example 是否使用正確的 Gherkin 語法（Given-When-Then）？
+- [ ] 缺少 Example 的規則是否已標記 #TODO？
+
+#### B4. 邊界條件覆蓋
+- [ ] **數值邊界**：是否涵蓋臨界值案例（剛好達標、差一點、超過）？
+- [ ] **組合邊界**：多條規則並存時的交集與衝突是否已處理？
+- [ ] **類別邊界**：不同值域的資料分類是否都有對應 Example？
+- [ ] **時間邊界**：時序相關的操作是否考慮了不同時間點的情況？
+- [ ] **狀態邊界**：狀態切換的邊界情況是否已涵蓋？
+
+#### B5. 錯誤與異常處理
+- [ ] 前置條件失敗時的行為是否明確？
+- [ ] 異常情況是否都有對應的規則與 Example？
+- [ ] 錯誤訊息或回饋是否已定義？
+
+### C. 術語與一致性檢查
+
+#### C1. 詞彙表
+- [ ] 是否建立了標準術語詞彙表？
+- [ ] 核心概念是否都有一致的命名？
+
+#### C2. 術語衝突
+- [ ] 是否存在同義詞混用（同一概念多種稱呼）？
+- [ ] 是否存在同名異義（不同概念使用相同名稱）？
+- [ ] 已棄用術語是否已標記並統一替換？
+
+### D. 其他品質檢查
+
+#### D1. 待決事項
+- [ ] 是否存在 TODO 標記或未決議事項？
+- [ ] 未決事項的影響範圍是否已評估？
+
+#### D2. 模糊描述
+- [ ] 是否存在未量化的形容詞（如「健全」「直覺」「適當」）？
+- [ ] 模糊的「應該」「可能」是否已轉換為明確規則？
+
+---
+
+**釐清項目篩選原則**：
+對於狀態為 Partial 或 Missing 的檢查項，建立釐清項目，除非：
+- 釐清不會實質改變實作或驗證策略，或
+- 該資訊更適合延後到規劃階段（內部備註）
+
+僅納入其答案會實質影響架構、資料建模、任務拆解、測試設計、UX 行為、營運就緒度或合規驗證的問題。
+
+**避免重複提問原則**：
+在建立新的釐清項目前，必須先檢查 `.clarify/resolved/` 目錄：
+- 掃描 `.clarify/resolved/data/` 和 `.clarify/resolved/features/` 中所有已解決的釐清項目
+- 檢查問題主題是否已被回答（即使問法略有不同）
+- 若該問題已在 resolved 中有解決記錄，則不重複建立新的釐清項目
+- 若問題角度不同但相關，應在新釐清項目的「定位」或「影響範圍」中註記相關的已解決項目
+
+## 2. 產生釐清項目檔案
+
+**前置步驟：檢查已解決項目**
+
+在建立任何釐清項目檔案前：
+1. 讀取 `.clarify/resolved/data/` 和 `.clarify/resolved/features/` 目錄結構
+2. 列出所有已解決的釐清項目檔案名稱
+3. 對於每個待建立的釐清項目，比對其問題主題是否已存在於 resolved 中
+4. 若已存在，跳過該釐清項目的建立
+
+針對每個識別出的 Partial 或 Missing 檢查項，建立對應的釐清項目檔案：
+
+### 檔案路徑規則
+
+- **資料模型 (ERM) 相關**：`.clarify/data/<實體名>_<問題全句，以底線代替分隔符號>.md`
+  - 例如：`.clarify/data/Product_商品價格是否允許負值.md`
+  - 例如：`.clarify/data/Order_訂單狀態轉換規則為何.md`
+
+- **功能 (Feature) 相關**：`.clarify/features/<功能名>_<問題全句，以底線代替分隔符號>.md`
+  - 例如：`.clarify/features/將商品加入購物車_數量為零時的處理方式.md`
+  - 例如：`.clarify/features/下訂訂單_優惠規則套用順序為何.md`
+
+### 釐清項目檔案格式
+
+每個釐清項目檔案使用以下統一格式：
+
+```markdown
+# 釐清問題
+
+<釐清問題之完整句子>
+
+# 定位
+
+<ERM：指出哪個實體的哪個屬性？或是哪個關係？>
+<Feature：指出哪個功能的哪一條規則？或是哪個 Example？>
+
+# 多選題
+
+| 選項 | 描述 |
+|--------|-------------|
+| A | <選項 A 描述> |
+| B | <選項 B 描述> |
+| C | <選項 C 描述> |
+| D | <選項 D 描述>（選用）|
+| E | <選項 E 描述>（選用）|
+| Short | 提供其他簡短答案（<=5 字）|
+
+註：最多 5 個選項（包含 Short）。若無明確選項，僅保留 Short 並註明 `Format: Short answer (<=5 words)`。
+
+# 影響範圍
+
+<說明此釐清將影響哪些實體、功能、規則或測試案例>
+
+# 優先級
+
+<High / Medium / Low>
+- High：阻礙核心功能定義或資料建模
+- Medium：影響邊界條件或測試完整性
+- Low：優化或細節調整
+```
+
+## 3. 產生 Overview 文件
+
+在 `.clarify/overview.md` 中產生釐清策略總覽，內容包含：
+
+### 3.1 釐清項目統計
+
+- 資料模型相關：X 項
+- 功能模型相關：Y 項
+- 總計：Z 項
+
+### 3.2 優先級分佈
+
+- High：X 項
+- Medium：Y 項
+- Low：Z 項
+
+### 3.3 建議釐清順序
+
+**核心原則**：由核心至延伸、平衡資料與功能分佈。
+
+1. **第一階段：核心資料模型**（優先處理影響最大的實體與關係）
+   - 列出 High 優先級的資料模型釐清項目
+   - 原因：核心實體與屬性定義會影響所有後續功能設計
+
+2. **第二階段：核心功能規則**（處理主要業務流程的規則完整性）
+   - 列出 High 優先級的功能模型釐清項目
+   - 原因：確保主要交互流程清晰定義
+
+3. **第三階段：邊界條件與跨模型關聯**（處理資料與功能的邊界情況）
+   - 列出 Medium 優先級項目（交錯資料與功能）
+   - 原因：補足邊界案例與跨實體/跨功能的互動
+
+4. **第四階段：細節與優化**（處理剩餘的低優先級項目）
+   - 列出 Low 優先級項目
+   - 原因：完善規格細節
+
+### 3.4 釐清策略說明
+
+- **平衡原則**：避免連續處理同一類別的問題，在資料模型與功能模型間交替進行
+- **依賴關係**：標記具有前置依賴的釐清項目（需先釐清 A 才能處理 B）
+- **組合釐清**：標記可一併處理的相關釐清項目
+
+### 3.5 覆蓋度摘要
+
+列出每個檢查分類（A1-A6, B1-B5, C1-C2, D1-D2）的狀態：
+- **Clear**：已充分定義
+- **Partial**：部分定義，已建立 X 個釐清項目
+- **Missing**：尚未定義，已建立 Y 個釐清項目
+
+## 4. 驗證產出
+
+確保產生的釐清項目符合以下標準：
+
+- [ ] 每個釐清項目檔案都遵循統一格式
+- [ ] 檔案路徑符合命名規則（實體名/功能名清晰、問題描述精確）
+- [ ] 每個問題都有明確的定位（指向具體的實體/屬性/功能/規則）
+- [ ] 多選題選項互斥且涵蓋主要可能性
+- [ ] 影響範圍清楚標記
+- [ ] 優先級合理評估（符合影響 × 不確定性原則）
+- [ ] `overview.md` 的釐清順序具體可行且符合「由核心至延伸、平衡分佈」原則
+
+## 5. 回報完成
+
+產出簡潔報告，包含：
+
+- 掃描完成的規格檔案清單
+- 釐清項目總數（分資料模型 / 功能模型）
+- 優先級分佈（High / Medium / Low）
+- `.clarify/` 資料夾結構概覽
+- 提示使用者執行 `formulation.md` prompt 進行下一階段釐清互動
+
+# 行為規則
+
+- **純偵測角色**：此階段不進行任何互動式釐清，僅產出釐清項目檔案
+- **完整掃描**：不受 5 題限制，所有 Partial 或 Missing 檢查項都應建立釐清項目
+- **結構化輸出**：嚴格遵循檔案路徑與格式規範，確保 formulation 階段能順利讀取
+- **優先級評估**：根據「影響 × 不確定性」評估每個釐清項目的優先級
+- **策略規劃**：在 `overview.md` 中提供清晰的釐清順序建議
+- **避免臆測**：若技術棧問題不阻礙功能釐清，則不列入釐清項目
+- **保持精煉**：每個釐清問題應聚焦單一決策點，避免複合問題
+- **可測試性**：確保每個問題的答案可直接轉換為規格更新（DBML 或 Gherkin）
+
+# 輸出格式要求
+
+1. **釐清項目檔案** → `.clarify/data/*.md` 或 `.clarify/features/*.md`
+2. **總覽文件** → `.clarify/overview.md`
+3. **完成報告** → 終端輸出或回覆訊息
+
+# 與 Formulation 階段的銜接
+
+- Discovery 產出的釐清項目檔案將被 Formulation 階段讀取
+- `overview.md` 的釐清順序將指導 Formulation 階段的提問順序
+- 檔案格式設計確保 Formulation 可直接解析並呈現給使用者
+- 優先級與影響範圍資訊幫助 Formulation 決定是否需提前終止釐清流程

@@ -19,6 +19,16 @@ class Member(Base):
     line_avatar = Column(String(500), comment="LINE 會員頭像 CDN URL（儲存 LINE 提供的完整 URL，如 https://profile.line-scdn.net/xxxxx），若無頭像或 URL 失效則顯示預設頭像。URL 來源：會員加入時從 LINE Profile API 取得，儲存後不定期更新。前端顯示時直接載入此 URL")
     line_name = Column(String(100), comment="LINE 顯示名稱")
 
+    # Facebook 相關資訊
+    fb_uid = Column(String(100), unique=True, index=True, comment="Facebook User ID，透過 Facebook OAuth 登入時取得")
+    fb_avatar = Column(String(500), comment="Facebook 會員頭像 URL")
+    fb_name = Column(String(100), comment="Facebook 顯示名稱")
+
+    # Webchat 相關資訊
+    webchat_uid = Column(String(100), unique=True, index=True, comment="Webchat 訪客 ID，系統自動生成或透過 OAuth 關聯取得")
+    webchat_avatar = Column(String(500), comment="Webchat 會員頭像 URL")
+    webchat_name = Column(String(100), comment="Webchat 顯示名稱")
+
     # 基本資訊
     name = Column(String(32), comment="會員姓名（統一單欄位）")
     gender = Column(String(1), comment="性別：0=不透漏/1=男/2=女")

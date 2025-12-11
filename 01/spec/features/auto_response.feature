@@ -245,6 +245,17 @@ Feature: 自動回應
       When 會員發送訊息「訂房」
       Then 系統觸發自動回應「訂房諮詢」
 
+  Rule: 會員 GPT 自動回應開關（Member.gpt_enabled）
+
+    Example: 關閉後不觸發 GPT，自動回應 (keyword/welcome/time) 照常
+      Given 會員「王小明」的 gpt_enabled = false
+      And 會員發送訊息「訂房」
+      And 系統中存在 GPT 自動回應流程與關鍵字自動回應規則
+      When 系統處理訊息
+      Then 系統跳過 GPT 自動回應（不呼叫 GPT 模型）
+      And 系統仍可觸發關鍵字/歡迎/指定時間等其他自動回應
+      And 聊天室訊息來源標註正常（若有觸發其他自動回應）
+
   Rule: 支援事先設定訊息回應內容，觸發方式：選擇指定時間觸發
 
     Example: 設定指定時間觸發訊息
@@ -881,12 +892,12 @@ Feature: 自動回應
       - 關鍵字觸發（keyword_trigger）vs 指定時間觸發（scheduled_trigger）：會員發送訊息時同時檢查
 
     優先順序定義（僅適用於會員發送訊息時）：
-      1. 關鍵字觸發（keyword_trigger）- 最高優先（有命中關鍵字就回）
-      2. 指定時間觸發（scheduled_trigger）- 次優先（關鍵字未命中時才檢查時間）
+      1. 關鍵字觸發（keyword_trigger）- 最高優先（有命中關鍵字就回）；同類型只比較 updated_at（最新者勝出）
+      2. 指定時間觸發（scheduled_trigger）- 次優先（關鍵字未命中時才檢查時間）；不與關鍵字併發
 
     排序邏輯：
       - 第一層排序：trigger_type（關鍵字 > 時間）
-      - 第二層排序：created_at ASC（同類型時，最早建立的優先）
+      - 第二層排序（同 trigger_type 時）：updated_at DESC（同類型時，最後更新的優先）
       - 執行策略：僅執行優先順序最高的 1 則自動回應
 
     Example: 新好友加入並發送關鍵字 - 歡迎訊息與關鍵字都執行（不衝突）
@@ -923,17 +934,17 @@ Feature: 自動回應
       And 系統執行「指定時間觸發」自動回應
       And 系統回覆「目前為非營業時間，請稍後再聯繫」
 
-    Example: 同類型多個觸發 - 執行最早建立的
+    Example: 同類型多個關鍵字觸發 - 執行最後更新的
       Given 系統中存在以下自動回應
-        | trigger_type      | trigger_condition | response_content      | created_at       | is_enabled |
-        | keyword_trigger   | 訂房              | 回應 A：訂房資訊 A    | 2025/01/01 10:00 | true       |
-        | keyword_trigger   | 訂房              | 回應 B：訂房資訊 B    | 2025/01/02 14:00 | true       |
-        | keyword_trigger   | 訂房              | 回應 C：訂房資訊 C    | 2025/01/03 16:00 | true       |
+        | trigger_type      | trigger_condition | response_content      | created_at       | updated_at       | is_enabled |
+        | keyword_trigger   | 訂房              | 回應 A：訂房資訊 A    | 2025/01/01 10:00 | 2025/01/02 09:00 | true       |
+        | keyword_trigger   | 訂房              | 回應 B：訂房資訊 B    | 2025/01/01 11:00 | 2025/01/02 14:00 | true       |
+        | keyword_trigger   | 訂房              | 回應 C：訂房資訊 C    | 2025/01/01 12:00 | 2025/01/02 12:00 | true       |
       When 會員發送訊息「訂房」
       Then 系統觸發 3 個關鍵字自動回應
-      And 系統按 created_at ASC 排序：回應 A（最早）> 回應 B > 回應 C
-      And 系統僅執行「回應 A：訂房資訊 A」
-      And 系統不執行「回應 B」與「回應 C」
+      And 系統按 updated_at DESC 排序：回應 B（最新）> 回應 C > 回應 A
+      And 系統僅執行「回應 B：訂房資訊 B」（最新更新）
+      And 系統不執行其他關鍵字回應
 
     Example: 僅一個自動回應觸發 - 正常執行
       Given 系統中存在以下自動回應

@@ -1,8 +1,25 @@
-// 力麗飯店 LineOA CRM 管理後台 - 資料模型 (v0.3.0)
+// 力麗飯店 LineOA CRM 管理後台 - 資料模型 (v0.4.3)
 // 根據規格文檔萃取的實體關係模型
-// 版本: v0.3.0
-// 更新日期: 2025-11-23
+// 版本: v0.4.3
+// 更新日期: 2025-12-11
 // 變更摘要:
+//   - v0.4.3: ConversationThread / ConversationMessage 表擴展多渠道支援（方案 A：單表 + platform 欄位）
+//   - v0.4.3: ConversationThread 新增 member_id / platform / platform_uid / last_message_at 欄位
+//   - v0.4.3: ConversationMessage 新增 platform 欄位（冗餘，方便查詢）
+//   - v0.4.3: ChatLog 表定位為原始訊息日誌備份，與 ConversationMessage 同時寫入
+//   - v0.4.2: Member 表新增 fb_uid/fb_name/fb_avatar、webchat_uid/webchat_name/webchat_avatar 六個欄位（與 LINE 設計一致）
+//   - v0.4.1: 新增 FbFriend / WebchatFriend 表（多渠道好友追蹤）
+//   - v0.4.0: 新增多渠道整合支援（LINE / Facebook / Webchat）
+//   - v0.4.0: 新增 LineChannel 表（多 LINE 頻道管理）
+//   - v0.4.0: 新增 FbChannel 表（Facebook 頻道管理）
+//   - v0.4.0: 新增 ConversationThread / ConversationMessage 表（對話串整合）
+//   - v0.4.0: 新增 ChatLog 表（跨渠道聊天記錄）
+//   - v0.4.0: 新增問卷系統（SurveyTemplate / Survey / SurveyQuestion / SurveyResponse）
+//   - v0.4.0: 新增 User 表（簡化版使用者管理）
+//   - v0.4.0: 新增 TagTriggerLog 表（標籤觸發記錄）
+//   - v0.4.0: Member 表新增 gpt_enabled / passport_number / address_detail 欄位
+//   - v0.4.0: Message 表新增 platform / source_draft_id 欄位支援多平台發送
+//   - v0.4.0: AutoResponse 表新增 channels 欄位支援渠道篩選
 //   - v0.3.0: 標籤系統三表架構設計（MemberTag + InteractionTag + MemberInteractionTag）
 //   - v0.3.0: MemberTag 表結構更新（移除訊息互動來源，調整欄位為 BigInt PK）
 //   - v0.3.0: InteractionTag 表更新（自動產生互動標籤定義，黃色標籤）
@@ -28,9 +45,20 @@
 
 Table Member {
   member_id string(50) [pk, note: '會員唯一識別碼，上限 50 字元']
-  line_uid string(100) [note: 'LINE 官方帳號會員的唯一識別碼，長度上限 100 字元（當前格式為 U 開頭加 32 位英數字，預留未來 LINE 格式變更空間）']
+  // LINE 相關資訊
+  line_uid string(100) [unique, note: 'LINE 官方帳號會員的唯一識別碼，長度上限 100 字元（當前格式為 U 開頭加 32 位英數字，預留未來 LINE 格式變更空間）']
   line_avatar string(500) [note: 'LINE 會員頭像 CDN URL，上限 500 字元（儲存 LINE 提供的完整 URL，如 https://profile.line-scdn.net/xxxxx），若無頭像或 URL 失效則顯示預設頭像。URL 來源：會員加入時從 LINE Profile API 取得，儲存後不定期更新。前端顯示時直接載入此 URL']
   line_name string(100) [note: 'LINE 會員顯示名稱，上限 100 字元']
+
+  // Facebook 相關資訊
+  fb_uid string(100) [unique, note: 'Facebook User ID，長度上限 100 字元，唯一性約束（NULL 值不受約束）。透過 Facebook OAuth 登入時取得']
+  fb_avatar string(500) [note: 'Facebook 會員頭像 URL，上限 500 字元（儲存 Facebook 提供的完整 URL），若無頭像或 URL 失效則顯示預設頭像']
+  fb_name string(100) [note: 'Facebook 顯示名稱，上限 100 字元']
+
+  // Webchat 相關資訊
+  webchat_uid string(100) [unique, note: 'Webchat 訪客 ID，長度上限 100 字元，唯一性約束（NULL 值不受約束）。系統自動生成或透過 OAuth 關聯取得']
+  webchat_avatar string(500) [note: 'Webchat 會員頭像 URL，上限 500 字元，若無頭像則顯示預設頭像']
+  webchat_name string(100) [note: 'Webchat 顯示名稱，上限 100 字元']
   name string(32) [note: '會員姓名，供內部人員識別用，上限 32 字元']
   gender string(1) [not null, default: '0', note: '性別（選填），值域：0=不透漏 / 1=男 / 2=女。預設值：0（不透漏）。不允許 NULL。問券蒐集會員性別後產生對應的「男」「女」標籤，性別為「不透漏」（0）則不產生標籤']
   birthday date [note: '生日，格式：yyyy-mm-dd，儲存完整日期（年/月/日）。用途：(1) 生日月份標籤自動生成（系統從完整日期提取月份）、(2) 生日行銷推播、(3) 會員年齡計算。允許 NULL（會員可選擇不提供）']
@@ -43,6 +71,9 @@ Table Member {
   last_interaction_at timestamp [note: '最後回覆時間（UTC）。更新觸發條件：僅當會員主動發送文字或圖片訊息時更新。不更新情境：被動接收推播訊息、點擊按鈕互動、開啟訊息等行為皆不更新此欄位。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串']
   receive_notification bool [note: '是否接收優惠通知']
   internal_note text [note: '內部人員可新增的備註，用於記錄該會員的消費習慣與喜好。使用 TEXT 型別不限長度']
+  passport_number string(50) [note: '護照號碼，上限 50 字元。用於外籍會員識別']
+  address_detail string(255) [note: '詳細地址，上限 255 字元。用於配送或寄送用途']
+  gpt_enabled bool [default: true, note: '是否啟用 GPT 自動回應。預設值：true。設為 false 時，該會員的訊息不會觸發 GPT 自動回應']
 
   indexes {
     email_index (email) [note: '優化會員 email 搜尋與登入查詢']
@@ -50,6 +81,8 @@ Table Member {
     id_number_index (id_number) [note: '優化 PMS 比對關鍵欄位查詢']
     last_interaction_index (last_interaction_at) [note: '優化最近回覆日期排序查詢']
     join_source_index (join_source) [note: '優化會員來源篩選查詢']
+    fb_uid_index (fb_uid) [note: '優化 Facebook UID 查詢（高頻操作）']
+    webchat_uid_index (webchat_uid) [note: '優化 Webchat UID 查詢（高頻操作）']
   }
 
   Note: '''
@@ -71,7 +104,7 @@ Table Member {
         * 依 line_uid 建立或更新 LineFriend 後，系統 upsert Member
         * 若 Member 不存在：建立新 Member，預設 join_source = 'LINE'，同步寫入 line_name 與 line_avatar
         * 若 Member 已存在：更新 line_name、line_avatar、last_interaction_at，保留其他欄位
-    - LINE Profile 同步為強制雙向：任一表的 line_name/line_avatar（或 line_display_name/line_picture_url）變更時，立即寫回另一表，使兩邊欄位始終一致（關聯尚未建立時除外）
+    - LINE Profile 同步為強制雙向：任一表的 line_name/line_avatar（或 line_display_name/line_picture_url）變更時，立即寫回另一表，並在同一交易內保持兩邊欄位一致（尚未關聯時僅更新現有表，不進行延遲同步）
     - LineFriend.member_id 維持與 Member.member_id 的參照，雙向同步時需同時更新
   '''
 }
@@ -166,6 +199,153 @@ Table LineFriend {
   '''
 }
 
+Table FbFriend {
+  id bigint [pk, increment, note: 'Facebook 好友唯一識別碼']
+  fb_uid string(100) [unique, not null, note: 'Facebook User ID，唯一性約束']
+  member_id bigint [ref: > Member.member_id, note: '關聯的會員 ID（選填）。OAuth 授權成為會員後建立關聯，未授權則為 NULL']
+  fb_display_name string(255) [note: 'Facebook 顯示名稱，從 Facebook Graph API 取得，上限 255 字元']
+  fb_picture_url string(500) [note: 'Facebook 頭像 URL，從 Facebook Graph API 取得，上限 500 字元']
+  email string(255) [note: 'Facebook 授權取得的 email，用於跨渠道會員比對']
+  is_following bool [not null, default: true, note: '是否追蹤中：true 為當前好友 / false 為已取消追蹤。預設值：true']
+  followed_at timestamp [note: '首次加好友時間（UTC）']
+  unfollowed_at timestamp [note: '取消追蹤時間（UTC）。允許 NULL（未取消追蹤）']
+  last_interaction_at timestamp [note: '最後互動時間（UTC）。每次用戶互動（發訊息、postback 等）都更新此欄位']
+  created_at timestamp [default: `now()`, note: '建立時間（UTC）']
+  updated_at timestamp [note: '更新時間（UTC）。on update CURRENT_TIMESTAMP']
+
+  indexes {
+    fb_uid_index (fb_uid) [note: '優化 FB UID 查詢（高頻操作）']
+    member_id_index (member_id) [note: '優化會員關聯查詢，支援 JOIN 操作']
+    is_following_index (is_following) [note: '優化好友狀態篩選查詢']
+    last_interaction_index (last_interaction_at) [note: '優化最近互動時間排序查詢']
+  }
+
+  Note: '''
+  Facebook 好友追蹤實體，用於管理所有透過 Facebook Messenger 互動的用戶
+
+  核心功能：
+    1. 追蹤 Facebook 好友狀態（連結、取消連結）
+    2. 儲存 Facebook Profile（displayName, pictureUrl, email）
+    3. 記錄好友互動時間與頻率
+    4. 與會員系統建立可選關聯（透過 email 或 OAuth）
+
+  與 Member 表的關係與同步（雙向同步設計）：
+    - OAuth 授權事件：建立或更新 FbFriend 後，同步 upsert Member；若 Member 不存在則建立 join_source = Facebook 的記錄，若存在則更新相關欄位
+    - FbFriend.member_id 於 upsert 後回寫，維持 referential integrity
+    - 任一方（FbFriend 或 Member）名稱 / 頭像 / email 更新時，必須在同一交易內更新另一方。未關聯（member_id = NULL）前僅更新 FbFriend；關聯建立後強制保持一致
+    - 非 Facebook 來源的 Member 可無對應 FbFriend；FbFriend 仍可為 NULL member_id 直到關聯完成
+    - 透過 email 比對進行跨渠道會員合併
+
+  好友狀態管理：
+    - 連結（OAuth 授權）：
+      * is_following = true
+      * followed_at = 當前時間
+      * unfollowed_at = NULL
+    - 取消連結：
+      * is_following = false
+      * unfollowed_at = 當前時間
+    - 重新連結：
+      * is_following = true
+      * followed_at = 當前時間（更新為最新連結時間）
+      * unfollowed_at = NULL（清除取消連結記錄）
+
+  互動時間更新：
+    - 更新觸發：每次用戶主動互動（發訊息、點擊按鈕等）
+    - 更新欄位：last_interaction_at = 當前時間
+    - 用途：追蹤用戶活躍度、計算沉默用戶、支援再行銷策略
+
+  資料保留策略：
+    - 所有 FbFriend 記錄永久保留，不自動刪除
+    - is_following + followed_at/unfollowed_at 作為歷史軌跡來源
+
+  關係：FbFriend N:1 Member（可選關聯，允許 NULL）
+  '''
+}
+
+Table WebchatFriend {
+  id bigint [pk, increment, note: 'Webchat 訪客唯一識別碼']
+  webchat_uid string(100) [unique, not null, note: 'Webchat 訪客 ID，唯一性約束。格式：UUID v4（如 550e8400-e29b-41d4-a716-446655440000）。生成時機：訪客首次連線時由後端生成，儲存於 localStorage 供重新訪問時識別']
+  member_id bigint [ref: > Member.member_id, note: '關聯的會員 ID（選填）。OAuth 授權成為會員後建立關聯']
+  webchat_display_name string(100) [note: 'Webchat 顯示名稱，上限 100 字元']
+  webchat_picture_url string(500) [note: 'Webchat 頭像 URL，上限 500 字元']
+  email string(255) [note: 'OAuth 授權取得的 email，用於跨渠道會員比對']
+  is_following bool [not null, default: true, note: '是否活躍中：true 為活躍訪客 / false 為已結束會話。預設值：true。會話結束判定：WebSocket 連線斷開時（瀏覽器關閉或網路中斷）自動設為 false']
+  followed_at timestamp [note: '首次訪問時間（UTC）']
+  unfollowed_at timestamp [note: '會話結束時間（UTC）。允許 NULL（活躍中）']
+  last_interaction_at timestamp [note: '最後互動時間（UTC）。每次用戶互動都更新此欄位']
+  created_at timestamp [default: `now()`, note: '建立時間（UTC）']
+  updated_at timestamp [note: '更新時間（UTC）。on update CURRENT_TIMESTAMP']
+
+  indexes {
+    webchat_uid_index (webchat_uid) [note: '優化 Webchat UID 查詢（高頻操作）']
+    member_id_index (member_id) [note: '優化會員關聯查詢，支援 JOIN 操作']
+    is_following_index (is_following) [note: '優化訪客狀態篩選查詢']
+    last_interaction_index (last_interaction_at) [note: '優化最近互動時間排序查詢']
+  }
+
+  Note: '''
+  Webchat 訪客追蹤實體，用於管理所有透過 Webchat 互動的訪客
+
+  核心功能：
+    1. 追蹤 Webchat 訪客會話狀態
+    2. 儲存訪客資訊（displayName, pictureUrl, email）
+    3. 記錄訪客互動時間與頻率
+    4. 與會員系統建立可選關聯（透過 OAuth 或 email 比對）
+
+  與 Member 表的關係與同步（雙向同步設計）：
+    - 訪客互動事件：建立或更新 WebchatFriend 後，同步 upsert Member；若 Member 不存在則建立 join_source = Webchat 的記錄，若存在則更新相關欄位
+    - WebchatFriend.member_id 於 upsert 後回寫，維持 referential integrity
+    - 任一方（WebchatFriend 或 Member）名稱 / 頭像 / email 更新時，必須在同一交易內更新另一方。未關聯（member_id = NULL）前僅更新 WebchatFriend；關聯建立後強制保持一致
+    - 非 Webchat 來源的 Member 可無對應 WebchatFriend；WebchatFriend 仍可為 NULL member_id 直到關聯完成
+    - Webchat 訪客可透過 LINE / Facebook / Google OAuth 登入後關聯既有會員
+    - 跨渠道會員合併觸發時機：OAuth 登入成功後依混合策略即時合併
+      * 合併優先順序：
+        1. email 相同 → 合併為同一 member_id
+        2. 同渠道 UID 已存在 → 使用既有 member_id（同一用戶重複登入）
+        3. 以上都不符合 → 建立新 member_id
+      * 延遲合併：若 OAuth 未取得 email，日後用戶填入 email 時再觸發合併
+      * 合併策略：新資料優先覆蓋非空欄位，空白不覆蓋舊資料
+      * 標籤合併：去重合併集合
+
+  webchat_uid 生成規則：
+    - 格式：UUID v4（36 字元，如 550e8400-e29b-41d4-a716-446655440000）
+    - 生成時機：訪客首次建立 WebSocket 連線時由後端生成
+    - 唯一性保證：UUID v4 碰撞機率極低（2^122 可能值），無需額外檢查
+    - 跨 session 識別：
+      * 前端將 webchat_uid 儲存於 localStorage
+      * 訪客重新訪問時優先讀取既有 ID
+      * 若 localStorage 無資料或被清除，視為新訪客並生成新 UUID
+    - 與 OAuth 整合：OAuth 登入前使用 UUID 追蹤，登入後透過 email 與會員關聯
+
+  訪客狀態管理：
+    - 首次訪問：
+      * is_following = true
+      * followed_at = 當前時間
+      * unfollowed_at = NULL
+    - 會話結束（WebSocket 斷線偵測）：
+      * 偵測方式：WebSocket 連線斷開（瀏覽器關閉、網路中斷、手動離開）
+      * 心跳機制：每 30 秒 ping/pong 確認連線狀態
+      * 重連寬限期：60 秒內重新連線視為同一會話，不更新狀態
+      * is_following = false
+      * unfollowed_at = 當前時間
+    - 重新訪問：
+      * is_following = true
+      * followed_at = 當前時間（更新為最新訪問時間）
+      * unfollowed_at = NULL（清除結束記錄）
+
+  互動時間更新：
+    - 更新觸發：每次用戶主動互動（發訊息、點擊按鈕等）
+    - 更新欄位：last_interaction_at = 當前時間
+    - 用途：追蹤用戶活躍度、計算沉默用戶、支援再行銷策略
+
+  資料保留策略：
+    - 所有 WebchatFriend 記錄永久保留，不自動刪除
+    - is_following + followed_at/unfollowed_at 作為歷史軌跡來源
+
+  關係：WebchatFriend N:1 Member（可選關聯，允許 NULL）
+  '''
+}
+
 Table MemberTag {
   id bigint [pk, increment, note: '會員標籤唯一識別碼']
   member_id bigint [ref: > Member.member_id, not null, note: '所屬會員 ID']
@@ -207,6 +387,7 @@ Table MemberTag {
     - UNIQUE 索引 (member_id, tag_name, message_id) 確保唯一性
     - 相同會員、相同標籤、相同來源（message_id）只有一筆記錄
     - message_id 為 NULL 時，同一會員同一標籤只有一筆記錄
+    - MemberTag 與 InteractionTag 可同名；對同一會員顯示時，按 tag_name 去重合併來源（會員標籤 + 自動互動 + 手動互動），前端以標籤類型樣式區分
 
   message_id 填值策略：
     - 後台手動新增/移除：message_id = NULL
@@ -221,7 +402,7 @@ Table MemberTag {
 
   查詢邏輯（會員詳情頁）：
     - 查詢順序：MemberTag → InteractionTag (auto) → MemberInteractionTag (manual)
-    - 合併去重：按 tag_name 去重，優先顯示最早建立的記錄
+    - 合併去重：按 tag_name 去重，合併來源（會員標籤/互動標籤），優先顯示最早建立的記錄
     - 視覺區分：會員標籤（綠色）、自動互動標籤（黃色）、手動互動標籤（藍色）
 
   資料完整性：
@@ -442,10 +623,13 @@ Table Message {
   target_filter text [note: '篩選條件（若為篩選目標對象），JSON 格式儲存。支援邏輯：包含條件（多個標籤全部 AND）或排除條件（多個標籤全部 AND NOT）。前端以 include/exclude 切換開關實作互斥模式，送出的 target_filter 僅會包含其中一種陣列，避免同時 include 與 exclude 或兩者皆空。範例：{"include": ["VIP", "台北市"]} 表示必須同時包含 VIP 與 台北市；{"exclude": ["黑名單"]} 表示排除黑名單成員']
   scheduled_datetime_utc timestamp [note: '排程發送時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串（如：2025-02-01T02:00:00Z）。範例：2025-02-01T02:00:00Z 表示台灣時間 2025/02/01 10:00。前端顯示時轉換為台灣時區（UTC+8，固定偏移無夏令時）。若為立即發送則此欄位為 NULL']
   trigger_condition text [note: '特定觸發條件（預留欄位，v0 版不實作，允許 NULL）。未來可能用途：動態條件篩選（如：加入好友 7-29 天、最後互動超過 30 天）。建議未來使用 JSON 格式（如：{"type":"join_duration","min_days":7,"max_days":29}）。v0 版使用標籤系統實現相同需求']
-  estimated_send_count int [note: '預計發送好友人數，>= 0。計算時機：發送前根據篩選條件（target_filter）計算符合條件的會員數量。計算邏輯：查詢資料庫符合篩選條件的 LineFriend 記錄數（is_following = true）。不儲存於資料庫，每次發送前即時計算']
-  available_quota int [note: '可用訊息配額餘額，>= 0。資料來源：即時從 LINE Messaging API 查詢取得（quota endpoint）。更新時機：(1) 發送前查詢 LINE API 取得最新配額並儲存、(2) 發送後立即查詢 LINE API 更新配額。不進行本地維護與遞減，確保與 LINE API 完全同步，避免配額不一致問題']
+  estimated_send_count int [note: '預計發送好友人數，>= 0。計算時機：發送前根據篩選條件（target_filter）計算符合條件的會員數量。計算邏輯：依 platform 計算：LINE → 查詢 LineFriend is_following=true；Facebook → 查詢 FbFriend is_following=true（若有）；Instagram → 查詢對應好友表。每次發送前即時計算，不長存']
+  available_quota int [note: '可用訊息配額餘額，>= 0。資料來源依 platform 而定：LINE → 即時呼叫 LINE Messaging API quota endpoint 並同步更新；Facebook/Instagram：若平台無配額或無配額 API，則 available_quota 設為 NULL 並視為「無限額」且不阻擋發送（僅記錄狀態），若未來提供配額 API，改為同樣即時查詢與驗證']
   thumbnail string(500) [note: '縮圖 URL，上限 500 字元，無圖片則為系統預設圖']
   flex_message_json text [note: 'Flex Message JSON 內容（選填），由前端 Flex Message Simulator 產生。後端驗證：(1) JSON 格式正確性（可解析）、(2) 基本結構完整性。前端使用 LINE 官方 Simulator 確保符合 LINE Flex Message 規範']
+  platform string(20) [default: 'LINE', note: '發送平台：LINE / Facebook；Instagram 暫不支援且不允許選取。預設值：LINE。未來若加入 Instagram，需補齊好友表、配額查詢與投遞管線後再開放']
+  source_draft_id bigint [ref: > Message.message_id, note: '來源草稿 ID。當訊息從草稿發布時，記錄原始草稿的 message_id，用於追蹤訊息來源']
+  notification_message string(200) [note: '通知推播訊息，上限 200 字元。顯示在手機通知欄的文字內容']
   created_at timestamp [note: '建立時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串']
   updated_at timestamp [note: '最後更新時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串']
 
@@ -454,6 +638,7 @@ Table Message {
     scheduled_time_index (scheduled_datetime_utc) [note: '優化排程任務觸發查詢']
     sent_time_index (sent_at) [note: '優化歷史訊息時間排序查詢']
     campaign_index (campaign_id) [note: '優化活動訊息查詢']
+    source_draft_id_index (source_draft_id) [note: '優化來源草稿查詢']
   }
 
   Note: '''
@@ -525,6 +710,7 @@ Table MessageDelivery {
     - pending → failed：發送失敗（可重試，但需人工觸發回到 pending 後重新排程 sent → opened → clicked 流程）
     - sent：若會員未開啟，可能停留於 sent 終止
     - clicked：最終狀態，不再變動
+    - 多渠道追蹤口徑：clicked 以追蹤連結統一記錄（所有渠道適用）；opened 僅對支援讀取回報的渠道（LINE）寫入，Facebook/Instagram 等無已讀回報的渠道 opened 永遠為 NULL（直接跳過 opened 狀態，維持 sent → clicked）
 
   資料量管理：
     - 預估資料量：會員數 × 訊息數（如 10,000 會員 × 100 訊息 = 1,000,000 筆）
@@ -736,7 +922,12 @@ Table AutoResponse {
   scheduled_mode string(20) [note: '指定時間觸發模式（當 trigger_type = 指定時間觸發時使用），上限 20 字元：passive（被動回應模式）/ active（主動推播模式）。passive：會員發訊息時判斷時間是否在範圍內，符合則回應；active：系統於時間範圍開始時主動推播給所有會員']
   is_enabled bool [note: '啟用狀態：true 啟用 / false 停用']
   response_count int [note: '設定的自動回應訊息數量（至少 1 筆，最多 5 筆），>= 1。驗證層級：應用層驗證，UI 層限制輸入範圍 1-5。此欄位應與 AutoResponseMessage 記錄數量一致']
+  channels json [note: '支持的渠道列表（JSON 格式），如 ["LINE", "Facebook"]。若為 NULL 表示全部渠道。用於多渠道自動回應篩選']
   created_at timestamp [note: '建立時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串。前端顯示時轉換為台灣時區（UTC+8）']
+
+  indexes {
+    trigger_type_enabled (trigger_type, is_enabled, created_at) [note: '優化自動回應觸發查詢，支援優先順序排序']
+  }
 
   Note: '''
   自動回應實體，用於設定訊息的自動回應規則
@@ -856,9 +1047,11 @@ Table Campaign {
   campaign_id string [pk, note: '活動唯一識別碼']
   campaign_name string(100) [note: '活動名稱，上限 100 字元']
   campaign_tag string(50) [note: '活動標籤，用於分類與篩選，上限 50 字元']
-  campaign_date date [note: '活動日期，格式：yyyy-mm-dd']
-  description string(500) [note: '活動描述，上限 500 字元，允許 NULL']
-  status string(20) [note: '活動狀態：active（進行中）/ completed（已完成）/ cancelled（已取消）。預設值：active。草稿僅存在於訊息模板（Message.send_status = draft）階段，不使用於此欄位']
+  campaign_date date [note: '活動日期，格式：yyyy-mm-dd。（保留欄位，建議改用 start_date / end_date）']
+  start_date date [note: '活動開始日期，格式：yyyy-mm-dd。活動期間起始日']
+  end_date date [note: '活動結束日期，格式：yyyy-mm-dd。活動期間結束日']
+  description text [note: '活動描述，允許 NULL']
+  status string(20) [note: '活動狀態：active（進行中）/ inactive（未啟用）/ completed（已完成）/ cancelled（已取消）。預設值：active。草稿僅存在於訊息模板（Message.send_status = draft）階段，不使用於此欄位']
   created_at timestamp [note: '建立時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串']
   updated_at timestamp [note: '最後更新時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串']
 
@@ -986,6 +1179,7 @@ Table Admin {
   管理員實體，用於系統登入與權限管理
   登入方式：信箱+密碼 / Google 快速登入 / LINE 快速登入
   權限管理：採用 RBAC（Role-Based Access Control）系統，管理員透過角色獲得權限，支援動態權限配置
+  狀態：legacy 過渡；計畫由 User 表取代（含帳號與權限資料遷移），保留期間僅為既有 RBAC/登入相容
   關係：Admin 1:1 LineOAConfig, Admin 1:1 LoginConfig, Admin 1:N LoginSession, Admin 1:N SystemAuthorization, Admin N:M Role (透過 AdminRole)
   '''
 }
@@ -1177,5 +1371,386 @@ Table SystemAuthorization {
     6. 檢查機制：每個需要授權的操作執行前，檢查 SystemAuthorization.is_active 與 expire_date，過期則拒絕執行並返回錯誤「系統授權已過期，請聯繫管理員」
     7. 續約恢復：續約後 is_active 恢復為 true，所有功能立即恢復正常（管理員需重新登入）
   關係：SystemAuthorization N:1 Admin
+  '''
+}
+
+// ============================================
+// 多渠道整合相關資料表（v0.4.0 新增）
+// ============================================
+// 支援 LINE / Facebook / Webchat 三渠道整合
+// 詳見：spec/features/聊天室多渠道
+// ============================================
+
+Table LineChannel {
+  id bigint [pk, increment, note: 'LINE 頻道唯一識別碼']
+  channel_id string(100) [unique, note: 'LINE Channel ID']
+  channel_access_token string(500) [not null, note: '頻道存取權杖']
+  channel_secret string(100) [not null, note: '頻道密鑰']
+  channel_name string(100) [note: '頻道名稱']
+  basic_id string(100) [note: 'LINE Bot Basic ID（格式：@xxxxxxx）']
+  liff_id_open string(100) [note: 'LIFF ID']
+  login_channel_id string(100) [note: 'LINE Login Channel ID']
+  login_channel_secret string(100) [note: 'LINE Login Channel Secret']
+  is_active bool [not null, default: true, note: '是否啟用']
+  created_at timestamp [default: `now()`, note: '建立時間（UTC）']
+  updated_at timestamp [note: '更新時間（UTC）']
+
+  Note: '''
+  LINE 頻道設定實體，支援多頻道管理
+  用途：儲存 LINE Messaging API 頻道設定，支援多個 LINE 官方帳號管理
+  與 LineOAConfig 的區別：LineChannel 用於多頻道設定，LineOAConfig 用於單一管理員綁定
+  '''
+}
+
+Table FbChannel {
+  page_id string(255) [pk, note: 'Facebook Page ID']
+  page_access_token string(500) [not null, note: 'FB 頻道存取權杖']
+  app_id string(255) [note: 'Facebook App ID']
+  app_secret string(255) [note: 'Facebook App Secret']
+  channel_name string(100) [note: '頻道名稱']
+  is_active bool [not null, default: true, note: '是否啟用']
+  created_at timestamp [default: `now()`, note: '建立時間（UTC）']
+  updated_at timestamp [note: '更新時間（UTC）']
+
+  Note: '''
+  Facebook 頻道設定實體
+  用途：儲存 Facebook Messenger API 頻道設定，支援 Facebook 客服聊天功能
+  關係：FbChannel 與 ChatLog 關聯（透過 platform = 'Facebook'）
+  '''
+}
+
+Table ConversationThread {
+  id string(150) [pk, note: '對話串 ID，格式：{platform}:{uid}，例如 LINE:U123xxx、FB:F456xxx、WEB:W789xxx']
+  member_id bigint [ref: > Member.id, note: '關聯會員 ID（選填）。已關聯會員後填入，用於跨渠道整合查詢']
+  platform string(20) [not null, note: '渠道類型：LINE / Facebook / Webchat']
+  platform_uid string(100) [not null, note: '渠道原始 UID（LINE UID / FB UID / Webchat UID）']
+  conversation_name string(200) [note: '對話名稱，格式：{platform}:{display_name}']
+  last_message_at timestamp [note: '最後訊息時間（UTC），用於排序和找出最近互動渠道']
+  created_at timestamp [default: `now()`, note: '建立時間（UTC）']
+  updated_at timestamp [note: '更新時間（UTC）']
+
+  indexes {
+    member_platform_index (member_id, platform) [note: '優化會員多渠道查詢，支援渠道切換']
+    platform_uid_index (platform, platform_uid) [note: '優化渠道 UID 查詢']
+    last_message_index (member_id, last_message_at) [note: '優化最近互動渠道查詢']
+  }
+
+  Note: '''
+  對話串實體，用於整合多渠道聊天記錄（方案 A：單表 + platform 欄位）
+
+  核心功能：
+    1. 作為聊天訊息的容器，每個渠道用戶一個對話串
+    2. 透過 member_id 關聯會員，支援跨渠道整合顯示
+    3. 透過 platform 欄位區分不同渠道
+
+  ID 格式規範：
+    - LINE:U1234567890abcdef → LINE 用戶
+    - FB:F9876543210fedcba → Facebook 用戶
+    - WEB:W5555555555555555 → Webchat 訪客
+
+  與 Members 表的關係：
+    - 未登入訪客：member_id = NULL，僅有 platform_uid
+    - 已登入會員：member_id 填入，可跨渠道整合查詢
+    - 會員合併時：多個 ConversationThread 共用同一 member_id
+
+  客服聊天室查詢邏輯：
+    - 整合顯示：SELECT * FROM conversation_messages WHERE thread_id IN (SELECT id FROM conversation_threads WHERE member_id = ?) ORDER BY created_at
+    - 渠道篩選：加上 AND platform = ?
+    - 預設渠道：SELECT platform FROM conversation_threads WHERE member_id = ? ORDER BY last_message_at DESC LIMIT 1
+
+  關係：ConversationThread 1:N ConversationMessage, ConversationThread N:1 Member
+  '''
+}
+
+Table ConversationMessage {
+  id string(100) [pk, note: '訊息 ID（UUID）']
+  thread_id string(150) [ref: > ConversationThread.id, not null, note: '所屬對話串 ID，格式：{platform}:{uid}']
+  platform string(20) [not null, note: '渠道類型：LINE / Facebook / Webchat（冗餘欄位，方便查詢時避免 JOIN）']
+  role string(20) [note: '角色：user（會員訊息）/ assistant（系統回應，包括客服、GPT、自動回應）']
+  direction string(20) [not null, note: '方向：incoming（收到）/ outgoing（發出）']
+  message_type string(50) [note: '訊息類型：text / image / sticker / postback / flex 等']
+  question text [note: '用戶訊息內容（direction=incoming 時使用）']
+  response text [note: '系統回應內容（direction=outgoing 時使用）']
+  message_source string(20) [note: '訊息來源：webhook（用戶訊息）/ manual（人工回覆）/ gpt（GPT 自動回應）/ keyword（關鍵字觸發）/ welcome（歡迎訊息）/ always（全時自動回應）/ broadcast（訊息推播）']
+  event_id string(100) [note: '事件 ID（LINE eventId 等，用於去重）']
+  status string(20) [note: '狀態：received / sent / read / failed']
+  created_at timestamp [default: `now()`, note: '建立時間（UTC）']
+  updated_at timestamp [note: '更新時間（UTC）']
+
+  indexes {
+    thread_id_index (thread_id) [note: '優化對話串訊息查詢']
+    platform_index (platform) [note: '優化渠道篩選查詢']
+    created_at_index (created_at) [note: '優化時間排序查詢']
+    thread_created_index (thread_id, created_at) [note: '優化對話串時間排序查詢']
+  }
+
+  Note: '''
+  對話訊息實體，統一儲存所有渠道的聊天訊息（方案 A：單表 + platform 欄位）
+
+  核心功能：
+    1. 記錄客服聊天室中的所有訊息
+    2. 支援多渠道訊息整合顯示
+    3. 記錄訊息來源以區分人工/自動回應
+
+  訊息來源 (message_source) 說明：
+    - webhook：用戶透過渠道主動發送的訊息
+    - manual：客服人員手動回覆
+    - gpt：GPT 自動生成回應
+    - keyword：關鍵字觸發的自動回應
+    - welcome：歡迎訊息（新好友加入時）
+    - always：全時自動回應
+    - broadcast：訊息推播（群發訊息）
+
+  訊息內容存取：
+    - 用戶訊息：direction=incoming，內容存於 question 欄位
+    - 系統回應：direction=outgoing，內容存於 response 欄位
+
+  與 ChatLog 表的區別：
+    - ConversationMessage：客服聊天室使用，包含 message_source 區分回應類型
+    - ChatLog：原始訊息日誌備份，包含完整 JSON payload
+
+  關係：ConversationMessage N:1 ConversationThread
+  '''
+}
+
+Table ChatLog {
+  id bigint [pk, increment, note: '聊天記錄唯一識別碼']
+  platform string(50) [not null, note: '平台類型：LINE / Facebook / Webchat']
+  user_id string(100) [not null, note: '用戶 UID（LINE UID / FB UID / Webchat UID）']
+  direction string(20) [not null, note: '訊息方向：incoming（收到）/ outgoing（發出）']
+  message_type string(20) [not null, note: '訊息類型：text / image / sticker / flex 等']
+  text text [note: '文字內容']
+  content text [note: '訊息內容（JSON 格式，儲存完整 payload）。格式：{"type":"<message_type>","data":{...}}']
+  event_id string(100) [note: '事件 ID（用於去重與追蹤）']
+  status string(20) [note: '狀態']
+  created_at timestamp [not null, default: `now()`, note: '建立時間（UTC）']
+  updated_at timestamp [note: '更新時間（UTC）']
+
+  indexes {
+    user_id_index (user_id) [note: '優化用戶訊息查詢']
+    platform_user_index (platform, user_id) [note: '優化渠道用戶查詢']
+    event_id_index (event_id) [note: '優化事件 ID 查詢（去重用）']
+  }
+
+  Note: '''
+  聊天記錄實體，作為原始訊息日誌備份
+
+  用途定位：
+    - 原始訊息日誌：儲存完整 JSON payload，供除錯和稽核使用
+    - 備份層：與 ConversationMessage 同時寫入，互為備份
+
+  與 ConversationMessage 的關係：
+    ┌─────────────────────────────────────────────────────────────┐
+    │  收到訊息時同時寫入兩表：                                     │
+    │  1. ConversationMessage → 客服聊天室顯示（含 message_source） │
+    │  2. ChatLog → 原始日誌備份（含完整 JSON payload）             │
+    └─────────────────────────────────────────────────────────────┘
+
+  兩表差異對照：
+    | 特性           | ConversationMessage        | ChatLog                |
+    |----------------|----------------------------|------------------------|
+    | 主要用途       | 客服聊天室 UI 顯示          | 原始日誌備份            |
+    | message_source | ✅ 有（區分回應類型）        | ❌ 無                   |
+    | content        | 分離存於 question/response  | ✅ 完整 JSON payload    |
+    | 讀取場景       | 聊天室 API、已讀標記         | 除錯、稽核、資料恢復    |
+
+  content JSON 格式對照：
+    - image：{"type":"image","data":{"url":"<string>"}}
+    - sticker：{"type":"sticker","data":{"package_id":"<string>","sticker_id":"<string>"}}
+    - flex：{"type":"flex","data":{"json":{...}}}
+    - video：{"type":"video","data":{"url":"<string>","duration_ms":<number>}}
+    - audio：{"type":"audio","data":{"url":"<string>","duration_ms":<number>}}
+    - location：{"type":"location","data":{"title":"<string>","address":"<string>","lat":<number>,"lng":<number>}}
+    - file：{"type":"file","data":{"url":"<string>","filename":"<string>","size_bytes":<number>}}
+    - text：可為 NULL（text 欄位已存），或同格式：{"type":"text","data":{"text":"<string>"}}
+  '''
+}
+
+// ============================================
+// 問卷系統相關資料表
+// ============================================
+
+Table SurveyTemplate {
+  id bigint [pk, increment, note: '問卷範本唯一識別碼']
+  name string(100) [not null, note: '範本名稱']
+  description text [note: '範本描述']
+  icon string(50) [note: '範本圖標']
+  category string(50) [not null, note: '範本類別']
+  default_questions json [note: '預設題目（JSON 格式）']
+  is_active bool [not null, note: '是否啟用']
+  created_at timestamp [not null, note: '建立時間（UTC）']
+  updated_at timestamp [note: '更新時間（UTC）']
+
+  Note: '''
+  問卷範本實體，定義可重複使用的問卷模板
+  用途：提供預設問卷範本，加快問卷建立流程
+  範本類別可包含：會員資料收集、滿意度調查、市場調研等
+  關係：SurveyTemplate 1:N Survey
+  '''
+}
+
+Table Survey {
+  id bigint [pk, increment, note: '問卷唯一識別碼']
+  name string(200) [not null, note: '問卷名稱']
+  template_id bigint [ref: > SurveyTemplate.id, not null, note: '範本 ID']
+  description text [note: '問卷描述']
+  target_audience string(20) [not null, note: '目標受眾：ALL（所有會員）/ FILTERED（篩選目標對象）']
+  target_tags json [note: '目標標籤（JSON 格式）']
+  schedule_type string(20) [not null, note: '排程類型：IMMEDIATE（立即發送）/ SCHEDULED（排程發送）']
+  scheduled_at timestamp [note: '排程發送時間']
+  sent_at timestamp [note: '實際發送時間']
+  status string(20) [not null, note: '狀態：draft / scheduled / sending / sent / completed']
+  response_count int [note: '回應數']
+  view_count int [note: '瀏覽數']
+  created_by bigint [ref: > User.id, note: '創建者 ID']
+  created_at timestamp [not null, note: '建立時間（UTC）']
+  updated_at timestamp [note: '更新時間（UTC）']
+
+  indexes {
+    template_id_index (template_id) [note: '優化範本關聯查詢']
+    created_by_index (created_by) [note: '優化創建者查詢']
+  }
+
+  Note: '''
+  問卷實體，管理問卷的基本資訊與發送狀態
+  用途：建立、管理、發送問卷給會員
+  問卷狀態流程：draft → scheduled → sending → sent → completed
+  關係：Survey N:1 SurveyTemplate, Survey 1:N SurveyQuestion, Survey 1:N SurveyResponse, Survey N:1 User
+  '''
+}
+
+Table SurveyQuestion {
+  id bigint [pk, increment, note: '題目唯一識別碼']
+  survey_id bigint [ref: > Survey.id, not null, note: '問卷 ID']
+  question_type string(20) [not null, note: '題目類型：NAME / PHONE / EMAIL / BIRTHDAY / ADDRESS / GENDER / ID_NUMBER / LINK / VIDEO / IMAGE']
+  question_text text [not null, note: '題目文字']
+  font_size int [note: '字型大小']
+  description text [note: '題目描述']
+  options json [note: '選項（JSON 格式，用於選擇題）']
+  is_required bool [not null, note: '是否必填']
+  min_length int [note: '最小長度（文字輸入題）']
+  max_length int [note: '最大長度（文字輸入題）']
+  min_value int [note: '最小值（數值題）']
+  max_value int [note: '最大值（數值題）']
+  order int [not null, note: '題目順序']
+  video_description text [note: '影片描述']
+  video_link string(500) [note: '影片超連結']
+  image_description text [note: '圖片描述']
+  image_link string(500) [note: '圖片連結（編輯使用）']
+  image_base64 text [note: '圖片 Base64（發送使用）']
+  created_at timestamp [not null, note: '建立時間（UTC）']
+  updated_at timestamp [note: '更新時間（UTC）']
+
+  indexes {
+    survey_id_index (survey_id) [note: '優化問卷題目查詢']
+  }
+
+  Note: '''
+  問卷題目實體，定義問卷中的每個題目
+  題目類型說明：
+    - NAME：姓名輸入
+    - PHONE：電話輸入
+    - EMAIL：電子信箱輸入
+    - BIRTHDAY：生日輸入
+    - ADDRESS：地址輸入
+    - GENDER：性別選擇
+    - ID_NUMBER：身分證輸入
+    - LINK：超連結顯示
+    - VIDEO：影片顯示
+    - IMAGE：圖片顯示
+  關係：SurveyQuestion N:1 Survey
+  '''
+}
+
+Table SurveyResponse {
+  id bigint [pk, increment, note: '回覆唯一識別碼']
+  survey_id bigint [ref: > Survey.id, not null, note: '問卷 ID']
+  member_id bigint [ref: > Member.member_id, not null, note: '會員 ID']
+  answers json [not null, note: '答案（JSON 格式）']
+  is_completed bool [not null, note: '是否完成']
+  completed_at timestamp [note: '完成時間']
+  source string(50) [note: '來源：LINE / Web / SMS 等']
+  ip_address string(50) [note: 'IP 位址']
+  user_agent string(500) [note: '用戶代理']
+  created_at timestamp [not null, note: '建立時間（UTC）']
+  updated_at timestamp [note: '更新時間（UTC）']
+
+  indexes {
+    survey_id_index (survey_id) [note: '優化問卷回覆查詢']
+    member_id_index (member_id) [note: '優化會員回覆查詢']
+  }
+
+  Note: '''
+  問卷回覆實體，記錄會員的問卷填答資料
+  用途：儲存會員對問卷的回覆內容，支援會員資料自動更新
+  answers 欄位格式：{"question_id": "answer_value", ...}
+  關係：SurveyResponse N:1 Survey, SurveyResponse N:1 Member
+  '''
+}
+
+// ============================================
+// 使用者管理相關資料表
+// ============================================
+
+Table User {
+  id bigint [pk, increment, note: '使用者唯一識別碼']
+  username string(50) [unique, not null, note: '用戶名']
+  email string(100) [unique, not null, note: '電子信箱']
+  password_hash string(255) [not null, note: '密碼雜湊值']
+  full_name string(100) [note: '全名']
+  role string(20) [not null, note: '角色：ADMIN（管理員）/ MARKETING（行銷人員）/ CUSTOMER_SERVICE（客服人員）']
+  is_active bool [note: '是否啟用']
+  last_login_at timestamp [note: '最後登入時間']
+  created_at timestamp [not null, note: '建立時間（UTC）']
+  updated_at timestamp [note: '更新時間（UTC）']
+
+  Note: '''
+  使用者實體，管理系統操作人員帳號
+  用途：提供系統登入、權限控制功能
+  角色說明：
+    - ADMIN：管理員，擁有所有權限
+    - MARKETING：行銷人員，可操作群發訊息、活動管理
+    - CUSTOMER_SERVICE：客服人員，可操作聊天室、會員查詢
+  遷移策略：
+    - User 為後續唯一帳號表，逐步取代 Admin（含帳號與權限資料的遷移）
+    - 過渡期間：Admin/RBAC 仍為正式權限來源，維持 Admin 與 User 帳號 1:1 同步（同 email），以便平滑遷移
+    - 新功能與外鍵（如 Survey.created_by）一律參照 User，為後續淘汰 Admin 做準備
+  關係：User 1:N Survey（創建者）
+  '''
+}
+
+// ============================================
+// 標籤觸發記錄相關資料表
+// ============================================
+
+Table TagTriggerLog {
+  id bigint [pk, increment, note: '觸發記錄唯一識別碼']
+  member_id bigint [ref: > Member.member_id, not null, note: '會員 ID']
+  tag_id bigint [ref: > InteractionTag.id, not null, note: '標籤 ID']
+  message_id bigint [ref: > Message.message_id, note: '群發訊息 ID（選填）']
+  campaign_id bigint [ref: > Campaign.campaign_id, note: '活動 ID（選填）']
+  trigger_source string(20) [not null, note: '觸發來源：CLICK（按鈕點擊）/ INTERACTION（互動）/ MANUAL（手動）']
+  triggered_at timestamp [not null, note: '觸發時間']
+  created_at timestamp [not null, note: '建立時間（UTC）']
+  updated_at timestamp [note: '更新時間（UTC）']
+
+  indexes {
+    member_id_index (member_id) [note: '優化會員標籤查詢']
+    tag_id_index (tag_id) [note: '優化標籤統計查詢']
+    message_id_index (message_id) [note: '優化訊息關聯查詢']
+    campaign_id_index (campaign_id) [note: '優化活動關聯查詢']
+  }
+
+  Note: '''
+  標籤觸發記錄實體，記錄會員觸發標籤的詳細歷史
+  用途：追蹤會員互動行為，支援標籤統計與分析
+  觸發來源說明：
+    - CLICK：會員點擊訊息中的按鈕
+    - INTERACTION：會員與訊息互動
+    - MANUAL：管理員手動為會員打標籤
+  與 ComponentInteractionLog 的區別：
+    - TagTriggerLog：標籤維度的觸發記錄，用於標籤統計
+    - ComponentInteractionLog：訊息元件維度的互動記錄，用於互動分析
+  關係：TagTriggerLog N:1 Member, TagTriggerLog N:1 InteractionTag, TagTriggerLog N:1 Message（選填）, TagTriggerLog N:1 Campaign（選填）
   '''
 }

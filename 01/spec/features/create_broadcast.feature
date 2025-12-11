@@ -398,7 +398,7 @@ Feature: 建立訊息推播
       And 系統設定 send_status 為「sending」
       And 系統開始逐一發送訊息給 800 位會員
 
-  Rule: 使用者能夠選擇於指定日期與時間進行排程傳送（以台灣時區 UTC+8 顯示,後端以 UTC 儲存,台灣無夏令時無需特別處理）
+  Rule: 使用者能夠選擇於指定日期與時間進行排程傳送（以台灣時區 UTC+8 顯示,後端以 UTC 儲存,台灣無夏令時無需特別處理；不依管理員瀏覽器時區轉換）
 
     Example: 前端即時驗證排程時間不可為過去時間
       Given 行銷人員正在設定排程時間
@@ -413,6 +413,13 @@ Feature: 建立訊息推播
       Then 前端計算 UTC 時間為「2025-02-01T02:00:00Z」（台灣時間 -8 小時）
       And 系統儲存 scheduled_datetime_utc 為「2025-02-01T02:00:00Z」
       And 前端顯示給使用者的排程時間為「2025/02/01 10:00」（台灣時間）
+
+    Example: 不依管理員瀏覽器時區轉換
+      Given 行銷人員位於美國（瀏覽器時區 UTC-5）
+      When 行銷人員設定排程時間為「2025/02/01 10:00」
+      Then 前端仍以台灣時間 UTC+8 顯示「2025/02/01 10:00」
+      And 系統轉換並儲存 UTC 時間為「2025-02-01T02:00:00Z」
+      And 前端不依瀏覽器時區自動轉換顯示
 
     Example: 顯示既有排程時轉換回台灣時間
       Given 系統儲存的排程時間為「2025-02-01T02:00:00Z」（UTC）
@@ -483,25 +490,32 @@ Feature: 建立訊息推播
       When 行銷人員嘗試取消訊息
       Then 系統拒絕操作,顯示錯誤訊息「已發送的訊息無法取消」
 
-  Rule: include / exclude 篩選模式互斥切換
+  Rule: include / exclude 篩選模式支援同時使用
 
-    Example: 只能擇一模式
+    Example: 同時使用 include 和 exclude 標籤
       Given 行銷人員在設定篩選條件
-      When 使用者切換到「包含指定標籤（include）」模式
-      Then 系統自動停用「排除指定標籤（exclude）」模式
-      And target_filter 僅包含 include 陣列
+      When 使用者選擇「包含指定標籤（include）」：「VIP會員」
+      And 使用者同時選擇「排除指定標籤（exclude）」：「黑名單」
+      Then target_filter 同時包含 include 和 exclude 陣列
+      And 系統發送對象為「符合 VIP會員 標籤」且「不符合 黑名單 標籤」的會員
+      And 篩選邏輯為：(符合 include 標籤) AND NOT (符合 exclude 標籤)
 
-    Example: 排除模式同樣互斥
+    Example: 僅使用 include 標籤
       Given 行銷人員在設定篩選條件
-      When 使用者切換到「排除指定標籤（exclude）」模式
-      Then 系統自動停用 include 模式
-      And target_filter 僅包含 exclude 陣列
+      When 使用者僅選擇「包含指定標籤（include）」：「VIP會員」
+      Then target_filter 僅包含 include 陣列
+      And 系統發送對象為所有符合「VIP會員」標籤的會員
 
-    Example: 不允許 include 與 exclude 同時為空
-      Given 行銷人員尚未選擇篩選模式
+    Example: 僅使用 exclude 標籤
+      Given 行銷人員在設定篩選條件
+      When 使用者僅選擇「排除指定標籤（exclude）」：「黑名單」
+      Then target_filter 僅包含 exclude 陣列
+      And 系統發送對象為所有不符合「黑名單」標籤的會員
+
+    Example: 至少需要選擇一種篩選條件
+      Given 行銷人員尚未選擇任何標籤
       When 行銷人員嘗試儲存設定
-      Then 前端要求使用者至少擇一種模式並提供對應標籤
-      And 系統不會出現 include 與 exclude 都為空或同時存在的情況
+      Then 前端要求使用者至少選擇 include 或 exclude 標籤
 
   Rule: 在確認發送前,系統必須顯示此次訊息的預計發送好友人數
 
@@ -567,6 +581,15 @@ Feature: 建立訊息推播
       Then 後端驗證失敗
       And 操作失敗
       And 系統回傳錯誤「訊息配額不足,無法發送」
+
+    Example: 配額不足時禁止建立訊息記錄
+      Given 行銷人員點擊「立即發送」建立群發訊息
+      And 預計發送好友人數為 1500 人
+      And 可用訊息配額為 1000 則
+      When 後端檢查配額
+      Then 後端回傳錯誤「訊息配額不足,未建立訊息」
+      And 系統不建立 Message 記錄
+      And 系統不建立任何排程工作
 
     Example: 配額充足時發送按鈕正常啟用
       Given 行銷人員已完成群發訊息設定
@@ -753,13 +776,13 @@ Feature: 建立訊息推播
       And 預覽區顯示裁切後圖片（正方形顯示）
 
 
-    Example: 上傳圖片且勾選欄位,自動裁切（1.92:1）
+    Example: 上傳圖片且勾選欄位,自動裁切（1.91:1）
       Given 行銷人員正在建立訊息模板
       And 勾選其一欄位（例如勾選「標題」、「金額」）
       When 行銷人員上傳圖片「image.jpg」
-      Then 系統判定顯示比例為橫向長方形 1.92:1
+      Then 系統判定顯示比例為橫向長方形 1.91:1
       And 前端上傳圖片到後端
-      And 後端計算裁切區域：取中心 1920x1000 橫向長方形
+      And 後端計算裁切區域：取中心 1920x1005 橫向長方形
       And 後端裁切圖片並儲存
       And 後端返回裁切後圖片 URL
       And 前端更新 image_url 為裁切後圖片 URL
@@ -769,7 +792,7 @@ Feature: 建立訊息推播
       Given 行銷人員已上傳圖片並裁切為 1:1（僅圖片無其他欄位）
       When 行銷人員勾選「標題」欄位
       Then 系統自動觸發重新裁切流程
-      And 後端將圖片重新裁切為 1.92:1
+      And 後端將圖片重新裁切為 1.91:1
       And 預覽區更新顯示新裁切結果
 
   Rule: 圖片檔案大小限制為 1 MB
@@ -805,18 +828,18 @@ Feature: 建立訊息推播
 
     Example: 不同比例圖片的 CSS 模擬預覽
       Given 行銷人員選擇了直向圖片「portrait.jpg」（寬 1000px × 高 1500px）
-      And 已勾選「標題」欄位（需要 1.92:1 比例）
+      And 已勾選「標題」欄位（需要 1.91:1 比例）
       When 前端顯示預覽
       Then 前端使用 CSS object-fit: cover 取中心區域
-      And 預覽區模擬顯示 1.92:1 橫向長方形裁切效果
-      And 預覽區顯示提示「預覽（實際發送時將裁切為 1920x1000）」
+      And 預覽區模擬顯示 1.91:1 橫向長方形裁切效果
+      And 預覽區顯示提示「預覽（實際發送時將裁切為 1920x1005）」
 
     Example: 切換欄位後預覽即時更新
       Given 行銷人員已上傳圖片並顯示 1:1 預覽（僅圖片無其他欄位）
       When 行銷人員勾選「標題」欄位
-      Then 預覽區即時切換為 1.92:1 比例模擬
+      Then 預覽區即時切換為 1.91:1 比例模擬
       And CSS 自動更新裁切效果
-      And 提示文字更新為「預覽（實際發送時將裁切為 1920x1000）」
+      And 提示文字更新為「預覽（實際發送時將裁切為 1920x1005）」
 
   Rule: 前端上傳完成後重新載入實際裁切後圖片
 

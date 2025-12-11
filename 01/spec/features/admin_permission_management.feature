@@ -164,3 +164,20 @@ Feature: 管理員權限管理
       When 超級管理員「admin001」為角色「staff」授予權限「message.send」
       Then 管理員「admin002」無需重新登入即可立即獲得權限「message.send」
       And 管理員「admin002」可以發送訊息
+
+  Rule: 權限快取失效策略（事件驅動 + 定期清理）
+
+    Example: 角色/權限變更時立即失效快取
+      Given 管理員「admin002」權限來自角色「staff」
+      And 系統使用權限快取（查詢 admin_id → 權限集合）
+      When 超級管理員「admin001」為角色「staff」新增權限「campaign.manage」
+      Then 系統立即發布權限變更事件
+      And 所有節點收到事件後立刻清除「staff」相關的權限快取
+      And 管理員「admin002」下一次請求時重新載入最新權限
+
+    Example: 定期清理快取避免遺漏事件
+      Given 權限快取已啟用
+      And 系統設定背景清理 TTL 為 1 小時
+      When 快取存在超過 1 小時的項目
+      Then 背景工作自動清理過期快取
+      And 確保即使事件漏送也會在 1 小時內重新載入

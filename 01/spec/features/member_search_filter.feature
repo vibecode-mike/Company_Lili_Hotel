@@ -58,21 +58,21 @@ Feature: 會員搜尋與篩選
         | M002      | 陳大明 |
         | M003      | 李明華 |
 
-  Rule: 支援搜尋字段：電子信箱（模糊搜尋）
+  Rule: 支援搜尋字段：電子信箱（模糊搜尋，包含前綴/包含/域名）
 
-  Example: 以電子信箱模糊搜尋會員
+    Example: 前綴匹配（開頭）
       Given 系統中存在以下會員
         | member_id | email              |
-        | M001      | zhang@example.com  |
-        | M002      | li@example.com     |
-        | M003      | wang@example.com   |
-      When 使用者搜尋電子信箱「zhang@example.com」
-      Then 系統使用模糊搜尋（LIKE '%zhang@example.com%'）
+        | M001      | john@example.com   |
+        | M002      | alice@example.com  |
+        | M003      | mjohnson@test.com  |
+      When 使用者搜尋電子信箱「john」
+      Then 系統使用模糊搜尋（LIKE 'john%'）
       And 系統顯示以下會員
         | member_id | email              |
-        | M001      | zhang@example.com  |
+        | M001      | john@example.com   |
 
-    Example: 電子信箱模糊搜尋支援部分匹配
+    Example: 包含匹配（任意位置）
       Given 系統中存在以下會員
         | member_id | email               |
         | M001      | user@gmail.com      |
@@ -85,6 +85,19 @@ Feature: 會員搜尋與篩選
         | M001      | user@gmail.com      |
         | M002      | user123@gmail.com   |
         | M003      | testuser@gmail.com  |
+
+    Example: 域名匹配
+      Given 系統中存在以下會員
+        | member_id | email               |
+        | M001      | anna@gmail.com      |
+        | M002      | bob@yahoo.com       |
+        | M003      | carol@gmail.com     |
+      When 使用者搜尋電子信箱「@gmail.com」
+      Then 系統使用模糊搜尋（LIKE '%@gmail.com'）
+      And 系統顯示以下會員
+        | member_id | email               |
+        | M001      | anna@gmail.com      |
+        | M003      | carol@gmail.com     |
 
 
   Rule: 支援搜尋字段：手機號碼（精確搜尋）

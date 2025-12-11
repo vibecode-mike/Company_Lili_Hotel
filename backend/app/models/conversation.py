@@ -1,8 +1,15 @@
 """
 對話相關模型
 對應 line_app/app.py 中使用的對話表
+
+多渠道設計說明（方案 A：單表 + platform 欄位）：
+- conversation_threads.id 格式：{platform}:{uid}（如 LINE:U123xxx, FB:F456xxx, WEB:W789xxx）
+- 透過 member_id 關聯會員，實現跨渠道整合查詢
+- platform 欄位區分渠道，platform_uid 儲存渠道原始 UID
+- 各渠道邏輯差異在 Service 層抽象處理（LineService, FbService, WebchatService）
 """
 from sqlalchemy import (
+    BigInteger,
     Column,
     String,
     ForeignKey,
@@ -16,14 +23,40 @@ from app.models.base import Base
 
 
 class ConversationThread(Base):
-    """對話串表（對應 line_app/app.py 使用的表）"""
+    """對話串表（多渠道支援）
+
+    id 格式：{platform}:{uid}
+    - LINE:U123xxx
+    - FB:F456xxx
+    - WEB:W789xxx
+    """
 
     __tablename__ = "conversation_threads"
+    __table_args__ = (
+        Index("ix_conversation_threads_member_platform", "member_id", "platform"),
+        Index("ix_conversation_threads_platform_uid", "platform", "platform_uid"),
+        Index("ix_conversation_threads_last_message_at", "last_message_at"),
+    )
 
     id = Column(
-        String(100), primary_key=True, comment="對話串ID（使用 LINE userId）"
+        String(150), primary_key=True, comment="對話串ID，格式：{platform}:{uid}"
+    )
+    member_id = Column(
+        BigInteger,
+        ForeignKey("members.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="關聯會員ID（跨渠道整合用）",
+    )
+    platform = Column(
+        String(20), nullable=True, comment="渠道類型：LINE / Facebook / Webchat"
+    )
+    platform_uid = Column(
+        String(100), nullable=True, comment="渠道原始 UID"
     )
     conversation_name = Column(String(200), nullable=True, comment="對話名稱")
+    last_message_at = Column(
+        DateTime, nullable=True, comment="最後訊息時間（用於找最近互動渠道）"
+    )
     created_at = Column(
         DateTime, server_default=func.now(), nullable=True, comment="建立時間"
     )
@@ -33,22 +66,41 @@ class ConversationThread(Base):
     messages = relationship(
         "ConversationMessage", back_populates="thread", cascade="all, delete-orphan"
     )
+    member = relationship("Member", backref="conversation_threads")
 
 
 class ConversationMessage(Base):
-    """對話訊息表（對應 line_app/app.py 使用的表）"""
+    """對話訊息表（多渠道支援）
+
+    message_source 值域：
+    - webhook: Webhook 收到的訊息
+    - manual: 客服手動發送
+    - gpt: GPT 自動回覆
+    - keyword: 關鍵字回覆
+    - welcome: 歡迎訊息
+    - always: 常態回覆
+    - broadcast: 群發訊息
+    """
 
     __tablename__ = "conversation_messages"
-    __table_args__ = (Index("ix_conversation_messages_thread_id", "thread_id"),)
+    __table_args__ = (
+        Index("ix_conversation_messages_thread_id", "thread_id"),
+        Index("ix_conversation_messages_platform", "platform"),
+        Index("ix_conversation_messages_created_at", "created_at"),
+        Index("ix_conversation_messages_thread_created", "thread_id", "created_at"),
+    )
 
     id = Column(String(100), primary_key=True, comment="訊息ID")
     thread_id = Column(
-        String(100),
+        String(150),
         ForeignKey("conversation_threads.id", ondelete="CASCADE"),
         nullable=False,
         comment="所屬對話串",
     )
-    role = Column(String(20), nullable=True, comment="角色")
+    platform = Column(
+        String(20), nullable=True, comment="渠道類型（冗餘欄位，方便查詢）"
+    )
+    role = Column(String(20), nullable=True, comment="角色：user / assistant")
     direction = Column(
         String(20), nullable=True, comment="方向：incoming/outgoing"
     )
@@ -57,7 +109,11 @@ class ConversationMessage(Base):
     response = Column(Text, nullable=True, comment="回應內容")
     event_id = Column(String(100), nullable=True, comment="事件ID")
     status = Column(String(20), nullable=True, comment="狀態")
-    message_source = Column(String(20), nullable=True, comment="訊息來源：manual|gpt|keyword|welcome|always")
+    message_source = Column(
+        String(20),
+        nullable=True,
+        comment="訊息來源：webhook|manual|gpt|keyword|welcome|always|broadcast",
+    )
     created_at = Column(
         DateTime, server_default=func.now(), nullable=True, comment="建立時間"
     )

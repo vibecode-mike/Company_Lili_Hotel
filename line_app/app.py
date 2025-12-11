@@ -1011,7 +1011,7 @@ def check_keyword_trigger(line_uid: str, text: str):
             WHERE ar.is_active = 1
               AND ar.trigger_type = 'keyword'
               AND ark.is_enabled = 1
-              AND LOWER(:text) LIKE CONCAT('%', LOWER(ark.keyword), '%')
+              AND LOWER(:text) = LOWER(ark.keyword)
             ORDER BY arm.sequence_order
             LIMIT 1
         """, {"text": text})

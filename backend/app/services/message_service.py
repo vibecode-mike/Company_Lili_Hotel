@@ -571,7 +571,7 @@ class MessageService:
                       AND mt.tag_name IN ({tag_placeholders})
                 """
 
-                # 如果有排除标签，添加排除条件
+                # 如果同時有排除标签，添加排除条件
                 if exclude_tags:
                     exclude_placeholders = ", ".join([f":exclude_tag{i}" for i in range(len(exclude_tags))])
                     exclude_params = {f"exclude_tag{i}": tag for i, tag in enumerate(exclude_tags)}
