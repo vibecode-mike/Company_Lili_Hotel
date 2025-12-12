@@ -128,7 +128,7 @@ export default function ConfigPanel({
   };
 
   const addButton = () => {
-    if (currentBubble.buttons.length >= 4) return;
+    if (currentBubble.buttons.length >= 3) return;
     updateBubble({
       buttons: [...currentBubble.buttons, { style: 'primary', label: '', url: '', actionLabel: '' }],
     });
@@ -477,7 +477,7 @@ export default function ConfigPanel({
           ))}
 
           {/* Add Button */}
-          {isFirstBubble && currentBubble.buttons.length < 4 && (
+          {isFirstBubble && currentBubble.buttons.length < 3 && (
             <button
               onClick={addButton}
               className="flex items-center gap-1 text-[#0F6BEB] hover:text-[#0a4fa8] transition-colors"
