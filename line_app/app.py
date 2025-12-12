@@ -3215,30 +3215,7 @@ def on_text(event: MessageEvent):
     except Exception:
         logging.exception("[on_text] Failed to save incoming message")
 
-    # === 2. 寫入 chat_logs ===
-    try:
-        with engine.begin() as conn:
-            conn.execute(sql_text("""
-                INSERT INTO chat_logs
-                (platform, user_id, direction, message_type, text, content, event_id, status, created_at)
-                VALUES (:platform, :user_id, :direction, :message_type, :text, :content, :event_id, :status, NOW())
-            """), {
-                "platform": "LINE",
-                "user_id": uid,
-                "direction": "incoming",
-                "message_type": "text",
-                "text": text_in,
-                "content": json.dumps({
-                    "type": "text",
-                    "text": text_in
-                }, ensure_ascii=False),
-                "event_id": event.message.id,
-                "status": "received"
-            })
-    except Exception as e:
-        logging.exception(f"[on_text] Failed to save chat_log: {e}")
-
-    # === 3. 更新會員資訊 ===
+    # === 2. 更新會員資訊 ===
     mid = None
     if uid:
         try:

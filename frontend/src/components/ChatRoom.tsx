@@ -4,16 +4,18 @@
  */
 
 import type { Member } from "../types/member";
+import { useState } from "react";
 import svgPaths from "../imports/svg-9tjcfsdo1d";
 import Breadcrumb from "./common/Breadcrumb";
 import { ChatRoomLayout } from './chat-room';
+import type { ChatPlatform } from "./chat-room/types";
 
 interface ChatRoomProps {
   member: Member | undefined;
   memberId?: string;  // 支援直接傳入 memberId，用於 WebSocket 連線
   memberName?: string; // 會員名稱（用於麵包屑顯示）
   onBack: () => void;
-  onNavigateToMemberDetail?: () => void; // 導航到會員詳情頁
+  onNavigateToMemberDetail?: (platform?: ChatPlatform) => void; // 導航到會員詳情頁（帶渠道資訊）
 }
 
 // 返回按钮组件
@@ -49,6 +51,7 @@ function BackButtonWithArrow({ onClick }: { onClick: () => void }) {
 export default function ChatRoom({ member, memberId, memberName, onBack, onNavigateToMemberDetail }: ChatRoomProps) {
   // 顯示名稱優先順序：傳入的 memberName > member.username > member.realName > '會員'
   const displayName = memberName || member?.username || member?.realName || '會員';
+  const [currentPlatform, setCurrentPlatform] = useState<ChatPlatform>('LINE');
 
   // 只有當 member 和 memberId 都沒有時，才顯示錯誤頁面
   // 有 memberId 時，即使 member 還沒載入，也可以先建立 WebSocket 連線
@@ -88,10 +91,10 @@ export default function ChatRoom({ member, memberId, memberName, onBack, onNavig
                 {
                   label: displayName,
                   onClick: onNavigateToMemberDetail ? () => {
-                    onNavigateToMemberDetail();
+                    onNavigateToMemberDetail(currentPlatform);
                   } : undefined
                 },
-                { label: '聊天', active: true }
+                { label: `聊天（${currentPlatform}）`, active: true }
               ]}
             />
           </div>
@@ -103,7 +106,12 @@ export default function ChatRoom({ member, memberId, memberName, onBack, onNavig
         <div className="size-full">
           <div className="box-border content-stretch flex flex-col gap-[32px] items-start p-[40px] relative w-full">
             {/* Chat Room Layout */}
-            <ChatRoomLayout member={member} memberId={memberId} onBack={onBack} />
+            <ChatRoomLayout
+              member={member}
+              memberId={memberId}
+              onBack={onBack}
+              onPlatformChange={setCurrentPlatform}
+            />
           </div>
         </div>
       </div>

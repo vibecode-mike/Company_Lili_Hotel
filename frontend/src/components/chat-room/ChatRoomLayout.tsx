@@ -76,7 +76,7 @@ const findLatestMessageTimestamp = (messages: ChatMessage[]): string | undefined
 // 內嵌組件已移至獨立檔案:
 // - UserAvatar, OfficialAvatar, MessageBubble → ChatBubble.tsx
 
-export default function ChatRoomLayout({ member: initialMember, memberId }: ChatRoomLayoutProps) {
+export default function ChatRoomLayout({ member: initialMember, memberId, chatSessionApiBase = '/api/v1', onPlatformChange }: ChatRoomLayoutProps) {
   const { fetchMemberById } = useMembers();
   const [member, setMember] = useState<Member | undefined>(initialMember);
   const [isLoadingMember, setIsLoadingMember] = useState(false);
@@ -97,6 +97,33 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
 
   // 平台切換狀態 (Figma v1087)
   const [currentPlatform, setCurrentPlatform] = useState<ChatPlatform>('LINE');
+  const [threadsMap, setThreadsMap] = useState<Record<string, string>>({});
+
+  // 載入 chat-session：平台與 thread 映射
+  const loadChatSession = useCallback(async () => {
+    const targetId = member?.id?.toString() || memberId;
+    if (!targetId) return;
+    try {
+      const token = localStorage.getItem('auth_token');
+      const resp = await fetch(`${chatSessionApiBase}/members/${targetId}/chat-session`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const result = await resp.json();
+      if (result.code === 200 && result.data) {
+        const { available_platforms, default_platform, threads } = result.data;
+        const platforms = (Array.isArray(result.data)
+          ? result.data
+          : Object.keys(threads || {})) as ChatPlatform[];
+        const finalPlatforms = (platforms.length ? platforms : ['LINE']) as ChatPlatform[];
+        setThreadsMap(threads || {});
+        const nextPlatform = (default_platform as ChatPlatform) || finalPlatforms[0] || 'LINE';
+        setCurrentPlatform(nextPlatform);
+        onPlatformChange?.(nextPlatform);
+      }
+    } catch (e) {
+      console.error('載入 chat-session 失敗', e);
+    }
+  }, [member?.id, memberId, onPlatformChange, chatSessionApiBase]);
 
   // GPT 計時器狀態
   const [isGptManualMode, setIsGptManualMode] = useState(false);
@@ -241,16 +268,31 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
     return member?.lastChatTime || memberLastInteractionRaw || null;
   }, [messages, member?.lastChatTime, memberLastInteractionRaw]);
 
-  const panelMember = useMemo(() => {
+  const displayMember = useMemo(() => {
     if (!member) return undefined;
-    if (!latestChatTimestamp || latestChatTimestamp === member.lastChatTime) {
-      return member;
+    const overrides: Partial<Member> = {};
+    if (currentPlatform === 'LINE') {
+      overrides.avatar = member.lineAvatar || member.line_avatar;
+      overrides.username = member.line_name || member.username;
+    } else if (currentPlatform === 'Facebook') {
+      overrides.avatar = (member as any).fb_avatar;
+      overrides.username = (member as any).fb_name || member.username;
+    } else if (currentPlatform === 'Webchat') {
+      overrides.avatar = (member as any).webchat_avatar;
+      overrides.username = (member as any).webchat_name || member.username;
     }
-    return { ...member, lastChatTime: latestChatTimestamp };
-  }, [member, latestChatTimestamp]);
+    return { ...member, ...overrides };
+  }, [member, currentPlatform]);
+
+  const panelMember = useMemo(() => {
+    if (!displayMember) return undefined;
+    if (!latestChatTimestamp || latestChatTimestamp === displayMember.lastChatTime) {
+      return displayMember;
+    }
+    return { ...displayMember, lastChatTime: latestChatTimestamp };
+  }, [displayMember, latestChatTimestamp]);
 
   // Fetch full member details when component mounts
-  // 支援兩種情況：1) initialMember 存在  2) 只有 memberId
   useEffect(() => {
     const targetId = initialMember?.id || memberId;
     if (!targetId) return;
@@ -267,6 +309,17 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
     loadMemberDetail();
   }, [initialMember?.id, memberId, fetchMemberById]);
 
+  // 初始載入 chat session (platforms, threads)
+  useEffect(() => {
+    loadChatSession();
+  }, [loadChatSession]);
+
+  useEffect(() => {
+    if (onPlatformChange) {
+      onPlatformChange(currentPlatform);
+    }
+  }, [currentPlatform, onPlatformChange]);
+
   // Sync member data for related UI pieces when member changes
   useEffect(() => {
     if (member) {
@@ -276,9 +329,18 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
     }
   }, [member]);
 
-  // WebSocket 監聽新訊息
+  // 先計算 threadId，再用於 WS 與推播過濾
+  const currentThreadId = threadsMap[currentPlatform];
+
+  // WebSocket 監聽新訊息（thread 維度）
   const handleNewMessage = useCallback((wsMessage: any) => {
     if (wsMessage.type === 'new_message' && wsMessage.data) {
+      const incomingThread = wsMessage.data.thread_id || wsMessage.data.threadId;
+      if (currentThreadId && incomingThread && incomingThread !== currentThreadId) {
+        // 忽略非當前 thread 的推播
+        return;
+      }
+
       // 將新訊息添加到列表末尾
       setMessages(prev => {
         // 避免重複添加 (檢查 message_id)
@@ -304,11 +366,71 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
         }
       }, 100);
     }
-  }, [member]);
+  }, [member, currentThreadId]);
 
-  // 建立 WebSocket 連線（優先使用 member?.id，其次使用傳入的 memberId）
-  const wsTargetId = member?.id?.toString() || memberId;
-  const { isConnected: isRealtimeConnected } = useWebSocket(wsTargetId, handleNewMessage);
+  // Load chat messages from API
+  // 支援兩種情況：1) member?.id 存在  2) 只有 memberId
+  const loadChatMessages = useCallback(
+    async (
+      pageNum: number = 1,
+      append: boolean = false,
+      options?: { silent?: boolean },
+    ) => {
+      const targetId = member?.id?.toString() || memberId;
+      if (!targetId) return;
+
+      const silent = options?.silent ?? false;
+      if (!silent) {
+        setIsLoading(true);
+      }
+      try {
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch(
+          `/api/v1/members/${targetId}/chat-messages?page=${pageNum}&page_size=${PAGE_SIZE}&platform=${currentPlatform}`,
+          {
+            headers: { 'Authorization': `Bearer ${token}` }
+          }
+        );
+
+        const result = await response.json();
+
+        if (result.code === 200 && result.data) {
+          const { messages: newMessages, has_more } = result.data;
+          const reversedMessages = [...newMessages].reverse();
+
+          if (append) {
+            setMessages(prev => [...reversedMessages, ...prev]);
+          } else {
+            setMessages(reversedMessages);
+          }
+
+          setHasMore(has_more);
+          setPage(pageNum);
+        } else {
+          console.error('API 回應格式錯誤:', result);
+        }
+      } catch (error) {
+        console.error('載入聊天訊息失敗:', error);
+      } finally {
+        if (!silent) {
+          setIsLoading(false);
+        }
+      }
+    },
+    [member?.id, memberId, currentPlatform]
+  );
+
+  // 建立 WebSocket 連線（依當前平台 thread_id）
+  const { isConnected: isRealtimeConnected } = useWebSocket(currentThreadId, handleNewMessage);
+
+  // 平台切換時重置訊息狀態並重新載入
+  useEffect(() => {
+    setMessages([]);
+    setPage(1);
+    setHasMore(true);
+    setVisibleDate('');
+    loadChatMessages(1, false);
+  }, [currentPlatform, loadChatMessages]);
 
   // 初始載入訊息後設定 visibleDate（顯示最新訊息的日期）
   useEffect(() => {
@@ -326,60 +448,6 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
       setVisibleDate(formatDateWithWeekday(latestChatTimestamp));
     }
   }, [messages, latestChatTimestamp, visibleDate]);
-
-  // Load chat messages from API
-  // 支援兩種情況：1) member?.id 存在  2) 只有 memberId
-  const loadChatMessages = useCallback(async (
-    pageNum: number = 1,
-    append: boolean = false,
-    options?: { silent?: boolean },
-  ) => {
-    const targetId = member?.id?.toString() || memberId;
-    if (!targetId) return;
-
-    const silent = options?.silent ?? false;
-    if (!silent) {
-      setIsLoading(true);
-    }
-    try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(
-        `/api/v1/members/${targetId}/chat-messages?page=${pageNum}&page_size=${PAGE_SIZE}`,
-        {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }
-      );
-
-      const result = await response.json();
-
-      // ✅ 修正：backend 使用 SuccessResponse，返回 code: 200，而非 success: true
-      if (result.code === 200 && result.data) {
-        const { messages: newMessages, has_more } = result.data;
-
-        // API 返回降序（最新在前），需反轉為升序（最舊在前）
-        const reversedMessages = [...newMessages].reverse();
-
-        if (append) {
-          // 向上滾動載入更早訊息 - 添加到前面
-          setMessages(prev => [...reversedMessages, ...prev]);
-        } else {
-          // 初次載入 - 替換全部
-          setMessages(reversedMessages);
-        }
-
-        setHasMore(has_more);
-        setPage(pageNum);
-      } else {
-        console.error('API 回應格式錯誤:', result);
-      }
-    } catch (error) {
-      console.error('載入聊天訊息失敗:', error);
-    } finally {
-      if (!silent) {
-        setIsLoading(false);
-      }
-    }
-  }, [member?.id, memberId]);
 
   // Handle scroll for infinite scrolling and visible date update
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
@@ -434,7 +502,7 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
     if (targetId) {
       loadChatMessages(1, false);
     }
-  }, [member?.id, memberId, loadChatMessages]);
+  }, [member?.id, memberId, loadChatMessages, currentPlatform]);
 
   // Fallback polling when WebSocket 無法建立，仍定期刷新訊息
   useEffect(() => {
@@ -558,6 +626,7 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
   const handleSendMessage = async () => {
     const trimmedText = messageInput.trim();
     if (!trimmedText || !member?.id || isSending) return;
+    const platform = currentPlatform || 'LINE';
 
     setIsSending(true);
 
@@ -571,7 +640,7 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ text: trimmedText })
+          body: JSON.stringify({ text: trimmedText, platform })
         }
       );
 
@@ -718,10 +787,10 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
                 onChange={handleAvatarFileChange}
               />
 
-              {/* LINE Avatar or Default User Icon */}
-              {member?.lineAvatar ? (
+              {/* Channel-specific Avatar or Default User Icon */}
+              {displayMember?.avatar ? (
                 <img
-                  src={member.lineAvatar}
+                  src={displayMember.avatar}
                   alt="會員頭像"
                   className="w-full h-full object-cover"
                 />
@@ -761,10 +830,10 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
                 </div>
               </div>
             </div>
-            {/* Username */}
+            {/* Username - Channel-specific */}
             <div className="content-stretch flex items-center justify-center relative shrink-0">
               <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[32px] text-nowrap">
-                <p className="leading-[1.5] whitespace-pre">{member?.username || 'User Name'}</p>
+                <p className="leading-[1.5] whitespace-pre">{displayMember?.username || 'User Name'}</p>
               </div>
             </div>
           </div>
@@ -773,12 +842,12 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
           <div className="relative rounded-[20px] shrink-0 w-full">
             <div aria-hidden="true" className="absolute border border-[#e1ebf9] border-solid inset-0 pointer-events-none rounded-[20px]" />
             <div className="size-full">
-              <div className="box-border content-stretch flex flex-col gap-[32px] items-start p-[28px] relative w-full">
-                {panelMember ? (
-                  <MemberInfoPanelComplete
-                    member={panelMember}
-                    memberTags={memberTags}
-                    interactionTags={interactionTags}
+          <div className="box-border content-stretch flex flex-col gap-[32px] items-start p-[28px] relative w-full">
+            {panelMember ? (
+              <MemberInfoPanelComplete
+                member={panelMember}
+                memberTags={memberTags}
+                interactionTags={interactionTags}
                     onEditTags={handleEditTags}
                   />
                 ) : (
@@ -858,7 +927,9 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
             {/* 平台選擇器（左側） */}
             <PlatformSwitcher
               value={currentPlatform}
-              onChange={setCurrentPlatform}
+              onChange={(platform) => {
+                setCurrentPlatform(platform);
+              }}
             />
 
             {/* 日期（中間） */}
@@ -923,7 +994,13 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
                 <div key={message.id} data-timestamp={message.timestamp || ''} className="w-full">
                   <ChatBubble
                     message={message}
-                    memberAvatar={member?.lineAvatar}
+                    memberAvatar={
+                      currentPlatform === 'LINE'
+                        ? panelMember?.lineAvatar || (panelMember as any)?.avatar
+                        : currentPlatform === 'Facebook'
+                        ? (panelMember as any)?.fb_avatar
+                        : (panelMember as any)?.webchat_avatar
+                    }
                     platform={currentPlatform}
                   />
                 </div>

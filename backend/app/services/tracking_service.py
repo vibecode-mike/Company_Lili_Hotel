@@ -2,7 +2,7 @@
 元件互動追蹤服務層
 職責：處理追蹤相關的業務邏輯，記錄用戶互動並更新統計數據
 """
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, update

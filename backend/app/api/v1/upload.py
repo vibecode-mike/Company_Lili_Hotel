@@ -2,12 +2,10 @@
 Image Upload API Endpoint
 上传图片接口
 """
-import os
 import uuid
 from datetime import datetime
-from typing import Optional
 from io import BytesIO
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
 from pathlib import Path
 from PIL import Image

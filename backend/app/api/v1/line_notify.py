@@ -12,6 +12,7 @@ from sqlalchemy import select
 from app.websocket_manager import manager
 from app.database import get_db
 from app.models.member import Member
+from app.services.chatroom_service import ChatroomService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -42,12 +43,12 @@ async def notify_new_message(
         notification: 訊息通知資料
     """
     try:
-        # 1. 根據 line_uid 找到對應的 member_id
-        stmt = select(Member.id).where(Member.line_uid == notification.line_uid)
+        # 1. 根據 line_uid 找到對應的 member
+        stmt = select(Member).where(Member.line_uid == notification.line_uid)
         result = await db.execute(stmt)
-        member_id = result.scalar_one_or_none()
+        member = result.scalar_one_or_none()
 
-        if not member_id:
+        if not member:
             logger.warning(f"Member not found for LINE UID: {notification.line_uid}")
             # 不算錯誤,可能是新用戶或尚未同步
             return {"status": "ok", "message": "Member not found, skipped"}
@@ -75,14 +76,22 @@ async def notify_new_message(
             "source": notification.source  # 傳遞來源 (gpt/keyword/always)
         }
 
-        # 4. 透過 WebSocket 推送給前端
-        await manager.send_new_message(str(member_id), message_data)
+        # 4. 更新 conversation_messages 並透過 WebSocket 推送給前端 (thread_id = LINE:{uid})
+        chatroom_service = ChatroomService(db)
+        msg = await chatroom_service.append_message(member, "LINE", "incoming", notification.message_text, message_source=notification.source)
 
-        logger.info(f"✅ Notified frontend about new message from member {member_id}")
+        await manager.send_new_message(msg.thread_id, {
+            **message_data,
+            "thread_id": msg.thread_id,
+            "timestamp": msg.created_at.isoformat()
+        })
+
+        logger.info(f"✅ Notified frontend about new message on thread {msg.thread_id}")
         return {
             "status": "ok",
-            "member_id": member_id,
-            "notified": manager.get_connection_count(str(member_id)) > 0
+            "member_id": member.id,
+            "thread_id": msg.thread_id,
+            "notified": manager.get_connection_count(msg.thread_id) > 0
         }
 
     except Exception as e:

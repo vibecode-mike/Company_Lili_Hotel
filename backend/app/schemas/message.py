@@ -3,7 +3,7 @@
 注意：原 campaigns 表已重命名為 messages（語意變更）
 """
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, Dict, Any, List, Union
+from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone
 from decimal import Decimal
 

@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import MainContainer from '../imports/MemberDetailContainer';
 import MainLayout from '../components/layouts/MainLayout';
 import { useNavigation } from '../contexts/NavigationContext';
 import { useMembers } from '../contexts/MembersContext';
 import { Member } from '../types/member';
+import type { ChatPlatform } from '../components/chat-room/types';
 
 /**
  * 會員詳情頁面
@@ -32,10 +33,41 @@ export default function MemberDetailPage() {
     loadMemberDetail();
   }, [params.memberId, fetchMemberById]);
   
-  // 轉換為 MemberData 格式（如果需要）
+  // 從 URL 參數獲取渠道（從聊天室返回時會帶入）
+  const platform = (params.platform as ChatPlatform) || 'LINE';
+
+  // 根據渠道獲取對應的頭像和名稱
+  const getChannelSpecificData = useMemo(() => {
+    if (!member) return { avatar: undefined, name: undefined };
+
+    switch (platform) {
+      case 'LINE':
+        return {
+          avatar: member.lineAvatar || (member as any).line_avatar,
+          name: (member as any).line_name || member.username
+        };
+      case 'Facebook':
+        return {
+          avatar: (member as any).fb_avatar,
+          name: (member as any).fb_name || member.username
+        };
+      case 'Webchat':
+        return {
+          avatar: (member as any).webchat_avatar,
+          name: (member as any).webchat_name || member.username
+        };
+      default:
+        return {
+          avatar: member.lineAvatar,
+          name: member.username
+        };
+    }
+  }, [member, platform]);
+
+  // 轉換為 MemberData 格式（如果需要）- 使用渠道特定的頭像和名稱
   const memberData = member ? {
     id: member.id,
-    username: member.username,
+    username: getChannelSpecificData.name || member.username,  // 渠道特定名稱
     realName: member.realName,
     tags: member.tags,
     memberTags: member.memberTags,           // ✅ 添加會員標籤
@@ -48,7 +80,7 @@ export default function MemberDetailPage() {
     createTime: member.createTime,
     lastChatTime: member.lastChatTime,
     lineUid: member.lineUid,                 // ✅ 添加 LINE UID
-    lineAvatar: member.lineAvatar,           // ✅ 添加 LINE 頭像
+    lineAvatar: getChannelSpecificData.avatar || member.lineAvatar,  // 渠道特定頭像
     id_number: member.id_number,             // ✅ 添加身分證字號
     residence: member.residence,             // ✅ 添加居住地
     passport_number: member.passport_number, // ✅ 添加護照號碼

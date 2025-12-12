@@ -4,7 +4,7 @@
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select
 from typing import List, Optional
 from datetime import datetime
 import logging
@@ -12,6 +12,7 @@ import logging
 from app.database import get_db
 from app.models.member import Member
 from app.schemas.common import SuccessResponse
+from app.services.chatroom_service import ChatroomService
 import json
 
 logger = logging.getLogger(__name__)
@@ -106,6 +107,7 @@ async def get_chat_messages(
     member_id: int,
     page: int = Query(1, ge=1, description="頁碼"),
     page_size: int = Query(50, ge=1, le=100, description="每頁筆數"),
+    platform: Optional[str] = Query(None, description="渠道：LINE/Facebook/Webchat"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -125,118 +127,80 @@ async def get_chat_messages(
         聊天消息列表
     """
     try:
-        from sqlalchemy import func, text
-
         logger.info(f"📖 獲取會員聊天紀錄: member_id={member_id}, page={page}, page_size={page_size}")
 
-        # 先查詢會員的 line_uid
-        member_query = select(Member.line_uid).where(Member.id == member_id)
+        member_query = select(Member).where(Member.id == member_id)
         member_result = await db.execute(member_query)
-        line_uid = member_result.scalar_one_or_none()
+        member = member_result.scalar_one_or_none()
 
-        if not line_uid:
-            logger.warning(f"⚠️ 會員 {member_id} 未綁定 LINE 帳號")
-            raise HTTPException(status_code=400, detail="會員未綁定 LINE 帳號")
+        if not member:
+            raise HTTPException(status_code=404, detail="會員不存在")
 
-        logger.info(f"🔍 使用 line_uid={line_uid} 查詢 conversation_messages")
+        chatroom_service = ChatroomService(db)
+        resolved_platform = _resolve_platform(platform)
 
-        # 計算總數
-        count_query = text("""
-            SELECT COUNT(*) as total
-            FROM conversation_messages
-            WHERE thread_id = :thread_id
-        """)
-        count_result = await db.execute(count_query, {"thread_id": line_uid})
-        total = count_result.scalar() or 0
+        result = await chatroom_service.get_messages(member, resolved_platform, page, page_size)
 
-        # 計算分頁
-        offset = (page - 1) * page_size
-        has_more = (offset + page_size) < total
-
-        # 查詢聊天紀錄
-        query = text("""
-            SELECT
-                id,
-                direction,
-                CASE
-                    WHEN direction = 'outgoing' THEN response
-                    WHEN direction = 'incoming' THEN question
-                    ELSE ''
-                END as message_content,
-                status as message_status,
-                created_at,
-                message_source
-            FROM conversation_messages
-            WHERE thread_id = :thread_id
-            ORDER BY created_at DESC
-            LIMIT :limit OFFSET :offset
-        """)
-
-        result = await db.execute(
-            query,
-            {
-                "thread_id": line_uid,
-                "limit": page_size,
-                "offset": offset
-            }
-        )
-        records = result.fetchall()
-
-        # 轉換為前端格式
         messages = []
-        for record in records:
-            # 格式化時間
-            created_at = record.created_at if hasattr(record, 'created_at') else record[4]
+        for record in result["messages"]:
+            ts_raw = record.get("timestamp")
+            created_at = datetime.fromisoformat(ts_raw) if ts_raw else None
             time_str = format_chat_time(created_at)
-
-            # 判斷消息類型
-            direction = record.direction if hasattr(record, 'direction') else record[1]
-            msg_type = 'user' if direction == 'incoming' else 'official'
-
-            # 判斷是否已讀
-            status = record.message_status if hasattr(record, 'message_status') else record[3]
-            is_read = status == 'read' if status else False
-
-            # 獲取消息內容
-            content = record.message_content if hasattr(record, 'message_content') else record[2]
-
-            # 解析並提取實際的消息文字
-            text_content = extract_message_text(content) if content else ''
-
-            # 獲取 ID
-            msg_id = record.id if hasattr(record, 'id') else record[0]
-
-            # 獲取 message_source（新增）
-            msg_source = record.message_source if hasattr(record, 'message_source') else record[5]
-
-            # 轉換時間為 ISO 格式
-            timestamp_str = created_at.isoformat() if created_at else None
+            text_content = extract_message_text(record.get("text", "")) if record.get("text") else ""
 
             messages.append(ChatMessage(
-                id=msg_id,
-                type=msg_type,
+                id=record["id"],
+                type=record["type"],
                 text=text_content,
                 time=time_str,
-                timestamp=timestamp_str,
-                isRead=is_read,
-                source=msg_source
+                timestamp=record.get("timestamp"),
+                isRead=record.get("isRead", False),
+                source=record.get("source"),
             ))
 
-        logger.info(f"✅ 成功獲取 {len(messages)} 筆聊天紀錄（共 {total} 筆）")
+        logger.info(f"✅ 成功獲取 {len(messages)} 筆聊天紀錄（共 {result['total']} 筆）")
 
         return SuccessResponse(
             data=ChatMessagesResponse(
                 messages=messages,
-                total=total,
+                total=result["total"],
                 page=page,
                 page_size=page_size,
-                has_more=has_more
+                has_more=result["has_more"]
             ).model_dump()
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"❌ 獲取聊天紀錄失敗: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"獲取聊天紀錄失敗: {str(e)}")
+
+
+def _resolve_platform(request_platform: Optional[str]) -> str:
+    if request_platform is None:
+        return "LINE"
+    normalized = request_platform.strip()
+    allowed = {"LINE", "Facebook", "Webchat"}
+    if normalized not in allowed:
+        raise HTTPException(status_code=400, detail="不支援的渠道平台")
+    return normalized
+
+
+def _resolve_platform_uid(member: Member, platform: str) -> str:
+    if platform == "LINE":
+        if not member.line_uid:
+            raise HTTPException(status_code=400, detail="會員未綁定 LINE 帳號")
+        return member.line_uid
+    if platform == "Facebook":
+        if not member.fb_uid:
+            raise HTTPException(status_code=400, detail="會員未綁定 Facebook 帳號")
+        return member.fb_uid
+    if platform == "Webchat":
+        if not member.webchat_uid:
+            raise HTTPException(status_code=400, detail="會員未綁定 Webchat")
+        return member.webchat_uid
+    raise HTTPException(status_code=400, detail="不支援的渠道平台")
 
 
 def format_chat_time(dt: datetime) -> str:

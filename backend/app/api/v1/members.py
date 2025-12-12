@@ -9,7 +9,7 @@ from app.database import get_db
 from app.models.member import Member
 from app.models.tag import MemberTag, MemberInteractionTag
 from app.models.user import User
-from app.models.chat_log import ChatLog
+from app.models.conversation import ConversationMessage
 from app.models.line_channel import LineChannel
 from app.schemas.member import (
     MemberCreate,
@@ -29,6 +29,7 @@ from app.clients.line_app_client import LineAppClient
 from datetime import datetime, timezone
 import os
 
+from app.services.chatroom_service import ChatroomService
 router = APIRouter()
 
 
@@ -107,28 +108,30 @@ async def get_members(
     last_chat_times = {}
 
     if member_line_uids:
-        # 使用子查詢找出每個 user_id 的最新聊天時間
-        from sqlalchemy import and_
-
+        # 使用子查詢找出每個 thread_id (line_uid) 的最新聊天時間
+        # conversation_messages 的 thread_id = platform_uid (line_uid)
         subq = (
             select(
-                ChatLog.user_id,
-                func.max(ChatLog.created_at).label('max_created_at')
+                ConversationMessage.thread_id,
+                func.max(ConversationMessage.created_at).label('max_created_at')
             )
-            .where(ChatLog.user_id.in_(member_line_uids))
-            .group_by(ChatLog.user_id)
+            .where(
+                ConversationMessage.thread_id.in_(member_line_uids),
+                ConversationMessage.platform == 'LINE'
+            )
+            .group_by(ConversationMessage.thread_id)
         ).subquery()
 
         chat_result = await db.execute(
-            select(ChatLog.user_id, ChatLog.created_at)
+            select(ConversationMessage.thread_id, ConversationMessage.created_at)
             .join(subq, and_(
-                ChatLog.user_id == subq.c.user_id,
-                ChatLog.created_at == subq.c.max_created_at
+                ConversationMessage.thread_id == subq.c.thread_id,
+                ConversationMessage.created_at == subq.c.max_created_at
             ))
         )
 
-        for user_id, created_at in chat_result:
-            last_chat_times[user_id] = created_at
+        for thread_id, created_at in chat_result:
+            last_chat_times[thread_id] = created_at
 
     # 組裝響應數據
     items = []
@@ -248,12 +251,16 @@ async def get_member(
         tags.append(TagInfo(id=tag_id, name=tag_name, type="interaction"))
 
     # 查詢該會員最後一條聊天訊息的時間
+    # 使用 conversation_messages，thread_id = platform_uid (line_uid)
     last_chat_time = member.last_interaction_at
     if member.line_uid:
         last_chat_result = await db.execute(
-            select(ChatLog.created_at)
-            .where(ChatLog.user_id == member.line_uid)
-            .order_by(ChatLog.created_at.desc())
+            select(ConversationMessage.created_at)
+            .where(
+                ConversationMessage.thread_id == member.line_uid,
+                ConversationMessage.platform == 'LINE'
+            )
+            .order_by(ConversationMessage.created_at.desc())
             .limit(1)
         )
         last_chat_row = last_chat_result.scalar()
@@ -732,6 +739,7 @@ async def update_member_notes(
 async def send_member_chat_message(
     member_id: int,
     text: str = Body(..., embed=True),
+    platform: str = Body("LINE", embed=True, description="渠道：LINE/Facebook/Webchat"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -756,31 +764,59 @@ async def send_member_chat_message(
     if not member:
         raise HTTPException(status_code=404, detail="會員不存在")
 
-    if not member.line_uid:
-        raise HTTPException(status_code=400, detail="會員未綁定 LINE 帳號")
+    platform = platform.strip()
 
-    # 調用 line_app 發送訊息
-    line_app_url = os.getenv("LINE_APP_URL", "http://localhost:3001")
-    client = LineAppClient(base_url=line_app_url)
+    # 建立/寫入對話訊息
+    from app.services.chatroom_service import ChatroomService
 
-    try:
-        send_result = await client.send_chat_message(
-            line_uid=member.line_uid,
-            text=text
-        )
+    chatroom_service = ChatroomService(db)
 
-        if not send_result.get("ok"):
-            raise HTTPException(status_code=500, detail="發送訊息失敗")
+    if platform == "LINE":
+        if not member.line_uid:
+            raise HTTPException(status_code=400, detail="會員未綁定 LINE 帳號")
 
-        return {
-            "success": True,
-            "message_id": send_result.get("message_id"),
-            "thread_id": send_result.get("thread_id"),
-            "sent_at": datetime.now().isoformat()
-        }
+        # 調用 line_app 發送訊息
+        line_app_url = os.getenv("LINE_APP_URL", "http://localhost:3001")
+        client = LineAppClient(base_url=line_app_url)
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"發送訊息失敗: {str(e)}")
+        try:
+            send_result = await client.send_chat_message(
+                line_uid=member.line_uid,
+                text=text
+            )
+
+            if not send_result.get("ok"):
+                raise HTTPException(status_code=500, detail="發送訊息失敗")
+
+            await chatroom_service.append_message(member, "LINE", "outgoing", text, message_source="manual")
+
+            return {
+                "success": True,
+                "message_id": send_result.get("message_id"),
+                "thread_id": send_result.get("thread_id"),
+                "sent_at": datetime.now().isoformat()
+            }
+
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"發送訊息失敗: {str(e)}")
+
+    elif platform in {"Facebook", "Webchat"}:
+        # 先寫入對話訊息，外部傳送暫作 TODO
+        try:
+            msg = await chatroom_service.append_message(member, platform, "outgoing", text, message_source="manual")
+            return {
+                "success": True,
+                "message_id": msg.id,
+                "thread_id": msg.thread_id,
+                "sent_at": msg.created_at.isoformat()
+            }
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"發送訊息失敗: {str(e)}")
+
+    else:
+        raise HTTPException(status_code=400, detail="不支援的渠道平台")
 
 
 @router.put("/{member_id}/chat/mark-read")

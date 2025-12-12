@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict
 from app.database import get_db
 from app.models.user import User
-from app.schemas.auth import LoginRequest, TokenResponse, UserInfo
+from app.schemas.auth import TokenResponse, UserInfo
 from app.core.security import verify_password, create_access_token, decode_access_token
 from app.config import settings
 

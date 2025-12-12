@@ -7,8 +7,9 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
     說明:
       - Webchat 聊天紀錄獨立存在，不會覆蓋 LINE 或 Facebook 的訊息。
       - 當用戶在 Webchat 上登入 LINE 或 Facebook OAuth 時，系統會取得該渠道會員資訊（line_uid / fb_uid、email），並與 members 表進行關聯。
-      - LINE / Facebook 的好友資料仍然存在各自表中（line_friends / fb_friends）。聊天紀錄統一存放於 chat_logs 表。
-      - 客服在系統介面看到的訊息流，是依 member_id 整合的三個渠道訊息，聊天紀錄存放於 chat_logs 表，好友資料保留在各自 friends 表。
+      - LINE / Facebook 的好友資料仍然存在各自表中（line_friends / fb_friends）。
+      - 聊天紀錄統一存放於 conversation_threads（對話線程）和 conversation_messages（對話訊息）表。
+      - 客服在系統介面看到的訊息流，是依 member_id 整合的三個渠道訊息，好友資料保留在各自 friends 表。
 
     Given Webchat 為互動入口，使用者在 Webchat 互動時，需要透過 LINE 或 Facebook OAuth 登入
     And 三個渠道各自有自己的好友追蹤表：
@@ -25,6 +26,13 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
       | last_interaction_at| 最後互動時間                                        |
     And 跨渠道關聯透過各 friends 表的 member_id 欄位建立
     And 上次互動渠道依據 member_id 下所有渠道 friends 表的 last_interaction_at 最晚者
+    And 聊天紀錄表結構如下：
+      | 表名                  | 主要欄位                                                                         |
+      | conversation_threads  | id (thread_id), member_id, platform, platform_uid, last_message_at              |
+      | conversation_messages | id, thread_id, platform, direction, question, response, message_source, created_at |
+    And conversation_threads 的 id (thread_id) 格式為 platform_uid（如 "U66da9a54ad9341376212e673d7fd7228"）
+    And 渠道識別透過 platform 欄位區分（"LINE" / "Facebook" / "Webchat"）
+    And 查詢訊息時使用 thread_id + platform 兩個條件
 
   # =============================================================================
   # Webchat 使用 LINE OAuth 登入
@@ -260,8 +268,62 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
         | Webchat  |
         | LINE     |
         | Facebook |
-      And 聊天室訊息依選擇渠道顯示對應紀錄（從 chat_logs 表依 platform 篩選）
+      And 聊天室訊息依選擇渠道顯示對應紀錄（從 conversation_messages 表依 thread_id + platform 篩選）
       And 好友資料保留在各自 friends 表中
+
+  # =============================================================================
+  # 聊天訊息資料查詢規格
+  # =============================================================================
+
+  Rule: 聊天訊息查詢使用 thread_id（platform_uid）+ platform 欄位組合作為查詢條件
+
+    Example: 查詢 LINE 渠道訊息
+      Given 會員 member_id "M001" 的 LINE UID 為 "U66da9a54ad9341376212e673d7fd7228"
+      When 客服選擇 LINE 渠道查看聊天紀錄
+      Then 系統查詢 conversation_messages 表：
+        | 條件欄位   | 值                                     |
+        | thread_id  | U66da9a54ad9341376212e673d7fd7228      |
+        | platform   | LINE                                    |
+      And 結果依 created_at 排序顯示
+
+    Example: 查詢 Facebook 渠道訊息
+      Given 會員 member_id "M001" 的 FB UID 為 "F123456789"
+      When 客服選擇 Facebook 渠道查看聊天紀錄
+      Then 系統查詢 conversation_messages 表：
+        | 條件欄位   | 值                                     |
+        | thread_id  | F123456789                              |
+        | platform   | Facebook                                |
+      And 結果依 created_at 排序顯示
+
+    Example: 查詢 Webchat 渠道訊息
+      Given 會員 member_id "M001" 的 Webchat UID 為 "550e8400-e29b-41d4-a716-446655440000"
+      When 客服選擇 Webchat 渠道查看聊天紀錄
+      Then 系統查詢 conversation_messages 表：
+        | 條件欄位   | 值                                          |
+        | thread_id  | 550e8400-e29b-41d4-a716-446655440000        |
+        | platform   | Webchat                                      |
+      And 結果依 created_at 排序顯示
+
+  Rule: conversation_threads 表用於追蹤對話線程狀態，id 直接使用 platform_uid
+
+    Example: 開啟聊天會話時建立或更新 thread
+      Given 會員 member_id "M001" 的 LINE UID 為 "U123"
+      When 客服開啟該會員的 LINE 聊天室
+      Then 系統查詢或建立 conversation_threads 記錄：
+        | 欄位         | 值      |
+        | id           | U123    |
+        | member_id    | M001    |
+        | platform     | LINE    |
+        | platform_uid | U123    |
+      And 系統更新 last_message_at 為最後訊息時間
+
+    Example: 同會員多渠道各自獨立 thread
+      Given 會員 member_id "M001" 綁定 LINE (U123) 和 Facebook (F456)
+      Then conversation_threads 表存在兩筆記錄：
+        | id    | member_id | platform | platform_uid |
+        | U123  | M001      | LINE     | U123         |
+        | F456  | M001      | Facebook | F456         |
+      And 每個渠道的訊息透過各自的 thread_id + platform 查詢
 
   # =============================================================================
   # Webchat 訪客會話狀態管理

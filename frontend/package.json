@@ -53,6 +53,7 @@
             "@vitejs/plugin-react-swc": "^3.10.2",
             "rollup-plugin-visualizer": "^6.0.5",
             "terser": "^5.44.1",
+            "typescript": "^5.9.3",
             "vite": "6.3.5"
       },
       "scripts": {

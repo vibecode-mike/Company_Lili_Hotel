@@ -3,9 +3,6 @@ LINE Bot 服務層
 封裝 LINE 推播邏輯，連接 FastAPI 和 LINE Bot SDK
 """
 import logging
-import sys
-import os
-from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from sqlalchemy import select
@@ -20,7 +17,6 @@ from app.database import AsyncSessionLocal
 from app.models.message import Message
 from app.models.template import MessageTemplate
 from app.models.tag import MemberTag
-from app.utils.image_handler import file_path_to_base64
 
 # ============================================================
 # 輔助函數：獲取 line_app 的函數 (避免頂層導入衝突)

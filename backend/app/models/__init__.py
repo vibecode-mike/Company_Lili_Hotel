@@ -13,7 +13,6 @@ from app.models.auto_response_message import AutoResponseMessage
 from app.models.consumption_record import ConsumptionRecord
 from app.models.pms_integration import PMSIntegration
 from app.models.tag_trigger_log import TagTriggerLog
-from app.models.chat_log import ChatLog
 from app.models.tag_rule import TagRule
 from app.models.admin import Admin, Role, Permission, AdminRole, RolePermission
 from app.models.tracking import ComponentInteractionLog, InteractionType, ClickTrackingDemo
@@ -38,7 +37,6 @@ __all__ = [
     "ConsumptionRecord",
     "PMSIntegration",
     "TagTriggerLog",
-    "ChatLog",
     "TagRule",
     "Admin",
     "Role",

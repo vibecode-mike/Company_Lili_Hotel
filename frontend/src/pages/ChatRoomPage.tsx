@@ -2,6 +2,7 @@ import ChatRoom from '../components/ChatRoom';
 import MainLayout from '../components/layouts/MainLayout';
 import { useNavigation } from '../contexts/NavigationContext';
 import { useMembers } from '../contexts/MembersContext';
+import type { ChatPlatform } from '../components/chat-room/types';
 
 /**
  * 聊天室頁面
@@ -21,10 +22,13 @@ export default function ChatRoomPage() {
     navigate('member-management');
   };
 
-  // 導航到會員詳情頁（第二層麵包屑點擊）
-  const handleNavigateToMemberDetail = () => {
+  // 導航到會員詳情頁（第二層麵包屑點擊）- 帶渠道資訊
+  const handleNavigateToMemberDetail = (platform?: ChatPlatform) => {
     if (params.memberId) {
-      navigate('member-detail', { memberId: params.memberId });
+      navigate('member-detail', {
+        memberId: params.memberId,
+        platform: platform || 'LINE'  // 傳遞當前選擇的渠道
+      });
     }
   };
 

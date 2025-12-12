@@ -26,6 +26,7 @@ from app.api.v1 import (
     line_channels,
     websocket,
     line_notify,
+    chat_session,
 )
 
 api_router = APIRouter()
@@ -46,3 +47,4 @@ api_router.include_router(chat_messages.router, prefix="", tags=["聊天紀錄"]
 api_router.include_router(line_channels.router, prefix="/line_channels", tags=["LINE 頻道設定"])
 api_router.include_router(websocket.router, prefix="", tags=["WebSocket 即時通訊"])
 api_router.include_router(line_notify.router, prefix="", tags=["LINE 訊息通知"])
+api_router.include_router(chat_session.router, prefix="", tags=["聊天 Session"])

@@ -17,7 +17,6 @@ from linebot.v3.messaging import (
     PushMessageRequest,
     MulticastRequest,
 )
-from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from app.config import settings
 from typing import List, Dict, Any, Optional
 import logging

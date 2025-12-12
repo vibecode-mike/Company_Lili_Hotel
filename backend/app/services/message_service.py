@@ -4,7 +4,7 @@
 """
 from typing import Dict, Any, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, not_, or_, cast, String, text
+from sqlalchemy import select, func, and_, or_, cast, String, text
 from sqlalchemy.orm import selectinload
 from datetime import datetime
 import logging
@@ -13,9 +13,7 @@ import os
 
 from app.models.message import Message
 from app.models.template import MessageTemplate
-from app.models.member import Member
-from app.models.tag import MemberTag, InteractionTag
-from app.models.tracking import ComponentInteractionLog
+from app.models.tag import InteractionTag
 from app.adapters.line_app_adapter import LineAppAdapter
 from app.clients.line_app_client import LineAppClient
 from app.core.pagination import PageResponse
