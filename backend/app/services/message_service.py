@@ -56,13 +56,15 @@ class MessageService:
         interaction_tags: Optional[List[str]] = None,
         admin_id: Optional[int] = None,
         message_title: Optional[str] = None,
-        draft_id: Optional[int] = None
+        draft_id: Optional[int] = None,
+        platform: Optional[str] = "LINE",
+        fb_message_json: Optional[str] = None
     ) -> Message:
         """创建群发消息
 
         Args:
             db: 数据库 session
-            flex_message_json: 前端生成的 Flex Message JSON 字符串
+            flex_message_json: LINE Flex Message JSON 字符串
             target_type: 发送对象类型 ("all_friends" | "filtered")
             schedule_type: 发送方式 ("immediate" | "scheduled" | "draft")
             template_name: 模板名称（可选）
@@ -75,6 +77,8 @@ class MessageService:
             admin_id: 创建者 ID（可选）
             message_title: 消息标题（可选，用于列表显示）
             draft_id: 来源草稿 ID（可选，有值时复制草稿发布，原草稿保留）
+            platform: 发送平台 ("LINE" | "Facebook" | "Instagram")
+            fb_message_json: Facebook Messenger JSON 字符串（可选）
 
         Returns:
             创建的消息对象
@@ -93,6 +97,8 @@ class MessageService:
                 thumbnail=thumbnail,
                 interaction_tags=interaction_tags,
                 message_title=message_title,
+                platform=platform,
+                fb_message_json=fb_message_json,
             )
 
         # 1. 创建基础模板（仅用于关联，实际内容存储在 Message.flex_message_json）
@@ -125,7 +131,9 @@ class MessageService:
             target_filter=target_filter or {},
             send_status=send_status,
             campaign_id=campaign_id,
-            flex_message_json=flex_message_json,  # 直接存储 Flex Message JSON
+            platform=platform or "LINE",  # 發送平台
+            flex_message_json=flex_message_json,  # LINE Flex Message JSON
+            fb_message_json=fb_message_json,  # Facebook Messenger JSON
             message_title=message_title or notification_message or thumbnail,  # 优先使用前端传入的 message_title（訊息標題）
             notification_message=notification_message,  # 保存通知推播文字
             thumbnail=thumbnail,
@@ -259,13 +267,15 @@ class MessageService:
         thumbnail: Optional[str] = None,
         interaction_tags: Optional[List[str]] = None,
         message_title: Optional[str] = None,
+        platform: Optional[str] = None,
+        fb_message_json: Optional[str] = None,
     ) -> Message:
         """从草稿发布 - 复制成新记录，原草稿保留
 
         Args:
             db: 数据库 session
             draft_id: 来源草稿 ID
-            flex_message_json: Flex Message JSON（可覆盖草稿内容）
+            flex_message_json: LINE Flex Message JSON（可覆盖草稿内容）
             target_type: 发送对象类型
             schedule_type: 发送方式 ("immediate" | "scheduled")
             target_filter: 筛选条件
@@ -274,6 +284,8 @@ class MessageService:
             thumbnail: 缩略图 URL
             interaction_tags: 互动标签列表
             message_title: 消息标题
+            platform: 发送平台
+            fb_message_json: Facebook Messenger JSON（可覆盖草稿内容）
 
         Returns:
             新创建的消息对象（原草稿保持不变）
@@ -313,7 +325,9 @@ class MessageService:
             target_filter=target_filter if target_filter is not None else draft.target_filter,
             send_status=send_status,
             campaign_id=draft.campaign_id,
+            platform=platform or draft.platform or "LINE",  # 發送平台
             flex_message_json=flex_message_json or draft.flex_message_json,
+            fb_message_json=fb_message_json or draft.fb_message_json,  # Facebook JSON
             message_title=message_title or draft.message_title,
             notification_message=notification_message or draft.notification_message,
             thumbnail=thumbnail or draft.thumbnail,
@@ -687,17 +701,31 @@ class MessageService:
         if not message:
             raise ValueError(f"消息不存在: ID={message_id}")
 
-        if not message.flex_message_json:
-            raise ValueError(f"消息缺少 Flex Message JSON 内容")
+        # 2. 根據平台路由發送
+        platform = message.platform or "LINE"
+        logger.info(f"📤 准备发送消息: ID={message_id}, Platform={platform}")
 
-        if self._is_scheduled(message):
-            await self._cancel_message_job(message_id)
-            message.scheduled_datetime_utc = None
-            logger.info(f"⏹️  Cleared scheduler job before sending message {message_id}")
+        if platform == "Facebook":
+            # Facebook 發送（預留結構）
+            if not message.fb_message_json:
+                raise ValueError(f"消息缺少 Facebook Messenger JSON 内容")
+            raise NotImplementedError("Facebook 發送功能開發中")
 
-        # 2. 发送消息
-        logger.info(f"📤 准备发送消息: ID={message_id}")
-        return await self._send_via_http(db, message, channel_id)
+        elif platform == "Instagram":
+            # Instagram 發送（預留結構）
+            raise NotImplementedError("Instagram 發送功能開發中")
+
+        else:
+            # LINE 發送（現有邏輯）
+            if not message.flex_message_json:
+                raise ValueError(f"消息缺少 Flex Message JSON 内容")
+
+            if self._is_scheduled(message):
+                await self._cancel_message_job(message_id)
+                message.scheduled_datetime_utc = None
+                logger.info(f"⏹️  Cleared scheduler job before sending message {message_id}")
+
+            return await self._send_via_http(db, message, channel_id)
 
     async def _send_via_http(
         self,

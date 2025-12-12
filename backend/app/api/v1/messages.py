@@ -126,14 +126,20 @@ async def create_message(
         创建的消息对象详情
     """
     try:
-        # 验证 flex_message_json 必填
-        if not data.flex_message_json:
-            raise ValueError("flex_message_json 是必填字段")
+        # 根據平台驗證必填欄位
+        platform = getattr(data, 'platform', None) or "LINE"
+        if platform == "Facebook":
+            if not data.fb_message_json:
+                raise ValueError("fb_message_json 是 Facebook 平台的必填字段")
+        else:
+            # LINE 或其他平台
+            if not data.flex_message_json:
+                raise ValueError("flex_message_json 是必填字段")
 
         if data.draft_id:
-            logger.info(f"📤 从草稿发布: draft_id={data.draft_id}, schedule_type={data.schedule_type}")
+            logger.info(f"📤 从草稿发布: draft_id={data.draft_id}, schedule_type={data.schedule_type}, platform={platform}")
         else:
-            logger.info(f"📤 创建群发消息: schedule_type={data.schedule_type}")
+            logger.info(f"📤 创建群发消息: schedule_type={data.schedule_type}, platform={platform}")
 
         message = await message_service.create_message(
             db=db,
@@ -148,7 +154,9 @@ async def create_message(
             thumbnail=data.thumbnail,
             interaction_tags=data.interaction_tags,
             message_title=data.message_title,
-            draft_id=data.draft_id,  # 新增：来源草稿 ID
+            draft_id=data.draft_id,  # 来源草稿 ID
+            platform=platform,  # 發送平台
+            fb_message_json=getattr(data, 'fb_message_json', None),  # Facebook JSON
         )
 
         logger.info(f"✅ 消息创建成功: ID={message.id}")

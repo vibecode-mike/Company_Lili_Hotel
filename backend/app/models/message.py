@@ -82,6 +82,7 @@ class Message(Base):
     )
     created_by = Column(BigInteger, ForeignKey("users.id"), comment="創建者ID")
     flex_message_json = Column(MEDIUMTEXT, nullable=True, comment="Flex Message JSON 內容（最大 16MB）")
+    fb_message_json = Column(MEDIUMTEXT, nullable=True, comment="Facebook Messenger JSON 內容")
 
     # 平台設定（新增）
     platform = Column(

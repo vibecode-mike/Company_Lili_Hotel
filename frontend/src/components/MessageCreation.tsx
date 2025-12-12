@@ -21,6 +21,7 @@ import uploadIconPaths from '../imports/svg-wb8nmg8j6i';
 import messageTextSvgPaths from '../imports/svg-hbkooryl5v';
 import FlexMessageEditorNew from './flex-message/FlexMessageEditorNew';
 import CarouselMessageEditor, { type CarouselCard } from './CarouselMessageEditor';
+import { FacebookMessageEditor, MessengerMessage } from './facebook-message';
 import { TriggerImagePreview, TriggerTextPreview, GradientPreviewContainer, DeleteButton } from './common';
 import ActionTriggerTextMessage from '../imports/ActionTriggerTextMessage';
 import ActionTriggerImageMessage from '../imports/ActionTriggerImageMessage';
@@ -96,6 +97,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   const [activeTab, setActiveTab] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [flexMessageJson, setFlexMessageJson] = useState<FlexMessage | null>(null);
+  const [fbMessageJson, setFbMessageJson] = useState<MessengerMessage | null>(null);
   const [selectedFilterTags, setSelectedFilterTags] = useState<Array<{ id: string; name: string }>>([]);
   const [filterCondition, setFilterCondition] = useState<'include' | 'exclude'>('include');
   const [scheduledDate, setScheduledDate] = useState<Date | undefined>(undefined);
@@ -675,14 +677,17 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     }
 
     try {
-      // 批量上傳裁切後的圖片
-      const uploadSuccess = await uploadCroppedImages();
-      if (!uploadSuccess) {
-        return; // 上傳失敗，已經顯示錯誤訊息
+      // LINE 平台需要上傳圖片，Facebook 平台跳過
+      let flexMessage = null;
+      if (selectedPlatform === 'LINE') {
+        // 批量上傳裁切後的圖片
+        const uploadSuccess = await uploadCroppedImages();
+        if (!uploadSuccess) {
+          return; // 上傳失敗，已經顯示錯誤訊息
+        }
+        // Generate flex message JSON from cards (使用 uploadedImageUrl)
+        flexMessage = generateFlexMessage(cards);
       }
-
-      // Generate flex message JSON from cards (使用 uploadedImageUrl)
-      const flexMessage = generateFlexMessage(cards);
 
       const token = localStorage.getItem('auth_token');
       if (!token) {
@@ -692,7 +697,6 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
       // Prepare request body for draft
       const requestBody: any = {
-        flex_message_json: JSON.stringify(flexMessage),
         target_type: targetType === 'all' ? 'all_friends' : 'filtered',
         schedule_type: 'draft',  // ✅ 必填欄位：固定為 draft
         notification_message: notificationMsg,
@@ -701,6 +705,19 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         thumbnail: cards[0]?.uploadedImageUrl || cards[0]?.image || null,
         interaction_tags: collectInteractionTags(),
       };
+
+      // 根據平台設置對應的 JSON 欄位
+      if (selectedPlatform === 'Facebook') {
+        if (!fbMessageJson) {
+          toast.error('請先編輯 Facebook 訊息內容');
+          return;
+        }
+        requestBody.fb_message_json = JSON.stringify(fbMessageJson);
+        // Facebook 平台也需要 flex_message_json（後端 required）
+        requestBody.flex_message_json = JSON.stringify({ type: 'bubble', body: { type: 'box', layout: 'vertical', contents: [] } });
+      } else {
+        requestBody.flex_message_json = JSON.stringify(flexMessage);
+      }
 
       // Add target filter for filtered audience
       if (targetType === 'filtered' && selectedFilterTags.length > 0) {
@@ -786,7 +803,17 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       hasError = true;
     }
 
-    // 驗證卡片欄位
+    // Facebook 平台跳過卡片驗證（使用獨立編輯器）
+    if (selectedPlatform === 'Facebook') {
+      // Facebook 只需要有 fbMessageJson
+      if (!fbMessageJson) {
+        toast.error('請先編輯 Facebook 訊息內容');
+        return false;
+      }
+      return !hasError;
+    }
+
+    // LINE 平台：驗證卡片欄位
     const newCardErrors = new Map();
 
     cards.forEach((card) => {
@@ -1296,15 +1323,18 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     }
 
     try {
-      // ✅ 先上傳所有圖片到後端
-      const uploadSuccess = await uploadCroppedImages();
-      if (!uploadSuccess) {
-        toast.error('圖片上傳失敗，請重試');
-        return;
+      // LINE 平台需要上傳圖片，Facebook 平台跳過
+      let flexMessage = null;
+      if (selectedPlatform === 'LINE') {
+        // ✅ 先上傳所有圖片到後端
+        const uploadSuccess = await uploadCroppedImages();
+        if (!uploadSuccess) {
+          toast.error('圖片上傳失敗，請重試');
+          return;
+        }
+        // Generate flex message JSON from cards (使用 uploadedImageUrl)
+        flexMessage = generateFlexMessage(cards);
       }
-
-      // Generate flex message JSON from cards (使用 uploadedImageUrl)
-      const flexMessage = generateFlexMessage(cards);
 
       const token = localStorage.getItem('auth_token');
       if (!token) {
@@ -1314,7 +1344,6 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
       // Prepare request body
       const requestBody: any = {
-        flex_message_json: JSON.stringify(flexMessage),
         target_type: targetType === 'all' ? 'all_friends' : 'filtered',
         schedule_type: scheduleType,
         notification_message: notificationMsg,
@@ -1323,6 +1352,19 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         thumbnail: cards[0]?.uploadedImageUrl || cards[0]?.image || null,
         interaction_tags: collectInteractionTags(),
       };
+
+      // 根據平台設置對應的 JSON 欄位
+      if (selectedPlatform === 'Facebook') {
+        if (!fbMessageJson) {
+          toast.error('請先編輯 Facebook 訊息內容');
+          return;
+        }
+        requestBody.fb_message_json = JSON.stringify(fbMessageJson);
+        // Facebook 平台也需要 flex_message_json（後端 required）
+        requestBody.flex_message_json = JSON.stringify({ type: 'bubble', body: { type: 'box', layout: 'vertical', contents: [] } });
+      } else {
+        requestBody.flex_message_json = JSON.stringify(flexMessage);
+      }
 
       // Add target filter for filtered audience
       if (targetType === 'filtered' && selectedFilterTags.length > 0) {
@@ -2019,33 +2061,40 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
           {/* Carousel Message Editor Section - Full Width */}
           <div className="border-t-2 border-[#E5E5E5]">
-            {/* Carousel Message Editor - Full Height */}
+            {/* Editor - conditionally render LINE or Facebook editor */}
             <div className="h-[calc(100vh-300px)] min-h-[600px]">
-              <CarouselMessageEditor
-                cards={cards}
-                activeTab={activeTab}
-                onTabChange={setActiveTab}
-                onAddCarousel={addCarousel}
-                onUpdateCard={updateCard}
-                onImageUpload={(file) => handleImageUpload(file, currentCard)}
-                errors={cardErrors.get(currentCard.id)}
-                onDeleteCarousel={deleteCard}
-                selectedPlatform={selectedPlatform}
-                onCopyCard={() => {
-                  // 檢查是否已達到上限
-                  if (cards.length >= 10) {
-                    toast.error('最多可新增10個輪播');
-                    return;
-                  }
+              {selectedPlatform === 'LINE' ? (
+                <CarouselMessageEditor
+                  cards={cards}
+                  activeTab={activeTab}
+                  onTabChange={setActiveTab}
+                  onAddCarousel={addCarousel}
+                  onUpdateCard={updateCard}
+                  onImageUpload={(file) => handleImageUpload(file, currentCard)}
+                  errors={cardErrors.get(currentCard.id)}
+                  onDeleteCarousel={deleteCard}
+                  selectedPlatform={selectedPlatform}
+                  onCopyCard={() => {
+                    // 檢查是否已達到上限
+                    if (cards.length >= 10) {
+                      toast.error('最多可新增10個輪播');
+                      return;
+                    }
 
-                  // Copy current card functionality
-                  const newId = Math.max(...cards.map(c => c.id)) + 1;
-                  const copiedCard = { ...currentCard, id: newId };
-                  setCards([...cards, copiedCard]);
-                  setActiveTab(newId);
-                  toast.success('已複製圖卡');
-                }}
-              />
+                    // Copy current card functionality
+                    const newId = Math.max(...cards.map(c => c.id)) + 1;
+                    const copiedCard = { ...currentCard, id: newId };
+                    setCards([...cards, copiedCard]);
+                    setActiveTab(newId);
+                    toast.success('已複製圖卡');
+                  }}
+                />
+              ) : (
+                <FacebookMessageEditor
+                  onJsonChange={setFbMessageJson}
+                  initialJson={fbMessageJson}
+                />
+              )}
             </div>
           </div>
         </main>

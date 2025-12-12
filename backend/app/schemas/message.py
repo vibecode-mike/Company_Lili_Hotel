@@ -154,6 +154,10 @@ class MessageCreate(BaseModel):
 
     # Flex Message 支援
     flex_message_json: Optional[str] = None  # LINE Flex Message JSON 字串
+    fb_message_json: Optional[str] = None  # Facebook Messenger JSON 字串
+
+    # 平台設定
+    platform: Optional[str] = Field(default="LINE", description="發送平台：LINE/Facebook/Instagram")
 
     # 系統欄位
     campaign_id: Optional[int] = None  # 關聯活動ID（選填）
@@ -207,6 +211,7 @@ class MessageUpdate(MessageBase):
     target_type: Optional[str] = None  # 更新時可選
     message_title: Optional[str] = None  # 訊息標題（更新時可選）
     flex_message_json: Optional[str] = None  # Flex Message JSON（更新時可選）
+    fb_message_json: Optional[str] = None  # Facebook Messenger JSON（更新時可選）
     failure_reason: Optional[str] = None  # 發送失敗原因
     scheduled_at: Optional[datetime] = None  # ✅ 排程時間（更新時可選）
 
@@ -288,6 +293,7 @@ class MessageDetail(MessageListItem):
     available_quota: int = 0  # 可用訊息配額用量
     click_count: int = 0  # 點擊次數（從ComponentInteractionLog統計）
     flex_message_json: Optional[str] = None  # Flex Message JSON字串（用於前端預覽）
+    fb_message_json: Optional[str] = None  # Facebook Messenger JSON字串（用於前端預覽）
 
 
 class MessageSearchParams(BaseModel):
