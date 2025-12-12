@@ -1044,7 +1044,7 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
                 onChange={(e) => updateTitle(e.target.value)}
                 placeholder="輸入標題文字"
                 maxLength={80}
-                className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-300 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
               />
               <span className="absolute right-[12px] top-[10px] text-[12px] leading-[16px] text-[#6a7282]">
                 {titleText.length}/80
@@ -1075,7 +1075,7 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
                 onChange={(e) => updateSubtitle(e.target.value)}
                 placeholder="輸入內文文字說明"
                 maxLength={80}
-                className="w-full h-[78px] px-[12px] py-[8px] rounded-[10px] border border-neutral-100 text-[14px] leading-[20px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all resize-none"
+                className="w-full h-[78px] px-[12px] py-[8px] rounded-[10px] border border-neutral-300 text-[14px] leading-[20px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all resize-none"
               />
               <span className="absolute right-[12px] bottom-[8px] text-[12px] leading-[16px] text-[#6a7282]">
                 {subtitleText.length}/80
