@@ -35,7 +35,7 @@ const createDefaultBubble = (): FlexBubble => ({
       },
       {
         type: "text",
-        text: "副標題文字說明",
+        text: "內文文字說明",
         wrap: true,
         color: "#666666",
         size: "sm",
@@ -232,11 +232,11 @@ export function FacebookMessageEditor({ onJsonChange, initialJson }: FacebookMes
                 if (hasPrice) {
                   // Keep the same structure with newline for price
                   const lines = item.text.split('\n');
-                  const defaultSubtitle = "副標題文字說明";
+                  const defaultSubtitle = "內文文字說明";
                   const priceLines = lines.slice(1); // Keep all lines after first (price info)
                   return { ...item, text: `${defaultSubtitle}\n${priceLines.join('\n')}` };
                 } else {
-                  return { ...item, text: "副標題文字說明" };
+                  return { ...item, text: "內文文字說明" };
                 }
               }
             }

@@ -376,12 +376,12 @@ def maybe_update_member_profile(uid: str) -> None:
     """
     try:
         row = fetchone("""
-            SELECT line_display_name, line_picture_url
+            SELECT line_name, line_picture_url
             FROM members
             WHERE line_uid = :uid
         """, {"uid": uid})
 
-        has_name = bool(row and row.get("line_display_name"))
+        has_name = bool(row and row.get("line_name"))
         has_pic  = bool(row and row.get("line_picture_url"))
         if has_name and has_pic:
             return  # 都有就不打 API
@@ -2521,7 +2521,7 @@ def __track():
                 (
                     :uid,
                     :src,
-                    COALESCE(:dname, (SELECT m.line_display_name FROM `{MYSQL_DB}`.`members` m WHERE m.line_uid = :uid LIMIT 1)),
+                    COALESCE(:dname, (SELECT m.line_name FROM `{MYSQL_DB}`.`members` m WHERE m.line_uid = :uid LIMIT 1)),
                     1,
                     NOW(),
                     :merged
@@ -2530,7 +2530,7 @@ def __track():
                 total_clicks = 1,
                 line_display_name = COALESCE(
                     :dname,
-                    (SELECT m.line_display_name FROM `{MYSQL_DB}`.`members` m WHERE m.line_uid = :uid LIMIT 1),
+                    (SELECT m.line_name FROM `{MYSQL_DB}`.`members` m WHERE m.line_uid = :uid LIMIT 1),
                     line_display_name
                 ),
                 last_click_tag = :merged,
@@ -3146,11 +3146,11 @@ def on_postback(event: PostbackEvent):
     if uid:
         try:
             cur = fetchone(
-                "SELECT line_display_name, line_picture_url FROM members WHERE line_uid=:u",
+                "SELECT line_name, line_picture_url FROM members WHERE line_uid=:u",
                 {"u": uid}
             ) or {}
             api_dn, api_pu = fetch_line_profile(uid)
-            dn_to_write = api_dn if (api_dn and api_dn != cur.get("line_display_name")) else None
+            dn_to_write = api_dn if (api_dn and api_dn != cur.get("line_name")) else None
             pu_to_write = api_pu if (api_pu and api_pu != cur.get("line_picture_url")) else None
 
             # 1) 一樣先處理 members（問卷用的那張表）
@@ -3221,10 +3221,10 @@ def on_text(event: MessageEvent):
         try:
             # 讀取現有 DB 資料
             cur = fetchone(
-                "SELECT line_display_name, line_picture_url FROM members WHERE line_uid=:u",
+                "SELECT line_name, line_picture_url FROM members WHERE line_uid=:u",
                 {"u": uid}
             ) or {}
-            cur_dn = cur.get("line_display_name")
+            cur_dn = cur.get("line_name")
             cur_pu = cur.get("line_picture_url")
 
             # 從 LINE API 取得最新 profile
