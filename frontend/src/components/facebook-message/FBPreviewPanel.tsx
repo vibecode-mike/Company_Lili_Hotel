@@ -1,4 +1,5 @@
 import { FlexBubble } from "./fb-types";
+import { FB_PLACEHOLDER_IMAGE } from "./FacebookMessageEditor";
 
 interface FBPreviewPanelProps {
   bubbles: FlexBubble[];
@@ -35,7 +36,7 @@ function FlexBubblePreview({ bubble }: { bubble: FlexBubble }) {
               aspectRatio: bubble.hero.aspectRatio || "1.91:1",
             }}
             onError={(e) => {
-              e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='157'%3E%3Crect fill='%23f0f0f0' width='300' height='157'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23999' font-family='sans-serif' font-size='14'%3E選擇圖片%3C/text%3E%3C/svg%3E";
+              e.currentTarget.src = FB_PLACEHOLDER_IMAGE;
             }}
           />
           {bubble.hero.action && (
@@ -52,7 +53,7 @@ function FlexBubblePreview({ bubble }: { bubble: FlexBubble }) {
 
       {/* Body */}
       {bubble.body && bubble.body.contents.some((c: any) => c.type === "text" && c.text && c.text.trim() !== "") && (
-        <div className="px-3 pt-3 pb-2">
+        <div className="p-[16px]">
           {bubble.body.contents.map((content: any, index: number) => {
             if (content.type === "text") {
               return (
@@ -96,7 +97,7 @@ function FlexBubblePreview({ bubble }: { bubble: FlexBubble }) {
         const containerMarginTop = firstButtonMargin === "xl" ? "24px" : firstButtonMargin === "lg" ? "12px" : firstButtonMargin === "md" ? "6px" : firstButtonMargin === "sm" ? "4px" : "0";
 
         return (
-          <div className="px-3 pb-3">
+          <div className="px-[16px] pb-[16px]">
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", width: "100%", marginTop: containerMarginTop }}>
               {buttonContents.map((content: any, index: number) => (
                 <button

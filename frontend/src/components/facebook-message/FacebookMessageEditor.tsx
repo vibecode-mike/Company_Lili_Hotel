@@ -6,6 +6,9 @@ import { Plus, Copy, Trash2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
+// FB 預設圖片佔位符
+export const FB_PLACEHOLDER_IMAGE = "/images/fb-placeholder.png";
+
 interface FacebookMessageEditorProps {
   onJsonChange?: (json: MessengerMessage | null) => void;
   initialJson?: MessengerMessage | null;
@@ -15,7 +18,7 @@ const createDefaultBubble = (): FlexBubble => ({
   type: "bubble",
   hero: {
     type: "image",
-    url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='157'%3E%3Crect fill='%23f0f0f0' width='300' height='157'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23999' font-family='sans-serif' font-size='14'%3E選擇圖片%3C/text%3E%3C/svg%3E",
+    url: FB_PLACEHOLDER_IMAGE,
     size: "full",
     aspectRatio: "1.91:1",
     aspectMode: "cover",
@@ -206,7 +209,7 @@ export function FacebookMessageEditor({ onJsonChange, initialJson }: FacebookMes
       if (firstBubble.hero) {
         newBubble.hero = {
           ...firstBubble.hero,
-          url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='157'%3E%3Crect fill='%23f0f0f0' width='300' height='157'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23999' font-family='sans-serif' font-size='14'%3E選擇圖片%3C/text%3E%3C/svg%3E",
+          url: FB_PLACEHOLDER_IMAGE,
         };
       } else {
         // First bubble has no hero, so new bubble shouldn't have one either
@@ -298,7 +301,7 @@ export function FacebookMessageEditor({ onJsonChange, initialJson }: FacebookMes
             if (!targetBubble.hero) {
               targetBubble.hero = {
                 type: "image",
-                url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='157'%3E%3Crect fill='%23f0f0f0' width='300' height='157'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23999' font-family='sans-serif' font-size='14'%3E選擇圖片%3C/text%3E%3C/svg%3E",
+                url: FB_PLACEHOLDER_IMAGE,
                 size: "full",
                 aspectRatio: bubble.hero.aspectRatio || "1.91:1",
                 aspectMode: "cover",
