@@ -35,7 +35,7 @@ func SendMetaGetRequest(url string) (response_body map[string]any, err error) {
 }
 
 func SendMetaPostRequest(url string, payload []byte) (response_body map[string]any, err error) {
-	req, _ := http.NewRequest("Post", url, bytes.NewBuffer(payload))
+	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	req.Header.Set("Content-Type", "application/json")
 
 	res, err := http.DefaultClient.Do(req)

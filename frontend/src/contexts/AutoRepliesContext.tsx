@@ -18,11 +18,18 @@ export type AutoReplyTriggerType = 'welcome' | 'keyword' | 'follow' | 'time';
  */
 export type ChannelType = AutoReplyChannel;
 
+// 關鍵字對象，包含是否重複的標記
+export interface AutoReplyKeyword {
+  keyword: string;
+  isDuplicate: boolean;
+}
+
 export interface AutoReply {
   id: string;
   name: string;
   triggerType: AutoReplyTriggerType;
   keywords: string[];
+  keywordObjects: AutoReplyKeyword[]; // 包含重複標記的關鍵字對象
   tags: string[];
   messages: string[];
   isActive: boolean;
@@ -48,7 +55,19 @@ export interface AutoReplyPayload {
   dateRangeStart?: string | null;
   dateRangeEnd?: string | null;
   channels?: AutoReplyChannel[]; // 新增：支持的回應渠道
+  channelId?: string | null; // 渠道ID（LINE channel ID 或 FB page ID）
+  forceActivate?: boolean; // 強制啟用（確認切換時使用）
 }
+
+export interface AutoReplyConflict {
+  conflict: true;
+  conflictType: 'welcome' | 'always_date_overlap';
+  existingId: number;
+  existingName: string;
+  existingDateRange?: string;
+}
+
+export type SaveAutoReplyResult = AutoReply | AutoReplyConflict | null;
 
 interface AutoRepliesContextType {
   autoReplies: AutoReply[];
@@ -64,7 +83,7 @@ interface AutoRepliesContextType {
   error: string | null;
   fetchAutoReplies: () => Promise<void>;
   fetchAutoReplyById: (id: string) => Promise<AutoReply | undefined>;
-  saveAutoReply: (payload: AutoReplyPayload, id?: string) => Promise<AutoReply | null>;
+  saveAutoReply: (payload: AutoReplyPayload, id?: string) => Promise<SaveAutoReplyResult>;
   removeAutoReply: (id: string) => Promise<void>;
 }
 
@@ -90,6 +109,17 @@ function mapAutoResponse(item: BackendAutoReply & { content?: string; messages?:
         .map((kw: BackendKeyword) => kw?.keyword ?? kw?.name ?? '')
         .filter((kw: string) => kw)
     : [];
+
+  // 建立包含重複標記的關鍵字對象
+  const keywordObjects: AutoReplyKeyword[] = Array.isArray(item?.keywords)
+    ? item.keywords
+        .filter((kw: BackendKeyword) => kw?.keyword || kw?.name)
+        .map((kw: BackendKeyword) => ({
+          keyword: kw?.keyword ?? kw?.name ?? '',
+          isDuplicate: Boolean(kw?.is_duplicate),
+        }))
+    : [];
+
   const messages = Array.isArray(item?.messages) && item.messages.length > 0
     ? item.messages
         .sort((a: BackendReplyMessage, b: BackendReplyMessage) => (a?.sequence_order ?? 0) - (b?.sequence_order ?? 0))
@@ -102,6 +132,7 @@ function mapAutoResponse(item: BackendAutoReply & { content?: string; messages?:
     name: item?.name ?? '未命名自動回應',
     triggerType: (item?.trigger_type ?? 'keyword') as AutoReplyTriggerType,
     keywords,
+    keywordObjects,  // 新增：包含重複標記的關鍵字對象
     tags: keywords,
     messages: messages.length > 0 ? messages : [''],
     isActive: Boolean(item?.is_active),
@@ -212,7 +243,7 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
   }, []);
 
   const saveAutoReply = useCallback(
-    async (payload: AutoReplyPayload, id?: string) => {
+    async (payload: AutoReplyPayload, id?: string): Promise<SaveAutoReplyResult> => {
       try {
         const token = getAuthTokenOrThrow();
         const response = await fetch(id ? `/api/v1/auto_responses/${id}` : '/api/v1/auto_responses', {
@@ -231,7 +262,9 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
             trigger_time_end: payload.triggerTimeEnd ?? null,
             date_range_start: payload.dateRangeStart ?? null,
             date_range_end: payload.dateRangeEnd ?? null,
-            channels: payload.channels ?? undefined,  // 新增：渠道列表
+            channels: payload.channels ?? undefined,
+            channel_id: payload.channelId ?? null,
+            force_activate: payload.forceActivate ?? false,
           }),
         });
 
@@ -241,6 +274,19 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
         }
 
         const result = await response.json();
+
+        // 檢查是否有衝突
+        if (result?.data?.conflict) {
+          const conflictData: AutoReplyConflict = {
+            conflict: true,
+            conflictType: result.data.conflict_type,
+            existingId: result.data.existing_id,
+            existingName: result.data.existing_name,
+            existingDateRange: result.data.existing_date_range,
+          };
+          return conflictData;
+        }
+
         const targetId = id ?? result?.data?.id?.toString();
         const fresh = targetId ? await fetchAutoReplyById(targetId) : null;
         toast.success(id ? '自動回應已更新' : '自動回應已建立');

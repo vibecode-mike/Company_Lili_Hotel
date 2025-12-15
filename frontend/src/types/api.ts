@@ -44,6 +44,7 @@ export interface BackendMember {
 export interface BackendKeyword {
   keyword?: string;
   name?: string;
+  is_duplicate?: boolean;  // 是否為重複關鍵字
 }
 
 /**

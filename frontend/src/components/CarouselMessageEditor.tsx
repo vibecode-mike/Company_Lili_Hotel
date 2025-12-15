@@ -943,9 +943,9 @@ export default function CarouselMessageEditor({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="primary">Primary（綠色實心）</SelectItem>
-                      <SelectItem value="secondary">Secondary（灰色實心）</SelectItem>
-                      <SelectItem value="link">Link（綠色外框）</SelectItem>
+                      <SelectItem value="primary">Primary (Solid Green)</SelectItem>
+                      <SelectItem value="secondary">Secondary (Solid Gray)</SelectItem>
+                      <SelectItem value="link">Link (Green Outline)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1149,9 +1149,9 @@ export default function CarouselMessageEditor({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="primary">Primary（綠色實心）</SelectItem>
-                      <SelectItem value="secondary">Secondary（灰色實心）</SelectItem>
-                      <SelectItem value="link">Link（綠色外框）</SelectItem>
+                      <SelectItem value="primary">Primary (Solid Green)</SelectItem>
+                      <SelectItem value="secondary">Secondary (Solid Gray)</SelectItem>
+                      <SelectItem value="link">Link (Green Outline)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1340,9 +1340,9 @@ export default function CarouselMessageEditor({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="primary">Primary（綠色實心）</SelectItem>
-                      <SelectItem value="secondary">Secondary（灰色實心）</SelectItem>
-                      <SelectItem value="link">Link（綠色外框）</SelectItem>
+                      <SelectItem value="primary">Primary (Solid Green)</SelectItem>
+                      <SelectItem value="secondary">Secondary (Solid Gray)</SelectItem>
+                      <SelectItem value="link">Link (Green Outline)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

@@ -5,6 +5,7 @@ import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 
 import { cn } from "./utils";
 
+
 function TooltipProvider({
   delayDuration = 0,
   ...props
@@ -40,8 +41,10 @@ function TooltipContent({
   children,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content>) {
+  
+
   return (
-    <TooltipPrimitive.Portal>
+    <TooltipPrimitive.Portal >
       <TooltipPrimitive.Content
         data-slot="tooltip-content"
         sideOffset={sideOffset}

@@ -4,11 +4,18 @@ import ButtonEdit from '../imports/ButtonEdit';
 import { MemberSourceIcon } from './common/icons/MemberSourceIcon';
 import type { MemberSourceType } from '../types/channel';
 
+// 關鍵字對象（包含重複標記）
+export interface KeywordObject {
+  keyword: string;
+  isDuplicate: boolean;
+}
+
 export interface AutoReplyData {
   id: string;
   content: string;
   replyType: '歡迎訊息' | '觸發關鍵字' | '一律回應' | '指定時間';
   keywords: string[];
+  keywordObjects?: KeywordObject[];  // 包含重複標記的關鍵字對象
   status: '啟用' | '停用';
   platform: string;
   triggerCount: number;
@@ -223,9 +230,20 @@ const AutoReplyRow = memo(function AutoReplyRow({
           <div className="box-border content-stretch flex flex-wrap gap-[4px] items-start px-[12px] py-0 relative shrink-0 w-[280px]">
             {row.keywords.length > 0 ? (
               <>
-                {row.keywords.map((keyword, idx) => (
-                  <div key={idx} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] px-[8px] py-[4px] relative rounded-[8px] shrink-0">
-                    <p className="leading-[1.5] relative shrink-0 text-[#0f6beb] text-[14px] text-center whitespace-nowrap">{keyword}</p>
+                {(row.keywordObjects && row.keywordObjects.length > 0
+                  ? row.keywordObjects
+                  : row.keywords.map(kw => ({ keyword: kw, isDuplicate: false }))
+                ).map((kwObj, idx) => (
+                  <div
+                    key={idx}
+                    className={`box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] px-[8px] py-[4px] relative rounded-[8px] shrink-0 ${
+                      kwObj.isDuplicate ? 'bg-[#ffebee]' : 'bg-[#f0f6ff]'
+                    }`}
+                    title={kwObj.isDuplicate ? '重複的關鍵字，以最新版本觸發' : undefined}
+                  >
+                    <p className={`leading-[1.5] relative shrink-0 text-[14px] text-center whitespace-nowrap ${
+                      kwObj.isDuplicate ? 'text-[#f44336]' : 'text-[#0f6beb]'
+                    }`}>{kwObj.keyword}</p>
                   </div>
                 ))}
               </>

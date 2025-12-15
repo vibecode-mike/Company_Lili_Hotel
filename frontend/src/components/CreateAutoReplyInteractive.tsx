@@ -5,7 +5,7 @@ import svgPathsModal from "../imports/svg-9n0wtrekj3";
 import KeywordTagsInput from './KeywordTagsInput';
 import TriggerTimeOptions, { TriggerTimeType } from './TriggerTimeOptions';
 import { SimpleBreadcrumb, DeleteButton } from './common';
-import { useAutoReplies, type AutoReply as AutoReplyRecord, type AutoReplyPayload } from '../contexts/AutoRepliesContext';
+import { useAutoReplies, type AutoReply as AutoReplyRecord, type AutoReplyPayload, type AutoReplyConflict } from '../contexts/AutoRepliesContext';
 
 interface CreateAutoReplyProps {
   onBack: () => void;
@@ -76,6 +76,11 @@ export default function CreateAutoReplyInteractive({
   const [scheduledDateTime, setScheduledDateTime] = useState(() => ({ ...INITIAL_SCHEDULE }));
   const textareaRefs = useRef<{ [key: number]: HTMLTextAreaElement | null }>({});
   const isEditing = Boolean(autoReplyId);
+
+  // 衝突對話框狀態
+  const [showConflictDialog, setShowConflictDialog] = useState(false);
+  const [conflictData, setConflictData] = useState<AutoReplyConflict | null>(null);
+  const [pendingPayload, setPendingPayload] = useState<AutoReplyPayload | null>(null);
 
   const resetForm = useCallback(() => {
     setReplyType('welcome');
@@ -214,7 +219,12 @@ export default function CreateAutoReplyInteractive({
     );
   };
 
-  const handleSave = async () => {
+  // 檢查結果是否為衝突
+  const isConflict = (result: unknown): result is AutoReplyConflict => {
+    return typeof result === 'object' && result !== null && 'conflict' in result && (result as AutoReplyConflict).conflict === true;
+  };
+
+  const handleSave = async (forceActivate = false) => {
     if (isSaving) return;
     const trimmedMessages = messages
       .map((msg) => msg.text.trim())
@@ -245,12 +255,48 @@ export default function CreateAutoReplyInteractive({
       triggerTimeEnd: shouldSendSchedule ? scheduledDateTime.endTime || null : null,
       dateRangeStart: shouldSendSchedule ? normalizeDateForApi(scheduledDateTime.startDate) : null,
       dateRangeEnd: shouldSendSchedule ? normalizeDateForApi(scheduledDateTime.endDate) : null,
-      channels: [selectedChannel], // 新增：包含選擇的渠道
+      channels: [selectedChannel],
+      forceActivate,
     };
 
     setIsSaving(true);
     try {
-      await saveAutoReply(payload, autoReplyId ?? undefined);
+      const result = await saveAutoReply(payload, autoReplyId ?? undefined);
+
+      // 檢查是否有衝突
+      if (isConflict(result)) {
+        setConflictData(result);
+        setPendingPayload(payload);
+        setShowConflictDialog(true);
+        setIsSaving(false);
+        return;
+      }
+
+      onSaved?.();
+      onBack();
+    } catch {
+      // 錯誤提示已由 context 處理
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 確認切換：停用舊的，啟用新的
+  const handleConfirmSwitch = async () => {
+    if (!pendingPayload) return;
+    setShowConflictDialog(false);
+    await handleSave(true);
+  };
+
+  // 保存但不啟用
+  const handleSaveInactive = async () => {
+    if (!pendingPayload) return;
+    setShowConflictDialog(false);
+    const inactivePayload = { ...pendingPayload, isActive: false };
+    setIsSaving(true);
+    try {
+      await saveAutoReply(inactivePayload, autoReplyId ?? undefined);
+      toast.success('自動回應已保存（停用狀態）');
       onSaved?.();
       onBack();
     } catch {
@@ -387,7 +433,7 @@ export default function CreateAutoReplyInteractive({
                     )}
                     <button
                       type="button"
-                      onClick={handleSave}
+                      onClick={() => handleSave()}
                       disabled={isSaving || isHydrating}
                       className={`bg-[#242424] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 transition-colors ${
                         isSaving || isHydrating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-[#383838] active:bg-[#4a4a4a]'
@@ -681,6 +727,52 @@ export default function CreateAutoReplyInteractive({
           </div>
         </div>
       </main>
+
+      {/* 衝突對話框 */}
+      {showConflictDialog && conflictData && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-[16px] p-[24px] max-w-[480px] w-full mx-4 shadow-xl">
+            <h2 className="font-['Noto_Sans_TC:Regular',sans-serif] text-[20px] text-[#383838] mb-[16px]">
+              {conflictData.conflictType === 'welcome'
+                ? '系統目前已啟用中的歡迎訊息'
+                : '日期區間衝突'}
+            </h2>
+            <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] text-[#6e6e6e] mb-[8px]">
+              {conflictData.conflictType === 'welcome'
+                ? `目前啟用的歡迎訊息：「${conflictData.existingName}」`
+                : `與現有一律回應「${conflictData.existingName}」的日期區間重疊`}
+            </p>
+            {conflictData.existingDateRange && (
+              <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[14px] text-[#a8a8a8] mb-[24px]">
+                日期區間：{conflictData.existingDateRange}
+              </p>
+            )}
+            <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] text-[#383838] mb-[24px]">
+              是否切換至新的設定？
+            </p>
+            <div className="flex gap-[12px] justify-end">
+              <button
+                type="button"
+                onClick={handleSaveInactive}
+                className="bg-neutral-100 box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[16px] py-[8px] rounded-[16px] cursor-pointer hover:bg-neutral-200 transition-colors"
+              >
+                <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[16px] text-[#383838]">
+                  保存
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSwitch}
+                className="bg-[#0f6beb] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[16px] py-[8px] rounded-[16px] cursor-pointer hover:bg-[#0d5bc9] transition-colors"
+              >
+                <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[16px] text-white">
+                  確認切換
+                </p>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

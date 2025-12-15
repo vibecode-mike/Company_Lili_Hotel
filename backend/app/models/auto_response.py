@@ -62,6 +62,22 @@ class AutoResponse(Base):
         default=None,
         comment="支持的渠道列表（['LINE', 'Facebook']），null 表示全部渠道",
     )
+    # 渠道ID（帳號級別：LINE channel ID 或 FB page ID）
+    channel_id = Column(
+        String(100),
+        nullable=True,
+        default=None,
+        index=True,
+        comment="渠道ID（LINE channel ID 或 FB page ID），用於帳號級別的歡迎訊息/一律回應管理",
+    )
+
+    # 版本與重複狀態（用於關鍵字衝突管理）
+    version = Column(Integer, default=1, comment="版本號，用於追蹤編輯歷史")
+    is_duplicate = Column(
+        Boolean,
+        default=False,
+        comment="是否為重複的關鍵字（被更新版本覆蓋）",
+    )
 
     # 時間設定
     trigger_time_start = Column(Time, comment="指定時間區間起始")
@@ -111,6 +127,11 @@ class AutoResponseKeyword(Base):
     keyword = Column(String(50), nullable=False, comment="關鍵字")
     match_type = Column(String(20), default="exact", nullable=False, comment="比對類型：exact（完全匹配）")
     is_enabled = Column(Boolean, default=True, nullable=False, comment="是否啟用此關鍵字")
+    is_duplicate = Column(
+        Boolean,
+        default=False,
+        comment="是否為重複關鍵字（與其他自動回應衝突，以最新版本觸發）",
+    )
     match_count = Column(Integer, default=0, comment="匹配次數")
     last_triggered_at = Column(DateTime, nullable=True, comment="最近觸發時間")
     created_at = Column(DateTime, server_default=func.now(), comment="建立時間")

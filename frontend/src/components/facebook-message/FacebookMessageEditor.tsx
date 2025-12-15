@@ -32,7 +32,7 @@ const createDefaultBubble = (): FlexBubble => ({
       },
       {
         type: "text",
-        text: "副標題文字說明\nNT$ 0",
+        text: "副標題文字說明",
         wrap: true,
         color: "#666666",
         size: "sm",

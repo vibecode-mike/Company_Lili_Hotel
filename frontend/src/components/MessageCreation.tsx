@@ -1696,7 +1696,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
             <div className="flex flex-col xl:flex-row gap-[32px] xl:gap-[120px] items-start w-full">
               <div className="flex-1 flex flex-col sm:flex-row items-start gap-4 w-full">
                 <Label className="min-w-[120px] sm:min-w-[140px] lg:min-w-[160px] pt-3 flex items-center gap-1">
-                  <span className="text-[16px] text-[#383838]">發佈渠道</span>
+                  <span className="text-[16px] text-[#383838]">Platform</span>
                   <span className="text-[16px] text-[#f44336]">*</span>
                 </Label>
                 <div className="flex-1 flex flex-col gap-[2px]">

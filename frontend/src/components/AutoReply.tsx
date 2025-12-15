@@ -86,6 +86,7 @@ export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNav
       content: reply.messages[0] ?? '',
       replyType: getReplyTypeLabel(reply.triggerType),
       keywords: reply.keywords,
+      keywordObjects: reply.keywordObjects,  // 包含重複標記的關鍵字對象
       status: reply.isActive ? '啟用' : '停用',
       platform: 'LINE',
       triggerCount: reply.triggerCount,
