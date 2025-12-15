@@ -53,3 +53,6 @@ build/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Go cache
+meta_page_backend/.gocache/
