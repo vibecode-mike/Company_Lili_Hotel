@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { FlexBubble } from "./fb-types";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -15,6 +16,68 @@ interface FBConfigPanelProps {
 }
 
 export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpdateAllBubbles, onDuplicateBubble, canDuplicate }: FBConfigPanelProps) {
+  const [tagInputState, setTagInputState] = useState<Record<string, string>>({});
+
+  const splitTags = (value?: string) =>
+    (value || "")
+      .split(/[\s,，]+/)
+      .map(tag => tag.trim())
+      .filter(Boolean);
+
+  const joinTags = (tags: string[]) => tags.join(", ");
+
+  const renderTagInput = (fieldKey: string, value: string, onChangeValue: (val: string) => void, placeholder: string) => {
+    const tags = splitTags(value);
+    const inputValue = tagInputState[fieldKey] || "";
+
+    const addTag = () => {
+      const newTag = inputValue.trim();
+      if (!newTag) return;
+      const nextTags = Array.from(new Set([...tags, newTag]));
+      onChangeValue(joinTags(nextTags));
+      setTagInputState(prev => ({ ...prev, [fieldKey]: "" }));
+    };
+
+    const removeTag = (tagToRemove: string) => {
+      const nextTags = tags.filter(tag => tag !== tagToRemove);
+      onChangeValue(joinTags(nextTags));
+    };
+
+    return (
+      <div className="flex flex-col gap-[4px]">
+        <div className="flex flex-wrap gap-[6px] items-center min-h-[36px] w-full px-[10px] py-[6px] rounded-[8px] border border-neutral-200 bg-white">
+          {tags.map(tag => (
+            <div key={tag} className="flex items-center gap-[4px] bg-[#f0f6ff] text-[#0f6beb] text-[12px] px-[8px] py-[4px] rounded-[6px]">
+              <span className="leading-[16px]">{tag}</span>
+              <button
+                type="button"
+                onClick={() => removeTag(tag)}
+                className="text-[#a8a8a8] hover:text-[#6a6a6a] leading-none"
+                aria-label={`刪除標籤 ${tag}`}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          <input
+            type="text"
+            value={inputValue}
+            onChange={(e) => setTagInputState(prev => ({ ...prev, [fieldKey]: e.target.value }))}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addTag();
+              }
+            }}
+            placeholder={tags.length === 0 ? placeholder : "按 Enter 新增標籤"}
+            maxLength={50}
+            className="flex-1 min-w-[120px] bg-transparent text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none"
+          />
+        </div>
+      </div>
+    );
+  };
+
   const isFirstBubble = bubbleIndex === 0;
   // Helper function to check if there's any content (text or buttons)
   const hasAnyContent = (bubbleData: FlexBubble) => {
@@ -1004,13 +1067,12 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
 
                       <div className="flex flex-col gap-[4px]">
                         <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">互動標籤</p>
-                        <input
-                          type="text"
-                          value={heroActionLabel}
-                          onChange={(e) => updateHeroActionLabel(e.target.value)}
-                          placeholder="輸入互動標籤（僅供後台紀錄）"
-                          className="w-full h-[36px] px-[12px] rounded-[8px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
-                        />
+                        {renderTagInput(
+                          `hero-action-${bubbleIndex}`,
+                          heroActionLabel,
+                          (val) => updateHeroActionLabel(val),
+                          "輸入互動標籤（僅供後台紀錄）"
+                        )}
                         <p className="text-[12px] leading-[16px] text-[#6a7282]">此欄位不影響訊息輸出，僅供後台紀錄使用</p>
                       </div>
                     </>
@@ -1245,13 +1307,12 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
 
                 <div className="flex flex-col gap-[4px]">
                   <span className="text-[12px] leading-[16px] text-neutral-600">互動標籤</span>
-                  <input
-                    type="text"
-                    value={bubble._metadata?.buttonLabels?.[index] || ""}
-                    onChange={(e) => updateButton(index, "interactionLabel", e.target.value)}
-                    placeholder="輸入點擊後會貼上的互動標籤，例如 #促銷活動"
-                    className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all bg-white"
-                  />
+                  {renderTagInput(
+                    `button-${bubbleIndex}-${index}`,
+                    bubble._metadata?.buttonLabels?.[index] || "",
+                    (val) => updateButton(index, "interactionLabel", val),
+                    "輸入點擊後會貼上的互動標籤，例如 #促銷活動"
+                  )}
                   <p className="text-[12px] leading-[16px] text-[#6a7282]">此欄位不影響訊息輸出,僅供後台紀錄使用</p>
                 </div>
               </>
