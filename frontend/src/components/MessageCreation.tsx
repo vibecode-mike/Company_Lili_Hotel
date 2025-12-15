@@ -1705,7 +1705,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                     onValueChange={(value) => setSelectedPlatform(value as MessagePlatform)}
                   >
                     <SelectTrigger className="w-full h-[48px] rounded-[8px] bg-white border border-neutral-100">
-                      <SelectValue />
+                      <SelectValue>{selectedPlatform}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {platformOptions.map((option) => (
