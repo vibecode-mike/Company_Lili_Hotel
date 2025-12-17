@@ -362,21 +362,21 @@ const MessageRow = memo(function MessageRow({
           </div>
 
           {/* 已開啟次數 - 左對齊 */}
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[150px]">
+          <div className="box-border content-stretch flex items-center justify-start px-[12px] py-0 relative shrink-0 w-[150px]">
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
               <p className="leading-[24px]">{message.openCount}</p>
             </div>
           </div>
 
           {/* 點擊次數 - 左對齊 */}
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[130px]">
+          <div className="box-border content-stretch flex items-center justify-start px-[12px] py-0 relative shrink-0 w-[130px]">
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
               <p className="leading-[24px]">{message.clickCount}</p>
             </div>
           </div>
 
           {/* 時間欄位 - 動態標籤 */}
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[180px]">
+          <div className="box-border content-stretch flex items-center justify-start px-[12px] py-0 relative shrink-0 w-[180px]">
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
               <p className="leading-[1.5] whitespace-nowrap">{message.sendTime}</p>
             </div>
