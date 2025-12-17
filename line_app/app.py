@@ -3369,7 +3369,6 @@ def on_text(event: MessageEvent):
     # 移除 mid 條件：line_notify.py 會自己根據 line_uid 查詢 member_id
     if uid:
         try:
-            import requests
             backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8700")
             resp = requests.post(
                 f"{backend_url}/api/v1/line/message-notify",
