@@ -836,8 +836,13 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       const errors: any = {};
 
       // 驗證圖片（只有啟用時才驗證）
-      if (card.enableImage && !card.image) {
+      if (card.enableImage && !(card.uploadedImageUrl || card.image)) {
         errors.image = '請選擇圖片';
+      }
+
+      // 驗證點擊圖片觸發 URL（只有啟用時才驗證）
+      if (card.enableImageUrl && (!card.imageUrl || card.imageUrl.trim() === '')) {
+        errors.imageUrl = '請輸入點擊後跳轉網址';
       }
 
       // 驗證標題文字（只有啟用時才驗證）

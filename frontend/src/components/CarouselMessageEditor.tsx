@@ -91,6 +91,7 @@ const joinTags = (tags: string[]) => tags.join(', ');
 
 interface CardErrors {
   image?: string;
+  imageUrl?: string;
   cardTitle?: string;
   content?: string;
   price?: string;
@@ -486,6 +487,7 @@ export default function CarouselMessageEditor({
   const showContentInlineError = currentCard.enableContent && isEmpty(currentCard.content);
   const showPriceInlineError = currentCard.enablePrice && isEmpty(currentCard.price);
   const showImageUrlInlineError = currentCard.enableImageUrl && isEmpty(currentCard.imageUrl);
+  const showImageInlineError = currentCard.enableImage && isEmpty(currentCard.uploadedImageUrl || currentCard.image);
 
   const showButton1TextError = currentCard.enableButton1 && isEmpty(currentCard.button1);
   const showButton1UrlError = currentCard.enableButton1 && isEmpty(currentCard.button1Url);
@@ -622,9 +624,9 @@ export default function CarouselMessageEditor({
                 </div>
 
                 {/* Image Error */}
-                {errors?.image && (
+                {(showImageInlineError || errors?.image) && (
                   <p className="text-[12px] leading-[16px] text-red-500 mt-2">
-                    {errors.image}
+                    {showImageInlineError ? '請選擇圖片' : errors?.image}
                   </p>
                 )}
 
@@ -651,15 +653,15 @@ export default function CarouselMessageEditor({
                           value={currentCard.imageUrl}
                           onChange={(e) => onUpdateCard({ imageUrl: e.target.value })}
                           placeholder="https://example.com"
-                          aria-invalid={showImageUrlInlineError}
+                          aria-invalid={showImageUrlInlineError || Boolean(errors?.imageUrl)}
                           className={`w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
-                            requiredFieldClasses(showImageUrlInlineError)
+                            requiredFieldClasses(showImageUrlInlineError || Boolean(errors?.imageUrl))
                           }`}
-                          style={requiredFieldStyle(showImageUrlInlineError)}
+                          style={requiredFieldStyle(showImageUrlInlineError || Boolean(errors?.imageUrl))}
                         />
-                        {showImageUrlInlineError && (
+                        {(showImageUrlInlineError || errors?.imageUrl) && (
                           <p className="text-[12px] leading-[16px] text-[#f44336]">
-                            請輸入點擊後跳轉網址
+                            {showImageUrlInlineError ? '請輸入點擊後跳轉網址' : errors?.imageUrl}
                           </p>
                         )}
                         <p className="text-[12px] leading-[16px] text-[#6a7282]">使用者點擊圖片時會開啟此網址</p>
