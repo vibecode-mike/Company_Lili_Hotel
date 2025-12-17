@@ -29,7 +29,7 @@ const createDefaultBubble = (): FlexBubble => ({
     contents: [
       {
         type: "text",
-        text: "標題文字",
+        text: "",
         weight: "bold",
         size: "xl",
       },
@@ -60,7 +60,7 @@ const createDefaultBubble = (): FlexBubble => ({
 const convertFromMessengerFormat = (json: MessengerMessage): FlexBubble[] => {
   const elements = json.attachment?.payload?.elements || [];
   return elements.map((element: any) => {
-    const titleText = typeof element.title === "string" ? element.title : "標題文字";
+    const titleText = typeof element.title === "string" ? element.title : "";
     const subtitleText = typeof element.subtitle === "string" ? element.subtitle : "";
 
     const bubble: FlexBubble = {
@@ -228,7 +228,7 @@ export function FacebookMessageEditor({ onJsonChange, initialJson }: FacebookMes
             if (item.type === "text") {
               if (item.size === "xl") {
                 // Title element
-                return { ...item, text: "標題文字" };
+                return { ...item, text: "" };
               } else {
                 // Subtitle element - preserve price structure if exists
                 const hasPrice = item.text && item.text.includes('\n');
@@ -251,7 +251,7 @@ export function FacebookMessageEditor({ onJsonChange, initialJson }: FacebookMes
         if (!hasTitle) {
           newBubble.body.contents.unshift({
             type: "text",
-            text: "標題文字",
+            text: "",
             weight: "bold",
             size: "xl",
           });

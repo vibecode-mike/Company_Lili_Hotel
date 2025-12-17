@@ -1037,6 +1037,11 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
               {titleText.length}/80
             </span>
           </div>
+          {isTitleInvalid && (
+            <p className="text-[12px] leading-[16px] text-[#f44336] mt-2">
+              請輸入標題文字
+            </p>
+          )}
         </div>
       </div>
 
