@@ -179,6 +179,21 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange, status
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">已開啟次數</p>
             </div>
+            <TooltipProvider>
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <div
+                    className="relative shrink-0 size-[24px]"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <IcInfo />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>LINE 推播目前無法取得「已開啟/已讀」回傳，因此此欄通常會是 0 或顯示 -</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <SortIcon active={isActive('openCount')} order={sortConfig.order} />
           </div>
 
@@ -199,6 +214,21 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange, status
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">點擊次數</p>
             </div>
+            <TooltipProvider>
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <div
+                    className="relative shrink-0 size-[24px]"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <IcInfo />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>使用者需點擊訊息內的按鈕/圖片（追蹤連結）才會累積點擊次數</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <SortIcon active={isActive('clickCount')} order={sortConfig.order} />
           </div>
 
