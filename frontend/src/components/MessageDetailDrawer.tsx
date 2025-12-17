@@ -603,37 +603,41 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
                 </div>
               </InfoRow>
 
-              <InfoRow label="發送人數">
-                <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0" data-name="Table/List-atomic">
-                  <div className="flex flex-col font-['Inter:Regular',sans-serif] font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] text-nowrap tracking-[0.22px]">
-                    <p className="leading-[24px] whitespace-pre">{displayData.recipients}</p>
-                  </div>
-                </div>
-              </InfoRow>
+              {displayData.status === '已發送' && (
+                <>
+                  <InfoRow label="發送人數">
+                    <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0" data-name="Table/List-atomic">
+                      <div className="flex flex-col font-['Inter:Regular',sans-serif] font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] text-nowrap tracking-[0.22px]">
+                        <p className="leading-[24px] whitespace-pre">{displayData.recipients}</p>
+                      </div>
+                    </div>
+                  </InfoRow>
 
-              <InfoRow label="已開啟次數">
-                <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0" data-name="Table/List-atomic">
-                  <div className="flex flex-col font-['Inter:Regular',sans-serif] font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] text-nowrap tracking-[0.22px]">
-                    <p className="leading-[24px] whitespace-pre">{displayData.opens}</p>
-                  </div>
-                </div>
-              </InfoRow>
+                  <InfoRow label="已開啟次數">
+                    <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0" data-name="Table/List-atomic">
+                      <div className="flex flex-col font-['Inter:Regular',sans-serif] font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] text-nowrap tracking-[0.22px]">
+                        <p className="leading-[24px] whitespace-pre">{displayData.opens}</p>
+                      </div>
+                    </div>
+                  </InfoRow>
 
-              <InfoRow label="點擊次數">
-                <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0" data-name="Table/List-atomic">
-                  <div className="flex flex-col font-['Inter:Regular',sans-serif] font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] text-nowrap tracking-[0.22px]">
-                    <p className="leading-[24px] whitespace-pre">{displayData.clicks}</p>
-                  </div>
-                </div>
-              </InfoRow>
+                  <InfoRow label="點擊次數">
+                    <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0" data-name="Table/List-atomic">
+                      <div className="flex flex-col font-['Inter:Regular',sans-serif] font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] text-nowrap tracking-[0.22px]">
+                        <p className="leading-[24px] whitespace-pre">{displayData.clicks}</p>
+                      </div>
+                    </div>
+                  </InfoRow>
 
-              <InfoRow label="發送時間">
-                <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0" data-name="Table/List-atomic">
-                  <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-                    <p className="leading-[1.5] whitespace-pre">{displayData.sendTime}</p>
-                  </div>
-                </div>
-              </InfoRow>
+                  <InfoRow label="發送時間">
+                    <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0" data-name="Table/List-atomic">
+                      <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
+                        <p className="leading-[1.5] whitespace-pre">{displayData.sendTime}</p>
+                      </div>
+                    </div>
+                  </InfoRow>
+                </>
+              )}
               {displayData.status === '草稿' && (
                 <InfoRow label="最後更新時間">
                   <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0">
