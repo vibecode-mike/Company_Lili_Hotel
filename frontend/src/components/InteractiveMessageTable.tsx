@@ -1,4 +1,4 @@
-import { useState, useMemo, memo } from 'react';
+import { useEffect, useMemo, useState, memo } from 'react';
 import svgPaths from "../imports/svg-noih6nla1w";
 import { TextIconButton } from './common/buttons';
 import { ArrowRightIcon } from './common/icons/ArrowIcon';
@@ -171,45 +171,49 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange, status
             </div>
           </div>
 
-          {/* 已開啟次數 */}
-          <div 
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[120px] cursor-pointer"
-            onClick={() => onSortChange('openCount')}
-          >
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">已開啟次數</p>
-            </div>
-            <SortIcon active={isActive('openCount')} order={sortConfig.order} />
-          </div>
+          {statusFilter === '已發送' && (
+            <>
+              {/* 已開啟次數 */}
+              <div 
+                className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[120px] cursor-pointer"
+                onClick={() => onSortChange('openCount')}
+              >
+                <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
+                  <p className="leading-[1.5] whitespace-pre">已開啟次數</p>
+                </div>
+                <SortIcon active={isActive('openCount')} order={sortConfig.order} />
+              </div>
 
-          {/* Divider */}
-          <div className="h-[12px] relative shrink-0 w-0">
-            <div className="absolute inset-[-3.33%_-0.4px]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
-                <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
-              </svg>
-            </div>
-          </div>
+              {/* Divider */}
+              <div className="h-[12px] relative shrink-0 w-0">
+                <div className="absolute inset-[-3.33%_-0.4px]">
+                  <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
+                    <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
+                  </svg>
+                </div>
+              </div>
 
-          {/* 點擊次數 */}
-          <div 
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px] cursor-pointer"
-            onClick={() => onSortChange('clickCount')}
-          >
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">點擊次數</p>
-            </div>
-            <SortIcon active={isActive('clickCount')} order={sortConfig.order} />
-          </div>
+              {/* 點擊次數 */}
+              <div 
+                className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px] cursor-pointer"
+                onClick={() => onSortChange('clickCount')}
+              >
+                <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
+                  <p className="leading-[1.5] whitespace-pre">點擊次數</p>
+                </div>
+                <SortIcon active={isActive('clickCount')} order={sortConfig.order} />
+              </div>
 
-          {/* Divider */}
-          <div className="h-[12px] relative shrink-0 w-0">
-            <div className="absolute inset-[-3.33%_-0.4px]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
-                <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
-              </svg>
-            </div>
-          </div>
+              {/* Divider */}
+              <div className="h-[12px] relative shrink-0 w-0">
+                <div className="absolute inset-[-3.33%_-0.4px]">
+                  <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
+                    <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
+                  </svg>
+                </div>
+              </div>
+            </>
+          )}
 
           {/* 時間欄位 - 動態標籤 */}
           <div 
@@ -331,19 +335,23 @@ const MessageRow = memo(function MessageRow({
             </div>
           </div>
 
-          {/* 已開啟次數 - 左對齊 */}
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[120px]">
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[24px]">{message.openCount}</p>
-            </div>
-          </div>
+          {message.status === '已發送' && (
+            <>
+              {/* 已開啟次數 - 左對齊 */}
+              <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[120px]">
+                <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
+                  <p className="leading-[24px]">{message.openCount}</p>
+                </div>
+              </div>
 
-          {/* 點擊次數 - 左對齊 */}
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[100px]">
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[24px]">{message.clickCount}</p>
-            </div>
-          </div>
+              {/* 點擊次數 - 左對齊 */}
+              <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[100px]">
+                <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
+                  <p className="leading-[24px]">{message.clickCount}</p>
+                </div>
+              </div>
+            </>
+          )}
 
           {/* 時間欄位 - 動態標籤 */}
           <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[150px]">
@@ -382,10 +390,17 @@ const EmptyStateRow = memo(function EmptyStateRow() {
 });
 
 export default function InteractiveMessageTable({ messages, onEdit, onViewDetails, statusFilter }: InteractiveMessageTableProps) {
+  const showOpenClick = statusFilter === '已發送';
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     field: 'sendTime',
     order: 'desc',
   });
+
+  useEffect(() => {
+    if (!showOpenClick && (sortConfig.field === 'openCount' || sortConfig.field === 'clickCount')) {
+      setSortConfig({ field: 'sendTime', order: 'desc' });
+    }
+  }, [showOpenClick, sortConfig.field]);
 
   const getDefaultOrder = (field: SortField): SortOrder => {
     switch (field) {
@@ -464,17 +479,19 @@ export default function InteractiveMessageTable({ messages, onEdit, onViewDetail
     return list;
   }, [messages, sortConfig]);
 
+  const tableWidthClass = showOpenClick ? 'w-[1250px]' : 'w-[1030px]';
+
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0 w-full">
       {/* Table Container - Fixed height container with horizontal scroll */}
       <div className="bg-white rounded-[16px] w-full flex flex-col max-h-[600px] overflow-x-auto table-scroll">
         {/* Table Header - Fixed */}
-        <div className="relative shrink-0 w-[1250px]">
+        <div className={`relative shrink-0 ${tableWidthClass}`}>
           <TableHeader sortConfig={sortConfig} onSortChange={handleSort} statusFilter={statusFilter} />
         </div>
         
         {/* Table Body - Scrollable Container */}
-        <div className="w-[1250px] flex-1 table-scroll">
+        <div className={`${tableWidthClass} flex-1 table-scroll`}>
           {sortedMessages.length === 0 ? (
             <EmptyStateRow />
           ) : (
