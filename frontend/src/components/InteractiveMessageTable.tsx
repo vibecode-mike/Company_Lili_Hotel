@@ -173,7 +173,7 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange, status
 
           {/* 已開啟次數 */}
           <div
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[120px] cursor-pointer"
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[150px] cursor-pointer"
             onClick={() => onSortChange('openCount')}
           >
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
@@ -208,7 +208,7 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange, status
 
           {/* 點擊次數 */}
           <div
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px] cursor-pointer"
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[130px] cursor-pointer"
             onClick={() => onSortChange('clickCount')}
           >
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
@@ -243,7 +243,7 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange, status
 
           {/* 時間欄位 - 動態標籤 */}
           <div
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[150px] cursor-pointer"
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[180px] cursor-pointer"
             onClick={() => onSortChange('sendTime')}
           >
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
@@ -362,21 +362,21 @@ const MessageRow = memo(function MessageRow({
           </div>
 
           {/* 已開啟次數 - 左對齊 */}
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[120px]">
+          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[150px]">
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
               <p className="leading-[24px]">{message.openCount}</p>
             </div>
           </div>
 
           {/* 點擊次數 - 左對齊 */}
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[100px]">
+          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[130px]">
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
               <p className="leading-[24px]">{message.clickCount}</p>
             </div>
           </div>
 
           {/* 時間欄位 - 動態標籤 */}
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[150px]">
+          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[180px]">
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
               <p className="leading-[1.5] whitespace-nowrap">{message.sendTime}</p>
             </div>
