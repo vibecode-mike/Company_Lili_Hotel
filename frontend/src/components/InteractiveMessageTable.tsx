@@ -68,8 +68,8 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange, status
       <div className="flex flex-row items-center size-full">
         <div className="box-border content-stretch flex items-center pb-[12px] pt-[16px] px-[12px] relative w-full">
           {/* 訊息標題 */}
-          <div 
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[250px] cursor-pointer" 
+          <div
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[200px] cursor-pointer" 
             onClick={() => onSortChange('title')}
           >
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
@@ -88,8 +88,8 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange, status
           </div>
 
           {/* 互動標籤 */}
-          <div 
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[200px] cursor-pointer"
+          <div
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[160px] cursor-pointer"
             onClick={() => onSortChange('tags')}
           >
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
@@ -322,14 +322,14 @@ const MessageRow = memo(function MessageRow({
       <div className="flex flex-row items-center size-full">
         <div className="box-border content-stretch flex items-center p-[12px] relative w-full">
           {/* 訊息標題 */}
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[250px]">
+          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[200px]">
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
               <p className="leading-[1.5] truncate">{message.title}</p>
             </div>
           </div>
 
           {/* 互動標籤 */}
-          <div className="box-border content-stretch flex flex-wrap gap-[4px] items-start px-[12px] py-0 relative shrink-0 w-[200px]">
+          <div className="box-border content-stretch flex flex-wrap gap-[4px] items-start px-[12px] py-0 relative shrink-0 w-[160px]">
             {message.tags.map((tag, index) => (
               <div key={index} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] px-[8px] py-[4px] relative rounded-[8px] shrink-0">
                 <p className="leading-[1.5] relative shrink-0 text-[#0f6beb] text-[14px] text-center whitespace-nowrap">{tag}</p>
