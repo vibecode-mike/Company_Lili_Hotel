@@ -34,6 +34,64 @@ import { CAROUSEL_STRUCTURE_FIELDS } from './carouselStructure';
 import type { FlexMessage, FlexBubble } from '../types/api';
 import type { MessagePlatform } from '../types/channel';
 
+// FB 預設圖片佔位符
+const FB_PLACEHOLDER_IMAGE = "/images/fb-placeholder.png";
+
+// Convert LINE CarouselCard[] to Facebook MessengerMessage
+const convertCardsToMessengerMessage = (cards: CarouselCard[]): MessengerMessage => {
+  const elements = cards.map(card => {
+    const buttons: Array<{ type: "web_url" | "postback"; url?: string; title: string; payload?: string }> = [];
+    if (card.enableButton1 && card.button1) {
+      buttons.push({ type: "web_url", url: card.button1Url || "#", title: card.button1 });
+    }
+    if (card.enableButton2 && card.button2) {
+      buttons.push({ type: "web_url", url: card.button2Url || "#", title: card.button2 });
+    }
+    if (card.enableButton3 && card.button3) {
+      buttons.push({ type: "web_url", url: card.button3Url || "#", title: card.button3 });
+    }
+    return {
+      title: card.enableTitle && card.cardTitle ? card.cardTitle : "標題文字",
+      subtitle: card.enableContent && card.content ? card.content : undefined,
+      image_url: card.enableImage && card.image ? card.image : FB_PLACEHOLDER_IMAGE,
+      default_action: card.enableImageUrl && card.imageUrl ? { type: "web_url" as const, url: card.imageUrl } : undefined,
+      buttons: buttons.length > 0 ? buttons : undefined
+    };
+  });
+  return { attachment: { type: "template", payload: { template_type: "generic", elements } } };
+};
+
+// Convert Facebook MessengerMessage to LINE CarouselCard[]
+const convertMessengerMessageToCards = (messengerMessage: MessengerMessage | null, existingCards: CarouselCard[]): CarouselCard[] => {
+  if (!messengerMessage?.attachment?.payload?.elements) return existingCards;
+  const elements = messengerMessage.attachment.payload.elements;
+  return elements.map((element, index) => {
+    const baseCard = existingCards[index] || existingCards[0] || {} as CarouselCard;
+    const buttons = element.buttons || [];
+    return {
+      ...baseCard,
+      id: existingCards[index]?.id || index + 1,
+      enableImage: !!element.image_url && element.image_url !== FB_PLACEHOLDER_IMAGE,
+      image: element.image_url || '',
+      enableImageUrl: !!element.default_action?.url,
+      imageUrl: element.default_action?.url || '',
+      enableTitle: !!element.title && element.title !== "標題文字",
+      cardTitle: element.title || '',
+      enableContent: !!element.subtitle,
+      content: element.subtitle || '',
+      enableButton1: buttons.length > 0,
+      button1: buttons[0]?.title || '',
+      button1Url: buttons[0]?.url || '',
+      enableButton2: buttons.length > 1,
+      button2: buttons[1]?.title || '',
+      button2Url: buttons[1]?.url || '',
+      enableButton3: buttons.length > 2,
+      button3: buttons[2]?.title || '',
+      button3Url: buttons[2]?.url || '',
+    };
+  });
+};
+
 // Custom DialogContent without close button
 function DialogContentNoClose({
   className,
@@ -241,6 +299,31 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   ]);
 
   const currentCard = cards.find(c => c.id === activeTab) || cards[0];
+
+  // Handle platform change with content conversion
+  const handlePlatformChange = (newPlatform: MessagePlatform) => {
+    if (selectedPlatform === newPlatform) return;
+    if (selectedPlatform === 'LINE' && newPlatform === 'Facebook') {
+      const hasContent = cards.some(card =>
+        (card.enableImage && card.image) || (card.enableTitle && card.cardTitle) ||
+        (card.enableContent && card.content) || (card.enableButton1 && card.button1)
+      );
+      if (hasContent) {
+        setFbMessageJson(convertCardsToMessengerMessage(cards));
+        toast.success('已將 LINE 內容複製到 Facebook');
+      }
+    } else if (selectedPlatform === 'Facebook' && newPlatform === 'LINE') {
+      if (fbMessageJson) {
+        const convertedCards = convertMessengerMessageToCards(fbMessageJson, cards);
+        if (convertedCards.length > 0) {
+          setCards(convertedCards);
+          setActiveTab(convertedCards[0].id);
+          toast.success('已將 Facebook 內容複製到 LINE');
+        }
+      }
+    }
+    setSelectedPlatform(newPlatform);
+  };
 
   const updateCard = (updates: Partial<CarouselCard>) => {
     setCards(prevCards => {
@@ -1723,7 +1806,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                 <div className="flex-1 flex flex-col gap-[2px]">
                   <Select
                     value={selectedPlatform}
-                    onValueChange={(value) => setSelectedPlatform(value as MessagePlatform)}
+                    onValueChange={(value) => handlePlatformChange(value as MessagePlatform)}
                   >
                     <SelectTrigger className="w-full h-[48px] rounded-[8px] bg-white border border-neutral-100">
                       <SelectValue>{selectedPlatform}</SelectValue>
