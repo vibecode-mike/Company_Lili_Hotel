@@ -30,9 +30,11 @@ export default function KeywordTagsInput({
   const [inputValue, setInputValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const isComposingRef = useRef(false);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+    const isImeComposing = isComposingRef.current || (e.nativeEvent as any).isComposing;
+    if (e.key === 'Enter' && !isImeComposing) {
       e.preventDefault();
       addTag();
     }
@@ -158,11 +160,17 @@ export default function KeywordTagsInput({
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyDown={handleKeyDown}
+                    onCompositionStart={() => {
+                      isComposingRef.current = true;
+                    }}
+                    onCompositionEnd={() => {
+                      isComposingRef.current = false;
+                    }}
                     onFocus={() => setIsFocused(true)}
                     onBlur={() => {
                       setIsFocused(false);
                       // 失去焦点时如果有内容也添加
-                      if (inputValue.trim()) {
+                      if (!isComposingRef.current && inputValue.trim()) {
                         addTag();
                       }
                     }}

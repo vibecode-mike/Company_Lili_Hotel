@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { FlexBubble } from "./fb-types";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -17,6 +17,7 @@ interface FBConfigPanelProps {
 
 export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpdateAllBubbles, onDuplicateBubble, canDuplicate }: FBConfigPanelProps) {
   const [tagInputState, setTagInputState] = useState<Record<string, string>>({});
+  const isComposingRef = useRef(false);
 
   const splitTags = (value?: string) =>
     (value || "")
@@ -33,7 +34,15 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
     const addTag = () => {
       const newTag = inputValue.trim();
       if (!newTag) return;
-      const nextTags = Array.from(new Set([...tags, newTag]));
+
+      // 檢查重複標籤
+      if (tags.includes(newTag)) {
+        toast.warning(`標籤「${newTag}」已存在`);
+        setTagInputState(prev => ({ ...prev, [fieldKey]: "" }));
+        return;
+      }
+
+      const nextTags = [...tags, newTag];
       onChangeValue(joinTags(nextTags));
       setTagInputState(prev => ({ ...prev, [fieldKey]: "" }));
     };
@@ -45,7 +54,7 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
 
     return (
       <div className="flex flex-col gap-[4px]">
-        <div className="flex flex-wrap gap-[6px] items-center min-h-[36px] w-full px-[10px] py-[6px] rounded-[8px] border border-neutral-200 bg-white">
+        <div className="flex flex-wrap gap-[6px] items-center min-h-[44px] w-full px-[12px] py-[8px] rounded-[8px] border border-neutral-200 bg-white">
           {tags.map(tag => (
             <div key={tag} className="flex items-center gap-[4px] bg-[#f0f6ff] text-[#0f6beb] text-[12px] px-[8px] py-[4px] rounded-[6px]">
               <span className="leading-[16px]">{tag}</span>
@@ -64,10 +73,17 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
             value={inputValue}
             onChange={(e) => setTagInputState(prev => ({ ...prev, [fieldKey]: e.target.value }))}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
+              const isImeComposing = isComposingRef.current || (e.nativeEvent as any).isComposing;
+              if (e.key === "Enter" && !isImeComposing) {
                 e.preventDefault();
                 addTag();
               }
+            }}
+            onCompositionStart={() => {
+              isComposingRef.current = true;
+            }}
+            onCompositionEnd={() => {
+              isComposingRef.current = false;
             }}
             placeholder={tags.length === 0 ? placeholder : "按 Enter 新增標籤"}
             maxLength={50}

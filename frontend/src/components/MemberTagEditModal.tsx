@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, KeyboardEvent } from 'react';
+import { useState, useEffect, useMemo, useRef, KeyboardEvent } from 'react';
 import svgPaths from '../imports/svg-pen3bccldb';
 import { useToast } from './ToastProvider';
 import { Tag } from './common';
@@ -25,6 +25,7 @@ export default function MemberTagEditModal({
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<TabType>('member');
   const [searchInput, setSearchInput] = useState('');
+  const isComposingRef = useRef(false);
   const [selectedMemberTags, setSelectedMemberTags] = useState<string[]>([]);
   const [selectedInteractionTags, setSelectedInteractionTags] = useState<string[]>([]);
 
@@ -185,7 +186,8 @@ export default function MemberTagEditModal({
 
   // Handle Enter key in search input
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && searchInput.trim()) {
+    const isImeComposing = isComposingRef.current || (e.nativeEvent as any).isComposing;
+    if (e.key === 'Enter' && !isImeComposing && searchInput.trim()) {
       handleCreateTag();
     }
   };
@@ -247,6 +249,12 @@ export default function MemberTagEditModal({
                             value={searchInput}
                             onChange={(e) => setSearchInput(e.target.value)}
                             onKeyDown={handleKeyDown}
+                            onCompositionStart={() => {
+                              isComposingRef.current = true;
+                            }}
+                            onCompositionEnd={() => {
+                              isComposingRef.current = false;
+                            }}
                             placeholder="輸入或按 Enter 新增標籤，可多組輸入"
                             maxLength={20}
                             className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] flex-1 text-[#383838] text-[20px] outline-none placeholder:text-[#a8a8a8] min-w-0"
