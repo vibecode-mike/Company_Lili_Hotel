@@ -18,6 +18,7 @@ interface FBConfigPanelProps {
 export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpdateAllBubbles, onDuplicateBubble, canDuplicate }: FBConfigPanelProps) {
   const [tagInputState, setTagInputState] = useState<Record<string, string>>({});
   const isComposingRef = useRef(false);
+  const requiredTitlePlaceholder = "標題文字";
 
   const splitTags = (value?: string) =>
     (value || "")
@@ -128,7 +129,8 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
   const heroActionPayload = (bubble._metadata as any)?.heroActionPayload || "";
   const titleText = titleElement?.text || "";
   const fullSubtitleText = subtitleElement?.text || "";
-  const isTitleInvalid = titleText.trim() === "";
+  const normalizedTitleText = titleText.trim();
+  const isTitleInvalid = normalizedTitleText === "" || normalizedTitleText === requiredTitlePlaceholder;
 
   // Parse subtitle and price from the combined text
   const subtitleParts = fullSubtitleText.split('\n');

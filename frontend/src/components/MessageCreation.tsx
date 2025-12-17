@@ -817,7 +817,10 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         return false;
       }
 
-      const invalidIndex = elements.findIndex((el: any) => String(el?.title ?? '').trim() === '');
+      const invalidIndex = elements.findIndex((el: any) => {
+        const title = String(el?.title ?? '').trim();
+        return title === '' || title === '標題文字';
+      });
       if (invalidIndex !== -1) {
         toast.error(`Facebook 模板第 ${invalidIndex + 1} 個卡片：標題文字為必填`);
         return false;
