@@ -810,6 +810,19 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         toast.error('請先編輯 Facebook 訊息內容');
         return false;
       }
+
+      const elements = (fbMessageJson as any)?.attachment?.payload?.elements;
+      if (!Array.isArray(elements) || elements.length === 0) {
+        toast.error('請先編輯 Facebook 訊息內容');
+        return false;
+      }
+
+      const invalidIndex = elements.findIndex((el: any) => String(el?.title ?? '').trim() === '');
+      if (invalidIndex !== -1) {
+        toast.error(`Facebook 模板第 ${invalidIndex + 1} 個卡片：標題文字為必填`);
+        return false;
+      }
+
       return !hasError;
     }
 

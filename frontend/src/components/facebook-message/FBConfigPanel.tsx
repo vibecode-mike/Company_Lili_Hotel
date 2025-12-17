@@ -117,7 +117,6 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
   const titleElement = allTextElements.find((c: any) => c.size === "xl" && c.weight === "bold");
   const subtitleElement = allTextElements.find((c: any) => c.size === "sm" && c.color === "#666666");
 
-  const hasTitle = !!titleElement;
   const hasSubtitle = !!subtitleElement;
   const buttons = bubble.footer?.contents.filter((c: any) => c.type === "button") || [];
 
@@ -129,6 +128,7 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
   const heroActionPayload = (bubble._metadata as any)?.heroActionPayload || "";
   const titleText = titleElement?.text || "";
   const fullSubtitleText = subtitleElement?.text || "";
+  const isTitleInvalid = titleText.trim() === "";
 
   // Parse subtitle and price from the combined text
   const subtitleParts = fullSubtitleText.split('\n');
@@ -433,95 +433,6 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
             ...updated.body.contents[descIdx],
             text: currSubtitle,
           };
-        }
-      }
-
-      // Update hero aspect ratio based on content
-      if (updated.hero) {
-        updated.hero.aspectRatio = hasAnyContent(updated) ? "1.91:1" : "1:1";
-      }
-
-      return updated;
-    });
-
-    onUpdateAllBubbles(updatedBubbles);
-  };
-
-  const toggleTitle = (checked: boolean) => {
-    if (!isFirstBubble) return; // Only allow toggling on first bubble
-
-    const newBubble = JSON.parse(JSON.stringify(bubble));
-    if (!newBubble.body) {
-      newBubble.body = {
-        type: "box",
-        layout: "vertical",
-        contents: [],
-      };
-    }
-
-    if (checked) {
-      // Check if title already exists
-      const titleExists = newBubble.body.contents.some((c: any) =>
-        c.type === "text" && c.size === "xl" && c.weight === "bold"
-      );
-      if (titleExists) return;
-
-      // Add title at the beginning
-      newBubble.body.contents.unshift({
-        type: "text",
-        text: "標題文字",
-        weight: "bold",
-        size: "xl",
-      });
-    } else {
-      // Remove title (identified by size: "xl" and weight: "bold")
-      const titleIndex = newBubble.body.contents.findIndex((c: any) =>
-        c.type === "text" && c.size === "xl" && c.weight === "bold"
-      );
-      if (titleIndex !== -1) {
-        newBubble.body.contents.splice(titleIndex, 1);
-      }
-    }
-
-    // Update hero aspect ratio based on content
-    if (newBubble.hero) {
-      newBubble.hero.aspectRatio = hasAnyContent(newBubble) ? "1.91:1" : "1:1";
-    }
-
-    // Sync structure to all other bubbles
-    const updatedBubbles = allBubbles.map((b, idx) => {
-      if (idx === 0) return newBubble;
-      const updated = JSON.parse(JSON.stringify(b));
-
-      if (!updated.body) {
-        updated.body = {
-          type: "box",
-          layout: "vertical",
-          contents: [],
-        };
-      }
-
-      if (checked) {
-        // Check if title already exists
-        const titleExists = updated.body.contents.some((c: any) =>
-          c.type === "text" && c.size === "xl" && c.weight === "bold"
-        );
-        if (titleExists) return updated;
-
-        // Add title to other bubbles at the beginning
-        updated.body.contents.unshift({
-          type: "text",
-          text: "標題文字",
-          weight: "bold",
-          size: "xl",
-        });
-      } else {
-        // Remove title from other bubbles (identified by size: "xl" and weight: "bold")
-        const titleIdx = updated.body.contents.findIndex((c: any) =>
-          c.type === "text" && c.size === "xl" && c.weight === "bold"
-        );
-        if (titleIdx !== -1) {
-          updated.body.contents.splice(titleIdx, 1);
         }
       }
 
@@ -1102,34 +1013,29 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
 
       {/* Title Section */}
       <div className="flex flex-col gap-[12px]">
-        <div className="flex items-center gap-[8px]">
-          <Checkbox
-            id="show-title"
-            checked={hasTitle}
-            onCheckedChange={toggleTitle}
-            disabled={!isFirstBubble}
-            className="size-[16px]"
-          />
-          <span className={`text-[14px] leading-[20px] ${isFirstBubble ? "text-neutral-950 cursor-pointer" : "text-neutral-400 cursor-not-allowed"}`}>標題文字</span>
+        <div className="flex items-center gap-[4px]">
+          <span className="text-[14px] leading-[20px] text-neutral-950">標題文字</span>
+          <span className="text-[14px] leading-[20px] text-[#f44336]">*</span>
         </div>
 
-        {hasTitle && (
-          <div className="flex flex-col gap-[2px]">
-            <div className="relative">
-              <input
-                type="text"
-                value={titleText}
-                onChange={(e) => updateTitle(e.target.value)}
-                placeholder="輸入標題文字"
-                maxLength={80}
-                className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-300 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
-              />
-              <span className="absolute right-[12px] top-[10px] text-[12px] leading-[16px] text-[#6a7282]">
-                {titleText.length}/80
-              </span>
-            </div>
+        <div className="flex flex-col gap-[2px]">
+          <div className="relative">
+            <input
+              type="text"
+              value={titleText}
+              onChange={(e) => updateTitle(e.target.value)}
+              placeholder="輸入標題文字"
+              maxLength={80}
+              aria-invalid={isTitleInvalid}
+              className={`w-full h-[36px] px-[12px] rounded-[10px] border text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 transition-all ${
+                isTitleInvalid ? "border-[#f44336] focus:ring-[#f44336]/30" : "border-neutral-300 focus:ring-[#0f6beb]"
+              }`}
+            />
+            <span className="absolute right-[12px] top-[10px] text-[12px] leading-[16px] text-[#6a7282]">
+              {titleText.length}/80
+            </span>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Subtitle Section */}

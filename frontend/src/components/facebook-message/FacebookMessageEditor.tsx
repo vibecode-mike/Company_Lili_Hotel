@@ -60,6 +60,9 @@ const createDefaultBubble = (): FlexBubble => ({
 const convertFromMessengerFormat = (json: MessengerMessage): FlexBubble[] => {
   const elements = json.attachment?.payload?.elements || [];
   return elements.map((element: any) => {
+    const titleText = typeof element.title === "string" ? element.title : "標題文字";
+    const subtitleText = typeof element.subtitle === "string" ? element.subtitle : "";
+
     const bubble: FlexBubble = {
       type: "bubble",
       body: {
@@ -68,13 +71,13 @@ const convertFromMessengerFormat = (json: MessengerMessage): FlexBubble[] => {
         contents: [
           {
             type: "text",
-            text: element.title || "標題文字",
+            text: titleText,
             weight: "bold",
             size: "xl",
           },
           {
             type: "text",
-            text: element.subtitle || "",
+            text: subtitleText,
             wrap: true,
             color: "#666666",
             size: "sm",
@@ -243,6 +246,16 @@ export function FacebookMessageEditor({ onJsonChange, initialJson }: FacebookMes
             return item;
           }),
         };
+
+        const hasTitle = newBubble.body.contents.some((item: any) => item?.type === "text" && item?.size === "xl");
+        if (!hasTitle) {
+          newBubble.body.contents.unshift({
+            type: "text",
+            text: "標題文字",
+            weight: "bold",
+            size: "xl",
+          });
+        }
       }
 
       // Copy footer structure (button count and styles) - max 3 buttons for Facebook
