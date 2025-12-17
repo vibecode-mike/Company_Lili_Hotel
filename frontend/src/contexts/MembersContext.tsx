@@ -58,9 +58,11 @@ const transformBackendMember = (item: BackendMember): Member => {
     .map((tag: BackendTag) => tag.name);
   const combinedTags = Array.from(new Set([...(memberTags || []), ...(interactionTags || [])]));
 
+  const displayName = item.line_display_name || '';
+
   return {
     id: item.id?.toString() ?? '',
-    username: item.line_name || item.name || '未命名會員',
+    username: displayName || item.name || '未命名會員',
     realName: item.name || '',
     tags: combinedTags,
     memberTags,

@@ -23,13 +23,13 @@ async def main():
 
         print("\n=== 詳細會員列表 ===\n")
         result = await session.execute(
-            select(Member.id, Member.name, Member.line_name, Member.join_source)
+            select(Member.id, Member.name, Member.line_display_name, Member.join_source)
             .order_by(Member.id)
         )
         members = result.all()
 
-        for member_id, name, line_name, join_source in members:
-            print(f"ID {member_id}: {name or line_name} - join_source: {join_source}")
+        for member_id, name, line_display_name, join_source in members:
+            print(f"ID {member_id}: {name or line_display_name} - join_source: {join_source}")
 
 if __name__ == "__main__":
     asyncio.run(main())

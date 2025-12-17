@@ -110,7 +110,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
 
   const lineUid = getMemberString(member, ['lineUid', 'line_uid'], '');
   const joinSource = getMemberString(member, ['join_source'], 'LINE');
-  const lineName = getMemberString(member, ['lineName', 'line_name'], '');
+  const lineName = getMemberString(member, ['lineDisplayName', 'line_display_name', 'lineName'], '');
   const [channelName, setChannelName] = React.useState<string>('LINE');
 
   React.useEffect(() => {

@@ -71,16 +71,17 @@ async def test_get_chat_messages_by_platform():
     async_session.add(member)
     async_session.add_all(
         [
-            ConversationThread(id="LINE:U1", member_id=1, platform="LINE", platform_uid="U1"),
-            ConversationThread(id="Facebook:F1", member_id=1, platform="Facebook", platform_uid="F1"),
-            ConversationThread(id="Webchat:W1", member_id=1, platform="Webchat", platform_uid="W1"),
+            # thread_id uses platform_uid; platform is stored in a separate column.
+            ConversationThread(id="U1", member_id=1, platform="LINE", platform_uid="U1"),
+            ConversationThread(id="F1", member_id=1, platform="Facebook", platform_uid="F1"),
+            ConversationThread(id="W1", member_id=1, platform="Webchat", platform_uid="W1"),
         ]
     )
     async_session.add_all(
         [
             ConversationMessage(
                 id=str(uuid.uuid4()),
-                thread_id="LINE:U1",
+                thread_id="U1",
                 platform="LINE",
                 direction="incoming",
                 question="hello line",
@@ -88,7 +89,7 @@ async def test_get_chat_messages_by_platform():
             ),
             ConversationMessage(
                 id=str(uuid.uuid4()),
-                thread_id="Facebook:F1",
+                thread_id="F1",
                 platform="Facebook",
                 direction="incoming",
                 question="hello fb",

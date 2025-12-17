@@ -58,7 +58,7 @@ async def get_members(
                 Member.name.like(search_pattern, escape='\\'),
                 Member.email.like(search_pattern, escape='\\'),
                 Member.phone.like(search_pattern, escape='\\'),
-                Member.line_name.like(search_pattern, escape='\\'),
+                Member.line_display_name.like(search_pattern, escape='\\'),
             )
         )
 
@@ -271,7 +271,7 @@ async def get_member(
     member_data = {
         "id": member.id,
         "line_uid": member.line_uid,
-        "line_name": member.line_name,
+        "line_display_name": member.line_display_name,
         "line_avatar": member.line_avatar,
         "channel_id": channel_id,
         "name": member.name,

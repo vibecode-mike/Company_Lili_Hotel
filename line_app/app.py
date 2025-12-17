@@ -368,6 +368,28 @@ def fetch_line_profile(user_id: str) -> tuple[Optional[str], Optional[str]]:
         pass
     return None, None
 
+
+def fetch_member_profile(line_uid: str) -> dict:
+    """
+    從 members 表抓 LINE 顯示名稱/頭像（已統一欄位：line_display_name / line_avatar）。
+
+    回傳 keys：
+      - line_display_name
+      - line_avatar
+    """
+    line_uid = (line_uid or "").strip()
+    if not line_uid:
+        return {}
+
+    sql = """
+        SELECT line_display_name, line_avatar
+        FROM members
+        WHERE line_uid=:u
+        LIMIT 1
+    """
+    return fetchone(sql, {"u": line_uid}) or {}
+
+
 # 補使用者line資料
 def maybe_update_member_profile(uid: str) -> None:
     """
@@ -375,14 +397,9 @@ def maybe_update_member_profile(uid: str) -> None:
     抓不到（None）時不覆蓋，以避免把舊值清空。
     """
     try:
-        row = fetchone("""
-            SELECT line_name, line_picture_url
-            FROM members
-            WHERE line_uid = :uid
-        """, {"uid": uid})
-
-        has_name = bool(row and row.get("line_name"))
-        has_pic  = bool(row and row.get("line_picture_url"))
+        row = fetch_member_profile(uid)
+        has_name = bool(row and row.get("line_display_name"))
+        has_pic = bool(row and row.get("line_avatar"))
         if has_name and has_pic:
             return  # 都有就不打 API
 
@@ -560,7 +577,7 @@ def insert_conversation_message(*, thread_id: str, role: str, direction: str,
 # members：會員基本資料 upsert
 # 會同時處理：
 #   - line_uid
-#   - line_name / line_avatar（對應 LINE displayName / pictureUrl）
+#   - line_display_name / line_avatar（對應 LINE displayName / pictureUrl）
 #   - join_source（預設 "LINE"）
 #   - 其他問卷欄位（gender / birthday / email / phone ...）
 # --------------------------------------------
@@ -593,17 +610,11 @@ def upsert_member(line_uid: str,
 
     # display name
     if display_name is not None:
-        if _table_has("members", "line_name"):
-            add("line_name", "dn", display_name)
-        elif _table_has("members", "line_display_name"):
-            add("line_display_name", "dn", display_name)
+        add("line_display_name", "dn", display_name)
 
     # avatar
     if picture_url is not None:
-        if _table_has("members", "line_avatar"):
-            add("line_avatar", "pu", picture_url)
-        elif _table_has("members", "line_picture_url"):
-            add("line_picture_url", "pu", picture_url)
+        add("line_avatar", "pu", picture_url)
 
     # form fields
     add("gender", "g", gender)
@@ -638,8 +649,8 @@ def upsert_member(line_uid: str,
     # UPDATE part
     set_parts = []
     for k in (
-        "line_name", "line_display_name",
-        "line_avatar", "line_picture_url",
+        "line_display_name",
+        "line_avatar",
         "gender", "birthday", "email", "phone",
         "join_source", "source",
         "name", "id_number", "passport_number",    # ← 新增
@@ -2514,6 +2525,12 @@ def __track():
 
     # ---- 3) upsert：不再用 FIND_IN_SET；直接寫入合併後的 merged_str ----
     try:
+        member_display_subq = (
+            f"(SELECT m.line_display_name FROM `{MYSQL_DB}`.`members` m WHERE m.line_uid = :uid LIMIT 1)"
+        )
+        insert_display_expr = f"COALESCE(:dname, {member_display_subq})"
+        update_display_expr = f"COALESCE(:dname, {member_display_subq}, line_display_name)"
+
         execute(f"""
             INSERT INTO `{MYSQL_DB}`.`click_tracking_demo`
                 (line_id, source_campaign_id, line_display_name, total_clicks, last_clicked_at, last_click_tag)
@@ -2521,18 +2538,14 @@ def __track():
                 (
                     :uid,
                     :src,
-                    COALESCE(:dname, (SELECT m.line_name FROM `{MYSQL_DB}`.`members` m WHERE m.line_uid = :uid LIMIT 1)),
+                    {insert_display_expr},
                     1,
                     NOW(),
                     :merged
                 )
             ON DUPLICATE KEY UPDATE
                 total_clicks = 1,
-                line_display_name = COALESCE(
-                    :dname,
-                    (SELECT m.line_name FROM `{MYSQL_DB}`.`members` m WHERE m.line_uid = :uid LIMIT 1),
-                    line_display_name
-                ),
+                line_display_name = {update_display_expr},
                 last_click_tag = :merged,
                 last_clicked_at = NOW();
         """, {"uid": uid, "src": src, "dname": display_name, "merged": merged_str})
@@ -2896,7 +2909,7 @@ def api_member_form_submit():
     try:
         dn, pu = fetch_line_profile(uid)
     except Exception:
-        dn = answers.get("line_name") or None
+        dn = answers.get("line_display_name") or None
         pu = answers.get("line_avatar") or None
 
     # 3) 先更新 members
@@ -3145,13 +3158,10 @@ def on_postback(event: PostbackEvent):
     data = getattr(event.postback, "data", "") if getattr(event, "postback", None) else ""
     if uid:
         try:
-            cur = fetchone(
-                "SELECT line_name, line_picture_url FROM members WHERE line_uid=:u",
-                {"u": uid}
-            ) or {}
+            cur = fetch_member_profile(uid) or {}
             api_dn, api_pu = fetch_line_profile(uid)
-            dn_to_write = api_dn if (api_dn and api_dn != cur.get("line_name")) else None
-            pu_to_write = api_pu if (api_pu and api_pu != cur.get("line_picture_url")) else None
+            dn_to_write = api_dn if (api_dn and api_dn != cur.get("line_display_name")) else None
+            pu_to_write = api_pu if (api_pu and api_pu != cur.get("line_avatar")) else None
 
             # 1) 一樣先處理 members（問卷用的那張表）
             mid = upsert_member(uid, dn_to_write, pu_to_write)
@@ -3162,7 +3172,7 @@ def on_postback(event: PostbackEvent):
                 line_uid=uid,
                 # 優先用 API 最新 profile，沒有就退回 DB 原本的值
                 display_name=api_dn or cur.get("line_display_name"),
-                picture_url=api_pu or cur.get("line_picture_url"),
+                picture_url=api_pu or cur.get("line_avatar"),
                 member_id=mid,
                 is_following=True,
             )
@@ -3220,12 +3230,9 @@ def on_text(event: MessageEvent):
     if uid:
         try:
             # 讀取現有 DB 資料
-            cur = fetchone(
-                "SELECT line_name, line_picture_url FROM members WHERE line_uid=:u",
-                {"u": uid}
-            ) or {}
-            cur_dn = cur.get("line_name")
-            cur_pu = cur.get("line_picture_url")
+            cur = fetch_member_profile(uid) or {}
+            cur_dn = cur.get("line_display_name")
+            cur_pu = cur.get("line_avatar")
 
             # 從 LINE API 取得最新 profile
             api_dn, api_pu = fetch_line_profile(uid)

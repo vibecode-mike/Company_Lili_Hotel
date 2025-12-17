@@ -27,7 +27,7 @@ export interface BackendMember {
   last_chat_time?: string;
   last_interaction_at?: string;
   line_uid?: string;
-  line_name?: string;
+  line_display_name?: string;
   line_avatar?: string;
   channel_id?: string;
   join_source?: string;

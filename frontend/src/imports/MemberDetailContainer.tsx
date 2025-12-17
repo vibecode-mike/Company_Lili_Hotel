@@ -46,10 +46,12 @@ const mapApiMemberToMemberData = (apiMember: BackendMember, fallback?: MemberDat
       .map((tag: BackendTag) => tag.name) || [];
   const combinedTags = Array.from(new Set([...(memberTags || []), ...(interactionTags || [])]));
 
+  const displayName = apiMember?.line_display_name;
+
   return {
     id: apiMember?.id?.toString() ?? fallback?.id ?? '',
-    username: apiMember?.line_name || apiMember?.name || fallback?.username || '未命名會員',
-    realName: apiMember?.name || fallback?.realName || apiMember?.line_name || '未命名會員',
+    username: displayName || apiMember?.name || fallback?.username || '未命名會員',
+    realName: apiMember?.name || fallback?.realName || displayName || '未命名會員',
     tags: combinedTags,
     memberTags,
     interactionTags,

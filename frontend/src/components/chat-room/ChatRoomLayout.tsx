@@ -273,7 +273,7 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
     const overrides: Partial<Member> = {};
     if (currentPlatform === 'LINE') {
       overrides.avatar = member.lineAvatar || member.line_avatar;
-      overrides.username = member.line_name || member.username;
+      overrides.username = member.line_display_name || member.username;
     } else if (currentPlatform === 'Facebook') {
       overrides.avatar = (member as any).fb_avatar;
       overrides.username = (member as any).fb_name || member.username;

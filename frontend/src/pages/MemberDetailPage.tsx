@@ -44,7 +44,7 @@ export default function MemberDetailPage() {
       case 'LINE':
         return {
           avatar: member.lineAvatar || (member as any).line_avatar,
-          name: (member as any).line_name || member.username
+          name: (member as any).line_display_name || member.username
         };
       case 'Facebook':
         return {

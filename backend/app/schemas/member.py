@@ -49,7 +49,7 @@ class MemberListItem(BaseModel):
 
     id: int
     line_uid: Optional[str] = None
-    line_name: Optional[str] = None  # 改名為 line_name
+    line_display_name: Optional[str] = None
     line_avatar: Optional[str] = None  # 改名為 line_avatar
     channel_id: Optional[str] = None  # LINE channel ID
     name: Optional[str] = None  # 統一單欄位
