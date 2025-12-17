@@ -1029,9 +1029,10 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
               placeholder="輸入標題文字"
               maxLength={80}
               aria-invalid={isTitleInvalid}
-              className={`w-full h-[36px] px-[12px] rounded-[10px] border text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 transition-all ${
-                isTitleInvalid ? "border-[#f44336] focus:ring-[#f44336]/30" : "border-neutral-300 focus:ring-[#0f6beb]"
+              className={`w-full h-[36px] px-[12px] rounded-[10px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 transition-all ${
+                isTitleInvalid ? "border-2 focus:ring-[#f44336]/30" : "border border-neutral-300 focus:ring-[#0f6beb]"
               }`}
+              style={isTitleInvalid ? { borderColor: "#f44336", borderWidth: "2px" as const } : undefined}
             />
             <span className="absolute right-[12px] top-[10px] text-[12px] leading-[16px] text-[#6a7282]">
               {titleText.length}/80
