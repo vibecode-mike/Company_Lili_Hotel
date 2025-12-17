@@ -172,13 +172,14 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange, status
           </div>
 
           {/* 已開啟次數 */}
-          <div 
+          <div
             className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[120px] cursor-pointer"
             onClick={() => onSortChange('openCount')}
           >
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">已開啟次數</p>
             </div>
+            <SortIcon active={isActive('openCount')} order={sortConfig.order} />
             <TooltipProvider>
               <Tooltip delayDuration={0}>
                 <TooltipTrigger asChild>
@@ -194,7 +195,6 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange, status
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            <SortIcon active={isActive('openCount')} order={sortConfig.order} />
           </div>
 
           {/* Divider */}
@@ -207,13 +207,14 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange, status
           </div>
 
           {/* 點擊次數 */}
-          <div 
+          <div
             className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px] cursor-pointer"
             onClick={() => onSortChange('clickCount')}
           >
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">點擊次數</p>
             </div>
+            <SortIcon active={isActive('clickCount')} order={sortConfig.order} />
             <TooltipProvider>
               <Tooltip delayDuration={0}>
                 <TooltipTrigger asChild>
@@ -229,7 +230,6 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange, status
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            <SortIcon active={isActive('clickCount')} order={sortConfig.order} />
           </div>
 
           {/* Divider */}
@@ -242,18 +242,19 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange, status
           </div>
 
           {/* 時間欄位 - 動態標籤 */}
-          <div 
+          <div
             className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[150px] cursor-pointer"
             onClick={() => onSortChange('sendTime')}
           >
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">{getTimeColumnLabel()}</p>
             </div>
+            <SortIcon active={isActive('sendTime')} order={sortConfig.order} />
             {statusFilter === '草稿' && (
               <TooltipProvider>
                 <Tooltip delayDuration={0}>
                   <TooltipTrigger asChild>
-                    <div 
+                    <div
                       className="relative shrink-0 size-[24px]"
                       onClick={(e) => e.stopPropagation()}
                     >
@@ -266,7 +267,6 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange, status
                 </Tooltip>
               </TooltipProvider>
             )}
-            <SortIcon active={isActive('sendTime')} order={sortConfig.order} />
           </div>
         </div>
       </div>
