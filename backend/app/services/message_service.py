@@ -13,7 +13,7 @@ import os
 
 from app.models.message import Message
 from app.models.template import MessageTemplate
-from app.models.tag import InteractionTag
+from app.models.tracking import ComponentInteractionLog, InteractionType
 from app.adapters.line_app_adapter import LineAppAdapter
 from app.clients.line_app_client import LineAppClient
 from app.core.pagination import PageResponse
@@ -442,13 +442,15 @@ class MessageService:
         result = await db.execute(query)
         messages = result.scalars().all()
 
-        # 為每條訊息計算 click_count
+        # 為每條訊息計算 click_count（依規格：從 component_interaction_logs 動態統計）
         message_items = []
+        click_counts_by_message_id = await self.get_messages_click_counts(
+            db,
+            [int(m.id) for m in messages if m and m.id is not None],
+        )
         for message in messages:
             item = MessageListItem.model_validate(message)
-            # 計算該訊息的點擊次數（互動標籤 trigger_member_count 加總）
-            click_count = await self.get_message_click_count(db, message.id)
-            item.click_count = click_count
+            item.click_count = int(click_counts_by_message_id.get(int(message.id), 0))
             message_items.append(item)
 
         page_response = PageResponse[MessageListItem].create(
@@ -866,36 +868,47 @@ class MessageService:
         db: AsyncSession,
         message_id: int
     ) -> int:
-        """获取消息的点击次数（互動標籤的 trigger_member_count 加總）
+        """获取消息的点击次数（依規格：從 ComponentInteractionLog 統計）
 
         Args:
             db: 数据库 session
             message_id: 消息 ID
 
         Returns:
-            点击次数总计（各互動標籤的 trigger_member_count 加總）
+            點擊次數（不重複 line_id，僅計算 interaction_type='button_url'）
         """
-        # 1. 先取得訊息的 interaction_tags
-        msg_stmt = select(Message.interaction_tags).where(Message.id == message_id)
-        msg_result = await db.execute(msg_stmt)
-        interaction_tags_json = msg_result.scalar_one_or_none()
+        counts = await self.get_messages_click_counts(db, [int(message_id)])
+        return int(counts.get(int(message_id), 0))
 
-        if not interaction_tags_json:
-            return 0
+    async def get_messages_click_counts(
+        self,
+        db: AsyncSession,
+        message_ids: List[int],
+    ) -> Dict[int, int]:
+        """批量获取消息点击次数（依規格：從 ComponentInteractionLog 統計）"""
+        normalized_ids = [int(mid) for mid in message_ids if mid is not None]
+        if not normalized_ids:
+            return {}
 
-        # 2. 查詢這些標籤的 trigger_member_count 加總
-        tag_names = interaction_tags_json  # JSON 已經是 list
-        if not tag_names:
-            return 0
-
-        stmt = select(func.sum(InteractionTag.trigger_member_count)).where(
-            InteractionTag.tag_name.in_(tag_names)
+        stmt = (
+            select(
+                ComponentInteractionLog.message_id.label("message_id"),
+                func.count(func.distinct(ComponentInteractionLog.line_id)).label(
+                    "unique_clicks"
+                ),
+            )
+            .where(
+                ComponentInteractionLog.message_id.in_(normalized_ids),
+                ComponentInteractionLog.interaction_type == InteractionType.BUTTON_URL,
+            )
+            .group_by(ComponentInteractionLog.message_id)
         )
-        result = await db.execute(stmt)
-        total = result.scalar() or 0
 
-        logger.debug(f"📊 消息 ID={message_id} 點擊次數: {total} (來自標籤: {tag_names})")
-        return total
+        result = await db.execute(stmt)
+        counts: Dict[int, int] = {int(row.message_id): int(row.unique_clicks or 0) for row in result.all()}
+        for mid in normalized_ids:
+            counts.setdefault(int(mid), 0)
+        return counts
 
     async def delete_message(
         self,

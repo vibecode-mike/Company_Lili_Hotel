@@ -320,13 +320,16 @@ const MessageRow = memo(function MessageRow({
     <div className={`bg-white relative shrink-0 w-full ${isLast ? 'rounded-bl-[16px] rounded-br-[16px]' : ''}`}>
       <div aria-hidden="true" className={`absolute border-[#dddddd] ${isLast ? 'border-0' : 'border-[0px_0px_1px]'} border-solid inset-0 pointer-events-none ${isLast ? 'rounded-bl-[16px] rounded-br-[16px]' : ''}`} />
       <div className="flex flex-row items-center size-full">
-        <div className="box-border content-stretch flex items-center p-[12px] relative w-full">
+        <div className="box-border content-stretch flex items-center pb-[12px] pt-[12px] px-[12px] relative w-full">
           {/* 訊息標題 */}
           <div className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[200px]">
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
               <p className="leading-[1.5] truncate">{message.title}</p>
             </div>
           </div>
+
+          {/* Spacer */}
+          <div className="h-[12px] relative shrink-0 w-0" />
 
           {/* 互動標籤 */}
           <div className="box-border content-stretch flex flex-wrap gap-[4px] items-start px-[12px] py-0 relative shrink-0 w-[160px]">
@@ -337,6 +340,9 @@ const MessageRow = memo(function MessageRow({
             ))}
           </div>
 
+          {/* Spacer */}
+          <div className="h-[12px] relative shrink-0 w-0" />
+
           {/* 平台 */}
           <div className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px]">
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
@@ -346,6 +352,9 @@ const MessageRow = memo(function MessageRow({
             </div>
           </div>
 
+          {/* Spacer */}
+          <div className="h-[12px] relative shrink-0 w-0" />
+
           {/* 狀態 */}
           <div className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px]">
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
@@ -354,12 +363,18 @@ const MessageRow = memo(function MessageRow({
             {(message.status === '已排程' || message.status === '已發送') && <CheckSuccess />}
           </div>
 
+          {/* Spacer */}
+          <div className="h-[12px] relative shrink-0 w-0" />
+
           {/* 發送人數 */}
           <div className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px]">
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[24px]">{message.sentCount}</p>
             </div>
           </div>
+
+          {/* Spacer */}
+          <div className="h-[12px] relative shrink-0 w-0" />
 
           {/* 已開啟次數 */}
           <div className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[150px]">
@@ -368,12 +383,18 @@ const MessageRow = memo(function MessageRow({
             </div>
           </div>
 
+          {/* Spacer */}
+          <div className="h-[12px] relative shrink-0 w-0" />
+
           {/* 點擊次數 */}
           <div className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[130px]">
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[24px]">{message.clickCount}</p>
             </div>
           </div>
+
+          {/* Spacer */}
+          <div className="h-[12px] relative shrink-0 w-0" />
 
           {/* 時間欄位 - 動態標籤 */}
           <div className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[180px]">

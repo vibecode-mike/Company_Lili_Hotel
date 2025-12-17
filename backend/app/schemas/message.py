@@ -248,7 +248,7 @@ class MessageListItem(BaseModel):
     platform: str = "LINE"  # 平台名稱（目前固定為 LINE）
     send_count: int = 0  # 傳送人數
     open_count: int = 0  # 開啟次數（不重複）
-    click_count: int = 0  # 點擊次數（互動標籤 trigger_member_count 加總）
+    click_count: int = 0  # 點擊次數（依規格：從 ComponentInteractionLog 統計）
     open_rate: Optional[float] = None
     click_rate: Optional[float] = None
     scheduled_at: Optional[datetime] = Field(
