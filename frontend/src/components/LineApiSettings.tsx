@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import Sidebar from './Sidebar';
-import LineApiSettingsContent from './LineApiSettingsContent';
+import BasicSettings from './BasicSettings';
 import { useLineChannelStatus } from '../contexts/LineChannelStatusContext';
 
 interface LineApiSettingsProps {
@@ -36,7 +36,7 @@ export default function LineApiSettings({
 
       {/* Main Content Area - offset by sidebar width */}
       <main className={`flex-1 overflow-auto bg-slate-50 transition-all duration-300 ${sidebarOpen ? 'ml-[330px] lg:ml-[280px] md:ml-[250px]' : 'ml-[72px]'}`}>
-        <LineApiSettingsContent />
+        <BasicSettings />
       </main>
     </div>
   );
