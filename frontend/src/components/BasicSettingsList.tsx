@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useState, useMemo } from 'react';
 import { ChannelStatusBadge } from './ChannelStatusBadge';
 
 export interface ChannelAccount {
@@ -64,6 +64,27 @@ const MessengerIcon = memo(function MessengerIcon() {
   );
 });
 
+// Sort order type
+type SortOrder = 'asc' | 'desc';
+
+// 排序圖標組件 - 與 InteractiveMessageTable.tsx 相同
+const SortIcon = memo(function SortIcon({ order }: { order: SortOrder }) {
+  return (
+    <div className="overflow-clip shrink-0 size-[20px] relative">
+      <div
+        className={`absolute h-[8px] left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%] w-[12px] ${order === 'asc' ? 'rotate-180' : ''}`}
+      >
+        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 8">
+          <path
+            d="M0.666667 8H3.33333C3.7 8 4 7.7 4 7.33333C4 6.96667 3.7 6.66667 3.33333 6.66667H0.666667C0.3 6.66667 0 6.96667 0 7.33333C0 7.7 0.3 8 0.666667 8ZM0 0.666667C0 1.03333 0.3 1.33333 0.666667 1.33333H11.3333C11.7 1.33333 12 1.03333 12 0.666667C12 0.3 11.7 0 11.3333 0H0.666667C0.3 0 0 0.3 0 0.666667ZM0.666667 4.66667H7.33333C7.7 4.66667 8 4.36667 8 4C8 3.63333 7.7 3.33333 7.33333 3.33333H0.666667C0.3 3.33333 0 3.63333 0 4C0 4.36667 0.3 4.66667 0.666667 4.66667Z"
+            fill="#0F6BEB"
+          />
+        </svg>
+      </div>
+    </div>
+  );
+});
+
 /**
  * 基本設定帳號列表表格
  * 設計來源: Member Management_v0.1/3.png, 4.png, 6.jpg
@@ -73,6 +94,23 @@ export const BasicSettingsList = memo(function BasicSettingsList({
   onAddAccount,
   onReauthorize
 }: BasicSettingsListProps) {
+  // Sort state - default to descending (newest first)
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+
+  // Toggle sort order
+  const handleSort = () => {
+    setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
+  };
+
+  // Sort accounts by lastVerified
+  const sortedAccounts = useMemo(() => {
+    return [...accounts].sort((a, b) => {
+      const timeA = new Date(a.lastVerified).getTime();
+      const timeB = new Date(b.lastVerified).getTime();
+      return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
+    });
+  }, [accounts, sortOrder]);
+
   return (
     <div className="bg-[#f6f9fd] min-h-screen w-full">
       <div className="max-w-[1240px] mx-auto px-[40px] pt-[48px] pb-[80px]">
@@ -152,18 +190,12 @@ export const BasicSettingsList = memo(function BasicSettingsList({
                 {/* Column: 最後驗證時間 */}
                 <div className="basis-0 grow min-h-px min-w-px relative shrink-0">
                   <div className="flex flex-row items-center size-full">
-                    <div className="content-stretch flex gap-[4px] items-center px-[12px] py-0 relative w-full">
+                    <div
+                      className="content-stretch flex gap-[4px] items-center px-[12px] py-0 relative w-full cursor-pointer"
+                      onClick={handleSort}
+                    >
                       <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[#383838] text-[14px] whitespace-nowrap">最後驗證時間</p>
-                      {/* Sorting Icon */}
-                      <svg className="size-[20px]" fill="none" viewBox="0 0 20 20">
-                        <path
-                          d="M7 8L10 5L13 8M7 12L10 15L13 12"
-                          stroke="#0F6BEB"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
+                      <SortIcon order={sortOrder} />
                     </div>
                   </div>
                 </div>
@@ -178,11 +210,11 @@ export const BasicSettingsList = memo(function BasicSettingsList({
           </div>
 
           {/* Table Rows */}
-          {accounts.map((account, index) => (
+          {sortedAccounts.map((account, index) => (
             <div
               key={account.id}
               className={`bg-white relative shrink-0 w-full ${
-                index !== accounts.length - 1 ? 'border-b border-[#ddd]' : ''
+                index !== sortedAccounts.length - 1 ? 'border-b border-[#ddd]' : ''
               }`}
             >
               <div className="flex flex-row items-center size-full">
@@ -238,9 +270,9 @@ export const BasicSettingsList = memo(function BasicSettingsList({
                     {account.status === 'expired' && onReauthorize && (
                       <button
                         onClick={() => onReauthorize(account)}
-                        className="content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 hover:opacity-80 transition-opacity"
+                        className="btn-reauthorize content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 hover:opacity-80 transition-opacity"
                       >
-                        <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[#b71c1c] text-[14px] whitespace-nowrap">
+                        <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[14px] whitespace-nowrap">
                           重新授權
                         </p>
                       </button>

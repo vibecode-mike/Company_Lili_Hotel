@@ -143,7 +143,7 @@ interface MessageCreationProps {
 
 export default function MessageCreation({ onBack, onNavigate, onNavigateToSettings, editMessageId, editMessageData, onDelete }: MessageCreationProps = {}) {
   // Get quota status and refreshAll from MessagesContext
-  const { quotaStatus, refreshAll } = useMessages();
+  const { quotaStatus, quotaLoading, quotaError, refreshAll } = useMessages();
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [templateType, setTemplateType] = useState('select');
@@ -2154,9 +2154,15 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                   </p>
                   <p className="text-[16px] text-[#383838] mt-[10px]">
                     可用訊息則數：
-                    {quotaStatus
-                      ? `${quotaStatus.availableQuota.toLocaleString()} 則`
-                      : '載入中...'}
+                    {quotaLoading
+                      ? '載入中...'
+                      : quotaError
+                        ? quotaError === '請先登入'
+                          ? '請先登入'
+                          : '無法取得'
+                        : quotaStatus
+                          ? `${quotaStatus.availableQuota.toLocaleString()} 則`
+                          : '—'}
                   </p>
                 </div>
               </div>

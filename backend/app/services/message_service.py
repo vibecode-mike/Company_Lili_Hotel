@@ -490,9 +490,12 @@ class MessageService:
             }
         """
         # 1. 计算预计发送人数
-        estimated_count = await self._calculate_target_count(
-            db, target_type, target_filter
-        )
+        try:
+            estimated_count = await self._calculate_target_count(db, target_type, target_filter)
+        except Exception as e:
+            # 容错：若目标人数统计失败（例如资料表尚未建立），仍回传配额资讯避免前端卡在「载入中」
+            logger.error(f"❌ 预计发送人数统计失败: {e}", exc_info=True)
+            estimated_count = 0
 
         logger.info(f"📊 预计发送人数: {estimated_count}")
 

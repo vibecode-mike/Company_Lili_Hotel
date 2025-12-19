@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import "./styles/globals.css";
 
 // Patch removeChild to handle Radix UI Portal cleanup issues
 // Suppresses "node is not a child" errors while ensuring proper cleanup

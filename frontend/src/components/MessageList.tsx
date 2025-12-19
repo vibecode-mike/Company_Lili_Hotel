@@ -245,7 +245,9 @@ const MainContent = memo(function MainContent({
   sentCount,
   scheduledCount,
   draftCount,
-  quotaStatus
+  quotaStatus,
+  quotaLoading,
+  quotaError
 }: {
   onCreateMessage: () => void;
   searchValue: string;
@@ -260,7 +262,23 @@ const MainContent = memo(function MainContent({
   scheduledCount: number;
   draftCount: number;
   quotaStatus: { used: number; monthlyLimit: number; availableQuota: number; quotaType: string } | null;
+  quotaLoading: boolean;
+  quotaError: string | null;
 }) {
+  const quotaText = useMemo(() => {
+    if (quotaLoading) return '載入中...';
+    if (quotaError) return quotaError === '請先登入' ? '請先登入' : '無法取得';
+    if (!quotaStatus) return '—';
+    const usedText = quotaStatus.used.toLocaleString();
+    if (!quotaStatus.monthlyLimit) return `${usedText}/—`;
+    return `${usedText}/${quotaStatus.monthlyLimit.toLocaleString()}`;
+  }, [quotaLoading, quotaError, quotaStatus]);
+
+  const quotaPercent = useMemo(() => {
+    if (!quotaStatus?.monthlyLimit) return 0;
+    return Math.min((quotaStatus.used / quotaStatus.monthlyLimit) * 100, 100);
+  }, [quotaStatus]);
+
   return (
     <div className="basis-0 content-stretch flex flex-col grow items-start min-h-px min-w-px relative shrink-0 w-full" data-name="Main Content">
       {/* Search and Create Button */}
@@ -280,7 +298,7 @@ const MainContent = memo(function MainContent({
                 </div>
                 <div className="content-stretch flex gap-[10px] items-center justify-center relative shrink-0" data-name="Description Text Container">
                   <p className="font-['Noto_Sans_TC:Medium',sans-serif] font-medium leading-[1.5] relative shrink-0 text-[#0f6beb] text-[16px] text-center text-nowrap whitespace-pre">
-                    {quotaStatus ? `${quotaStatus.used.toLocaleString()}/${quotaStatus.monthlyLimit.toLocaleString()}` : '載入中...'}
+                    {quotaText}
                   </p>
                 </div>
               </div>
@@ -288,9 +306,7 @@ const MainContent = memo(function MainContent({
                 <div
                   className="absolute bg-[#3a87f2] h-[8px] left-0 rounded-[80px] top-0 transition-all duration-300"
                   style={{
-                    width: quotaStatus
-                      ? `${Math.min((quotaStatus.used / quotaStatus.monthlyLimit) * 100, 100)}%`
-                      : '0%'
+                    width: `${quotaPercent}%`
                   }}
                   data-name="usage"
                 />
@@ -349,6 +365,8 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
     isLoading,
     statusCounts,
     quotaStatus,
+    quotaLoading,
+    quotaError,
     fetchMessages,
     fetchQuota
   } = useMessages();
@@ -514,6 +532,8 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
               scheduledCount={statusCounts.scheduled}
               draftCount={statusCounts.draft}
               quotaStatus={quotaStatus}
+              quotaLoading={quotaLoading}
+              quotaError={quotaError}
             />
           </div>
         ) : (

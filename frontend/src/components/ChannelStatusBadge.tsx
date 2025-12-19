@@ -23,8 +23,8 @@ export const ChannelStatusBadge = memo(function ChannelStatusBadge({
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="bg-[#ffebee] content-stretch flex items-center justify-center min-w-[32px] px-[8px] py-[4px] relative rounded-[8px] shrink-0 cursor-default">
-            <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[#b71c1c] text-[16px] text-center whitespace-nowrap">
+          <div className="status-badge-expired content-stretch flex items-center justify-center min-w-[32px] px-[8px] py-[4px] relative rounded-[8px] shrink-0 cursor-default">
+            <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[16px] text-center whitespace-nowrap">
               連結已失效
             </p>
           </div>
@@ -43,8 +43,8 @@ export const ChannelStatusBadge = memo(function ChannelStatusBadge({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <div className="bg-[#e4fcea] content-stretch flex items-center justify-center min-w-[32px] px-[8px] py-[4px] relative rounded-[8px] shrink-0 cursor-default">
-          <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[#00470c] text-[16px] text-center whitespace-nowrap">
+        <div className="status-badge-connected content-stretch flex items-center justify-center min-w-[32px] px-[8px] py-[4px] relative rounded-[8px] shrink-0 cursor-default">
+          <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[16px] text-center whitespace-nowrap">
             已連結
           </p>
         </div>

@@ -44,7 +44,7 @@ export const BasicSettingsEmpty = memo(function BasicSettingsEmpty({
           {/* LINE Card */}
           <button
             onClick={onLineClick}
-            className="basis-0 grow min-h-px min-w-px relative bg-white hover:bg-[#f6f9fd] active:bg-[#f6f9fd] transition-colors duration-200 rounded-[16px] shrink-0 p-[20px] group text-left border border-[#e5e7eb]"
+            className="platform-card basis-0 grow min-h-px min-w-px relative rounded-[16px] shrink-0 p-[20px] group text-left border border-[#e5e7eb]"
           >
             <div className="flex flex-row items-center justify-center size-full">
               {/* LINE Icon */}
@@ -95,7 +95,7 @@ export const BasicSettingsEmpty = memo(function BasicSettingsEmpty({
           {/* Facebook Card */}
           <button
             onClick={onFacebookClick}
-            className="basis-0 grow min-h-px min-w-px relative bg-white hover:bg-[#f6f9fd] active:bg-[#f6f9fd] transition-colors duration-200 rounded-[16px] shrink-0 p-[20px] group text-left border border-[#e5e7eb]"
+            className="platform-card basis-0 grow min-h-px min-w-px relative rounded-[16px] shrink-0 p-[20px] group text-left border border-[#e5e7eb]"
           >
             <div className="flex flex-row items-center justify-center size-full">
               {/* Facebook Messenger Icon */}

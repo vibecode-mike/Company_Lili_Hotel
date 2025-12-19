@@ -51,6 +51,8 @@ interface MessagesContextType {
   fetchMessages: () => Promise<void>;
   statusCounts: { sent: number; scheduled: number; draft: number };
   quotaStatus: QuotaStatus | null;
+  quotaLoading: boolean;
+  quotaError: string | null;
   fetchQuota: () => Promise<void>;
   refreshAll: () => Promise<void>;
 }
@@ -91,6 +93,8 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [quotaStatus, setQuotaStatus] = useState<QuotaStatus | null>(null);
+  const [quotaLoading, setQuotaLoading] = useState(false);
+  const [quotaError, setQuotaError] = useState<string | null>(null);
   const { isAuthenticated } = useAuth();
   const hasFetchedRef = useRef(false);
 
@@ -126,10 +130,14 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
   }, []);
 
   const fetchQuota = useCallback(async () => {
+    setQuotaLoading(true);
+    setQuotaError(null);
     try {
       const token = localStorage.getItem('auth_token');
       if (!token) {
         console.warn('未登入，無法獲取配額狀態');
+        setQuotaStatus(null);
+        setQuotaError('請先登入');
         return;
       }
 
@@ -145,19 +153,24 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
       });
 
       if (!response.ok) {
-        throw new Error('獲取配額狀態失敗');
+        const errorBody = await response.json().catch(() => null);
+        throw new Error(errorBody?.detail || '獲取配額狀態失敗');
       }
 
       const result = await response.json();
       setQuotaStatus({
-        used: result.used,
-        monthlyLimit: result.monthly_limit,
-        availableQuota: result.available_quota,
-        quotaType: result.quota_type,
+        used: Number(result.used ?? 0),
+        monthlyLimit: Number(result.monthly_limit ?? 0),
+        availableQuota: Number(result.available_quota ?? 0),
+        quotaType: String(result.quota_type ?? 'none'),
       });
+      setQuotaError(null);
     } catch (error) {
       console.error('獲取配額狀態錯誤:', error);
-      // 不顯示錯誤提示，避免干擾用戶體驗
+      setQuotaStatus(null);
+      setQuotaError(error instanceof Error ? error.message : '獲取配額狀態失敗');
+    } finally {
+      setQuotaLoading(false);
     }
   }, []);
 
@@ -180,6 +193,8 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
       hasFetchedRef.current = false;
       setMessages([]);
       setQuotaStatus(null);
+      setQuotaLoading(false);
+      setQuotaError(null);
     }
   }, [isAuthenticated, fetchMessages, fetchQuota]);
 
@@ -221,9 +236,11 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
     fetchMessages,
     statusCounts,
     quotaStatus,
+    quotaLoading,
+    quotaError,
     fetchQuota,
     refreshAll,
-  }), [messages, addMessage, updateMessage, deleteMessage, getMessageById, totalMessages, isLoading, fetchMessages, statusCounts, quotaStatus, fetchQuota, refreshAll]);
+  }), [messages, addMessage, updateMessage, deleteMessage, getMessageById, totalMessages, isLoading, fetchMessages, statusCounts, quotaStatus, quotaLoading, quotaError, fetchQuota, refreshAll]);
 
   return (
     <MessagesContext.Provider value={value}>
