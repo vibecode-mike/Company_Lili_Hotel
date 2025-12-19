@@ -931,7 +931,7 @@ function Table8Columns3Actions({
         </div>
         
         {/* Table Body - Scrollable Container */}
-        <div className="w-[1630px] flex-1 overflow-y-auto table-scroll">
+        <div className="w-[1630px] flex-1 table-scroll">
           {members.map((member, index) => (
             <MemberRow 
               key={member.id} 
