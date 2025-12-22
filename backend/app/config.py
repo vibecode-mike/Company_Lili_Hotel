@@ -2,7 +2,7 @@
 配置管理模組
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List
+from typing import List, Optional
 from pathlib import Path
 import os
 
@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     # LINE App 服務 URL
     LINE_APP_URL: str = "http://localhost:3001"
 
+    # FacebITE_FACEBOOK_APP_ID: Optional[str]ok Graph API
+    FACEBOOK_GRAPH_API_VERSION: str = "v24.0"
+    VITE_FACEBOOK_APP_ID: Optional[str] = "851348804294287"
+    VITE_FACEBOOK_APP_SECRET: Optional[str]="8c6de275e53765098908c0bd7a05bf6a"
     # 路由配置
     UPLOAD_ROUTE_PREFIX: str = "/uploads"
 
