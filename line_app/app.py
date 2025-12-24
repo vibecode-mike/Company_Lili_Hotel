@@ -528,7 +528,9 @@ def insert_conversation_message(*, thread_id: str, role: str, direction: str,
                                 response: str | None = None,
                                 event_id: str | None = None,
                                 status: str = "received",
-                                message_source: str | None = None):
+                                message_source: str | None = None,
+                                message_id: str | None = None,
+                                platform: str | None = "LINE"):
     """
     儲存對話訊息到 conversation_messages 表
 
@@ -542,16 +544,34 @@ def insert_conversation_message(*, thread_id: str, role: str, direction: str,
         logging.warning("thread_id is empty, cannot insert message")
         return None
 
-    msg_id = uuid.uuid4().hex
+    msg_id = (message_id.strip() if isinstance(message_id, str) and message_id.strip() else None) or uuid.uuid4().hex
 
     try:
-        execute("""
-            INSERT INTO conversation_messages
-                (id, thread_id, role, direction, message_type,
-                 question, response, event_id, status, message_source, created_at, updated_at)
-            VALUES
-                (:id, :tid, :role, :dir, :mt, :q, :r, :eid, :st, :src, NOW(), NOW())
-        """, {
+        columns = [
+            "id",
+            "thread_id",
+            "role",
+            "direction",
+            "message_type",
+            "question",
+            "response",
+            "event_id",
+            "status",
+            "message_source",
+        ]
+        values = [
+            ":id",
+            ":tid",
+            ":role",
+            ":dir",
+            ":mt",
+            ":q",
+            ":r",
+            ":eid",
+            ":st",
+            ":src",
+        ]
+        params = {
             "id": msg_id,
             "tid": thread_id,
             "role": role,
@@ -562,7 +582,25 @@ def insert_conversation_message(*, thread_id: str, role: str, direction: str,
             "eid": event_id,
             "st": status,
             "src": message_source
-        })
+        }
+
+        if platform and _table_has("conversation_messages", "platform"):
+            columns.append("platform")
+            values.append(":platform")
+            params["platform"] = platform
+
+        columns.extend(["created_at", "updated_at"])
+        values.extend(["NOW()", "NOW()"])
+
+        execute(
+            f"""
+            INSERT IGNORE INTO conversation_messages
+                ({", ".join(columns)})
+            VALUES
+                ({", ".join(values)})
+            """,
+            params,
+        )
         logging.info(f"Inserted message: {msg_id}, thread: {thread_id}, source: {message_source}")
         return msg_id
 
@@ -3220,7 +3258,9 @@ def on_text(event: MessageEvent):
             message_type="text",
             question=text_in,
             event_id=event.message.id,
-            status="received"
+            status="received",
+            message_source="webhook",
+            message_id=event.message.id,
         )
     except Exception:
         logging.exception("[on_text] Failed to save incoming message")
@@ -3251,19 +3291,7 @@ def on_text(event: MessageEvent):
                 picture_url=api_pu or cur_pu,
                 member_id=mid,
                 is_following=True,
-            )
-
-            # 插入訊息記錄到 conversation_messages 表（1:1 對話）
-            thread_id = ensure_thread_for_user(uid)
-            insert_conversation_message(
-                thread_id=thread_id,
-                role="user",
-                direction="incoming",
-                message_type="text",
-                question=text_in,
-                message_source="webhook",
-                status="received"
-            )
+	            )
         except Exception:
             logging.exception("[on_text] Failed to update member/line_friends")
 

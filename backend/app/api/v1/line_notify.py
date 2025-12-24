@@ -13,6 +13,7 @@ from sqlalchemy import select
 from app.websocket_manager import manager
 from app.database import get_db
 from app.models.member import Member
+from app.models.conversation import ConversationMessage
 from app.services.chatroom_service import ChatroomService
 
 logger = logging.getLogger(__name__)
@@ -78,14 +79,48 @@ async def notify_new_message(
             "source": notification.source  # 傳遞來源 (gpt/keyword/always)
         }
 
-        # 4. 更新 conversation_messages 並透過 WebSocket 推送給前端 (thread_id = LINE:{uid})
+        # 4. Upsert conversation_messages（避免 LINE App 與 Backend 重複寫入/造成聊天室缺訊）
         chatroom_service = ChatroomService(db)
-        msg = await chatroom_service.append_message(member, "LINE", "incoming", notification.message_text, message_source=notification.source)
+        thread = await chatroom_service.upsert_thread(member, "LINE")
+
+        direction = "outgoing" if notification.direction == "outgoing" else "incoming"
+        role = "assistant" if direction == "outgoing" else "user"
+
+        msg_result = await db.execute(select(ConversationMessage).where(ConversationMessage.id == notification.message_id))
+        msg = msg_result.scalar_one_or_none()
+
+        if msg:
+            # 補齊/修正欄位（舊資料可能沒有 platform）
+            msg.thread_id = thread.id
+            msg.platform = "LINE"
+            msg.role = role
+            msg.direction = direction
+            msg.message_source = notification.source or msg.message_source
+            if direction == "outgoing":
+                msg.response = notification.message_text
+            else:
+                msg.question = notification.message_text
+        else:
+            created_at_utc = datetime.fromtimestamp(notification.timestamp / 1000, tz=timezone.utc).replace(tzinfo=None)
+            msg = ConversationMessage(
+                id=notification.message_id,
+                thread_id=thread.id,
+                platform="LINE",
+                role=role,
+                direction=direction,
+                question=notification.message_text if direction == "incoming" else None,
+                response=notification.message_text if direction == "outgoing" else None,
+                message_source=notification.source,
+                created_at=created_at_utc,
+            )
+            db.add(msg)
+
+        thread.last_message_at = msg.created_at
 
         await manager.send_new_message(msg.thread_id, {
             **message_data,
             "thread_id": msg.thread_id,
-            "timestamp": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg.created_at else None
+            "timestamp": datetime.fromtimestamp(notification.timestamp / 1000, tz=timezone.utc).isoformat()
         })
 
         logger.info(f"✅ Notified frontend about new message on thread {msg.thread_id}")
