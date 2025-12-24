@@ -1,4 +1,5 @@
-import { memo, useMemo, useState } from 'react';
+import { memo, useMemo, useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import svgPaths from "../imports/svg-wbwsye31ry";
 import ButtonEdit from '../imports/ButtonEdit';
 import { MemberSourceIcon } from './common/icons/MemberSourceIcon';
@@ -6,6 +7,7 @@ import type { MemberSourceType } from '../types/channel';
 
 // 關鍵字對象（包含重複標記）
 export interface KeywordObject {
+  id?: number;
   keyword: string;
   isDuplicate: boolean;
 }
@@ -26,6 +28,109 @@ interface AutoReplyTableProps {
   data: AutoReplyData[];
   onRowClick?: (id: string) => void;
   onToggleStatus?: (id: string, nextState: boolean) => void;
+  onDuplicateKeywordClick?: (keywordId: number, keyword: string) => void;
+}
+
+// 重複關鍵字標籤組件（帶 Portal Tooltip）
+function DuplicateKeywordTag({
+  id,
+  keyword,
+  onUpdateClick,
+}: {
+  id?: number;
+  keyword: string;
+  onUpdateClick?: (keywordId: number, keyword: string) => void;
+}) {
+  const [showTooltip, setShowTooltip] = useState(false);
+  const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
+  const tagRef = useRef<HTMLDivElement>(null);
+  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleMouseEnter = () => {
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+    setShowTooltip(true);
+  };
+
+  const handleMouseLeave = () => {
+    hideTimeoutRef.current = setTimeout(() => {
+      setShowTooltip(false);
+    }, 300);
+  };
+
+  useEffect(() => {
+    if (showTooltip && tagRef.current) {
+      const rect = tagRef.current.getBoundingClientRect();
+      setTooltipPos({
+        top: rect.top - 8,
+        left: rect.left + rect.width / 2,
+      });
+    }
+  }, [showTooltip]);
+
+  // 清理計時器
+  useEffect(() => {
+    return () => {
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <div
+      ref={tagRef}
+      className="box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] px-[8px] py-[4px] relative rounded-[8px] shrink-0 transition-colors cursor-pointer"
+      style={{ backgroundColor: isHovered ? '#ffcdd2' : '#ffebee' }}
+      onMouseEnter={() => { handleMouseEnter(); setIsHovered(true); }}
+      onMouseLeave={() => { handleMouseLeave(); setIsHovered(false); }}
+    >
+      <p className="leading-[1.5] relative shrink-0 text-[14px] text-center whitespace-nowrap" style={{ color: '#f44336' }}>
+        {keyword}
+      </p>
+      {showTooltip && createPortal(
+        <div
+          className="fixed z-[9999] pointer-events-auto"
+          style={{
+            top: tooltipPos.top,
+            left: tooltipPos.left,
+            transform: 'translate(-50%, -100%)',
+          }}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          <div
+            className="rounded-lg px-3 py-2 text-[13px] whitespace-nowrap shadow-lg cursor-pointer transition-colors"
+            style={{ backgroundColor: '#383838', color: 'white' }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (id && onUpdateClick) {
+                onUpdateClick(id, keyword);
+                setShowTooltip(false);
+              }
+            }}
+            onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#4a4a4a')}
+            onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#383838')}
+          >
+            重複標籤,<span style={{ color: '#64b5f6', textDecoration: 'underline' }}>點擊更新</span>為最新版本
+          </div>
+          <div
+            className="absolute left-1/2 -translate-x-1/2 w-0 h-0"
+            style={{
+              borderLeft: '6px solid transparent',
+              borderRight: '6px solid transparent',
+              borderTop: '6px solid #383838',
+            }}
+          />
+        </div>,
+        document.body
+      )}
+    </div>
+  );
 }
 
 type SortField = 'content' | 'replyType' | 'keywords' | 'status' | 'platform' | 'triggerCount' | 'createTime';
@@ -195,11 +300,13 @@ const AutoReplyRow = memo(function AutoReplyRow({
   isLast,
   onRowClick,
   onToggleStatus,
+  onDuplicateKeywordClick,
 }: {
   row: AutoReplyData;
   isLast: boolean;
   onRowClick: (id: string) => void;
   onToggleStatus: (event: React.MouseEvent, id: string, status: AutoReplyData['status']) => void;
+  onDuplicateKeywordClick?: (keywordId: number, keyword: string) => void;
 }) {
   const EditButton = () => (
     <div onClick={() => onRowClick(row.id)}>
@@ -234,17 +341,23 @@ const AutoReplyRow = memo(function AutoReplyRow({
                   ? row.keywordObjects
                   : row.keywords.map(kw => ({ keyword: kw, isDuplicate: false }))
                 ).map((kwObj, idx) => (
-                  <div
-                    key={idx}
-                    className={`box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] px-[8px] py-[4px] relative rounded-[8px] shrink-0 ${
-                      kwObj.isDuplicate ? 'bg-[#ffebee]' : 'bg-[#f0f6ff]'
-                    }`}
-                    title={kwObj.isDuplicate ? '重複的關鍵字，以最新版本觸發' : undefined}
-                  >
-                    <p className={`leading-[1.5] relative shrink-0 text-[14px] text-center whitespace-nowrap ${
-                      kwObj.isDuplicate ? 'text-[#f44336]' : 'text-[#0f6beb]'
-                    }`}>{kwObj.keyword}</p>
-                  </div>
+                  kwObj.isDuplicate ? (
+                    <DuplicateKeywordTag
+                      key={idx}
+                      id={kwObj.id}
+                      keyword={kwObj.keyword}
+                      onUpdateClick={onDuplicateKeywordClick}
+                    />
+                  ) : (
+                    <div
+                      key={idx}
+                      className="box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] px-[8px] py-[4px] relative rounded-[8px] shrink-0 bg-[#f0f6ff]"
+                    >
+                      <p className="leading-[1.5] relative shrink-0 text-[14px] text-center whitespace-nowrap text-[#0f6beb]">
+                        {kwObj.keyword}
+                      </p>
+                    </div>
+                  )
                 ))}
               </>
             ) : (
@@ -315,7 +428,7 @@ const AutoReplyRow = memo(function AutoReplyRow({
   );
 });
 
-export default function AutoReplyTableStyled({ data, onRowClick, onToggleStatus }: AutoReplyTableProps) {
+export default function AutoReplyTableStyled({ data, onRowClick, onToggleStatus, onDuplicateKeywordClick }: AutoReplyTableProps) {
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     field: 'createTime',
     order: 'desc',
@@ -401,12 +514,13 @@ export default function AutoReplyTableStyled({ data, onRowClick, onToggleStatus 
         {/* Table Body - Scrollable Container */}
         <div className="w-[1250px] flex-1 overflow-y-auto table-scroll">
           {sortedData.map((row, index) => (
-            <AutoReplyRow 
-              key={row.id} 
-              row={row} 
+            <AutoReplyRow
+              key={row.id}
+              row={row}
               isLast={index === sortedData.length - 1}
               onRowClick={handleRowClick}
               onToggleStatus={handleToggleStatus}
+              onDuplicateKeywordClick={onDuplicateKeywordClick}
             />
           ))}
         </div>

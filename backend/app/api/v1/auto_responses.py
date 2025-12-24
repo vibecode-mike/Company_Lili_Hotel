@@ -604,3 +604,50 @@ async def toggle_auto_response(
         await db.commit()
 
     return SuccessResponse(message="狀態更新成功")
+
+
+@router.patch("/keywords/{keyword_id}/activate", response_model=SuccessResponse)
+async def activate_keyword(
+    keyword_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    激活指定的重複關鍵字，使其成為生效版本。
+    其他相同關鍵字會被標記為 is_duplicate=True。
+    """
+    # 1. 查找目標關鍵字
+    result = await db.execute(
+        select(AutoResponseKeyword)
+        .options(selectinload(AutoResponseKeyword.auto_response))
+        .where(AutoResponseKeyword.id == keyword_id)
+    )
+    target_keyword = result.scalar_one_or_none()
+
+    if not target_keyword:
+        raise HTTPException(status_code=404, detail="關鍵字不存在")
+
+    keyword_text = target_keyword.keyword.lower().strip()
+
+    # 2. 查找所有相同文字的關鍵字（跨啟用的自動回應）
+    query = (
+        select(AutoResponseKeyword)
+        .join(AutoResponse)
+        .where(
+            AutoResponse.trigger_type == TriggerType.KEYWORD.value,
+            AutoResponse.is_active == True,
+        )
+    )
+    result = await db.execute(query)
+    all_keywords = result.scalars().all()
+
+    # 3. 更新重複標記
+    for kw in all_keywords:
+        if kw.keyword.lower().strip() == keyword_text:
+            if kw.id == keyword_id:
+                kw.is_duplicate = False
+            else:
+                kw.is_duplicate = True
+
+    await db.commit()
+
+    return SuccessResponse(message="標籤已更新")

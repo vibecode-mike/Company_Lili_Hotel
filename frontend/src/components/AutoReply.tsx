@@ -1,4 +1,4 @@
-import { useMemo, useState, memo, useEffect } from 'react';
+import { useMemo, useState, memo } from 'react';
 import AutoReplyTableStyled, { AutoReplyData } from './AutoReplyTableStyled';
 import svgPaths from "../imports/svg-icons-common";
 import { PageWithSidebar } from './Sidebar';
@@ -6,6 +6,14 @@ import { PageHeaderWithBreadcrumb } from './common/Breadcrumb';
 import CreateAutoReplyInteractive from './CreateAutoReplyInteractive';
 import { useAutoReplies } from '../contexts/AutoRepliesContext';
 import { useNavigation } from '../contexts/NavigationContext';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from './ui/dialog';
+import { Button } from './ui/button';
 
 interface AutoReplyProps {
   onBack: () => void;
@@ -74,7 +82,12 @@ const CancelCircleIcon = memo(function CancelCircleIcon({ onClick }: { onClick: 
 export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNavigateToMembers, onNavigateToSettings }: AutoReplyProps) {
   const { params, navigate } = useNavigation();
   const [searchTerm, setSearchTerm] = useState('');
-  const { autoReplies, isLoading, error, toggleAutoReply } = useAutoReplies();
+  const { autoReplies, isLoading, error, toggleAutoReply, activateDuplicateKeyword } = useAutoReplies();
+
+  // 重複關鍵字確認彈窗狀態
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+  const [selectedKeyword, setSelectedKeyword] = useState<{ id: number; keyword: string } | null>(null);
+  const [isActivating, setIsActivating] = useState(false);
 
   // 從 URL 參數讀取狀態
   const view = params.view === 'edit' ? 'editor' : 'list';
@@ -128,6 +141,37 @@ export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNav
       await toggleAutoReply(id, nextState);
     } catch {
       // 已在 context 中處理錯誤提示
+    }
+  };
+
+  // 處理重複關鍵字點擊
+  const handleDuplicateKeywordClick = (keywordId: number, keyword: string) => {
+    setSelectedKeyword({ id: keywordId, keyword });
+    setShowDuplicateDialog(true);
+  };
+
+  // 確認激活重複關鍵字
+  const handleConfirmActivate = async () => {
+    if (!selectedKeyword) return;
+    setIsActivating(true);
+    try {
+      await activateDuplicateKeyword(selectedKeyword.id);
+      setShowDuplicateDialog(false);
+      // 延遲清除 selectedKeyword，等待 Dialog 關閉動畫完成
+      setTimeout(() => setSelectedKeyword(null), 200);
+    } catch {
+      // 錯誤已在 context 中處理，彈窗保持開啟讓用戶可以重試
+    } finally {
+      setIsActivating(false);
+    }
+  };
+
+  // 關閉彈窗
+  const handleCloseDuplicateDialog = () => {
+    if (!isActivating) {
+      setShowDuplicateDialog(false);
+      // 延遲清除 selectedKeyword，等待 Dialog 關閉動畫完成
+      setTimeout(() => setSelectedKeyword(null), 200);
     }
   };
 
@@ -223,6 +267,7 @@ export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNav
               data={filteredData}
               onRowClick={(id) => openEditor(id)}
               onToggleStatus={handleToggleStatus}
+              onDuplicateKeywordClick={handleDuplicateKeywordClick}
             />
           ) : (
             <div className="flex h-[240px] items-center justify-center rounded-[16px] border border-dashed border-[#dddddd] bg-white text-[#6e6e6e]">
@@ -231,6 +276,53 @@ export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNav
           )}
         </div>
       </div>
+
+      {/* 重複關鍵字確認彈窗 */}
+      <Dialog open={showDuplicateDialog} onOpenChange={handleCloseDuplicateDialog}>
+        <DialogContent className="sm:max-w-[600px]" style={{ width: '600px', maxWidth: '600px' }}>
+          <DialogHeader>
+            <DialogTitle className="font-medium" style={{ fontSize: '22px', color: '#383838' }}>
+              確認更新標籤？
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-[14px] leading-[1.6]" style={{ color: '#383838' }}>
+              相同名稱的標籤已存在，是否要以最新建立的標籤取代？
+            </p>
+            {selectedKeyword && (
+              <div className="mt-3 inline-flex items-center px-3 py-1.5 rounded-lg bg-[#ffebee]">
+                <span className="text-[14px] text-[#f44336]">{selectedKeyword.keyword}</span>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="gap-3 sm:gap-3">
+            <Button
+              variant="outline"
+              onClick={handleCloseDuplicateDialog}
+              disabled={isActivating}
+              className="px-6 h-[40px] border-[#dddddd] text-[#6e6e6e] hover:bg-[#f5f5f5]"
+            >
+              取消
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleConfirmActivate}
+              disabled={isActivating}
+              className="px-6 h-[40px] hover:bg-[#ffebee]"
+              style={{ borderColor: '#f44336', color: '#f44336' }}
+            >
+              {isActivating ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#f44336] border-r-transparent" />
+                  處理中...
+                </span>
+              ) : (
+                '確認更新'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageWithSidebar>
   );
 }

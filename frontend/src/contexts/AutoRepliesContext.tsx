@@ -20,6 +20,7 @@ export type ChannelType = AutoReplyChannel;
 
 // 關鍵字對象，包含是否重複的標記
 export interface AutoReplyKeyword {
+  id?: number;  // 關鍵字 ID，用於激活重複關鍵字
   keyword: string;
   isDuplicate: boolean;
 }
@@ -85,6 +86,7 @@ interface AutoRepliesContextType {
   fetchAutoReplyById: (id: string) => Promise<AutoReply | undefined>;
   saveAutoReply: (payload: AutoReplyPayload, id?: string) => Promise<SaveAutoReplyResult>;
   removeAutoReply: (id: string) => Promise<void>;
+  activateDuplicateKeyword: (keywordId: number) => Promise<void>;
 }
 
 const AutoRepliesContext = createContext<AutoRepliesContextType | undefined>(undefined);
@@ -115,6 +117,7 @@ function mapAutoResponse(item: BackendAutoReply & { content?: string; messages?:
     ? item.keywords
         .filter((kw: BackendKeyword) => kw?.keyword || kw?.name)
         .map((kw: BackendKeyword) => ({
+          id: kw?.id,
           keyword: kw?.keyword ?? kw?.name ?? '',
           isDuplicate: Boolean(kw?.is_duplicate),
         }))
@@ -357,6 +360,31 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
     [autoReplies]
   );
 
+  const activateDuplicateKeyword = useCallback(async (keywordId: number) => {
+    try {
+      const token = getAuthTokenOrThrow();
+      const response = await fetch(`/api/v1/auto_responses/keywords/${keywordId}/activate`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => null);
+        throw new Error(errData?.detail || errData?.message || '操作失敗，請稍後再試');
+      }
+
+      // 刷新列表以獲取最新狀態
+      await fetchAutoReplies();
+      toast.success('標籤已更新');
+    } catch (err) {
+      console.error('激活重複關鍵字錯誤:', err);
+      toast.error(err instanceof Error ? err.message : '操作失敗，請稍後再試');
+      throw err;
+    }
+  }, [fetchAutoReplies]);
+
   const totalAutoReplies = useMemo(() => autoReplies.length, [autoReplies]);
   const activeAutoReplies = useMemo(
     () => autoReplies.filter(reply => reply.isActive).length,
@@ -391,6 +419,7 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
     fetchAutoReplyById,
     saveAutoReply,
     removeAutoReply,
+    activateDuplicateKeyword,
   }), [
     autoReplies,
     addAutoReply,
@@ -406,6 +435,7 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
     fetchAutoReplyById,
     saveAutoReply,
     removeAutoReply,
+    activateDuplicateKeyword,
   ]);
 
   return (

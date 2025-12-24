@@ -42,6 +42,7 @@ export interface BackendMember {
  * 後端關鍵字物件
  */
 export interface BackendKeyword {
+  id?: number;  // 關鍵字 ID，用於激活重複關鍵字
   keyword?: string;
   name?: string;
   is_duplicate?: boolean;  // 是否為重複關鍵字
