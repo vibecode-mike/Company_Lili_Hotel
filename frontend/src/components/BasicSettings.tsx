@@ -9,6 +9,7 @@ import {
   fbGetBusinesses,
   fbGetBusinessPages,
   fbGetPageAccessToken,
+  fbGetLoginStatus,
   fbLogin,
 } from '../utils/facebookSdk';
 import {
@@ -261,7 +262,11 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
         throw new Error('Facebook SDK 尚未載入完成，請稍候再試');
       }
 
-      const loginResponse = await fbLogin(facebookLoginScope);
+      const existingSession = await fbGetLoginStatus().catch(() => null);
+      const loginResponse =
+        existingSession?.status === 'connected' && existingSession.authResponse?.accessToken
+          ? existingSession
+          : await fbLogin(facebookLoginScope);
       if (loginResponse.status !== 'connected' || !loginResponse.authResponse?.accessToken) {
         throw new Error('Facebook 登入未完成（可能已取消授權）');
       }
@@ -312,6 +317,22 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     showToast,
   ]);
 
+  const requestMetaJwt = useCallback(async (facebookAccessToken: string): Promise<string> => {
+    const metaLoginResponse = await fetch('https://api-youth-tycg.star-bit.io/api/v1/admin/meta_login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ access_token: facebookAccessToken }),
+    });
+
+    const metaLoginPayload = await metaLoginResponse.json().catch(() => null);
+    const metaJwt = metaLoginPayload?.data?.access_token;
+    if (!metaLoginResponse.ok || !metaJwt) {
+      throw new Error(metaLoginPayload?.msg || `meta_login 失敗（HTTP ${metaLoginResponse.status}）`);
+    }
+
+    return metaJwt;
+  }, []);
+
   const handleFacebookBusinessChange = useCallback(
     async (businessId: string) => {
       setSelectedFacebookBusinessId(businessId);
@@ -320,7 +341,7 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     [loadFacebookPagesForBusiness]
   );
 
-  // 點擊 Facebook 卡片 - FB OAuth → meta_login → 存 JWT → 帳號列表
+  // 點擊 Facebook 卡片 - FB OAuth → meta_login → 存 JWT → 選粉專 → 寫入 fb_channels
   const handleFacebookClick = useCallback(async () => {
     setFacebookAuthorizing(true);
     try {
@@ -330,36 +351,40 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
       await prepareFacebookSdk();
 
       // FB OAuth 對話框
-      const loginResponse = await fbLogin(facebookLoginScope);
+      const existingSession = await fbGetLoginStatus().catch(() => null);
+      const loginResponse =
+        existingSession?.status === 'connected' && existingSession.authResponse?.accessToken
+          ? existingSession
+          : await fbLogin(facebookLoginScope);
       if (loginResponse.status !== 'connected' || !loginResponse.authResponse?.accessToken) {
         throw new Error('Facebook 登入未完成（可能已取消授權）');
       }
 
-      // 呼叫 meta_login API
+      // 呼叫 meta_login API（以外部 Meta 服務為主）
       const fbAccessToken = loginResponse.authResponse.accessToken;
-      const metaLoginResponse = await fetch('https://api-youth-tycg.star-bit.io/api/v1/admin/meta_login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ access_token: fbAccessToken }),
-      });
-      const metaLoginPayload = await metaLoginResponse.json().catch(() => null);
-      const metaJwt = metaLoginPayload?.data?.access_token;
-      if (!metaLoginResponse.ok || !metaJwt) {
-        throw new Error(metaLoginPayload?.msg || `meta_login 失敗（HTTP ${metaLoginResponse.status}）`);
-      }
+      const metaJwt = await requestMetaJwt(fbAccessToken);
 
-      // 存 JWT → 帳號列表
+      // 存 JWT（供後續外部 API 使用）
       localStorage.setItem('meta_jwt_token', metaJwt);
-      await reloadAccounts();
-      setViewState('list');
-      showToast('已完成 Facebook 連結', 'success');
+
+      // 需要選擇粉絲專頁並保存到本機 fb_channels，才算完成「基本設定」連結
+      setFacebookDialogOpen(true);
+      setFacebookTargetChannelId(null);
+      await handleFacebookAuthorize(null);
     } catch (error) {
       console.error('Facebook 連結失敗:', error);
       showToast(error instanceof Error ? error.message : 'Facebook 連結失敗', 'error');
     } finally {
       setFacebookAuthorizing(false);
     }
-  }, [facebookLoginScope, facebookSdkError, prepareFacebookSdk, reloadAccounts, showToast]);
+  }, [
+    facebookLoginScope,
+    facebookSdkError,
+    handleFacebookAuthorize,
+    prepareFacebookSdk,
+    requestMetaJwt,
+    showToast,
+  ]);
 
   // 點擊新增帳號按鈕 - 直接回到平台選擇卡片
   const handleAddAccount = useCallback(() => {
@@ -397,7 +422,7 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
       }
       setViewState('line-setup');
     } else {
-      // Facebook: FB OAuth → meta_login → 存 JWT → 帳號列表
+      // Facebook: FB OAuth → meta_login → 存 JWT → 選粉專 → PATCH fb_channels
       setFacebookAuthorizing(true);
       try {
         if (facebookSdkError) {
@@ -405,26 +430,23 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
         }
         await prepareFacebookSdk();
 
-        const loginResponse = await fbLogin(facebookLoginScope);
+        const existingSession = await fbGetLoginStatus().catch(() => null);
+        const loginResponse =
+          existingSession?.status === 'connected' && existingSession.authResponse?.accessToken
+            ? existingSession
+            : await fbLogin(facebookLoginScope);
         if (loginResponse.status !== 'connected' || !loginResponse.authResponse?.accessToken) {
           throw new Error('Facebook 登入未完成（可能已取消授權）');
         }
 
         const fbAccessToken = loginResponse.authResponse.accessToken;
-        const metaLoginResponse = await fetch('https://api-youth-tycg.star-bit.io/api/v1/admin/meta_login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ access_token: fbAccessToken }),
-        });
-        const metaLoginPayload = await metaLoginResponse.json().catch(() => null);
-        const metaJwt = metaLoginPayload?.data?.access_token;
-        if (!metaLoginResponse.ok || !metaJwt) {
-          throw new Error(metaLoginPayload?.msg || `meta_login 失敗（HTTP ${metaLoginResponse.status}）`);
-        }
+        const metaJwt = await requestMetaJwt(fbAccessToken);
 
         localStorage.setItem('meta_jwt_token', metaJwt);
-        await reloadAccounts();
-        showToast('已完成 Facebook 重新連結', 'success');
+
+        setFacebookDialogOpen(true);
+        setFacebookTargetChannelId(account.id);
+        await handleFacebookAuthorize(account.id);
       } catch (error) {
         console.error('Facebook 重新連結失敗:', error);
         showToast(error instanceof Error ? error.message : 'Facebook 重新連結失敗', 'error');
@@ -432,7 +454,14 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
         setFacebookAuthorizing(false);
       }
     }
-  }, [facebookLoginScope, facebookSdkError, prepareFacebookSdk, reloadAccounts, showToast]);
+  }, [
+    facebookLoginScope,
+    facebookSdkError,
+    handleFacebookAuthorize,
+    prepareFacebookSdk,
+    requestMetaJwt,
+    showToast,
+  ]);
 
   // 返回列表
   const handleBackToList = useCallback(() => {

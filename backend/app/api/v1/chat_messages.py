@@ -6,18 +6,52 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 from app.database import get_db
 from app.models.member import Member
 from app.schemas.common import SuccessResponse
 from app.services.chatroom_service import ChatroomService
+from app.clients.fb_message_client import FbMessageClient
 import json
+from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+TAIPEI_TZ = ZoneInfo("Asia/Taipei")
+
+
+def _ensure_utc(dt: datetime) -> datetime:
+    """Treat naive datetimes as UTC and return an aware UTC datetime."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def parse_iso_datetime(value: str) -> Optional[datetime]:
+    """
+    Parse an ISO datetime string into an aware UTC datetime.
+    - Accepts strings ending with 'Z'
+    - Treats naive strings as UTC
+    """
+    if not value:
+        return None
+    normalized = value.strip()
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        return _ensure_utc(datetime.fromisoformat(normalized))
+    except ValueError:
+        return None
+
+
+def format_iso_utc(dt: Optional[datetime]) -> Optional[str]:
+    if not dt:
+        return None
+    return _ensure_utc(dt).isoformat()
 
 
 def extract_message_text(message_content: str) -> str:
@@ -108,6 +142,7 @@ async def get_chat_messages(
     page: int = Query(1, ge=1, description="頁碼"),
     page_size: int = Query(50, ge=1, le=100, description="每頁筆數"),
     platform: Optional[str] = Query(None, description="渠道：LINE/Facebook/Webchat"),
+    meta_jwt_token: Optional[str] = Query(None, description="FB 渠道需要的 JWT token"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -139,12 +174,67 @@ async def get_chat_messages(
         chatroom_service = ChatroomService(db)
         resolved_platform = _resolve_platform(platform)
 
+        # Facebook 渠道：從外部 API 獲取聊天記錄
+        if resolved_platform == "Facebook":
+            if not meta_jwt_token:
+                raise HTTPException(status_code=400, detail="缺少 meta_jwt_token")
+
+            fb_client = FbMessageClient()
+            fb_result = await fb_client.get_chat_history(member.email, meta_jwt_token)
+
+            if not fb_result.get("ok"):
+                raise HTTPException(status_code=500, detail=f"獲取 FB 聊天記錄失敗: {fb_result.get('error')}")
+
+            # 轉換外部 API 格式為內部格式
+            messages = []
+            for idx, item in enumerate(fb_result.get("data", [])):
+                direction = item.get("direction", "outgoing")
+                msg_content = item.get("message", "")
+                timestamp = item.get("time", 0)
+
+                # 解析訊息內容
+                if isinstance(msg_content, dict):
+                    # Template 訊息：提取標題或 subtitle
+                    text = _extract_fb_template_text(msg_content)
+                else:
+                    text = str(msg_content)
+
+                # 轉換時間戳（epoch 秒 -> UTC）
+                dt = datetime.fromtimestamp(timestamp, tz=timezone.utc) if timestamp else None
+                time_str = format_chat_time(dt)
+
+                messages.append(ChatMessage(
+                    id=f"fb_{idx}_{timestamp}",
+                    type="user" if direction == "ingoing" else "official",
+                    text=text,
+                    time=time_str,
+                    timestamp=format_iso_utc(dt),
+                    isRead=True,
+                    source="external" if direction == "outgoing" else None,
+                ))
+
+            # FB 訊息按時間正序排列
+            messages.sort(key=lambda m: m.timestamp or "")
+
+            logger.info(f"✅ 成功獲取 {len(messages)} 筆 FB 聊天紀錄")
+
+            return SuccessResponse(
+                data=ChatMessagesResponse(
+                    messages=messages,
+                    total=len(messages),
+                    page=1,
+                    page_size=len(messages),
+                    has_more=False
+                ).model_dump()
+            )
+
+        # LINE/Webchat：從本地資料庫獲取
         result = await chatroom_service.get_messages(member, resolved_platform, page, page_size)
 
         messages = []
         for record in result["messages"]:
             ts_raw = record.get("timestamp")
-            created_at = datetime.fromisoformat(ts_raw) if ts_raw else None
+            created_at = parse_iso_datetime(ts_raw) if ts_raw else None
             time_str = format_chat_time(created_at)
             text_content = extract_message_text(record.get("text", "")) if record.get("text") else ""
 
@@ -153,7 +243,7 @@ async def get_chat_messages(
                 type=record["type"],
                 text=text_content,
                 time=time_str,
-                timestamp=record.get("timestamp"),
+                timestamp=format_iso_utc(created_at) if created_at else record.get("timestamp"),
                 isRead=record.get("isRead", False),
                 source=record.get("source"),
             ))
@@ -203,7 +293,7 @@ def _resolve_platform_uid(member: Member, platform: str) -> str:
     raise HTTPException(status_code=400, detail="不支援的渠道平台")
 
 
-def format_chat_time(dt: datetime) -> str:
+def format_chat_time(dt: Optional[datetime]) -> str:
     """
     格式化聊天時間為 "時段 HH:mm" 格式
 
@@ -223,8 +313,9 @@ def format_chat_time(dt: datetime) -> str:
     if not dt:
         return ""
 
-    hour = dt.hour
-    minute = dt.minute
+    local_dt = _ensure_utc(dt).astimezone(TAIPEI_TZ)
+    hour = local_dt.hour
+    minute = local_dt.minute
 
     # 判斷時段
     if 0 <= hour < 6:
@@ -244,3 +335,47 @@ def format_chat_time(dt: datetime) -> str:
         display_hour = 12
 
     return f"{period} {display_hour:02d}:{minute:02d}"
+
+
+def _extract_fb_template_text(msg_content: dict) -> str:
+    """
+    從 FB Template 訊息中提取文字
+
+    FB Template 訊息格式：
+    {
+        "attachment": {
+            "type": "template",
+            "payload": {
+                "template_type": "generic",
+                "elements": [
+                    {"title": "標題", "subtitle": "副標題", ...}
+                ]
+            }
+        }
+    }
+
+    Args:
+        msg_content: FB 訊息內容 (dict)
+
+    Returns:
+        提取的文字內容
+    """
+    try:
+        # 嘗試從 attachment.payload.elements 中提取
+        attachment = msg_content.get("attachment", {})
+        payload = attachment.get("payload", {})
+        elements = payload.get("elements", [])
+
+        if elements:
+            first_element = elements[0]
+            title = first_element.get("title", "")
+            subtitle = first_element.get("subtitle", "")
+            return f"{title} - {subtitle}" if subtitle else title
+
+        # 如果有 text 欄位
+        if msg_content.get("text"):
+            return msg_content["text"]
+
+        return "[圖文訊息]"
+    except Exception:
+        return "[圖文訊息]"

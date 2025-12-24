@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 
 from sqlalchemy import select, func
@@ -111,7 +111,11 @@ class ChatroomService:
         messages = []
         for record in records:
             msg_type = "user" if record.direction == "incoming" else "official"
-            timestamp_str = record.created_at.isoformat() if record.created_at else None
+            if record.created_at:
+                created_at_utc = record.created_at.replace(tzinfo=timezone.utc)
+                timestamp_str = created_at_utc.isoformat()
+            else:
+                timestamp_str = None
             messages.append(
                 {
                     "id": record.id,

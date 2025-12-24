@@ -341,7 +341,7 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
         return;
       }
 
-      // 將新訊息添加到列表末尾
+      // 將新訊息添加到列表末尾（messages 維持「舊 → 新」排序）
       setMessages(prev => {
         // 避免重複添加 (檢查 message_id)
         const exists = prev.some(msg => msg.id === wsMessage.data.id);
@@ -355,7 +355,7 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
       if (member) {
         setMember({
           ...member,
-          lastChatTime: new Date().toISOString()
+          lastChatTime: wsMessage.data.timestamp || new Date().toISOString()
         });
       }
 
@@ -385,23 +385,33 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
       }
       try {
         const token = localStorage.getItem('auth_token');
-        const response = await fetch(
-          `/api/v1/members/${targetId}/chat-messages?page=${pageNum}&page_size=${PAGE_SIZE}&platform=${currentPlatform}`,
-          {
-            headers: { 'Authorization': `Bearer ${token}` }
+
+        // 建立 URL 參數
+        let url = `/api/v1/members/${targetId}/chat-messages?page=${pageNum}&page_size=${PAGE_SIZE}&platform=${currentPlatform}`;
+
+        // FB 渠道需要傳送 meta_jwt_token
+        if (currentPlatform === 'Facebook') {
+          const metaJwt = localStorage.getItem('meta_jwt_token');
+          if (metaJwt) {
+            url += `&meta_jwt_token=${encodeURIComponent(metaJwt)}`;
           }
-        );
+        }
+
+        const response = await fetch(url, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
 
         const result = await response.json();
 
         if (result.code === 200 && result.data) {
           const { messages: newMessages, has_more } = result.data;
-          const reversedMessages = [...newMessages].reverse();
 
           if (append) {
-            setMessages(prev => [...reversedMessages, ...prev]);
+            // append=true 表示載入更早訊息（往上翻頁），需「前插」以維持舊→新排序
+            setMessages(prev => [...newMessages, ...prev]);
           } else {
-            setMessages(reversedMessages);
+            // API 已回傳舊→新排序，不需要反轉
+            setMessages(newMessages);
           }
 
           setHasMore(has_more);
@@ -434,18 +444,30 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
 
   // 初始載入訊息後設定 visibleDate（顯示最新訊息的日期）
   useEffect(() => {
-    if (visibleDate) return;
+    const container = chatContainerRef.current;
+    const isNearBottom =
+      !container || container.scrollHeight - container.scrollTop - container.clientHeight < 24;
+
     if (messages.length > 0) {
-      // 初次載入時，顯示最後一則（最新）訊息的日期
-      const lastMessage = messages[messages.length - 1];
-      const timestampFromMessage = extractMessageTimestamp(lastMessage);
-      if (timestampFromMessage) {
-        setVisibleDate(formatDateWithWeekday(timestampFromMessage));
-        return;
+      // 停在底部時，visibleDate 應隨最新訊息更新；不在底部則交給 scroll handler 決定顯示哪一天
+      if (!visibleDate || isNearBottom) {
+        const lastMessage = messages[messages.length - 1];
+        const timestampFromMessage = extractMessageTimestamp(lastMessage);
+        if (timestampFromMessage) {
+          const next = formatDateWithWeekday(timestampFromMessage);
+          if (next && next !== visibleDate) {
+            setVisibleDate(next);
+          }
+          return;
+        }
       }
     }
-    if (latestChatTimestamp) {
-      setVisibleDate(formatDateWithWeekday(latestChatTimestamp));
+
+    if (!visibleDate && latestChatTimestamp) {
+      const next = formatDateWithWeekday(latestChatTimestamp);
+      if (next && next !== visibleDate) {
+        setVisibleDate(next);
+      }
     }
   }, [messages, latestChatTimestamp, visibleDate]);
 
@@ -529,12 +551,7 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
     }
   }, [messages, page]);
 
-  // Auto-scroll to bottom when messages change (legacy - keep for new message functionality)
-  useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-    }
-  }, [messages]);
+  // Note: 不要在 messages 每次變動就強制滾到底部，否則會破壞「向上載入更早訊息」的滾動位置保持。
 
   // GPT 計時器 useEffect：多分頁同步
   useEffect(() => {
@@ -632,6 +649,24 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
 
     try {
       const token = localStorage.getItem('auth_token');
+
+      // 建立請求 body
+      const requestBody: { text: string; platform: string; meta_jwt_token?: string } = {
+        text: trimmedText,
+        platform
+      };
+
+      // 對於 Facebook 渠道，從 localStorage 取得 meta_jwt_token
+      if (platform === 'Facebook') {
+        const metaJwt = localStorage.getItem('meta_jwt_token');
+        if (!metaJwt) {
+          alert('請先完成 Facebook 授權');
+          setIsSending(false);
+          return;
+        }
+        requestBody.meta_jwt_token = metaJwt;
+      }
+
       const response = await fetch(
         `/api/v1/members/${member.id}/chat/send`,
         {
@@ -640,12 +675,13 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ text: trimmedText, platform })
+          body: JSON.stringify(requestBody)
         }
       );
 
       if (!response.ok) {
-        throw new Error('發送失敗');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || '發送失敗');
       }
 
       const result = await response.json();
@@ -991,7 +1027,7 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
 
               {/* Messages list (使用 ChatBubble - Figma v1087) */}
               {messages.map((message) => (
-                <div key={message.id} data-timestamp={message.timestamp || ''} className="w-full">
+                <div key={message.id} data-timestamp={extractMessageTimestamp(message) || ''} className="w-full">
                   <ChatBubble
                     message={message}
                     memberAvatar={

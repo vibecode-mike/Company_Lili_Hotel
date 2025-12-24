@@ -51,10 +51,12 @@ class Settings(BaseSettings):
     # LINE App 服務 URL
     LINE_APP_URL: str = "http://localhost:3001"
 
-    # FacebITE_FACEBOOK_APP_ID: Optional[str]ok Graph API
+    # Facebook API (外部 Meta Page 服務)
+    FB_API_URL: str = "https://api-youth-tycg.star-bit.io"
+
+    # Facebook Graph API / Frontend SDK config (no app secret stored here)
     FACEBOOK_GRAPH_API_VERSION: str = "v24.0"
     VITE_FACEBOOK_APP_ID: Optional[str] = "851348804294287"
-    VITE_FACEBOOK_APP_SECRET: Optional[str]="8c6de275e53765098908c0bd7a05bf6a"
     # 路由配置
     UPLOAD_ROUTE_PREFIX: str = "/uploads"
 

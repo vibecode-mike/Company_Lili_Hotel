@@ -5,7 +5,8 @@ LINE 訊息通知 API
 import logging
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -54,7 +55,8 @@ async def notify_new_message(
             return {"status": "ok", "message": "Member not found, skipped"}
 
         # 2. 轉換時間格式 (使用中文上午/下午)
-        message_time = datetime.fromtimestamp(notification.timestamp / 1000)
+        # notification.timestamp: Unix timestamp (milliseconds)
+        message_time = datetime.fromtimestamp(notification.timestamp / 1000, tz=timezone.utc).astimezone(ZoneInfo("Asia/Taipei"))
         hour = message_time.hour
         minute = message_time.minute
         period = "上午" if hour < 12 else "下午"
@@ -83,7 +85,7 @@ async def notify_new_message(
         await manager.send_new_message(msg.thread_id, {
             **message_data,
             "thread_id": msg.thread_id,
-            "timestamp": msg.created_at.isoformat()
+            "timestamp": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg.created_at else None
         })
 
         logger.info(f"✅ Notified frontend about new message on thread {msg.thread_id}")

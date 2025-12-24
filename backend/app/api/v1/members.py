@@ -26,7 +26,9 @@ from app.schemas.common import SuccessResponse
 from app.core.pagination import PageParams, PageResponse, paginate_query
 from app.api.v1.auth import get_current_user
 from app.clients.line_app_client import LineAppClient
+from app.clients.fb_message_client import FbMessageClient
 from datetime import datetime, timezone
+from typing import Optional
 import os
 
 from app.services.chatroom_service import ChatroomService
@@ -740,6 +742,7 @@ async def send_member_chat_message(
     member_id: int,
     text: str = Body(..., embed=True),
     platform: str = Body("LINE", embed=True, description="渠道：LINE/Facebook/Webchat"),
+    meta_jwt_token: Optional[str] = Body(None, embed=True, description="FB 渠道需要的 JWT token"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -794,21 +797,46 @@ async def send_member_chat_message(
                 "success": True,
                 "message_id": send_result.get("message_id"),
                 "thread_id": send_result.get("thread_id"),
-                "sent_at": datetime.now().isoformat()
+                "sent_at": datetime.now(timezone.utc).isoformat()
             }
 
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"發送訊息失敗: {str(e)}")
 
-    elif platform in {"Facebook", "Webchat"}:
-        # 先寫入對話訊息，外部傳送暫作 TODO
+    elif platform == "Facebook":
+        # 檢查 meta_jwt_token
+        if not meta_jwt_token:
+            raise HTTPException(status_code=400, detail="缺少 meta_jwt_token，請先完成 Facebook 授權")
+
+        # 調用外部 FB API 發送訊息 (FB 會員一定有 email)
+        fb_client = FbMessageClient()
+        send_result = await fb_client.send_message(
+            recipient_email=member.email,
+            text=text,
+            meta_jwt_token=meta_jwt_token
+        )
+
+        if not send_result.get("ok"):
+            raise HTTPException(status_code=500, detail=f"發送 Facebook 訊息失敗: {send_result.get('error')}")
+
+        # 成功後寫入對話訊息
+        msg = await chatroom_service.append_message(member, "Facebook", "outgoing", text, message_source="manual")
+        return {
+            "success": True,
+            "message_id": send_result.get("message_id", msg.id),
+            "thread_id": msg.thread_id,
+            "sent_at": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg.created_at else None
+        }
+
+    elif platform == "Webchat":
+        # Webchat 僅寫入資料庫
         try:
             msg = await chatroom_service.append_message(member, platform, "outgoing", text, message_source="manual")
             return {
                 "success": True,
                 "message_id": msg.id,
                 "thread_id": msg.thread_id,
-                "sent_at": msg.created_at.isoformat()
+                "sent_at": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg.created_at else None
             }
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
