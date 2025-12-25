@@ -500,8 +500,8 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
       }
     }
 
-    // 滾動到頂部 + 還有更多訊息 + 不在載入中
-    if (container.scrollTop === 0 && hasMore && !isLoading) {
+    // 接近頂部（< 50px）+ 還有更多訊息 + 不在載入中
+    if (container.scrollTop < 50 && hasMore && !isLoading) {
       const prevScrollHeight = container.scrollHeight;
 
       const loadMore = async () => {
@@ -550,6 +550,19 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
       });
     }
   }, [messages, page]);
+
+  // 當內容不夠滾動但還有更多訊息時，自動載入更多
+  useEffect(() => {
+    const container = chatContainerRef.current;
+    if (!container || !hasMore || isLoading) return;
+
+    // 檢查是否可以滾動（內容高度 > 容器高度）
+    const canScroll = container.scrollHeight > container.clientHeight;
+
+    if (!canScroll && messages.length > 0) {
+      loadChatMessages(page + 1, true);
+    }
+  }, [messages, hasMore, isLoading, page, loadChatMessages]);
 
   // Note: 不要在 messages 每次變動就強制滾到底部，否則會破壞「向上載入更早訊息」的滾動位置保持。
 
