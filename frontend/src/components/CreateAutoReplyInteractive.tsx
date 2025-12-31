@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import Sidebar from './Sidebar';
 import svgPathsModal from "../imports/svg-9n0wtrekj3";
 import KeywordTagsInput from './KeywordTagsInput';
-import TriggerTimeOptions, { TriggerTimeType } from './TriggerTimeOptions';
+import TriggerTimeOptions, { TriggerTimeType, ScheduleModeType } from './TriggerTimeOptions';
 import { SimpleBreadcrumb, DeleteButton } from './common';
 import { useAutoReplies, type AutoReply as AutoReplyRecord, type AutoReplyPayload, type AutoReplyConflict } from '../contexts/AutoRepliesContext';
 
@@ -74,6 +74,7 @@ export default function CreateAutoReplyInteractive({
   const [keywordTags, setKeywordTags] = useState<string[]>([]);
   const [triggerTime, setTriggerTime] = useState<TriggerTimeType>('immediate');
   const [scheduledDateTime, setScheduledDateTime] = useState(() => ({ ...INITIAL_SCHEDULE }));
+  const [scheduleMode, setScheduleMode] = useState<ScheduleModeType>('time'); // 新增：日期或時間模式
   const textareaRefs = useRef<{ [key: number]: HTMLTextAreaElement | null }>({});
   const isEditing = Boolean(autoReplyId);
 
@@ -82,6 +83,10 @@ export default function CreateAutoReplyInteractive({
   const [conflictData, setConflictData] = useState<AutoReplyConflict | null>(null);
   const [pendingPayload, setPendingPayload] = useState<AutoReplyPayload | null>(null);
 
+  // 渠道 ID 狀態（用於歡迎訊息衝突判斷）
+  const [lineBasicId, setLineBasicId] = useState<string | null>(null);
+  const [fbPageId, setFbPageId] = useState<string | null>(null);
+
   const resetForm = useCallback(() => {
     setReplyType('welcome');
     setIsEnabled(true);
@@ -89,6 +94,45 @@ export default function CreateAutoReplyInteractive({
     setKeywordTags([]);
     setTriggerTime('immediate');
     setScheduledDateTime({ ...INITIAL_SCHEDULE });
+    setScheduleMode('time');
+  }, []);
+
+  // 獲取渠道 ID（LINE basic_id / Facebook page_id）
+  useEffect(() => {
+    // 獲取 LINE channel basic_id
+    fetch('/api/v1/line_channels/current')
+      .then(res => res.ok ? res.json() : null)
+      .then(data => setLineBasicId(data?.basic_id || null))
+      .catch(() => null);
+
+    // 獲取 FB channel page_id
+    fetch('/api/v1/fb_channels')
+      .then(res => res.ok ? res.json() : [])
+      .then(data => {
+        const active = Array.isArray(data) ? data.find((ch: { is_active?: boolean }) => ch.is_active) : null;
+        setFbPageId(active?.page_id || null);
+      })
+      .catch(() => null);
+  }, []);
+
+  // 處理日期/時間模式切換，清空另一模式的值
+  const handleScheduleModeChange = useCallback((mode: ScheduleModeType) => {
+    setScheduleMode(mode);
+    if (mode === 'date') {
+      // 切換到日期模式，清空時間
+      setScheduledDateTime(prev => ({
+        ...prev,
+        startTime: '',
+        endTime: '',
+      }));
+    } else {
+      // 切換到時間模式，清空日期
+      setScheduledDateTime(prev => ({
+        ...prev,
+        startDate: '',
+        endDate: '',
+      }));
+    }
   }, []);
 
   const hydrateFromRecord = useCallback((record: AutoReplyRecord) => {
@@ -122,6 +166,13 @@ export default function CreateAutoReplyInteractive({
       startTime: record.triggerTimeStart ?? '',
       endTime: record.triggerTimeEnd ?? '',
     });
+
+    // 根據現有資料決定 scheduleMode
+    if (record.dateRangeStart || record.dateRangeEnd) {
+      setScheduleMode('date');
+    } else {
+      setScheduleMode('time');
+    }
   }, []);
 
   useEffect(() => {
@@ -240,10 +291,26 @@ export default function CreateAutoReplyInteractive({
     }
 
     const shouldSendSchedule = replyType === 'follow' && triggerTime === 'scheduled';
-    if (shouldSendSchedule && (!scheduledDateTime.startTime || !scheduledDateTime.endTime)) {
-      toast.error('請設定完整的觸發時間區間');
-      return;
+    if (shouldSendSchedule) {
+      if (scheduleMode === 'date') {
+        if (!scheduledDateTime.startDate || !scheduledDateTime.endDate) {
+          toast.error('請設定完整的日期區間');
+          return;
+        }
+      } else {
+        if (!scheduledDateTime.startTime || !scheduledDateTime.endTime) {
+          toast.error('請設定完整的時間區間');
+          return;
+        }
+      }
     }
+
+    // 根據 scheduleMode 只送對應欄位
+    const sendDateFields = shouldSendSchedule && scheduleMode === 'date';
+    const sendTimeFields = shouldSendSchedule && scheduleMode === 'time';
+
+    // 根據選擇的渠道帶入對應的 channelId
+    const channelId = selectedChannel === 'LINE' ? lineBasicId : fbPageId;
 
     const payload: AutoReplyPayload = {
       name: `${getReplyTypeLabel(replyType)} - ${trimmedMessages[0].slice(0, 12) || '訊息'}`,
@@ -251,11 +318,12 @@ export default function CreateAutoReplyInteractive({
       messages: trimmedMessages,
       keywords: replyType === 'keyword' ? keywordTags : [],
       isActive: isEnabled,
-      triggerTimeStart: shouldSendSchedule ? scheduledDateTime.startTime || null : null,
-      triggerTimeEnd: shouldSendSchedule ? scheduledDateTime.endTime || null : null,
-      dateRangeStart: shouldSendSchedule ? normalizeDateForApi(scheduledDateTime.startDate) : null,
-      dateRangeEnd: shouldSendSchedule ? normalizeDateForApi(scheduledDateTime.endDate) : null,
+      triggerTimeStart: sendTimeFields ? scheduledDateTime.startTime || null : null,
+      triggerTimeEnd: sendTimeFields ? scheduledDateTime.endTime || null : null,
+      dateRangeStart: sendDateFields ? normalizeDateForApi(scheduledDateTime.startDate) : null,
+      dateRangeEnd: sendDateFields ? normalizeDateForApi(scheduledDateTime.endDate) : null,
       channels: [selectedChannel],
+      channelId: channelId,
       forceActivate,
     };
 
@@ -518,7 +586,9 @@ export default function CreateAutoReplyInteractive({
                                 </div>
                                 {isDropdownOpen && (
                                   <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-neutral-100 rounded-[8px] shadow-lg z-10">
-                                    {replyTypeOptions.map(opt => (
+                                    {replyTypeOptions
+                                      .filter(opt => selectedChannel !== 'Facebook' || opt.value === 'keyword')
+                                      .map(opt => (
                                       <div key={opt.value} className="py-[12px] px-[8px] hover:bg-slate-50 cursor-pointer flex items-center" onClick={(e) => { e.stopPropagation(); setReplyType(opt.value); setIsDropdownOpen(false); }}>
                                         <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#383838] text-[16px] leading-[1.5] whitespace-nowrap">{opt.label}</p>
                                       </div>
@@ -551,7 +621,7 @@ export default function CreateAutoReplyInteractive({
                                 {isChannelDropdownOpen && (
                                   <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-neutral-100 rounded-[8px] shadow-lg z-10">
                                     {channelOptions.map(opt => (
-                                      <div key={opt.value} className="py-[12px] px-[8px] hover:bg-slate-50 cursor-pointer flex items-center" onClick={(e) => { e.stopPropagation(); setSelectedChannel(opt.value); setIsChannelDropdownOpen(false); }}>
+                                      <div key={opt.value} className="py-[12px] px-[8px] hover:bg-slate-50 cursor-pointer flex items-center" onClick={(e) => { e.stopPropagation(); setSelectedChannel(opt.value); if (opt.value === 'Facebook' && replyType !== 'keyword') { setReplyType('keyword'); } setIsChannelDropdownOpen(false); }}>
                                         <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#383838] text-[16px] leading-[1.5] whitespace-nowrap">{opt.label}</p>
                                       </div>
                                     ))}
@@ -601,6 +671,8 @@ export default function CreateAutoReplyInteractive({
                               scheduledDateTime={scheduledDateTime}
                               setScheduledDateTime={setScheduledDateTime}
                               showScheduledOption={replyType === 'follow'} // 只有"一律回應"才顯示"指定日期或時間"
+                              scheduleMode={scheduleMode}
+                              onScheduleModeChange={handleScheduleModeChange}
                             />
                           </div>
                         </div>
@@ -687,9 +759,11 @@ export default function CreateAutoReplyInteractive({
                                           rows={3}
                                         />
 
-                                        <div className="bg-neutral-100 box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer hover:bg-neutral-200 transition-colors" onClick={() => handleInsertVariable(index)}>
-                                          <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] text-center">好友的顯示名稱</p>
-                                        </div>
+                                        {selectedChannel !== 'Facebook' && (
+                                          <div className="bg-neutral-100 box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer hover:bg-neutral-200 transition-colors" onClick={() => handleInsertVariable(index)}>
+                                            <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] text-center">好友的顯示名稱</p>
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
                                   </div>
