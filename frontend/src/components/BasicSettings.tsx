@@ -6,21 +6,9 @@ import { BasicSettingsList, ChannelAccount } from './BasicSettingsList';
 import LineApiSettingsContent from './LineApiSettingsContent';
 import {
   ensureFacebookSdkLoaded,
-  fbGetBusinesses,
-  fbGetBusinessPages,
-  fbGetPageAccessToken,
-  fbGetLoginStatus,
+  fbGetManagedPages,
   fbLogin,
 } from '../utils/facebookSdk';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from './ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 type ViewState = 'loading' | 'empty' | 'line-setup' | 'list';
 
@@ -43,11 +31,6 @@ type FbPageOption = {
   accessToken?: string;
 };
 
-type FbBusinessOption = {
-  id: string;
-  name: string;
-};
-
 type FacebookSdkConfigDto = {
   app_id: string;
   api_version: string;
@@ -62,18 +45,10 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
   const { showToast } = useToast();
   const [viewState, setViewState] = useState<ViewState>('loading');
   const [accounts, setAccounts] = useState<ChannelAccount[]>([]);
-  const [facebookDialogOpen, setFacebookDialogOpen] = useState(false);
   const [facebookAuthorizing, setFacebookAuthorizing] = useState(false);
   const [facebookSdkLoading, setFacebookSdkLoading] = useState(false);
   const [facebookSdkReady, setFacebookSdkReady] = useState(false);
   const [facebookSdkError, setFacebookSdkError] = useState<string | null>(null);
-  const [facebookBusinesses, setFacebookBusinesses] = useState<FbBusinessOption[]>([]);
-  const [selectedFacebookBusinessId, setSelectedFacebookBusinessId] = useState<string>('');
-  const [facebookPages, setFacebookPages] = useState<FbPageOption[]>([]);
-  const [selectedFacebookPageId, setSelectedFacebookPageId] = useState<string>('');
-  const [facebookLoadingPages, setFacebookLoadingPages] = useState(false);
-  const [facebookSubmitting, setFacebookSubmitting] = useState(false);
-  const [facebookTargetChannelId, setFacebookTargetChannelId] = useState<string | null>(null);
 
   const hasAccounts = accounts.length > 0;
 
@@ -93,20 +68,23 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
       .replace(/\//g, '-');
   }, []);
 
+  const fbApiBaseUrl = useMemo(
+    () => (import.meta.env.VITE_FB_API_URL?.trim() || 'https://api-youth-tycg.star-bit.io').replace(/\/+$/, ''),
+    []
+  );
+  const fbServiceAccount = useMemo(
+    () => import.meta.env.VITE_FB_FIRM_ACCOUNT?.trim() || 'tycg-admin',
+    []
+  );
+  const fbServicePassword = useMemo(
+    () => import.meta.env.VITE_FB_FIRM_PASSWORD?.trim() || '123456',
+    []
+  );
+
   const facebookLoginScope = useMemo(() => {
-    return 'public_profile,email,business_management,pages_show_list,pages_read_engagement';
+    return 'public_profile,email,pages_show_list,pages_read_engagement,pages_manage_metadata';
   }, []);
 
-  const resetFacebookDialog = useCallback(() => {
-    setFacebookAuthorizing(false);
-    setFacebookSubmitting(false);
-    setFacebookLoadingPages(false);
-    setFacebookBusinesses([]);
-    setSelectedFacebookBusinessId('');
-    setFacebookPages([]);
-    setSelectedFacebookPageId('');
-    setFacebookTargetChannelId(null);
-  }, []);
 
   const prepareFacebookSdk = useCallback(async () => {
     if (facebookSdkReady || facebookSdkLoading) return;
@@ -131,38 +109,29 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     }
   }, [facebookSdkLoading, facebookSdkReady]);
 
-  const loadFacebookPagesForBusiness = useCallback(async (businessId: string, preferredPageId?: string | null) => {
-    const id = businessId.trim();
-    if (!id) return;
+  // 儲存粉專到後端
+  const saveFacebookPage = useCallback(async (page: FbPageOption, targetChannelId: string | null) => {
+    const endpoint = targetChannelId
+      ? `/api/v1/fb_channels/${encodeURIComponent(targetChannelId)}`
+      : '/api/v1/fb_channels';
+    const method = targetChannelId ? 'PATCH' : 'POST';
 
-    setFacebookLoadingPages(true);
-    try {
-      const pages = await fbGetBusinessPages(id);
-      const normalized: FbPageOption[] = (Array.isArray(pages) ? pages : [])
-        .filter(p => typeof p.id === 'string' && p.id)
-        .map(p => ({
-          id: p.id,
-          name: typeof p.name === 'string' && p.name.trim() ? p.name : p.id,
-        }));
+    const response = await fetch(endpoint, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        page_id: page.id,
+        channel_name: page.name,
+        is_active: true,
+        connection_status: 'connected',
+      }),
+    });
 
-      setFacebookPages(normalized);
-      if (!normalized.length) {
-        setSelectedFacebookPageId('');
-        return;
-      }
-
-      const defaultSelected =
-        preferredPageId && normalized.some(p => p.id === preferredPageId) ? preferredPageId : normalized[0].id;
-      setSelectedFacebookPageId(defaultSelected);
-    } finally {
-      setFacebookLoadingPages(false);
+    if (!response.ok) {
+      const detail = await response.json().catch(() => null);
+      throw new Error(typeof detail?.detail === 'string' ? detail.detail : '無法保存 Facebook 粉絲專頁設定');
     }
   }, []);
-
-  const handleFacebookDialogOpenChange = useCallback((open: boolean) => {
-    setFacebookDialogOpen(open);
-    if (!open) resetFacebookDialog();
-  }, [resetFacebookDialog]);
 
   useEffect(() => {
     prepareFacebookSdk();
@@ -252,6 +221,7 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     setViewState('line-setup');
   }, [accounts, showToast]);
 
+  // Facebook 授權流程：FB.login → 取得粉專列表 → 自動儲存第一個粉專
   const handleFacebookAuthorize = useCallback(async (targetChannelId: string | null): Promise<boolean> => {
     setFacebookAuthorizing(true);
     try {
@@ -262,44 +232,37 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
         throw new Error('Facebook SDK 尚未載入完成，請稍候再試');
       }
 
-      const existingSession = await fbGetLoginStatus().catch(() => null);
-      const loginResponse =
-        existingSession?.status === 'connected' && existingSession.authResponse?.accessToken
-          ? existingSession
-          : await fbLogin(facebookLoginScope);
+      // 1. FB.login（官方彈窗）
+      const loginResponse = await fbLogin(facebookLoginScope);
       if (loginResponse.status !== 'connected' || !loginResponse.authResponse?.accessToken) {
         throw new Error('Facebook 登入未完成（可能已取消授權）');
       }
 
-      const businesses = await fbGetBusinesses();
-      const normalizedBusinesses: FbBusinessOption[] = (Array.isArray(businesses) ? businesses : [])
-        .filter(b => typeof b.id === 'string' && b.id)
-        .map(b => ({
-          id: b.id,
-          name: typeof b.name === 'string' && b.name.trim() ? b.name : b.id,
+      // 2. 取得用戶管理的粉專列表（/me/accounts）
+      const pages = await fbGetManagedPages();
+      const normalizedPages: FbPageOption[] = (Array.isArray(pages) ? pages : [])
+        .filter(p => typeof p.id === 'string' && p.id)
+        .map(p => ({
+          id: p.id,
+          name: typeof p.name === 'string' && p.name.trim() ? p.name : p.id,
+          accessToken: p.access_token,
         }));
 
-      if (normalizedBusinesses.length === 0) {
-        throw new Error('找不到可管理的商家（請確認已授權 business_management，且帳號有 BM 權限）');
+      if (normalizedPages.length === 0) {
+        throw new Error('找不到可管理的粉絲專頁（請確認您的 Facebook 帳號有管理粉專的權限）');
       }
 
-      setFacebookBusinesses(normalizedBusinesses);
+      // 3. 使用用戶在官方 FB.login 彈窗中授權的粉專
+      const selectedPage = normalizedPages[0];
 
-      const preferredPageId = targetChannelId ? accounts.find(a => a.id === targetChannelId)?.channelId : null;
-      let selectedBusinessId = normalizedBusinesses[0].id;
-
-      if (preferredPageId) {
-        for (const business of normalizedBusinesses) {
-          const pages = await fbGetBusinessPages(business.id);
-          if ((Array.isArray(pages) ? pages : []).some(p => p?.id === preferredPageId)) {
-            selectedBusinessId = business.id;
-            break;
-          }
-        }
-      }
-
-      setSelectedFacebookBusinessId(selectedBusinessId);
-      await loadFacebookPagesForBusiness(selectedBusinessId, preferredPageId);
+      // 4. 直接儲存粉專
+      await saveFacebookPage(selectedPage, targetChannelId);
+      await reloadAccounts();
+      setViewState('list');
+      showToast(
+        targetChannelId ? '已重新授權 Facebook 粉絲專頁' : '已成功連結 Facebook 粉絲專頁',
+        'success'
+      );
       return true;
     } catch (error) {
       console.error('Facebook 授權流程失敗:', error);
@@ -313,78 +276,122 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     facebookLoginScope,
     facebookSdkError,
     facebookSdkReady,
-    loadFacebookPagesForBusiness,
+    reloadAccounts,
+    saveFacebookPage,
     showToast,
   ]);
 
-  const requestMetaJwt = useCallback(async (facebookAccessToken: string): Promise<string> => {
-    const metaLoginResponse = await fetch('https://api-youth-tycg.star-bit.io/api/v1/admin/meta_login', {
+  const performFirmLogin = useCallback(async (): Promise<string> => {
+    const firmLoginResponse = await fetch(`${fbApiBaseUrl}/api/v1/admin/firm_login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ access_token: facebookAccessToken }),
+      body: JSON.stringify({ account: fbServiceAccount, password: fbServicePassword }),
     });
 
-    const metaLoginPayload = await metaLoginResponse.json().catch(() => null);
-    const metaJwt = metaLoginPayload?.data?.access_token;
-    if (!metaLoginResponse.ok || !metaJwt) {
-      throw new Error(metaLoginPayload?.msg || `meta_login 失敗（HTTP ${metaLoginResponse.status}）`);
+    const firmLoginPayload = await firmLoginResponse.json().catch(() => null);
+    if (!firmLoginResponse.ok) {
+      throw new Error(firmLoginPayload?.msg || `firm_login 失敗（HTTP ${firmLoginResponse.status}）`);
     }
 
-    return metaJwt;
-  }, []);
+    const firmToken = firmLoginPayload?.data?.access_token;
+    if (!firmToken) {
+      throw new Error('firm_login 未取得 access_token，無法進行後續授權');
+    }
 
-  const handleFacebookBusinessChange = useCallback(
-    async (businessId: string) => {
-      setSelectedFacebookBusinessId(businessId);
-      await loadFacebookPagesForBusiness(businessId, null);
+    localStorage.setItem('meta_jwt_token', firmToken);
+    return firmToken;
+  }, [fbApiBaseUrl, fbServiceAccount, fbServicePassword]);
+
+  const requestMetaLogin = useCallback(
+    async (facebookAccessToken: string): Promise<string> => {
+      const ensureServiceJwt = async (): Promise<string> => {
+        const existing = localStorage.getItem('meta_jwt_token');
+        if (existing) return existing;
+        return performFirmLogin();
+      };
+
+      let serviceJwt = await ensureServiceJwt();
+
+      const metaLoginResponse = await fetch(`${fbApiBaseUrl}/api/v1/admin/meta_page/meta_login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${serviceJwt}`,
+        },
+        body: JSON.stringify({ access_token: facebookAccessToken }),
+      });
+
+      let metaLoginPayload = await metaLoginResponse.json().catch(() => null);
+
+      // 若 JWT 過期，重新進行 firm_login 後再重試一次 meta_login
+      if (metaLoginResponse.status === 401) {
+        serviceJwt = await performFirmLogin();
+        const retryResponse = await fetch(`${fbApiBaseUrl}/api/v1/admin/meta_page/meta_login`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${serviceJwt}`,
+          },
+          body: JSON.stringify({ access_token: facebookAccessToken }),
+        });
+        metaLoginPayload = await retryResponse.json().catch(() => null);
+        if (!retryResponse.ok) {
+          throw new Error(metaLoginPayload?.msg || `meta_login 失敗（HTTP ${retryResponse.status}）`);
+        }
+        // meta_login 成功後，繼續使用 firm_login 的 JWT（不覆蓋）
+        return serviceJwt;
+      }
+
+      if (!metaLoginResponse.ok) {
+        throw new Error(metaLoginPayload?.msg || `meta_login 失敗（HTTP ${metaLoginResponse.status}）`);
+      }
+
+      // meta_login 成功後，繼續使用 firm_login 的 JWT（不覆蓋）
+      return serviceJwt;
     },
-    [loadFacebookPagesForBusiness]
+    [fbApiBaseUrl, performFirmLogin]
   );
 
-  // 點擊 Facebook 卡片 - FB OAuth → meta_login → 存 JWT → 選粉專 → 寫入 fb_channels
-  const handleFacebookClick = useCallback(async () => {
-    setFacebookAuthorizing(true);
-    try {
-      if (facebookSdkError) {
-        throw new Error(facebookSdkError);
-      }
-      await prepareFacebookSdk();
-
-      // FB OAuth 對話框
-      const existingSession = await fbGetLoginStatus().catch(() => null);
-      const loginResponse =
-        existingSession?.status === 'connected' && existingSession.authResponse?.accessToken
-          ? existingSession
-          : await fbLogin(facebookLoginScope);
-      if (loginResponse.status !== 'connected' || !loginResponse.authResponse?.accessToken) {
-        throw new Error('Facebook 登入未完成（可能已取消授權）');
-      }
-
-      // 呼叫 meta_login API（以外部 Meta 服務為主）
-      const fbAccessToken = loginResponse.authResponse.accessToken;
-      const metaJwt = await requestMetaJwt(fbAccessToken);
-
-      // 存 JWT（供後續外部 API 使用）
-      localStorage.setItem('meta_jwt_token', metaJwt);
-
-      // 需要選擇粉絲專頁並保存到本機 fb_channels，才算完成「基本設定」連結
-      setFacebookDialogOpen(true);
-      setFacebookTargetChannelId(null);
-      await handleFacebookAuthorize(null);
-    } catch (error) {
-      console.error('Facebook 連結失敗:', error);
-      showToast(error instanceof Error ? error.message : 'Facebook 連結失敗', 'error');
-    } finally {
-      setFacebookAuthorizing(false);
+  // 同步 FB 會員列表到後端（非阻塞，失敗不影響主流程）
+  const syncFacebookMembers = useCallback(async () => {
+    const metaJwt = localStorage.getItem('meta_jwt_token');
+    if (!metaJwt) {
+      console.warn('缺少 meta_jwt_token，跳過 FB 會員同步');
+      return;
     }
-  }, [
-    facebookLoginScope,
-    facebookSdkError,
-    handleFacebookAuthorize,
-    prepareFacebookSdk,
-    requestMetaJwt,
-    showToast,
-  ]);
+
+    try {
+      const syncResponse = await fetch('/api/v1/fb_channels/sync-members', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ meta_jwt_token: metaJwt }),
+      });
+
+      if (syncResponse.ok) {
+        const syncResult = await syncResponse.json();
+        console.log('FB 會員同步完成:', syncResult.data);
+      } else {
+        console.warn('FB 會員同步失敗，但不影響主流程');
+      }
+    } catch (syncError) {
+      console.warn('FB 會員同步錯誤:', syncError);
+      // 不阻斷主流程
+    }
+  }, []);
+
+  // 點擊 Facebook 卡片 - FB.login → 取得粉專 → 自動儲存
+  const handleFacebookClick = useCallback(async () => {
+    if (!facebookSdkReady) {
+      await prepareFacebookSdk();
+      if (!facebookSdkReady && !window.FB) {
+        showToast('Facebook SDK 載入失敗，請重試', 'error');
+        return;
+      }
+    }
+    await handleFacebookAuthorize(null);
+  }, [facebookSdkReady, handleFacebookAuthorize, prepareFacebookSdk, showToast]);
 
   // 點擊新增帳號按鈕 - 直接回到平台選擇卡片
   const handleAddAccount = useCallback(() => {
@@ -422,46 +429,17 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
       }
       setViewState('line-setup');
     } else {
-      // Facebook: FB OAuth → meta_login → 存 JWT → 選粉專 → PATCH fb_channels
-      setFacebookAuthorizing(true);
-      try {
-        if (facebookSdkError) {
-          throw new Error(facebookSdkError);
-        }
+      // Facebook: FB.login → 取得粉專 → 自動儲存
+      if (!facebookSdkReady) {
         await prepareFacebookSdk();
-
-        const existingSession = await fbGetLoginStatus().catch(() => null);
-        const loginResponse =
-          existingSession?.status === 'connected' && existingSession.authResponse?.accessToken
-            ? existingSession
-            : await fbLogin(facebookLoginScope);
-        if (loginResponse.status !== 'connected' || !loginResponse.authResponse?.accessToken) {
-          throw new Error('Facebook 登入未完成（可能已取消授權）');
+        if (!facebookSdkReady && !window.FB) {
+          showToast('Facebook SDK 載入失敗，請重試', 'error');
+          return;
         }
-
-        const fbAccessToken = loginResponse.authResponse.accessToken;
-        const metaJwt = await requestMetaJwt(fbAccessToken);
-
-        localStorage.setItem('meta_jwt_token', metaJwt);
-
-        setFacebookDialogOpen(true);
-        setFacebookTargetChannelId(account.id);
-        await handleFacebookAuthorize(account.id);
-      } catch (error) {
-        console.error('Facebook 重新連結失敗:', error);
-        showToast(error instanceof Error ? error.message : 'Facebook 重新連結失敗', 'error');
-      } finally {
-        setFacebookAuthorizing(false);
       }
+      await handleFacebookAuthorize(account.id);
     }
-  }, [
-    facebookLoginScope,
-    facebookSdkError,
-    handleFacebookAuthorize,
-    prepareFacebookSdk,
-    requestMetaJwt,
-    showToast,
-  ]);
+  }, [facebookSdkReady, handleFacebookAuthorize, prepareFacebookSdk, reloadAccounts, showToast]);
 
   // 返回列表
   const handleBackToList = useCallback(() => {
@@ -472,65 +450,6 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     }
   }, [hasAccounts]);
 
-  const handleConfirmFacebookPage = useCallback(async () => {
-    const selected = facebookPages.find(p => p.id === selectedFacebookPageId);
-    if (!selected) return;
-
-    setFacebookSubmitting(true);
-    try {
-      const tokenInfo = selected.accessToken
-        ? { access_token: selected.accessToken, name: selected.name }
-        : await fbGetPageAccessToken(selected.id);
-      const pageAccessToken = tokenInfo.access_token;
-      const pageName = tokenInfo.name || selected.name;
-
-      const endpoint = facebookTargetChannelId
-        ? `/api/v1/fb_channels/${encodeURIComponent(facebookTargetChannelId)}`
-        : '/api/v1/fb_channels';
-
-      const method = facebookTargetChannelId ? 'PATCH' : 'POST';
-      const response = await fetch(endpoint, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          page_id: selected.id,
-          page_access_token: pageAccessToken,
-          channel_name: pageName,
-          is_active: true,
-        }),
-      });
-
-      if (!response.ok) {
-        const detail = await response.json().catch(() => null);
-        const message =
-          typeof detail?.detail === 'string'
-            ? detail.detail
-            : '無法保存 Facebook 粉絲專頁設定';
-        throw new Error(message);
-      }
-
-      setFacebookDialogOpen(false);
-      resetFacebookDialog();
-      await reloadAccounts();
-      setViewState('list');
-      showToast(
-        facebookTargetChannelId ? '已重新授權 Facebook 粉絲專頁' : '已成功連結 Facebook 粉絲專頁',
-        'success'
-      );
-    } catch (error) {
-      console.error('保存 Facebook 粉絲專頁失敗:', error);
-      showToast(error instanceof Error ? error.message : '保存 Facebook 粉絲專頁失敗', 'error');
-    } finally {
-      setFacebookSubmitting(false);
-    }
-  }, [
-    facebookPages,
-    selectedFacebookPageId,
-    facebookTargetChannelId,
-    reloadAccounts,
-    resetFacebookDialog,
-    showToast,
-  ]);
 
   // 渲染不同視圖
   if (viewState === 'loading') {
@@ -543,97 +462,12 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
 
   if (viewState === 'empty') {
     return (
-      <>
-        <BasicSettingsEmpty
-          onLineClick={handleLineClick}
-          onFacebookClick={handleFacebookClick}
-          hasAccounts={hasAccounts}
-          onViewAccounts={hasAccounts ? handleViewAccounts : undefined}
-        />
-        <Dialog open={facebookDialogOpen} onOpenChange={handleFacebookDialogOpenChange}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>連接 Facebook 帳號</DialogTitle>
-              <DialogDescription>
-                透過官方授權流程取得可管理的粉絲專頁，驗證成功後會自動保存。
-              </DialogDescription>
-            </DialogHeader>
-            {!facebookBusinesses.length ? (
-              <div className="flex flex-col gap-2">
-	                <button
-	                  type="button"
-	                  className="bg-[#242424] text-white rounded-[12px] px-[12px] py-[10px] hover:bg-[#383838] transition-colors disabled:opacity-60"
-	                  onClick={
-	                    facebookSdkReady ? () => handleFacebookAuthorize(facebookTargetChannelId) : prepareFacebookSdk
-	                  }
-	                  disabled={facebookAuthorizing || facebookSubmitting || facebookSdkLoading}
-	                >
-	                  {facebookAuthorizing ? '授權中...' : facebookSdkLoading ? '載入 Facebook...' : '使用 Facebook 登入/授權'}
-	                </button>
-                <p className="text-[12px] text-[#6e6e6e]">
-                  若未出現登入視窗，請確認瀏覽器未阻擋彈出視窗或第三方 Cookie。
-                </p>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                <Select value={selectedFacebookBusinessId} onValueChange={handleFacebookBusinessChange}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="選擇使用的商家" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {facebookBusinesses.map(b => (
-                      <SelectItem key={b.id} value={b.id}>
-                        {b.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Select
-                  value={selectedFacebookPageId}
-                  onValueChange={setSelectedFacebookPageId}
-                  disabled={facebookLoadingPages}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder={facebookLoadingPages ? '載入粉絲專頁中...' : '選擇粉絲專頁'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {facebookPages.map(p => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <DialogFooter>
-              <button
-                type="button"
-                className="border border-[#ddd] rounded-[12px] px-[12px] py-[8px] hover:bg-[#f5f5f5] transition-colors"
-                onClick={() => handleFacebookDialogOpenChange(false)}
-                disabled={facebookAuthorizing || facebookSubmitting}
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                className="bg-[#242424] text-white rounded-[12px] px-[12px] py-[8px] hover:bg-[#383838] transition-colors disabled:opacity-60"
-                onClick={handleConfirmFacebookPage}
-                disabled={
-                  !selectedFacebookBusinessId ||
-                  !selectedFacebookPageId ||
-                  facebookAuthorizing ||
-                  facebookSubmitting ||
-                  facebookLoadingPages
-                }
-              >
-                {facebookSubmitting ? '驗證並保存中...' : '確認連結'}
-              </button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </>
+      <BasicSettingsEmpty
+        onLineClick={handleLineClick}
+        onFacebookClick={handleFacebookClick}
+        hasAccounts={hasAccounts}
+        onViewAccounts={hasAccounts ? handleViewAccounts : undefined}
+      />
     );
   }
 
@@ -647,87 +481,6 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
   }
 
   return (
-    <>
-      <BasicSettingsList accounts={accounts} onAddAccount={handleAddAccount} onReauthorize={handleReauthorize} />
-      <Dialog open={facebookDialogOpen} onOpenChange={handleFacebookDialogOpenChange}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>連接 Facebook 帳號</DialogTitle>
-            <DialogDescription>
-              透過官方授權流程取得可管理的粉絲專頁，驗證成功後會自動保存。
-            </DialogDescription>
-          </DialogHeader>
-          {!facebookBusinesses.length ? (
-            <div className="flex flex-col gap-2">
-	              <button
-	                type="button"
-	                className="bg-[#242424] text-white rounded-[12px] px-[12px] py-[10px] hover:bg-[#383838] transition-colors disabled:opacity-60"
-	                onClick={
-	                  facebookSdkReady ? () => handleFacebookAuthorize(facebookTargetChannelId) : prepareFacebookSdk
-	                }
-	                disabled={facebookAuthorizing || facebookSubmitting || facebookSdkLoading}
-	              >
-	                {facebookAuthorizing ? '授權中...' : facebookSdkLoading ? '載入 Facebook...' : '使用 Facebook 登入/授權'}
-	              </button>
-              <p className="text-[12px] text-[#6e6e6e]">
-                若未出現登入視窗，請確認瀏覽器未阻擋彈出視窗或第三方 Cookie。
-              </p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              <Select value={selectedFacebookBusinessId} onValueChange={handleFacebookBusinessChange}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="選擇使用的商家" />
-                </SelectTrigger>
-                <SelectContent>
-                  {facebookBusinesses.map(b => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={selectedFacebookPageId} onValueChange={setSelectedFacebookPageId} disabled={facebookLoadingPages}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={facebookLoadingPages ? '載入粉絲專頁中...' : '選擇粉絲專頁'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {facebookPages.map(p => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          <DialogFooter>
-            <button
-              type="button"
-              className="border border-[#ddd] rounded-[12px] px-[12px] py-[8px] hover:bg-[#f5f5f5] transition-colors"
-              onClick={() => handleFacebookDialogOpenChange(false)}
-              disabled={facebookAuthorizing || facebookSubmitting}
-            >
-              取消
-            </button>
-            <button
-              type="button"
-              className="bg-[#242424] text-white rounded-[12px] px-[12px] py-[8px] hover:bg-[#383838] transition-colors disabled:opacity-60"
-              onClick={handleConfirmFacebookPage}
-              disabled={
-                !selectedFacebookBusinessId ||
-                !selectedFacebookPageId ||
-                facebookAuthorizing ||
-                facebookSubmitting ||
-                facebookLoadingPages
-              }
-            >
-              {facebookSubmitting ? '驗證並保存中...' : '確認連結'}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+    <BasicSettingsList accounts={accounts} onAddAccount={handleAddAccount} onReauthorize={handleReauthorize} />
   );
 }
