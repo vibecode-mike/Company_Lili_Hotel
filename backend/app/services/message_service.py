@@ -36,6 +36,59 @@ class MessageService:
             and bool(message.scheduled_datetime_utc)
         )
 
+    @staticmethod
+    def _transform_fb_message_to_api_format(message: Message) -> dict:
+        """
+        將 MessengerMessage 格式轉換為外部 FB API 格式
+
+        MessengerMessage (前端):
+        {
+          "attachment": {
+            "type": "template",
+            "payload": {
+              "template_type": "generic",
+              "elements": [...]
+            }
+          }
+        }
+
+        External API (輸出):
+        {
+          "channel": "FB",
+          "target_type": "all | tagged",
+          "targets": ["#tag1", ...],
+          "element": [...]
+        }
+        """
+        fb_json = json.loads(message.fb_message_json)
+        elements = fb_json.get("attachment", {}).get("payload", {}).get("elements", [])
+
+        # 轉換 target_type
+        if message.target_type == "all_friends":
+            target_type = "all"
+            targets = []
+        else:
+            target_type = "tagged"
+            targets = message.target_filter.get("include", []) if message.target_filter else []
+
+        # 轉換 elements
+        api_elements = []
+        for el in elements:
+            api_el = {
+                "title": el.get("title", ""),
+                "subtitle": el.get("subtitle", ""),
+                "image_url": el.get("image_url", ""),
+                "buttons": el.get("buttons", [])
+            }
+            api_elements.append(api_el)
+
+        return {
+            "channel": "FB",
+            "target_type": target_type,
+            "targets": targets,
+            "element": api_elements
+        }
+
     # ============================================================
     # line_app 配置
     # ============================================================
@@ -684,7 +737,8 @@ class MessageService:
         self,
         db: AsyncSession,
         message_id: int,
-        channel_id: Optional[str] = None
+        channel_id: Optional[str] = None,
+        meta_jwt_token: Optional[str] = None
     ) -> Dict[str, Any]:
         """发送群发消息
 
@@ -692,6 +746,7 @@ class MessageService:
             db: 数据库 session
             message_id: 消息 ID
             channel_id: LINE 频道 ID
+            meta_jwt_token: FB 渠道需要的 JWT token
 
         Returns:
             {
@@ -711,10 +766,47 @@ class MessageService:
         logger.info(f"📤 准备发送消息: ID={message_id}, Platform={platform}")
 
         if platform == "Facebook":
-            # Facebook 發送（預留結構）
+            # Facebook 發送
             if not message.fb_message_json:
-                raise ValueError(f"消息缺少 Facebook Messenger JSON 内容")
-            raise NotImplementedError("Facebook 發送功能開發中")
+                raise ValueError("消息缺少 Facebook Messenger JSON 内容")
+
+            if not meta_jwt_token:
+                raise ValueError("Facebook 發送需要 meta_jwt_token")
+
+            # 轉換格式
+            payload = self._transform_fb_message_to_api_format(message)
+            logger.info(f"📦 FB API payload: {payload}")
+
+            # 發送到外部 API
+            from app.clients.fb_message_client import FbMessageClient
+            fb_client = FbMessageClient()
+            result = await fb_client.send_broadcast_message(
+                payload=payload,
+                meta_jwt_token=meta_jwt_token
+            )
+            logger.info(f"📬 FB API result: {result}")
+
+            # 更新消息狀態
+            if result.get("ok"):
+                message.send_status = "已發送"
+                message.send_time = datetime.now()
+                # 彈性解析回應欄位 (sent_count 或 sent)
+                sent_count = result.get("sent_count") or result.get("sent") or 0
+                failed_count = result.get("failed_count") or result.get("failed") or 0
+            else:
+                message.send_status = "發送失敗"
+                message.failure_reason = result.get("error", "未知錯誤")
+                sent_count = 0
+                failed_count = message.estimated_send_count or 0
+
+            await db.commit()
+
+            return {
+                "ok": result.get("ok", False),
+                "sent": sent_count,
+                "failed": failed_count,
+                "errors": [result.get("error")] if result.get("error") else None
+            }
 
         elif platform == "Instagram":
             # Instagram 發送（預留結構）

@@ -4,7 +4,7 @@ Facebook Message HTTP 客户端
 """
 import httpx
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -23,6 +23,11 @@ class FbMessageClient:
         self.base_url = base_url or settings.FB_API_URL
         self.timeout = httpx.Timeout(30.0)
 
+    @staticmethod
+    def _auth_headers(meta_jwt_token: str) -> Dict[str, str]:
+        """組裝帶 Authorization 的標頭"""
+        return {"Authorization": f"Bearer {meta_jwt_token}"}
+
     async def send_message(self, recipient_email: str, text: str, meta_jwt_token: str) -> dict:
         """
         發送訊息到 Facebook 用戶 (使用 email 識別)
@@ -36,7 +41,7 @@ class FbMessageClient:
             {"ok": True, ...} on success
             {"ok": False, "error": "..."} on failure
         """
-        headers = {"Authorization": f"Bearer {meta_jwt_token}"}
+        headers = self._auth_headers(meta_jwt_token)
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
@@ -93,3 +98,155 @@ class FbMessageClient:
             except httpx.RequestError as e:
                 logger.error(f"FB history request error: {e}")
                 return {"ok": False, "error": str(e), "data": []}
+
+    async def get_member_list(self, meta_jwt_token: str) -> Dict[str, Any]:
+        """
+        獲取 Facebook 會員列表
+
+        Args:
+            meta_jwt_token: Meta JWT Token (Bearer token)
+
+        Returns:
+            {
+                "ok": True,
+                "data": [
+                    {"uid": str, "name": str, "email": str | None},
+                    ...
+                ]
+            }
+            or {"ok": False, "error": "...", "data": []} on failure
+        """
+        headers = self._auth_headers(meta_jwt_token)
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                response = await client.get(
+                    f"{self.base_url}/api/v1/admin/meta_page/members",
+                    headers=headers
+                )
+                response.raise_for_status()
+                result = response.json()
+                logger.info(f"FB member list fetched, {len(result.get('data', []))} members")
+                return {"ok": True, "data": result.get("data", [])}
+            except httpx.HTTPStatusError as e:
+                logger.error(f"FB member list API error: {e.response.status_code} - {e.response.text}")
+                return {"ok": False, "error": f"API error: {e.response.status_code}", "data": []}
+            except httpx.RequestError as e:
+                logger.error(f"FB member list request error: {e}")
+                return {"ok": False, "error": str(e), "data": []}
+
+    async def send_broadcast_message(self, payload: Dict[str, Any], meta_jwt_token: str) -> Dict[str, Any]:
+        """
+        群發 Messenger 訊息 (/meta_page/message)
+
+        Args:
+            payload: API 所需 JSON（包含 channel/target_type/targets/element）
+            meta_jwt_token: Meta JWT Token (Bearer)
+        """
+        headers = self._auth_headers(meta_jwt_token)
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                response = await client.post(
+                    f"{self.base_url}/api/v1/admin/meta_page/message",
+                    json=payload,
+                    headers=headers,
+                )
+                response.raise_for_status()
+                return {"ok": True, **response.json()}
+            except httpx.HTTPStatusError as e:
+                logger.error(f"FB broadcast API error: {e.response.status_code} - {e.response.text}")
+                return {"ok": False, "error": f"API error: {e.response.status_code}"}
+            except httpx.RequestError as e:
+                logger.error(f"FB broadcast request error: {e}")
+                return {"ok": False, "error": str(e)}
+
+    async def list_messages(self, meta_jwt_token: str) -> Dict[str, Any]:
+        """
+        取得訊息列表 (/meta_page/message/list)
+        """
+        headers = self._auth_headers(meta_jwt_token)
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                response = await client.get(
+                    f"{self.base_url}/api/v1/admin/meta_page/message/list",
+                    headers=headers,
+                )
+                response.raise_for_status()
+                return {"ok": True, **response.json()}
+            except httpx.HTTPStatusError as e:
+                logger.error(f"FB message list API error: {e.response.status_code} - {e.response.text}")
+                return {"ok": False, "error": f"API error: {e.response.status_code}"}
+            except httpx.RequestError as e:
+                logger.error(f"FB message list request error: {e}")
+                return {"ok": False, "error": str(e)}
+
+    async def set_auto_template(self, payload: Dict[str, Any], meta_jwt_token: str) -> Dict[str, Any]:
+        """
+        設定自動回應模板 (/meta_page/message/auto_template)
+        """
+        headers = self._auth_headers(meta_jwt_token)
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                response = await client.post(
+                    f"{self.base_url}/api/v1/admin/meta_page/message/auto_template",
+                    json=payload,
+                    headers=headers,
+                )
+                response.raise_for_status()
+                return {"ok": True, **response.json()}
+            except httpx.HTTPStatusError as e:
+                logger.error(f"FB auto_template API error: {e.response.status_code} - {e.response.text}")
+                return {"ok": False, "error": f"API error: {e.response.status_code}"}
+            except httpx.RequestError as e:
+                logger.error(f"FB auto_template request error: {e}")
+                return {"ok": False, "error": str(e)}
+
+    async def create_message_template(self, payload: Dict[str, Any], meta_jwt_token: str) -> Dict[str, Any]:
+        """
+        建立/更新群發訊息模板 (/meta_page/message/template)
+        """
+        headers = self._auth_headers(meta_jwt_token)
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                response = await client.post(
+                    f"{self.base_url}/api/v1/admin/meta_page/message/template",
+                    json=payload,
+                    headers=headers,
+                )
+                response.raise_for_status()
+                return {"ok": True, **response.json()}
+            except httpx.HTTPStatusError as e:
+                logger.error(f"FB template API error: {e.response.status_code} - {e.response.text}")
+                return {"ok": False, "error": f"API error: {e.response.status_code}"}
+            except httpx.RequestError as e:
+                logger.error(f"FB template request error: {e}")
+                return {"ok": False, "error": str(e)}
+
+    async def get_message_template(self, setting_id: Optional[str], meta_jwt_token: str) -> Dict[str, Any]:
+        """
+        取得訊息模板內容 (/meta_page/message/template?setting_id=xxx)
+        """
+        headers = self._auth_headers(meta_jwt_token)
+        params: Dict[str, str] = {}
+        if setting_id:
+            params["setting_id"] = setting_id
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                response = await client.get(
+                    f"{self.base_url}/api/v1/admin/meta_page/message/template",
+                    headers=headers,
+                    params=params or None,
+                )
+                response.raise_for_status()
+                return {"ok": True, **response.json()}
+            except httpx.HTTPStatusError as e:
+                logger.error(f"FB template fetch API error: {e.response.status_code} - {e.response.text}")
+                return {"ok": False, "error": f"API error: {e.response.status_code}"}
+            except httpx.RequestError as e:
+                logger.error(f"FB template fetch request error: {e}")
+                return {"ok": False, "error": str(e)}

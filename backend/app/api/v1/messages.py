@@ -233,11 +233,13 @@ async def send_message(
         logger.info(f"📤 发送消息: ID={message_id}")
 
         channel_id = request.channel_id if request else None
+        meta_jwt_token = request.meta_jwt_token if request else None
 
         result = await message_service.send_message(
             db,
             message_id,
-            channel_id
+            channel_id,
+            meta_jwt_token
         )
 
         if not result.get("ok"):
@@ -305,7 +307,7 @@ async def get_message(
             },
             "send_status": message.send_status,
             "interaction_tags": message.interaction_tags or [],
-            "platform": "LINE",
+            "platform": message.platform or "LINE",
             "send_count": message.send_count or 0,
             "open_count": message.open_count or 0,
             "open_rate": None,
@@ -326,6 +328,7 @@ async def get_message(
             "available_quota": message.available_quota or 0,
             "click_count": click_count,
             "flex_message_json": message.flex_message_json,
+            "fb_message_json": message.fb_message_json,
         }
 
         logger.info(f"✅ 消息详情获取成功: ID={message_id}, 点击次数={click_count}")

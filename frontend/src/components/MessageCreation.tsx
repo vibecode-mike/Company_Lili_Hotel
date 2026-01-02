@@ -304,6 +304,9 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   const handlePlatformChange = (newPlatform: MessagePlatform) => {
     if (selectedPlatform === newPlatform) return;
     if (selectedPlatform === 'LINE' && newPlatform === 'Facebook') {
+      // Facebook 不支援排程發送，強制設為立即發送
+      setScheduleType('immediate');
+
       const hasContent = cards.some(card =>
         (card.enableImage && card.image) || (card.enableTitle && card.cardTitle) ||
         (card.enableContent && card.content) || (card.enableButton1 && card.button1)
@@ -875,14 +878,15 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
     let hasError = false;
 
-    // ✅ 群發訊息類型：title 和 notificationMsg 為必填欄位
+    // ✅ 群發訊息類型：title 為必填欄位
+    // ✅ notificationMsg 只對 LINE 平台必填（Facebook 沒有此功能）
     // ✅ UI 已經有即時錯誤提示（紅色邊框 + 錯誤文字），不需要在這裡重複設置錯誤訊息
-    // ✅ 只需要簡單檢查是否為空，以阻止發布
     if (!title || title.trim() === '') {
       hasError = true;
     }
 
-    if (!notificationMsg || notificationMsg.trim() === '') {
+    // 只有 LINE 平台才驗證 notificationMsg
+    if (selectedPlatform === 'LINE' && (!notificationMsg || notificationMsg.trim() === '')) {
       hasError = true;
     }
 
@@ -1043,8 +1047,8 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       hasError = true;
     }
 
-    // 驗證排程時間必須在未來
-    if (scheduleType === 'scheduled') {
+    // 驗證排程時間必須在未來（僅 LINE 平台需要驗證，Facebook 只能立即發送）
+    if (selectedPlatform === 'LINE' && scheduleType === 'scheduled') {
       if (!scheduledDate) {
         // 已由現有的 UI 驗證處理（第 1591-1595 行）
         hasError = true;
@@ -1532,12 +1536,26 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       }
 
       if (scheduleType === 'immediate') {
+        // 準備發送請求的 body
+        const sendBody: Record<string, string> = {};
+
+        // FB 平台需要帶入 meta_jwt_token
+        if (selectedPlatform === 'Facebook') {
+          const metaJwtToken = localStorage.getItem('meta_jwt_token');
+          if (!metaJwtToken) {
+            toast.error('請先登入 Facebook 帳號');
+            return;
+          }
+          sendBody.meta_jwt_token = metaJwtToken;
+        }
+
         const sendResponse = await fetch(`/api/v1/messages/${messageId}/send`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
-          }
+          },
+          body: Object.keys(sendBody).length > 0 ? JSON.stringify(sendBody) : undefined
         });
 
         if (!sendResponse.ok) {
@@ -1879,7 +1897,8 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
               </div>
             </div>
 
-            {/* Form Fields Row 2 */}
+            {/* Form Fields Row 2 - 通知推播 (僅 LINE 顯示) */}
+            {selectedPlatform === 'LINE' && (
             <div className="flex flex-col xl:flex-row gap-[32px] xl:gap-[120px] items-start w-full">
               <div className="flex-1 flex flex-col sm:flex-row items-start gap-4 w-full">
                 <Label className="min-w-[120px] sm:min-w-[140px] lg:min-w-[160px] pt-3 flex items-center gap-1">
@@ -1930,8 +1949,10 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
               </div>
 
             </div>
+            )}
 
-            {/* Schedule Section */}
+            {/* Schedule Section - 僅 LINE 顯示 */}
+            {selectedPlatform === 'LINE' && (
             <div className="flex items-start gap-4 w-full">
               <Label className="min-w-[160px] pt-1 flex items-center gap-1">
                 <span className="text-[16px] text-[#383838]">自訂時間</span>
@@ -2058,6 +2079,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                 )}
               </div>
             </div>
+            )}
 
             {/* Target Audience Section */}
             <div className="flex items-start gap-4 w-full">
