@@ -152,11 +152,21 @@ class FbMessageClient:
                     json=payload,
                     headers=headers,
                 )
-                response.raise_for_status()
-                return {"ok": True, **response.json()}
-            except httpx.HTTPStatusError as e:
-                logger.error(f"FB broadcast API error: {e.response.status_code} - {e.response.text}")
-                return {"ok": False, "error": f"API error: {e.response.status_code}"}
+                data = response.json()
+                # 根據 body 中的 status 判斷成功/失敗
+                if data.get("status") == 200:
+                    result_data = data.get("data", {})
+                    return {
+                        "ok": True,
+                        "sent": result_data.get("success", 0),
+                        "failed": result_data.get("failure", 0),
+                        "total": result_data.get("total_targets", 0),
+                        "msg": data.get("msg", "ok")
+                    }
+                else:
+                    error_msg = data.get("msg", f"API error: {data.get('status')}")
+                    logger.error(f"FB broadcast API error: {error_msg}")
+                    return {"ok": False, "error": error_msg}
             except httpx.RequestError as e:
                 logger.error(f"FB broadcast request error: {e}")
                 return {"ok": False, "error": str(e)}
