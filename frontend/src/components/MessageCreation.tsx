@@ -146,10 +146,10 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   // Fetch estimated recipient count when target settings change
   useEffect(() => {
     const fetchEstimatedRecipientCount = async () => {
-      try {
-        const token = localStorage.getItem('auth_token');
-        if (!token) return;
+      // Reset to null (loading state) when params change
+      setEstimatedRecipientCount(null);
 
+      try {
         // Prepare request body for quota API (same endpoint gives us recipient count)
         const requestBody: any = {
           target_type: targetType === 'all' ? 'all_friends' : 'filtered'
@@ -162,12 +162,18 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
           };
         }
 
+        // Build headers - include auth token if available (API doesn't require it)
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json'
+        };
+        const token = localStorage.getItem('auth_token');
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
         const response = await fetch('/api/v1/messages/quota', {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
+          headers,
           body: JSON.stringify(requestBody)
         });
 
@@ -175,10 +181,15 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
           const result = await response.json();
           // The quota API returns estimated_send_count
           setEstimatedRecipientCount(result.estimated_send_count || 0);
+        } else {
+          // API returned error, show 0 instead of infinite loading
+          console.error('獲取預計發送人數失敗:', response.status);
+          setEstimatedRecipientCount(0);
         }
       } catch (error) {
         console.error('獲取預計發送人數錯誤:', error);
-        // Don't show error to user, just keep showing loading state
+        // Show 0 on network error instead of infinite loading
+        setEstimatedRecipientCount(0);
       }
     };
 
