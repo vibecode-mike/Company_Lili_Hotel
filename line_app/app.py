@@ -1551,12 +1551,13 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
     logging.info(f"Exclude tags: {exclude_tags}")
 
     if target_audience == "all":
-        # 情境 A: 發送給所有會員
+        # 情境 A: 發送給所有會員（只發給正在關注的）
         rs = fetchall("""
             SELECT m.line_uid, m.id
             FROM members m
             WHERE m.line_uid IS NOT NULL
               AND m.line_uid != ''
+              AND m.is_following = 1
         """)
     elif target_audience == "filtered":
         # 根據 include 和 exclude 標籤進行篩選
@@ -1575,6 +1576,7 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
                 INNER JOIN member_tags mt ON m.id = mt.member_id
                 WHERE m.line_uid IS NOT NULL
                   AND m.line_uid != ''
+                  AND m.is_following = 1
                   AND mt.tag_name IN ({include_placeholders})
                   AND m.id NOT IN (
                       SELECT DISTINCT m2.id
@@ -1595,6 +1597,7 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
                 INNER JOIN member_tags mt ON m.id = mt.member_id
                 WHERE m.line_uid IS NOT NULL
                   AND m.line_uid != ''
+                  AND m.is_following = 1
                   AND mt.tag_name IN ({include_placeholders})
             """, params)
 
@@ -1608,6 +1611,7 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
                 FROM members m
                 WHERE m.line_uid IS NOT NULL
                   AND m.line_uid != ''
+                  AND m.is_following = 1
                   AND m.id NOT IN (
                       SELECT DISTINCT m2.id
                       FROM members m2
@@ -1616,20 +1620,22 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
                   )
             """, params)
         else:
-            # 沒有指定標籤，發送給所有會員
+            # 沒有指定標籤，發送給所有會員（只發給正在關注的）
             rs = fetchall("""
                 SELECT m.line_uid, m.id
                 FROM members m
                 WHERE m.line_uid IS NOT NULL
                   AND m.line_uid != ''
+                  AND m.is_following = 1
             """)
     else:
-        # 預設發送給所有會員
+        # 預設發送給所有會員（只發給正在關注的）
         rs = fetchall("""
             SELECT m.line_uid, m.id
             FROM members m
             WHERE m.line_uid IS NOT NULL
               AND m.line_uid != ''
+              AND m.is_following = 1
         """)
 
     logging.info(f"Found {len(rs)} members with line_uid")
