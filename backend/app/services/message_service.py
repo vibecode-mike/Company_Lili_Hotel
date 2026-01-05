@@ -657,7 +657,7 @@ class MessageService:
         target_type: str,
         target_filter: Optional[Dict] = None
     ) -> int:
-        """计算符合条件的 LINE 好友数量（使用 line_friends 表）
+        """计算符合条件的會員數量（使用 members 表，配合 is_following 和 member_tags）
 
         Args:
             db: 数据库 session
@@ -665,7 +665,7 @@ class MessageService:
             target_filter: 筛选条件 {"include": [...], "exclude": [...]}
 
         Returns:
-            符合条件的 LINE 好友数量
+            符合条件的會員數量
         """
         # 容错处理：filtered 但没有 filter 时，视为 all_friends
         if target_type == "filtered":
@@ -676,38 +676,37 @@ class MessageService:
                 target_type = "all_friends"
 
         if target_type == "all_friends":
-            # 查询所有正在关注的 LINE 好友
+            # 查询所有正在关注的會員
             result = await db.execute(
                 text("""
                     SELECT COUNT(*)
-                    FROM line_friends
+                    FROM members
                     WHERE line_uid IS NOT NULL
                       AND line_uid != ''
                       AND is_following = 1
                 """)
             )
             count = result.scalar() or 0
-            logger.debug(f"📊 所有 LINE 好友数量: {count}")
+            logger.debug(f"📊 所有正在關注的會員數量: {count}")
             return count
 
         elif target_type == "filtered" and target_filter:
-            # 根据标签筛选 LINE 好友（通过 member_id 关联）
+            # 根据标签筛选會員
             include_tags = target_filter.get("include", [])
             exclude_tags = target_filter.get("exclude", [])
 
             if include_tags:
-                # 包含指定标签的 LINE 好友
+                # 包含指定标签的會員
                 tag_placeholders = ", ".join([f":tag{i}" for i in range(len(include_tags))])
                 tag_params = {f"tag{i}": tag for i, tag in enumerate(include_tags)}
 
                 query_str = f"""
-                    SELECT COUNT(DISTINCT lf.id)
-                    FROM line_friends lf
-                    LEFT JOIN members m ON lf.member_id = m.id
-                    LEFT JOIN member_tags mt ON m.id = mt.member_id
-                    WHERE lf.line_uid IS NOT NULL
-                      AND lf.line_uid != ''
-                      AND lf.is_following = 1
+                    SELECT COUNT(DISTINCT m.id)
+                    FROM members m
+                    INNER JOIN member_tags mt ON m.id = mt.member_id
+                    WHERE m.line_uid IS NOT NULL
+                      AND m.line_uid != ''
+                      AND m.is_following = 1
                       AND mt.tag_name IN ({tag_placeholders})
                 """
 
@@ -718,18 +717,17 @@ class MessageService:
                     tag_params.update(exclude_params)
 
                     query_str += f"""
-                      AND lf.id NOT IN (
-                          SELECT DISTINCT lf2.id
-                          FROM line_friends lf2
-                          LEFT JOIN members m2 ON lf2.member_id = m2.id
-                          LEFT JOIN member_tags mt2 ON m2.id = mt2.member_id
+                      AND m.id NOT IN (
+                          SELECT DISTINCT m2.id
+                          FROM members m2
+                          INNER JOIN member_tags mt2 ON m2.id = mt2.member_id
                           WHERE mt2.tag_name IN ({exclude_placeholders})
                       )
                     """
 
                 result = await db.execute(text(query_str), tag_params)
                 count = result.scalar() or 0
-                logger.debug(f"📊 筛选后的 LINE 好友数量: {count}, filter={target_filter}")
+                logger.debug(f"📊 篩選後的會員數量: {count}, filter={target_filter}")
                 return count
 
             elif exclude_tags:
@@ -738,23 +736,22 @@ class MessageService:
                 exclude_params = {f"exclude_tag{i}": tag for i, tag in enumerate(exclude_tags)}
 
                 query_str = f"""
-                    SELECT COUNT(DISTINCT lf.id)
-                    FROM line_friends lf
-                    WHERE lf.line_uid IS NOT NULL
-                      AND lf.line_uid != ''
-                      AND lf.is_following = 1
-                      AND lf.id NOT IN (
-                          SELECT DISTINCT lf2.id
-                          FROM line_friends lf2
-                          LEFT JOIN members m ON lf2.member_id = m.id
-                          LEFT JOIN member_tags mt ON m.id = mt.member_id
-                          WHERE mt.tag_name IN ({exclude_placeholders})
+                    SELECT COUNT(DISTINCT m.id)
+                    FROM members m
+                    WHERE m.line_uid IS NOT NULL
+                      AND m.line_uid != ''
+                      AND m.is_following = 1
+                      AND m.id NOT IN (
+                          SELECT DISTINCT m2.id
+                          FROM members m2
+                          INNER JOIN member_tags mt2 ON m2.id = mt2.member_id
+                          WHERE mt2.tag_name IN ({exclude_placeholders})
                       )
                 """
 
                 result = await db.execute(text(query_str), exclude_params)
                 count = result.scalar() or 0
-                logger.debug(f"📊 排除标签后的 LINE 好友数量: {count}, filter={target_filter}")
+                logger.debug(f"📊 排除標籤後的會員數量: {count}, filter={target_filter}")
                 return count
 
         return 0
