@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { FBConfigPanel } from "./FBConfigPanel";
 import { FBPreviewPanel } from "./FBPreviewPanel";
-import { FlexBubble, MessengerMessage } from "./fb-types";
-import { Plus, Copy, Trash2, Download } from "lucide-react";
+import { FlexBubble, FlexMessage } from "./fb-types";
+import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -10,8 +10,8 @@ import { toast } from "sonner";
 export const FB_PLACEHOLDER_IMAGE = "/images/fb-placeholder.png";
 
 interface FacebookMessageEditorProps {
-  onJsonChange?: (json: MessengerMessage | null) => void;
-  initialJson?: MessengerMessage | null;
+  onJsonChange?: (json: FlexMessage | null) => void;
+  initialJson?: FlexMessage | null;
 }
 
 const createDefaultBubble = (): FlexBubble => ({
@@ -50,152 +50,71 @@ const createDefaultBubble = (): FlexBubble => ({
     contents: [],
   },
   _metadata: {
-    buttonTypes: {},
-    buttonPayloads: {},
     buttonLabels: {}
   }
 });
 
-// Convert Messenger JSON back to internal FlexBubble format
-const convertFromMessengerFormat = (json: MessengerMessage): FlexBubble[] => {
-  const elements = json.attachment?.payload?.elements || [];
-  return elements.map((element: any) => {
-    const titleText = typeof element.title === "string" ? element.title : "";
-    const subtitleText = typeof element.subtitle === "string" ? element.subtitle : "";
-
-    const bubble: FlexBubble = {
+// Initialize editor from Flex Message format
+const initFromFlexFormat = (json: FlexMessage): FlexBubble[] => {
+  if (json.type === "carousel" && json.contents) {
+    return json.contents.map(bubble => ({
+      ...bubble,
+      _metadata: bubble._metadata || { buttonLabels: {} }
+    }));
+  } else if (json.type === "bubble") {
+    return [{
       type: "bubble",
-      body: {
-        type: "box",
-        layout: "vertical",
-        contents: [
-          {
-            type: "text",
-            text: titleText,
-            weight: "bold",
-            size: "xl",
-          },
-          {
-            type: "text",
-            text: subtitleText,
-            wrap: true,
-            color: "#666666",
-            size: "sm",
-            margin: "md",
-          },
-        ],
-      },
-      footer: {
-        type: "box",
-        layout: "vertical",
-        spacing: "sm",
-        contents: (element.buttons || []).map((btn: any) => ({
-          type: "button",
-          action: {
-            type: btn.type === "web_url" ? "uri" : "postback",
-            label: btn.title || "按鈕",
-            uri: btn.url,
-            data: btn.payload,
-          },
-          style: "secondary",
-        })),
-      },
-      _metadata: {
-        buttonTypes: {},
-        buttonPayloads: {},
-        buttonLabels: {}
-      }
-    };
-
-    if (element.image_url) {
-      bubble.hero = {
-        type: "image",
-        url: element.image_url,
-        size: "full",
-        aspectRatio: "1.91:1",
-        aspectMode: "cover",
-      };
-      if (element.default_action?.url) {
-        bubble.hero.action = {
-          type: "uri",
-          uri: element.default_action.url,
-        };
-      }
-    }
-
-    return bubble;
-  });
+      hero: json.hero as any,
+      body: json.body,
+      footer: json.footer,
+      styles: json.styles,
+      _metadata: (json as any)._metadata || { buttonLabels: {} }
+    }];
+  }
+  return [createDefaultBubble()];
 };
 
 export function FacebookMessageEditor({ onJsonChange, initialJson }: FacebookMessageEditorProps) {
   const [bubbles, setBubbles] = useState<FlexBubble[]>(() => {
-    if (initialJson && initialJson.attachment?.payload?.elements?.length) {
-      return convertFromMessengerFormat(initialJson);
+    if (initialJson) {
+      return initFromFlexFormat(initialJson);
     }
     return [createDefaultBubble()];
   });
   const [activeBubbleIndex, setActiveBubbleIndex] = useState(0);
   const tabScrollRef = useRef<HTMLDivElement>(null);
 
-  // Convert internal format to Facebook Messenger format
-  const convertToMessengerFormat = useCallback((): MessengerMessage => {
-    const elements = bubbles.map(bubble => {
-      const titleText = bubble.body?.contents.find((c: any) => c.type === "text" && c.size === "xl")?.text || "";
-      const subtitleText = bubble.body?.contents.find((c: any) => c.type === "text" && c.size === "sm")?.text || "";
-
-      const element: any = {
-        title: titleText,
-      };
-
-      if (subtitleText) {
-        element.subtitle = subtitleText;
-      }
-
-      if (bubble.hero?.url && !bubble.hero.url.startsWith("data:image/svg")) {
-        element.image_url = bubble.hero.url;
-      }
-
-      if (bubble.hero?.action?.uri) {
-        element.default_action = {
-          type: "web_url",
-          url: bubble.hero.action.uri,
-        };
-      }
-
-      const buttons = bubble.footer?.contents
-        .filter((c: any) => c.type === "button")
-        .slice(0, 3) // Facebook限制最多3個按鈕
-        .map((btn: any) => ({
-          type: btn.action.type === "uri" ? "web_url" : "postback",
-          title: btn.action.label || "按鈕",
-          ...(btn.action.type === "uri" ? { url: btn.action.uri } : { payload: btn.action.data }),
-        }));
-
-      if (buttons && buttons.length > 0) {
-        element.buttons = buttons;
-      }
-
-      return element;
-    });
-
+  // Convert internal format to Flex Message format (same as LINE)
+  const convertToFlexFormat = useCallback((): FlexMessage => {
+    if (bubbles.length === 1) {
+      const bubble = bubbles[0];
+      return {
+        type: "bubble",
+        hero: bubble.hero,
+        body: bubble.body,
+        footer: bubble.footer,
+        styles: bubble.styles,
+      } as FlexMessage;
+    }
     return {
-      attachment: {
-        type: "template",
-        payload: {
-          template_type: "generic",
-          elements,
-        },
-      },
+      type: "carousel",
+      contents: bubbles.map(bubble => ({
+        type: "bubble",
+        hero: bubble.hero,
+        body: bubble.body,
+        footer: bubble.footer,
+        styles: bubble.styles,
+      })),
     };
   }, [bubbles]);
 
   // Notify parent of JSON changes
   useEffect(() => {
     if (onJsonChange) {
-      const json = convertToMessengerFormat();
+      const json = convertToFlexFormat();
       onJsonChange(json);
     }
-  }, [bubbles, onJsonChange, convertToMessengerFormat]);
+  }, [bubbles, onJsonChange, convertToFlexFormat]);
 
   const addBubble = () => {
     if (bubbles.length >= 10) {
@@ -265,7 +184,7 @@ export function FacebookMessageEditor({ onJsonChange, initialJson }: FacebookMes
           type: "box",
           layout: "vertical",
           spacing: "sm",
-          contents: firstBubble.footer.contents.slice(0, buttonCount).map((btn: any, idx: number) => {
+          contents: firstBubble.footer.contents.slice(0, buttonCount).map((btn: any) => {
             return {
               ...btn,
               action: {
@@ -303,8 +222,6 @@ export function FacebookMessageEditor({ onJsonChange, initialJson }: FacebookMes
 
       // If hero status changed (added or removed)
       if (newFirstBubbleHasHero !== oldFirstBubbleHasHero) {
-        console.log("Hero status changed:", { newFirstBubbleHasHero, oldFirstBubbleHasHero });
-
         // Update all other bubbles
         for (let i = 1; i < newBubbles.length; i++) {
           const targetBubble = JSON.parse(JSON.stringify(newBubbles[i]));
@@ -325,7 +242,6 @@ export function FacebookMessageEditor({ onJsonChange, initialJson }: FacebookMes
             }
           } else {
             // First bubble has no hero - remove hero from all bubbles
-            console.log("Removing hero from bubble", i);
             delete targetBubble.hero;
           }
 
@@ -390,13 +306,9 @@ export function FacebookMessageEditor({ onJsonChange, initialJson }: FacebookMes
     toast.success("已刪除圖卡");
   };
 
-  const getFlexMessage = () => {
-    return convertToMessengerFormat();
-  };
-
   const exportJSON = () => {
-    const messengerFormat = convertToMessengerFormat();
-    const jsonString = JSON.stringify(messengerFormat, null, 2);
+    const flexFormat = convertToFlexFormat();
+    const jsonString = JSON.stringify(flexFormat, null, 2);
 
     try {
       navigator.clipboard.writeText(jsonString);
@@ -407,7 +319,7 @@ export function FacebookMessageEditor({ onJsonChange, initialJson }: FacebookMes
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "messenger-message.json";
+      a.download = "flex-message.json";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

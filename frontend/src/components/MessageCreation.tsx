@@ -21,7 +21,7 @@ import uploadIconPaths from '../imports/svg-wb8nmg8j6i';
 import messageTextSvgPaths from '../imports/svg-hbkooryl5v';
 import FlexMessageEditorNew from './flex-message/FlexMessageEditorNew';
 import CarouselMessageEditor, { type CarouselCard } from './CarouselMessageEditor';
-import { FacebookMessageEditor, MessengerMessage } from './facebook-message';
+import { FacebookMessageEditor, FlexMessage as FBFlexMessage } from './facebook-message';
 import { TriggerImagePreview, TriggerTextPreview, GradientPreviewContainer, DeleteButton } from './common';
 import ActionTriggerTextMessage from '../imports/ActionTriggerTextMessage';
 import ActionTriggerImageMessage from '../imports/ActionTriggerImageMessage';
@@ -36,61 +36,6 @@ import type { MessagePlatform } from '../types/channel';
 
 // FB 預設圖片佔位符
 const FB_PLACEHOLDER_IMAGE = "/images/fb-placeholder.png";
-
-// Convert LINE CarouselCard[] to Facebook MessengerMessage
-const convertCardsToMessengerMessage = (cards: CarouselCard[]): MessengerMessage => {
-  const elements = cards.map(card => {
-    const buttons: Array<{ type: "web_url" | "postback"; url?: string; title: string; payload?: string }> = [];
-    if (card.enableButton1 && card.button1) {
-      buttons.push({ type: "web_url", url: card.button1Url || "#", title: card.button1 });
-    }
-    if (card.enableButton2 && card.button2) {
-      buttons.push({ type: "web_url", url: card.button2Url || "#", title: card.button2 });
-    }
-    if (card.enableButton3 && card.button3) {
-      buttons.push({ type: "web_url", url: card.button3Url || "#", title: card.button3 });
-    }
-    return {
-      title: card.enableTitle && card.cardTitle ? card.cardTitle : "標題文字",
-      subtitle: card.enableContent && card.content ? card.content : undefined,
-      image_url: card.enableImage && card.image ? card.image : FB_PLACEHOLDER_IMAGE,
-      default_action: card.enableImageUrl && card.imageUrl ? { type: "web_url" as const, url: card.imageUrl } : undefined,
-      buttons: buttons.length > 0 ? buttons : undefined
-    };
-  });
-  return { attachment: { type: "template", payload: { template_type: "generic", elements } } };
-};
-
-// Convert Facebook MessengerMessage to LINE CarouselCard[]
-const convertMessengerMessageToCards = (messengerMessage: MessengerMessage | null, existingCards: CarouselCard[]): CarouselCard[] => {
-  if (!messengerMessage?.attachment?.payload?.elements) return existingCards;
-  const elements = messengerMessage.attachment.payload.elements;
-  return elements.map((element, index) => {
-    const baseCard = existingCards[index] || existingCards[0] || {} as CarouselCard;
-    const buttons = element.buttons || [];
-    return {
-      ...baseCard,
-      id: existingCards[index]?.id || index + 1,
-      enableImage: !!element.image_url && element.image_url !== FB_PLACEHOLDER_IMAGE,
-      image: element.image_url || '',
-      enableImageUrl: !!element.default_action?.url,
-      imageUrl: element.default_action?.url || '',
-      enableTitle: !!element.title && element.title !== "標題文字",
-      cardTitle: element.title || '',
-      enableContent: !!element.subtitle,
-      content: element.subtitle || '',
-      enableButton1: buttons.length > 0,
-      button1: buttons[0]?.title || '',
-      button1Url: buttons[0]?.url || '',
-      enableButton2: buttons.length > 1,
-      button2: buttons[1]?.title || '',
-      button2Url: buttons[1]?.url || '',
-      enableButton3: buttons.length > 2,
-      button3: buttons[2]?.title || '',
-      button3Url: buttons[2]?.url || '',
-    };
-  });
-};
 
 // Custom DialogContent without close button
 function DialogContentNoClose({
@@ -155,7 +100,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   const [activeTab, setActiveTab] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [flexMessageJson, setFlexMessageJson] = useState<FlexMessage | null>(null);
-  const [fbMessageJson, setFbMessageJson] = useState<MessengerMessage | null>(null);
+  const [fbMessageJson, setFbMessageJson] = useState<FBFlexMessage | null>(null);
   const [selectedFilterTags, setSelectedFilterTags] = useState<Array<{ id: string; name: string }>>([]);
   const [filterCondition, setFilterCondition] = useState<'include' | 'exclude'>('include');
   const [scheduledDate, setScheduledDate] = useState<Date | undefined>(undefined);
@@ -303,27 +248,9 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   // Handle platform change with content conversion
   const handlePlatformChange = (newPlatform: MessagePlatform) => {
     if (selectedPlatform === newPlatform) return;
-    if (selectedPlatform === 'LINE' && newPlatform === 'Facebook') {
+    if (newPlatform === 'Facebook') {
       // Facebook 不支援排程發送，強制設為立即發送
       setScheduleType('immediate');
-
-      const hasContent = cards.some(card =>
-        (card.enableImage && card.image) || (card.enableTitle && card.cardTitle) ||
-        (card.enableContent && card.content) || (card.enableButton1 && card.button1)
-      );
-      if (hasContent) {
-        setFbMessageJson(convertCardsToMessengerMessage(cards));
-        toast.success('已將 LINE 內容複製到 Facebook');
-      }
-    } else if (selectedPlatform === 'Facebook' && newPlatform === 'LINE') {
-      if (fbMessageJson) {
-        const convertedCards = convertMessengerMessageToCards(fbMessageJson, cards);
-        if (convertedCards.length > 0) {
-          setCards(convertedCards);
-          setActiveTab(convertedCards[0].id);
-          toast.success('已將 Facebook 內容複製到 LINE');
-        }
-      }
     }
     setSelectedPlatform(newPlatform);
   };
@@ -892,21 +819,33 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
     // Facebook 平台跳過卡片驗證（使用獨立編輯器）
     if (selectedPlatform === 'Facebook') {
-      // Facebook 只需要有 fbMessageJson
+      // Facebook 只需要有 fbMessageJson (Flex 格式)
       if (!fbMessageJson) {
         toast.error('請先編輯 Facebook 訊息內容');
         return false;
       }
 
-      const elements = (fbMessageJson as any)?.attachment?.payload?.elements;
-      if (!Array.isArray(elements) || elements.length === 0) {
+      // 取得 bubbles 列表 (Flex 格式：carousel 有 contents，bubble 本身就是單一卡片)
+      let bubbles: any[] = [];
+      if (fbMessageJson.type === 'carousel' && fbMessageJson.contents) {
+        bubbles = fbMessageJson.contents;
+      } else if (fbMessageJson.type === 'bubble') {
+        bubbles = [fbMessageJson];
+      }
+
+      if (bubbles.length === 0) {
         toast.error('請先編輯 Facebook 訊息內容');
         return false;
       }
 
-      const invalidIndex = elements.findIndex((el: any) => {
-        const title = String(el?.title ?? '').trim();
-        return title === '' || title === '標題文字';
+      // 驗證每個 bubble 是否有標題 (body 中 size="xl" 或 weight="bold" 的文字)
+      const invalidIndex = bubbles.findIndex((bubble: any) => {
+        const bodyContents = bubble?.body?.contents || [];
+        const titleItem = bodyContents.find((item: any) =>
+          item?.type === 'text' && (item?.size === 'xl' || item?.weight === 'bold')
+        );
+        const title = String(titleItem?.text ?? '').trim();
+        return title === '';
       });
       if (invalidIndex !== -1) {
         toast.error(`Facebook 模板第 ${invalidIndex + 1} 個卡片：標題文字為必填`);
@@ -2174,18 +2113,21 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                       ? `${estimatedRecipientCount.toLocaleString()} 人`
                       : '計算中...'}
                   </p>
-                  <p className="text-[16px] text-[#383838] mt-[10px]">
-                    可用訊息則數：
-                    {quotaLoading
-                      ? '載入中...'
-                      : quotaError
-                        ? quotaError === '請先登入'
-                          ? '請先登入'
-                          : '無法取得'
-                        : quotaStatus
-                          ? `${quotaStatus.availableQuota.toLocaleString()} 則`
-                          : '—'}
-                  </p>
+                  {/* LINE 才顯示可用訊息則數，Facebook 只有速率限制不顯示 */}
+                  {selectedPlatform === 'LINE' && (
+                    <p className="text-[16px] text-[#383838] mt-[10px]">
+                      可用訊息則數：
+                      {quotaLoading
+                        ? '載入中...'
+                        : quotaError
+                          ? quotaError === '請先登入'
+                            ? '請先登入'
+                            : '無法取得'
+                          : quotaStatus
+                            ? `${quotaStatus.availableQuota.toLocaleString()} 則`
+                            : '—'}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

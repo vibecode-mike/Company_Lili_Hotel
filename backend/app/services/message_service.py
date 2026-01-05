@@ -39,55 +39,125 @@ class MessageService:
     @staticmethod
     def _transform_fb_message_to_api_format(message: Message) -> dict:
         """
-        將 MessengerMessage 格式轉換為外部 FB API 格式
+        將 Flex Message 格式轉換為外部 FB API 格式
 
-        MessengerMessage (前端):
+        Flex Message (前端儲存格式，與 LINE 相同):
         {
-          "attachment": {
-            "type": "template",
-            "payload": {
-              "template_type": "generic",
-              "elements": [...]
+          "type": "carousel",
+          "contents": [
+            {
+              "type": "bubble",
+              "hero": { "url": "..." },
+              "body": { "contents": [...] },
+              "footer": { "contents": [...] }
             }
-          }
+          ]
         }
 
         External API (輸出):
         {
           "channel": "FB",
           "target_type": "all | tagged",
-          "targets": ["#tag1", ...],
+          "tag_include": ["#tag1", ...],
+          "tag_exclude": ["#tag2", ...],
           "element": [...]
         }
         """
-        fb_json = json.loads(message.fb_message_json)
-        elements = fb_json.get("attachment", {}).get("payload", {}).get("elements", [])
+        flex_json = json.loads(message.fb_message_json)
 
-        # 轉換 target_type
+        # 取得 bubbles 列表
+        if flex_json.get("type") == "carousel":
+            bubbles = flex_json.get("contents", [])
+        elif flex_json.get("type") == "bubble":
+            bubbles = [flex_json]
+        else:
+            bubbles = []
+
+        # 轉換每個 bubble 為 FB element
+        api_elements = []
+        for bubble in bubbles:
+            element = {}
+
+            # 提取標題 (body 中 size="xl" 或 weight="bold" 的文字)
+            body_contents = bubble.get("body", {}).get("contents", [])
+            for item in body_contents:
+                if item.get("type") == "text":
+                    if item.get("size") == "xl" or item.get("weight") == "bold":
+                        element["title"] = (item.get("text") or "").strip()
+                        break
+
+            if not element.get("title"):
+                element["title"] = "訊息"  # FB 要求 title 必填
+
+            # 提取副標題 (body 中 size="sm" 的文字)
+            for item in body_contents:
+                if item.get("type") == "text" and item.get("size") == "sm":
+                    subtitle = (item.get("text") or "").strip()
+                    if subtitle:
+                        element["subtitle"] = subtitle
+                    break
+
+            # 提取圖片
+            hero = bubble.get("hero", {})
+            image_url = (hero.get("url") or "").strip()
+            if image_url:
+                element["image_url"] = image_url
+
+            # 提取按鈕 (最多 3 個)
+            footer_contents = bubble.get("footer", {}).get("contents", [])
+            buttons = []
+            for item in footer_contents:
+                if item.get("type") == "button" and len(buttons) < 3:
+                    action = item.get("action", {})
+                    btn_title = (action.get("label") or "按鈕").strip()
+
+                    if action.get("type") == "uri":
+                        url = (action.get("uri") or "").strip()
+                        if url:
+                            buttons.append({
+                                "type": "web_url",
+                                "title": btn_title,
+                                "url": url
+                            })
+                    else:
+                        payload = (action.get("data") or "").strip()
+                        if payload:
+                            buttons.append({
+                                "type": "postback",
+                                "title": btn_title,
+                                "payload": payload
+                            })
+
+            if buttons:
+                element["buttons"] = buttons
+
+            api_elements.append(element)
+
+        # 轉換 target_type 和標籤
         if message.target_type == "all_friends":
             target_type = "all"
-            targets = []
+            tag_include = []
+            tag_exclude = []
         else:
             target_type = "tagged"
-            targets = message.target_filter.get("include", []) if message.target_filter else []
+            target_filter = message.target_filter or {}
+            tag_include = target_filter.get("include", [])
+            tag_exclude = target_filter.get("exclude", [])
 
-        # 轉換 elements
-        api_elements = []
-        for el in elements:
-            api_el = {
-                "title": el.get("title", ""),
-                "subtitle": el.get("subtitle", ""),
-                "image_url": el.get("image_url", ""),
-                "buttons": el.get("buttons", [])
-            }
-            api_elements.append(api_el)
-
-        return {
+        # 組裝 API payload
+        payload = {
             "channel": "FB",
             "target_type": target_type,
-            "targets": targets,
+            "tag_include": tag_include,
+            "tag_exclude": tag_exclude,
             "element": api_elements
         }
+
+        # 加入 message_title（用於通知/預覽標題）
+        if message.message_title:
+            payload["title"] = message.message_title
+
+        return payload
 
     # ============================================================
     # line_app 配置
