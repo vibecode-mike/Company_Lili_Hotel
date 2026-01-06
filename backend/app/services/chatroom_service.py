@@ -125,6 +125,7 @@ class ChatroomService:
         count_stmt = select(func.count()).select_from(ConversationMessage).where(
             ConversationMessage.thread_id == thread_id,
             ConversationMessage.platform == platform,
+            ConversationMessage.message_source != "broadcast",  # 過濾群發訊息
         )
         result = await self.db.execute(count_stmt)
         total = result.scalar() or 0
@@ -137,6 +138,7 @@ class ChatroomService:
             .where(
                 ConversationMessage.thread_id == thread_id,
                 ConversationMessage.platform == platform,
+                ConversationMessage.message_source != "broadcast",  # 過濾群發訊息
             )
             .order_by(ConversationMessage.created_at.desc())
             .limit(page_size)

@@ -359,12 +359,7 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
         });
       }
 
-      // 自動滾動到底部
-      setTimeout(() => {
-        if (chatContainerRef.current) {
-          chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-        }
-      }, 100);
+      // 收到新訊息時不自動滾動，保持當前位置
     }
   }, [member, currentThreadId]);
 
@@ -720,10 +715,9 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
           }
         }
 
-        // 重新載入訊息列表（確保顯示最新訊息）
-        await loadChatMessages(1, false);
+        // 新訊息會透過 WebSocket handleNewMessage 推送，不需要重新載入
 
-        // 可選：滾動到底部
+        // 滾動到底部
         setTimeout(() => {
           if (chatContainerRef.current) {
             chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
