@@ -276,7 +276,7 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
       overrides.username = member.line_display_name || member.username;
     } else if (currentPlatform === 'Facebook') {
       overrides.avatar = (member as any).fb_avatar;
-      overrides.username = (member as any).fb_name || member.username;
+      overrides.username = (member as any).fb_customer_name || member.username;
     } else if (currentPlatform === 'Webchat') {
       overrides.avatar = (member as any).webchat_avatar;
       overrides.username = (member as any).webchat_name || member.username;
@@ -389,11 +389,11 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
         // 建立 URL 參數
         let url = `/api/v1/members/${targetId}/chat-messages?page=${pageNum}&page_size=${PAGE_SIZE}&platform=${currentPlatform}`;
 
-        // FB 渠道需要傳送 meta_jwt_token
+        // FB 渠道需要傳送 jwt_token
         if (currentPlatform === 'Facebook') {
-          const metaJwt = localStorage.getItem('meta_jwt_token');
-          if (metaJwt) {
-            url += `&meta_jwt_token=${encodeURIComponent(metaJwt)}`;
+          const jwtToken = localStorage.getItem('jwt_token');
+          if (jwtToken) {
+            url += `&jwt_token=${encodeURIComponent(jwtToken)}`;
           }
         }
 
@@ -408,7 +408,12 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
 
           if (append) {
             // append=true 表示載入更早訊息（往上翻頁），需「前插」以維持舊→新排序
-            setMessages(prev => [...newMessages, ...prev]);
+            // 去重：過濾掉已存在的訊息
+            setMessages(prev => {
+              const existingIds = new Set(prev.map(msg => msg.id));
+              const uniqueNewMessages = newMessages.filter((msg: ChatMessage) => !existingIds.has(msg.id));
+              return [...uniqueNewMessages, ...prev];
+            });
           } else {
             // API 已回傳舊→新排序，不需要反轉
             setMessages(newMessages);
@@ -664,20 +669,20 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
       const token = localStorage.getItem('auth_token');
 
       // 建立請求 body
-      const requestBody: { text: string; platform: string; meta_jwt_token?: string } = {
+      const requestBody: { text: string; platform: string; jwt_token?: string } = {
         text: trimmedText,
         platform
       };
 
-      // 對於 Facebook 渠道，從 localStorage 取得 meta_jwt_token
+      // 對於 Facebook 渠道，從 localStorage 取得 jwt_token
       if (platform === 'Facebook') {
-        const metaJwt = localStorage.getItem('meta_jwt_token');
-        if (!metaJwt) {
+        const jwtToken = localStorage.getItem('jwt_token');
+        if (!jwtToken) {
           alert('請先完成 Facebook 授權');
           setIsSending(false);
           return;
         }
-        requestBody.meta_jwt_token = metaJwt;
+        requestBody.jwt_token = jwtToken;
       }
 
       const response = await fetch(

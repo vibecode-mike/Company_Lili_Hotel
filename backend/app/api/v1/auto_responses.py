@@ -1,8 +1,9 @@
 """
 自動回應 API
 """
+import logging
 from datetime import date, time
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
@@ -10,8 +11,11 @@ from app.database import get_db
 from app.models.auto_response import AutoResponse, AutoResponseKeyword, TriggerType
 from app.models.auto_response_message import AutoResponseMessage
 from app.schemas.common import SuccessResponse
+from app.clients.fb_message_client import FbMessageClient
 from pydantic import BaseModel, conlist
 from typing import Optional, List, Sequence, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -195,7 +199,9 @@ async def _deactivate_conflicting(
 async def _detect_and_mark_duplicate_keywords(db: AsyncSession) -> None:
     """
     檢測並標記重複的關鍵字。
-    規則：當多個啟用的自動回應包含相同關鍵字時，只有最新建立的版本有效，其他標記為重複。
+    規則：
+    1. 當多個啟用的自動回應包含相同關鍵字時，只有最新建立的版本有效，其他標記為重複。
+    2. 若自動回應的所有關鍵字都被標記為重複，則自動停用該自動回應。
     """
     # 獲取所有啟用的關鍵字類型自動回應的關鍵字
     query = (
@@ -234,6 +240,76 @@ async def _detect_and_mark_duplicate_keywords(db: AsyncSession) -> None:
             # 最新的不是重複，其他都是重複
             for i, kw in enumerate(sorted_kws):
                 kw.is_duplicate = i > 0
+
+    # === 自動停用無有效關鍵字的自動回應 ===
+    # 收集所有受影響的自動回應 ID
+    affected_ar_ids = set()
+    for kw in all_keywords:
+        if kw.auto_response:
+            affected_ar_ids.add(kw.auto_response_id)
+
+    # 檢查每個自動回應是否還有非重複的關鍵字
+    for ar_id in affected_ar_ids:
+        # 取得該自動回應的所有關鍵字
+        ar_keywords = [kw for kw in all_keywords if kw.auto_response_id == ar_id]
+
+        # 檢查是否所有關鍵字都是重複的
+        has_valid_keyword = any(not kw.is_duplicate for kw in ar_keywords)
+
+        if not has_valid_keyword and ar_keywords:
+            # 所有關鍵字都是重複的，自動停用此自動回應
+            auto_response = ar_keywords[0].auto_response
+            if auto_response and auto_response.is_active:
+                auto_response.is_active = False
+
+
+async def _sync_fb_auto_template(
+    auto_response: AutoResponse,
+    jwt_token: str
+) -> None:
+    """
+    同步自動回應到 Facebook 外部 API
+
+    Args:
+        auto_response: 已載入關聯資料的 AutoResponse 物件
+        jwt_token: Facebook JWT Token
+
+    Raises:
+        HTTPException: 當缺少 token 或 API 呼叫失敗時
+    """
+    if not jwt_token:
+        raise HTTPException(
+            status_code=400,
+            detail="缺少 jwt_token，請先完成 Facebook 授權"
+        )
+
+    # 建立 payload
+    payload = {
+        "firm_id": 1,
+        "response_type": 2 if auto_response.trigger_type == TriggerType.KEYWORD.value else 3,
+        "enabled": auto_response.is_active,
+        "trigger_time": 0,
+        "tags": [kw.keyword for kw in auto_response.keyword_relations],
+        "text": [
+            msg.message_content
+            for msg in sorted(auto_response.response_messages, key=lambda m: m.sequence_order)
+        ],
+    }
+
+    logger.info(f"Syncing FB auto_template: {payload}")
+
+    fb_client = FbMessageClient()
+    result = await fb_client.set_auto_template(payload, jwt_token)
+
+    if not result.get("ok"):
+        error_msg = result.get("error", "未知錯誤")
+        logger.error(f"FB auto_template sync failed: {error_msg}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"同步 Facebook 自動回應失敗: {error_msg}"
+        )
+
+    logger.info(f"FB auto_template synced successfully for auto_response_id={auto_response.id}")
 
 
 @router.get("", response_model=SuccessResponse)
@@ -332,6 +408,7 @@ async def get_auto_response(
 @router.post("", response_model=SuccessResponse)
 async def create_auto_response(
     data: AutoResponseCreate,
+    jwt_token: Optional[str] = Query(None, description="FB 渠道需要的 JWT token"),
     db: AsyncSession = Depends(get_db)
 ):
     """創建自動回應"""
@@ -412,6 +489,25 @@ async def create_auto_response(
             )
         )
 
+    # 若渠道包含 Facebook，先同步到外部 API（失敗則 rollback）
+    if channels and 'Facebook' in channels:
+        try:
+            # 需要 flush 以確保關聯資料已建立，然後重新查詢載入
+            await db.flush()
+            result = await db.execute(
+                select(AutoResponse)
+                .options(
+                    selectinload(AutoResponse.keyword_relations),
+                    selectinload(AutoResponse.response_messages),
+                )
+                .where(AutoResponse.id == auto_response.id)
+            )
+            auto_response_with_relations = result.scalar_one()
+            await _sync_fb_auto_template(auto_response_with_relations, jwt_token)
+        except HTTPException:
+            await db.rollback()
+            raise
+
     await db.commit()
     await db.refresh(auto_response)
 
@@ -427,6 +523,7 @@ async def create_auto_response(
 async def update_auto_response(
     auto_response_id: int,
     data: AutoResponseUpdate,
+    jwt_token: Optional[str] = Query(None, description="FB 渠道需要的 JWT token"),
     db: AsyncSession = Depends(get_db)
 ):
     """更新自動回應"""
@@ -449,7 +546,10 @@ async def update_auto_response(
 
     # 歡迎訊息衝突檢查（編輯現有歡迎訊息視為新版本）
     if final_trigger_type == TriggerType.WELCOME.value and final_is_active:
-        existing_welcome = await _check_welcome_conflict(db, final_channel_id, exclude_id=auto_response_id)
+        # 編輯啟用中的歡迎訊息時，不排除自己（視為新版本需確認）
+        # 只有編輯停用的歡迎訊息（並嘗試啟用）時，才排除自己
+        exclude_id_for_check = auto_response_id if not auto_response.is_active else None
+        existing_welcome = await _check_welcome_conflict(db, final_channel_id, exclude_id=exclude_id_for_check)
         if existing_welcome and not data.force_activate:
             return SuccessResponse(
                 data={
@@ -461,7 +561,10 @@ async def update_auto_response(
                 message="系統目前已啟用中的歡迎訊息，是否切換至新的設定？"
             )
         elif existing_welcome and data.force_activate:
-            existing_welcome.is_active = False
+            # 只有當衝突的歡迎訊息不是當前正在編輯的記錄時才停用
+            if existing_welcome.id != auto_response_id:
+                existing_welcome.is_active = False
+            # 如果是編輯自己，不需要額外操作，繼續正常儲存即可
 
     # 一律回應日期區間衝突檢查
     if final_trigger_type == TriggerType.FOLLOW.value and final_is_active:
@@ -546,6 +649,28 @@ async def update_auto_response(
             auto_response.content = message_list[0]
         auto_response.response_count = len(message_list)
 
+    # 確定最終的 channels
+    final_channels = data.channels if data.channels is not None else auto_response.channels
+
+    # 若渠道包含 Facebook，先同步到外部 API（失敗則 rollback）
+    if final_channels and 'Facebook' in final_channels:
+        try:
+            # 需要 flush 以確保關聯資料已更新，然後重新查詢載入
+            await db.flush()
+            result = await db.execute(
+                select(AutoResponse)
+                .options(
+                    selectinload(AutoResponse.keyword_relations),
+                    selectinload(AutoResponse.response_messages),
+                )
+                .where(AutoResponse.id == auto_response.id)
+            )
+            auto_response_with_relations = result.scalar_one()
+            await _sync_fb_auto_template(auto_response_with_relations, jwt_token)
+        except HTTPException:
+            await db.rollback()
+            raise
+
     await db.commit()
     await db.refresh(auto_response)
 
@@ -586,16 +711,77 @@ async def delete_auto_response(
 async def toggle_auto_response(
     auto_response_id: int,
     is_active: bool,
+    force_activate: bool = False,
+    jwt_token: Optional[str] = Query(None, description="FB 渠道需要的 JWT token"),
     db: AsyncSession = Depends(get_db)
 ):
     """切換自動回應狀態"""
-    result = await db.execute(select(AutoResponse).where(AutoResponse.id == auto_response_id))
+    result = await db.execute(
+        select(AutoResponse)
+        .options(
+            selectinload(AutoResponse.keyword_relations),
+            selectinload(AutoResponse.response_messages),
+        )
+        .where(AutoResponse.id == auto_response_id)
+    )
     auto_response = result.scalar_one_or_none()
 
     if not auto_response:
         raise HTTPException(status_code=404, detail="自動回應不存在")
 
+    # 只有啟用時才需要檢查衝突
+    if is_active:
+        # 歡迎訊息衝突檢查
+        if auto_response.trigger_type == TriggerType.WELCOME.value:
+            existing = await _check_welcome_conflict(
+                db, auto_response.channel_id, exclude_id=auto_response_id
+            )
+            if existing and not force_activate:
+                return SuccessResponse(
+                    data={
+                        "conflict": True,
+                        "conflict_type": "welcome",
+                        "existing_id": existing.id,
+                        "existing_name": existing.name,
+                    },
+                    message="系統目前已啟用中的歡迎訊息，是否切換至新的設定？"
+                )
+            elif existing and force_activate:
+                existing.is_active = False
+
+        # 一律回應日期區間衝突檢查
+        if auto_response.trigger_type == TriggerType.FOLLOW.value:
+            overlapping = await _check_always_date_overlap(
+                db,
+                auto_response.channel_id,
+                auto_response.date_range_start,
+                auto_response.date_range_end,
+                exclude_id=auto_response_id
+            )
+            if overlapping and not force_activate:
+                return SuccessResponse(
+                    data={
+                        "conflict": True,
+                        "conflict_type": "always_date_overlap",
+                        "existing_id": overlapping.id,
+                        "existing_name": overlapping.name,
+                        "existing_date_range": f"{overlapping.date_range_start} ~ {overlapping.date_range_end}",
+                    },
+                    message="與現有一律回應的日期區間重疊，是否切換至新的設定？"
+                )
+            elif overlapping and force_activate:
+                overlapping.is_active = False
+
     auto_response.is_active = is_active
+
+    # 若渠道包含 Facebook，同步到外部 API（失敗則 rollback）
+    if auto_response.channels and 'Facebook' in auto_response.channels:
+        try:
+            await _sync_fb_auto_template(auto_response, jwt_token)
+        except HTTPException:
+            await db.rollback()
+            raise
+
     await db.commit()
 
     # 關鍵字類型切換狀態後重新檢測重複關鍵字

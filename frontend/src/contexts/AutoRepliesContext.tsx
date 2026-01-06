@@ -70,6 +70,13 @@ export interface AutoReplyConflict {
 
 export type SaveAutoReplyResult = AutoReply | AutoReplyConflict | null;
 
+// Toggle 操作的結果類型
+export interface ToggleAutoReplySuccess {
+  success: true;
+}
+
+export type ToggleAutoReplyResult = ToggleAutoReplySuccess | AutoReplyConflict | null;
+
 interface AutoRepliesContextType {
   autoReplies: AutoReply[];
   setAutoReplies: (replies: AutoReply[]) => void;
@@ -77,7 +84,7 @@ interface AutoRepliesContextType {
   updateAutoReply: (id: string, updates: Partial<AutoReply>) => void;
   deleteAutoReply: (id: string) => void;
   getAutoReplyById: (id: string) => AutoReply | undefined;
-  toggleAutoReply: (id: string, nextState?: boolean) => Promise<void>;
+  toggleAutoReply: (id: string, nextState?: boolean, forceActivate?: boolean) => Promise<ToggleAutoReplyResult>;
   totalAutoReplies: number;
   activeAutoReplies: number;
   isLoading: boolean;
@@ -249,7 +256,17 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
     async (payload: AutoReplyPayload, id?: string): Promise<SaveAutoReplyResult> => {
       try {
         const token = getAuthTokenOrThrow();
-        const response = await fetch(id ? `/api/v1/auto_responses/${id}` : '/api/v1/auto_responses', {
+
+        // 構建 URL，若渠道包含 Facebook 則加上 jwt_token
+        let url = id ? `/api/v1/auto_responses/${id}` : '/api/v1/auto_responses';
+        if (payload.channels?.includes('Facebook')) {
+          const jwtToken = localStorage.getItem('jwt_token');
+          if (jwtToken) {
+            url += `?jwt_token=${encodeURIComponent(jwtToken)}`;
+          }
+        }
+
+        const response = await fetch(url, {
           method: id ? 'PUT' : 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -328,22 +345,47 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
   }, []);
 
   const toggleAutoReply = useCallback(
-    async (id: string, nextState?: boolean) => {
+    async (id: string, nextState?: boolean, forceActivate = false): Promise<ToggleAutoReplyResult> => {
       const existing = autoReplies.find(reply => reply.id === id);
       const targetState = typeof nextState === 'boolean' ? nextState : !existing?.isActive;
 
       try {
         const token = getAuthTokenOrThrow();
-        const response = await fetch(`/api/v1/auto_responses/${id}/toggle?is_active=${targetState}`, {
-          method: 'PATCH',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+
+        // 構建 URL，若渠道包含 Facebook 則加上 jwt_token
+        let url = `/api/v1/auto_responses/${id}/toggle?is_active=${targetState}&force_activate=${forceActivate}`;
+        if (existing?.channels?.includes('Facebook')) {
+          const jwtToken = localStorage.getItem('jwt_token');
+          if (jwtToken) {
+            url += `&jwt_token=${encodeURIComponent(jwtToken)}`;
+          }
+        }
+
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
         if (!response.ok) {
           const errData = await response.json().catch(() => null);
           throw new Error(errData?.detail || errData?.message || '更新狀態失敗');
+        }
+
+        const result = await response.json();
+
+        // 檢查是否有衝突
+        if (result?.data?.conflict) {
+          const conflictData: AutoReplyConflict = {
+            conflict: true,
+            conflictType: result.data.conflict_type,
+            existingId: result.data.existing_id,
+            existingName: result.data.existing_name,
+            existingDateRange: result.data.existing_date_range,
+          };
+          return conflictData;
         }
 
         setAutoReplies(prev =>
@@ -351,6 +393,8 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
             reply.id === id ? { ...reply, isActive: targetState } : reply
           )
         );
+
+        return { success: true };
       } catch (err) {
         console.error('切換自動回應狀態錯誤:', err);
         toast.error(err instanceof Error ? err.message : '更新狀態失敗');

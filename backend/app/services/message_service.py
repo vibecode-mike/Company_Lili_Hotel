@@ -805,7 +805,7 @@ class MessageService:
         db: AsyncSession,
         message_id: int,
         channel_id: Optional[str] = None,
-        meta_jwt_token: Optional[str] = None
+        jwt_token: Optional[str] = None
     ) -> Dict[str, Any]:
         """发送群发消息
 
@@ -813,7 +813,7 @@ class MessageService:
             db: 数据库 session
             message_id: 消息 ID
             channel_id: LINE 频道 ID
-            meta_jwt_token: FB 渠道需要的 JWT token
+            jwt_token: FB 渠道需要的 JWT token
 
         Returns:
             {
@@ -837,8 +837,8 @@ class MessageService:
             if not message.fb_message_json:
                 raise ValueError("消息缺少 Facebook Messenger JSON 内容")
 
-            if not meta_jwt_token:
-                raise ValueError("Facebook 發送需要 meta_jwt_token")
+            if not jwt_token:
+                raise ValueError("Facebook 發送需要 jwt_token")
 
             # 轉換格式
             payload = self._transform_fb_message_to_api_format(message)
@@ -849,7 +849,7 @@ class MessageService:
             fb_client = FbMessageClient()
             result = await fb_client.send_broadcast_message(
                 payload=payload,
-                meta_jwt_token=meta_jwt_token
+                jwt_token=jwt_token
             )
             logger.info(f"📬 FB API result: {result}")
 

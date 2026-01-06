@@ -24,24 +24,24 @@ class FbMessageClient:
         self.timeout = httpx.Timeout(30.0)
 
     @staticmethod
-    def _auth_headers(meta_jwt_token: str) -> Dict[str, str]:
+    def _auth_headers(jwt_token: str) -> Dict[str, str]:
         """組裝帶 Authorization 的標頭"""
-        return {"Authorization": f"Bearer {meta_jwt_token}"}
+        return {"Authorization": f"Bearer {jwt_token}"}
 
-    async def send_message(self, recipient_email: str, text: str, meta_jwt_token: str) -> dict:
+    async def send_message(self, recipient_email: str, text: str, jwt_token: str) -> dict:
         """
         發送訊息到 Facebook 用戶 (使用 email 識別)
 
         Args:
             recipient_email: 會員 Email
             text: 訊息內容
-            meta_jwt_token: Meta JWT Token (Bearer token)
+            jwt_token: JWT Token (Bearer token)
 
         Returns:
             {"ok": True, ...} on success
             {"ok": False, "error": "..."} on failure
         """
-        headers = self._auth_headers(meta_jwt_token)
+        headers = self._auth_headers(jwt_token)
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
@@ -61,13 +61,13 @@ class FbMessageClient:
                 logger.error(f"FB request error: {e}")
                 return {"ok": False, "error": str(e)}
 
-    async def get_chat_history(self, email: str, meta_jwt_token: str) -> Dict[str, Any]:
+    async def get_chat_history(self, email: str, jwt_token: str) -> Dict[str, Any]:
         """
         獲取 Facebook 聊天記錄
 
         Args:
             email: 會員 Email
-            meta_jwt_token: Meta JWT Token (Bearer token)
+            jwt_token: JWT Token (Bearer token)
 
         Returns:
             {
@@ -79,7 +79,7 @@ class FbMessageClient:
             }
             or {"ok": False, "error": "...", "data": []} on failure
         """
-        headers = {"Authorization": f"Bearer {meta_jwt_token}"}
+        headers = {"Authorization": f"Bearer {jwt_token}"}
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
@@ -99,12 +99,12 @@ class FbMessageClient:
                 logger.error(f"FB history request error: {e}")
                 return {"ok": False, "error": str(e), "data": []}
 
-    async def get_member_list(self, meta_jwt_token: str) -> Dict[str, Any]:
+    async def get_member_list(self, jwt_token: str) -> Dict[str, Any]:
         """
         獲取 Facebook 會員列表
 
         Args:
-            meta_jwt_token: Meta JWT Token (Bearer token)
+            jwt_token: JWT Token (Bearer token)
 
         Returns:
             {
@@ -116,7 +116,7 @@ class FbMessageClient:
             }
             or {"ok": False, "error": "...", "data": []} on failure
         """
-        headers = self._auth_headers(meta_jwt_token)
+        headers = self._auth_headers(jwt_token)
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
@@ -135,15 +135,15 @@ class FbMessageClient:
                 logger.error(f"FB member list request error: {e}")
                 return {"ok": False, "error": str(e), "data": []}
 
-    async def send_broadcast_message(self, payload: Dict[str, Any], meta_jwt_token: str) -> Dict[str, Any]:
+    async def send_broadcast_message(self, payload: Dict[str, Any], jwt_token: str) -> Dict[str, Any]:
         """
         群發 Messenger 訊息 (/meta_page/message)
 
         Args:
             payload: API 所需 JSON（包含 channel/target_type/targets/element）
-            meta_jwt_token: Meta JWT Token (Bearer)
+            jwt_token: JWT Token (Bearer)
         """
-        headers = self._auth_headers(meta_jwt_token)
+        headers = self._auth_headers(jwt_token)
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
@@ -152,30 +152,37 @@ class FbMessageClient:
                     json=payload,
                     headers=headers,
                 )
-                data = response.json()
-                # 根據 body 中的 status 判斷成功/失敗
-                if data.get("status") == 200:
-                    result_data = data.get("data", {})
+                try:
+                    data = response.json()
+                except ValueError:
+                    preview = response.text[:200] if response.text else "empty body"
+                    logger.error(f"FB broadcast API returned non‑JSON body: {preview}")
+                    return {"ok": False, "error": "FB API 回應非 JSON"}
+
+                status_code = data.get("status", response.status_code)
+                # 根據 body 中的 status 判斷成功/失敗（外部 API 可能回傳 HTTP 200 但 status != 200）
+                if status_code == 200:
+                    result_data = data.get("data", {}) or {}
                     return {
                         "ok": True,
                         "sent": result_data.get("success", 0),
                         "failed": result_data.get("failure", 0),
                         "total": result_data.get("total_targets", 0),
-                        "msg": data.get("msg", "ok")
+                        "msg": data.get("msg", "ok"),
                     }
-                else:
-                    error_msg = data.get("msg", f"API error: {data.get('status')}")
-                    logger.error(f"FB broadcast API error: {error_msg}")
-                    return {"ok": False, "error": error_msg}
+
+                error_msg = data.get("msg", f"API error: {status_code}")
+                logger.error(f"FB broadcast API error ({status_code}): {error_msg}")
+                return {"ok": False, "error": error_msg}
             except httpx.RequestError as e:
                 logger.error(f"FB broadcast request error: {e}")
                 return {"ok": False, "error": str(e)}
 
-    async def list_messages(self, meta_jwt_token: str) -> Dict[str, Any]:
+    async def list_messages(self, jwt_token: str) -> Dict[str, Any]:
         """
         取得訊息列表 (/meta_page/message/list)
         """
-        headers = self._auth_headers(meta_jwt_token)
+        headers = self._auth_headers(jwt_token)
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
@@ -192,11 +199,11 @@ class FbMessageClient:
                 logger.error(f"FB message list request error: {e}")
                 return {"ok": False, "error": str(e)}
 
-    async def set_auto_template(self, payload: Dict[str, Any], meta_jwt_token: str) -> Dict[str, Any]:
+    async def set_auto_template(self, payload: Dict[str, Any], jwt_token: str) -> Dict[str, Any]:
         """
         設定自動回應模板 (/meta_page/message/auto_template)
         """
-        headers = self._auth_headers(meta_jwt_token)
+        headers = self._auth_headers(jwt_token)
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
@@ -214,11 +221,11 @@ class FbMessageClient:
                 logger.error(f"FB auto_template request error: {e}")
                 return {"ok": False, "error": str(e)}
 
-    async def create_message_template(self, payload: Dict[str, Any], meta_jwt_token: str) -> Dict[str, Any]:
+    async def create_message_template(self, payload: Dict[str, Any], jwt_token: str) -> Dict[str, Any]:
         """
         建立/更新群發訊息模板 (/meta_page/message/template)
         """
-        headers = self._auth_headers(meta_jwt_token)
+        headers = self._auth_headers(jwt_token)
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
@@ -236,11 +243,11 @@ class FbMessageClient:
                 logger.error(f"FB template request error: {e}")
                 return {"ok": False, "error": str(e)}
 
-    async def get_message_template(self, setting_id: Optional[str], meta_jwt_token: str) -> Dict[str, Any]:
+    async def get_message_template(self, setting_id: Optional[str], jwt_token: str) -> Dict[str, Any]:
         """
         取得訊息模板內容 (/meta_page/message/template?setting_id=xxx)
         """
-        headers = self._auth_headers(meta_jwt_token)
+        headers = self._auth_headers(jwt_token)
         params: Dict[str, str] = {}
         if setting_id:
             params["setting_id"] = setting_id

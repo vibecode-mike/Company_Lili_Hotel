@@ -142,7 +142,7 @@ async def get_chat_messages(
     page: int = Query(1, ge=1, description="頁碼"),
     page_size: int = Query(50, ge=1, le=100, description="每頁筆數"),
     platform: Optional[str] = Query(None, description="渠道：LINE/Facebook/Webchat"),
-    meta_jwt_token: Optional[str] = Query(None, description="FB 渠道需要的 JWT token"),
+    jwt_token: Optional[str] = Query(None, description="FB 渠道需要的 JWT token"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -176,11 +176,11 @@ async def get_chat_messages(
 
         # Facebook 渠道：從外部 API 獲取聊天記錄
         if resolved_platform == "Facebook":
-            if not meta_jwt_token:
-                raise HTTPException(status_code=400, detail="缺少 meta_jwt_token")
+            if not jwt_token:
+                raise HTTPException(status_code=400, detail="缺少 jwt_token")
 
             fb_client = FbMessageClient()
-            fb_result = await fb_client.get_chat_history(member.email, meta_jwt_token)
+            fb_result = await fb_client.get_chat_history(member.email, jwt_token)
 
             if not fb_result.get("ok"):
                 raise HTTPException(status_code=500, detail=f"獲取 FB 聊天記錄失敗: {fb_result.get('error')}")
@@ -188,7 +188,8 @@ async def get_chat_messages(
             # 轉換外部 API 格式為內部格式
             messages = []
             for idx, item in enumerate(fb_result.get("data", [])):
-                direction = item.get("direction", "outgoing")
+                direction_raw = (item.get("direction") or "outgoing").lower()
+                is_incoming = direction_raw in {"ingoing", "incoming"}
                 msg_content = item.get("message", "")
                 timestamp = item.get("time", 0)
 
@@ -205,12 +206,12 @@ async def get_chat_messages(
 
                 messages.append(ChatMessage(
                     id=f"fb_{idx}_{timestamp}",
-                    type="user" if direction == "ingoing" else "official",
+                    type="user" if is_incoming else "official",
                     text=text,
                     time=time_str,
                     timestamp=format_iso_utc(dt),
                     isRead=True,
-                    source="external" if direction == "outgoing" else None,
+                    source="external" if not is_incoming else None,
                 ))
 
             # FB 訊息按時間正序排列
@@ -283,9 +284,9 @@ def _resolve_platform_uid(member: Member, platform: str) -> str:
             raise HTTPException(status_code=400, detail="會員未綁定 LINE 帳號")
         return member.line_uid
     if platform == "Facebook":
-        if not member.fb_uid:
+        if not member.fb_customer_id:
             raise HTTPException(status_code=400, detail="會員未綁定 Facebook 帳號")
-        return member.fb_uid
+        return member.fb_customer_id
     if platform == "Webchat":
         if not member.webchat_uid:
             raise HTTPException(status_code=400, detail="會員未綁定 Webchat")

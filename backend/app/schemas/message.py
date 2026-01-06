@@ -365,7 +365,7 @@ class MessageSendRequest(BaseModel):
     """消息發送請求"""
 
     channel_id: Optional[str] = None  # LINE 頻道 ID（多租戶支持）
-    meta_jwt_token: Optional[str] = None  # FB 渠道需要的 JWT token
+    jwt_token: Optional[str] = None  # FB 渠道需要的 JWT token
 
 
 class MessageSendResponse(BaseModel):

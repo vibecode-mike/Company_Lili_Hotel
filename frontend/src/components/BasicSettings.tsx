@@ -298,14 +298,14 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
       throw new Error('firm_login 未取得 access_token，無法進行後續授權');
     }
 
-    localStorage.setItem('meta_jwt_token', firmToken);
+    localStorage.setItem('jwt_token', firmToken);
     return firmToken;
   }, [fbApiBaseUrl, fbServiceAccount, fbServicePassword]);
 
   const requestMetaLogin = useCallback(
     async (facebookAccessToken: string): Promise<string> => {
       const ensureServiceJwt = async (): Promise<string> => {
-        const existing = localStorage.getItem('meta_jwt_token');
+        const existing = localStorage.getItem('jwt_token');
         if (existing) return existing;
         return performFirmLogin();
       };
@@ -354,9 +354,9 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
 
   // 同步 FB 會員列表到後端（非阻塞，失敗不影響主流程）
   const syncFacebookMembers = useCallback(async () => {
-    const metaJwt = localStorage.getItem('meta_jwt_token');
-    if (!metaJwt) {
-      console.warn('缺少 meta_jwt_token，跳過 FB 會員同步');
+    const jwtToken = localStorage.getItem('jwt_token');
+    if (!jwtToken) {
+      console.warn('缺少 jwt_token，跳過 FB 會員同步');
       return;
     }
 
@@ -366,7 +366,7 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ meta_jwt_token: metaJwt }),
+        body: JSON.stringify({ jwt_token: jwtToken }),
       });
 
       if (syncResponse.ok) {

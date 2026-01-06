@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
 
 interface User {
@@ -42,6 +42,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const initialState = getInitialAuthState();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(initialState.isAuthenticated);
   const [user, setUser] = useState<User | null>(initialState.user);
+  const fbApiBaseUrl = useMemo(
+    () => (import.meta.env.VITE_FB_API_URL?.trim() || 'https://api-youth-tycg.star-bit.io').replace(/\/+$/, ''),
+    []
+  );
+  const fbFirmAccount = useMemo(() => import.meta.env.VITE_FB_FIRM_ACCOUNT?.trim() || 'tycg-admin', []);
+  const fbFirmPassword = useMemo(() => import.meta.env.VITE_FB_FIRM_PASSWORD?.trim() || '123456', []);
+
+  const performFirmLogin = useCallback(async (): Promise<string | null> => {
+    try {
+      const firmLoginResp = await fetch(`${fbApiBaseUrl}/api/v1/admin/firm_login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account: fbFirmAccount, password: fbFirmPassword }),
+      });
+      const firmPayload = await firmLoginResp.json().catch(() => null);
+      const firmToken = firmPayload?.data?.access_token;
+      if (firmLoginResp.ok && firmToken) {
+        localStorage.setItem('jwt_token', firmToken);
+        return firmToken;
+      }
+      console.warn('firm_login 失敗，後續 FB API 可能無法使用', firmPayload);
+      toast.warning(firmPayload?.msg || 'FB 服務登入失敗，請稍後再試');
+      return null;
+    } catch (firmLoginError) {
+      console.error('firm_login 發生錯誤:', firmLoginError);
+      toast.warning('FB 服務登入失敗，請稍後再試');
+      return null;
+    }
+  }, [fbApiBaseUrl, fbFirmAccount, fbFirmPassword]);
 
   // Email/Password login
   const login = async (email: string, password: string): Promise<boolean> => {
@@ -72,6 +101,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('user_email', data.user.email);
       localStorage.setItem('login_method', 'email');
 
+      // 連動外部 FB 服務的 firm_login，取得 JWT 作為後續 Authorization
+      await performFirmLogin();
+
       setIsAuthenticated(true);
       setUser({
         email: data.user.email,
@@ -99,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('auth_token', token);
     localStorage.setItem('user_email', mockEmail);
     localStorage.setItem('login_method', 'google');
+    await performFirmLogin();
 
     setIsAuthenticated(true);
     setUser({
@@ -122,6 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('auth_token', token);
     localStorage.setItem('user_email', mockEmail);
     localStorage.setItem('login_method', 'line');
+    await performFirmLogin();
 
     setIsAuthenticated(true);
     setUser({
@@ -139,6 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('user_email');
     localStorage.removeItem('login_method');
+    localStorage.removeItem('jwt_token');
     
     setIsAuthenticated(false);
     setUser(null);

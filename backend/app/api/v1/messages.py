@@ -233,13 +233,13 @@ async def send_message(
         logger.info(f"📤 发送消息: ID={message_id}")
 
         channel_id = request.channel_id if request else None
-        meta_jwt_token = request.meta_jwt_token if request else None
+        jwt_token = request.jwt_token if request else None
 
         result = await message_service.send_message(
             db,
             message_id,
             channel_id,
-            meta_jwt_token
+            jwt_token
         )
 
         if not result.get("ok"):

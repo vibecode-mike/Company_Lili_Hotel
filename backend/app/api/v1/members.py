@@ -742,7 +742,7 @@ async def send_member_chat_message(
     member_id: int,
     text: str = Body(..., embed=True),
     platform: str = Body("LINE", embed=True, description="渠道：LINE/Facebook/Webchat"),
-    meta_jwt_token: Optional[str] = Body(None, embed=True, description="FB 渠道需要的 JWT token"),
+    jwt_token: Optional[str] = Body(None, embed=True, description="FB 渠道需要的 JWT token"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -804,16 +804,16 @@ async def send_member_chat_message(
             raise HTTPException(status_code=500, detail=f"發送訊息失敗: {str(e)}")
 
     elif platform == "Facebook":
-        # 檢查 meta_jwt_token
-        if not meta_jwt_token:
-            raise HTTPException(status_code=400, detail="缺少 meta_jwt_token，請先完成 Facebook 授權")
+        # 檢查 jwt_token
+        if not jwt_token:
+            raise HTTPException(status_code=400, detail="缺少 jwt_token，請先完成 Facebook 授權")
 
         # 調用外部 FB API 發送訊息 (FB 會員一定有 email)
         fb_client = FbMessageClient()
         send_result = await fb_client.send_message(
             recipient_email=member.email,
             text=text,
-            meta_jwt_token=meta_jwt_token
+            jwt_token=jwt_token
         )
 
         if not send_result.get("ok"):

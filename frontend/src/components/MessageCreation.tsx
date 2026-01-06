@@ -143,26 +143,29 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     // Flex Message JSON is ready for use
   }, [flexMessageJson]);
 
-  // Fetch estimated recipient count when target settings change
+  // Fetch estimated recipient count when target settings or platform change
+  // Triggers on: initial mount (LINE default), page refresh, or platform selection change
   useEffect(() => {
-    const fetchEstimatedRecipientCount = async () => {
-      // Reset to null (loading state) when params change
-      setEstimatedRecipientCount(null);
+    let isActive = true;
+
+    const fetchCount = async () => {
+      // Only fetch for LINE platform - Facebook uses different API
+      if (selectedPlatform !== 'LINE') {
+        setEstimatedRecipientCount(0);
+        return;
+      }
 
       try {
-        // Prepare request body for quota API (same endpoint gives us recipient count)
-        const requestBody: any = {
+        const requestBody: Record<string, unknown> = {
           target_type: targetType === 'all' ? 'all_friends' : 'filtered'
         };
 
-        // Add filter conditions for filtered audience
         if (targetType === 'filtered' && selectedFilterTags.length > 0) {
           requestBody.target_filter = {
             [filterCondition]: selectedFilterTags.map(t => t.name)
           };
         }
 
-        // Build headers - include auth token if available (API doesn't require it)
         const headers: Record<string, string> = {
           'Content-Type': 'application/json'
         };
@@ -177,24 +180,27 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
           body: JSON.stringify(requestBody)
         });
 
+        if (!isActive) return;
+
         if (response.ok) {
           const result = await response.json();
-          // The quota API returns estimated_send_count
-          setEstimatedRecipientCount(result.estimated_send_count || 0);
+          setEstimatedRecipientCount(result.estimated_send_count ?? 0);
         } else {
-          // API returned error, show 0 instead of infinite loading
-          console.error('獲取預計發送人數失敗:', response.status);
           setEstimatedRecipientCount(0);
         }
-      } catch (error) {
-        console.error('獲取預計發送人數錯誤:', error);
-        // Show 0 on network error instead of infinite loading
-        setEstimatedRecipientCount(0);
+      } catch {
+        if (isActive) {
+          setEstimatedRecipientCount(0);
+        }
       }
     };
 
-    fetchEstimatedRecipientCount();
-  }, [targetType, selectedFilterTags, filterCondition]);
+    fetchCount();
+
+    return () => {
+      isActive = false;
+    };
+  }, [selectedPlatform, targetType, selectedFilterTags, filterCondition]);
 
   const button1TriggerImageInputRef = useRef<HTMLInputElement>(null);
   const button2TriggerImageInputRef = useRef<HTMLInputElement>(null);
@@ -1489,14 +1495,14 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         // 準備發送請求的 body
         const sendBody: Record<string, string> = {};
 
-        // FB 平台需要帶入 meta_jwt_token
+        // FB 平台需要帶入 jwt_token
         if (selectedPlatform === 'Facebook') {
-          const metaJwtToken = localStorage.getItem('meta_jwt_token');
-          if (!metaJwtToken) {
+          const jwtToken = localStorage.getItem('jwt_token');
+          if (!jwtToken) {
             toast.error('請先登入 Facebook 帳號');
             return;
           }
-          sendBody.meta_jwt_token = metaJwtToken;
+          sendBody.jwt_token = jwtToken;
         }
 
         const sendResponse = await fetch(`/api/v1/messages/${messageId}/send`, {

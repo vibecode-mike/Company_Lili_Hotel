@@ -3,6 +3,7 @@ import sys
 import pytest
 import uuid
 from datetime import datetime
+from unittest.mock import patch, AsyncMock
 
 # Override required env vars before importing app modules
 os.environ.setdefault("SECRET_KEY", "test")
@@ -63,7 +64,7 @@ async def test_get_chat_messages_by_platform():
         id=1,
         email="user@example.com",
         line_uid="U1",
-        fb_uid="F1",
+        fb_customer_id="F1",
         webchat_uid="W1",
         join_source="LINE",
         last_interaction_at=datetime.utcnow(),
@@ -103,9 +104,27 @@ async def test_get_chat_messages_by_platform():
     assert resp_line.data["total"] == 1
     assert resp_line.data["messages"][0]["type"] == "user"
 
-    resp_fb = await get_chat_messages(member_id=1, page=1, page_size=50, platform="Facebook", db=async_session)
-    assert resp_fb.data["total"] == 1
-    assert resp_fb.data["messages"][0]["text"] == "hello fb"
+    # Facebook 測試需要 mock 外部 API 調用
+    # FbMessageClient.get_chat_history 返回格式: {"ok": True, "data": [...]}
+    mock_fb_result = {
+        "ok": True,
+        "data": [
+            {
+                "direction": "incoming",
+                "message": "hello fb",
+                "time": 1735689600,  # Unix timestamp
+            }
+        ],
+    }
+    with patch("app.api.v1.chat_messages.FbMessageClient") as MockFbClient:
+        mock_instance = MockFbClient.return_value
+        mock_instance.get_chat_history = AsyncMock(return_value=mock_fb_result)
+        resp_fb = await get_chat_messages(
+            member_id=1, page=1, page_size=50, platform="Facebook",
+            jwt_token="test_token", db=async_session
+        )
+        assert resp_fb.data["total"] == 1
+        assert resp_fb.data["messages"][0]["text"] == "hello fb"
 
     # default platform is LINE when not provided
     resp_default = await get_chat_messages(member_id=1, page=1, page_size=50, platform=None, db=async_session)
