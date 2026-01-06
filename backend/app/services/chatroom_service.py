@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 
+import pytz
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +11,42 @@ from app.models.member import Member
 from app.models.conversation import ConversationThread, ConversationMessage
 
 logger = logging.getLogger(__name__)
+
+# 台北時區
+TAIPEI_TZ = pytz.timezone('Asia/Taipei')
+
+
+def format_chat_time(dt: Optional[datetime]) -> str:
+    """格式化為 '時段 HH:mm' 格式，例如 '下午 03:30'"""
+    if not dt:
+        return ""
+
+    # 假設 naive datetime 就是台灣本地時間（不做 UTC 假設）
+    if dt.tzinfo is None:
+        local_dt = TAIPEI_TZ.localize(dt)
+    else:
+        local_dt = dt.astimezone(TAIPEI_TZ)
+    hour = local_dt.hour
+    minute = local_dt.minute
+
+    # 判斷時段 (台灣時間)
+    if 0 <= hour < 6:
+        period = "凌晨"
+        display_hour = hour if hour > 0 else 12
+    elif 6 <= hour < 12:
+        period = "上午"
+        display_hour = hour
+    elif 12 <= hour < 14:
+        period = "中午"
+        display_hour = 12 if hour == 12 else hour - 12
+    elif 14 <= hour < 18:
+        period = "下午"
+        display_hour = hour - 12
+    else:  # 18-23
+        period = "晚上"
+        display_hour = hour - 12
+
+    return f"{period} {display_hour:02d}:{minute:02d}"
 
 
 class ChatroomService:
@@ -112,8 +149,12 @@ class ChatroomService:
         for record in records:
             msg_type = "user" if record.direction == "incoming" else "official"
             if record.created_at:
-                created_at_utc = record.created_at.replace(tzinfo=timezone.utc)
-                timestamp_str = created_at_utc.isoformat()
+                # 假設 naive datetime 是台灣本地時間
+                if record.created_at.tzinfo is None:
+                    created_at_local = TAIPEI_TZ.localize(record.created_at)
+                else:
+                    created_at_local = record.created_at.astimezone(TAIPEI_TZ)
+                timestamp_str = created_at_local.isoformat()
             else:
                 timestamp_str = None
             messages.append(
@@ -121,7 +162,7 @@ class ChatroomService:
                     "id": record.id,
                     "type": msg_type,
                     "text": record.question if record.direction == "incoming" else record.response,
-                    "time": "",  # 已有 timestamp，前端可自行格式化
+                    "time": format_chat_time(record.created_at),  # 格式化為 "下午 03:30"
                     "timestamp": timestamp_str,
                     "isRead": record.status == "read" if hasattr(record, "status") else False,
                     "source": record.message_source,
@@ -143,7 +184,7 @@ class ChatroomService:
 
         for plat, uid in [
             ("LINE", member.line_uid),
-            ("Facebook", member.fb_uid),
+            ("Facebook", member.fb_customer_id),
             ("Webchat", member.webchat_uid),
         ]:
             if not uid:
@@ -166,9 +207,9 @@ class ChatroomService:
                 raise ValueError("會員未綁定 LINE 帳號")
             return member.line_uid
         if platform == "Facebook":
-            if not member.fb_uid:
+            if not member.fb_customer_id:
                 raise ValueError("會員未綁定 Facebook 帳號")
-            return member.fb_uid
+            return member.fb_customer_id
         if platform == "Webchat":
             if not member.webchat_uid:
                 raise ValueError("會員未綁定 Webchat")

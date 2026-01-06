@@ -3378,13 +3378,14 @@ def on_text(event: MessageEvent):
                 # 這樣前端聊天室可以即時顯示自動回應
                 try:
                     backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8700")
+                    current_ts = int(time.time() * 1000)  # time.time() 返回 UTC epoch 秒數
                     requests.post(
                         f"{backend_url}/api/v1/line/message-notify",
                         json={
                             "line_uid": uid,
                             "message_text": reply_text,
-                            "timestamp": int(datetime.datetime.now().timestamp() * 1000),
-                            "message_id": str(msg_id) if msg_id else f"auto_{int(datetime.datetime.now().timestamp())}",
+                            "timestamp": current_ts,
+                            "message_id": str(msg_id) if msg_id else f"auto_{current_ts}",
                             "direction": "outgoing",
                             "source": message_source  # gpt/keyword/always
                         },
@@ -3409,7 +3410,7 @@ def on_text(event: MessageEvent):
                 json={
                     "line_uid": uid,
                     "message_text": text_in,
-                    "timestamp": int(datetime.datetime.now().timestamp() * 1000),
+                    "timestamp": event.timestamp,  # 使用 LINE 官方時間戳 (毫秒)
                     "message_id": event.message.id
                 },
                 timeout=5

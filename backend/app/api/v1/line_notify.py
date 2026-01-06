@@ -55,12 +55,25 @@ async def notify_new_message(
             # 不算錯誤,可能是新用戶或尚未同步
             return {"status": "ok", "message": "Member not found, skipped"}
 
-        # 2. 轉換時間格式 (使用中文上午/下午)
-        # notification.timestamp: Unix timestamp (milliseconds)
-        message_time = datetime.fromtimestamp(notification.timestamp / 1000, tz=timezone.utc).astimezone(ZoneInfo("Asia/Taipei"))
+        # 2. 轉換時間格式 (使用中文時段)
+        # notification.timestamp: Unix timestamp (milliseconds) - 直接轉為本地時間
+        message_time = datetime.fromtimestamp(notification.timestamp / 1000, tz=ZoneInfo("Asia/Taipei"))
         hour = message_time.hour
         minute = message_time.minute
-        period = "上午" if hour < 12 else "下午"
+
+        # 判斷時段
+        if 0 <= hour < 6:
+            period = "凌晨"
+        elif 6 <= hour < 12:
+            period = "上午"
+        elif 12 <= hour < 14:
+            period = "中午"
+        elif 14 <= hour < 18:
+            period = "下午"
+        else:  # 18-23
+            period = "晚上"
+
+        # 轉換為 12 小時制
         hour_12 = hour if hour <= 12 else hour - 12
         if hour_12 == 0:
             hour_12 = 12
@@ -101,7 +114,8 @@ async def notify_new_message(
             else:
                 msg.question = notification.message_text
         else:
-            created_at_utc = datetime.fromtimestamp(notification.timestamp / 1000, tz=timezone.utc).replace(tzinfo=None)
+            # 直接使用本地時間（不做 UTC 假設）
+            created_at_local = datetime.fromtimestamp(notification.timestamp / 1000)
             msg = ConversationMessage(
                 id=notification.message_id,
                 thread_id=thread.id,
@@ -111,7 +125,7 @@ async def notify_new_message(
                 question=notification.message_text if direction == "incoming" else None,
                 response=notification.message_text if direction == "outgoing" else None,
                 message_source=notification.source,
-                created_at=created_at_utc,
+                created_at=created_at_local,
             )
             db.add(msg)
 
@@ -120,7 +134,7 @@ async def notify_new_message(
         await manager.send_new_message(msg.thread_id, {
             **message_data,
             "thread_id": msg.thread_id,
-            "timestamp": datetime.fromtimestamp(notification.timestamp / 1000, tz=timezone.utc).isoformat()
+            "timestamp": datetime.fromtimestamp(notification.timestamp / 1000, tz=ZoneInfo("Asia/Taipei")).isoformat()
         })
 
         logger.info(f"✅ Notified frontend about new message on thread {msg.thread_id}")
