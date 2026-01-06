@@ -526,20 +526,6 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
     }
   }, [member?.id, memberId, loadChatMessages, currentPlatform]);
 
-  // Fallback polling when WebSocket 無法建立，仍定期刷新訊息
-  useEffect(() => {
-    const targetId = member?.id?.toString() || memberId;
-    if (!targetId || isRealtimeConnected) {
-      return;
-    }
-
-    const interval = setInterval(() => {
-      loadChatMessages(1, false, { silent: true });
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [isRealtimeConnected, member?.id, memberId, loadChatMessages]);
-
   // Auto-scroll to bottom on initial load
   useEffect(() => {
     if (messages.length > 0 && chatContainerRef.current && page === 1) {
