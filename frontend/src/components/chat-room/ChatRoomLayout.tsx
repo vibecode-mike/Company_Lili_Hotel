@@ -136,6 +136,7 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
   const [isAvatarPressed, setIsAvatarPressed] = useState(false);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
   const messageTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const hasInitialScrolled = useRef(false);  // 追蹤是否已完成初次滾動
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
@@ -526,16 +527,22 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
     }
   }, [member?.id, memberId, loadChatMessages, currentPlatform]);
 
-  // Auto-scroll to bottom on initial load
+  // Auto-scroll to bottom on initial load (只執行一次)
   useEffect(() => {
-    if (messages.length > 0 && chatContainerRef.current && page === 1) {
+    if (messages.length > 0 && chatContainerRef.current && page === 1 && !hasInitialScrolled.current) {
       requestAnimationFrame(() => {
         if (chatContainerRef.current) {
           chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+          hasInitialScrolled.current = true;  // 標記已完成初次滾動
         }
       });
     }
   }, [messages, page]);
+
+  // 切換會員或平台時重置初次滾動標記
+  useEffect(() => {
+    hasInitialScrolled.current = false;
+  }, [member?.id, memberId, currentPlatform]);
 
   // 當內容不夠滾動但還有更多訊息時，自動載入更多
   useEffect(() => {
