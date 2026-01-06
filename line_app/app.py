@@ -544,7 +544,8 @@ def insert_conversation_message(*, thread_id: str, role: str, direction: str,
         logging.warning("thread_id is empty, cannot insert message")
         return None
 
-    msg_id = (message_id.strip() if isinstance(message_id, str) and message_id.strip() else None) or uuid.uuid4().hex
+    # 呼叫端可傳入 message_id（如 LINE reply_token / message.id）；未傳則產生 UUID
+    msg_id = message_id.strip() if isinstance(message_id, str) and message_id.strip() else uuid.uuid4().hex
 
     try:
         columns = [
@@ -3099,12 +3100,23 @@ def on_follow(event: FollowEvent):
     檢查是否有啟用的歡迎訊息自動回應
     """
     uid = getattr(event.source, "user_id", None)
+    reply_token = getattr(event, "reply_token", None)
 
     # 確保 uid 去除空白字元
     if uid:
         uid = uid.strip()
 
     logging.info(f"[on_follow] uid={uid}")
+
+    # 若同一個 follow 事件被多個 webhook 觸發（reply_token 相同），直接跳過以避免重複回覆
+    if reply_token:
+        try:
+            existed = fetchone("SELECT 1 FROM conversation_messages WHERE id=:id", {"id": reply_token})
+            if existed:
+                logging.info(f"[on_follow] Duplicate follow detected (reply_token={reply_token}), skip welcome.")
+                return
+        except Exception:
+            logging.exception("[on_follow] Duplicate check failed, continue to handle follow")
 
     # === 1. 檢查是否有啟用的歡迎訊息 ===
     welcome_msg = None
@@ -3169,7 +3181,9 @@ def on_follow(event: FollowEvent):
                     message_type="text",
                     response=welcome_msg,
                     message_source="welcome",
-                    status="sent"
+                    status="sent",
+                    # 使用 LINE reply_token 當作 message_id，避免同一個 follow 事件重複寫入聊天室紀錄
+                    message_id=getattr(event, "reply_token", None)
                 )
                 logging.info(f"[on_follow] Welcome message saved to conversation_messages for uid={uid}")
             except Exception:
