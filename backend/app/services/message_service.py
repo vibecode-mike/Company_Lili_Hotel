@@ -657,7 +657,7 @@ class MessageService:
         target_type: str,
         target_filter: Optional[Dict] = None
     ) -> int:
-        """计算符合条件的會員數量（使用 members 表，配合 is_following 和 member_tags）
+        """计算符合条件的會員數量（使用 members 表，配合 is_following、member_tags 和 member_interaction_tags）
 
         Args:
             db: 数据库 session
@@ -691,26 +691,35 @@ class MessageService:
             return count
 
         elif target_type == "filtered" and target_filter:
-            # 根据标签筛选會員
+            # 根据标签筛选會員（同時查詢 member_tags 和 member_interaction_tags）
             include_tags = target_filter.get("include", [])
             exclude_tags = target_filter.get("exclude", [])
 
             if include_tags:
-                # 包含指定标签的會員
+                # 包含指定标签的會員（查詢會員標籤和互動標籤兩個表）
                 tag_placeholders = ", ".join([f":tag{i}" for i in range(len(include_tags))])
                 tag_params = {f"tag{i}": tag for i, tag in enumerate(include_tags)}
 
                 query_str = f"""
                     SELECT COUNT(DISTINCT m.id)
                     FROM members m
-                    INNER JOIN member_tags mt ON m.id = mt.member_id
                     WHERE m.line_uid IS NOT NULL
                       AND m.line_uid != ''
                       AND m.is_following = 1
-                      AND mt.tag_name IN ({tag_placeholders})
+                      AND (
+                          m.id IN (
+                              SELECT member_id FROM member_tags
+                              WHERE tag_name IN ({tag_placeholders})
+                          )
+                          OR
+                          m.id IN (
+                              SELECT member_id FROM member_interaction_tags
+                              WHERE tag_name IN ({tag_placeholders})
+                          )
+                      )
                 """
 
-                # 如果同時有排除标签，添加排除条件
+                # 如果同時有排除标签，添加排除条件（同時排除兩個表的標籤）
                 if exclude_tags:
                     exclude_placeholders = ", ".join([f":exclude_tag{i}" for i in range(len(exclude_tags))])
                     exclude_params = {f"exclude_tag{i}": tag for i, tag in enumerate(exclude_tags)}
@@ -718,10 +727,12 @@ class MessageService:
 
                     query_str += f"""
                       AND m.id NOT IN (
-                          SELECT DISTINCT m2.id
-                          FROM members m2
-                          INNER JOIN member_tags mt2 ON m2.id = mt2.member_id
-                          WHERE mt2.tag_name IN ({exclude_placeholders})
+                          SELECT member_id FROM member_tags
+                          WHERE tag_name IN ({exclude_placeholders})
+                      )
+                      AND m.id NOT IN (
+                          SELECT member_id FROM member_interaction_tags
+                          WHERE tag_name IN ({exclude_placeholders})
                       )
                     """
 
@@ -731,7 +742,7 @@ class MessageService:
                 return count
 
             elif exclude_tags:
-                # 只有排除标签的情况
+                # 只有排除标签的情况（同時排除兩個表的標籤）
                 exclude_placeholders = ", ".join([f":exclude_tag{i}" for i in range(len(exclude_tags))])
                 exclude_params = {f"exclude_tag{i}": tag for i, tag in enumerate(exclude_tags)}
 
@@ -742,10 +753,12 @@ class MessageService:
                       AND m.line_uid != ''
                       AND m.is_following = 1
                       AND m.id NOT IN (
-                          SELECT DISTINCT m2.id
-                          FROM members m2
-                          INNER JOIN member_tags mt2 ON m2.id = mt2.member_id
-                          WHERE mt2.tag_name IN ({exclude_placeholders})
+                          SELECT member_id FROM member_tags
+                          WHERE tag_name IN ({exclude_placeholders})
+                      )
+                      AND m.id NOT IN (
+                          SELECT member_id FROM member_interaction_tags
+                          WHERE tag_name IN ({exclude_placeholders})
                       )
                 """
 
