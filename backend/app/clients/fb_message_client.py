@@ -28,12 +28,12 @@ class FbMessageClient:
         """組裝帶 Authorization 的標頭"""
         return {"Authorization": f"Bearer {jwt_token}"}
 
-    async def send_message(self, recipient_email: str, text: str, jwt_token: str) -> dict:
+    async def send_message(self, fb_customer_id: str, text: str, jwt_token: str) -> dict:
         """
-        發送訊息到 Facebook 用戶 (使用 email 識別)
+        發送訊息到 Facebook 用戶 (使用 fb_customer_id 識別)
 
         Args:
-            recipient_email: 會員 Email
+            fb_customer_id: Facebook Customer ID
             text: 訊息內容
             jwt_token: JWT Token (Bearer token)
 
@@ -47,12 +47,12 @@ class FbMessageClient:
             try:
                 response = await client.post(
                     f"{self.base_url}/api/v1/admin/meta_page/message/single",
-                    json={"recipient": recipient_email, "text": text},
+                    json={"customer_id": fb_customer_id, "text": text},
                     headers=headers
                 )
                 response.raise_for_status()
                 result = response.json()
-                logger.info(f"FB message sent to {recipient_email}")
+                logger.info(f"FB message sent to fb_customer_id={fb_customer_id}")
                 return {"ok": True, **result}
             except httpx.HTTPStatusError as e:
                 logger.error(f"FB API error: {e.response.status_code} - {e.response.text}")
@@ -61,12 +61,12 @@ class FbMessageClient:
                 logger.error(f"FB request error: {e}")
                 return {"ok": False, "error": str(e)}
 
-    async def get_chat_history(self, email: str, jwt_token: str) -> Dict[str, Any]:
+    async def get_chat_history(self, customer_id: str, jwt_token: str) -> Dict[str, Any]:
         """
         獲取 Facebook 聊天記錄
 
         Args:
-            email: 會員 Email
+            customer_id: Facebook Customer ID (fb_customer_id)
             jwt_token: JWT Token (Bearer token)
 
         Returns:
@@ -85,12 +85,12 @@ class FbMessageClient:
             try:
                 response = await client.get(
                     f"{self.base_url}/api/v1/admin/meta_page/message/history",
-                    params={"email": email},
+                    params={"customer_id": customer_id},
                     headers=headers
                 )
                 response.raise_for_status()
                 result = response.json()
-                logger.info(f"FB chat history fetched for {email}, {len(result.get('data', []))} messages")
+                logger.info(f"FB chat history fetched for customer_id={customer_id}, {len(result.get('data', []))} messages")
                 return {"ok": True, "data": result.get("data", [])}
             except httpx.HTTPStatusError as e:
                 logger.error(f"FB history API error: {e.response.status_code} - {e.response.text}")

@@ -180,7 +180,7 @@ async def get_chat_messages(
                 raise HTTPException(status_code=400, detail="缺少 jwt_token")
 
             fb_client = FbMessageClient()
-            fb_result = await fb_client.get_chat_history(member.email, jwt_token)
+            fb_result = await fb_client.get_chat_history(member.fb_customer_id, jwt_token)
 
             if not fb_result.get("ok"):
                 raise HTTPException(status_code=500, detail=f"獲取 FB 聊天記錄失敗: {fb_result.get('error')}")
