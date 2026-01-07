@@ -238,7 +238,10 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
         throw new Error('Facebook 登入未完成（可能已取消授權）');
       }
 
-      // 2. 取得用戶管理的粉專列表（/me/accounts）
+      // 2. 呼叫 meta_login 綁定 FB token 到外部服務
+      await requestMetaLogin(loginResponse.authResponse.accessToken);
+
+      // 3. 取得用戶管理的粉專列表（/me/accounts）
       const pages = await fbGetManagedPages();
       const normalizedPages: FbPageOption[] = (Array.isArray(pages) ? pages : [])
         .filter(p => typeof p.id === 'string' && p.id)
@@ -252,10 +255,10 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
         throw new Error('找不到可管理的粉絲專頁（請確認您的 Facebook 帳號有管理粉專的權限）');
       }
 
-      // 3. 使用用戶在官方 FB.login 彈窗中授權的粉專
+      // 4. 使用用戶在官方 FB.login 彈窗中授權的粉專
       const selectedPage = normalizedPages[0];
 
-      // 4. 直接儲存粉專
+      // 5. 儲存粉專到本地資料庫
       await saveFacebookPage(selectedPage, targetChannelId);
       await reloadAccounts();
       setViewState('list');
@@ -277,6 +280,7 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     facebookSdkError,
     facebookSdkReady,
     reloadAccounts,
+    requestMetaLogin,
     saveFacebookPage,
     showToast,
   ]);
