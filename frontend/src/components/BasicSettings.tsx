@@ -221,70 +221,6 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     setViewState('line-setup');
   }, [accounts, showToast]);
 
-  // Facebook 授權流程：FB.login → 取得粉專列表 → 自動儲存第一個粉專
-  const handleFacebookAuthorize = useCallback(async (targetChannelId: string | null): Promise<boolean> => {
-    setFacebookAuthorizing(true);
-    try {
-      if (facebookSdkError) {
-        throw new Error(facebookSdkError);
-      }
-      if (!facebookSdkReady || !window.FB) {
-        throw new Error('Facebook SDK 尚未載入完成，請稍候再試');
-      }
-
-      // 1. FB.login（官方彈窗）
-      const loginResponse = await fbLogin(facebookLoginScope);
-      if (loginResponse.status !== 'connected' || !loginResponse.authResponse?.accessToken) {
-        throw new Error('Facebook 登入未完成（可能已取消授權）');
-      }
-
-      // 2. 呼叫 meta_login 綁定 FB token 到外部服務
-      await requestMetaLogin(loginResponse.authResponse.accessToken);
-
-      // 3. 取得用戶管理的粉專列表（/me/accounts）
-      const pages = await fbGetManagedPages();
-      const normalizedPages: FbPageOption[] = (Array.isArray(pages) ? pages : [])
-        .filter(p => typeof p.id === 'string' && p.id)
-        .map(p => ({
-          id: p.id,
-          name: typeof p.name === 'string' && p.name.trim() ? p.name : p.id,
-          accessToken: p.access_token,
-        }));
-
-      if (normalizedPages.length === 0) {
-        throw new Error('找不到可管理的粉絲專頁（請確認您的 Facebook 帳號有管理粉專的權限）');
-      }
-
-      // 4. 使用用戶在官方 FB.login 彈窗中授權的粉專
-      const selectedPage = normalizedPages[0];
-
-      // 5. 儲存粉專到本地資料庫
-      await saveFacebookPage(selectedPage, targetChannelId);
-      await reloadAccounts();
-      setViewState('list');
-      showToast(
-        targetChannelId ? '已重新授權 Facebook 粉絲專頁' : '已成功連結 Facebook 粉絲專頁',
-        'success'
-      );
-      return true;
-    } catch (error) {
-      console.error('Facebook 授權流程失敗:', error);
-      showToast(error instanceof Error ? error.message : 'Facebook 授權失敗', 'error');
-      return false;
-    } finally {
-      setFacebookAuthorizing(false);
-    }
-  }, [
-    accounts,
-    facebookLoginScope,
-    facebookSdkError,
-    facebookSdkReady,
-    reloadAccounts,
-    requestMetaLogin,
-    saveFacebookPage,
-    showToast,
-  ]);
-
   const performFirmLogin = useCallback(async (): Promise<string> => {
     const firmLoginResponse = await fetch(`${fbApiBaseUrl}/api/v1/admin/firm_login`, {
       method: 'POST',
@@ -355,6 +291,70 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     },
     [fbApiBaseUrl, performFirmLogin]
   );
+
+  // Facebook 授權流程：FB.login → 取得粉專列表 → 自動儲存第一個粉專
+  const handleFacebookAuthorize = useCallback(async (targetChannelId: string | null): Promise<boolean> => {
+    setFacebookAuthorizing(true);
+    try {
+      if (facebookSdkError) {
+        throw new Error(facebookSdkError);
+      }
+      if (!facebookSdkReady || !window.FB) {
+        throw new Error('Facebook SDK 尚未載入完成，請稍候再試');
+      }
+
+      // 1. FB.login（官方彈窗）
+      const loginResponse = await fbLogin(facebookLoginScope);
+      if (loginResponse.status !== 'connected' || !loginResponse.authResponse?.accessToken) {
+        throw new Error('Facebook 登入未完成（可能已取消授權）');
+      }
+
+      // 2. 呼叫 meta_login 綁定 FB token 到外部服務
+      await requestMetaLogin(loginResponse.authResponse.accessToken);
+
+      // 3. 取得用戶管理的粉專列表（/me/accounts）
+      const pages = await fbGetManagedPages();
+      const normalizedPages: FbPageOption[] = (Array.isArray(pages) ? pages : [])
+        .filter(p => typeof p.id === 'string' && p.id)
+        .map(p => ({
+          id: p.id,
+          name: typeof p.name === 'string' && p.name.trim() ? p.name : p.id,
+          accessToken: p.access_token,
+        }));
+
+      if (normalizedPages.length === 0) {
+        throw new Error('找不到可管理的粉絲專頁（請確認您的 Facebook 帳號有管理粉專的權限）');
+      }
+
+      // 4. 使用用戶在官方 FB.login 彈窗中授權的粉專
+      const selectedPage = normalizedPages[0];
+
+      // 5. 儲存粉專到本地資料庫
+      await saveFacebookPage(selectedPage, targetChannelId);
+      await reloadAccounts();
+      setViewState('list');
+      showToast(
+        targetChannelId ? '已重新授權 Facebook 粉絲專頁' : '已成功連結 Facebook 粉絲專頁',
+        'success'
+      );
+      return true;
+    } catch (error) {
+      console.error('Facebook 授權流程失敗:', error);
+      showToast(error instanceof Error ? error.message : 'Facebook 授權失敗', 'error');
+      return false;
+    } finally {
+      setFacebookAuthorizing(false);
+    }
+  }, [
+    accounts,
+    facebookLoginScope,
+    facebookSdkError,
+    facebookSdkReady,
+    reloadAccounts,
+    requestMetaLogin,
+    saveFacebookPage,
+    showToast,
+  ]);
 
   // 同步 FB 會員列表到後端（非阻塞，失敗不影響主流程）
   const syncFacebookMembers = useCallback(async () => {
