@@ -204,14 +204,14 @@ async def sync_facebook_members(
     """
     同步 Facebook 會員列表到 members 表
 
-    從外部 API 獲取 FB 會員，根據 email 或 fb_customer_id 判斷是否為現有會員：
+    從 /meta_page/message/list API 獲取 FB 會員，根據 email 或 fb_customer_id 判斷是否為現有會員：
     1. 先用 email 查詢 → 若找到，綁定 fb_customer_id 到該會員（跨渠道合併）
     2. 再用 fb_customer_id 查詢 → 若找到，更新 fb_customer_name
     3. 都沒找到 → 新建會員
     """
-    # 1. 從外部 API 獲取會員列表
+    # 1. 從 message/list API 獲取會員列表
     fb_client = FbMessageClient()
-    result = await fb_client.get_member_list(jwt_token)
+    result = await fb_client.list_messages(jwt_token)
 
     if not result.get("ok"):
         raise HTTPException(status_code=500, detail=f"獲取 FB 會員列表失敗: {result.get('error')}")
@@ -227,8 +227,9 @@ async def sync_facebook_members(
 
     # 2. 逐一處理會員
     for fb_member in fb_members:
-        fb_customer_id = fb_member.get("uid")
-        fb_customer_name = fb_member.get("name", "")
+        # message/list 使用 customer_id 和 customer_name
+        fb_customer_id = str(fb_member.get("customer_id", ""))
+        fb_customer_name = fb_member.get("customer_name", "")
         fb_email = (fb_member.get("email") or "").strip() or None
 
         if not fb_customer_id:

@@ -99,41 +99,6 @@ class FbMessageClient:
                 logger.error(f"FB history request error: {e}")
                 return {"ok": False, "error": str(e), "data": []}
 
-    async def get_member_list(self, jwt_token: str) -> Dict[str, Any]:
-        """
-        獲取 Facebook 會員列表
-
-        Args:
-            jwt_token: JWT Token (Bearer token)
-
-        Returns:
-            {
-                "ok": True,
-                "data": [
-                    {"uid": str, "name": str, "email": str | None},
-                    ...
-                ]
-            }
-            or {"ok": False, "error": "...", "data": []} on failure
-        """
-        headers = self._auth_headers(jwt_token)
-
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            try:
-                response = await client.get(
-                    f"{self.base_url}/api/v1/admin/meta_page/members",
-                    headers=headers
-                )
-                response.raise_for_status()
-                result = response.json()
-                logger.info(f"FB member list fetched, {len(result.get('data', []))} members")
-                return {"ok": True, "data": result.get("data", [])}
-            except httpx.HTTPStatusError as e:
-                logger.error(f"FB member list API error: {e.response.status_code} - {e.response.text}")
-                return {"ok": False, "error": f"API error: {e.response.status_code}", "data": []}
-            except httpx.RequestError as e:
-                logger.error(f"FB member list request error: {e}")
-                return {"ok": False, "error": str(e), "data": []}
 
     async def send_broadcast_message(self, payload: Dict[str, Any], jwt_token: str) -> Dict[str, Any]:
         """
