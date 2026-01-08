@@ -781,9 +781,50 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
     input.click();
   };
 
+  // 將 base64 data URL 轉換為 Blob
+  const dataURLtoBlob = (dataURL: string): Blob => {
+    const arr = dataURL.split(',');
+    const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+  };
+
+  // 上傳圖片到後端，返回 HTTP URL
+  const uploadImageToServer = async (imageDataUrl: string): Promise<string | null> => {
+    try {
+      const blob = dataURLtoBlob(imageDataUrl);
+      const file = new File([blob], `fb_image_${Date.now()}.jpg`, { type: 'image/jpeg' });
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/v1/upload', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData
+      });
+
+      const result = await response.json();
+      if (result.code === 200 && result.data?.url) {
+        return result.data.url;  // https://linebot.star-bit.io/uploads/...
+      }
+      console.error('Upload failed:', result);
+      return null;
+    } catch (error) {
+      console.error('Image upload failed:', error);
+      return null;
+    }
+  };
+
   const processAndUploadImage = (imageUrl: string) => {
     const img = new Image();
-    img.onload = () => {
+    img.onload = async () => {
       const width = img.width;
       const height = img.height;
       const ratio = width / height;
@@ -795,10 +836,12 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
       // Check if ratio matches target (within tolerance)
       const ratioMatches = Math.abs(ratio - targetRatio) <= tolerance;
 
+      let finalImageDataUrl: string;
+      let ratioText = "";
+
       if (ratioMatches) {
         // Image ratio is acceptable, use as is
-        updateHeroUrl(imageUrl);
-        toast.success("圖片已上傳");
+        finalImageDataUrl = imageUrl;
       } else {
         // Need to crop/fill the image
         const canvas = document.createElement("canvas");
@@ -851,12 +894,22 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
           0, 0, canvasWidth, canvasHeight
         );
 
-        // Convert to base64
-        const processedImageUrl = canvas.toDataURL("image/jpeg", 0.9);
-        updateHeroUrl(processedImageUrl);
+        // Convert to base64 for upload
+        finalImageDataUrl = canvas.toDataURL("image/jpeg", 0.9);
+        ratioText = targetRatio === 1.91 ? "1.91:1" : "1:1";
+      }
 
-        const ratioText = targetRatio === 1.91 ? "1.91:1" : "1:1";
-        toast.success(`圖片已自動調整為 ${ratioText} 比例並上傳`);
+      // ✅ 上傳圖片到後端，取得 HTTP URL（與 LINE 處理方式相同）
+      const uploadedUrl = await uploadImageToServer(finalImageDataUrl);
+      if (uploadedUrl) {
+        updateHeroUrl(uploadedUrl);
+        if (ratioText) {
+          toast.success(`圖片已自動調整為 ${ratioText} 比例並上傳`);
+        } else {
+          toast.success("圖片已上傳");
+        }
+      } else {
+        toast.error("圖片上傳失敗，請重試");
       }
     };
 
