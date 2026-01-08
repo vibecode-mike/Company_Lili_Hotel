@@ -181,7 +181,8 @@ class MessageService:
         message_title: Optional[str] = None,
         draft_id: Optional[int] = None,
         platform: Optional[str] = "LINE",
-        fb_message_json: Optional[str] = None
+        fb_message_json: Optional[str] = None,
+        estimated_send_count: Optional[int] = None
     ) -> Message:
         """创建群发消息
 
@@ -202,6 +203,7 @@ class MessageService:
             draft_id: 来源草稿 ID（可选，有值时复制草稿发布，原草稿保留）
             platform: 发送平台 ("LINE" | "Facebook" | "Instagram")
             fb_message_json: Facebook Messenger JSON 字符串（可选）
+            estimated_send_count: 預計發送人數（可选，FB 渠道由前端傳入）
 
         Returns:
             创建的消息对象
@@ -222,6 +224,7 @@ class MessageService:
                 message_title=message_title,
                 platform=platform,
                 fb_message_json=fb_message_json,
+                estimated_send_count=estimated_send_count,
             )
 
         # 1. 创建基础模板（仅用于关联，实际内容存储在 Message.flex_message_json）
@@ -266,15 +269,25 @@ class MessageService:
         if scheduled_at:
             message.scheduled_datetime_utc = scheduled_at
 
-        try:
-            estimated_count = await self._calculate_target_count(
-                db,
-                target_type,
-                target_filter or {},
-            )
-        except Exception as e:
-            logger.error(f"❌ 計算預計發送人數失敗: {e}")
-            estimated_count = 0
+        # 計算預計發送人數
+        # FB 渠道：使用前端傳入的值（來自外部 FB API）
+        # LINE 渠道：使用本地計算
+        if estimated_send_count and estimated_send_count > 0:
+            # 前端已傳入預計人數（FB 渠道）
+            estimated_count = estimated_send_count
+            logger.info(f"📊 使用前端傳入的預計發送人數: {estimated_count} (platform={platform})")
+        else:
+            # 本地計算（LINE 渠道）
+            try:
+                estimated_count = await self._calculate_target_count(
+                    db,
+                    target_type,
+                    target_filter or {},
+                )
+                logger.info(f"📊 本地計算預計發送人數: {estimated_count} (platform={platform})")
+            except Exception as e:
+                logger.error(f"❌ 計算預計發送人數失敗: {e}")
+                estimated_count = 0
 
         message.estimated_send_count = estimated_count
         db.add(message)
@@ -392,6 +405,7 @@ class MessageService:
         message_title: Optional[str] = None,
         platform: Optional[str] = None,
         fb_message_json: Optional[str] = None,
+        estimated_send_count: Optional[int] = None,
     ) -> Message:
         """从草稿发布 - 复制成新记录，原草稿保留
 
@@ -409,6 +423,7 @@ class MessageService:
             message_title: 消息标题
             platform: 发送平台
             fb_message_json: Facebook Messenger JSON（可覆盖草稿内容）
+            estimated_send_count: 預計發送人數（可选，FB 渠道由前端傳入）
 
         Returns:
             新创建的消息对象（原草稿保持不变）
@@ -462,15 +477,25 @@ class MessageService:
             new_message.scheduled_datetime_utc = scheduled_at
 
         # 5. 计算预计发送人数
-        try:
-            estimated_count = await self._calculate_target_count(
-                db,
-                new_message.target_type,
-                new_message.target_filter or {},
-            )
-        except Exception as e:
-            logger.error(f"❌ 計算預計發送人數失敗: {e}")
-            estimated_count = 0
+        # FB 渠道：使用前端傳入的值（來自外部 FB API）
+        # LINE 渠道：使用本地計算
+        actual_platform = new_message.platform or "LINE"
+        if estimated_send_count and estimated_send_count > 0:
+            # 前端已傳入預計人數（FB 渠道）
+            estimated_count = estimated_send_count
+            logger.info(f"📊 使用前端傳入的預計發送人數: {estimated_count} (platform={actual_platform})")
+        else:
+            # 本地計算（LINE 渠道）
+            try:
+                estimated_count = await self._calculate_target_count(
+                    db,
+                    new_message.target_type,
+                    new_message.target_filter or {},
+                )
+                logger.info(f"📊 本地計算預計發送人數: {estimated_count} (platform={actual_platform})")
+            except Exception as e:
+                logger.error(f"❌ 計算預計發送人數失敗: {e}")
+                estimated_count = 0
 
         new_message.estimated_send_count = estimated_count
 

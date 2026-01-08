@@ -157,6 +157,7 @@ async def create_message(
             draft_id=data.draft_id,  # 来源草稿 ID
             platform=platform,  # 發送平台
             fb_message_json=getattr(data, 'fb_message_json', None),  # Facebook JSON
+            estimated_send_count=data.estimated_send_count,  # 預計發送人數（FB 渠道由前端傳入）
         )
 
         logger.info(f"✅ 消息创建成功: ID={message.id}")

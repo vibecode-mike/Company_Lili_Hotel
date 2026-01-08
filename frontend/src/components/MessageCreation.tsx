@@ -149,49 +149,91 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     let isActive = true;
 
     const fetchCount = async () => {
-      // Only fetch for LINE platform - Facebook uses different API
-      if (selectedPlatform !== 'LINE') {
-        setEstimatedRecipientCount(0);
-        return;
-      }
-
-      try {
-        const requestBody: Record<string, unknown> = {
-          target_type: targetType === 'all' ? 'all_friends' : 'filtered'
-        };
-
-        if (targetType === 'filtered' && selectedFilterTags.length > 0) {
-          requestBody.target_filter = {
-            [filterCondition]: selectedFilterTags.map(t => t.name)
+      // LINE 渠道 - 使用 Python backend quota API
+      if (selectedPlatform === 'LINE') {
+        try {
+          const requestBody: Record<string, unknown> = {
+            target_type: targetType === 'all' ? 'all_friends' : 'filtered'
           };
-        }
 
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json'
-        };
-        const token = localStorage.getItem('auth_token');
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
+          if (targetType === 'filtered' && selectedFilterTags.length > 0) {
+            requestBody.target_filter = {
+              [filterCondition]: selectedFilterTags.map(t => t.name)
+            };
+          }
 
-        const response = await fetch('/api/v1/messages/quota', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(requestBody)
-        });
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json'
+          };
+          const token = localStorage.getItem('auth_token');
+          if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+          }
 
-        if (!isActive) return;
+          const response = await fetch('/api/v1/messages/quota', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(requestBody)
+          });
 
-        if (response.ok) {
-          const result = await response.json();
-          setEstimatedRecipientCount(result.estimated_send_count ?? 0);
-        } else {
-          setEstimatedRecipientCount(0);
+          if (!isActive) return;
+
+          if (response.ok) {
+            const result = await response.json();
+            setEstimatedRecipientCount(result.estimated_send_count ?? 0);
+          } else {
+            setEstimatedRecipientCount(0);
+          }
+        } catch {
+          if (isActive) {
+            setEstimatedRecipientCount(0);
+          }
         }
-      } catch {
-        if (isActive) {
-          setEstimatedRecipientCount(0);
+      }
+      // Facebook 渠道 - 使用外部 API (tags/amount)
+      else if (selectedPlatform === 'Facebook') {
+        try {
+          const fbApiBaseUrl = (import.meta.env.VITE_FB_API_URL?.trim() || 'https://api-youth-tycg.star-bit.io').replace(/\/+$/, '');
+          const jwtToken = localStorage.getItem('jwt_token');
+
+          // 構建查詢參數
+          const params = new URLSearchParams();
+          if (targetType === 'filtered' && selectedFilterTags.length > 0) {
+            const tagNames = selectedFilterTags.map(t => t.name).join(',');
+            if (filterCondition === 'include') {
+              params.set('tag_include', tagNames);
+            } else {
+              params.set('tag_exclude', tagNames);
+            }
+          }
+
+          const queryString = params.toString();
+          const url = `${fbApiBaseUrl}/api/v1/admin/meta_page/tags/amount${queryString ? '?' + queryString : ''}`;
+
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${jwtToken}`,
+            },
+          });
+
+          if (!isActive) return;
+
+          if (response.ok) {
+            const result = await response.json();
+            setEstimatedRecipientCount(result.data ?? 0);
+          } else {
+            setEstimatedRecipientCount(0);
+          }
+        } catch {
+          if (isActive) {
+            setEstimatedRecipientCount(0);
+          }
         }
+      }
+      // 其他渠道 (Webchat 等) - 暫不支援
+      else {
+        setEstimatedRecipientCount(0);
       }
     };
 
@@ -1415,6 +1457,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         platform: selectedPlatform,
         thumbnail: cards[0]?.uploadedImageUrl || cards[0]?.image || null,
         interaction_tags: collectInteractionTags(),
+        estimated_send_count: estimatedRecipientCount || 0,  // 預計發送人數（FB 渠道由前端計算）
       };
 
       // 根據平台設置對應的 JSON 欄位
