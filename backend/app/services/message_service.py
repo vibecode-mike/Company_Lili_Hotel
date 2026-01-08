@@ -873,6 +873,8 @@ class MessageService:
                 # 彈性解析回應欄位 (sent_count 或 sent)
                 sent_count = result.get("sent_count") or result.get("sent") or 0
                 failed_count = result.get("failed_count") or result.get("failed") or 0
+                # 更新發送人數統計（用於前端表格顯示）
+                message.send_count = sent_count
             else:
                 message.send_status = "發送失敗"
                 message.failure_reason = result.get("error", "未知錯誤")
