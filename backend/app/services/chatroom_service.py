@@ -21,9 +21,11 @@ def format_chat_time(dt: Optional[datetime]) -> str:
     if not dt:
         return ""
 
-    # 假設 naive datetime 就是台灣本地時間（不做 UTC 假設）
+    # 統一處理：假設 naive datetime 是 UTC 時間，然後轉換為台北時間顯示
     if dt.tzinfo is None:
-        local_dt = TAIPEI_TZ.localize(dt)
+        # naive datetime 視為 UTC
+        utc_dt = dt.replace(tzinfo=timezone.utc)
+        local_dt = utc_dt.astimezone(TAIPEI_TZ)
     else:
         local_dt = dt.astimezone(TAIPEI_TZ)
     hour = local_dt.hour
@@ -73,14 +75,14 @@ class ChatroomService:
             thread.member_id = member.id
             thread.platform = platform
             thread.platform_uid = platform_uid
-            thread.last_message_at = thread.last_message_at or datetime.utcnow()
+            thread.last_message_at = thread.last_message_at or datetime.now(timezone.utc)
         else:
             thread = ConversationThread(
                 id=thread_id,
                 member_id=member.id,
                 platform=platform,
                 platform_uid=platform_uid,
-                last_message_at=datetime.utcnow(),
+                last_message_at=datetime.now(timezone.utc),
             )
             self.db.add(thread)
         await self.db.flush()
@@ -104,7 +106,7 @@ class ChatroomService:
             question=content if direction == "incoming" else None,
             response=content if direction == "outgoing" else None,
             message_source=message_source,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
         self.db.add(msg)
         thread.last_message_at = msg.created_at

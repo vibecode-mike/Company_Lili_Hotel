@@ -70,7 +70,7 @@ class TrackingService:
                 interaction_tag_id=interaction_tag_id,
                 interaction_type=interaction_type_enum,
                 interaction_value=interaction_value,
-                triggered_at=datetime.utcnow(),
+                triggered_at=datetime.now(timezone.utc),
                 line_event_type=line_event_type,
                 user_agent=user_agent,
             )
@@ -375,7 +375,7 @@ class TrackingService:
             "interactions_by_type": interactions_by_type,
             "carousel_stats": carousel_stats,
             "component_stats": component_stats,
-            "generated_at": datetime.utcnow(),
+            "generated_at": datetime.now(timezone.utc),
         }
 
     async def get_campaign_interactions(

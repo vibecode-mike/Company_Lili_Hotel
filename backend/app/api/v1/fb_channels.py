@@ -5,7 +5,7 @@ Facebook 頻道設定 API
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 from typing import List, Optional
 
@@ -136,7 +136,7 @@ async def create_or_update_channel(data: FbChannelCreate, db: AsyncSession = Dep
     result = await db.execute(stmt)
     existing = result.scalar_one_or_none()
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     if existing:
         existing.page_id = page_id
         existing.channel_name = data.channel_name or existing.channel_name

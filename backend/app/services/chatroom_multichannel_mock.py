@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 from uuid import uuid4
 
@@ -14,7 +14,7 @@ class Member:
     member_id: str
     email: Optional[str] = None
     line_uid: Optional[str] = None
-    fb_uid: Optional[str] = None
+    fb_customer_id: Optional[str] = None
     webchat_uid: Optional[str] = None
     join_source: Optional[str] = None
     last_interaction_at: Optional[datetime] = None
@@ -30,7 +30,7 @@ class LineFriend:
 
 @dataclass
 class FacebookFriend:
-    fb_uid: str
+    fb_customer_id: str
     member_id: Optional[str] = None
     email: Optional[str] = None
     last_interaction_at: Optional[datetime] = None
@@ -82,8 +82,8 @@ class MemberRepository:
     def find_by_line_uid(self, line_uid: str) -> Optional[Member]:
         return next((m for m in self.members.values() if m.line_uid == line_uid), None)
 
-    def find_by_fb_uid(self, fb_uid: str) -> Optional[Member]:
-        return next((m for m in self.members.values() if m.fb_uid == fb_uid), None)
+    def find_by_fb_customer_id(self, fb_customer_id: str) -> Optional[Member]:
+        return next((m for m in self.members.values() if m.fb_customer_id == fb_customer_id), None)
 
     def find_by_webchat_uid(self, webchat_uid: str) -> Optional[Member]:
         return next((m for m in self.members.values() if m.webchat_uid == webchat_uid), None)
@@ -112,14 +112,14 @@ class FacebookFriendRepository:
         self.friends: Dict[str, FacebookFriend] = {}
 
     def save(self, friend: FacebookFriend) -> None:
-        self.friends[friend.fb_uid] = friend
+        self.friends[friend.fb_customer_id] = friend
 
-    def find_by_uid(self, fb_uid: str) -> Optional[FacebookFriend]:
-        return self.friends.get(fb_uid)
+    def find_by_uid(self, fb_customer_id: str) -> Optional[FacebookFriend]:
+        return self.friends.get(fb_customer_id)
 
-    def update_member_id(self, fb_uid: str, member_id: str) -> None:
-        if fb_uid in self.friends:
-            self.friends[fb_uid].member_id = member_id
+    def update_member_id(self, fb_customer_id: str, member_id: str) -> None:
+        if fb_customer_id in self.friends:
+            self.friends[fb_customer_id].member_id = member_id
 
 
 class WebchatFriendRepository:
@@ -155,9 +155,9 @@ class ConversationThreadRepository:
         thread = self.threads.get(thread_id)
         if thread:
             thread.member_id = member_id
-            thread.last_message_at = datetime.utcnow()
+            thread.last_message_at = datetime.now(timezone.utc)
             return thread
-        thread = ConversationThread(thread_id=thread_id, member_id=member_id, platform=platform, platform_uid=platform_uid, last_message_at=datetime.utcnow())
+        thread = ConversationThread(thread_id=thread_id, member_id=member_id, platform=platform, platform_uid=platform_uid, last_message_at=datetime.now(timezone.utc))
         self.threads[thread_id] = thread
         return thread
 
@@ -216,21 +216,21 @@ class OAuthService:
             self.thread_repo.upsert_thread(member.member_id, "Webchat", webchat_uid)
         return {"member_id": member.member_id}
 
-    def webchat_login_via_facebook_oauth(self, *, fb_uid: str, email: Optional[str], webchat_uid: Optional[str] = None) -> dict:
-        existing_friend = self.fb_repo.find_by_uid(fb_uid)
+    def webchat_login_via_facebook_oauth(self, *, fb_customer_id: str, email: Optional[str], webchat_uid: Optional[str] = None) -> dict:
+        existing_friend = self.fb_repo.find_by_uid(fb_customer_id)
         if not email and not existing_friend:
             raise Exception("Facebook OAuth 缺少 email 或既有綁定")
-        member = self._find_member_by_email_or_fb(email, fb_uid, existing_friend)
+        member = self._find_member_by_email_or_fb(email, fb_customer_id, existing_friend)
         if not member:
-            member = Member(member_id=self.member_repo.next_member_id(), email=email, fb_uid=fb_uid, join_source="Facebook")
+            member = Member(member_id=self.member_repo.next_member_id(), email=email, fb_customer_id=fb_customer_id, join_source="Facebook")
         else:
-            member.fb_uid = member.fb_uid or fb_uid
+            member.fb_customer_id = member.fb_customer_id or fb_customer_id
             member.email = member.email or email
         self.member_repo.save(member)
         if not existing_friend:
-            self.fb_repo.save(FacebookFriend(fb_uid=fb_uid, member_id=member.member_id, email=email))
+            self.fb_repo.save(FacebookFriend(fb_customer_id=fb_customer_id, member_id=member.member_id, email=email))
         else:
-            self.fb_repo.update_member_id(fb_uid, member.member_id)
+            self.fb_repo.update_member_id(fb_customer_id, member.member_id)
 
         if webchat_uid:
             existing_web = self.webchat_repo.find_by_uid(webchat_uid)
@@ -239,7 +239,7 @@ class OAuthService:
             else:
                 self.webchat_repo.save(WebchatFriend(webchat_uid=webchat_uid, member_id=member.member_id, email=email))
 
-        self.thread_repo.upsert_thread(member.member_id, "Facebook", fb_uid)
+        self.thread_repo.upsert_thread(member.member_id, "Facebook", fb_customer_id)
         if webchat_uid:
             self.thread_repo.upsert_thread(member.member_id, "Webchat", webchat_uid)
         return {"member_id": member.member_id}
@@ -264,7 +264,7 @@ class OAuthService:
         member = self.member_repo.find_by_email(email)
         if not member:
             member = Member(member_id=self.member_repo.next_member_id(), email=email)
-        for key in ["line_uid", "fb_uid", "webchat_uid"]:
+        for key in ["line_uid", "fb_customer_id", "webchat_uid"]:
             if incoming_payload.get(key) and getattr(member, key) is None:
                 setattr(member, key, incoming_payload[key])
         self.member_repo.save(member)
@@ -279,13 +279,13 @@ class OAuthService:
             return self.member_repo.find_by_line_uid(line_uid)
         return None
 
-    def _find_member_by_email_or_fb(self, email: Optional[str], fb_uid: str, existing_friend: Optional[FacebookFriend]) -> Optional[Member]:
+    def _find_member_by_email_or_fb(self, email: Optional[str], fb_customer_id: str, existing_friend: Optional[FacebookFriend]) -> Optional[Member]:
         if email:
             member = self.member_repo.find_by_email(email)
             if member:
                 return member
         if existing_friend:
-            return self.member_repo.find_by_fb_uid(fb_uid)
+            return self.member_repo.find_by_fb_customer_id(fb_customer_id)
         return None
 
 
@@ -322,7 +322,7 @@ class ChatroomService:
         for friend in self.fb_repo.friends.values():
             if friend.member_id == member_id:
                 if not self.thread_repo.find_by_member_and_platform(member_id, "Facebook"):
-                    self.thread_repo.upsert_thread(member_id, "Facebook", friend.fb_uid)
+                    self.thread_repo.upsert_thread(member_id, "Facebook", friend.fb_customer_id)
                 available_platforms.append("Facebook")
                 if friend.last_interaction_at and (latest_time is None or friend.last_interaction_at > latest_time):
                     latest_time = friend.last_interaction_at

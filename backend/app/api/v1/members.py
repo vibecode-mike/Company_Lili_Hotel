@@ -30,8 +30,12 @@ from app.clients.fb_message_client import FbMessageClient
 from datetime import datetime, timezone
 from typing import Optional
 import os
+import pytz
 
 from app.services.chatroom_service import ChatroomService
+
+# 台北時區
+TAIPEI_TZ = pytz.timezone('Asia/Taipei')
 from app.websocket_manager import manager
 router = APIRouter()
 
@@ -823,11 +827,17 @@ async def send_member_chat_message(
         # 成功後寫入對話訊息
         msg = await chatroom_service.append_message(member, "Facebook", "outgoing", text, message_source="manual")
 
-        # WebSocket 推送通知前端即時更新
+        # WebSocket 推送通知前端即時更新 - 將 UTC 轉為台北時間顯示
         time_str = ""
         if msg.created_at:
-            hour = msg.created_at.hour
-            minute = msg.created_at.minute
+            # 假設 naive datetime 是 UTC，轉換為台北時間
+            if msg.created_at.tzinfo is None:
+                utc_dt = msg.created_at.replace(tzinfo=timezone.utc)
+            else:
+                utc_dt = msg.created_at
+            local_dt = utc_dt.astimezone(TAIPEI_TZ)
+            hour = local_dt.hour
+            minute = local_dt.minute
             if 0 <= hour < 6:
                 period = "凌晨"
             elif 6 <= hour < 12:
@@ -866,11 +876,17 @@ async def send_member_chat_message(
         try:
             msg = await chatroom_service.append_message(member, platform, "outgoing", text, message_source="manual")
 
-            # WebSocket 推送通知前端即時更新
+            # WebSocket 推送通知前端即時更新 - 將 UTC 轉為台北時間顯示
             time_str = ""
             if msg.created_at:
-                hour = msg.created_at.hour
-                minute = msg.created_at.minute
+                # 假設 naive datetime 是 UTC，轉換為台北時間
+                if msg.created_at.tzinfo is None:
+                    utc_dt = msg.created_at.replace(tzinfo=timezone.utc)
+                else:
+                    utc_dt = msg.created_at
+                local_dt = utc_dt.astimezone(TAIPEI_TZ)
+                hour = local_dt.hour
+                minute = local_dt.minute
                 if 0 <= hour < 6:
                     period = "凌晨"
                 elif 6 <= hour < 12:

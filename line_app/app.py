@@ -685,6 +685,12 @@ def upsert_member(line_uid: str,
         ph.append(":uat")
         p["uat"] = utcnow()
 
+    # 統一使用 UTC 時間存儲 last_interaction_at
+    if _table_has("members", "last_interaction_at"):
+        fields.append("last_interaction_at")
+        ph.append(":liat")
+        p["liat"] = utcnow()
+
     # UPDATE part
     set_parts = []
     for k in (
@@ -702,8 +708,9 @@ def upsert_member(line_uid: str,
     if _table_has("members", "updated_at"):
         set_parts.append("updated_at=VALUES(updated_at)")
 
+    # 使用 VALUES(last_interaction_at) 保持 UTC 一致性
     if _table_has("members", "last_interaction_at"):
-        set_parts.append("last_interaction_at=NOW()")
+        set_parts.append("last_interaction_at=VALUES(last_interaction_at)")
 
     sql = (
         f"INSERT INTO members ({', '.join(fields)}) "
