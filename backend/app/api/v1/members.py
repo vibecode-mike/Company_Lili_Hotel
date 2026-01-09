@@ -32,6 +32,7 @@ from typing import Optional
 import os
 
 from app.services.chatroom_service import ChatroomService
+from app.websocket_manager import manager
 router = APIRouter()
 
 
@@ -821,6 +822,38 @@ async def send_member_chat_message(
 
         # 成功後寫入對話訊息
         msg = await chatroom_service.append_message(member, "Facebook", "outgoing", text, message_source="manual")
+
+        # WebSocket 推送通知前端即時更新
+        time_str = ""
+        if msg.created_at:
+            hour = msg.created_at.hour
+            minute = msg.created_at.minute
+            if 0 <= hour < 6:
+                period = "凌晨"
+            elif 6 <= hour < 12:
+                period = "上午"
+            elif 12 <= hour < 14:
+                period = "中午"
+            elif 14 <= hour < 18:
+                period = "下午"
+            else:
+                period = "晚上"
+            hour_12 = hour if hour <= 12 else hour - 12
+            if hour_12 == 0:
+                hour_12 = 12
+            time_str = f"{period} {hour_12:02d}:{minute:02d}"
+
+        await manager.send_new_message(msg.thread_id, {
+            "id": msg.id,
+            "type": "official",
+            "text": text,
+            "time": time_str,
+            "timestamp": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg.created_at else None,
+            "thread_id": msg.thread_id,
+            "isRead": True,
+            "source": "manual"
+        })
+
         return {
             "success": True,
             "message_id": send_result.get("message_id", msg.id),
@@ -832,6 +865,38 @@ async def send_member_chat_message(
         # Webchat 僅寫入資料庫
         try:
             msg = await chatroom_service.append_message(member, platform, "outgoing", text, message_source="manual")
+
+            # WebSocket 推送通知前端即時更新
+            time_str = ""
+            if msg.created_at:
+                hour = msg.created_at.hour
+                minute = msg.created_at.minute
+                if 0 <= hour < 6:
+                    period = "凌晨"
+                elif 6 <= hour < 12:
+                    period = "上午"
+                elif 12 <= hour < 14:
+                    period = "中午"
+                elif 14 <= hour < 18:
+                    period = "下午"
+                else:
+                    period = "晚上"
+                hour_12 = hour if hour <= 12 else hour - 12
+                if hour_12 == 0:
+                    hour_12 = 12
+                time_str = f"{period} {hour_12:02d}:{minute:02d}"
+
+            await manager.send_new_message(msg.thread_id, {
+                "id": msg.id,
+                "type": "official",
+                "text": text,
+                "time": time_str,
+                "timestamp": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg.created_at else None,
+                "thread_id": msg.thread_id,
+                "isRead": True,
+                "source": "manual"
+            })
+
             return {
                 "success": True,
                 "message_id": msg.id,

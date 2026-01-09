@@ -2807,6 +2807,26 @@ def api_send_chat_message():
         )
         logging.info(f"[api_send_chat_message] 記錄訊息 {msg_id} 到 DB")
 
+        # 4. 通知 Backend 進行 WebSocket 推送（讓前端聊天室即時更新）
+        try:
+            backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8700")
+            current_ts = int(time.time() * 1000)
+            requests.post(
+                f"{backend_url}/api/v1/line/message-notify",
+                json={
+                    "line_uid": line_uid,
+                    "message_text": text,
+                    "timestamp": current_ts,
+                    "message_id": str(msg_id),
+                    "direction": "outgoing",
+                    "source": "manual"
+                },
+                timeout=5
+            )
+            logging.info(f"[api_send_chat_message] 已通知 Backend WebSocket 推送")
+        except Exception as notify_err:
+            logging.warning(f"[api_send_chat_message] 通知 Backend 失敗: {notify_err}")
+
         return jsonify({
             "ok": True,
             "message_id": msg_id,
