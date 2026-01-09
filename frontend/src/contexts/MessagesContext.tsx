@@ -28,6 +28,7 @@ export interface Message {
   updatedAt: string;
   content?: FlexMessage;
   thumbnail?: string;
+  sender: string;  // 發送人員（創建者名稱）
 }
 
 // 配額狀態類型
@@ -72,6 +73,11 @@ const transformBackendMessage = (item: BackendMessage): Message => {
     ? item.platform
     : 'LINE'; // 默認為 LINE
 
+  // 取得發送人員名稱：優先使用 full_name，否則使用 username
+  const sender = item.created_by
+    ? (item.created_by.full_name || item.created_by.username || '-')
+    : '-';
+
   return {
     id: item.id.toString(),
     title: item.message_title || item.template?.name || '未命名訊息',
@@ -85,6 +91,7 @@ const transformBackendMessage = (item: BackendMessage): Message => {
     createdAt: item.created_at,
     updatedAt: item.updated_at,
     thumbnail: item.thumbnail,
+    sender,
   };
 };
 

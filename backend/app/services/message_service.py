@@ -17,7 +17,7 @@ from app.models.tracking import ComponentInteractionLog, InteractionType
 from app.adapters.line_app_adapter import LineAppAdapter
 from app.clients.line_app_client import LineAppClient
 from app.core.pagination import PageResponse
-from app.schemas.message import MessageListItem
+from app.schemas.message import MessageListItem, CreatorInfo
 
 logger = logging.getLogger(__name__)
 
@@ -569,7 +569,10 @@ class MessageService:
             status_counts[str(status)] = int(count or 0)
 
         # 主查詢
-        base_query = select(Message).options(selectinload(Message.template))
+        base_query = select(Message).options(
+            selectinload(Message.template),
+            selectinload(Message.creator),
+        )
         base_query = apply_filters(base_query)
 
         if send_status:
@@ -599,6 +602,9 @@ class MessageService:
         for message in messages:
             item = MessageListItem.model_validate(message)
             item.click_count = int(click_counts_by_message_id.get(int(message.id), 0))
+            # 設定創建者資訊（發送人員）
+            if message.creator:
+                item.created_by = CreatorInfo.model_validate(message.creator)
             message_items.append(item)
 
         page_response = PageResponse[MessageListItem].create(

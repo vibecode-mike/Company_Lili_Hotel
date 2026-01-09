@@ -14,7 +14,7 @@ export interface Message {
   platform: string;
   status: string;
   sentCount: string;
-  openCount: string;
+  sender: string;  // 發送人員
   clickCount: string;
   sendTime: string;
   timeValue?: string | null;
@@ -27,7 +27,7 @@ interface InteractiveMessageTableProps {
   statusFilter: string;
 }
 
-type SortField = 'title' | 'tags' | 'platform' | 'status' | 'sentCount' | 'openCount' | 'clickCount' | 'sendTime';
+type SortField = 'title' | 'tags' | 'platform' | 'status' | 'sentCount' | 'sender' | 'clickCount' | 'sendTime';
 type SortOrder = 'asc' | 'desc';
 interface SortConfig {
   field: SortField;
@@ -41,7 +41,7 @@ const COLUMN_WIDTHS = {
   platform: 'w-[100px]',
   status: 'w-[100px]',
   sentCount: 'w-[120px]',
-  openCount: 'w-[160px]',
+  sender: 'w-[160px]',  // 發送人員
   clickCount: 'w-[160px]',
   sendTime: 'w-[180px]',
   actions: 'w-[120px]',
@@ -153,25 +153,13 @@ const TableHeader = memo(function TableHeader({
         </div>
         <Divider />
 
-        {/* 已開啟次數 */}
+        {/* 發送人員 */}
         <div
-          className={`${CELL_BASE} ${COLUMN_WIDTHS.openCount} gap-[4px] cursor-pointer`}
-          onClick={() => onSortChange('openCount')}
+          className={`${CELL_BASE} ${COLUMN_WIDTHS.sender} gap-[4px] cursor-pointer`}
+          onClick={() => onSortChange('sender')}
         >
-          <span className={CELL_TEXT}>已開啟次數</span>
-          <TooltipProvider>
-            <Tooltip delayDuration={0}>
-              <TooltipTrigger asChild>
-                <div className="shrink-0 size-[20px]" onClick={(e) => e.stopPropagation()}>
-                  <IcInfo />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>LINE 推播目前無法取得「已開啟/已讀」回傳，因此此欄通常會是 0 或顯示 -</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <SortIcon active={isActive('openCount')} order={sortConfig.order} />
+          <span className={CELL_TEXT}>發送人員</span>
+          <SortIcon active={isActive('sender')} order={sortConfig.order} />
         </div>
         <Divider />
 
@@ -300,9 +288,9 @@ const MessageRow = memo(function MessageRow({
         </div>
         <Divider visible={false} />
 
-        {/* 已開啟次數 */}
-        <div className={`${CELL_BASE} ${COLUMN_WIDTHS.openCount}`}>
-          <span className={CELL_TEXT}>{message.openCount}</span>
+        {/* 發送人員 */}
+        <div className={`${CELL_BASE} ${COLUMN_WIDTHS.sender}`}>
+          <span className={`${CELL_TEXT} truncate`}>{message.sender}</span>
         </div>
         <Divider visible={false} />
 
@@ -358,7 +346,6 @@ export default function InteractiveMessageTable({ messages, onEdit, onViewDetail
     switch (field) {
       case 'sendTime':
       case 'sentCount':
-      case 'openCount':
       case 'clickCount':
         return 'desc';
       default:
@@ -414,8 +401,8 @@ export default function InteractiveMessageTable({ messages, onEdit, onViewDetail
         case 'sentCount':
           comparison = parseNumber(a.sentCount) - parseNumber(b.sentCount);
           break;
-        case 'openCount':
-          comparison = parseNumber(a.openCount) - parseNumber(b.openCount);
+        case 'sender':
+          comparison = compareString(a.sender, b.sender);
           break;
         case 'clickCount':
           comparison = parseNumber(a.clickCount) - parseNumber(b.clickCount);

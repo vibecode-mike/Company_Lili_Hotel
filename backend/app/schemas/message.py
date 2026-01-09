@@ -235,6 +235,18 @@ class TemplateInfo(BaseModel):
     }
 
 
+class CreatorInfo(BaseModel):
+    """創建者信息（用於列表顯示）"""
+
+    id: int
+    username: str
+    full_name: Optional[str] = None
+
+    model_config = {
+        "from_attributes": True,
+    }
+
+
 class MessageListItem(BaseModel):
     """群發訊息列表項"""
 
@@ -258,6 +270,7 @@ class MessageListItem(BaseModel):
     )
     send_time: Optional[datetime] = None  # 傳送時間
     source_draft_id: Optional[int] = None  # 來源草稿ID
+    created_by: Optional[CreatorInfo] = None  # 發送人員（創建者）
     created_at: datetime
     updated_at: Optional[datetime] = None  # 最後更新時間
 

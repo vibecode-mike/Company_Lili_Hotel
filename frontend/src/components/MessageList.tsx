@@ -416,7 +416,7 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
         platform: msg.platform,
         status: msg.status,
         sentCount: msg.recipientCount > 0 ? msg.recipientCount.toString() : '-',
-        openCount: msg.openCount > 0 ? msg.openCount.toString() : '-',
+        sender: msg.sender || '-',  // 發送人員
         clickCount: msg.clickCount > 0 ? msg.clickCount.toString() : '-',
         sendTime: formatDateTime(timeSource),
         timeValue: timeSource

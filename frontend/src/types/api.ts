@@ -121,6 +121,11 @@ export interface BackendMessage {
   template?: {
     name?: string;
   };
+  created_by?: {
+    id: number;
+    username: string;
+    full_name?: string;
+  };
   created_at: string;
   updated_at: string;
 }
