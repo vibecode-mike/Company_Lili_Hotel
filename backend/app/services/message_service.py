@@ -182,7 +182,8 @@ class MessageService:
         draft_id: Optional[int] = None,
         platform: Optional[str] = "LINE",
         fb_message_json: Optional[str] = None,
-        estimated_send_count: Optional[int] = None
+        estimated_send_count: Optional[int] = None,
+        created_by: Optional[int] = None,
     ) -> Message:
         """创建群发消息
 
@@ -225,6 +226,7 @@ class MessageService:
                 platform=platform,
                 fb_message_json=fb_message_json,
                 estimated_send_count=estimated_send_count,
+                created_by=created_by,
             )
 
         # 1. 创建基础模板（仅用于关联，实际内容存储在 Message.flex_message_json）
@@ -264,7 +266,7 @@ class MessageService:
             notification_message=notification_message,  # 保存通知推播文字
             thumbnail=thumbnail,
             interaction_tags=normalized_tags,
-            # created_by=admin_id  # 如果 Message 模型有此字段
+            created_by=created_by,  # 發送人員（當前登入者 ID）
         )
         if scheduled_at:
             message.scheduled_datetime_utc = scheduled_at
@@ -406,6 +408,7 @@ class MessageService:
         platform: Optional[str] = None,
         fb_message_json: Optional[str] = None,
         estimated_send_count: Optional[int] = None,
+        created_by: Optional[int] = None,
     ) -> Message:
         """从草稿发布 - 复制成新记录，原草稿保留
 
@@ -471,6 +474,7 @@ class MessageService:
             thumbnail=thumbnail or draft.thumbnail,
             interaction_tags=normalized_tags,
             source_draft_id=draft_id,  # 记录来源草稿
+            created_by=created_by,  # 發送人員（當前登入者 ID）
         )
 
         if scheduled_at and schedule_type == "scheduled":

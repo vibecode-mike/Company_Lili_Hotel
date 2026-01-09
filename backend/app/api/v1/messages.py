@@ -26,6 +26,8 @@ from app.schemas.message import (
     MessageSearchParams,
 )
 from app.services.message_service import MessageService
+from app.api.v1.auth import get_current_user
+from app.models.user import User
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -105,6 +107,7 @@ async def get_quota_status(
 async def create_message(
     data: MessageCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     创建群发消息
@@ -158,6 +161,7 @@ async def create_message(
             platform=platform,  # 發送平台
             fb_message_json=getattr(data, 'fb_message_json', None),  # Facebook JSON
             estimated_send_count=data.estimated_send_count,  # 預計發送人數（FB 渠道由前端傳入）
+            created_by=current_user.id,  # 發送人員（當前登入者）
         )
 
         logger.info(f"✅ 消息创建成功: ID={message.id}")
