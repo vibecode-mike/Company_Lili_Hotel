@@ -122,6 +122,7 @@ class ChatMessage(BaseModel):
     timestamp: Optional[str] = None  # ISO 格式完整時間戳，用於日期顯示
     isRead: bool = False
     source: Optional[str] = None  # 'manual' | 'gpt' | 'keyword' | 'welcome' | 'always'
+    senderName: Optional[str] = None  # 發送人員名稱：manual 顯示人員名稱，其他顯示「系統」
 
     class Config:
         from_attributes = True
@@ -247,6 +248,7 @@ async def get_chat_messages(
                 timestamp=format_iso_utc(created_at) if created_at else record.get("timestamp"),
                 isRead=record.get("isRead", False),
                 source=record.get("source"),
+                senderName=record.get("senderName"),
             ))
 
         logger.info(f"✅ 成功獲取 {len(messages)} 筆聊天紀錄（共 {result['total']} 筆）")

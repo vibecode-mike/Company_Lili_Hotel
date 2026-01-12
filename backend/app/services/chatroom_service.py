@@ -6,9 +6,11 @@ from typing import Optional, Dict, Any
 import pytz
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.member import Member
 from app.models.conversation import ConversationThread, ConversationMessage
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +97,7 @@ class ChatroomService:
         direction: str,
         content: str,
         message_source: Optional[str] = None,
+        sender_id: Optional[int] = None,
     ) -> ConversationMessage:
         thread = await self.upsert_thread(member, platform)
         message_id = str(uuid.uuid4())
@@ -106,6 +109,7 @@ class ChatroomService:
             question=content if direction == "incoming" else None,
             response=content if direction == "outgoing" else None,
             message_source=message_source,
+            sent_by=sender_id,
             created_at=datetime.now(timezone.utc),
         )
         self.db.add(msg)
@@ -137,6 +141,7 @@ class ChatroomService:
 
         msg_stmt = (
             select(ConversationMessage)
+            .options(selectinload(ConversationMessage.sender))
             .where(
                 ConversationMessage.thread_id == thread_id,
                 ConversationMessage.platform == platform,
@@ -161,6 +166,15 @@ class ChatroomService:
                 timestamp_str = created_at_local.isoformat()
             else:
                 timestamp_str = None
+
+            # 計算 senderName：manual 訊息顯示發送人員名稱，其他顯示「系統」
+            sender_name = None
+            if msg_type == "official":
+                if record.message_source == "manual" and record.sender:
+                    sender_name = record.sender.username
+                else:
+                    sender_name = "系統"
+
             messages.append(
                 {
                     "id": record.id,
@@ -170,6 +184,7 @@ class ChatroomService:
                     "timestamp": timestamp_str,
                     "isRead": record.status == "read" if hasattr(record, "status") else False,
                     "source": record.message_source,
+                    "senderName": sender_name,
                 }
             )
 

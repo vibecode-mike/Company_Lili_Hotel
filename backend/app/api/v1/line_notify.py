@@ -131,13 +131,16 @@ async def notify_new_message(
 
         thread.last_message_at = msg.created_at
 
-        await manager.send_new_message(msg.thread_id, {
-            **message_data,
-            "thread_id": msg.thread_id,
-            "timestamp": datetime.fromtimestamp(notification.timestamp / 1000, tz=ZoneInfo("Asia/Taipei")).isoformat()
-        })
-
-        logger.info(f"✅ Notified frontend about new message on thread {msg.thread_id}")
+        # 手動發送訊息由 members.py 推送 WebSocket（包含 senderName），這裡跳過避免重複
+        if notification.direction == "outgoing" and notification.source == "manual":
+            logger.info(f"⏭️ Skipping WebSocket push for manual outgoing message (handled by members.py)")
+        else:
+            await manager.send_new_message(msg.thread_id, {
+                **message_data,
+                "thread_id": msg.thread_id,
+                "timestamp": datetime.fromtimestamp(notification.timestamp / 1000, tz=ZoneInfo("Asia/Taipei")).isoformat()
+            })
+            logger.info(f"✅ Notified frontend about new message on thread {msg.thread_id}")
         return {
             "status": "ok",
             "member_id": member.id,

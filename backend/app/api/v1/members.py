@@ -3,7 +3,7 @@
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_, and_, func, delete
+from sqlalchemy import select, or_, and_, func, delete, update
 from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.models.member import Member
@@ -796,12 +796,54 @@ async def send_member_chat_message(
             if not send_result.get("ok"):
                 raise HTTPException(status_code=500, detail="發送訊息失敗")
 
-            await chatroom_service.append_message(member, "LINE", "outgoing", text, message_source="manual")
+            # LINE app 已建立訊息記錄，這裡更新 sent_by 欄位
+            line_msg_id = send_result.get("message_id")
+            thread_id = send_result.get("thread_id")
+            if line_msg_id:
+                await db.execute(
+                    update(ConversationMessage)
+                    .where(ConversationMessage.id == line_msg_id)
+                    .values(sent_by=current_user.id)
+                )
+                await db.flush()
+
+                # WebSocket 推送通知前端即時更新（包含 senderName）
+                now_utc = datetime.now(timezone.utc)
+                local_dt = now_utc.astimezone(TAIPEI_TZ)
+                hour = local_dt.hour
+                minute = local_dt.minute
+                if 0 <= hour < 6:
+                    period = "凌晨"
+                elif 6 <= hour < 12:
+                    period = "上午"
+                elif 12 <= hour < 14:
+                    period = "中午"
+                elif 14 <= hour < 18:
+                    period = "下午"
+                else:
+                    period = "晚上"
+                hour_12 = hour if hour <= 12 else hour - 12
+                if hour_12 == 0:
+                    hour_12 = 12
+                time_str = f"{period} {hour_12:02d}:{minute:02d}"
+
+                sender_name = current_user.username
+                await manager.send_new_message(thread_id, {
+                    "id": line_msg_id,
+                    "type": "official",
+                    "text": text,
+                    "time": time_str,
+                    "timestamp": now_utc.isoformat(),
+                    "thread_id": thread_id,
+                    "isRead": True,
+                    "source": "manual",
+                    "senderName": sender_name
+                })
 
             return {
                 "success": True,
-                "message_id": send_result.get("message_id"),
-                "thread_id": send_result.get("thread_id"),
+                "message_id": line_msg_id,
+                "thread_id": thread_id,
                 "sent_at": datetime.now(timezone.utc).isoformat()
             }
 
@@ -825,7 +867,7 @@ async def send_member_chat_message(
             raise HTTPException(status_code=500, detail=f"發送 Facebook 訊息失敗: {send_result.get('error')}")
 
         # 成功後寫入對話訊息
-        msg = await chatroom_service.append_message(member, "Facebook", "outgoing", text, message_source="manual")
+        msg = await chatroom_service.append_message(member, "Facebook", "outgoing", text, message_source="manual", sender_id=current_user.id)
 
         # WebSocket 推送通知前端即時更新 - 將 UTC 轉為台北時間顯示
         time_str = ""
@@ -861,7 +903,8 @@ async def send_member_chat_message(
             "timestamp": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg.created_at else None,
             "thread_id": msg.thread_id,
             "isRead": True,
-            "source": "manual"
+            "source": "manual",
+            "senderName": current_user.username
         })
 
         return {
@@ -874,7 +917,7 @@ async def send_member_chat_message(
     elif platform == "Webchat":
         # Webchat 僅寫入資料庫
         try:
-            msg = await chatroom_service.append_message(member, platform, "outgoing", text, message_source="manual")
+            msg = await chatroom_service.append_message(member, platform, "outgoing", text, message_source="manual", sender_id=current_user.id)
 
             # WebSocket 推送通知前端即時更新 - 將 UTC 轉為台北時間顯示
             time_str = ""
@@ -910,7 +953,8 @@ async def send_member_chat_message(
                 "timestamp": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg.created_at else None,
                 "thread_id": msg.thread_id,
                 "isRead": True,
-                "source": "manual"
+                "source": "manual",
+                "senderName": current_user.full_name or current_user.username
             })
 
             return {

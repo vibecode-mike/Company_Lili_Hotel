@@ -112,6 +112,12 @@ class ConversationMessage(Base):
         nullable=True,
         comment="訊息來源：webhook|manual|gpt|keyword|welcome|always|broadcast",
     )
+    sent_by = Column(
+        BigInteger,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="發送人員ID（僅 manual 訊息有值）",
+    )
     created_at = Column(
         DateTime, server_default=func.now(), nullable=True, comment="建立時間"
     )
@@ -119,3 +125,4 @@ class ConversationMessage(Base):
 
     # 關聯關係
     thread = relationship("ConversationThread", back_populates="messages")
+    sender = relationship("User", foreign_keys=[sent_by])
