@@ -345,14 +345,14 @@ function MemberTags({ member }: { member: DisplayMember }) {
   // 如果沒有任何標籤，顯示 "-"
   if (allDisplayTags.length === 0) {
     return (
-      <div className="box-border content-center flex flex-wrap gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[320px]" data-name="Table/List-atomic">
+      <div className="box-border flex flex-wrap gap-[4px] items-center justify-start px-[12px] py-0 relative shrink-0 w-[320px]" data-name="Table/List-atomic">
         <p className="text-[14px] text-[#6e6e6e] leading-[1.5]">-</p>
       </div>
     );
   }
 
   return (
-    <div className="box-border content-center flex flex-wrap gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[320px]" data-name="Table/List-atomic">
+    <div className="box-border flex flex-wrap gap-[4px] items-center justify-start px-[12px] py-0 relative shrink-0 w-[320px]" data-name="Table/List-atomic">
       {allDisplayTags.map((tag, index) => (
         <div key={index} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
           <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">{tag}</p>
@@ -459,7 +459,7 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Displ
       )}
       <div className="flex flex-row items-center size-full">
         <div className="box-border content-stretch flex items-center p-[12px] relative w-full">
-          <div className="flex items-center relative shrink-0 w-[300px] pl-[28px]" data-name="Container">
+          <div className="flex items-center relative shrink-0 w-[260px]" data-name="Container">
             <div className="bg-white relative rounded-full shrink-0 size-[68px] ml-[8px]" data-name="Avatar">
               <Avatar avatarUrl={member.avatar} altText={member.displayName || '會員頭像'} />
             </div>
@@ -497,19 +497,14 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Displ
             </div>
           </div>
           {/* 平台欄位內容 */}
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[200px]" data-name="Table/List-atomic">
-            <div className="flex items-center justify-start font-['Noto_Sans_TC:Regular',sans-serif] relative text-[#383838]">
-              <ChannelIcon channel={member.channel} channelName={member.channelName} />
-            </div>
+          <div className="box-border flex items-center justify-start px-[12px] py-0 relative shrink-0 w-[200px]" data-name="Table/List-atomic">
+            <ChannelIcon channel={member.channel} channelName={member.channelName} />
           </div>
-          <div className="basis-0 grow min-h-px min-w-[200px] relative shrink-0" data-name="Table/List-atomic">
-            <div className="flex flex-row items-center size-full">
-              <div className="box-border content-stretch flex items-center px-[12px] py-0 relative w-full">
-                <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px] whitespace-nowrap">
-                  <p className="leading-[1.5] whitespace-pre">{formatMemberDateTime(getLatestMemberChatTimestamp(member)) || '-'}</p>
-                </div>
-              </div>
-            </div>
+          {/* 最近聊天時間欄位內容 */}
+          <div className="box-border flex items-center justify-start px-[12px] py-0 relative shrink-0 min-w-[200px] grow" data-name="Table/List-atomic">
+            <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[#383838] text-[14px] leading-[1.5] whitespace-nowrap">
+              {formatMemberDateTime(getLatestMemberChatTimestamp(member)) || '-'}
+            </p>
           </div>
           <div
             onClick={(e) => {
