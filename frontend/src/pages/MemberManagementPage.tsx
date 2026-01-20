@@ -3,6 +3,7 @@ import MemberManagement from '../imports/MemberListContainer';
 import MainLayout from '../components/layouts/MainLayout';
 import { useNavigation } from '../contexts/NavigationContext';
 import { useMembers } from '../contexts/MembersContext';
+import type { DisplayMember } from '../types/member';
 
 /**
  * 會員管理頁面
@@ -17,7 +18,7 @@ export default function MemberManagementPage() {
   }, [fetchMembers]);
 
   return (
-    <MainLayout 
+    <MainLayout
       currentPage="members"
       sidebarOpen={sidebarOpen}
       onToggleSidebar={setSidebarOpen}
@@ -26,11 +27,20 @@ export default function MemberManagementPage() {
         onAddMember={() => {
           // TODO: 打開新增會員模態框
         }}
-        onOpenChat={(member) => {
-          navigate('chat-room', { memberId: member.id });
+        onOpenChat={(member: DisplayMember) => {
+          // 傳遞 memberId 和 channel 給聊天室
+          // LINE: 使用 odooMemberId（DB member.id）
+          // FB: 使用 channelUid（customer_id），因為可能尚未同步到 DB
+          const memberId = member.odooMemberId?.toString() || member.channelUid;
+          navigate('chat-room', {
+            memberId,
+            channel: member.channel,
+          });
         }}
-        onViewDetail={(member) => {
-          navigate('member-detail', { memberId: member.id });
+        onViewDetail={(member: DisplayMember) => {
+          // 使用 odooMemberId 或 channelUid 跳轉到會員詳情頁
+          const memberId = member.odooMemberId?.toString() || member.channelUid;
+          navigate('member-detail', { memberId });
         }}
       />
     </MainLayout>
