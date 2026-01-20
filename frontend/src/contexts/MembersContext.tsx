@@ -1,14 +1,12 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback, useMemo, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
-import type { Member, TagInfo, ExpandedMember, ChannelType } from '../types/member';
+import type { Member, TagInfo, ChannelType, DisplayMember } from '../types/member';
 import type { BackendMember, BackendTag } from '../types/api';
 import { useAuth } from '../components/auth/AuthContext';
 
 /**
  * 會員數據 Context
- *
  * 專門處理會員相關的數據和操作
- * 獨立於其他數據類型，避免不必要的重新渲染
  */
 
 // FB 訊息列表成員資訊（來自外部 API）
@@ -18,7 +16,7 @@ interface FbMemberInfo {
   customer_name: string;
   customer_tag: string[];
   channel: string;
-  email?: string;  // 用於匹配
+  email?: string;
   create_time: string;
   last_message_time: string;
   unread: boolean;
@@ -26,96 +24,19 @@ interface FbMemberInfo {
   unread_time_string: string;
 }
 
-/**
- * 展開會員列表（每個渠道獨立一行）
- * 用於會員管理頁表格顯示
- */
-const expandMembersByChannel = (members: Member[]): ExpandedMember[] => {
-  const expanded: ExpandedMember[] = [];
-
-  for (const member of members) {
-    // LINE 渠道
-    if (member.lineUid) {
-      expanded.push({
-        ...member,
-        id: `${member.id}-line`,  // 唯一 key
-        channel: 'LINE' as ChannelType,
-        channelUid: member.lineUid,
-        channelDisplayName: member.line_display_name || member.realName || '未知',
-        channelAvatar: member.lineAvatar || '',
-        originalMemberId: member.id,
-      });
-    }
-
-    // Facebook 渠道
-    if (member.fb_customer_id) {
-      expanded.push({
-        ...member,
-        id: `${member.id}-facebook`,
-        channel: 'Facebook' as ChannelType,
-        channelUid: member.fb_customer_id,
-        channelDisplayName: member.fb_customer_name || member.realName || '未知',
-        channelAvatar: member.fb_avatar || '',
-        originalMemberId: member.id,
-      });
-    }
-
-    // Webchat 渠道
-    if (member.webchat_uid) {
-      expanded.push({
-        ...member,
-        id: `${member.id}-webchat`,
-        channel: 'Webchat' as ChannelType,
-        channelUid: member.webchat_uid,
-        channelDisplayName: member.webchat_name || member.realName || '訪客',
-        channelAvatar: member.webchat_avatar || '',
-        originalMemberId: member.id,
-      });
-    }
-    // 注意：不處理無渠道會員（系統中不存在）
-  }
-
-  return expanded;
-};
-
-/**
- * 合併 FB 資料到會員列表（以 email 匹配）
- */
-const mergeFbDataWithMembers = (members: Member[], fbMembers: FbMemberInfo[]): Member[] => {
-  // 建立 FB 資料的 Map（以 email 匹配）
-  const fbMap = new Map<string, FbMemberInfo>();
-  fbMembers.forEach(fb => {
-    if (fb.email) {
-      fbMap.set(fb.email.toLowerCase(), fb);
-    }
-  });
-
-  // 合併資料（僅更新 lastChatTime，fb_customer_id/name 已由後端 sync-members 處理）
-  return members.map(member => {
-    const fbInfo = member.email ? fbMap.get(member.email.toLowerCase()) : null;
-    if (fbInfo) {
-      return {
-        ...member,
-        lastChatTime: fbInfo.last_message_time || member.lastChatTime,
-      };
-    }
-    return member;
-  });
-};
-
 // Context 類型定義
 interface MembersContextType {
   members: Member[];
-  expandedMembers: ExpandedMember[];  // 展開後的會員列表（每渠道一行）
+  displayMembers: DisplayMember[];
   setMembers: (members: Member[]) => void;
   addMember: (member: Member) => void;
   updateMember: (id: string, updates: Partial<Member>) => void;
   deleteMember: (id: string) => void;
   getMemberById: (id: string) => Member | undefined;
-  getExpandedMemberById: (id: string) => ExpandedMember | undefined;  // 查詢展開後的會員
+  getDisplayMemberById: (id: string) => DisplayMember | undefined;
   fetchMemberById: (id: string) => Promise<Member | null>;
   totalMembers: number;
-  totalExpandedMembers: number;  // 展開後的總數
+  totalDisplayMembers: number;
   isLoading: boolean;
   error: string | null;
   fetchMembers: () => Promise<void>;
@@ -199,18 +120,12 @@ interface MembersProviderProps {
 
 // Provider 組件
 export function MembersProvider({ children }: MembersProviderProps) {
-  const [members, setMembersState] = useState<Member[]>([]);
-  const [expandedMembers, setExpandedMembers] = useState<ExpandedMember[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [displayMembers, setDisplayMembers] = useState<DisplayMember[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { isAuthenticated } = useAuth();
   const hasFetchedRef = useRef(false);
-
-  // 封裝 setMembers，同時更新展開後的列表
-  const setMembers = useCallback((newMembers: Member[]) => {
-    setMembersState(newMembers);
-    setExpandedMembers(expandMembersByChannel(newMembers));
-  }, []);
 
   const fetchMembers = useCallback(async () => {
     const token = localStorage.getItem('auth_token');
@@ -222,62 +137,92 @@ export function MembersProvider({ children }: MembersProviderProps) {
     setIsLoading(true);
     setError(null);
 
+    const jwtToken = localStorage.getItem('jwt_token') || '';
+    const displayRows: DisplayMember[] = [];
+
     try {
-      // 同步 FB 會員（若有 jwt_token）
-      const jwtToken = localStorage.getItem('jwt_token');
-      if (jwtToken) {
-        try {
-          const syncResponse = await fetch('/api/v1/fb_channels/sync-members', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ jwt_token: jwtToken }),
+      // 1. 並行取得 LINE 會員 + FB 會員（先顯示，再同步）
+      const [lineMembersRes, fbMembersRes] = await Promise.all([
+        fetch('/api/v1/members?channel=line&page=1&page_size=200', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        }),
+        jwtToken
+          ? fetch(`/api/v1/fb_channels/message-list?jwt_token=${encodeURIComponent(jwtToken)}`)
+          : Promise.resolve({ ok: false } as Response),
+      ]);
+
+      // 2. LINE 會員 → 直接加入顯示列表
+      if (lineMembersRes.ok) {
+        const lineData = await lineMembersRes.json();
+        const lineItems = lineData.data?.items || [];
+        for (const member of lineItems) {
+          displayRows.push({
+            id: `line-${member.id}`,
+            odooMemberId: member.id,
+            channel: 'LINE',
+            channelUid: member.line_uid || '',
+            displayName: member.line_display_name || member.name || '未知',
+            realName: member.name || null,
+            avatar: member.line_avatar || null,
+            email: member.email || null,
+            phone: member.phone || null,
+            createTime: member.created_at || null,
+            lastChatTime: member.last_interaction_at || null,
+            tags: (member.tags || []).map((t: BackendTag) => t.name),
           });
-          if (syncResponse.ok) {
-            const syncResult = await syncResponse.json();
-            console.log('FB 會員同步完成:', syncResult.data);
-          }
-        } catch (syncError) {
-          console.warn('FB 會員同步失敗，繼續獲取會員列表:', syncError);
         }
+        console.log('LINE 會員載入:', lineItems.length, '筆');
       }
 
-      // 獲取會員列表
-      const response = await fetch('/api/v1/members?page=1&page_size=200', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('獲取會員列表失敗');
+      // 3. FB 會員 → 直接加入顯示列表
+      if (fbMembersRes.ok) {
+        const fbData = await fbMembersRes.json();
+        const fbItems: FbMemberInfo[] = fbData.data || [];
+        for (const fb of fbItems) {
+          displayRows.push({
+            id: `fb-${fb.customer_id}`,
+            odooMemberId: null,  // FB 會員可能沒有本地 ID
+            channel: 'Facebook',
+            channelUid: String(fb.customer_id),
+            displayName: fb.customer_name || 'Facebook 用戶',
+            realName: null,  // FB 無真實姓名資料
+            avatar: null,
+            email: fb.email || null,
+            phone: null,
+            createTime: fb.create_time || null,
+            lastChatTime: fb.last_message_time || null,
+            tags: fb.customer_tag || [],
+          });
+        }
+        console.log('FB 會員載入:', fbItems.length, '筆');
       }
 
-      const result = await response.json();
-      const backendMembers = result.data?.items || [];
-      let transformedMembers = backendMembers.map(transformBackendMember);
+      // 設定顯示用列表
+      setDisplayMembers(displayRows);
 
-      // 取得 FB 訊息列表並合併（若有 jwt_token）
+      // 4. 背景同步到 DB（email 合併）- 不阻塞顯示
       if (jwtToken) {
-        try {
-          const fbListResponse = await fetch(
-            `/api/v1/fb_channels/message-list?jwt_token=${encodeURIComponent(jwtToken)}`
-          );
-          if (fbListResponse.ok) {
-            const fbListResult = await fbListResponse.json();
-            const fbMembers: FbMemberInfo[] = fbListResult.data || [];
-            if (fbMembers.length > 0) {
-              transformedMembers = mergeFbDataWithMembers(transformedMembers, fbMembers);
-              console.log('FB 訊息列表合併完成:', fbMembers.length, '筆');
-            }
-          }
-        } catch (fbListError) {
-          console.warn('FB 訊息列表取得失敗，不影響主流程:', fbListError);
-        }
+        fetch('/api/v1/fb_channels/sync-members', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jwt_token: jwtToken }),
+        })
+          .then(res => res.ok ? res.json() : null)
+          .then(data => data && console.log('FB 背景同步完成:', data.data))
+          .catch(err => console.warn('FB 背景同步失敗:', err));
       }
 
-      setMembers(transformedMembers);
+      // 向後相容：維持舊的 members 更新（用於詳情頁等場景）
+      const allMembersRes = await fetch('/api/v1/members?page=1&page_size=200', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (allMembersRes.ok) {
+        const allData = await allMembersRes.json();
+        const backendMembers = allData.data?.items || [];
+        const transformedMembers = backendMembers.map(transformBackendMember);
+        setMembers(transformedMembers);
+      }
+
     } catch (err) {
       console.error('獲取會員列表錯誤:', err);
       const message = '獲取會員列表失敗';
@@ -296,41 +241,30 @@ export function MembersProvider({ children }: MembersProviderProps) {
     if (!isAuthenticated) {
       hasFetchedRef.current = false;
       setMembers([]);
+      setDisplayMembers([]);
       setError(null);
     }
   }, [isAuthenticated, fetchMembers]);
 
   const addMember = useCallback((member: Member) => {
-    setMembersState(prev => {
-      const newMembers = [...prev, member];
-      setExpandedMembers(expandMembersByChannel(newMembers));
-      return newMembers;
-    });
+    setMembers(prev => [...prev, member]);
   }, []);
 
   const updateMember = useCallback((id: string, updates: Partial<Member>) => {
-    setMembersState(prev => {
-      const newMembers = prev.map(m => m.id === id ? { ...m, ...updates } : m);
-      setExpandedMembers(expandMembersByChannel(newMembers));
-      return newMembers;
-    });
+    setMembers(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
   }, []);
 
   const deleteMember = useCallback((id: string) => {
-    setMembersState(prev => {
-      const newMembers = prev.filter(m => m.id !== id);
-      setExpandedMembers(expandMembersByChannel(newMembers));
-      return newMembers;
-    });
+    setMembers(prev => prev.filter(m => m.id !== id));
   }, []);
 
   const getMemberById = useCallback((id: string) => {
     return members.find(m => m.id === id);
   }, [members]);
 
-  const getExpandedMemberById = useCallback((id: string) => {
-    return expandedMembers.find(m => m.id === id);
-  }, [expandedMembers]);
+  const getDisplayMemberById = useCallback((id: string) => {
+    return displayMembers.find(m => m.id === id);
+  }, [displayMembers]);
 
   const fetchMemberById = useCallback(async (id: string): Promise<Member | null> => {
     const token = localStorage.getItem('auth_token');
@@ -353,21 +287,17 @@ export function MembersProvider({ children }: MembersProviderProps) {
       const result = await response.json();
       const memberData = result.data;
 
-      // Transform backend data to frontend format
       const transformedMember = transformBackendMember(memberData);
 
       // Update the member in the members array if it exists
-      setMembersState(prev => {
+      setMembers(prev => {
         const index = prev.findIndex(m => m.id === id);
-        let newMembers: Member[];
         if (index !== -1) {
-          newMembers = [...prev];
+          const newMembers = [...prev];
           newMembers[index] = transformedMember;
-        } else {
-          newMembers = [...prev, transformedMember];
+          return newMembers;
         }
-        setExpandedMembers(expandMembersByChannel(newMembers));
-        return newMembers;
+        return [...prev, transformedMember];
       });
 
       return transformedMember;
@@ -378,24 +308,24 @@ export function MembersProvider({ children }: MembersProviderProps) {
   }, []);
 
   const totalMembers = useMemo(() => members.length, [members]);
-  const totalExpandedMembers = useMemo(() => expandedMembers.length, [expandedMembers]);
+  const totalDisplayMembers = useMemo(() => displayMembers.length, [displayMembers]);
 
   const value = useMemo<MembersContextType>(() => ({
     members,
-    expandedMembers,
+    displayMembers,
     setMembers,
     addMember,
     updateMember,
     deleteMember,
     getMemberById,
-    getExpandedMemberById,
+    getDisplayMemberById,
     fetchMemberById,
     totalMembers,
-    totalExpandedMembers,
+    totalDisplayMembers,
     isLoading,
     error,
     fetchMembers,
-  }), [members, expandedMembers, setMembers, addMember, updateMember, deleteMember, getMemberById, getExpandedMemberById, fetchMemberById, totalMembers, totalExpandedMembers, isLoading, error, fetchMembers]);
+  }), [members, displayMembers, addMember, updateMember, deleteMember, getMemberById, getDisplayMemberById, fetchMemberById, totalMembers, totalDisplayMembers, isLoading, error, fetchMembers]);
 
   return (
     <MembersContext.Provider value={value}>

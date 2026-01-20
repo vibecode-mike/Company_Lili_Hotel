@@ -28,9 +28,20 @@ export interface Member {
   birthday?: string;          // 生日 (ISO 日期格式 YYYY-MM-DD)
   createTime: string;
   lastChatTime: string;
+  // LINE 渠道
   lineUid?: string;
   lineAvatar?: string;
+  line_display_name?: string;
   channel_id?: string;        // LINE channel ID
+  // Facebook 渠道
+  fb_customer_id?: string;
+  fb_customer_name?: string;
+  fb_avatar?: string;
+  // Webchat 渠道
+  webchat_uid?: string;
+  webchat_name?: string;
+  webchat_avatar?: string;
+  // 其他
   join_source?: MemberSourceType; // 加入來源：LINE/CRM/PMS/ERP/系統 - 使用統一類型
   id_number?: string;         // 身分證字號
   residence?: string;         // 居住地
@@ -40,12 +51,27 @@ export interface Member {
 }
 
 /**
- * 扩展会员信息
- * 包含额外的状态和标签字段
- * 用于会员详情页面
+ * 渠道類型
  */
-export interface MemberData extends Member {
-  status?: "active" | "inactive";
+export type ChannelType = 'LINE' | 'Facebook' | 'Webchat';
+
+/**
+ * 會員管理頁表格顯示用型別
+ * LINE 和 FB 分開取、直接顯示
+ */
+export interface DisplayMember {
+  id: string;                    // 唯一 ID (如 "line-123", "fb-456")
+  odooMemberId: number | null;   // 本地 DB 的 member.id（FB 可能為 null）
+  channel: ChannelType;          // 渠道類型
+  channelUid: string;            // 渠道 UID (line_uid 或 customer_id)
+  displayName: string;           // 顯示名稱（渠道名稱，如 LINE 暱稱）
+  realName: string | null;       // 真實姓名（從會員資料）
+  avatar: string | null;         // 頭像 URL
+  email: string | null;          // Email
+  phone: string | null;          // 電話
+  createTime: string | null;     // 建立時間
+  lastChatTime: string | null;   // 最後聊天時間
+  tags: string[];                // 標籤列表
 }
 
 /**
@@ -89,42 +115,6 @@ export function isMember(obj: any): obj is Member {
 }
 
 /**
- * 类型守卫：检查是否为有效的会员数据对象
- */
-export function isMemberData(obj: any): obj is MemberData {
-  return isMember(obj);
-}
-
-/**
- * 工具函数：将 MemberData 转换为 Member
- * 用于需要基础会员信息的场景
- */
-export function memberDataToMember(memberData: MemberData): Member {
-  return {
-    id: memberData.id,
-    username: memberData.username,
-    realName: memberData.realName,
-    tags: memberData.tags,
-    phone: memberData.phone,
-    email: memberData.email,
-    createTime: memberData.createTime,
-    lastChatTime: memberData.lastChatTime,
-  };
-}
-
-/**
- * 工具函数：将 Member 转换为 MemberData
- * 用于需要扩展信息的场景
- */
-export function memberToMemberData(member: Member, additionalData?: Partial<MemberData>): MemberData {
-  return {
-    ...member,
-    status: additionalData?.status,
-    note: additionalData?.note,
-  };
-}
-
-/**
  * 工具函数：创建空的会员对象
  * 用于初始化表单或测试
  */
@@ -140,17 +130,5 @@ export function createEmptyMember(): Member {
     lastChatTime: new Date().toISOString(),
     lineUid: '',
     lineAvatar: '',
-  };
-}
-
-/**
- * 工具函数：创建空的会员数据对象
- * 用于初始化表单或测试
- */
-export function createEmptyMemberData(): MemberData {
-  return {
-    ...createEmptyMember(),
-    status: 'active',
-    note: '',
   };
 }
