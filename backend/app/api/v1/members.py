@@ -134,6 +134,7 @@ async def get_members(
     # 批量查詢所有會員的最後聊天時間（避免 N+1）
     member_line_uids = [m.line_uid for m in members if m.line_uid]
     last_chat_times = {}
+    unanswered_members = {}  # 儲存未回覆的會員: {thread_id: unanswered_since}
 
     if member_line_uids:
         # 使用子查詢找出每個 thread_id (line_uid) 的最新聊天時間
@@ -151,15 +152,29 @@ async def get_members(
         ).subquery()
 
         chat_result = await db.execute(
-            select(ConversationMessage.thread_id, ConversationMessage.created_at)
+            select(
+                ConversationMessage.thread_id,
+                ConversationMessage.created_at,
+                ConversationMessage.direction
+            )
             .join(subq, and_(
                 ConversationMessage.thread_id == subq.c.thread_id,
                 ConversationMessage.created_at == subq.c.max_created_at
             ))
         )
 
-        for thread_id, created_at in chat_result:
+        for thread_id, created_at, direction in chat_result:
             last_chat_times[thread_id] = created_at
+            # 如果最新訊息是 incoming（客戶發送），則標記為未回覆
+            if direction == 'incoming':
+                unanswered_members[thread_id] = created_at
+
+    # 查詢 LINE 渠道名稱
+    line_channel_name = None
+    line_channel_result = await db.execute(
+        select(LineChannel.channel_name).where(LineChannel.is_active == True).limit(1)
+    )
+    line_channel_name = line_channel_result.scalar()
 
     # 組裝響應數據
     items = []
@@ -186,6 +201,17 @@ async def get_members(
         # 使用批量查詢的聊天時間（無需額外查詢）
         if member.line_uid and member.line_uid in last_chat_times:
             member_dict["last_interaction_at"] = last_chat_times[member.line_uid]
+
+        # 添加未回覆狀態
+        if member.line_uid and member.line_uid in unanswered_members:
+            member_dict["is_unanswered"] = True
+            member_dict["unanswered_since"] = unanswered_members[member.line_uid]
+        else:
+            member_dict["is_unanswered"] = False
+            member_dict["unanswered_since"] = None
+
+        # 添加渠道名稱
+        member_dict["channel_name"] = line_channel_name
 
         items.append(member_dict)
 

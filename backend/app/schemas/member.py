@@ -69,6 +69,11 @@ class MemberListItem(BaseModel):
     tags: List[TagInfo] = []
     created_at: datetime
     last_interaction_at: Optional[datetime] = None
+    # 未回覆狀態
+    is_unanswered: bool = False  # 是否有未回覆的訊息
+    unanswered_since: Optional[datetime] = None  # 未回覆訊息的時間戳
+    # 渠道名稱
+    channel_name: Optional[str] = None  # 渠道帳號名稱 (e.g., "下班解憂所")
 
     class Config:
         from_attributes = True

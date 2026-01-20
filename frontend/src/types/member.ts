@@ -72,6 +72,11 @@ export interface DisplayMember {
   createTime: string | null;     // 建立時間
   lastChatTime: string | null;   // 最後聊天時間
   tags: string[];                // 標籤列表
+  // 未回覆狀態
+  isUnanswered: boolean;         // 是否有未回覆的訊息
+  unansweredSince: string | null; // 未回覆訊息的時間戳
+  // 渠道帳號名稱
+  channelName: string | null;    // 渠道帳號名稱 (e.g., "下班解憂所")
 }
 
 /**

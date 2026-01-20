@@ -5,9 +5,9 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "../components/ui/toolti
 import TooltipComponent from "./Tooltip";
 import { PageHeaderWithBreadcrumb } from "../components/common/Breadcrumb";
 import { TextIconButton, ArrowRightIcon, Tag } from "../components/common";
-import { MemberSourceIconLarge } from "../components/common/icons";
+import { MemberSourceIconLarge, ChannelIcon as CommonChannelIcon } from "../components/common/icons";
 import { useMembers } from "../contexts/MembersContext";
-import { formatMemberDateTime, getLatestMemberChatTimestamp } from "../utils/memberTime";
+import { formatMemberDateTime, getLatestMemberChatTimestamp, formatUnansweredTime } from "../utils/memberTime";
 
 /**
  * 會員管理列表頁面組件
@@ -96,7 +96,7 @@ function Container5({ count, totalMembers }: { count: number; totalMembers?: num
   );
 }
 
-type SortField = 'realName' | 'tags' | 'phone' | 'email' | 'createTime' | 'lastChatTime';
+type SortField = 'realName' | 'tags' | 'phone' | 'email' | 'lastChatTime';
 type SortOrder = 'asc' | 'desc';
 interface SortConfig {
   field: SortField;
@@ -243,35 +243,11 @@ function Container6({
           </div>
           {/* 平台欄位表頭 */}
           <div
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[120px]"
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[200px]"
             data-name="Table/Title-atomic"
           >
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">平台</p>
-            </div>
-          </div>
-          <div className="h-[12px] relative shrink-0 w-0" data-name="Divier">
-            <div className="absolute inset-[-3.33%_-0.4px]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
-                <path d="M0.4 0.4V12.4" id="Divier" stroke="var(--stroke-0, #DDDDDD)" strokeLinecap="round" strokeWidth="0.8" />
-              </svg>
-            </div>
-          </div>
-          <div
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[140px] cursor-pointer"
-            data-name="Table/Title-atomic"
-            onClick={() => onSortChange('createTime')}
-          >
-            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">建立時間</p>
-            </div>
-            <SortingIcon active={isActive('createTime')} order={sortConfig.order} />
-          </div>
-          <div className="h-[12px] relative shrink-0 w-0" data-name="Divier">
-            <div className="absolute inset-[-3.33%_-0.4px]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
-                <path d="M0.4 0.4V12.4" id="Divier" stroke="var(--stroke-0, #DDDDDD)" strokeLinecap="round" strokeWidth="0.8" />
-              </svg>
             </div>
           </div>
           <div className="h-[12px] relative shrink-0 w-0" data-name="Divier">
@@ -398,44 +374,36 @@ function MessageIcon() {
   );
 }
 
-// 渠道圖標組件
-function ChannelIcon({ channel }: { channel: ChannelType }) {
-  switch (channel) {
-    case 'LINE':
-      return (
-        <div className="flex items-center gap-1">
-          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#06C755">
-            <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63h2.386c.349 0 .63.285.63.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.063-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63.349 0 .631.285.631.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.281.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
-          </svg>
-          <span className="text-[14px] text-[#383838]">LINE</span>
-        </div>
-      );
-    case 'Facebook':
-      return (
-        <div className="flex items-center gap-1">
-          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#1877F2">
-            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-          </svg>
-          <span className="text-[14px] text-[#383838]">FB</span>
-        </div>
-      );
-    case 'Webchat':
-      return (
-        <div className="flex items-center gap-1">
-          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#6E6E6E">
-            <path d="M12 2C6.477 2 2 6.145 2 11.243c0 2.936 1.444 5.545 3.684 7.227V22l3.266-1.793c.87.24 1.792.369 2.75.369h.3c5.523 0 10-4.145 10-9.243S17.523 2 12 2z"/>
-          </svg>
-          <span className="text-[14px] text-[#383838]">Web</span>
-        </div>
-      );
-    default:
-      return <span className="text-[14px] text-[#6e6e6e]">-</span>;
+// 渠道圖標組件（使用統一組件）
+function ChannelIcon({ channel, channelName }: { channel: ChannelType; channelName?: string | null }) {
+  // 顯示渠道名稱，如果沒有則使用預設名稱
+  const displayName = channelName || (channel === 'LINE' ? 'LINE' : channel === 'Facebook' ? 'FB' : 'Web');
+
+  // LINE 和 Facebook 使用統一組件，Webchat 使用內嵌 SVG
+  if (channel === 'LINE' || channel === 'Facebook') {
+    return (
+      <div className="flex items-center gap-[8px]">
+        <CommonChannelIcon channel={channel} size={20} />
+        <span className="text-[14px] text-[#383838] truncate">{displayName}</span>
+      </div>
+    );
   }
+
+  // Webchat 使用內嵌 SVG
+  return (
+    <div className="flex items-center gap-[8px]">
+      <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" fill="#6E6E6E">
+        <path d="M12 2C6.477 2 2 6.145 2 11.243c0 2.936 1.444 5.545 3.684 7.227V22l3.266-1.793c.87.24 1.792.369 2.75.369h.3c5.523 0 10-4.145 10-9.243S17.523 2 12 2z"/>
+      </svg>
+      <span className="text-[14px] text-[#383838] truncate">{displayName}</span>
+    </div>
+  );
 }
 
 // Dynamic Member Row Component
 function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: DisplayMember; isLast?: boolean; onOpenChat?: (member: DisplayMember) => void; onViewDetail?: (member: DisplayMember) => void }) {
   const [isPressed, setIsPressed] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   const handleRowClick = () => {
     // 點擊行直接開啟聊天室
@@ -444,7 +412,14 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Displ
 
   const handleMouseDown = () => setIsPressed(true);
   const handleMouseUp = () => setIsPressed(false);
-  const handleMouseLeave = () => setIsPressed(false);
+  const handleMouseLeave = () => {
+    setIsPressed(false);
+    setIsHovered(false);
+  };
+  const handleMouseEnter = () => setIsHovered(true);
+
+  // 計算未回覆時間顯示
+  const unansweredTimeText = member.isUnanswered ? formatUnansweredTime(member.unansweredSince) : null;
 
   return (
     <div
@@ -454,6 +429,7 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Displ
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseLeave}
+      onMouseEnter={handleMouseEnter}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
@@ -462,20 +438,38 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Displ
       }}
       className={`relative shrink-0 w-full transition-colors group cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0f6beb]/30 ${isLast ? 'rounded-bl-[16px] rounded-br-[16px]' : 'border-b border-[#dddddd]'}`}
       data-name="Container"
-      style={{ backgroundColor: isPressed ? '#edf3ff' : 'white' }}
+      style={{ backgroundColor: isPressed || isHovered ? '#F8FAFC' : 'white' }}
     >
       <div className="flex flex-row items-center size-full">
         <div className="box-border content-stretch flex items-center p-[12px] relative w-full">
           <div className="content-stretch flex items-center relative shrink-0 w-[260px]" data-name="Container">
-            <div className="bg-white relative rounded-full shrink-0 size-[68px]" data-name="Avatar">
+            {/* 未回覆藍點指示器 */}
+            {member.isUnanswered && (
+              <div
+                className="w-[7px] h-[7px] rounded-full bg-[#0F6BEB] shrink-0"
+                data-name="Unanswered Indicator"
+              />
+            )}
+            {/* 沒有未回覆時的佔位空間 */}
+            {!member.isUnanswered && (
+              <div className="w-[7px] h-[7px] shrink-0" />
+            )}
+            <div className="bg-white relative rounded-full shrink-0 size-[68px] ml-[8px]" data-name="Avatar">
               <Avatar avatarUrl={member.avatar} altText={member.displayName || '會員頭像'} />
             </div>
             <div className="basis-0 grow min-h-px min-w-px relative shrink-0" data-name="Table/List-atomic">
               <div className="flex flex-row items-center size-full">
-                <div className="box-border content-stretch flex items-center px-[12px] py-0 relative w-full">
-                  <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-                    <p className="leading-[1.5]">{member.displayName || '未命名會員'}</p>
-                  </div>
+                <div className="box-border content-stretch flex flex-col items-start justify-center px-[12px] py-0 relative w-full">
+                  {/* 用戶名稱 - hover/press 時變藍色 */}
+                  <p className={`font-['Noto_Sans_TC:Regular',sans-serif] text-[14px] leading-[1.5] transition-colors ${isPressed || isHovered ? 'text-[#0F6BEB]' : 'text-[#383838]'}`}>
+                    {member.displayName || '未命名會員'}
+                  </p>
+                  {/* 未回覆時間顯示 */}
+                  {unansweredTimeText && (
+                    <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[12px] leading-[1.5] text-[#6E6E6E] mt-[4px]">
+                      {unansweredTimeText}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -497,14 +491,9 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Displ
             </div>
           </div>
           {/* 平台欄位內容 */}
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[120px]" data-name="Table/List-atomic">
+          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[200px]" data-name="Table/List-atomic">
             <div className="flex items-center justify-start font-['Noto_Sans_TC:Regular',sans-serif] relative text-[#383838]">
-              <ChannelIcon channel={member.channel} />
-            </div>
-          </div>
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[140px]" data-name="Table/List-atomic">
-            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">{formatMemberDateTime(member.createTime) || '-'}</p>
+              <ChannelIcon channel={member.channel} channelName={member.channelName} />
             </div>
           </div>
           <div className="basis-0 grow min-h-px min-w-[200px] relative shrink-0" data-name="Table/List-atomic">
@@ -516,7 +505,7 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Displ
               </div>
             </div>
           </div>
-          <div 
+          <div
             onClick={(e) => {
               e.stopPropagation();
               onOpenChat?.(member);
@@ -709,9 +698,6 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
         case 'email':
           comparison = (a.email || '').localeCompare(b.email || '');
           break;
-        case 'createTime':
-          comparison = parseDateTime(a.createTime) - parseDateTime(b.createTime);
-          break;
         case 'lastChatTime':
           comparison = parseDateTime(a.lastChatTime) - parseDateTime(b.lastChatTime);
           break;
@@ -742,7 +728,7 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
           order: prev.order === 'desc' ? 'asc' : 'desc',
         };
       }
-      const defaultOrder: SortOrder = field === 'createTime' || field === 'lastChatTime' ? 'desc' : 'asc';
+      const defaultOrder: SortOrder = field === 'lastChatTime' ? 'desc' : 'asc';
       return { field, order: defaultOrder };
     });
   };

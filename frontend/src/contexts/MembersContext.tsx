@@ -169,6 +169,11 @@ export function MembersProvider({ children }: MembersProviderProps) {
             createTime: member.created_at || null,
             lastChatTime: member.last_interaction_at || null,
             tags: (member.tags || []).map((t: BackendTag) => t.name),
+            // 未回覆狀態
+            isUnanswered: member.is_unanswered || false,
+            unansweredSince: member.unanswered_since || null,
+            // 渠道名稱
+            channelName: member.channel_name || null,
           });
         }
         console.log('LINE 會員載入:', lineItems.length, '筆');
@@ -192,6 +197,11 @@ export function MembersProvider({ children }: MembersProviderProps) {
             createTime: fb.create_time || null,
             lastChatTime: fb.last_message_time || null,
             tags: fb.customer_tag || [],
+            // 未回覆狀態（FB API 提供 unread 欄位）
+            isUnanswered: fb.unread || false,
+            unansweredSince: fb.unread ? fb.last_message_time : null,
+            // 渠道名稱（FB API 提供 channel 欄位）
+            channelName: fb.channel || null,
           });
         }
         console.log('FB 會員載入:', fbItems.length, '筆');
