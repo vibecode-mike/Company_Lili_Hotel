@@ -17,6 +17,7 @@ interface FbMemberInfo {
   customer_name: string;
   customer_tag: string[];
   channel: string;
+  page_id?: string;  // 預留：之後外部 API 會提供
   email?: string;
   create_time: string;
   last_message_time: string;
@@ -156,13 +157,21 @@ export function MembersProvider({ children }: MembersProviderProps) {
         }),
       ]);
 
-      // 解析 FB 粉專名稱（取第一個啟用的粉專）
-      let fbChannelName: string | null = null;
+      // 解析 FB 粉專：建立 page_id → channel_name 對照表
+      let fbChannelMap: Record<string, string> = {};
+      let defaultFbChannelName: string | null = null;
       if (fbChannelsRes.ok) {
         const fbChannels = await fbChannelsRes.json();
-        // fbChannels 是陣列，取第一個的 channel_name
-        if (Array.isArray(fbChannels) && fbChannels.length > 0) {
-          fbChannelName = fbChannels[0].channel_name || null;
+        if (Array.isArray(fbChannels)) {
+          for (const ch of fbChannels) {
+            if (ch.page_id && ch.channel_name) {
+              fbChannelMap[ch.page_id] = ch.channel_name;
+            }
+          }
+          // 預設使用第一個粉專名稱（當 API 沒有提供 page_id 時的 fallback）
+          if (fbChannels.length > 0) {
+            defaultFbChannelName = fbChannels[0].channel_name || null;
+          }
         }
       }
 
@@ -215,8 +224,8 @@ export function MembersProvider({ children }: MembersProviderProps) {
             // 未回覆狀態（FB API 提供 unread 欄位）
             isUnanswered: fb.unread || false,
             unansweredSince: fb.unread ? fb.last_message_time : null,
-            // 渠道名稱（使用本地 DB 的粉專名稱）
-            channelName: fbChannelName,
+            // 渠道名稱：優先用 page_id 對應，fallback 到預設粉專
+            channelName: (fb.page_id && fbChannelMap[fb.page_id]) || defaultFbChannelName,
           });
         }
         console.log('FB 會員載入:', fbItems.length, '筆');
