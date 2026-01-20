@@ -20,9 +20,6 @@ class FbChannel(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     page_id = Column(String(255), nullable=True, comment="Facebook Page ID")
-    page_access_token = Column(
-        String(500), nullable=False, comment="FB頻道存取權杖"
-    )
     app_id = Column(String(255), nullable=True, comment="Facebook App ID")
     app_secret = Column(String(255), nullable=True, comment="Facebook App Secret")
     channel_name = Column(String(100), nullable=True, comment="頻道名稱")

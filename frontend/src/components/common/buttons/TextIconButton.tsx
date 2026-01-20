@@ -59,9 +59,9 @@ export function TextIconButton({
     : 'cursor-pointer hover:opacity-70';
 
   // 处理点击事件
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent) => {
     if (!disabled && onClick) {
-      onClick();
+      onClick(e);
     }
   };
 

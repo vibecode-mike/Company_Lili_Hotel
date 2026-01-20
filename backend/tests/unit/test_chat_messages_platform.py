@@ -20,6 +20,7 @@ from app.database import Base
 from app.api.v1.chat_messages import get_chat_messages
 from app.models.member import Member
 from app.models.conversation import ConversationThread, ConversationMessage
+from app.models.fb_channel import FbChannel
 
 
 class DummyAsyncSession:
@@ -55,6 +56,7 @@ async def test_get_chat_messages_by_platform():
     Member.__table__.create(engine)
     ConversationThread.__table__.create(engine)
     ConversationMessage.__table__.create(engine)
+    FbChannel.__table__.create(engine)
     SessionLocal = sessionmaker(bind=engine)
 
     sync_session = SessionLocal()
@@ -70,6 +72,14 @@ async def test_get_chat_messages_by_platform():
         last_interaction_at=datetime.utcnow(),
     )
     async_session.add(member)
+    # 添加 FbChannel 記錄供 Facebook 測試使用
+    fb_channel = FbChannel(
+        id=1,
+        page_id="test_page_id",
+        is_active=True,
+        connection_status="connected",
+    )
+    async_session.add(fb_channel)
     async_session.add_all(
         [
             # thread_id uses platform_uid; platform is stored in a separate column.

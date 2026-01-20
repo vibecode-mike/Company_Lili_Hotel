@@ -11,6 +11,7 @@ from app.models.tag import MemberTag, MemberInteractionTag
 from app.models.user import User
 from app.models.conversation import ConversationMessage
 from app.models.line_channel import LineChannel
+from app.models.fb_channel import FbChannel
 from app.schemas.member import (
     MemberCreate,
     MemberUpdate,
@@ -31,8 +32,12 @@ from datetime import datetime, timezone
 from typing import Optional
 import os
 import pytz
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.services.chatroom_service import ChatroomService
+from app.api.v1.chat_messages import _extract_fb_template_text
 
 # 台北時區
 TAIPEI_TZ = pytz.timezone('Asia/Taipei')
@@ -44,10 +49,16 @@ router = APIRouter()
 async def get_members(
     params: MemberSearchParams = Depends(),
     page_params: PageParams = Depends(),
+    channel: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     # current_user: User = Depends(get_current_user),  # 暫時移除認證，開發階段使用
 ):
-    """獲取會員列表"""
+    """
+    獲取會員列表
+
+    Args:
+        channel: 篩選渠道 (line, facebook, webchat)，不指定則返回所有會員
+    """
     query = select(Member)
 
     # 搜索條件（已在 Schema 層驗證和清理）
@@ -79,6 +90,16 @@ async def get_members(
         query = query.join(MemberTag).where(
             MemberTag.tag_name.in_(tag_names)
         )
+
+    # 渠道篩選
+    if channel:
+        channel_lower = channel.lower()
+        if channel_lower == "line":
+            query = query.where(Member.line_uid.isnot(None))
+        elif channel_lower == "facebook":
+            query = query.where(Member.fb_customer_id.isnot(None))
+        elif channel_lower == "webchat":
+            query = query.where(Member.webchat_uid.isnot(None))
 
     # 排序 (MySQL 兼容版本)
     if params.sort_by == "last_interaction_at":
@@ -748,6 +769,7 @@ async def send_member_chat_message(
     text: str = Body(..., embed=True),
     platform: str = Body("LINE", embed=True, description="渠道：LINE/Facebook/Webchat"),
     jwt_token: Optional[str] = Body(None, embed=True, description="FB 渠道需要的 JWT token"),
+    page_id: Optional[str] = Body(None, embed=True, description="FB 渠道需要的 Page ID"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -855,9 +877,14 @@ async def send_member_chat_message(
         if not jwt_token:
             raise HTTPException(status_code=400, detail="缺少 jwt_token，請先完成 Facebook 授權")
 
+        # 檢查 page_id
+        if not page_id:
+            raise HTTPException(status_code=400, detail="缺少 page_id，請提供 Facebook Page ID")
+
         # 調用外部 FB API 發送訊息 (使用 fb_customer_id 識別)
         fb_client = FbMessageClient()
         send_result = await fb_client.send_message(
+            page_id=page_id,
             fb_customer_id=member.fb_customer_id,
             text=text,
             jwt_token=jwt_token
@@ -906,6 +933,65 @@ async def send_member_chat_message(
             "source": "manual",
             "senderName": current_user.username
         })
+
+        # 重新獲取聊天紀錄，檢查是否有外部 API 回推的新訊息
+        try:
+            sent_timestamp = int(msg.created_at.replace(tzinfo=timezone.utc).timestamp()) if msg.created_at else 0
+
+            fb_history = await fb_client.get_chat_history(member.fb_customer_id, page_id, jwt_token)
+
+            if fb_history.get("ok") and fb_history.get("data"):
+                # 找出比剛發送訊息更新的 ingoing 訊息（FB 可能有自動回覆）
+                for fb_msg in fb_history["data"]:
+                    msg_time = fb_msg.get("time", 0)
+                    direction = (fb_msg.get("direction") or "").lower()
+                    # 如果是新訊息且是 ingoing（來自 FB 的回覆）
+                    if direction in ("ingoing", "incoming") and msg_time > sent_timestamp:
+                        # 解析訊息內容
+                        msg_content = fb_msg.get("message", "")
+                        if isinstance(msg_content, dict):
+                            # Template 訊息
+                            fb_text = _extract_fb_template_text(msg_content)
+                        else:
+                            fb_text = str(msg_content)
+
+                        # 轉換時間
+                        fb_dt = datetime.fromtimestamp(msg_time, tz=timezone.utc)
+                        fb_local = fb_dt.astimezone(TAIPEI_TZ)
+                        fb_hour = fb_local.hour
+                        fb_minute = fb_local.minute
+                        if 0 <= fb_hour < 6:
+                            fb_period = "凌晨"
+                        elif 6 <= fb_hour < 12:
+                            fb_period = "上午"
+                        elif 12 <= fb_hour < 14:
+                            fb_period = "中午"
+                        elif 14 <= fb_hour < 18:
+                            fb_period = "下午"
+                        else:
+                            fb_period = "晚上"
+                        fb_hour_12 = fb_hour if fb_hour <= 12 else fb_hour - 12
+                        if fb_hour_12 == 0:
+                            fb_hour_12 = 12
+                        fb_time_str = f"{fb_period} {fb_hour_12:02d}:{fb_minute:02d}"
+
+                        # 透過 WebSocket 推送給前端
+                        await manager.send_new_message(msg.thread_id, {
+                            "id": f"fb_sync_{msg_time}",
+                            "type": "user",
+                            "text": fb_text,
+                            "time": fb_time_str,
+                            "timestamp": fb_dt.isoformat(),
+                            "thread_id": msg.thread_id,
+                            "isRead": True,
+                            "source": None,
+                            "senderName": None
+                        })
+                        logger.info(f"FB 同步推送新訊息: thread_id={msg.thread_id}, time={msg_time}")
+
+            logger.info(f"FB 聊天紀錄已同步: customer_id={member.fb_customer_id}")
+        except Exception as e:
+            logger.warning(f"FB 聊天紀錄同步失敗 (非關鍵): {e}")
 
         return {
             "success": True,

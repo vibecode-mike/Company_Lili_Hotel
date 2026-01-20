@@ -10,7 +10,7 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -25,6 +25,9 @@ from app.schemas.fb_channel import (
     FbChannelResponse,
     FbChannelStatusResponse,
     FacebookSdkConfigResponse,
+    FbChannelSyncRequest,
+    FbChannelVerifyResult,
+    FbChannelVerifyResponse,
 )
 
 router = APIRouter()
@@ -161,6 +164,189 @@ async def create_or_update_channel(data: FbChannelCreate, db: AsyncSession = Dep
     return channel
 
 
+@router.post("/sync", response_model=List[FbChannelResponse])
+async def sync_channels(data: FbChannelSyncRequest, db: AsyncSession = Depends(get_db)):
+    """
+    根據外部 API 返回的頻道列表同步本地資料庫。
+
+    - 列表中的頻道：建立或更新，設為 is_active=True
+    - 不在列表中的頻道：設為 is_active=False
+
+    這確保本地 DB 的 is_active 狀態與外部 API 的授權狀態一致。
+    """
+    now = datetime.now(timezone.utc)
+    active_page_ids = [ch.page_id for ch in data.channels]
+
+    # 1. 將不在列表中的頻道設為 is_active=False
+    if active_page_ids:
+        deactivate_stmt = (
+            update(FbChannel)
+            .where(FbChannel.is_active == True)
+            .where(FbChannel.page_id.not_in(active_page_ids))
+            .values(is_active=False)
+        )
+    else:
+        # 若列表為空，停用所有頻道
+        deactivate_stmt = (
+            update(FbChannel)
+            .where(FbChannel.is_active == True)
+            .values(is_active=False)
+        )
+    await db.execute(deactivate_stmt)
+
+    # 2. 建立或更新列表中的頻道
+    results = []
+    for ch in data.channels:
+        stmt = select(FbChannel).where(FbChannel.page_id == ch.page_id).limit(1)
+        result = await db.execute(stmt)
+        existing = result.scalar_one_or_none()
+
+        if existing:
+            existing.channel_name = ch.channel_name or existing.channel_name
+            existing.is_active = True
+            existing.last_verified_at = now
+            results.append(existing)
+        else:
+            channel = FbChannel(
+                page_id=ch.page_id,
+                channel_name=ch.channel_name,
+                is_active=True,
+                connection_status="connected",
+                last_verified_at=now,
+            )
+            db.add(channel)
+            results.append(channel)
+
+    await db.commit()
+    for r in results:
+        await db.refresh(r)
+
+    logger.info(f"FB channels synced: {len(results)} active, deactivated others not in list")
+    return results
+
+
+@router.post("/verify", response_model=FbChannelVerifyResponse)
+async def verify_channels(
+    jwt_token: str = Body(..., embed=True, description="Meta JWT Token"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    驗證本地 FB 頻道與外部 API 狀態是否一致，並自動修復不一致的記錄。
+
+    自動修復邏輯：
+    - not_found: 刪除本地 DB 記錄
+    - expired: 設為 is_active=0（停用）
+    """
+    # 1. 取得本地所有 is_active=1 的記錄
+    stmt = select(FbChannel).where(FbChannel.is_active == True)
+    result = await db.execute(stmt)
+    local_channels = list(result.scalars().all())
+
+    if not local_channels:
+        return FbChannelVerifyResponse(
+            verified_count=0,
+            mismatch_count=0,
+            deleted_count=0,
+            deactivated_count=0,
+            results=[],
+        )
+
+    # 2. 呼叫外部 login_status API
+    fb_client = FbMessageClient()
+    external_result = await fb_client.get_login_status(jwt_token)
+
+    if not external_result.get("ok"):
+        raise HTTPException(
+            status_code=500,
+            detail=f"外部 API 呼叫失敗: {external_result.get('error')}",
+        )
+
+    external_data = external_result.get("data", [])
+
+    # 建立外部資料的 page_id → 資訊 對照表
+    external_map = {
+        item["page_id"]: {
+            "name": item.get("name"),
+            "expired_time": item.get("expired_time"),
+        }
+        for item in external_data if item.get("page_id")
+    }
+
+    # 3. 逐一驗證每個本地 page_id
+    results = []
+    verified_count = 0
+    to_delete = []      # 待刪除的記錄 (not_found)
+    to_deactivate = []  # 待停用的記錄 (expired)
+    now = datetime.now()
+
+    for local in local_channels:
+        page_id = local.page_id
+        external_info = external_map.get(page_id)
+
+        if not external_info:
+            # 外部已移除：標記刪除
+            to_delete.append(local)
+            results.append(FbChannelVerifyResult(
+                page_id=page_id,
+                channel_name=local.channel_name,
+                external_status="not_found",
+                is_valid=False,
+                expired_time=None,
+                action_taken="deleted",
+            ))
+            continue
+
+        # 檢查是否過期
+        expired_time = external_info.get("expired_time")
+        is_expired = False
+        if expired_time:
+            try:
+                expired_date = datetime.strptime(expired_time, "%Y-%m-%d %H:%M")
+                is_expired = expired_date <= now
+            except ValueError:
+                logger.warning(f"Invalid expired_time format: {expired_time}")
+
+        external_status = "expired" if is_expired else "connected"
+        is_valid = not is_expired
+
+        if is_expired:
+            to_deactivate.append(local)
+            action_taken = "deactivated"
+        else:
+            verified_count += 1
+            action_taken = None
+
+        results.append(FbChannelVerifyResult(
+            page_id=page_id,
+            channel_name=local.channel_name,
+            external_status=external_status,
+            is_valid=is_valid,
+            expired_time=expired_time,
+            action_taken=action_taken,
+        ))
+
+    # 4. 執行停用操作 (expired)
+    for channel in to_deactivate:
+        channel.is_active = False
+        channel.connection_status = "expired"
+
+    # 5. 執行刪除操作 (not_found)
+    for channel in to_delete:
+        await db.delete(channel)
+
+    if to_deactivate or to_delete:
+        await db.commit()
+        logger.info(f"FB channels verify: deactivated {len(to_deactivate)}, deleted {len(to_delete)}")
+
+    return FbChannelVerifyResponse(
+        verified_count=verified_count,
+        mismatch_count=len(to_deactivate) + len(to_delete),
+        deleted_count=len(to_delete),
+        deactivated_count=len(to_deactivate),
+        results=results,
+    )
+
+
 @router.patch("/{channel_id}", response_model=FbChannelResponse)
 async def update_channel(channel_id: int, data: FbChannelUpdate, db: AsyncSession = Depends(get_db)):
     """更新 Facebook 頻道設定（支援部分更新）"""
@@ -202,14 +388,13 @@ async def sync_facebook_members(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    同步 Facebook 會員列表到 members 表
+    同步 Facebook 會員列表到 members 表（先清除再寫入）
 
-    從 /meta_page/message/list API 獲取 FB 會員，根據 email 或 fb_customer_id 判斷是否為現有會員：
-    1. 先用 email 查詢 → 若找到，綁定 fb_customer_id 到該會員（跨渠道合併）
-    2. 再用 fb_customer_id 查詢 → 若找到，更新 fb_customer_name
-    3. 都沒找到 → 新建會員
+    1. 清除所有會員的 fb_customer_* 欄位
+    2. 刪除孤兒會員（三個渠道都是 NULL）
+    3. 根據外部 API 返回的資料重新綁定
     """
-    # 1. 從 message/list API 獲取會員列表
+    # 1. 獲取外部 API 會員列表
     fb_client = FbMessageClient()
     result = await fb_client.list_messages(jwt_token)
 
@@ -218,72 +403,76 @@ async def sync_facebook_members(
 
     fb_members = result.get("data", [])
 
-    if not fb_members:
-        return SuccessResponse(data={"synced": 0, "created": 0, "updated": 0, "merged": 0})
+    # 2. 清除所有 FB 會員資料
+    clear_result = await db.execute(
+        update(Member)
+        .where(Member.fb_customer_id.isnot(None))
+        .values(fb_customer_id=None, fb_customer_name=None, fb_avatar=None)
+    )
+    cleared_count = clear_result.rowcount
 
+    # 3. 刪除孤兒會員（三個渠道都是 NULL）
+    delete_result = await db.execute(
+        delete(Member)
+        .where(Member.line_uid.is_(None))
+        .where(Member.fb_customer_id.is_(None))
+        .where(Member.webchat_uid.is_(None))
+    )
+    deleted_count = delete_result.rowcount
+
+    if not fb_members:
+        await db.commit()
+        logger.info(f"FB sync: cleared {cleared_count}, deleted {deleted_count} orphans, no FB members to sync")
+        return SuccessResponse(data={
+            "synced": 0,
+            "created": 0,
+            "updated": 0,
+            "cleared": cleared_count,
+            "deleted_orphans": deleted_count,
+        })
+
+    # 4. 重新綁定會員資料
     created_count = 0
     updated_count = 0
-    merged_count = 0
 
-    # 2. 逐一處理會員
     for fb_member in fb_members:
-        # message/list 使用 customer_id 和 customer_name
         fb_customer_id = str(fb_member.get("customer_id", ""))
-        fb_customer_name = fb_member.get("customer_name", "")
-        fb_email = (fb_member.get("email") or "").strip() or None
-
         if not fb_customer_id:
             continue
 
+        fb_customer_name = fb_member.get("customer_name", "")
+        fb_email = (fb_member.get("email") or "").strip() or None
+
+        # 根據 email 查詢現有會員
         member = None
-
-        # 2a. 先用 email 查詢（若有提供）
         if fb_email:
-            email_result = await db.execute(
-                select(Member).where(Member.email == fb_email)
-            )
-            member = email_result.scalar_one_or_none()
-
-        # 2b. 若 email 沒找到，再用 fb_customer_id 查詢
-        if not member:
-            uid_result = await db.execute(
-                select(Member).where(Member.fb_customer_id == fb_customer_id)
-            )
-            member = uid_result.scalar_one_or_none()
+            result = await db.execute(select(Member).where(Member.email == fb_email))
+            member = result.scalar_one_or_none()
 
         if member:
-            # 更新現有會員：綁定 fb_customer_id 和 fb_customer_name
-            was_merged = not member.fb_customer_id and fb_customer_id
-            if not member.fb_customer_id:
-                member.fb_customer_id = fb_customer_id
-            member.fb_customer_name = fb_customer_name or member.fb_customer_name
-            if fb_email and not member.email:
-                member.email = fb_email
-            if was_merged:
-                merged_count += 1
-            else:
-                updated_count += 1
+            # 綁定到現有會員
+            member.fb_customer_id = fb_customer_id
+            member.fb_customer_name = fb_customer_name
+            updated_count += 1
         else:
-            # 新增會員
-            member = Member(
+            # 新建會員
+            db.add(Member(
                 fb_customer_id=fb_customer_id,
                 fb_customer_name=fb_customer_name,
                 email=fb_email,
-                name=fb_customer_name,  # 使用 fb_customer_name 作為預設名稱
+                name=fb_customer_name,
                 join_source="Facebook",
-            )
-            db.add(member)
+            ))
             created_count += 1
 
     await db.commit()
 
-    logger.info(f"FB members synced: {created_count} created, {updated_count} updated, {merged_count} merged")
+    logger.info(f"FB sync: cleared {cleared_count}, deleted {deleted_count} orphans, {created_count} created, {updated_count} updated")
 
-    return SuccessResponse(
-        data={
-            "synced": len(fb_members),
-            "created": created_count,
-            "updated": updated_count,
-            "merged": merged_count,
-        }
-    )
+    return SuccessResponse(data={
+        "synced": len(fb_members),
+        "created": created_count,
+        "updated": updated_count,
+        "cleared": cleared_count,
+        "deleted_orphans": deleted_count,
+    })

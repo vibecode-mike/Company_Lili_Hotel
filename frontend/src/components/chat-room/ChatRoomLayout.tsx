@@ -76,6 +76,48 @@ const findLatestMessageTimestamp = (messages: ChatMessage[]): string | undefined
 // 內嵌組件已移至獨立檔案:
 // - UserAvatar, OfficialAvatar, MessageBubble → ChatBubble.tsx
 
+// FB 訊息轉換函式：將外部 FB API 格式轉換為 ChatMessage 格式
+function transformFbMessages(fbData: Array<{
+  direction?: string;
+  message?: string | object;
+  time?: number;
+}>): ChatMessage[] {
+  const messages: ChatMessage[] = fbData.map((item, idx) => {
+    const directionRaw = (item.direction || 'outgoing').toLowerCase();
+    const isIncoming = ['ingoing', 'incoming'].includes(directionRaw);
+    const timestamp = item.time || 0;
+
+    // 解析訊息內容（支援 Template 格式）
+    let text: string;
+    if (typeof item.message === 'object' && item.message !== null) {
+      const attachment = (item.message as any)?.attachment;
+      if (attachment?.type === 'template') {
+        const elements = attachment.payload?.elements || [];
+        text = elements.map((el: any) => `${el.title || ''} - ${el.subtitle || ''}`).join('\n') || '[模板訊息]';
+      } else {
+        text = JSON.stringify(item.message);
+      }
+    } else {
+      text = String(item.message || '');
+    }
+
+    const dt = timestamp ? new Date(timestamp * 1000) : new Date();
+    return {
+      id: `fb_${idx}_${timestamp}`,
+      type: isIncoming ? 'user' : 'official',
+      text,
+      time: dt.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }),
+      timestamp: dt.toISOString(),
+      isRead: true,
+      source: isIncoming ? undefined : 'external',
+    } as ChatMessage;
+  });
+
+  // 按時間正序排列（舊→新）
+  messages.sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+  return messages;
+}
+
 export default function ChatRoomLayout({ member: initialMember, memberId, chatSessionApiBase = '/api/v1', onPlatformChange }: ChatRoomLayoutProps) {
   const { fetchMemberById } = useMembers();
   const [member, setMember] = useState<Member | undefined>(initialMember);
@@ -98,6 +140,13 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
   // 平台切換狀態 (Figma v1087)
   const [currentPlatform, setCurrentPlatform] = useState<ChatPlatform>('LINE');
   const [threadsMap, setThreadsMap] = useState<Record<string, string>>({});
+
+  // FB 外部 API 設定
+  const fbApiBaseUrl = useMemo(
+    () => (import.meta.env.VITE_FB_API_URL?.trim() || 'https://api-youth-tycg.star-bit.io').replace(/\/+$/, ''),
+    []
+  );
+  const [fbPageId, setFbPageId] = useState<string | null>(null);
 
   // 載入 chat-session：平台與 thread 映射
   const loadChatSession = useCallback(async () => {
@@ -315,6 +364,19 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
     loadChatSession();
   }, [loadChatSession]);
 
+  // FB 渠道：取得 active channel 的 page_id
+  useEffect(() => {
+    if (currentPlatform === 'Facebook') {
+      fetch('/api/v1/fb_channels')
+        .then(res => res.ok ? res.json() : [])
+        .then(data => {
+          const active = Array.isArray(data) ? data.find((ch: { is_active?: boolean }) => ch.is_active) : null;
+          setFbPageId(active?.page_id || null);
+        })
+        .catch(() => setFbPageId(null));
+    }
+  }, [currentPlatform]);
+
   useEffect(() => {
     if (onPlatformChange) {
       onPlatformChange(currentPlatform);
@@ -335,10 +397,16 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
 
   // WebSocket 監聽新訊息（thread 維度）
   const handleNewMessage = useCallback((wsMessage: any) => {
+    console.log('📩 [WS] 收到訊息:', JSON.stringify(wsMessage, null, 2));
+    console.log('📩 [WS] currentThreadId:', currentThreadId);
+
     if (wsMessage.type === 'new_message' && wsMessage.data) {
       const incomingThread = wsMessage.data.thread_id || wsMessage.data.threadId;
+      console.log('📩 [WS] incomingThread:', incomingThread, '比對結果:', incomingThread === currentThreadId);
+
       if (currentThreadId && incomingThread && incomingThread !== currentThreadId) {
         // 忽略非當前 thread 的推播
+        console.log('📩 [WS] ❌ thread 不匹配，忽略');
         return;
       }
 
@@ -366,6 +434,7 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
 
   // Load chat messages from API
   // 支援兩種情況：1) member?.id 存在  2) 只有 memberId
+  // FB 渠道：直接呼叫外部 FB API
   const loadChatMessages = useCallback(
     async (
       pageNum: number = 1,
@@ -380,46 +449,67 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
         setIsLoading(true);
       }
       try {
-        const token = localStorage.getItem('auth_token');
+        let newMessages: ChatMessage[] = [];
+        let has_more = false;
 
-        // 建立 URL 參數
-        let url = `/api/v1/members/${targetId}/chat-messages?page=${pageNum}&page_size=${PAGE_SIZE}&platform=${currentPlatform}`;
-
-        // FB 渠道需要傳送 jwt_token
+        // FB 渠道：直接呼叫外部 FB API
         if (currentPlatform === 'Facebook') {
           const jwtToken = localStorage.getItem('jwt_token');
-          if (jwtToken) {
-            url += `&jwt_token=${encodeURIComponent(jwtToken)}`;
+          // FB 會員的 customer_id 從 member.channelUid 或 memberId 取得
+          const customerId = (member as any)?.channelUid || (member as any)?.fb_customer_id || memberId;
+
+          if (!jwtToken || !fbPageId || !customerId) {
+            console.error('FB 聊天紀錄載入失敗：缺少必要參數', { jwtToken: !!jwtToken, fbPageId, customerId });
+            return;
           }
-        }
 
-        const response = await fetch(url, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+          const fbResponse = await fetch(
+            `${fbApiBaseUrl}/api/v1/admin/meta_page/message/history?customer_id=${customerId}&page_id=${fbPageId}`,
+            { headers: { 'Authorization': `Bearer ${jwtToken}` } }
+          );
+          const fbResult = await fbResponse.json();
 
-        const result = await response.json();
-
-        if (result.code === 200 && result.data) {
-          const { messages: newMessages, has_more } = result.data;
-
-          if (append) {
-            // append=true 表示載入更早訊息（往上翻頁），需「前插」以維持舊→新排序
-            // 去重：過濾掉已存在的訊息
-            setMessages(prev => {
-              const existingIds = new Set(prev.map(msg => msg.id));
-              const uniqueNewMessages = newMessages.filter((msg: ChatMessage) => !existingIds.has(msg.id));
-              return [...uniqueNewMessages, ...prev];
-            });
+          if (fbResult.status === 200 && fbResult.data) {
+            newMessages = transformFbMessages(fbResult.data);
+            has_more = false; // 外部 API 一次返回全部訊息
           } else {
-            // API 已回傳舊→新排序，不需要反轉
-            setMessages(newMessages);
+            console.error('FB API 回應錯誤:', fbResult);
+            return;
           }
-
-          setHasMore(has_more);
-          setPage(pageNum);
         } else {
-          console.error('API 回應格式錯誤:', result);
+          // LINE/Webchat：透過後端 API
+          const token = localStorage.getItem('auth_token');
+          const url = `/api/v1/members/${targetId}/chat-messages?page=${pageNum}&page_size=${PAGE_SIZE}&platform=${currentPlatform}`;
+
+          const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+
+          const result = await response.json();
+
+          if (result.code === 200 && result.data) {
+            newMessages = result.data.messages;
+            has_more = result.data.has_more;
+          } else {
+            console.error('API 回應格式錯誤:', result);
+            return;
+          }
         }
+
+        // 處理訊息列表
+        if (append) {
+          // append=true 表示載入更早訊息（往上翻頁），需「前插」以維持舊→新排序
+          setMessages(prev => {
+            const existingIds = new Set(prev.map(msg => msg.id));
+            const uniqueNewMessages = newMessages.filter((msg: ChatMessage) => !existingIds.has(msg.id));
+            return [...uniqueNewMessages, ...prev];
+          });
+        } else {
+          setMessages(newMessages);
+        }
+
+        setHasMore(has_more);
+        setPage(pageNum);
       } catch (error) {
         console.error('載入聊天訊息失敗:', error);
       } finally {
@@ -428,7 +518,7 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
         }
       }
     },
-    [member?.id, memberId, currentPlatform]
+    [member?.id, (member as any)?.channelUid, (member as any)?.fb_customer_id, memberId, currentPlatform, fbApiBaseUrl, fbPageId]
   );
 
   // 建立 WebSocket 連線（依當前平台 thread_id）

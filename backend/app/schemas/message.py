@@ -158,6 +158,7 @@ class MessageCreate(BaseModel):
 
     # 平台設定
     platform: Optional[str] = Field(default="LINE", description="發送平台：LINE/Facebook/Instagram")
+    channel_id: Optional[str] = Field(default=None, description="渠道ID：LINE channel_id 或 FB page_id")
 
     # 系統欄位
     campaign_id: Optional[int] = None  # 關聯活動ID（選填）
@@ -257,7 +258,9 @@ class MessageListItem(BaseModel):
     template: TemplateInfo
     send_status: str  # 已排程/已發送/草稿/發送失敗
     interaction_tags: Optional[List[str]] = None  # 互動標籤數組
-    platform: str = "LINE"  # 平台名稱（目前固定為 LINE）
+    platform: str = "LINE"  # 平台名稱
+    channel_id: Optional[str] = None  # 渠道ID（LINE channel_id 或 FB page_id）
+    channel_name: Optional[str] = None  # 渠道名稱（頻道名/粉專名）
     send_count: int = 0  # 傳送人數
     open_count: int = 0  # 開啟次數（不重複）
     click_count: int = 0  # 點擊次數（依規格：從 ComponentInteractionLog 統計）
@@ -273,6 +276,14 @@ class MessageListItem(BaseModel):
     created_by: Optional[CreatorInfo] = None  # 發送人員（創建者）
     created_at: datetime
     updated_at: Optional[datetime] = None  # 最後更新時間
+
+    @field_validator("created_by", mode="before")
+    @classmethod
+    def validate_created_by(cls, v):
+        """處理 created_by 為整數（外鍵值）的情況，由 service 層設置實際 CreatorInfo"""
+        if isinstance(v, int):
+            return None
+        return v
 
     model_config = {
         "from_attributes": True,
@@ -379,6 +390,7 @@ class MessageSendRequest(BaseModel):
 
     channel_id: Optional[str] = None  # LINE 頻道 ID（多租戶支持）
     jwt_token: Optional[str] = None  # FB 渠道需要的 JWT token
+    page_id: Optional[str] = None  # FB 粉絲專頁 ID
 
 
 class MessageSendResponse(BaseModel):

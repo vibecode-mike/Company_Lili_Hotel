@@ -1,8 +1,9 @@
-// 力麗飯店 LineOA CRM 管理後台 - 資料模型 (v0.4.3)
+// 力麗飯店 LineOA CRM 管理後台 - 資料模型 (v0.4.5)
 // 根據規格文檔萃取的實體關係模型
-// 版本: v0.4.3
-// 更新日期: 2025-12-11
+// 版本: v0.4.5
+// 更新日期: 2025-12-26
 // 變更摘要:
+//   - v0.4.5: 移除 AutoResponsePushLog 表及主動推播模式（自動回應僅支援被動觸發）
 //   - v0.4.3: ConversationThread / ConversationMessage 表擴展多渠道支援（方案 A：單表 + platform 欄位）
 //   - v0.4.3: ConversationThread 新增 member_id / platform / platform_uid / last_message_at 欄位
 //   - v0.4.3: ConversationMessage 新增 platform 欄位（冗餘，方便查詢）
@@ -919,7 +920,7 @@ Table AutoResponse {
   date_range_start string(20) [note: '指定日期區間起始（當 trigger_type = 指定時間觸發時使用）。格式：yyyy/mm/dd，如「2025/02/01」。允許 NULL（不限定日期範圍時為 NULL）']
   date_range_end string(20) [note: '指定日期區間結束（當 trigger_type = 指定時間觸發時使用）。格式：yyyy/mm/dd，如「2025/02/28」。允許 NULL（不限定日期範圍時為 NULL）']
   weekdays string(20) [note: '週期性規則（選填），上限 20 字元。格式：逗號分隔的數字，1=週一, 2=週二, ..., 7=週日。範例：「1,2,3,4,5」表示週一至週五，「6,7」表示週末。允許 NULL（不限定星期）。用途：實現「每週一至週五 18:00-09:00」等週期性自動回應']
-  scheduled_mode string(20) [note: '指定時間觸發模式（當 trigger_type = 指定時間觸發時使用），上限 20 字元：passive（被動回應模式）/ active（主動推播模式）。passive：會員發訊息時判斷時間是否在範圍內，符合則回應；active：系統於時間範圍開始時主動推播給所有會員']
+  scheduled_mode string(20) [note: '指定時間觸發模式（當 trigger_type = 指定時間觸發時使用），上限 20 字元。目前僅支援 passive（被動回應模式）：會員發訊息時判斷時間是否在範圍內，符合則回應。注意：自動回應不支援主動推播模式，僅支援被動觸發']
   is_enabled bool [note: '啟用狀態：true 啟用 / false 停用']
   response_count int [note: '設定的自動回應訊息數量（至少 1 筆，最多 5 筆），>= 1。驗證層級：應用層驗證，UI 層限制輸入範圍 1-5。此欄位應與 AutoResponseMessage 記錄數量一致']
   channels json [note: '支持的渠道列表（JSON 格式），如 ["LINE", "Facebook"]。若為 NULL 表示全部渠道。用於多渠道自動回應篩選']
@@ -1017,6 +1018,7 @@ Table AutoResponseMessage {
   關係：AutoResponseMessage N:1 AutoResponse
   '''
 }
+
 
 Table ConsumptionRecord {
   record_id string [pk, note: '消費紀錄唯一識別碼']

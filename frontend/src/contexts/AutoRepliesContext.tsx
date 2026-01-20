@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback, useMemo, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
-import type { BackendAutoReply, BackendKeyword, BackendReplyMessage } from '../types/api';
+import type { BackendAutoReply, BackendKeyword, BackendReplyMessage, FbAutoReply } from '../types/api';
 import { useAuth } from '../components/auth/AuthContext';
 import type { AutoReplyChannel } from '../types/channel';
 
@@ -158,6 +158,39 @@ function mapAutoResponse(item: BackendAutoReply & { content?: string; messages?:
   };
 }
 
+function mapFbAutoResponse(item: FbAutoReply): AutoReply {
+  const fbKeywords = item?.keywords ?? [];
+  const keywords = fbKeywords.map(kw => kw.name).filter(Boolean);
+  const keywordObjects: AutoReplyKeyword[] = fbKeywords.map(kw => ({
+    id: kw.id,
+    keyword: kw.name,
+    isDuplicate: !kw.enabled,  // FB API 的 enabled=false 表示重複
+  }));
+
+  // FB API 的 reply_type: 2=keyword, 3=follow
+  const triggerType: AutoReplyTriggerType = item.reply_type === 2 ? 'keyword' : 'follow';
+
+  return {
+    id: `fb-${item.id}`,  // 加上 fb- 前綴避免與 LINE 的 ID 衝突
+    name: item.text || '未命名自動回應',
+    triggerType,
+    keywords,
+    keywordObjects,
+    tags: keywords,
+    messages: item.text ? [item.text] : [''],
+    isActive: item.enabled,
+    triggerCount: item.count || 0,
+    successRate: 0,
+    createdAt: new Date(item.create_time * 1000).toISOString(),
+    updatedAt: null,
+    triggerTimeStart: null,
+    triggerTimeEnd: null,
+    dateRangeStart: null,
+    dateRangeEnd: null,
+    channels: ['Facebook'],
+  };
+}
+
 function getAuthTokenOrThrow() {
   const token = localStorage.getItem('auth_token');
   if (!token) {
@@ -201,20 +234,45 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/v1/auto_responses', {
+      // 1. Fetch LINE auto-responses (existing)
+      const lineResponse = await fetch('/api/v1/auto_responses', {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => null);
+      if (!lineResponse.ok) {
+        const errData = await lineResponse.json().catch(() => null);
         throw new Error(errData?.detail || errData?.message || '獲取自動回應失敗');
       }
 
-      const result = await response.json();
-      const mapped = Array.isArray(result?.data) ? result.data.map(mapAutoResponse) : [];
-      setAutoReplies(sortByCreatedAt(mapped));
+      const lineResult = await lineResponse.json();
+      const lineReplies = Array.isArray(lineResult?.data) ? lineResult.data.map(mapAutoResponse) : [];
+
+      // 2. Fetch FB auto-responses (new)
+      let fbReplies: AutoReply[] = [];
+      const jwtToken = localStorage.getItem('jwt_token');
+      if (jwtToken) {
+        try {
+          const fbResponse = await fetch(`/api/v1/auto_responses/fb?jwt_token=${encodeURIComponent(jwtToken)}`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          if (fbResponse.ok) {
+            const fbResult = await fbResponse.json();
+            fbReplies = Array.isArray(fbResult?.data) ? fbResult.data.map(mapFbAutoResponse) : [];
+          }
+        } catch (fbErr) {
+          console.warn('獲取 FB 自動回應失敗（非致命）:', fbErr);
+          // FB 獲取失敗不阻斷整個流程
+        }
+      }
+
+      // 3. Combine and sort
+      const allReplies = [...lineReplies, ...fbReplies];
+      setAutoReplies(sortByCreatedAt(allReplies));
     } catch (err) {
       console.error('獲取自動回應錯誤:', err);
       setError(err instanceof Error ? err.message : '獲取自動回應失敗');
@@ -256,11 +314,40 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
     async (payload: AutoReplyPayload, id?: string): Promise<SaveAutoReplyResult> => {
       try {
         const token = getAuthTokenOrThrow();
+        const jwtToken = localStorage.getItem('jwt_token');
 
-        // 構建 URL，若渠道包含 Facebook 則加上 jwt_token
+        // 檢測是否為 FB 自動回應編輯
+        if (id?.startsWith('fb-')) {
+          const fbId = id.replace('fb-', '');
+          const url = `/api/v1/auto_responses/fb/${fbId}?jwt_token=${encodeURIComponent(jwtToken || '')}`;
+
+          const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              keywords: payload.keywords ?? [],
+              messages: payload.messages,
+              is_active: payload.isActive,
+              trigger_type: payload.triggerType,
+            }),
+          });
+
+          if (!response.ok) {
+            const errData = await response.json().catch(() => null);
+            throw new Error(errData?.detail || '更新 FB 自動回應失敗');
+          }
+
+          await fetchAutoReplies();
+          toast.success('FB 自動回應已更新');
+          return getAutoReplyById(id) || null;
+        }
+
+        // 原有的 LINE 自動回應邏輯 (POST/PUT)
         let url = id ? `/api/v1/auto_responses/${id}` : '/api/v1/auto_responses';
         if (payload.channels?.includes('Facebook')) {
-          const jwtToken = localStorage.getItem('jwt_token');
           if (jwtToken) {
             url += `?jwt_token=${encodeURIComponent(jwtToken)}`;
           }
@@ -317,7 +404,7 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
         throw err;
       }
     },
-    [fetchAutoReplyById]
+    [fetchAutoReplyById, fetchAutoReplies, getAutoReplyById]
   );
 
   const removeAutoReply = useCallback(async (id: string) => {

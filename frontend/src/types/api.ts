@@ -117,6 +117,8 @@ export interface BackendMessage {
   interactionTags?: string[];
   tags?: string[];
   platform?: string; // 注意：這裡保持 string 以兼容後端，在 Context 層進行類型守衛
+  channel_id?: string; // 渠道ID（LINE channel_id 或 FB page_id）
+  channel_name?: string; // 渠道名稱（頻道名/粉專名）
   thumbnail?: string;
   template?: {
     name?: string;
@@ -147,4 +149,28 @@ export interface ApiResponse<T = any> {
   data?: T;
   error?: string;
   message?: string;
+}
+
+/**
+ * FB 自動回應關鍵字物件（從外部 FB API 返回）
+ */
+export interface FbAutoReplyKeyword {
+  id: number;
+  basic_id: number;
+  name: string;
+  enabled: boolean;
+}
+
+/**
+ * FB 自動回應物件（從外部 FB API 返回）
+ */
+export interface FbAutoReply {
+  channel: string;
+  count: number;
+  create_time: number;
+  enabled: boolean;
+  id: number;
+  keywords: FbAutoReplyKeyword[];
+  reply_type: number;
+  text: string;
 }

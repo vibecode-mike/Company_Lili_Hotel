@@ -12,6 +12,7 @@ export interface Message {
   title: string;
   tags: string[];
   platform: string;
+  channelName?: string; // 渠道名稱（頻道名/粉專名）
   status: string;
   sentCount: string;
   sender: string;  // 發送人員
@@ -38,13 +39,20 @@ interface SortConfig {
 const COLUMN_WIDTHS = {
   title: 'w-[160px]',
   tags: 'w-[180px]',
-  platform: 'w-[100px]',
+  platform: 'w-[140px]',
   status: 'w-[100px]',
   sentCount: 'w-[120px]',
   sender: 'w-[160px]',  // 發送人員
   clickCount: 'w-[160px]',
   sendTime: 'w-[180px]',
   actions: 'w-[120px]',
+} as const;
+
+// 平台顯示名稱對應
+const PLATFORM_DISPLAY_NAMES: Record<string, string> = {
+  'LINE': 'LINE',
+  'Facebook': 'Facebook',
+  'Webchat': 'Webchat',
 } as const;
 
 // 統一欄位樣式
@@ -270,8 +278,9 @@ const MessageRow = memo(function MessageRow({
         <Divider visible={false} />
 
         {/* 平台 */}
-        <div className={`${CELL_BASE} ${COLUMN_WIDTHS.platform}`}>
-          <MemberSourceIcon source={message.platform as MemberSourceType} size={28} />
+        <div className={`${CELL_BASE} ${COLUMN_WIDTHS.platform} gap-[8px]`}>
+          <MemberSourceIcon source={message.platform as MemberSourceType} size={24} />
+          <span className={`${CELL_TEXT} truncate`}>{message.channelName || PLATFORM_DISPLAY_NAMES[message.platform] || message.platform}</span>
         </div>
         <Divider visible={false} />
 
@@ -382,40 +391,25 @@ export default function InteractiveMessageTable({ messages, onEdit, onViewDetail
       return Number.isNaN(timestamp) ? 0 : timestamp;
     };
 
-    const list = [...messages];
-    list.sort((a, b) => {
-      let comparison = 0;
-      switch (sortConfig.field) {
-        case 'title':
-          comparison = compareString(a.title, b.title);
-          break;
-        case 'tags':
-          comparison = compareString(a.tags?.[0], b.tags?.[0]);
-          break;
-        case 'platform':
-          comparison = compareString(a.platform, b.platform);
-          break;
-        case 'status':
-          comparison = compareString(a.status, b.status);
-          break;
-        case 'sentCount':
-          comparison = parseNumber(a.sentCount) - parseNumber(b.sentCount);
-          break;
-        case 'sender':
-          comparison = compareString(a.sender, b.sender);
-          break;
-        case 'clickCount':
-          comparison = parseNumber(a.clickCount) - parseNumber(b.clickCount);
-          break;
-        case 'sendTime':
-          comparison = parseTime(a.timeValue ?? a.sendTime) - parseTime(b.timeValue ?? b.sendTime);
-          break;
-        default:
-          comparison = 0;
+    const getComparison = (a: Message, b: Message): number => {
+      const { field } = sortConfig;
+      if (field === 'title' || field === 'platform' || field === 'status' || field === 'sender') {
+        return compareString(a[field], b[field]);
       }
+      if (field === 'tags') return compareString(a.tags?.[0], b.tags?.[0]);
+      if (field === 'sentCount' || field === 'clickCount') {
+        return parseNumber(a[field]) - parseNumber(b[field]);
+      }
+      if (field === 'sendTime') {
+        return parseTime(a.timeValue ?? a.sendTime) - parseTime(b.timeValue ?? b.sendTime);
+      }
+      return 0;
+    };
+
+    return [...messages].sort((a, b) => {
+      const comparison = getComparison(a, b);
       return sortConfig.order === 'asc' ? comparison : -comparison;
     });
-    return list;
   }, [messages, sortConfig]);
 
   return (

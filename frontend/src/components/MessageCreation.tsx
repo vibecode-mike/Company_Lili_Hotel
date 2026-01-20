@@ -33,6 +33,7 @@ import { useMessages } from '../contexts/MessagesContext';
 import { CAROUSEL_STRUCTURE_FIELDS } from './carouselStructure';
 import type { FlexMessage, FlexBubble } from '../types/api';
 import type { MessagePlatform } from '../types/channel';
+import { ChannelIcon } from './common/icons/ChannelIcon';
 
 // FB 預設圖片佔位符
 const FB_PLACEHOLDER_IMAGE = "/images/fb-placeholder.png";
@@ -62,6 +63,15 @@ function DialogContentNoClose({
       </DialogPrimitive.Content>
     </DialogPortal>
   );
+}
+
+// 渠道選項型別（用於平台選擇下拉選單）
+interface ChannelOption {
+  value: string;           // 唯一識別碼 (e.g., "LINE_123" or "FB_456")
+  platform: 'LINE' | 'Facebook';
+  channelId: string;       // LINE channel_id 或 FB page_id
+  label: string;           // 顯示名稱
+  disabled: boolean;
 }
 
 interface MessageCreationProps {
@@ -107,6 +117,9 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   const [scheduledTime, setScheduledTime] = useState({ hours: '12', minutes: '00' });
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<MessagePlatform>('LINE');
+  // 渠道選項狀態（動態從 API 獲取）
+  const [channelOptions, setChannelOptions] = useState<ChannelOption[]>([]);
+  const [selectedChannel, setSelectedChannel] = useState<string>('');
   // 個別欄位錯誤狀態
   const [titleError, setTitleError] = useState('');
   const [notificationMsgError, setNotificationMsgError] = useState('');
@@ -132,11 +145,67 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   const [estimatedRecipientCount, setEstimatedRecipientCount] = useState<number | null>(null); // 預計發送人數
   const cardRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
 
-  // Platform selector options
-  const platformOptions: Array<{ value: MessagePlatform; label: string; disabled: boolean }> = [
-    { value: 'LINE', label: 'LINE', disabled: false },
-    { value: 'Facebook', label: 'Facebook', disabled: false },
-  ];
+  // 獲取可用渠道列表
+  useEffect(() => {
+    const fetchChannels = async () => {
+      const options: ChannelOption[] = [];
+      const token = localStorage.getItem('auth_token');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      };
+
+      // 獲取 LINE 頻道
+      try {
+        const lineRes = await fetch('/api/v1/line_channels/current', { headers });
+        if (lineRes.ok) {
+          const lineChannel = await lineRes.json();
+          if (lineChannel?.channel_id) {
+            options.push({
+              value: `LINE_${lineChannel.channel_id}`,
+              platform: 'LINE',
+              channelId: lineChannel.channel_id,
+              label: lineChannel.channel_name || 'LINE 官方帳號',
+              disabled: false
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch LINE channel:', error);
+      }
+
+      // 獲取 Facebook 粉專
+      try {
+        const fbRes = await fetch('/api/v1/fb_channels', { headers });
+        if (fbRes.ok) {
+          const fbChannels = await fbRes.json();
+          fbChannels.forEach((fb: { page_id: string; channel_name: string; is_active: boolean }) => {
+            if (fb.page_id) {
+              options.push({
+                value: `FB_${fb.page_id}`,
+                platform: 'Facebook',
+                channelId: fb.page_id,
+                label: fb.channel_name || 'Facebook 粉專',
+                disabled: false
+              });
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch FB channels:', error);
+      }
+
+      setChannelOptions(options);
+
+      // 預設選中第一個渠道
+      if (options.length > 0 && !selectedChannel) {
+        setSelectedChannel(options[0].value);
+        setSelectedPlatform(options[0].platform);
+      }
+    };
+
+    fetchChannels();
+  }, []);
 
   // Monitor flexMessageJson changes
   useEffect(() => {
@@ -312,6 +381,15 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       setScheduleType('immediate');
     }
     setSelectedPlatform(newPlatform);
+  };
+
+  // Handle channel selection change
+  const handleChannelChange = (value: string) => {
+    const selected = channelOptions.find(opt => opt.value === value);
+    if (selected) {
+      setSelectedChannel(value);
+      handlePlatformChange(selected.platform);
+    }
   };
 
   const updateCard = (updates: Partial<CarouselCard>) => {
@@ -767,6 +845,10 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         return;
       }
 
+      // 取得選中渠道的 ID
+      const selectedChannelOption = channelOptions.find(opt => opt.value === selectedChannel);
+      const channelId = selectedChannelOption?.channelId || null;
+
       // Prepare request body for draft
       const requestBody: any = {
         target_type: targetType === 'all' ? 'all_friends' : 'filtered',
@@ -774,6 +856,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         notification_message: notificationMsg,
         message_title: title || notificationMsg || '未命名訊息',
         platform: selectedPlatform,
+        channel_id: channelId,  // LINE channel_id 或 FB page_id
         thumbnail: cards[0]?.uploadedImageUrl || cards[0]?.image || null,
         interaction_tags: collectInteractionTags(),
       };
@@ -1448,6 +1531,10 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         return;
       }
 
+      // 取得選中渠道的 ID（LINE channel_id 或 FB page_id）
+      const selectedChannelOption = channelOptions.find(opt => opt.value === selectedChannel);
+      const channelId = selectedChannelOption?.channelId || null;
+
       // Prepare request body
       const requestBody: any = {
         target_type: targetType === 'all' ? 'all_friends' : 'filtered',
@@ -1455,6 +1542,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         notification_message: notificationMsg,
         message_title: title || notificationMsg || '未命名訊息',
         platform: selectedPlatform,
+        channel_id: channelId,  // LINE channel_id 或 FB page_id
         thumbnail: cards[0]?.uploadedImageUrl || cards[0]?.image || null,
         interaction_tags: collectInteractionTags(),
         estimated_send_count: estimatedRecipientCount || 0,  // 預計發送人數（FB 渠道由前端計算）
@@ -1538,7 +1626,11 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         // 準備發送請求的 body
         const sendBody: Record<string, string> = {};
 
-        // FB 平台需要帶入 jwt_token
+        // 取得選中渠道的 channelId
+        const selectedChannelOption = channelOptions.find(opt => opt.value === selectedChannel);
+        const channelId = selectedChannelOption?.channelId || null;
+
+        // FB 平台需要帶入 jwt_token 和 page_id
         if (selectedPlatform === 'Facebook') {
           const jwtToken = localStorage.getItem('jwt_token');
           if (!jwtToken) {
@@ -1546,6 +1638,11 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
             return;
           }
           sendBody.jwt_token = jwtToken;
+          if (channelId) {
+            sendBody.page_id = channelId;  // FB 使用 page_id
+          }
+        } else if (selectedPlatform === 'LINE' && channelId) {
+          sendBody.channel_id = channelId;  // LINE 使用 channel_id
         }
 
         const sendResponse = await fetch(`/api/v1/messages/${messageId}/send`, {
@@ -1817,30 +1914,43 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
             <div className="flex flex-col xl:flex-row gap-[32px] xl:gap-[120px] items-start w-full">
               <div className="flex-1 flex flex-col sm:flex-row items-start gap-4 w-full">
                 <Label className="min-w-[120px] sm:min-w-[140px] lg:min-w-[160px] pt-3 flex items-center gap-1">
-                  <span className="text-[16px] text-[#383838]">Platform</span>
+                  <span className="text-[16px] text-[#383838]">選擇發佈平台</span>
                   <span className="text-[16px] text-[#f44336]">*</span>
                 </Label>
                 <div className="flex-1 flex flex-col gap-[2px]">
-                  <Select
-                    value={selectedPlatform}
-                    onValueChange={(value) => handlePlatformChange(value as MessagePlatform)}
-                  >
-                    <SelectTrigger className="w-full h-[48px] rounded-[8px] bg-white border border-neutral-100">
-                      <SelectValue>{selectedPlatform}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {platformOptions.map((option) => (
-                        <SelectItem
-                          key={option.value}
-                          value={option.value}
-                          disabled={option.disabled}
-                          className={option.disabled ? 'opacity-50 cursor-not-allowed' : ''}
-                        >
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {channelOptions.length === 0 ? (
+                    <div className="text-[14px] text-[#999] p-3 bg-gray-50 rounded-[8px] border border-neutral-100">
+                      請先至「基本設定」連結 LINE 或 Facebook 渠道
+                    </div>
+                  ) : (
+                    <Select value={selectedChannel} onValueChange={handleChannelChange}>
+                      <SelectTrigger className="w-full h-[48px] rounded-[8px] bg-white border border-neutral-100">
+                        {selectedChannel ? (
+                          <div className="flex items-center gap-2">
+                            <ChannelIcon
+                              channel={channelOptions.find(opt => opt.value === selectedChannel)?.platform || 'LINE'}
+                              size={24}
+                            />
+                            <span className="truncate">
+                              {channelOptions.find(opt => opt.value === selectedChannel)?.label}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-[#a8a8a8]">請選擇發佈平台</span>
+                        )}
+                      </SelectTrigger>
+                      <SelectContent>
+                        {channelOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
+                            <div className="flex items-center gap-2">
+                              <ChannelIcon channel={option.platform} size={24} />
+                              <span>{option.label}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               </div>
             </div>

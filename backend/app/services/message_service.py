@@ -14,6 +14,8 @@ import os
 from app.models.message import Message
 from app.models.template import MessageTemplate
 from app.models.tracking import ComponentInteractionLog, InteractionType
+from app.models.line_channel import LineChannel
+from app.models.fb_channel import FbChannel
 from app.adapters.line_app_adapter import LineAppAdapter
 from app.clients.line_app_client import LineAppClient
 from app.core.pagination import PageResponse
@@ -184,6 +186,7 @@ class MessageService:
         fb_message_json: Optional[str] = None,
         estimated_send_count: Optional[int] = None,
         created_by: Optional[int] = None,
+        channel_id: Optional[str] = None,
     ) -> Message:
         """创建群发消息
 
@@ -205,6 +208,7 @@ class MessageService:
             platform: 发送平台 ("LINE" | "Facebook" | "Instagram")
             fb_message_json: Facebook Messenger JSON 字符串（可选）
             estimated_send_count: 預計發送人數（可选，FB 渠道由前端傳入）
+            channel_id: 渠道 ID（LINE channel_id 或 FB page_id）
 
         Returns:
             创建的消息对象
@@ -260,6 +264,7 @@ class MessageService:
             send_status=send_status,
             campaign_id=campaign_id,
             platform=platform or "LINE",  # 發送平台
+            channel_id=channel_id,  # 渠道 ID（LINE channel_id 或 FB page_id）
             flex_message_json=flex_message_json,  # LINE Flex Message JSON
             fb_message_json=fb_message_json,  # Facebook Messenger JSON
             message_title=message_title or notification_message or thumbnail,  # 优先使用前端传入的 message_title（訊息標題）
@@ -597,18 +602,47 @@ class MessageService:
         result = await db.execute(query)
         messages = result.scalars().all()
 
-        # 為每條訊息計算 click_count（依規格：從 component_interaction_logs 動態統計）
-        message_items = []
+        # 收集所有 channel_id 並查詢對應的 channel_name
+        line_channel_ids = {msg.channel_id for msg in messages if msg.channel_id and msg.platform == "LINE"}
+        fb_page_ids = {msg.channel_id for msg in messages if msg.channel_id and msg.platform in ("Facebook", "Instagram")}
+
+        # 查詢頻道名稱並建立映射
+        channel_name_map: Dict[str, str] = {}
+        if line_channel_ids:
+            line_result = await db.execute(
+                select(LineChannel.channel_id, LineChannel.channel_name).where(
+                    LineChannel.channel_id.in_(line_channel_ids)
+                )
+            )
+            channel_name_map.update({
+                f"LINE:{row.channel_id}": row.channel_name
+                for row in line_result.all() if row.channel_id and row.channel_name
+            })
+
+        if fb_page_ids:
+            fb_result = await db.execute(
+                select(FbChannel.page_id, FbChannel.channel_name).where(
+                    FbChannel.page_id.in_(fb_page_ids)
+                )
+            )
+            channel_name_map.update({
+                f"Facebook:{row.page_id}": row.channel_name
+                for row in fb_result.all() if row.page_id and row.channel_name
+            })
+
+        # 為每條訊息計算 click_count 和設定頻道名稱
         click_counts_by_message_id = await self.get_messages_click_counts(
             db,
             [int(m.id) for m in messages if m and m.id is not None],
         )
+        message_items = []
         for message in messages:
             item = MessageListItem.model_validate(message)
             item.click_count = int(click_counts_by_message_id.get(int(message.id), 0))
-            # 設定創建者資訊（發送人員）
             if message.creator:
                 item.created_by = CreatorInfo.model_validate(message.creator)
+            if message.channel_id and message.platform:
+                item.channel_name = channel_name_map.get(f"{message.platform}:{message.channel_id}")
             message_items.append(item)
 
         page_response = PageResponse[MessageListItem].create(
@@ -853,7 +887,8 @@ class MessageService:
         db: AsyncSession,
         message_id: int,
         channel_id: Optional[str] = None,
-        jwt_token: Optional[str] = None
+        jwt_token: Optional[str] = None,
+        page_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """发送群发消息
 
@@ -862,6 +897,7 @@ class MessageService:
             message_id: 消息 ID
             channel_id: LINE 频道 ID
             jwt_token: FB 渠道需要的 JWT token
+            page_id: FB 粉絲專頁 ID
 
         Returns:
             {
@@ -888,8 +924,13 @@ class MessageService:
             if not jwt_token:
                 raise ValueError("Facebook 發送需要 jwt_token")
 
+            if not page_id:
+                raise ValueError("Facebook 發送需要 page_id")
+
             # 轉換格式
             payload = self._transform_fb_message_to_api_format(message)
+            # 添加 page_id（API.XLSX 規格必填）
+            payload["page_id"] = page_id
             logger.info(f"📦 FB API payload: {payload}")
 
             # 發送到外部 API

@@ -11,6 +11,7 @@ import logging
 
 from app.database import get_db
 from app.models.member import Member
+from app.models.fb_channel import FbChannel
 from app.schemas.common import SuccessResponse
 from app.services.chatroom_service import ChatroomService
 from app.clients.fb_message_client import FbMessageClient
@@ -180,8 +181,17 @@ async def get_chat_messages(
             if not jwt_token:
                 raise HTTPException(status_code=400, detail="缺少 jwt_token")
 
+            # 查詢 active FbChannel 取得 page_id
+            fb_channel_result = await db.execute(
+                select(FbChannel.page_id).where(FbChannel.is_active == True).limit(1)
+            )
+            page_id = fb_channel_result.scalar()
+
+            if not page_id:
+                raise HTTPException(status_code=400, detail="未設定 Facebook 粉絲專頁")
+
             fb_client = FbMessageClient()
-            fb_result = await fb_client.get_chat_history(member.fb_customer_id, jwt_token)
+            fb_result = await fb_client.get_chat_history(member.fb_customer_id, page_id, jwt_token)
 
             if not fb_result.get("ok"):
                 raise HTTPException(status_code=500, detail=f"獲取 FB 聊天記錄失敗: {fb_result.get('error')}")

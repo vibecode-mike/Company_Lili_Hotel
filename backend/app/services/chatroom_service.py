@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 
 import pytz
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -131,7 +131,11 @@ class ChatroomService:
         count_stmt = select(func.count()).select_from(ConversationMessage).where(
             ConversationMessage.thread_id == thread_id,
             ConversationMessage.platform == platform,
-            ConversationMessage.message_source != "broadcast",  # 過濾群發訊息
+            # 過濾群發訊息（NULL 視為非群發）
+            or_(
+                ConversationMessage.message_source != "broadcast",
+                ConversationMessage.message_source.is_(None)
+            ),
         )
         result = await self.db.execute(count_stmt)
         total = result.scalar() or 0
@@ -145,7 +149,11 @@ class ChatroomService:
             .where(
                 ConversationMessage.thread_id == thread_id,
                 ConversationMessage.platform == platform,
-                ConversationMessage.message_source != "broadcast",  # 過濾群發訊息
+                # 過濾群發訊息（NULL 視為非群發）
+                or_(
+                    ConversationMessage.message_source != "broadcast",
+                    ConversationMessage.message_source.is_(None)
+                ),
             )
             .order_by(ConversationMessage.created_at.desc())
             .limit(page_size)

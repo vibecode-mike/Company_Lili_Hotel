@@ -43,12 +43,6 @@ cd line_app
 python app.py    # Starts on port 3001
 ```
 
-### Meta Page Backend (Go)
-```bash
-cd meta_page_backend
-go run main.go   # Starts on port 11204
-```
-
 ### E2E Tests (Playwright)
 ```bash
 npx playwright test tests/e2e
@@ -82,9 +76,6 @@ lili_hotel/
 │   ├── app.py              # Main Flask app & webhook routes
 │   └── manage_*.py         # LINE API management scripts
 │
-├── meta_page_backend/      # Facebook Page API (Go/Gin, port 11204)
-│   └── See meta_page_backend/CLAUDE.md
-│
 └── tests/e2e/              # Playwright E2E specs
 ```
 
@@ -106,6 +97,7 @@ The system supports LINE, Facebook, and Webchat through:
 - `Member` model has `line_user_id`, `fb_user_id`, `webchat_uid` fields
 - `Conversation` model tracks `channel_type` (line/facebook/webchat)
 - `message_service.py` handles routing messages to appropriate channel APIs
+- Facebook Messenger uses external API (`FB_API_URL`) for message sending and member sync
 
 ## Code Conventions
 
@@ -121,9 +113,11 @@ Backend `.env`:
 - `SECRET_KEY` - JWT secret
 - `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_SECRET`
 - `OPENAI_API_KEY`, `OPENAI_MODEL`
+- `FB_API_URL` - Facebook external API URL
 
 Frontend:
 - `VITE_API_BASE_URL` - Backend API URL
+- `VITE_FB_API_URL` - Facebook external API URL
 
 ## Database
 

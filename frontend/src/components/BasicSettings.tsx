@@ -81,9 +81,7 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     []
   );
 
-  const facebookLoginScope = useMemo(() => {
-    return 'public_profile,email,pages_show_list,pages_read_engagement,pages_manage_metadata';
-  }, []);
+  const facebookLoginScope = 'public_profile,email,pages_show_list,pages_read_engagement,pages_manage_metadata';
 
 
   const prepareFacebookSdk = useCallback(async () => {
@@ -137,59 +135,155 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     prepareFacebookSdk();
   }, [prepareFacebookSdk]);
 
+  // 執行 firm_login 取得 JWT token
+  const performFirmLogin = useCallback(async (): Promise<string> => {
+    const response = await fetch(`${fbApiBaseUrl}/api/v1/admin/firm_login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account: fbServiceAccount, password: fbServicePassword }),
+    });
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(payload?.msg || `firm_login 失敗（HTTP ${response.status}）`);
+    }
+
+    const token = payload?.data?.access_token;
+    if (!token) {
+      throw new Error('firm_login 未取得 access_token，無法進行後續授權');
+    }
+
+    localStorage.setItem('jwt_token', token);
+    return token;
+  }, [fbApiBaseUrl, fbServiceAccount, fbServicePassword]);
+
+  // 取得 JWT token，必要時執行 firm_login
+  const ensureJwtToken = useCallback(async (): Promise<string> => {
+    const existing = localStorage.getItem('jwt_token');
+    console.log('[BasicSettings] ensureJwtToken - existing:', existing ? 'yes' : 'no');
+    if (existing) return existing;
+    console.log('[BasicSettings] 執行 performFirmLogin...');
+    const token = await performFirmLogin();
+    console.log('[BasicSettings] performFirmLogin 完成:', token ? 'got token' : 'no token');
+    return token;
+  }, [performFirmLogin]);
+
+  // 呼叫外部 FB API 並處理 401 重試
+  const fetchFbLoginStatus = useCallback(async (token: string) => {
+    const response = await fetch(`${fbApiBaseUrl}/api/v1/admin/meta_page/login_status`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (response.status === 401) {
+      const newToken = await performFirmLogin();
+      return fetch(`${fbApiBaseUrl}/api/v1/admin/meta_page/login_status`, {
+        headers: { Authorization: `Bearer ${newToken}` },
+      });
+    }
+
+    return response;
+  }, [fbApiBaseUrl, performFirmLogin]);
+
   const reloadAccounts = useCallback(async () => {
+    console.log('[BasicSettings] reloadAccounts 開始執行');
     const nextAccounts: ChannelAccount[] = [];
 
+    // 1. 取得 LINE 資料（獨立 try-catch）
     try {
-      const [lineRes, fbRes] = await Promise.all([
-        fetch('/api/v1/line_channels/current'),
-        fetch('/api/v1/fb_channels'),
-      ]);
-
+      const lineRes = await fetch('/api/v1/line_channels/current');
       if (lineRes.ok) {
         const data = await lineRes.json();
-        if (data && data.channel_id) {
+        if (data?.channel_id) {
           nextAccounts.push({
             id: data.id?.toString() || 'line-1',
             platform: 'line',
-            name: '官方帳號名稱',
-            accountId: data.basic_id ? `@${data.basic_id}` : undefined,
+            name: data.basic_id ? `@${data.basic_id}` : '官方帳號',
             channelId: data.channel_id,
-            status: (data.connection_status || 'disconnected') as ChannelAccount['status'],
-            lastVerified: formatZhDateTime(data.last_verified_at),
+            status: 'connected',
+            lastVerified: '-',
           });
         }
       }
-
-      if (fbRes.ok) {
-        const fbData = (await fbRes.json()) as FbChannelDto[];
-        const fbAccounts: ChannelAccount[] = (Array.isArray(fbData) ? fbData : [])
-          .filter(ch => ch?.is_active !== false)
-          .map(ch => ({
-            id: String(ch.id),
-            platform: 'facebook' as const,
-            name: ch.channel_name || 'Facebook 粉絲專頁',
-            channelId: ch.page_id || '-',
-            status: (ch.connection_status || 'disconnected') as ChannelAccount['status'],
-            lastVerified: formatZhDateTime(ch.last_verified_at),
-          }));
-
-        nextAccounts.push(...fbAccounts);
-      }
-    } catch (error) {
-      console.error('載入帳號資訊失敗:', error);
+    } catch (lineError) {
+      console.error('[BasicSettings] LINE 資料載入失敗:', lineError);
     }
 
-    setAccounts(nextAccounts);
-  }, [formatZhDateTime]);
+    console.log('[BasicSettings] LINE 處理完成，開始處理 FB...');
 
+    // 2. 取得 FB 資料（獨立 try-catch，失敗不影響 LINE）
+    try {
+      const jwtToken = await ensureJwtToken();
+      console.log('[BasicSettings] jwtToken:', jwtToken ? 'exists' : 'missing');
+
+      // 2a. 先取得外部 login_status
+      const loginStatusRes = await fetchFbLoginStatus(jwtToken);
+      console.log('[BasicSettings] loginStatusRes.ok:', loginStatusRes.ok, 'status:', loginStatusRes.status);
+
+      if (loginStatusRes.ok) {
+        const loginStatusData = await loginStatusRes.json();
+        console.log('[BasicSettings] loginStatusData:', loginStatusData);
+
+        // 2b. 同步到本地 DB（根據外部 API 的頻道列表）
+        const channelsToSync = (loginStatusData.data || []).map((item: { page_id: string; name?: string }) => ({
+          page_id: item.page_id,
+          channel_name: item.name,
+        }));
+
+        console.log('[BasicSettings] 同步頻道到本地 DB:', channelsToSync);
+        await fetch('/api/v1/fb_channels/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channels: channelsToSync }),
+        });
+
+        // 2c. 重新取得本地資料（已同步，含更新的 last_verified_at）
+        const localFbRes = await fetch('/api/v1/fb_channels');
+        console.log('[BasicSettings] localFbRes.ok:', localFbRes.ok, 'status:', localFbRes.status);
+
+        if (localFbRes.ok) {
+          const localFbData = (await localFbRes.json()) as FbChannelDto[];
+          console.log('[BasicSettings] localFbData:', localFbData);
+
+          // 建立 page_id → last_verified_at 對照表
+          const localFbMap = new Map(
+            localFbData.filter(l => l.page_id).map(l => [l.page_id!, l.last_verified_at || ''])
+          );
+
+          const now = new Date();
+          for (const item of loginStatusData.data || []) {
+            const expiredDate = item.expired_time ? new Date(item.expired_time) : null;
+            const isExpired = expiredDate && expiredDate <= now;
+
+            nextAccounts.push({
+              id: `fb-${item.page_id}`,
+              platform: 'facebook',
+              name: item.name || 'Facebook 粉絲專頁',
+              channelId: item.page_id || '-',
+              status: isExpired ? 'expired' : 'connected',
+              lastVerified: formatZhDateTime(localFbMap.get(item.page_id) || ''),
+            });
+          }
+        }
+      }
+    } catch (fbError) {
+      console.error('[BasicSettings] FB 資料載入失敗:', fbError);
+      // FB 失敗不阻擋 LINE 顯示
+    }
+
+    console.log('[BasicSettings] 最終帳號數量:', nextAccounts.length, nextAccounts);
+    setAccounts(nextAccounts);
+    return nextAccounts.length;
+  }, [ensureJwtToken, fetchFbLoginStatus, formatZhDateTime]);
+
+  // 初始化：載入帳號並決定初始視圖
   useEffect(() => {
     let cancelled = false;
 
-    (async () => {
-      await reloadAccounts();
-      if (!cancelled) setViewState('empty');
-    })();
+    reloadAccounts().then(count => {
+      if (!cancelled) {
+        setViewState(count > 0 ? 'list' : 'empty');
+      }
+    });
 
     return () => {
       cancelled = true;
@@ -221,104 +315,61 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     setViewState('line-setup');
   }, [accounts, showToast]);
 
-  const performFirmLogin = useCallback(async (): Promise<string> => {
-    const firmLoginResponse = await fetch(`${fbApiBaseUrl}/api/v1/admin/firm_login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ account: fbServiceAccount, password: fbServicePassword }),
-    });
+  // 呼叫 meta_login 綁定 FB token 並處理 401 重試
+  const requestMetaLogin = useCallback(async (facebookAccessToken: string): Promise<string> => {
+    let serviceJwt = await ensureJwtToken();
 
-    const firmLoginPayload = await firmLoginResponse.json().catch(() => null);
-    if (!firmLoginResponse.ok) {
-      throw new Error(firmLoginPayload?.msg || `firm_login 失敗（HTTP ${firmLoginResponse.status}）`);
-    }
-
-    const firmToken = firmLoginPayload?.data?.access_token;
-    if (!firmToken) {
-      throw new Error('firm_login 未取得 access_token，無法進行後續授權');
-    }
-
-    localStorage.setItem('jwt_token', firmToken);
-    return firmToken;
-  }, [fbApiBaseUrl, fbServiceAccount, fbServicePassword]);
-
-  const requestMetaLogin = useCallback(
-    async (facebookAccessToken: string): Promise<string> => {
-      const ensureServiceJwt = async (): Promise<string> => {
-        const existing = localStorage.getItem('jwt_token');
-        if (existing) return existing;
-        return performFirmLogin();
-      };
-
-      let serviceJwt = await ensureServiceJwt();
-
-      const metaLoginResponse = await fetch(`${fbApiBaseUrl}/api/v1/admin/meta_page/meta_login`, {
+    const callMetaLogin = async (jwt: string) => {
+      const response = await fetch(`${fbApiBaseUrl}/api/v1/admin/meta_page/meta_login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${serviceJwt}`,
+          Authorization: `Bearer ${jwt}`,
         },
         body: JSON.stringify({ access_token: facebookAccessToken }),
       });
+      const payload = await response.json().catch(() => null);
+      return { response, payload };
+    };
 
-      let metaLoginPayload = await metaLoginResponse.json().catch(() => null);
+    let { response, payload } = await callMetaLogin(serviceJwt);
 
-      // 若 JWT 過期，重新進行 firm_login 後再重試一次 meta_login
-      if (metaLoginResponse.status === 401) {
-        serviceJwt = await performFirmLogin();
-        const retryResponse = await fetch(`${fbApiBaseUrl}/api/v1/admin/meta_page/meta_login`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${serviceJwt}`,
-          },
-          body: JSON.stringify({ access_token: facebookAccessToken }),
-        });
-        metaLoginPayload = await retryResponse.json().catch(() => null);
-        if (!retryResponse.ok) {
-          throw new Error(metaLoginPayload?.msg || `meta_login 失敗（HTTP ${retryResponse.status}）`);
-        }
-        // meta_login 成功後，繼續使用 firm_login 的 JWT（不覆蓋）
-        return serviceJwt;
-      }
+    // 若 JWT 過期，重新 firm_login 並重試
+    if (response.status === 401) {
+      serviceJwt = await performFirmLogin();
+      ({ response, payload } = await callMetaLogin(serviceJwt));
+    }
 
-      if (!metaLoginResponse.ok) {
-        throw new Error(metaLoginPayload?.msg || `meta_login 失敗（HTTP ${metaLoginResponse.status}）`);
-      }
+    if (!response.ok) {
+      throw new Error(payload?.msg || `meta_login 失敗（HTTP ${response.status}）`);
+    }
 
-      // meta_login 成功後，繼續使用 firm_login 的 JWT（不覆蓋）
-      return serviceJwt;
-    },
-    [fbApiBaseUrl, performFirmLogin]
-  );
+    return serviceJwt;
+  }, [ensureJwtToken, fbApiBaseUrl, performFirmLogin]);
 
-  // Facebook 授權流程：FB.login → 取得粉專列表 → 自動儲存第一個粉專
+  // Facebook 授權流程：FB.login → meta_login → 取得粉專 → 儲存
   const handleFacebookAuthorize = useCallback(async (targetChannelId: string | null): Promise<boolean> => {
     setFacebookAuthorizing(true);
     try {
-      if (facebookSdkError) {
-        throw new Error(facebookSdkError);
-      }
-      if (!facebookSdkReady || !window.FB) {
-        throw new Error('Facebook SDK 尚未載入完成，請稍候再試');
-      }
+      if (facebookSdkError) throw new Error(facebookSdkError);
+      if (!facebookSdkReady || !window.FB) throw new Error('Facebook SDK 尚未載入完成，請稍候再試');
 
-      // 1. FB.login（官方彈窗）
+      // 1. FB.login 官方彈窗
       const loginResponse = await fbLogin(facebookLoginScope);
       if (loginResponse.status !== 'connected' || !loginResponse.authResponse?.accessToken) {
         throw new Error('Facebook 登入未完成（可能已取消授權）');
       }
 
-      // 2. 呼叫 meta_login 綁定 FB token 到外部服務
+      // 2. meta_login 綁定 FB token
       await requestMetaLogin(loginResponse.authResponse.accessToken);
 
-      // 3. 取得用戶管理的粉專列表（/me/accounts）
+      // 3. 取得粉專列表
       const pages = await fbGetManagedPages();
       const normalizedPages: FbPageOption[] = (Array.isArray(pages) ? pages : [])
-        .filter(p => typeof p.id === 'string' && p.id)
+        .filter(p => p.id)
         .map(p => ({
           id: p.id,
-          name: typeof p.name === 'string' && p.name.trim() ? p.name : p.id,
+          name: p.name?.trim() || p.id,
           accessToken: p.access_token,
         }));
 
@@ -326,11 +377,8 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
         throw new Error('找不到可管理的粉絲專頁（請確認您的 Facebook 帳號有管理粉專的權限）');
       }
 
-      // 4. 使用用戶在官方 FB.login 彈窗中授權的粉專
-      const selectedPage = normalizedPages[0];
-
-      // 5. 儲存粉專到本地資料庫
-      await saveFacebookPage(selectedPage, targetChannelId);
+      // 4. 儲存第一個粉專
+      await saveFacebookPage(normalizedPages[0], targetChannelId);
       await reloadAccounts();
       setViewState('list');
       showToast(
@@ -345,16 +393,7 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     } finally {
       setFacebookAuthorizing(false);
     }
-  }, [
-    accounts,
-    facebookLoginScope,
-    facebookSdkError,
-    facebookSdkReady,
-    reloadAccounts,
-    requestMetaLogin,
-    saveFacebookPage,
-    showToast,
-  ]);
+  }, [facebookSdkError, facebookSdkReady, facebookLoginScope, requestMetaLogin, saveFacebookPage, reloadAccounts, showToast]);
 
   // 同步 FB 會員列表到後端（非阻塞，失敗不影響主流程）
   const syncFacebookMembers = useCallback(async () => {
@@ -401,22 +440,6 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
   const handleAddAccount = useCallback(() => {
     setViewState('empty');
   }, []);
-
-  const handleViewAccounts = useCallback(async () => {
-    setViewState('list');
-
-    const lineAccount = accounts.find(a => a.platform === 'line');
-    if (!lineAccount || lineAccount.status === 'connected') return;
-
-    try {
-      const response = await fetch('/api/v1/line_channels/verify', { method: 'POST' });
-      if (!response.ok) return;
-      await reloadAccounts();
-      showToast('已驗證 LINE 官方帳號', 'success');
-    } catch (error) {
-      console.error('驗證 LINE 官方帳號失敗:', error);
-    }
-  }, [accounts, reloadAccounts, showToast]);
 
   // 重新授權
   const handleReauthorize = useCallback(async (account: ChannelAccount) => {
@@ -469,8 +492,6 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
       <BasicSettingsEmpty
         onLineClick={handleLineClick}
         onFacebookClick={handleFacebookClick}
-        hasAccounts={hasAccounts}
-        onViewAccounts={hasAccounts ? handleViewAccounts : undefined}
       />
     );
   }

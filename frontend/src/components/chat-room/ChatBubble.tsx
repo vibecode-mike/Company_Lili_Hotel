@@ -25,6 +25,12 @@ import type { ChatMessage, ChatPlatform } from './types';
 import Container from '../../imports/Container-8548-103';
 import { PlatformIcon } from '../common/icons/PlatformIcon';
 import WebChatIcon from '../../assets/Icon-web-chat-16.png';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '../ui/tooltip';
 
 // Props 定義
 export interface ChatBubbleProps {
@@ -83,24 +89,36 @@ function UserAvatar({
 /**
  * 官方頭像組件（右側）
  * Figma 3.png: 白色圓形 + 人物圖標
+ * Hover 時顯示發送人員名稱（manual 顯示人員名稱，其他顯示「系統」）
  */
-function OfficialAvatar() {
+function OfficialAvatar({ senderName }: { senderName?: string | null }) {
+  const displayName = senderName || '系統';
+
   return (
-    <div className="bg-white overflow-clip relative rounded-full shrink-0 size-[45px] flex items-center justify-center shadow-sm">
-      {/* 人物圖標 SVG */}
-      <svg
-        width="24"
-        height="24"
-        viewBox="0 0 24 24"
-        fill="none"
-        className="shrink-0"
-      >
-        <path
-          d="M12 12C14.21 12 16 10.21 16 8C16 5.79 14.21 4 12 4C9.79 4 8 5.79 8 8C8 10.21 9.79 12 12 12ZM12 14C9.33 14 4 15.34 4 18V20H20V18C20 15.34 14.67 14 12 14Z"
-          fill="#6E6E6E"
-        />
-      </svg>
-    </div>
+    <TooltipProvider delayDuration={300}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="bg-white overflow-clip relative rounded-full shrink-0 size-[45px] flex items-center justify-center shadow-sm cursor-default">
+            {/* 人物圖標 SVG */}
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              className="shrink-0"
+            >
+              <path
+                d="M12 12C14.21 12 16 10.21 16 8C16 5.79 14.21 4 12 4C9.79 4 8 5.79 8 8C8 10.21 9.79 12 12 12ZM12 14C9.33 14 4 15.34 4 18V20H20V18C20 15.34 14.67 14 12 14Z"
+                fill="#6E6E6E"
+              />
+            </svg>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}>
+          {displayName}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -158,7 +176,7 @@ export function ChatBubble({
       </div>
 
       {/* 官方頭像（右側） */}
-      {isOfficial && <OfficialAvatar />}
+      {isOfficial && <OfficialAvatar senderName={message.senderName} />}
     </div>
   );
 }

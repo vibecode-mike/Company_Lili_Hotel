@@ -19,6 +19,8 @@ export interface Message {
   title: string;
   tags: string[];
   platform: MessagePlatform;
+  channelId?: string; // 渠道ID（LINE channel_id 或 FB page_id）
+  channelName?: string; // 渠道名稱（頻道名/粉專名）
   status: '已排程' | '草稿' | '已發送' | '發送失敗';
   recipientCount: number;
   openCount: number;
@@ -67,33 +69,25 @@ interface MessagesProviderProps {
 }
 
 // 轉換後端數據為前端格式
-const transformBackendMessage = (item: BackendMessage): Message => {
-  // 使用類型守衛確保 platform 是有效的 MessagePlatform
-  const platform: MessagePlatform = isMessagePlatform(item.platform)
-    ? item.platform
-    : 'LINE'; // 默認為 LINE
-
-  // 取得發送人員名稱：優先使用 full_name，否則使用 username
-  const sender = item.created_by
+const transformBackendMessage = (item: BackendMessage): Message => ({
+  id: item.id.toString(),
+  title: item.message_title || item.template?.name || '未命名訊息',
+  tags: normalizeInteractionTags(item.interaction_tags ?? item.interactionTags ?? item.tags),
+  platform: isMessagePlatform(item.platform) ? item.platform : 'LINE',
+  channelId: item.channel_id,
+  channelName: item.channel_name,
+  status: item.send_status,
+  recipientCount: item.send_count || 0,
+  openCount: item.open_count || 0,
+  clickCount: item.click_count || 0,
+  sendTime: item.send_time || item.scheduled_at || '-',
+  createdAt: item.created_at,
+  updatedAt: item.updated_at,
+  thumbnail: item.thumbnail,
+  sender: item.created_by
     ? (item.created_by.full_name || item.created_by.username || '-')
-    : '-';
-
-  return {
-    id: item.id.toString(),
-    title: item.message_title || item.template?.name || '未命名訊息',
-    tags: normalizeInteractionTags(item.interaction_tags ?? item.interactionTags ?? item.tags),
-    platform,
-    status: item.send_status,
-    recipientCount: item.send_count || 0,
-    openCount: item.open_count || 0,
-    clickCount: item.click_count || 0,
-    sendTime: item.send_time || item.scheduled_at || '-',
-    createdAt: item.created_at,
-    updatedAt: item.updated_at,
-    thumbnail: item.thumbnail,
-    sender,
-  };
-};
+    : '-',
+});
 
 // Provider 組件
 export function MessagesProvider({ children }: MessagesProviderProps) {

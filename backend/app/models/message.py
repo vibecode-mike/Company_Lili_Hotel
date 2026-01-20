@@ -91,6 +91,11 @@ class Message(Base):
         default="LINE",
         comment="發送平台：LINE/Facebook/Instagram",
     )
+    channel_id = Column(
+        String(100),
+        nullable=True,
+        comment="渠道ID（LINE channel_id 或 FB page_id）",
+    )
 
     # 相容 line_app/app.py 的欄位
     interaction_tags = Column(JSON, comment="互動標籤（相容舊程式）")

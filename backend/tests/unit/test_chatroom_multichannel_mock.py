@@ -3,8 +3,6 @@ import os
 import sys
 import pytest
 
-pytest.importorskip("aiosqlite")
-
 # Minimal env for app.config to load
 os.environ.setdefault("SECRET_KEY", "test")
 os.environ.setdefault("LINE_CHANNEL_ACCESS_TOKEN", "test")
@@ -60,7 +58,7 @@ def test_line_oauth_creates_threads():
 def test_facebook_oauth_creates_threads():
     ctx = build_services()
     ctx["member_repo"].save(Member(member_id="M001", email="user@example.com"))
-    result = ctx["oauth_service"].webchat_login_via_facebook_oauth(fb_uid="F321", email="user@example.com", webchat_uid="W001")
+    result = ctx["oauth_service"].webchat_login_via_facebook_oauth(fb_customer_id="F321", email="user@example.com", webchat_uid="W001")
     assert result["member_id"] == "M001"
     assert ctx["thread_repo"].find_thread("Facebook:F321")
     assert ctx["thread_repo"].find_thread("Webchat:W001")
@@ -78,7 +76,7 @@ def test_open_chatroom_defaults_to_latest_platform():
     now = datetime.utcnow()
     ctx["member_repo"].save(Member(member_id="M001"))
     ctx["line_repo"].save(LineFriend(line_uid="U1", member_id="M001", last_interaction_at=now))
-    ctx["fb_repo"].save(FacebookFriend(fb_uid="F1", member_id="M001", last_interaction_at=now))
+    ctx["fb_repo"].save(FacebookFriend(fb_customer_id="F1", member_id="M001", last_interaction_at=now))
     ctx["webchat_repo"].save(WebchatFriend(webchat_uid="W1", member_id="M001", last_interaction_at=now))
     session = ctx["chatroom_service"].open_chatroom_session("M001", prefer_latest=True)
     assert set(session["available_platforms"]) == {"LINE", "Facebook", "Webchat"}

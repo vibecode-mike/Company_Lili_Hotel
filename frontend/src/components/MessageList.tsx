@@ -395,15 +395,8 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
 
   const transformedMessages = useMemo(() => {
     const determineTimeSource = (msg: typeof contextMessages[number]) => {
-      if (msg.status === '草稿') {
-        return msg.updatedAt || msg.createdAt || null;
-      }
-      if (msg.status === '已排程' && msg.sendTime && msg.sendTime !== '-') {
-        return msg.sendTime;
-      }
-      if (msg.sendTime && msg.sendTime !== '-') {
-        return msg.sendTime;
-      }
+      if (msg.status === '草稿') return msg.updatedAt || msg.createdAt || null;
+      if (msg.sendTime && msg.sendTime !== '-') return msg.sendTime;
       return msg.updatedAt || msg.createdAt || null;
     };
 
@@ -414,9 +407,10 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
         title: msg.title,
         tags: msg.tags,
         platform: msg.platform,
+        channelName: msg.channelName,
         status: msg.status,
         sentCount: msg.recipientCount > 0 ? msg.recipientCount.toString() : '-',
-        sender: msg.sender || '-',  // 發送人員
+        sender: msg.sender || '-',
         clickCount: msg.clickCount > 0 ? msg.clickCount.toString() : '-',
         sendTime: formatDateTime(timeSource),
         timeValue: timeSource

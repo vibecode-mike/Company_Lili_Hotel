@@ -286,6 +286,7 @@ async def _sync_fb_auto_template(
     # 建立 payload
     payload = {
         "firm_id": 1,
+        "channel": "FB",
         "response_type": 2 if auto_response.trigger_type == TriggerType.KEYWORD.value else 3,
         "enabled": auto_response.is_active,
         "trigger_time": 0,
@@ -361,6 +362,69 @@ async def get_auto_responses(
         )
 
     return SuccessResponse(data=items)
+
+
+@router.get("/fb", response_model=SuccessResponse)
+async def get_fb_auto_responses(
+    jwt_token: str = Query(..., description="FB JWT token"),
+):
+    """取得 Facebook 自動回應列表（從外部 FB API）"""
+    fb_client = FbMessageClient()
+    result = await fb_client.get_auto_templates(jwt_token)
+
+    if not result.get("ok"):
+        error_msg = result.get("error", "未知錯誤")
+        logger.error(f"FB auto_template list failed: {error_msg}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"取得 Facebook 自動回應列表失敗: {error_msg}"
+        )
+
+    return SuccessResponse(data=result.get("data", []))
+
+
+class FbAutoResponseUpdate(BaseModel):
+    """FB 自動回應更新 payload"""
+    keywords: Optional[List[str]] = None
+    messages: Optional[List[str]] = None
+    is_active: Optional[bool] = None
+    trigger_type: Optional[str] = None  # 'keyword' or 'follow'
+
+
+@router.patch("/fb/{fb_id}", response_model=SuccessResponse)
+async def update_fb_auto_response(
+    fb_id: int,
+    data: FbAutoResponseUpdate,
+    jwt_token: str = Query(..., description="FB JWT token"),
+):
+    """更新 Facebook 自動回應（透過外部 FB API）"""
+    payload = {
+        "firm_id": 1,
+        "channel": "FB",
+        "trigger_time": 0,
+    }
+
+    if data.trigger_type:
+        payload["response_type"] = 2 if data.trigger_type == "keyword" else 3
+    if data.is_active is not None:
+        payload["enabled"] = data.is_active
+    if data.keywords is not None:
+        payload["tags"] = data.keywords
+    if data.messages is not None:
+        payload["text"] = data.messages
+
+    fb_client = FbMessageClient()
+    result = await fb_client.update_auto_template(fb_id, payload, jwt_token)
+
+    if not result.get("ok"):
+        error_msg = result.get("error", "未知錯誤")
+        logger.error(f"FB auto_template update failed: {error_msg}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"更新 Facebook 自動回應失敗: {error_msg}"
+        )
+
+    return SuccessResponse(message="更新成功")
 
 
 @router.get("/{auto_response_id}", response_model=SuccessResponse)

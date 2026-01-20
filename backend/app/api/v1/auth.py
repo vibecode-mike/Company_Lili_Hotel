@@ -20,28 +20,24 @@ oauth2_scheme = OAuth2PasswordBearer(
 )
 
 
-async def _get_default_active_user(db: AsyncSession) -> Optional[User]:
-    result = await db.execute(select(User).where(User.is_active).order_by(User.id))
-    return result.scalars().first()
-
-
 async def get_current_user(
     token: Optional[str] = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """獲取當前用戶（無 Token 時自動回退為第一位啟用帳號）"""
+    """獲取當前用戶（無有效 Token 時拋出 401 錯誤）"""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="無效的認證憑證",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    payload: Optional[Dict[str, int]] = decode_access_token(token) if token else None
+    # 無 token 直接拋出錯誤，不再使用回退機制
+    if not token:
+        raise credentials_exception
+
+    payload: Optional[Dict[str, int]] = decode_access_token(token)
     if payload is None:
-        fallback_user = await _get_default_active_user(db)
-        if fallback_user is None:
-            raise credentials_exception
-        return fallback_user
+        raise credentials_exception
 
     user_id: Optional[int] = payload.get("sub")  # type: ignore[arg-type]
     if user_id is None:

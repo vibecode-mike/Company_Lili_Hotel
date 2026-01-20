@@ -5,7 +5,6 @@ export interface ChannelAccount {
   id: string;
   platform: 'line' | 'facebook';
   name: string;
-  accountId?: string; // LINE: @xxx
   channelId: string;
   status: 'connected' | 'expired';
   lastVerified: string;
@@ -230,9 +229,6 @@ export const BasicSettingsList = memo(function BasicSettingsList({
                         {/* Account Info */}
                         <div className="flex flex-col font-['Noto_Sans_TC',sans-serif] font-normal text-[14px]">
                           <p className="leading-[1.5] text-[#383838]">{account.name}</p>
-                          {account.accountId && (
-                            <p className="leading-[1.5] text-[#6e6e6e]">{account.accountId}</p>
-                          )}
                         </div>
                       </div>
                     </div>

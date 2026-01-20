@@ -20,9 +20,9 @@ class Member(Base):
     line_display_name = Column(String(100), comment="LINE 顯示名稱")
 
     # Facebook 相關資訊
-    fb_uid = Column(String(100), unique=True, index=True, comment="Facebook User ID，透過 Facebook OAuth 登入時取得")
+    fb_customer_id = Column(String(100), unique=True, index=True, comment="Facebook Customer ID，透過 Facebook OAuth 登入時取得")
     fb_avatar = Column(String(500), comment="Facebook 會員頭像 URL")
-    fb_name = Column(String(100), comment="Facebook 顯示名稱")
+    fb_customer_name = Column(String(100), comment="Facebook 顯示名稱")
 
     # Webchat 相關資訊
     webchat_uid = Column(String(100), unique=True, index=True, comment="Webchat 訪客 ID，系統自動生成或透過 OAuth 關聯取得")

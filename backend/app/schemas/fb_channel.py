@@ -19,15 +19,13 @@ class FbChannelBase(BaseModel):
 
 class FbChannelCreate(FbChannelBase):
     """創建 Facebook 頻道設定"""
-
-    page_access_token: str = Field(..., max_length=500, description="FB頻道存取權杖（必填）")
+    pass
 
 
 class FbChannelUpdate(BaseModel):
     """更新 Facebook 頻道設定（支援部分更新）"""
 
     page_id: Optional[str] = Field(None, max_length=255, description="Facebook Page ID")
-    page_access_token: Optional[str] = Field(None, max_length=500, description="FB頻道存取權杖")
     channel_name: Optional[str] = Field(None, max_length=100, description="頻道名稱")
     is_active: Optional[bool] = Field(None, description="是否啟用")
     connection_status: Optional[str] = Field(None, description="連結狀態")
@@ -73,3 +71,39 @@ class FacebookSdkConfigResponse(BaseModel):
 
     app_id: str = Field(..., description="Facebook App ID")
     api_version: str = Field(..., description="Facebook Graph/API 版本（例如 v23.0）")
+
+
+class FbChannelSyncItem(BaseModel):
+    """同步請求中的單一頻道資訊"""
+
+    page_id: str = Field(..., description="Facebook Page ID")
+    channel_name: Optional[str] = Field(None, description="頻道名稱")
+
+
+class FbChannelSyncRequest(BaseModel):
+    """FB 頻道同步請求（根據外部 API 返回的頻道列表同步本地資料庫）"""
+
+    channels: List[FbChannelSyncItem] = Field(
+        default_factory=list, description="要同步的頻道列表"
+    )
+
+
+class FbChannelVerifyResult(BaseModel):
+    """單一頻道驗證結果"""
+
+    page_id: str = Field(..., description="Facebook Page ID")
+    channel_name: Optional[str] = Field(None, description="頻道名稱")
+    external_status: str = Field(..., description="外部狀態: connected | expired | not_found")
+    is_valid: bool = Field(..., description="本地與外部是否一致")
+    expired_time: Optional[str] = Field(None, description="外部 API 回傳的過期時間")
+    action_taken: Optional[str] = Field(None, description="已執行的動作: deleted | deactivated | None")
+
+
+class FbChannelVerifyResponse(BaseModel):
+    """FB 頻道驗證回應"""
+
+    verified_count: int = Field(..., description="驗證通過數量")
+    mismatch_count: int = Field(..., description="不一致數量")
+    deleted_count: int = Field(0, description="已刪除數量（not_found 的記錄）")
+    deactivated_count: int = Field(0, description="已停用數量（expired 的記錄）")
+    results: List[FbChannelVerifyResult] = Field(default_factory=list, description="驗證結果列表")

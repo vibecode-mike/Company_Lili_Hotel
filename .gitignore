@@ -53,6 +53,4 @@ build/
 .pytest_cache/
 .coverage
 htmlcov/
-
-# Go cache
-meta_page_backend/.gocache/
+google-chrome-stable_current_amd64.deb

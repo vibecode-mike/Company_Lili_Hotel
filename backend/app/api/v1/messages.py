@@ -159,6 +159,7 @@ async def create_message(
             message_title=data.message_title,
             draft_id=data.draft_id,  # 来源草稿 ID
             platform=platform,  # 發送平台
+            channel_id=getattr(data, 'channel_id', None),  # 渠道 ID（LINE channel_id 或 FB page_id）
             fb_message_json=getattr(data, 'fb_message_json', None),  # Facebook JSON
             estimated_send_count=data.estimated_send_count,  # 預計發送人數（FB 渠道由前端傳入）
             created_by=current_user.id,  # 發送人員（當前登入者）
@@ -239,12 +240,14 @@ async def send_message(
 
         channel_id = request.channel_id if request else None
         jwt_token = request.jwt_token if request else None
+        page_id = request.page_id if request else None
 
         result = await message_service.send_message(
             db,
             message_id,
             channel_id,
-            jwt_token
+            jwt_token,
+            page_id
         )
 
         if not result.get("ok"):

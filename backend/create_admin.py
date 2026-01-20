@@ -15,49 +15,36 @@ from app.core.security import get_password_hash
 from sqlalchemy import select
 
 
-async def create_admin_user():
-    """創建初始管理員賬號"""
-    print("開始創建管理員賬號...")
-
+async def ensure_user(username: str, email: str, password: str):
+    """若不存在則建立指定用戶；已存在則略過"""
     async with AsyncSessionLocal() as session:
-        try:
-            # 檢查是否已存在管理員
-            result = await session.execute(
-                select(User).where(User.username == "admin")
-            )
-            existing_user = result.scalar_one_or_none()
+        result = await session.execute(select(User).where(User.username == username))
+        existing = result.scalar_one_or_none()
+        if existing:
+            print(f"⚠️  帳號已存在，跳過: {username} ({existing.email})")
+            return
 
-            if existing_user:
-                print("⚠️  管理員賬號已存在，跳過創建")
-                print(f"   用戶名: {existing_user.username}")
-                print(f"   郵箱: {existing_user.email}")
-                return
+        user = User(
+            username=username,
+            email=email,
+            password_hash=get_password_hash(password),
+            full_name="系統管理員",
+            role="admin",
+            is_active=True,
+        )
+        session.add(user)
+        await session.commit()
+        print(f"✅ 建立帳號成功: {username} / {password} / {email}")
 
-            # 創建新管理員
-            admin_user = User(
-                username="admin",
-                email="admin@lilihotel.com",
-                password_hash=get_password_hash("admin123"),
-                full_name="系統管理員",
-                role="admin",
-                is_active=True,
-            )
 
-            session.add(admin_user)
-            await session.commit()
-
-            print("✅ 管理員賬號創建成功！")
-            print("\n登入資訊：")
-            print("   用戶名: admin")
-            print("   密碼: admin123")
-            print("   郵箱: admin@lilihotel.com")
-            print("\n⚠️  請在生產環境中立即修改密碼！")
-
-        except Exception as e:
-            await session.rollback()
-            print(f"❌ 創建管理員賬號失敗: {e}")
-            raise
+async def main():
+    print("開始創建預設管理員與外部登入帳號...")
+    # 原有預設 admin
+    await ensure_user("admin", "admin@lilihotel.com", "admin123")
+    # 新增外部登入帳號（避免與既有 email 衝突，使用獨立信箱）
+    await ensure_user("tycg-admin", "tycg-admin@lilihotel.com", "123456")
+    print("完成。")
 
 
 if __name__ == "__main__":
-    asyncio.run(create_admin_user())
+    asyncio.run(main())

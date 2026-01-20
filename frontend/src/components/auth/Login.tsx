@@ -17,11 +17,11 @@ export default function Login() {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!value) {
       setEmailError('請輸入電子信箱');
-      return false;
+      return true; // 顯示錯誤但不阻擋
     }
     if (!emailRegex.test(value)) {
       setEmailError('請輸入有效的電子信箱格式');
-      return false;
+      return true; // 顯示錯誤但不阻擋
     }
     setEmailError('');
     return true;
@@ -42,9 +42,10 @@ export default function Login() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const isEmailValid = validateEmail(email);
+    // Email 顯示提示但不阻擋
+    validateEmail(email);
     const isPasswordValid = validatePassword(password);
-    if (!isEmailValid || !isPasswordValid) return;
+    if (!isPasswordValid) return;
     setIsLoading(true);
     await login(email, password);
     setIsLoading(false);
@@ -59,13 +60,13 @@ export default function Login() {
         <h1 className="text-center text-[16px] leading-[24px] text-[#9ca3af] mb-[32px]">
           登入您的帳號以繼續
         </h1>
-        <form onSubmit={handleLogin} className="flex flex-col gap-[20px]">
+        <form onSubmit={handleLogin} noValidate className="flex flex-col gap-[20px]">
           <div className="flex flex-col gap-[8px]">
             <label className="text-[14px] leading-[20px] text-[#000000]">電子信箱</label>
             <div className="relative">
               <Mail className="absolute left-[12px] top-[10px] size-[16px] text-[#9ca3af]" />
               <input
-                type="email"
+                type="text" // 避免瀏覽器原生 email 檢查阻擋送出
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value);

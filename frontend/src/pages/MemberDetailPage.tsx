@@ -49,7 +49,7 @@ export default function MemberDetailPage() {
       case 'Facebook':
         return {
           avatar: (member as any).fb_avatar,
-          name: (member as any).fb_name || member.username
+          name: (member as any).fb_customer_name || member.username
         };
       case 'Webchat':
         return {

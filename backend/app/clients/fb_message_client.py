@@ -28,11 +28,12 @@ class FbMessageClient:
         """組裝帶 Authorization 的標頭"""
         return {"Authorization": f"Bearer {jwt_token}"}
 
-    async def send_message(self, fb_customer_id: str, text: str, jwt_token: str) -> dict:
+    async def send_message(self, page_id: str, fb_customer_id: str, text: str, jwt_token: str) -> dict:
         """
         發送訊息到 Facebook 用戶 (使用 fb_customer_id 識別)
 
         Args:
+            page_id: Facebook Page ID
             fb_customer_id: Facebook Customer ID
             text: 訊息內容
             jwt_token: JWT Token (Bearer token)
@@ -47,7 +48,7 @@ class FbMessageClient:
             try:
                 response = await client.post(
                     f"{self.base_url}/api/v1/admin/meta_page/message/single",
-                    json={"customer_id": fb_customer_id, "text": text},
+                    json={"page_id": page_id, "customer_id": fb_customer_id, "text": text},
                     headers=headers
                 )
                 response.raise_for_status()
@@ -61,12 +62,13 @@ class FbMessageClient:
                 logger.error(f"FB request error: {e}")
                 return {"ok": False, "error": str(e)}
 
-    async def get_chat_history(self, customer_id: str, jwt_token: str) -> Dict[str, Any]:
+    async def get_chat_history(self, customer_id: str, page_id: str, jwt_token: str) -> Dict[str, Any]:
         """
         獲取 Facebook 聊天記錄
 
         Args:
             customer_id: Facebook Customer ID (fb_customer_id)
+            page_id: Facebook Page ID
             jwt_token: JWT Token (Bearer token)
 
         Returns:
@@ -85,12 +87,12 @@ class FbMessageClient:
             try:
                 response = await client.get(
                     f"{self.base_url}/api/v1/admin/meta_page/message/history",
-                    params={"customer_id": customer_id},
+                    params={"customer_id": customer_id, "page_id": page_id},
                     headers=headers
                 )
                 response.raise_for_status()
                 result = response.json()
-                logger.info(f"FB chat history fetched for customer_id={customer_id}, {len(result.get('data', []))} messages")
+                logger.info(f"FB chat history fetched for customer_id={customer_id}, page_id={page_id}, {len(result.get('data', []))} messages")
                 return {"ok": True, "data": result.get("data", [])}
             except httpx.HTTPStatusError as e:
                 logger.error(f"FB history API error: {e.response.status_code} - {e.response.text}")
@@ -178,12 +180,62 @@ class FbMessageClient:
                     headers=headers,
                 )
                 response.raise_for_status()
-                return {"ok": True, **response.json()}
+                result = response.json()
+                logger.info(f"FB auto_template API response: {result}")
+                return {"ok": True, **result}
             except httpx.HTTPStatusError as e:
                 logger.error(f"FB auto_template API error: {e.response.status_code} - {e.response.text}")
                 return {"ok": False, "error": f"API error: {e.response.status_code}"}
             except httpx.RequestError as e:
                 logger.error(f"FB auto_template request error: {e}")
+                return {"ok": False, "error": str(e)}
+
+    async def get_auto_templates(self, jwt_token: str) -> Dict[str, Any]:
+        """
+        取得自動回應模板列表 (GET /meta_page/message/auto_template)
+        """
+        headers = self._auth_headers(jwt_token)
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                response = await client.get(
+                    f"{self.base_url}/api/v1/admin/meta_page/message/auto_template",
+                    headers=headers,
+                )
+                response.raise_for_status()
+                result = response.json()
+                logger.info(f"FB auto_template list API response: {len(result.get('data', []))} items")
+                return {"ok": True, **result}
+            except httpx.HTTPStatusError as e:
+                logger.error(f"FB auto_template list API error: {e.response.status_code} - {e.response.text}")
+                return {"ok": False, "error": f"API error: {e.response.status_code}", "data": []}
+            except httpx.RequestError as e:
+                logger.error(f"FB auto_template list request error: {e}")
+                return {"ok": False, "error": str(e), "data": []}
+
+    async def update_auto_template(self, template_id: int, payload: Dict[str, Any], jwt_token: str) -> Dict[str, Any]:
+        """
+        更新自動回應模板 (PATCH /meta_page/message/auto_template)
+        """
+        headers = self._auth_headers(jwt_token)
+        payload_with_id = {"id": template_id, **payload}
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                response = await client.patch(
+                    f"{self.base_url}/api/v1/admin/meta_page/message/auto_template",
+                    json=payload_with_id,
+                    headers=headers,
+                )
+                response.raise_for_status()
+                result = response.json()
+                logger.info(f"FB auto_template PATCH response: {result}")
+                return {"ok": True, **result}
+            except httpx.HTTPStatusError as e:
+                logger.error(f"FB auto_template PATCH error: {e.response.status_code} - {e.response.text}")
+                return {"ok": False, "error": f"API error: {e.response.status_code}"}
+            except httpx.RequestError as e:
+                logger.error(f"FB auto_template PATCH request error: {e}")
                 return {"ok": False, "error": str(e)}
 
     async def create_message_template(self, payload: Dict[str, Any], jwt_token: str) -> Dict[str, Any]:
@@ -232,3 +284,74 @@ class FbMessageClient:
             except httpx.RequestError as e:
                 logger.error(f"FB template fetch request error: {e}")
                 return {"ok": False, "error": str(e)}
+
+    async def get_login_status(self, jwt_token: str) -> Dict[str, Any]:
+        """
+        取得 FB 連結狀態 (/meta_page/login_status)
+
+        Returns:
+            {"ok": True, "data": [...]} on success
+            {"ok": False, "error": "...", "data": []} on failure
+        """
+        headers = self._auth_headers(jwt_token)
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                response = await client.get(
+                    f"{self.base_url}/api/v1/admin/meta_page/login_status",
+                    headers=headers,
+                )
+                response.raise_for_status()
+                result = response.json()
+                logger.info(f"FB login_status: {len(result.get('data', []))} pages")
+                return {"ok": True, "data": result.get("data", [])}
+            except httpx.HTTPStatusError as e:
+                logger.error(f"FB login_status error: {e.response.status_code}")
+                return {"ok": False, "error": f"API error: {e.response.status_code}", "data": []}
+            except httpx.RequestError as e:
+                logger.error(f"FB login_status request error: {e}")
+                return {"ok": False, "error": str(e), "data": []}
+
+    async def get_broadcast_list(self, jwt_token: str) -> Dict[str, Any]:
+        """
+        取得推播活動列表 (/meta_page/message/gourp_list)
+
+        API.XLSX API 7: 活動與訊息推播 (一進到頁面的列表)
+
+        Returns:
+            {
+                "ok": True,
+                "data": [
+                    {
+                        "id": 14,
+                        "title": "12345",
+                        "channel": "FB",
+                        "status": 0,
+                        "amount": 0,
+                        "admin_id": 1,
+                        "click_amount": 0,
+                        "create_time": 1768793957
+                    }
+                ],
+                "msg": "ok",
+                "status": 200
+            }
+        """
+        headers = self._auth_headers(jwt_token)
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                response = await client.get(
+                    f"{self.base_url}/api/v1/admin/meta_page/message/gourp_list",
+                    headers=headers,
+                )
+                response.raise_for_status()
+                result = response.json()
+                logger.info(f"FB broadcast list API response: {len(result.get('data', []))} items")
+                return {"ok": True, **result}
+            except httpx.HTTPStatusError as e:
+                logger.error(f"FB broadcast list API error: {e.response.status_code} - {e.response.text}")
+                return {"ok": False, "error": f"API error: {e.response.status_code}", "data": []}
+            except httpx.RequestError as e:
+                logger.error(f"FB broadcast list request error: {e}")
+                return {"ok": False, "error": str(e), "data": []}

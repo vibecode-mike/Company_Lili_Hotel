@@ -3,6 +3,9 @@
 interface ImportMetaEnv {
   readonly VITE_FACEBOOK_APP_ID?: string;
   readonly VITE_FACEBOOK_API_VERSION?: string;
+  readonly VITE_FB_API_URL?: string;
+  readonly VITE_FB_FIRM_ACCOUNT?: string;
+  readonly VITE_FB_FIRM_PASSWORD?: string;
 }
 
 interface ImportMeta {
@@ -50,4 +53,3 @@ declare global {
 }
 
 export {};
-
