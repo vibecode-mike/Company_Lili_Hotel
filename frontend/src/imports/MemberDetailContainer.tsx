@@ -18,6 +18,7 @@ import { MemberSourceIconSmall } from "../components/common/icons";
 import { useMembers } from "../contexts/MembersContext";
 import { useAuth } from "../components/auth/AuthContext";
 import type { Member, MemberData } from "../types/member";
+import type { ChatPlatform } from "../components/chat-room/types";
 export type { MemberData } from "../types/member";
 import type { BackendMember, BackendTag } from "../types/api";
 import { formatMemberDateTime, getLatestMemberChatTimestamp } from "../utils/memberTime";
@@ -263,11 +264,21 @@ function Container({ member }: { member?: MemberData }) {
   );
 }
 
-function Container1({ member, onNavigate, fallbackMemberName }: { member?: MemberData; onNavigate?: (page: string, params?: { memberId?: string; memberName?: string }) => void; fallbackMemberName?: string }) {
+function Container1({
+  member,
+  onNavigate,
+  fallbackMemberName,
+  platform,
+}: {
+  member?: MemberData;
+  onNavigate?: (page: string, params?: { memberId?: string; memberName?: string; platform?: ChatPlatform }) => void;
+  fallbackMemberName?: string;
+  platform?: ChatPlatform;
+}) {
   const handleChatClick = () => {
     if (!member?.id) return;
     const targetName = member.username || member.realName || fallbackMemberName;
-    onNavigate?.("chat-room", { memberId: member.id, memberName: targetName });
+    onNavigate?.("chat-room", { memberId: member.id, memberName: targetName, platform });
   };
 
   return (
@@ -285,10 +296,20 @@ function Container1({ member, onNavigate, fallbackMemberName }: { member?: Membe
   );
 }
 
-function Container2({ member, onNavigate, fallbackMemberName }: { member?: MemberData; onNavigate?: (page: string, params?: { memberId?: string; memberName?: string }) => void; fallbackMemberName?: string }) {
+function Container2({
+  member,
+  onNavigate,
+  fallbackMemberName,
+  platform,
+}: {
+  member?: MemberData;
+  onNavigate?: (page: string, params?: { memberId?: string; memberName?: string; platform?: ChatPlatform }) => void;
+  fallbackMemberName?: string;
+  platform?: ChatPlatform;
+}) {
   return (
     <div className="basis-0 content-stretch flex flex-col gap-[24px] grow items-center max-w-[360px] min-h-px min-w-px relative self-stretch shrink-0" data-name="Container">
-      <Container1 member={member} onNavigate={onNavigate} fallbackMemberName={fallbackMemberName} />
+      <Container1 member={member} onNavigate={onNavigate} fallbackMemberName={fallbackMemberName} platform={platform} />
     </div>
   );
 }
@@ -1917,10 +1938,22 @@ function Container25({ member, onMemberUpdate }: { member?: MemberData; onMember
   );
 }
 
-function Container26({ member, onNavigate, onMemberUpdate, fallbackMemberName }: { member?: MemberData; onNavigate?: (page: string, params?: { memberId?: string; memberName?: string }) => void; onMemberUpdate?: (member: MemberData) => void; fallbackMemberName?: string }) {
+function Container26({
+  member,
+  onNavigate,
+  onMemberUpdate,
+  fallbackMemberName,
+  platform,
+}: {
+  member?: MemberData;
+  onNavigate?: (page: string, params?: { memberId?: string; memberName?: string; platform?: ChatPlatform }) => void;
+  onMemberUpdate?: (member: MemberData) => void;
+  fallbackMemberName?: string;
+  platform?: ChatPlatform;
+}) {
   return (
     <div className="content-stretch flex gap-[32px] items-start relative shrink-0 w-full" data-name="Container">
-      <Container2 member={member} onNavigate={onNavigate} fallbackMemberName={fallbackMemberName} />
+      <Container2 member={member} onNavigate={onNavigate} fallbackMemberName={fallbackMemberName} platform={platform} />
       <Container25 member={member} onMemberUpdate={onMemberUpdate} />
     </div>
   );
@@ -2150,7 +2183,19 @@ function ConsumptionRecordsSection() {
   );
 }
 
-function MainContent({ member, onNavigate, onMemberUpdate, fallbackMemberName }: { member?: MemberData; onNavigate?: (page: string, params?: { memberId?: string; memberName?: string }) => void; onMemberUpdate?: (member: MemberData) => void; fallbackMemberName?: string }) {
+function MainContent({
+  member,
+  onNavigate,
+  onMemberUpdate,
+  fallbackMemberName,
+  platform,
+}: {
+  member?: MemberData;
+  onNavigate?: (page: string, params?: { memberId?: string; memberName?: string; platform?: ChatPlatform }) => void;
+  onMemberUpdate?: (member: MemberData) => void;
+  fallbackMemberName?: string;
+  platform?: ChatPlatform;
+}) {
   return (
     <div className="relative shrink-0 w-full" data-name="Main Content">
       <div className="size-full">
@@ -2160,7 +2205,13 @@ function MainContent({ member, onNavigate, onMemberUpdate, fallbackMemberName }:
               <TitleWrapper />
             </SharedTitleContainer>
           </SharedHeaderContainer>
-          <Container26 member={member} onNavigate={onNavigate} onMemberUpdate={onMemberUpdate} fallbackMemberName={fallbackMemberName} />
+          <Container26
+            member={member}
+            onNavigate={onNavigate}
+            onMemberUpdate={onMemberUpdate}
+            fallbackMemberName={fallbackMemberName}
+            platform={platform}
+          />
           <ConsumptionRecordsSection />
         </div>
       </div>
@@ -2173,12 +2224,14 @@ export default function MainContainer({
   member, 
   onNavigate,
   fallbackMemberName,
+  platform,
   autoRefresh = true,
 }: { 
   onBack?: () => void; 
   member?: MemberData;
-  onNavigate?: (page: string, params?: { memberId?: string; memberName?: string }) => void;
+  onNavigate?: (page: string, params?: { memberId?: string; memberName?: string; platform?: ChatPlatform }) => void;
   fallbackMemberName?: string;
+  platform?: ChatPlatform;
   autoRefresh?: boolean;
 } = {}) {
   const [currentMember, setCurrentMember] = useState<MemberData | undefined>(member);
@@ -2196,7 +2249,10 @@ export default function MainContainer({
 
     const loadMemberDetail = async () => {
       try {
-        const fullMember = await fetchMemberById(memberId);
+        const fullMember = await fetchMemberById(
+          memberId,
+          platform === 'Facebook' ? platform : undefined
+        );
         if (!fullMember || isCancelled) return;
         setCurrentMember((prev) => mapMemberToMemberData(fullMember, prev));
       } catch (error) {
@@ -2209,7 +2265,7 @@ export default function MainContainer({
     return () => {
       isCancelled = true;
     };
-  }, [member?.id, fetchMemberById, autoRefresh]);
+  }, [member?.id, fetchMemberById, autoRefresh, platform]);
 
   React.useEffect(() => {
     if (!currentMember?.id) return;
@@ -2277,6 +2333,7 @@ export default function MainContainer({
         onNavigate={onNavigate}
         onMemberUpdate={(updatedMember) => setCurrentMember(updatedMember)}
         fallbackMemberName={fallbackMemberName}
+        platform={platform}
       />
     </div>
   );

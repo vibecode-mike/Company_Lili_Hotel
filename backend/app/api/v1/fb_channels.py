@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -384,7 +384,8 @@ async def deactivate_channel(channel_id: int, db: AsyncSession = Depends(get_db)
 
 @router.post("/sync-members", response_model=SuccessResponse)
 async def sync_facebook_members(
-    jwt_token: str = Body(..., embed=True, description="Meta JWT Token"),
+    jwt_token: Optional[str] = Body(None, embed=True, description="Meta JWT Token"),
+    authorization: Optional[str] = Header(None),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -394,9 +395,15 @@ async def sync_facebook_members(
     2. 刪除孤兒會員（三個渠道都是 NULL）
     3. 根據外部 API 返回的資料重新綁定
     """
+    token = jwt_token
+    if not token and authorization:
+        token = authorization.replace("Bearer ", "", 1) if authorization.startswith("Bearer ") else authorization
+    if not token:
+        raise HTTPException(status_code=400, detail="缺少 jwt_token")
+
     # 1. 獲取外部 API 會員列表
     fb_client = FbMessageClient()
-    result = await fb_client.list_messages(jwt_token)
+    result = await fb_client.list_messages(token)
 
     if not result.get("ok"):
         raise HTTPException(status_code=500, detail=f"獲取 FB 會員列表失敗: {result.get('error')}")
@@ -434,14 +441,31 @@ async def sync_facebook_members(
     # 4. 重新綁定會員資料
     created_count = 0
     updated_count = 0
+    processed_fb_ids = set()  # 追蹤已處理的 fb_customer_id，避免重複
 
     for fb_member in fb_members:
         fb_customer_id = str(fb_member.get("customer_id", ""))
         if not fb_customer_id:
             continue
 
+        # 跳過已處理的 fb_customer_id
+        if fb_customer_id in processed_fb_ids:
+            continue
+        processed_fb_ids.add(fb_customer_id)
+
         fb_customer_name = fb_member.get("customer_name", "")
         fb_email = (fb_member.get("email") or "").strip() or None
+
+        # 先檢查是否已存在此 fb_customer_id 的會員
+        existing_fb_result = await db.execute(
+            select(Member).where(Member.fb_customer_id == fb_customer_id)
+        )
+        existing_fb_member = existing_fb_result.scalar_one_or_none()
+        if existing_fb_member:
+            # 已存在，更新名稱
+            existing_fb_member.fb_customer_name = fb_customer_name
+            updated_count += 1
+            continue
 
         # 根據 email 查詢現有會員
         member = None

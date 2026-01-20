@@ -408,6 +408,7 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${jwtToken}`,
         },
         body: JSON.stringify({ jwt_token: jwtToken }),
       });

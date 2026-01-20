@@ -56,6 +56,7 @@ export interface ChatRoomLayoutProps {
   memberId?: string;  // 支援直接傳入 memberId，用於 WebSocket 連線
   chatSessionApiBase?: string; // 可覆寫 API 基底路徑（預設 /api/v1）
   onPlatformChange?: (platform: ChatPlatform) => void;
+  initialPlatform?: ChatPlatform;
 }
 
 // ========== 标签相关 ==========

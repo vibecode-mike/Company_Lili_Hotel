@@ -23,7 +23,10 @@ export default function MemberDetailPage() {
 
     const loadMemberDetail = async () => {
       setIsLoading(true);
-      const fullMember = await fetchMemberById(params.memberId!);
+      const fullMember = await fetchMemberById(
+        params.memberId!,
+        platform === 'Facebook' ? platform : undefined
+      );
       if (fullMember) {
         setMember(fullMember);
       }
@@ -94,6 +97,7 @@ export default function MemberDetailPage() {
         member={memberData}
         onBack={() => navigate('member-management')}
         onNavigate={navigate}
+        platform={platform}
         autoRefresh={false}
       />
     </MainLayout>

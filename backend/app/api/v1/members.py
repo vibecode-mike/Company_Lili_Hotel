@@ -1,7 +1,7 @@
 """
 會員管理 API
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi import APIRouter, Depends, HTTPException, status, Body, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, and_, func, delete, update
 from sqlalchemy.orm import selectinload
@@ -43,6 +43,47 @@ from app.api.v1.chat_messages import _extract_fb_template_text
 TAIPEI_TZ = pytz.timezone('Asia/Taipei')
 from app.websocket_manager import manager
 router = APIRouter()
+
+
+def format_taipei_time(dt: datetime) -> str:
+    """
+    將 UTC datetime 轉換為台北時間格式字串
+
+    Args:
+        dt: UTC datetime (naive 或 aware)
+
+    Returns:
+        格式化的時間字串，例如：「上午 10:30」
+    """
+    # 確保是 UTC aware datetime
+    if dt.tzinfo is None:
+        utc_dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        utc_dt = dt
+
+    # 轉換為台北時間
+    local_dt = utc_dt.astimezone(TAIPEI_TZ)
+    hour = local_dt.hour
+    minute = local_dt.minute
+
+    # 判斷時段
+    if 0 <= hour < 6:
+        period = "凌晨"
+    elif 6 <= hour < 12:
+        period = "上午"
+    elif 12 <= hour < 14:
+        period = "中午"
+    elif 14 <= hour < 18:
+        period = "下午"
+    else:
+        period = "晚上"
+
+    # 轉換為 12 小時制
+    hour_12 = hour if hour <= 12 else hour - 12
+    if hour_12 == 0:
+        hour_12 = 12
+
+    return f"{period} {hour_12:02d}:{minute:02d}"
 
 
 @router.get("", response_model=SuccessResponse)
@@ -91,15 +132,38 @@ async def get_members(
             MemberTag.tag_name.in_(tag_names)
         )
 
+    # 取得所有啟用中的 LINE channel_id
+    active_line_channel_ids_result = await db.execute(
+        select(LineChannel.channel_id).where(LineChannel.is_active == True)
+    )
+    active_line_channel_ids = [row[0] for row in active_line_channel_ids_result.fetchall()]
+
     # 渠道篩選
     if channel:
         channel_lower = channel.lower()
         if channel_lower == "line":
-            query = query.where(Member.line_uid.isnot(None))
+            # 只顯示屬於啟用中 LINE 帳號的會員
+            if active_line_channel_ids:
+                query = query.where(
+                    and_(
+                        Member.line_uid.isnot(None),
+                        Member.line_channel_id.in_(active_line_channel_ids)
+                    )
+                )
+            else:
+                query = query.where(False)  # 無啟用 LINE 帳號時不顯示任何會員
         elif channel_lower == "facebook":
             query = query.where(Member.fb_customer_id.isnot(None))
         elif channel_lower == "webchat":
             query = query.where(Member.webchat_uid.isnot(None))
+    elif active_line_channel_ids:
+        # 無渠道篩選時，過濾掉未啟用 LINE 帳號的會員
+        query = query.where(
+            or_(
+                Member.line_uid.is_(None),
+                Member.line_channel_id.in_(active_line_channel_ids)
+            )
+        )
 
     # 排序 (MySQL 兼容版本)
     if params.sort_by == "last_interaction_at":
@@ -254,22 +318,44 @@ async def get_member_count(
     return SuccessResponse(data={"count": count or 0})
 
 
+def _validate_platform(platform: Optional[str]) -> Optional[str]:
+    """Validate and normalize platform parameter."""
+    if not platform:
+        return None
+    normalized = platform.strip()
+    if normalized not in {"LINE", "Facebook", "Webchat"}:
+        raise HTTPException(status_code=400, detail="不支援的渠道平台")
+    return normalized
+
+
+async def _get_member_by_platform(
+    db: AsyncSession, member_id: str, platform: Optional[str]
+) -> Optional[Member]:
+    """Resolve member by ID based on platform type."""
+    if platform == "Facebook":
+        fb_customer_id = member_id.removeprefix("fb-")
+        result = await db.execute(
+            select(Member).where(Member.fb_customer_id == fb_customer_id)
+        )
+        return result.scalar_one_or_none()
+
+    try:
+        internal_id = int(member_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="無效的會員 ID")
+    result = await db.execute(select(Member).where(Member.id == internal_id))
+    return result.scalar_one_or_none()
+
+
 @router.get("/{member_id}", response_model=SuccessResponse)
 async def get_member(
-    member_id: int,
+    member_id: str,
+    platform: Optional[str] = Query(None, description="渠道：LINE/Facebook/Webchat"),
     db: AsyncSession = Depends(get_db),
-    # current_user: User = Depends(get_current_user),  # 暫時移除認證，開發階段使用
 ):
-    """
-    獲取會員詳情
-
-    優化說明：
-    1. 使用索引查詢：member_id 和 line_uid 都有索引
-    2. 平行查詢：三個標籤查詢可以平行執行（未來可用 asyncio.gather 進一步優化）
-    3. 去重邏輯：使用 Python set 進行記憶體內去重，效率高於 SQL DISTINCT
-    """
-    result = await db.execute(select(Member).where(Member.id == member_id))
-    member = result.scalar_one_or_none()
+    """獲取會員詳情"""
+    normalized = _validate_platform(platform)
+    member = await _get_member_by_platform(db, member_id, normalized)
 
     if not member:
         raise HTTPException(status_code=404, detail="會員不存在")
@@ -858,24 +944,7 @@ async def send_member_chat_message(
 
                 # WebSocket 推送通知前端即時更新（包含 senderName）
                 now_utc = datetime.now(timezone.utc)
-                local_dt = now_utc.astimezone(TAIPEI_TZ)
-                hour = local_dt.hour
-                minute = local_dt.minute
-                if 0 <= hour < 6:
-                    period = "凌晨"
-                elif 6 <= hour < 12:
-                    period = "上午"
-                elif 12 <= hour < 14:
-                    period = "中午"
-                elif 14 <= hour < 18:
-                    period = "下午"
-                else:
-                    period = "晚上"
-                hour_12 = hour if hour <= 12 else hour - 12
-                if hour_12 == 0:
-                    hour_12 = 12
-                time_str = f"{period} {hour_12:02d}:{minute:02d}"
-
+                time_str = format_taipei_time(now_utc)
                 sender_name = current_user.username
                 await manager.send_new_message(thread_id, {
                     "id": line_msg_id,
@@ -924,30 +993,7 @@ async def send_member_chat_message(
         msg = await chatroom_service.append_message(member, "Facebook", "outgoing", text, message_source="manual", sender_id=current_user.id)
 
         # WebSocket 推送通知前端即時更新 - 將 UTC 轉為台北時間顯示
-        time_str = ""
-        if msg.created_at:
-            # 假設 naive datetime 是 UTC，轉換為台北時間
-            if msg.created_at.tzinfo is None:
-                utc_dt = msg.created_at.replace(tzinfo=timezone.utc)
-            else:
-                utc_dt = msg.created_at
-            local_dt = utc_dt.astimezone(TAIPEI_TZ)
-            hour = local_dt.hour
-            minute = local_dt.minute
-            if 0 <= hour < 6:
-                period = "凌晨"
-            elif 6 <= hour < 12:
-                period = "上午"
-            elif 12 <= hour < 14:
-                period = "中午"
-            elif 14 <= hour < 18:
-                period = "下午"
-            else:
-                period = "晚上"
-            hour_12 = hour if hour <= 12 else hour - 12
-            if hour_12 == 0:
-                hour_12 = 12
-            time_str = f"{period} {hour_12:02d}:{minute:02d}"
+        time_str = format_taipei_time(msg.created_at) if msg.created_at else ""
 
         await manager.send_new_message(msg.thread_id, {
             "id": msg.id,
@@ -984,23 +1030,7 @@ async def send_member_chat_message(
 
                         # 轉換時間
                         fb_dt = datetime.fromtimestamp(msg_time, tz=timezone.utc)
-                        fb_local = fb_dt.astimezone(TAIPEI_TZ)
-                        fb_hour = fb_local.hour
-                        fb_minute = fb_local.minute
-                        if 0 <= fb_hour < 6:
-                            fb_period = "凌晨"
-                        elif 6 <= fb_hour < 12:
-                            fb_period = "上午"
-                        elif 12 <= fb_hour < 14:
-                            fb_period = "中午"
-                        elif 14 <= fb_hour < 18:
-                            fb_period = "下午"
-                        else:
-                            fb_period = "晚上"
-                        fb_hour_12 = fb_hour if fb_hour <= 12 else fb_hour - 12
-                        if fb_hour_12 == 0:
-                            fb_hour_12 = 12
-                        fb_time_str = f"{fb_period} {fb_hour_12:02d}:{fb_minute:02d}"
+                        fb_time_str = format_taipei_time(fb_dt)
 
                         # 透過 WebSocket 推送給前端
                         await manager.send_new_message(msg.thread_id, {
@@ -1033,30 +1063,7 @@ async def send_member_chat_message(
             msg = await chatroom_service.append_message(member, platform, "outgoing", text, message_source="manual", sender_id=current_user.id)
 
             # WebSocket 推送通知前端即時更新 - 將 UTC 轉為台北時間顯示
-            time_str = ""
-            if msg.created_at:
-                # 假設 naive datetime 是 UTC，轉換為台北時間
-                if msg.created_at.tzinfo is None:
-                    utc_dt = msg.created_at.replace(tzinfo=timezone.utc)
-                else:
-                    utc_dt = msg.created_at
-                local_dt = utc_dt.astimezone(TAIPEI_TZ)
-                hour = local_dt.hour
-                minute = local_dt.minute
-                if 0 <= hour < 6:
-                    period = "凌晨"
-                elif 6 <= hour < 12:
-                    period = "上午"
-                elif 12 <= hour < 14:
-                    period = "中午"
-                elif 14 <= hour < 18:
-                    period = "下午"
-                else:
-                    period = "晚上"
-                hour_12 = hour if hour <= 12 else hour - 12
-                if hour_12 == 0:
-                    hour_12 = 12
-                time_str = f"{period} {hour_12:02d}:{minute:02d}"
+            time_str = format_taipei_time(msg.created_at) if msg.created_at else ""
 
             await manager.send_new_message(msg.thread_id, {
                 "id": msg.id,

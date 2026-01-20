@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback, useMemo, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import type { Member, TagInfo, ChannelType, DisplayMember } from '../types/member';
+import type { ChatPlatform } from '../components/chat-room/types';
 import type { BackendMember, BackendTag } from '../types/api';
 import { useAuth } from '../components/auth/AuthContext';
 
@@ -34,7 +35,7 @@ interface MembersContextType {
   deleteMember: (id: string) => void;
   getMemberById: (id: string) => Member | undefined;
   getDisplayMemberById: (id: string) => DisplayMember | undefined;
-  fetchMemberById: (id: string) => Promise<Member | null>;
+  fetchMemberById: (id: string, platform?: ChatPlatform) => Promise<Member | null>;
   totalMembers: number;
   totalDisplayMembers: number;
   isLoading: boolean;
@@ -141,15 +142,29 @@ export function MembersProvider({ children }: MembersProviderProps) {
     const displayRows: DisplayMember[] = [];
 
     try {
-      // 1. 並行取得 LINE 會員 + FB 會員（先顯示，再同步）
-      const [lineMembersRes, fbMembersRes] = await Promise.all([
+      // 1. 並行取得 LINE 會員 + FB 會員 + FB 粉專列表（先顯示，再同步）
+      const [lineMembersRes, fbMembersRes, fbChannelsRes] = await Promise.all([
         fetch('/api/v1/members?channel=line&page=1&page_size=200', {
           headers: { 'Authorization': `Bearer ${token}` },
         }),
         jwtToken
           ? fetch(`/api/v1/fb_channels/message-list?jwt_token=${encodeURIComponent(jwtToken)}`)
           : Promise.resolve({ ok: false } as Response),
+        // 取得本地 DB 的 FB 粉專列表，用於顯示粉專名稱
+        fetch('/api/v1/fb_channels', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        }),
       ]);
+
+      // 解析 FB 粉專名稱（取第一個啟用的粉專）
+      let fbChannelName: string | null = null;
+      if (fbChannelsRes.ok) {
+        const fbChannels = await fbChannelsRes.json();
+        // fbChannels 是陣列，取第一個的 channel_name
+        if (Array.isArray(fbChannels) && fbChannels.length > 0) {
+          fbChannelName = fbChannels[0].channel_name || null;
+        }
+      }
 
       // 2. LINE 會員 → 直接加入顯示列表
       if (lineMembersRes.ok) {
@@ -200,8 +215,8 @@ export function MembersProvider({ children }: MembersProviderProps) {
             // 未回覆狀態（FB API 提供 unread 欄位）
             isUnanswered: fb.unread || false,
             unansweredSince: fb.unread ? fb.last_message_time : null,
-            // 渠道名稱（FB API 提供 channel 欄位）
-            channelName: fb.channel || null,
+            // 渠道名稱（使用本地 DB 的粉專名稱）
+            channelName: fbChannelName,
           });
         }
         console.log('FB 會員載入:', fbItems.length, '筆');
@@ -214,7 +229,10 @@ export function MembersProvider({ children }: MembersProviderProps) {
       if (jwtToken) {
         fetch('/api/v1/fb_channels/sync-members', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${jwtToken}`,
+          },
           body: JSON.stringify({ jwt_token: jwtToken }),
         })
           .then(res => res.ok ? res.json() : null)
@@ -276,7 +294,7 @@ export function MembersProvider({ children }: MembersProviderProps) {
     return displayMembers.find(m => m.id === id);
   }, [displayMembers]);
 
-  const fetchMemberById = useCallback(async (id: string): Promise<Member | null> => {
+  const fetchMemberById = useCallback(async (id: string, platform?: ChatPlatform): Promise<Member | null> => {
     const token = localStorage.getItem('auth_token');
     if (!token) {
       console.warn('未登入，無法獲取會員詳情');
@@ -284,7 +302,8 @@ export function MembersProvider({ children }: MembersProviderProps) {
     }
 
     try {
-      const response = await fetch(`/api/v1/members/${id}`, {
+      const platformParam = platform === 'Facebook' ? `?platform=${encodeURIComponent(platform)}` : '';
+      const response = await fetch(`/api/v1/members/${id}${platformParam}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },

@@ -24,6 +24,7 @@ import requests
 import uuid
 import time  # 用來在 backfill 抓所有好友個資時 時稍微 sleep，避免打太兇
 from pathlib import Path
+from typing import Optional
 
 # 確保以任何工作目錄啟動時都能匯入同目錄模組
 # 取得 app.py 所在目錄的絕對路徑
@@ -67,7 +68,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote_plus, quote
 from linebot.exceptions import InvalidSignatureError
 
-from flask import Flask, request, abort, jsonify, render_template_string, redirect, send_from_directory
+from flask import Flask, request, abort, jsonify, render_template_string, redirect, send_from_directory, g
 
 # LINE Bot SDK v3
 from linebot.v3 import WebhookHandler
@@ -249,7 +250,8 @@ def get_messaging_api(channel_id: str | None = None):
         return messaging_api  # 相容舊行為
     cred = get_credentials(channel_id)
     if not cred or not cred.get("token"):
-        return messaging_api  # 找不到就退回預設，避免出錯
+        # 有指定 channel_id 但找不到 → 明確錯誤，不 fallback
+        raise RuntimeError(f"Invalid channel_id or missing token: {channel_id}")
     cfg = Configuration(access_token=cred["token"])
     return MessagingApi(ApiClient(cfg))
 
@@ -303,6 +305,40 @@ def get_login_access_token(channel_id: str, channel_secret: str) -> str:
     )
     resp.raise_for_status()
     return resp.json().get("access_token", "")
+
+
+# 多 LINE 帳號切換（工程最終版）
+def get_channel_access_token_by_channel_id(line_channel_id: Optional[str]) -> str:
+    """
+    多 LINE 專頁支援：
+    - 有 line_channel_id → 從 DB 取對應的 channel_access_token
+    - 沒有 line_channel_id → fallback 使用 .env 的 LINE_CHANNEL_ACCESS_TOKEN
+    - 任何情況下：一定回傳 str，否則直接丟 RuntimeError
+    """
+
+    # 1️⃣ 指定了 line_channel_id → 從 DB 查
+    if line_channel_id:
+        row = fetchone("""
+            SELECT channel_access_token
+            FROM line_channels
+            WHERE channel_id = :cid
+            LIMIT 1
+        """, {"cid": line_channel_id})
+
+        if row:
+            token = row.get("channel_access_token")
+            if token:
+                return token
+
+        # 有給 line_channel_id 但查不到 → 明確錯誤
+        raise RuntimeError(f"Invalid line_channel_id or missing token: {line_channel_id}")
+
+    # 2️⃣ 沒指定 line_channel_id → fallback 用 .env（舊行為）
+    token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
+    if not token:
+        raise RuntimeError("LINE_CHANNEL_ACCESS_TOKEN not set in environment")
+
+    return token
 
 
 # 用 access_token 建立 LIFF App 並回傳 liffId，同時寫回資料庫的 liff_id_open
@@ -630,10 +666,11 @@ def upsert_member(line_uid: str,
                   join_source: Optional[str] = None,
                   name: Optional[str] = None,
                   id_number: Optional[str] = None,
-                  passport_number: Optional[str] = None,      # ← 新增
+                  passport_number: Optional[str] = None,
                   residence: Optional[str] = None,
-                  address_detail: Optional[str] = None,       # ← 新增
-                  receive_notification: Optional[int] = None) -> int:
+                  address_detail: Optional[str] = None,
+                  receive_notification: Optional[int] = None,
+                  line_channel_id: Optional[str] = None) -> int:
 
     fields, ph, p = ["line_uid"], [":uid"], {"uid": line_uid}
 
@@ -667,6 +704,9 @@ def upsert_member(line_uid: str,
     add("address_detail", "addr", address_detail)    # ← 新增
     add("receive_notification", "rn", receive_notification)
 
+    # line channel id (來自哪個 LINE 官方帳號)
+    add("line_channel_id", "lcid", line_channel_id)
+
     # join source
     js_val = join_source or "LINE"
     if _table_has("members", "join_source"):
@@ -696,6 +736,7 @@ def upsert_member(line_uid: str,
     for k in (
         "line_display_name",
         "line_avatar",
+        "line_channel_id",                         # ← 新增：多帳號支援
         "gender", "birthday", "email", "phone",
         "join_source", "source",
         "name", "id_number", "passport_number",    # ← 新增
@@ -1688,9 +1729,9 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
         return {"ok": False, "campaign_id": cid, "sent": 0, "error": error_msg}
 
     # 在迴圈外先決定要用哪個 Messaging API（避免重複 new client）
-    line_cid = (payload or {}).get("line_channel_id")
-    inner_cid = (payload or {}).get("channel_id")
-    api = get_messaging_api_by_line_id(line_cid) if line_cid else get_messaging_api(inner_cid)
+    # channel_id 和 line_channel_id 都是 LINE 官方的 Channel ID，統一用 get_messaging_api_by_line_id()
+    line_cid = (payload or {}).get("line_channel_id") or (payload or {}).get("channel_id")
+    api = get_messaging_api_by_line_id(line_cid)
 
     sent = 0
     failed = 0
@@ -2386,10 +2427,9 @@ def push_survey_entry(
     for i, m in enumerate(msgs):
         logging.info(f"  [{i}] {type(m).__name__}")
 
-    if line_channel_id:
-        api = get_messaging_api_by_line_id(line_channel_id)
-    else:
-        api = get_messaging_api(channel_id)
+    # channel_id 和 line_channel_id 都是 LINE 官方的 Channel ID，統一用 get_messaging_api_by_line_id()
+    line_cid = line_channel_id or channel_id
+    api = get_messaging_api_by_line_id(line_cid)
 
     # --- 收件者名單 ---
     test_uids = [u.strip() for u in os.getenv("TEST_UIDS", "").split(",") if u.strip()]
@@ -2445,8 +2485,8 @@ def get_messaging_api_by_line_id(line_channel_id: str | None) -> MessagingApi:
 
     cred = get_credentials_by_line_id(line_channel_id)
     if not cred or not cred.get("token"):
-        logging.warning(f"[MSGAPI] line_channel_id={line_channel_id} not found; fallback to default")
-        return messaging_api
+        # 有指定 line_channel_id 但找不到 → 明確錯誤，不 fallback
+        raise RuntimeError(f"Invalid line_channel_id or missing token: {line_channel_id}")
 
     cfg = Configuration(access_token=cred["token"])
     return MessagingApi(ApiClient(cfg))
@@ -2976,6 +3016,7 @@ def api_member_form_submit():
         return jsonify({"ok": False, "error": "無效的 LINE userId"}), 400
 
     answers = data.get("answers") or {}
+    line_channel_id = data.get("line_channel_id")  # 若前端有傳 line_channel_id
 
     # 2) 取最新 LINE profile（名字、頭像）
     try:
@@ -3005,6 +3046,7 @@ def api_member_form_submit():
 
         join_source=answers.get("join_source") or "LINE",
         receive_notification=answers.get("receive_notification") or 1,
+        line_channel_id=line_channel_id,  # 多帳號支援
     )
 
     # 4) 同步更新 line_friends
@@ -3087,6 +3129,9 @@ def callback_by_line_id(line_channel_id):
     if not cred or not cred.get("secret"):
         logging.error(f"[callback] unknown line_channel_id={line_channel_id}")
         return "channel not found", 404
+
+    # 1.1) 儲存 line_channel_id 到 Flask g，讓 event handler 可以存取
+    g.line_channel_id = line_channel_id
 
     # 2) 讀 header 與 body
     signature = request.headers.get("X-Line-Signature")
@@ -3185,7 +3230,9 @@ def on_follow(event: FollowEvent):
             )
 
             # 兼容性：同時更新 members 表
-            mid = upsert_member(uid, dn, pu)
+            # 從 Flask g 取得 line_channel_id（webhook 路徑 /callback/<line_channel_id>）
+            channel_id = getattr(g, 'line_channel_id', None)
+            mid = upsert_member(uid, dn, pu, line_channel_id=channel_id)
 
             # 關聯 LINE 好友和會員
             if friend_id and mid:
@@ -3249,7 +3296,8 @@ def on_postback(event: PostbackEvent):
             pu_to_write = api_pu if (api_pu and api_pu != cur.get("line_avatar")) else None
 
             # 1) 一樣先處理 members（問卷用的那張表）
-            mid = upsert_member(uid, dn_to_write, pu_to_write)
+            channel_id = getattr(g, 'line_channel_id', None)
+            mid = upsert_member(uid, dn_to_write, pu_to_write, line_channel_id=channel_id)
 
             # 2) ★新增：同時把這個使用者寫/更新到 line_friends
             #    只要有 postback（操作選單），就視為有互動 = 是好友
@@ -3329,7 +3377,8 @@ def on_text(event: MessageEvent):
             pu_to_write = api_pu if (api_pu and api_pu != cur_pu) else None
 
             # 更新 members 表
-            mid = upsert_member(uid, dn_to_write, pu_to_write)
+            channel_id = getattr(g, 'line_channel_id', None)
+            mid = upsert_member(uid, dn_to_write, pu_to_write, line_channel_id=channel_id)
 
             # 更新 line_friends 表
             upsert_line_friend(

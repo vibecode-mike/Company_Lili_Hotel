@@ -166,15 +166,13 @@ async def get_chat_messages(
     try:
         logger.info(f"📖 獲取會員聊天紀錄: member_id={member_id}, page={page}, page_size={page_size}")
 
-        member_query = select(Member).where(Member.id == member_id)
-        member_result = await db.execute(member_query)
-        member = member_result.scalar_one_or_none()
+        resolved_platform = _resolve_platform(platform)
+        member = await _resolve_member_by_platform(db, member_id, resolved_platform)
 
         if not member:
             raise HTTPException(status_code=404, detail="會員不存在")
 
         chatroom_service = ChatroomService(db)
-        resolved_platform = _resolve_platform(platform)
 
         # Facebook 渠道：從外部 API 獲取聊天記錄
         if resolved_platform == "Facebook":
@@ -288,6 +286,20 @@ def _resolve_platform(request_platform: Optional[str]) -> str:
     if normalized not in allowed:
         raise HTTPException(status_code=400, detail="不支援的渠道平台")
     return normalized
+
+
+async def _resolve_member_by_platform(
+    db: AsyncSession,
+    member_id: int,
+    platform: str,
+) -> Optional[Member]:
+    if platform == "Facebook":
+        result = await db.execute(select(Member).where(Member.fb_customer_id == str(member_id)))
+        member = result.scalar_one_or_none()
+        if member:
+            return member
+    result = await db.execute(select(Member).where(Member.id == member_id))
+    return result.scalar_one_or_none()
 
 
 def _resolve_platform_uid(member: Member, platform: str) -> str:

@@ -4,7 +4,7 @@
  */
 
 import type { Member } from "../types/member";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import svgPaths from "../imports/svg-9tjcfsdo1d";
 import Breadcrumb from "./common/Breadcrumb";
 import { ChatRoomLayout } from './chat-room';
@@ -14,6 +14,7 @@ interface ChatRoomProps {
   member: Member | undefined;
   memberId?: string;  // 支援直接傳入 memberId，用於 WebSocket 連線
   memberName?: string; // 會員名稱（用於麵包屑顯示）
+  initialPlatform?: ChatPlatform;
   onBack: () => void;
   onNavigateToMemberDetail?: (platform?: ChatPlatform) => void; // 導航到會員詳情頁（帶渠道資訊）
 }
@@ -48,10 +49,16 @@ function BackButtonWithArrow({ onClick }: { onClick: () => void }) {
   );
 }
 
-export default function ChatRoom({ member, memberId, memberName, onBack, onNavigateToMemberDetail }: ChatRoomProps) {
+export default function ChatRoom({ member, memberId, memberName, initialPlatform, onBack, onNavigateToMemberDetail }: ChatRoomProps) {
   // 顯示名稱優先順序：傳入的 memberName > member.username > member.realName > '會員'
   const displayName = memberName || member?.username || member?.realName || '會員';
-  const [currentPlatform, setCurrentPlatform] = useState<ChatPlatform>('LINE');
+  const [currentPlatform, setCurrentPlatform] = useState<ChatPlatform>(initialPlatform || 'LINE');
+
+  useEffect(() => {
+    if (initialPlatform) {
+      setCurrentPlatform(initialPlatform);
+    }
+  }, [initialPlatform]);
 
   // 只有當 member 和 memberId 都沒有時，才顯示錯誤頁面
   // 有 memberId 時，即使 member 還沒載入，也可以先建立 WebSocket 連線
@@ -109,6 +116,7 @@ export default function ChatRoom({ member, memberId, memberName, onBack, onNavig
             <ChatRoomLayout
               member={member}
               memberId={memberId}
+              initialPlatform={initialPlatform}
               onBack={onBack}
               onPlatformChange={setCurrentPlatform}
             />

@@ -16,6 +16,7 @@ class Member(Base):
 
     # LINE 相關資訊
     line_uid = Column(String(100), unique=True, index=True, comment="LINE UID")
+    line_channel_id = Column(String(100), index=True, comment="LINE 官方 Channel ID，對應 line_channels.channel_id")
     line_avatar = Column(String(500), comment="LINE 會員頭像 CDN URL（儲存 LINE 提供的完整 URL，如 https://profile.line-scdn.net/xxxxx），若無頭像或 URL 失效則顯示預設頭像。URL 來源：會員加入時從 LINE Profile API 取得，儲存後不定期更新。前端顯示時直接載入此 URL")
     line_display_name = Column(String(100), comment="LINE 顯示名稱")
 

@@ -40,38 +40,25 @@ const formatDateWithWeekday = (dateStr?: string | null): string => {
   return `${year}/${month}/${day}（${weekday}）`;
 };
 
-// Removed mock messages - will load from API
-const mockMessages_REMOVED: ChatMessage[] = [
-  { id: 1, type: 'user', text: '文字訊息', time: '下午 03:30', isRead: false },
-  { id: 2, type: 'official', text: '官方文字訊息', time: '下午 03:40', isRead: true },
-  { id: 3, type: 'user', text: '文字訊息', time: '下午 04:30', isRead: false },
-  { id: 4, type: 'official', text: '官方文字訊息', time: '下午 04:50', isRead: true },
-  { id: 5, type: 'user', text: '文字訊息', time: '下午 05:30', isRead: false },
-  { id: 6, type: 'official', text: '官方文字訊息', time: '下午 05:40', isRead: true },
-];
+const TIMESTAMP_KEYS = ['timestamp', 'created_at', 'createdAt', 'sent_at', 'sentAt', 'created_at_iso', 'createdAtIso'] as const;
 
-const extractMessageTimestamp = (message: ChatMessage): string | undefined => {
-  return (
-    message.timestamp ||
-    (message as any)?.created_at ||
-    (message as any)?.createdAt ||
-    (message as any)?.sent_at ||
-    (message as any)?.sentAt ||
-    (message as any)?.created_at_iso ||
-    (message as any)?.createdAtIso ||
-    undefined
-  ) ?? undefined;
-};
-
-const findLatestMessageTimestamp = (messages: ChatMessage[]): string | undefined => {
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const ts = extractMessageTimestamp(messages[i]);
-    if (ts) {
-      return ts;
+function extractMessageTimestamp(message: ChatMessage): string | undefined {
+  const msg = message as Record<string, unknown>;
+  for (const key of TIMESTAMP_KEYS) {
+    if (typeof msg[key] === 'string') {
+      return msg[key] as string;
     }
   }
   return undefined;
-};
+}
+
+function findLatestMessageTimestamp(messages: ChatMessage[]): string | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const ts = extractMessageTimestamp(messages[i]);
+    if (ts) return ts;
+  }
+  return undefined;
+}
 
 // 內嵌組件已移至獨立檔案:
 // - UserAvatar, OfficialAvatar, MessageBubble → ChatBubble.tsx
@@ -118,7 +105,13 @@ function transformFbMessages(fbData: Array<{
   return messages;
 }
 
-export default function ChatRoomLayout({ member: initialMember, memberId, chatSessionApiBase = '/api/v1', onPlatformChange }: ChatRoomLayoutProps) {
+export default function ChatRoomLayout({
+  member: initialMember,
+  memberId,
+  chatSessionApiBase = '/api/v1',
+  onPlatformChange,
+  initialPlatform,
+}: ChatRoomLayoutProps) {
   const { fetchMemberById } = useMembers();
   const [member, setMember] = useState<Member | undefined>(initialMember);
   const [isLoadingMember, setIsLoadingMember] = useState(false);
@@ -138,7 +131,7 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
   const [interactionTags, setInteractionTags] = useState<string[]>(member?.interactionTags || []); // ✅ 使用真實互動標籤
 
   // 平台切換狀態 (Figma v1087)
-  const [currentPlatform, setCurrentPlatform] = useState<ChatPlatform>('LINE');
+  const [currentPlatform, setCurrentPlatform] = useState<ChatPlatform>(initialPlatform || 'LINE');
   const [threadsMap, setThreadsMap] = useState<Record<string, string>>({});
 
   // FB 外部 API 設定
@@ -154,7 +147,10 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
     if (!targetId) return;
     try {
       const token = localStorage.getItem('auth_token');
-      const resp = await fetch(`${chatSessionApiBase}/members/${targetId}/chat-session`, {
+      const query = initialPlatform === 'Facebook'
+        ? `?platform=${encodeURIComponent(initialPlatform)}`
+        : '';
+      const resp = await fetch(`${chatSessionApiBase}/members/${targetId}/chat-session${query}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const result = await resp.json();
@@ -172,7 +168,7 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
     } catch (e) {
       console.error('載入 chat-session 失敗', e);
     }
-  }, [member?.id, memberId, onPlatformChange, chatSessionApiBase]);
+  }, [member?.id, memberId, onPlatformChange, chatSessionApiBase, initialPlatform]);
 
   // GPT 計時器狀態
   const [isGptManualMode, setIsGptManualMode] = useState(false);
@@ -349,7 +345,10 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
 
     const loadMemberDetail = async () => {
       setIsLoadingMember(true);
-      const fullMember = await fetchMemberById(targetId);
+      const fullMember = await fetchMemberById(
+        targetId,
+        initialPlatform === 'Facebook' ? initialPlatform : undefined
+      );
       if (fullMember) {
         setMember(fullMember);
       }
@@ -526,12 +525,16 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
 
   // 平台切換時重置訊息狀態並重新載入
   useEffect(() => {
+    // Facebook 平台需要等待 fbPageId 獲取完成
+    if (currentPlatform === 'Facebook' && !fbPageId) {
+      return;
+    }
     setMessages([]);
     setPage(1);
     setHasMore(true);
     setVisibleDate('');
     loadChatMessages(1, false);
-  }, [currentPlatform, loadChatMessages]);
+  }, [currentPlatform, loadChatMessages, fbPageId]);
 
   // 初始載入訊息後設定 visibleDate（顯示最新訊息的日期）
   useEffect(() => {
@@ -609,15 +612,8 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
     }
   }, [hasMore, isLoading, page, loadChatMessages, visibleDate]);
 
-  // Load initial messages when member changes or memberId is available
-  useEffect(() => {
-    const targetId = member?.id?.toString() || memberId;
-    if (targetId) {
-      loadChatMessages(1, false);
-    }
-  }, [member?.id, memberId, loadChatMessages, currentPlatform]);
-
   // Auto-scroll to bottom on initial load (只執行一次)
+  // Note: Initial message loading is handled by the platform switch effect above
   useEffect(() => {
     if (messages.length > 0 && chatContainerRef.current && page === 1 && !hasInitialScrolled.current) {
       requestAnimationFrame(() => {
@@ -672,43 +668,27 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
     };
   }, [member?.id]);
 
-  // GPT 計時器 useEffect：頁面重新整理時清除手動模式狀態
+  // GPT 計時器初始化：清除殘留狀態並從資料庫同步
   useEffect(() => {
     if (!member?.id) return;
 
-    // 頁面載入時，檢查是否有殘留的計時器狀態
     const timerKey = `gpt_timer_${member.id}`;
     const storedTimer = localStorage.getItem(timerKey);
 
+    // 清除頁面重新整理時的殘留狀態
     if (storedTimer) {
-      console.log('🔄 [GPT Timer] 偵測到頁面重新整理，清除手動模式狀態');
-      // 清除 localStorage 中的計時器資料
       localStorage.removeItem(timerKey);
-      // 確保狀態為自動模式（已經是 false，但明確設置）
-      setIsGptManualMode(false);
-      // 清除任何可能殘留的計時器
       if (gptTimerRef.current) {
         clearTimeout(gptTimerRef.current);
         gptTimerRef.current = null;
       }
     }
-  }, [member?.id]);
 
-  // GPT 計時器 useEffect：頁面載入時從資料庫同步 GPT 模式狀態
-  useEffect(() => {
-    if (!member?.id) return;
-
-    // 從資料庫載入的 gpt_enabled 值來設定初始狀態
+    // 從資料庫同步 GPT 模式狀態
     if (member.gpt_enabled !== undefined) {
-      // gpt_enabled = true → 自動模式 → isGptManualMode = false
-      // gpt_enabled = false → 手動模式 → isGptManualMode = true
       const shouldBeManualMode = !member.gpt_enabled;
-
       if (shouldBeManualMode !== isGptManualMode) {
-        console.log(`🔄 [GPT Timer] 頁面載入：從資料庫同步 GPT 模式 (gpt_enabled=${member.gpt_enabled})`);
         setIsGptManualMode(shouldBeManualMode);
-
-        // 如果是手動模式，需要啟動計時器
         if (shouldBeManualMode) {
           startGptTimer();
         }
@@ -716,25 +696,17 @@ export default function ChatRoomLayout({ member: initialMember, memberId, chatSe
     }
   }, [member?.id, member?.gpt_enabled]);
 
-  // GPT 計時器 useEffect：會員切換時清理
+  // GPT 計時器清理：會員切換或組件卸載時
   useEffect(() => {
-    // 當會員變更時，恢復上一個會員的 GPT 模式
     return () => {
       if (member?.id && isGptManualMode) {
         restoreGptMode();
       }
-    };
-  }, [member?.id, isGptManualMode, restoreGptMode]);
-
-  // GPT 計時器 useEffect：組件卸載時清理
-  useEffect(() => {
-    return () => {
-      // 組件卸載時清除計時器
       if (gptTimerRef.current) {
         clearTimeout(gptTimerRef.current);
       }
     };
-  }, []);
+  }, [member?.id, isGptManualMode, restoreGptMode]);
 
   const handleSendMessage = async () => {
     const trimmedText = messageInput.trim();

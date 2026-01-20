@@ -16,6 +16,7 @@ export default function ChatRoomPage() {
 
   // 從 params 獲取會員名稱（優先使用傳入的 memberName）
   const memberName = params.memberName || member?.username || member?.realName;
+  const initialPlatform = (params.channel || params.platform) as ChatPlatform | undefined;
 
   // 導航到會員管理列表（第一層麵包屑點擊）
   const handleNavigateToMemberManagement = () => {
@@ -38,6 +39,7 @@ export default function ChatRoomPage() {
         member={member}
         memberId={params.memberId}
         memberName={memberName}
+        initialPlatform={initialPlatform}
         onBack={handleNavigateToMemberManagement}
         onNavigateToMemberDetail={handleNavigateToMemberDetail}
       />
