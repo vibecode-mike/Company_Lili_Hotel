@@ -139,6 +139,7 @@ async def get_members(
     if member_line_uids:
         # 使用子查詢找出每個 thread_id (line_uid) 的最新聊天時間
         # conversation_messages 的 thread_id = platform_uid (line_uid)
+        # 注意：platform 可能是 'LINE' 或 NULL，都需要包含
         subq = (
             select(
                 ConversationMessage.thread_id,
@@ -146,7 +147,7 @@ async def get_members(
             )
             .where(
                 ConversationMessage.thread_id.in_(member_line_uids),
-                ConversationMessage.platform == 'LINE'
+                or_(ConversationMessage.platform == 'LINE', ConversationMessage.platform.is_(None))
             )
             .group_by(ConversationMessage.thread_id)
         ).subquery()

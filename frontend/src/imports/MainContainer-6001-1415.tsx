@@ -440,20 +440,26 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Displ
       data-name="Container"
       style={{ backgroundColor: isPressed || isHovered ? '#F8FAFC' : 'white' }}
     >
+      {/* 未回覆藍點指示器 */}
+      {member.isUnanswered && (
+        <div
+          style={{
+            position: 'absolute',
+            left: '4px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: '7px',
+            height: '7px',
+            borderRadius: '50%',
+            backgroundColor: '#0F6BEB',
+            zIndex: 10,
+          }}
+          data-name="Unanswered Indicator"
+        />
+      )}
       <div className="flex flex-row items-center size-full">
         <div className="box-border content-stretch flex items-center p-[12px] relative w-full">
-          <div className="content-stretch flex items-center relative shrink-0 w-[260px]" data-name="Container">
-            {/* 未回覆藍點指示器 */}
-            {member.isUnanswered && (
-              <div
-                className="w-[7px] h-[7px] rounded-full bg-[#0F6BEB] shrink-0"
-                data-name="Unanswered Indicator"
-              />
-            )}
-            {/* 沒有未回覆時的佔位空間 */}
-            {!member.isUnanswered && (
-              <div className="w-[7px] h-[7px] shrink-0" />
-            )}
+          <div className="flex items-center relative shrink-0 w-[300px] pl-[28px]" data-name="Container">
             <div className="bg-white relative rounded-full shrink-0 size-[68px] ml-[8px]" data-name="Avatar">
               <Avatar avatarUrl={member.avatar} altText={member.displayName || '會員頭像'} />
             </div>
