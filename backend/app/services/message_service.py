@@ -146,20 +146,14 @@ class MessageService:
             tag_include = target_filter.get("include", [])
             tag_exclude = target_filter.get("exclude", [])
 
-        # 組裝 API payload
-        payload = {
+        return {
+            "title": message.message_title or "",
             "channel": "FB",
             "target_type": target_type,
             "tag_include": tag_include,
             "tag_exclude": tag_exclude,
             "element": api_elements
         }
-
-        # 加入 message_title（用於通知/預覽標題）
-        if message.message_title:
-            payload["title"] = message.message_title
-
-        return payload
 
     # ============================================================
     # line_app 配置

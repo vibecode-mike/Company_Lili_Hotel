@@ -267,26 +267,17 @@ async def _sync_fb_auto_template(
     auto_response: AutoResponse,
     jwt_token: str
 ) -> None:
-    """
-    同步自動回應到 Facebook 外部 API
-
-    Args:
-        auto_response: 已載入關聯資料的 AutoResponse 物件
-        jwt_token: Facebook JWT Token
-
-    Raises:
-        HTTPException: 當缺少 token 或 API 呼叫失敗時
-    """
+    """同步自動回應到 Facebook 外部 API"""
     if not jwt_token:
         raise HTTPException(
             status_code=400,
             detail="缺少 jwt_token，請先完成 Facebook 授權"
         )
 
-    # 建立 payload
     payload = {
         "firm_id": 1,
         "channel": "FB",
+        "page_id": auto_response.channel_id or "",
         "response_type": 2 if auto_response.trigger_type == TriggerType.KEYWORD.value else 3,
         "enabled": auto_response.is_active,
         "trigger_time": 0,
@@ -310,7 +301,7 @@ async def _sync_fb_auto_template(
             detail=f"同步 Facebook 自動回應失敗: {error_msg}"
         )
 
-    logger.info(f"FB auto_template synced successfully for auto_response_id={auto_response.id}")
+    logger.info(f"FB auto_template synced for auto_response_id={auto_response.id}")
 
 
 @router.get("", response_model=SuccessResponse)
@@ -388,7 +379,8 @@ class FbAutoResponseUpdate(BaseModel):
     keywords: Optional[List[str]] = None
     messages: Optional[List[str]] = None
     is_active: Optional[bool] = None
-    trigger_type: Optional[str] = None  # 'keyword' or 'follow'
+    trigger_type: Optional[str] = None
+    page_id: Optional[str] = None
 
 
 @router.patch("/fb/{fb_id}", response_model=SuccessResponse)
@@ -404,6 +396,8 @@ async def update_fb_auto_response(
         "trigger_time": 0,
     }
 
+    if data.page_id is not None:
+        payload["page_id"] = data.page_id
     if data.trigger_type:
         payload["response_type"] = 2 if data.trigger_type == "keyword" else 3
     if data.is_active is not None:

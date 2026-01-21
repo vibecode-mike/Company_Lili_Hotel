@@ -167,17 +167,25 @@ function mapFbAutoResponse(item: FbAutoReply): AutoReply {
     isDuplicate: !kw.enabled,  // FB API 的 enabled=false 表示重複
   }));
 
-  // FB API 的 reply_type: 2=keyword, 3=follow
-  const triggerType: AutoReplyTriggerType = item.reply_type === 2 ? 'keyword' : 'follow';
+  // FB API 的 response_type: 2=keyword, 3=follow
+  const triggerType: AutoReplyTriggerType = item.response_type === 2 ? 'keyword' : 'follow';
+
+  // 正確提取訊息（text 是陣列）
+  const messages = Array.isArray(item?.text)
+    ? item.text
+        .filter(t => t?.enabled !== false)
+        .map(t => t?.text ?? '')
+        .filter(Boolean)
+    : [];
 
   return {
     id: `fb-${item.id}`,  // 加上 fb- 前綴避免與 LINE 的 ID 衝突
-    name: item.text || '未命名自動回應',
+    name: item.channel_name || `FB 自動回應 #${item.id}`,  // 使用粉專名稱
     triggerType,
     keywords,
     keywordObjects,
     tags: keywords,
-    messages: item.text ? [item.text] : [''],
+    messages: messages.length > 0 ? messages : [''],
     isActive: item.enabled,
     triggerCount: item.count || 0,
     successRate: 0,
@@ -265,8 +273,7 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
             fbReplies = Array.isArray(fbResult?.data) ? fbResult.data.map(mapFbAutoResponse) : [];
           }
         } catch (fbErr) {
-          console.warn('獲取 FB 自動回應失敗（非致命）:', fbErr);
-          // FB 獲取失敗不阻斷整個流程
+          console.warn('[AutoReplies] 獲取 FB 自動回應失敗（非致命）:', fbErr);
         }
       }
 
@@ -345,13 +352,48 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
           return getAutoReplyById(id) || null;
         }
 
-        // 原有的 LINE 自動回應邏輯 (POST/PUT)
-        let url = id ? `/api/v1/auto_responses/${id}` : '/api/v1/auto_responses';
-        if (payload.channels?.includes('Facebook')) {
-          if (jwtToken) {
-            url += `?jwt_token=${encodeURIComponent(jwtToken)}`;
+        // 檢測是否為純 FB 渠道新建（直接調用外部 FB API）
+        if (!id && payload.channels?.length === 1 && payload.channels[0] === 'Facebook') {
+          if (!jwtToken) throw new Error('請先登入 Facebook 帳號');
+
+          const fbApiBaseUrl = (import.meta.env.VITE_FB_API_URL || '').replace(/\/+$/, '');
+          if (!fbApiBaseUrl) throw new Error('FB API URL 未設定');
+
+          const fbResponse = await fetch(
+            `${fbApiBaseUrl}/api/v1/admin/meta_page/message/auto_template`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${jwtToken}`,
+              },
+              body: JSON.stringify({
+                firm_id: 1,
+                channel: "FB",
+                page_id: payload.channelId || "",
+                response_type: payload.triggerType === 'keyword' ? 2 : 3,
+                trigger_time: 0,
+                tags: payload.keywords || [],
+                text: payload.messages || [],
+              }),
+            }
+          );
+
+          if (!fbResponse.ok) {
+            const errData = await fbResponse.json().catch(() => null);
+            throw new Error(errData?.msg || errData?.detail || '建立 FB 自動回應失敗');
           }
+
+          await fetchAutoReplies();
+          toast.success('FB 自動回應已建立');
+          return null;
         }
+
+        // 原有的 LINE 自動回應邏輯 (POST/PUT)
+        const baseUrl = id ? `/api/v1/auto_responses/${id}` : '/api/v1/auto_responses';
+        const url = payload.channels?.includes('Facebook') && jwtToken
+          ? `${baseUrl}?jwt_token=${encodeURIComponent(jwtToken)}`
+          : baseUrl;
 
         const response = await fetch(url, {
           method: id ? 'PUT' : 'POST',

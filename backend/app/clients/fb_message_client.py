@@ -379,3 +379,25 @@ class FbMessageClient:
             except httpx.RequestError as e:
                 logger.error(f"FB broadcast list request error: {e}")
                 return {"ok": False, "error": str(e), "data": []}
+
+    async def get_broadcast_detail(self, group_message_id: int, jwt_token: str) -> Dict[str, Any]:
+        """取得推播活動詳細資訊"""
+        headers = self._auth_headers(jwt_token)
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                response = await client.get(
+                    f"{self.base_url}/api/v1/admin/meta_page/message/gourp_detail",
+                    params={"group_message_id": group_message_id},
+                    headers=headers,
+                )
+                response.raise_for_status()
+                result = response.json()
+                logger.info(f"FB broadcast detail fetched for id={group_message_id}")
+                return {"ok": True, **result}
+            except httpx.HTTPStatusError as e:
+                logger.error(f"FB broadcast detail API error: {e.response.status_code} - {e.response.text}")
+                return {"ok": False, "error": f"API error: {e.response.status_code}", "data": []}
+            except httpx.RequestError as e:
+                logger.error(f"FB broadcast detail request error: {e}")
+                return {"ok": False, "error": str(e), "data": []}

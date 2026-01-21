@@ -5,7 +5,16 @@ import svgPathsModal from "../imports/svg-9n0wtrekj3";
 import KeywordTagsInput from './KeywordTagsInput';
 import TriggerTimeOptions, { TriggerTimeType, ScheduleModeType } from './TriggerTimeOptions';
 import { SimpleBreadcrumb, DeleteButton } from './common';
+import { ChannelIcon } from './common/icons/ChannelIcon';
 import { useAutoReplies, type AutoReply as AutoReplyRecord, type AutoReplyPayload, type AutoReplyConflict } from '../contexts/AutoRepliesContext';
+
+// 渠道選項介面（與群發訊息頁面一致）
+interface ChannelOption {
+  value: string;              // "LINE_xxx" 或 "FB_xxx"
+  platform: 'LINE' | 'Facebook';
+  channelId: string;          // LINE channel_id 或 FB page_id
+  label: string;              // 渠道名稱
+}
 
 interface CreateAutoReplyProps {
   onBack: () => void;
@@ -83,9 +92,9 @@ export default function CreateAutoReplyInteractive({
   const [conflictData, setConflictData] = useState<AutoReplyConflict | null>(null);
   const [pendingPayload, setPendingPayload] = useState<AutoReplyPayload | null>(null);
 
-  // 渠道 ID 狀態（用於歡迎訊息衝突判斷）
-  const [lineBasicId, setLineBasicId] = useState<string | null>(null);
-  const [fbPageId, setFbPageId] = useState<string | null>(null);
+  // 渠道選項狀態（動態從 API 獲取）
+  const [channelOptions, setChannelOptions] = useState<ChannelOption[]>([]);
+  const [selectedChannelValue, setSelectedChannelValue] = useState<string>('');
 
   const resetForm = useCallback(() => {
     setReplyType('welcome');
@@ -97,22 +106,62 @@ export default function CreateAutoReplyInteractive({
     setScheduleMode('time');
   }, []);
 
-  // 獲取渠道 ID（LINE basic_id / Facebook page_id）
+  // 獲取渠道列表（動態構建選項，與群發訊息頁面一致）
   useEffect(() => {
-    // 獲取 LINE channel basic_id
-    fetch('/api/v1/line_channels/current')
-      .then(res => res.ok ? res.json() : null)
-      .then(data => setLineBasicId(data?.basic_id || null))
-      .catch(() => null);
+    const fetchChannels = async () => {
+      const options: ChannelOption[] = [];
+      const token = localStorage.getItem('auth_token');
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      };
 
-    // 獲取 FB channel page_id
-    fetch('/api/v1/fb_channels')
-      .then(res => res.ok ? res.json() : [])
-      .then(data => {
-        const active = Array.isArray(data) ? data.find((ch: { is_active?: boolean }) => ch.is_active) : null;
-        setFbPageId(active?.page_id || null);
-      })
-      .catch(() => null);
+      try {
+        const [lineRes, fbRes] = await Promise.all([
+          fetch('/api/v1/line_channels/current', { headers }),
+          fetch('/api/v1/fb_channels', { headers })
+        ]);
+
+        if (lineRes.ok) {
+          const lineChannel = await lineRes.json();
+          if (lineChannel?.channel_id) {
+            options.push({
+              value: `LINE_${lineChannel.channel_id}`,
+              platform: 'LINE',
+              channelId: lineChannel.channel_id,
+              label: lineChannel.channel_name || 'LINE 官方帳號',
+            });
+          }
+        }
+
+        if (fbRes.ok) {
+          const fbChannels = await fbRes.json();
+          if (Array.isArray(fbChannels)) {
+            fbChannels.forEach((fb: { page_id: string; channel_name: string }) => {
+              if (fb.page_id) {
+                options.push({
+                  value: `FB_${fb.page_id}`,
+                  platform: 'Facebook',
+                  channelId: fb.page_id,
+                  label: fb.channel_name || 'Facebook 粉專',
+                });
+              }
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('渠道獲取失敗', e);
+      }
+
+      setChannelOptions(options);
+
+      if (options.length > 0 && !selectedChannelValue) {
+        setSelectedChannelValue(options[0].value);
+        setSelectedChannel(options[0].platform);
+      }
+    };
+
+    fetchChannels();
   }, []);
 
   // 處理日期/時間模式切換，清空另一模式的值
@@ -206,18 +255,12 @@ export default function CreateAutoReplyInteractive({
     { value: 'follow', label: '一律回應' }
   ];
 
-  const channelOptions: { value: ChannelType; label: string }[] = [
-    { value: 'LINE', label: 'LINE' },
-    { value: 'Facebook', label: 'Facebook' }
-  ];
-
   const getReplyTypeLabel = (type: ReplyType) => {
     return replyTypeOptions.find(opt => opt.value === type)?.label || '';
   };
 
-  const getChannelLabel = (channel: ChannelType) => {
-    return channelOptions.find(opt => opt.value === channel)?.label || '';
-  };
+  const getChannelLabel = (channel: ChannelType) =>
+    channelOptions.find(opt => opt.platform === channel)?.label || channel;
 
   const handleInsertVariable = (index: number) => {
     const target = messages[index];
@@ -305,12 +348,9 @@ export default function CreateAutoReplyInteractive({
       }
     }
 
-    // 根據 scheduleMode 只送對應欄位
     const sendDateFields = shouldSendSchedule && scheduleMode === 'date';
     const sendTimeFields = shouldSendSchedule && scheduleMode === 'time';
-
-    // 根據選擇的渠道帶入對應的 channelId
-    const channelId = selectedChannel === 'LINE' ? lineBasicId : fbPageId;
+    const channelId = channelOptions.find(opt => opt.value === selectedChannelValue)?.channelId;
 
     const payload: AutoReplyPayload = {
       name: `${getReplyTypeLabel(replyType)} - ${trimmedMessages[0].slice(0, 12) || '訊息'}`,
@@ -610,18 +650,39 @@ export default function CreateAutoReplyInteractive({
                             <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-[8px]" />
                             <div className="flex flex-col justify-center min-h-inherit size-full">
                               <div className="box-border content-stretch flex flex-col gap-[4px] items-start justify-center min-h-inherit p-[8px] relative w-full cursor-pointer" onClick={() => setIsChannelDropdownOpen(!isChannelDropdownOpen)}>
-                                <div className="content-stretch flex gap-[8px] items-start relative shrink-0 w-full">
-                                  <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] whitespace-nowrap overflow-hidden text-ellipsis">{getChannelLabel(selectedChannel)}</p>
+                                <div className="content-stretch flex gap-[8px] items-center relative shrink-0 w-full">
+                                  {/* 顯示選中渠道的圖標和名稱 */}
+                                  {channelOptions.length > 0 ? (
+                                    <>
+                                      <ChannelIcon platform={selectedChannel} size={20} />
+                                      <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] whitespace-nowrap overflow-hidden text-ellipsis">{getChannelLabel(selectedChannel)}</p>
+                                    </>
+                                  ) : (
+                                    <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] text-[#9e9e9e] text-[16px]">請先至基本設定連結渠道</p>
+                                  )}
                                   <div className="relative shrink-0 size-[24px]">
                                     <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
                                       <path d={svgPathsModal.p2b927b00} fill="var(--fill-0, #6E6E6E)" />
                                     </svg>
                                   </div>
                                 </div>
-                                {isChannelDropdownOpen && (
+                                {isChannelDropdownOpen && channelOptions.length > 0 && (
                                   <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-neutral-100 rounded-[8px] shadow-lg z-10">
                                     {channelOptions.map(opt => (
-                                      <div key={opt.value} className="py-[12px] px-[8px] hover:bg-slate-50 cursor-pointer flex items-center" onClick={(e) => { e.stopPropagation(); setSelectedChannel(opt.value); if (opt.value === 'Facebook' && replyType !== 'keyword') { setReplyType('keyword'); } setIsChannelDropdownOpen(false); }}>
+                                      <div
+                                        key={opt.value}
+                                        className="py-[12px] px-[8px] hover:bg-slate-50 cursor-pointer flex items-center gap-[8px]"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedChannelValue(opt.value);
+                                          setSelectedChannel(opt.platform);
+                                          if (opt.platform === 'Facebook' && replyType !== 'keyword') {
+                                            setReplyType('keyword');
+                                          }
+                                          setIsChannelDropdownOpen(false);
+                                        }}
+                                      >
+                                        <ChannelIcon platform={opt.platform} size={20} />
                                         <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#383838] text-[16px] leading-[1.5] whitespace-nowrap">{opt.label}</p>
                                       </div>
                                     ))}

@@ -156,8 +156,19 @@ export interface ApiResponse<T = any> {
  */
 export interface FbAutoReplyKeyword {
   id: number;
-  basic_id: number;
+  basic_id?: number;
   name: string;
+  enabled: boolean;
+}
+
+/**
+ * FB 自動回應訊息物件（從外部 FB API 返回）
+ */
+export interface FbAutoReplyText {
+  id: number;
+  basic_id?: number;
+  text: string;
+  count: number;
   enabled: boolean;
 }
 
@@ -165,12 +176,28 @@ export interface FbAutoReplyKeyword {
  * FB 自動回應物件（從外部 FB API 返回）
  */
 export interface FbAutoReply {
+  id: number;
   channel: string;
-  count: number;
+  channel_name: string;      // 粉專名稱
+  page_id: string;           // 粉專 ID
+  response_type: number;     // 2=keyword, 3=follow
+  trigger_time: number;
   create_time: number;
   enabled: boolean;
-  id: number;
+  count: number;
+  text: FbAutoReplyText[];   // 訊息陣列
   keywords: FbAutoReplyKeyword[];
-  reply_type: number;
-  text: string;
+}
+
+/**
+ * FB 自動回應建立 Payload（用於 POST /api/v1/admin/meta_page/message/auto_template）
+ */
+export interface FbAutoReplyCreatePayload {
+  firm_id: number;
+  channel: 'FB';
+  page_id: string;
+  response_type: 2 | 3;      // 2=keyword, 3=follow
+  trigger_time: number;
+  tags: string[];            // 關鍵字陣列
+  text: string[];            // 回覆訊息陣列
 }
