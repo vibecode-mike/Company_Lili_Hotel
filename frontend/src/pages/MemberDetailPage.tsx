@@ -11,7 +11,7 @@ import type { ChatPlatform } from '../components/chat-room/types';
  */
 export default function MemberDetailPage() {
   const { params, navigate, goBack } = useNavigation();
-  const { getMemberById, fetchMemberById } = useMembers();
+  const { getMemberById, fetchMemberById, getDisplayMemberById } = useMembers();
   const [member, setMember] = useState<Member | undefined>(
     params.memberId ? getMemberById(params.memberId) : undefined
   );
@@ -67,6 +67,30 @@ export default function MemberDetailPage() {
     }
   }, [member, platform]);
 
+  // 獲取渠道名稱（粉專名/頻道名）- 優先從 displayMembers 獲取
+  const channelName = useMemo(() => {
+    if (!member) return null;
+
+    // FB 會員：使用 fb_customer_id 或 params.memberId 查找
+    if (platform === 'Facebook') {
+      const fbCustomerId = (member as any)?.fb_customer_id || params.memberId;
+      if (fbCustomerId) {
+        const displayMember = getDisplayMemberById(`fb-${fbCustomerId}`);
+        if (displayMember?.channelName) {
+          return displayMember.channelName;
+        }
+      }
+    }
+
+    // LINE 會員：使用 member.id 查找
+    const displayMember = getDisplayMemberById(`line-${member.id}`);
+    if (displayMember?.channelName) {
+      return displayMember.channelName;
+    }
+
+    return null;
+  }, [member, platform, params.memberId, getDisplayMemberById]);
+
   // 轉換為 MemberData 格式（如果需要）- 使用渠道特定的頭像和名稱
   const memberData = member ? {
     id: member.id,
@@ -99,6 +123,7 @@ export default function MemberDetailPage() {
         onNavigate={navigate}
         platform={platform}
         autoRefresh={false}
+        channelName={channelName}
       />
     </MainLayout>
   );

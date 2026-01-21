@@ -1311,37 +1311,96 @@ function Container6({ member, onMemberUpdate }: { member?: MemberData; onMemberU
   );
 }
 
-function Container7({ member }: { member?: MemberData }) {
-  const [channelName, setChannelName] = React.useState<string>('LINE');
+function Container7({ member, propChannelName }: { member?: MemberData; propChannelName?: string | null }) {
+  const [channelName, setChannelName] = React.useState<string>('');
+  const joinSource = member?.join_source || 'LINE';
+  const { getDisplayMemberById } = useMembers();
 
   React.useEffect(() => {
+    // 優先使用傳入的 propChannelName
+    if (propChannelName) {
+      setChannelName(propChannelName);
+      return;
+    }
+
+    // 嘗試從 displayMembers 獲取正確的渠道名稱
+    const normalizedSource = joinSource?.toLowerCase() || 'line';
+    const isFacebook = normalizedSource === 'facebook' || normalizedSource === 'fb';
+
+    if (isFacebook && member?.id) {
+      // FB 會員：嘗試從 displayMembers 獲取（可能需要 customer_id）
+      // 嘗試多種 ID 格式
+      const fbId = (member as any)?.fb_customer_id || member.id;
+      const displayMember = getDisplayMemberById(`fb-${fbId}`);
+      if (displayMember?.channelName) {
+        setChannelName(displayMember.channelName);
+        return;
+      }
+    } else if (member?.id) {
+      // LINE 會員：使用 member.id 查找
+      const displayMember = getDisplayMemberById(`line-${member.id}`);
+      if (displayMember?.channelName) {
+        setChannelName(displayMember.channelName);
+        return;
+      }
+    }
+
+    // 如果從 displayMembers 找不到，則使用 API 獲取
     const fetchChannelInfo = async () => {
       try {
         const token = localStorage.getItem('auth_token');
         if (!token) return;
 
-        const response = await fetch('/api/v1/line_channels/current', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
+        if (isFacebook) {
+          // Facebook 渠道：獲取粉專名稱
+          const response = await fetch('/api/v1/fb_channels', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
 
-        if (!response.ok) return;
+          if (!response.ok) {
+            setChannelName('Facebook');
+            return;
+          }
 
-        const result = await response.json();
-        // 優先使用 channel_name，如果沒有則使用 channel_id
-        if (result?.channel_name) {
-          setChannelName(result.channel_name);
-        } else if (result?.channel_id) {
-          setChannelName(result.channel_id);
+          const fbChannels = await response.json();
+          // 如果只有一個粉專，使用它
+          if (Array.isArray(fbChannels) && fbChannels.length > 0) {
+            setChannelName(fbChannels[0].channel_name || 'Facebook');
+          } else {
+            setChannelName('Facebook');
+          }
+        } else {
+          // LINE 渠道：獲取 LINE 頻道名稱
+          const response = await fetch('/api/v1/line_channels/current', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+
+          if (!response.ok) {
+            setChannelName('LINE');
+            return;
+          }
+
+          const result = await response.json();
+          if (result?.channel_name) {
+            setChannelName(result.channel_name);
+          } else if (result?.channel_id) {
+            setChannelName(result.channel_id);
+          } else {
+            setChannelName('LINE');
+          }
         }
       } catch (error) {
         console.error('Failed to fetch channel info:', error);
+        setChannelName(isFacebook ? 'Facebook' : 'LINE');
       }
     };
 
     fetchChannelInfo();
-  }, []);
+  }, [joinSource, propChannelName, member?.id, getDisplayMemberById]);
 
   return (
     <div className="content-stretch flex items-center relative shrink-0 w-full" data-name="Container">
@@ -1418,10 +1477,10 @@ function Container10({ member }: { member?: MemberData }) {
   );
 }
 
-function Container11({ member }: { member?: MemberData }) {
+function Container11({ member, propChannelName }: { member?: MemberData; propChannelName?: string | null }) {
   return (
     <div className="content-stretch flex flex-col gap-[12px] items-start relative shrink-0 w-full" data-name="Container">
-      <Container7 member={member} />
+      <Container7 member={member} propChannelName={propChannelName} />
       <Container8 member={member} />
       <Container9 member={member} />
       <Container10 member={member} />
@@ -1429,7 +1488,7 @@ function Container11({ member }: { member?: MemberData }) {
   );
 }
 
-function Container12({ member, onMemberUpdate }: { member?: MemberData; onMemberUpdate?: (member: MemberData) => void }) {
+function Container12({ member, onMemberUpdate, propChannelName }: { member?: MemberData; onMemberUpdate?: (member: MemberData) => void; propChannelName?: string | null }) {
   return (
     <div className="content-stretch flex flex-col gap-[20px] items-start relative shrink-0 w-full" data-name="Container">
       <Container6 member={member} onMemberUpdate={onMemberUpdate} />
@@ -1440,18 +1499,18 @@ function Container12({ member, onMemberUpdate }: { member?: MemberData; onMember
           </svg>
         </div>
       </div>
-      <Container11 member={member} />
+      <Container11 member={member} propChannelName={propChannelName} />
     </div>
   );
 }
 
-function Container13({ member, onMemberUpdate }: { member?: MemberData; onMemberUpdate?: (member: MemberData) => void }) {
+function Container13({ member, onMemberUpdate, propChannelName }: { member?: MemberData; onMemberUpdate?: (member: MemberData) => void; propChannelName?: string | null }) {
   return (
     <div className="relative rounded-[20px] shrink-0 w-full" data-name="Container">
       <div aria-hidden="true" className="absolute border border-[#e1ebf9] border-solid inset-0 pointer-events-none rounded-[20px]" />
       <div className="size-full">
         <div className="box-border content-stretch flex flex-col gap-[32px] items-start p-[16px] md:p-[28px] relative w-full">
-          <Container12 member={member} onMemberUpdate={onMemberUpdate} />
+          <Container12 member={member} onMemberUpdate={onMemberUpdate} propChannelName={propChannelName} />
         </div>
       </div>
     </div>
@@ -1928,10 +1987,10 @@ function Container24({ member, onMemberUpdate }: { member?: MemberData; onMember
   );
 }
 
-function Container25({ member, onMemberUpdate }: { member?: MemberData; onMemberUpdate?: (member: MemberData) => void }) {
+function Container25({ member, onMemberUpdate, propChannelName }: { member?: MemberData; onMemberUpdate?: (member: MemberData) => void; propChannelName?: string | null }) {
   return (
     <div className="basis-0 content-stretch flex flex-col gap-[32px] grow items-start min-h-px min-w-px relative shrink-0" data-name="Container">
-      <Container13 member={member} onMemberUpdate={onMemberUpdate} />
+      <Container13 member={member} onMemberUpdate={onMemberUpdate} propChannelName={propChannelName} />
       <Container20 member={member} onMemberUpdate={onMemberUpdate} />
       <Container24 member={member} onMemberUpdate={onMemberUpdate} />
     </div>
@@ -1944,17 +2003,19 @@ function Container26({
   onMemberUpdate,
   fallbackMemberName,
   platform,
+  propChannelName,
 }: {
   member?: MemberData;
   onNavigate?: (page: string, params?: { memberId?: string; memberName?: string; platform?: ChatPlatform }) => void;
   onMemberUpdate?: (member: MemberData) => void;
   fallbackMemberName?: string;
   platform?: ChatPlatform;
+  propChannelName?: string | null;
 }) {
   return (
     <div className="content-stretch flex gap-[32px] items-start relative shrink-0 w-full" data-name="Container">
       <Container2 member={member} onNavigate={onNavigate} fallbackMemberName={fallbackMemberName} platform={platform} />
-      <Container25 member={member} onMemberUpdate={onMemberUpdate} />
+      <Container25 member={member} onMemberUpdate={onMemberUpdate} propChannelName={propChannelName} />
     </div>
   );
 }
@@ -2189,12 +2250,14 @@ function MainContent({
   onMemberUpdate,
   fallbackMemberName,
   platform,
+  propChannelName,
 }: {
   member?: MemberData;
   onNavigate?: (page: string, params?: { memberId?: string; memberName?: string; platform?: ChatPlatform }) => void;
   onMemberUpdate?: (member: MemberData) => void;
   fallbackMemberName?: string;
   platform?: ChatPlatform;
+  propChannelName?: string | null;
 }) {
   return (
     <div className="relative shrink-0 w-full" data-name="Main Content">
@@ -2211,6 +2274,7 @@ function MainContent({
             onMemberUpdate={onMemberUpdate}
             fallbackMemberName={fallbackMemberName}
             platform={platform}
+            propChannelName={propChannelName}
           />
           <ConsumptionRecordsSection />
         </div>
@@ -2219,20 +2283,23 @@ function MainContent({
   );
 }
 
-export default function MainContainer({ 
-  onBack, 
-  member, 
+export default function MainContainer({
+  onBack,
+  member,
   onNavigate,
   fallbackMemberName,
   platform,
   autoRefresh = true,
-}: { 
-  onBack?: () => void; 
+  channelName: propChannelName,
+}: {
+  onBack?: () => void;
   member?: MemberData;
   onNavigate?: (page: string, params?: { memberId?: string; memberName?: string; platform?: ChatPlatform }) => void;
   fallbackMemberName?: string;
   platform?: ChatPlatform;
   autoRefresh?: boolean;
+  /** 渠道名稱（粉專名/頻道名），優先使用此值 */
+  channelName?: string | null;
 } = {}) {
   const [currentMember, setCurrentMember] = useState<MemberData | undefined>(member);
   const { fetchMemberById } = useMembers();
@@ -2334,6 +2401,7 @@ export default function MainContainer({
         onMemberUpdate={(updatedMember) => setCurrentMember(updatedMember)}
         fallbackMemberName={fallbackMemberName}
         platform={platform}
+        propChannelName={propChannelName}
       />
     </div>
   );

@@ -197,11 +197,15 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       }
 
       setChannelOptions(options);
+      console.log('[MessageCreation] 渠道選項載入完成:', options.map(o => o.value));
 
-      // 預設選中第一個渠道
+      // 預設選中第一個渠道（僅在非編輯模式或 selectedChannel 為空時）
       if (options.length > 0 && !selectedChannel) {
+        console.log('[MessageCreation] 設定預設渠道:', options[0].value);
         setSelectedChannel(options[0].value);
         setSelectedPlatform(options[0].platform);
+      } else {
+        console.log('[MessageCreation] 保留現有 selectedChannel:', selectedChannel);
       }
     };
 
@@ -448,7 +452,11 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     // 根據 platform 和 channelId 還原 selectedChannel
     if (editMessageData.channelId) {
       const prefix = platform === 'Facebook' ? 'FB' : 'LINE';
-      setSelectedChannel(`${prefix}_${editMessageData.channelId}`);
+      const restoredChannel = `${prefix}_${editMessageData.channelId}`;
+      console.log('[MessageCreation] 還原渠道:', { platform, channelId: editMessageData.channelId, restoredChannel });
+      setSelectedChannel(restoredChannel);
+    } else {
+      console.log('[MessageCreation] editMessageData 無 channelId:', editMessageData);
     }
 
     if (editMessageData.scheduledDate) {

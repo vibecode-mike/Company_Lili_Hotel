@@ -112,7 +112,7 @@ export default function ChatRoomLayout({
   onPlatformChange,
   initialPlatform,
 }: ChatRoomLayoutProps) {
-  const { fetchMemberById } = useMembers();
+  const { fetchMemberById, getDisplayMemberById } = useMembers();
   const [member, setMember] = useState<Member | undefined>(initialMember);
   const [isLoadingMember, setIsLoadingMember] = useState(false);
 
@@ -337,6 +337,28 @@ export default function ChatRoomLayout({
     }
     return { ...displayMember, lastChatTime: latestChatTimestamp };
   }, [displayMember, latestChatTimestamp]);
+
+  // 獲取渠道名稱（粉專名/頻道名）- 優先從 displayMembers 獲取
+  const panelChannelName = useMemo(() => {
+    // 嘗試從 displayMembers 獲取 channelName
+    const targetId = member?.id?.toString() || memberId;
+    if (targetId) {
+      // FB 會員 ID 格式：fb-{customer_id}
+      const fbCustomerId = (member as any)?.fb_customer_id || (member as any)?.channelUid;
+      if (fbCustomerId && currentPlatform === 'Facebook') {
+        const displayMemberData = getDisplayMemberById(`fb-${fbCustomerId}`);
+        if (displayMemberData?.channelName) {
+          return displayMemberData.channelName;
+        }
+      }
+      // LINE 會員
+      const displayMemberData = getDisplayMemberById(`line-${targetId}`);
+      if (displayMemberData?.channelName) {
+        return displayMemberData.channelName;
+      }
+    }
+    return null;
+  }, [member?.id, memberId, (member as any)?.fb_customer_id, (member as any)?.channelUid, currentPlatform, getDisplayMemberById]);
 
   // Fetch full member details when component mounts
   useEffect(() => {
@@ -951,9 +973,10 @@ export default function ChatRoomLayout({
                 member={panelMember}
                 memberTags={memberTags}
                 interactionTags={interactionTags}
-                    onEditTags={handleEditTags}
-                  />
-                ) : (
+                onEditTags={handleEditTags}
+                channelName={panelChannelName}
+              />
+            ) : (
                   <div className="w-full text-center text-[#6e6e6e] text-[16px]">
                     載入會員資料中...
                   </div>

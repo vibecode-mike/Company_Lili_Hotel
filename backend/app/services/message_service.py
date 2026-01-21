@@ -1194,14 +1194,17 @@ class MessageService:
         if self._is_scheduled(message):
             await self._cancel_message_job(message.id)
 
-        # 3. 刪除關聯的 template（如果存在）
-        if message.template:
-            template_id = message.template.id
-            await db.delete(message.template)
-            logger.debug(f"🗑️ 刪除關聯模板: ID={template_id}")
+        # 3. 保存 template 引用，稍後刪除
+        template_to_delete = message.template
 
-        # 4. 刪除消息本身
+        # 4. 先刪除消息本身（因為 template_id 有 NOT NULL 約束，必須先刪消息）
         await db.delete(message)
+
+        # 5. 刪除關聯的 template（如果存在）
+        if template_to_delete:
+            logger.debug(f"🗑️ 刪除關聯模板: ID={template_to_delete.id}")
+            await db.delete(template_to_delete)
+
         await db.commit()
 
         logger.info(f"✅ 消息刪除成功: ID={message_id}")

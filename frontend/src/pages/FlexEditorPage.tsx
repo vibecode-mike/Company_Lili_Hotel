@@ -119,6 +119,12 @@ export default function FlexEditorPage() {
             return `tag_${Math.abs(hash)}`;
           };
 
+          console.log('[FlexEditorPage] 後端返回 message:', {
+            platform: message.platform,
+            channel_id: message.channel_id,
+            channel_name: message.channel_name
+          });
+
           const transformedData = {
             id: message.id,
             title: message.message_title,
