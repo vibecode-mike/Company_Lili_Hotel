@@ -445,19 +445,9 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     setFilterCondition(editMessageData.filterCondition || 'include');
     setTemplateType(editMessageData.templateType || 'carousel');
 
-    // ✅ 還原平台和渠道選擇
+    // ✅ 還原平台（渠道由獨立 useEffect 處理，等待 channelOptions 載入）
     const platform = (editMessageData.platform as MessagePlatform) || 'LINE';
     setSelectedPlatform(platform);
-
-    // 根據 platform 和 channelId 還原 selectedChannel
-    if (editMessageData.channelId) {
-      const prefix = platform === 'Facebook' ? 'FB' : 'LINE';
-      const restoredChannel = `${prefix}_${editMessageData.channelId}`;
-      console.log('[MessageCreation] 還原渠道:', { platform, channelId: editMessageData.channelId, restoredChannel });
-      setSelectedChannel(restoredChannel);
-    } else {
-      console.log('[MessageCreation] editMessageData 無 channelId:', editMessageData);
-    }
 
     if (editMessageData.scheduledDate) {
       setScheduledDate(editMessageData.scheduledDate);
@@ -638,6 +628,31 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       }
     }
   }, [editMessageData]);
+
+  // ✅ 獨立處理渠道還原（等待 channelOptions 載入後）
+  useEffect(() => {
+    if (!editMessageData || channelOptions.length === 0) return;
+
+    const platform = (editMessageData.platform as MessagePlatform) || 'LINE';
+
+    if (editMessageData.channelId) {
+      // 有 channelId，直接還原
+      const prefix = platform === 'Facebook' ? 'FB' : 'LINE';
+      const restoredChannel = `${prefix}_${editMessageData.channelId}`;
+      // 確認該渠道存在於選項中
+      if (channelOptions.some(opt => opt.value === restoredChannel)) {
+        console.log('[MessageCreation] channelOptions 載入後還原渠道:', restoredChannel);
+        setSelectedChannel(restoredChannel);
+      }
+    } else {
+      // 舊草稿沒有 channelId，根據 platform 選擇第一個匹配的渠道
+      const matchingChannel = channelOptions.find(opt => opt.platform === platform);
+      if (matchingChannel) {
+        console.log('[MessageCreation] 舊草稿，選擇平台匹配渠道:', matchingChannel.value);
+        setSelectedChannel(matchingChannel.value);
+      }
+    }
+  }, [editMessageData, channelOptions]);
 
   // 監聽表單變更，標記為未儲存
   useEffect(() => {

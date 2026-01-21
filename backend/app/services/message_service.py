@@ -1194,16 +1194,33 @@ class MessageService:
         if self._is_scheduled(message):
             await self._cancel_message_job(message.id)
 
-        # 3. 保存 template 引用，稍後刪除
-        template_to_delete = message.template
+        # 3. 保存 template ID，稍後檢查是否可刪除
+        template_id_to_delete = message.template_id
 
         # 4. 先刪除消息本身（因為 template_id 有 NOT NULL 約束，必須先刪消息）
         await db.delete(message)
+        await db.flush()  # 確保消息已從資料庫刪除
 
-        # 5. 刪除關聯的 template（如果存在）
-        if template_to_delete:
-            logger.debug(f"🗑️ 刪除關聯模板: ID={template_to_delete.id}")
-            await db.delete(template_to_delete)
+        # 5. 檢查是否有其他消息仍在使用此 template，若無則刪除
+        if template_id_to_delete:
+            # 檢查是否有其他消息引用此 template
+            other_messages_stmt = select(func.count()).select_from(Message).where(
+                Message.template_id == template_id_to_delete
+            )
+            other_count_result = await db.execute(other_messages_stmt)
+            other_messages_count = other_count_result.scalar()
+
+            if other_messages_count == 0:
+                # 沒有其他消息使用此 template，可以安全刪除
+                from app.models.template import MessageTemplate
+                template_stmt = select(MessageTemplate).where(MessageTemplate.id == template_id_to_delete)
+                template_result = await db.execute(template_stmt)
+                template = template_result.scalar_one_or_none()
+                if template:
+                    logger.debug(f"🗑️ 刪除關聯模板: ID={template_id_to_delete}")
+                    await db.delete(template)
+            else:
+                logger.debug(f"⏭️ 保留模板 ID={template_id_to_delete}，仍有 {other_messages_count} 個消息使用")
 
         await db.commit()
 
