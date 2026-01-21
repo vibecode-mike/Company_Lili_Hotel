@@ -35,12 +35,17 @@ async def get_current_user(
     if not token:
         raise credentials_exception
 
-    payload: Optional[Dict[str, int]] = decode_access_token(token)
+    payload: Optional[Dict[str, str]] = decode_access_token(token)
     if payload is None:
         raise credentials_exception
 
-    user_id: Optional[int] = payload.get("sub")  # type: ignore[arg-type]
-    if user_id is None:
+    sub: Optional[str] = payload.get("sub")
+    if sub is None:
+        raise credentials_exception
+
+    try:
+        user_id = int(sub)
+    except (ValueError, TypeError):
         raise credentials_exception
 
     result = await db.execute(select(User).where(User.id == user_id))
@@ -87,7 +92,7 @@ async def login(
     # 創建訪問令牌
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.id}, expires_delta=access_token_expires
+        data={"sub": str(user.id)}, expires_delta=access_token_expires
     )
 
     return TokenResponse(
@@ -105,7 +110,7 @@ async def refresh_token(
     """刷新 Token"""
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": current_user.id}, expires_delta=access_token_expires
+        data={"sub": str(current_user.id)}, expires_delta=access_token_expires
     )
 
     return TokenResponse(

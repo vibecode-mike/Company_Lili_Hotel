@@ -973,14 +973,13 @@ async def send_member_chat_message(
         if not jwt_token:
             raise HTTPException(status_code=400, detail="缺少 jwt_token，請先完成 Facebook 授權")
 
-        # 檢查 page_id
-        if not page_id:
-            raise HTTPException(status_code=400, detail="缺少 page_id，請提供 Facebook Page ID")
+        # 檢查 fb_customer_id
+        if not member.fb_customer_id:
+            raise HTTPException(status_code=400, detail="此會員未綁定 Facebook 帳號")
 
         # 調用外部 FB API 發送訊息 (使用 fb_customer_id 識別)
         fb_client = FbMessageClient()
         send_result = await fb_client.send_message(
-            page_id=page_id,
             fb_customer_id=member.fb_customer_id,
             text=text,
             jwt_token=jwt_token

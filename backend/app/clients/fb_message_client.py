@@ -28,35 +28,59 @@ class FbMessageClient:
         """組裝帶 Authorization 的標頭"""
         return {"Authorization": f"Bearer {jwt_token}"}
 
-    async def send_message(self, page_id: str, fb_customer_id: str, text: str, jwt_token: str) -> dict:
+    async def send_message(self, fb_customer_id: str, text: str, jwt_token: str) -> dict:
         """
-        發送訊息到 Facebook 用戶 (使用 fb_customer_id 識別)
+        發送訊息到 Facebook 用戶
 
         Args:
-            page_id: Facebook Page ID
-            fb_customer_id: Facebook Customer ID
+            fb_customer_id: Facebook Customer ID (會轉為整數)
             text: 訊息內容
             jwt_token: JWT Token (Bearer token)
 
         Returns:
             {"ok": True, ...} on success
-            {"ok": False, "error": "..."} on failure
+            {"ok": False, "error": "...", "error_code": int} on failure
         """
         headers = self._auth_headers(jwt_token)
+
+        # 轉換 customer_id 為整數
+        try:
+            customer_id_int = int(fb_customer_id)
+        except (ValueError, TypeError):
+            logger.error(f"Invalid fb_customer_id format: {fb_customer_id}")
+            return {"ok": False, "error": f"無效的 Facebook 會員 ID: {fb_customer_id}"}
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
                 response = await client.post(
                     f"{self.base_url}/api/v1/admin/meta_page/message/single",
-                    json={"page_id": page_id, "customer_id": fb_customer_id, "text": text},
+                    json={"customer_id": customer_id_int, "text": text},
                     headers=headers
                 )
-                response.raise_for_status()
+
                 result = response.json()
-                logger.info(f"FB message sent to fb_customer_id={fb_customer_id}")
+                status_code = result.get("status", response.status_code)
+
+                # 處理錯誤碼
+                if status_code != 200:
+                    error_messages = {
+                        1004: "請求參數錯誤",
+                        604: "資料讀取失敗",
+                        610: "無平台存取資訊",
+                        611: "平台存取資訊已過期，請重新授權",
+                        635: "此會員不存在於 Facebook",
+                        2001: "呼叫 Facebook API 錯誤",
+                        603: "資料寫入失敗"
+                    }
+                    error_msg = error_messages.get(status_code, result.get("msg", f"未知錯誤 ({status_code})"))
+                    logger.error(f"FB API error: {status_code} - {error_msg}")
+                    return {"ok": False, "error": error_msg, "error_code": status_code}
+
+                logger.info(f"FB message sent to customer_id={customer_id_int}")
                 return {"ok": True, **result}
+
             except httpx.HTTPStatusError as e:
-                logger.error(f"FB API error: {e.response.status_code} - {e.response.text}")
+                logger.error(f"FB API HTTP error: {e.response.status_code} - {e.response.text}")
                 return {"ok": False, "error": f"API error: {e.response.status_code}"}
             except httpx.RequestError as e:
                 logger.error(f"FB request error: {e}")
