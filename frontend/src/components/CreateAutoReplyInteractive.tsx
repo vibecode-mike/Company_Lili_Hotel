@@ -652,9 +652,9 @@ export default function CreateAutoReplyInteractive({
                               <div className="box-border content-stretch flex flex-col gap-[4px] items-start justify-center min-h-inherit p-[8px] relative w-full cursor-pointer" onClick={() => setIsChannelDropdownOpen(!isChannelDropdownOpen)}>
                                 <div className="content-stretch flex gap-[8px] items-center relative shrink-0 w-full">
                                   {/* 顯示選中渠道的圖標和名稱 */}
-                                  {channelOptions.length > 0 ? (
+                                  {channelOptions.length > 0 && selectedChannel ? (
                                     <>
-                                      <ChannelIcon platform={selectedChannel} size={20} />
+                                      <ChannelIcon channel={selectedChannel} size={20} />
                                       <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] whitespace-nowrap overflow-hidden text-ellipsis">{getChannelLabel(selectedChannel)}</p>
                                     </>
                                   ) : (
@@ -682,7 +682,7 @@ export default function CreateAutoReplyInteractive({
                                           setIsChannelDropdownOpen(false);
                                         }}
                                       >
-                                        <ChannelIcon platform={opt.platform} size={20} />
+                                        <ChannelIcon channel={opt.platform} size={20} />
                                         <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#383838] text-[16px] leading-[1.5] whitespace-nowrap">{opt.label}</p>
                                       </div>
                                     ))}
