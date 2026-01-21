@@ -86,6 +86,7 @@ interface MessageCreationProps {
     targetType: string;
     templateType: string;
     platform?: MessagePlatform;
+    channelId?: string | null; // LINE channel_id 或 FB page_id
     flexMessageJson?: FlexMessage;
     selectedFilterTags?: Array<{ id: string; name: string }>;
     filterCondition?: 'include' | 'exclude';
@@ -439,7 +440,16 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     setSelectedFilterTags(editMessageData.selectedFilterTags || []);
     setFilterCondition(editMessageData.filterCondition || 'include');
     setTemplateType(editMessageData.templateType || 'carousel');
-    setSelectedPlatform((editMessageData.platform as MessagePlatform) || 'LINE');
+
+    // ✅ 還原平台和渠道選擇
+    const platform = (editMessageData.platform as MessagePlatform) || 'LINE';
+    setSelectedPlatform(platform);
+
+    // 根據 platform 和 channelId 還原 selectedChannel
+    if (editMessageData.channelId) {
+      const prefix = platform === 'Facebook' ? 'FB' : 'LINE';
+      setSelectedChannel(`${prefix}_${editMessageData.channelId}`);
+    }
 
     if (editMessageData.scheduledDate) {
       setScheduledDate(editMessageData.scheduledDate);

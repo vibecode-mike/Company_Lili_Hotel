@@ -126,6 +126,8 @@ export default function FlexEditorPage() {
             scheduleType,
             targetType: message.target_type === 'all_friends' ? 'all' : 'filtered',
             templateType, // ✅ Now dynamically detected
+            platform: message.platform || 'LINE', // ✅ 還原平台
+            channelId: message.channel_id || null, // ✅ 還原渠道 ID
             selectedFilterTags: message.target_filter ?
               Object.values(message.target_filter).flat().map((name: any) => ({
                 id: generateStableTagId(String(name)), // ✅ Stable ID generation
