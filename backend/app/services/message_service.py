@@ -1174,55 +1174,72 @@ class MessageService:
         Raises:
             ValueError: 消息不存在或狀態不允許刪除
         """
-        # 1. 查詢消息
-        stmt = select(Message).where(Message.id == message_id).options(
-            selectinload(Message.template)
-        )
+        # 查詢消息並驗證
+        message = await self._get_message_for_deletion(db, message_id)
+        template_id = message.template_id
+
+        logger.info(f"🗑️ 開始刪除消息: ID={message_id}, 狀態={message.send_status}")
+
+        # 取消排程任務
+        if self._is_scheduled(message):
+            await self._cancel_message_job(message.id)
+
+        # 刪除消息
+        await db.delete(message)
+        await db.flush()
+
+        # 清理未使用的模板
+        await self._cleanup_orphaned_template(db, template_id)
+
+        await db.commit()
+        logger.info(f"✅ 消息刪除成功: ID={message_id}")
+        return True
+
+    async def _get_message_for_deletion(
+        self,
+        db: AsyncSession,
+        message_id: int
+    ) -> Message:
+        """獲取並驗證可刪除的消息"""
+        stmt = select(Message).where(Message.id == message_id)
         result = await db.execute(stmt)
         message = result.scalar_one_or_none()
 
         if not message:
             raise ValueError(f"消息不存在: ID={message_id}")
 
-        # 2. 檢查狀態（僅允許刪除草稿和已排程）
         allowed_statuses = ["草稿", "已排程"]
         if message.send_status not in allowed_statuses:
-            raise ValueError(f"無法刪除狀態為「{message.send_status}」的消息，僅可刪除草稿或已排程消息")
-
-        logger.info(f"🗑️ 開始刪除消息: ID={message_id}, 狀態={message.send_status}")
-
-        if self._is_scheduled(message):
-            await self._cancel_message_job(message.id)
-
-        # 3. 保存 template ID，稍後檢查是否可刪除
-        template_id_to_delete = message.template_id
-
-        # 4. 先刪除消息本身（因為 template_id 有 NOT NULL 約束，必須先刪消息）
-        await db.delete(message)
-        await db.flush()  # 確保消息已從資料庫刪除
-
-        # 5. 檢查是否有其他消息仍在使用此 template，若無則刪除
-        if template_id_to_delete:
-            # 檢查是否有其他消息引用此 template
-            other_messages_stmt = select(func.count()).select_from(Message).where(
-                Message.template_id == template_id_to_delete
+            raise ValueError(
+                f"無法刪除狀態為「{message.send_status}」的消息，僅可刪除草稿或已排程消息"
             )
-            other_count_result = await db.execute(other_messages_stmt)
-            other_messages_count = other_count_result.scalar()
 
-            if other_messages_count == 0:
-                # 沒有其他消息使用此 template，可以安全刪除
-                from app.models.template import MessageTemplate
-                template_stmt = select(MessageTemplate).where(MessageTemplate.id == template_id_to_delete)
-                template_result = await db.execute(template_stmt)
-                template = template_result.scalar_one_or_none()
-                if template:
-                    logger.debug(f"🗑️ 刪除關聯模板: ID={template_id_to_delete}")
-                    await db.delete(template)
-            else:
-                logger.debug(f"⏭️ 保留模板 ID={template_id_to_delete}，仍有 {other_messages_count} 個消息使用")
+        return message
 
-        await db.commit()
+    async def _cleanup_orphaned_template(
+        self,
+        db: AsyncSession,
+        template_id: int | None
+    ) -> None:
+        """刪除未被任何消息引用的模板"""
+        if not template_id:
+            return
 
-        logger.info(f"✅ 消息刪除成功: ID={message_id}")
-        return True
+        # 檢查是否有其他消息引用此模板
+        count_stmt = select(func.count()).select_from(Message).where(
+            Message.template_id == template_id
+        )
+        count = await db.scalar(count_stmt)
+
+        if count == 0:
+            from app.models.template import MessageTemplate
+            template_stmt = select(MessageTemplate).where(
+                MessageTemplate.id == template_id
+            )
+            template = await db.scalar(template_stmt)
+
+            if template:
+                logger.debug(f"🗑️ 刪除關聯模板: ID={template_id}")
+                await db.delete(template)
+        else:
+            logger.debug(f"⏭️ 保留模板 ID={template_id}，仍有 {count} 個消息使用")

@@ -197,15 +197,11 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       }
 
       setChannelOptions(options);
-      console.log('[MessageCreation] 渠道選項載入完成:', options.map(o => o.value));
 
-      // 預設選中第一個渠道（僅在非編輯模式或 selectedChannel 為空時）
+      // 預設選中第一個渠道（僅在 selectedChannel 為空時）
       if (options.length > 0 && !selectedChannel) {
-        console.log('[MessageCreation] 設定預設渠道:', options[0].value);
         setSelectedChannel(options[0].value);
         setSelectedPlatform(options[0].platform);
-      } else {
-        console.log('[MessageCreation] 保留現有 selectedChannel:', selectedChannel);
       }
     };
 
@@ -631,26 +627,15 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
   // ✅ 獨立處理渠道還原（等待 channelOptions 載入後）
   useEffect(() => {
-    if (!editMessageData || channelOptions.length === 0) return;
+    if (!editMessageData?.channelId || channelOptions.length === 0) return;
 
     const platform = (editMessageData.platform as MessagePlatform) || 'LINE';
+    const prefix = platform === 'Facebook' ? 'FB' : 'LINE';
+    const restoredChannel = `${prefix}_${editMessageData.channelId}`;
 
-    if (editMessageData.channelId) {
-      // 有 channelId，直接還原
-      const prefix = platform === 'Facebook' ? 'FB' : 'LINE';
-      const restoredChannel = `${prefix}_${editMessageData.channelId}`;
-      // 確認該渠道存在於選項中
-      if (channelOptions.some(opt => opt.value === restoredChannel)) {
-        console.log('[MessageCreation] channelOptions 載入後還原渠道:', restoredChannel);
-        setSelectedChannel(restoredChannel);
-      }
-    } else {
-      // 舊草稿沒有 channelId，根據 platform 選擇第一個匹配的渠道
-      const matchingChannel = channelOptions.find(opt => opt.platform === platform);
-      if (matchingChannel) {
-        console.log('[MessageCreation] 舊草稿，選擇平台匹配渠道:', matchingChannel.value);
-        setSelectedChannel(matchingChannel.value);
-      }
+    // 確認該渠道存在於選項中
+    if (channelOptions.some(opt => opt.value === restoredChannel)) {
+      setSelectedChannel(restoredChannel);
     }
   }, [editMessageData, channelOptions]);
 
