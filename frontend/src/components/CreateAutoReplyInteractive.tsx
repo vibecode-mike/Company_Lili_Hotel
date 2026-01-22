@@ -606,44 +606,10 @@ export default function CreateAutoReplyInteractive({
                   <div className="basis-0 content-stretch flex flex-col gap-[24px] grow items-start min-h-px min-w-px relative shrink-0">
                     <div className="content-stretch flex flex-col gap-[40px] items-end min-h-[200px] relative shrink-0 w-full">
                       <div className="content-stretch flex flex-col gap-[32px] items-end relative shrink-0 w-full">
-                        {/* 回應類型 */}
+                        {/* 選擇回應平台 */}
                         <div className="content-stretch flex items-start relative shrink-0 w-full flex-col xl:flex-row gap-[8px] xl:gap-0">
                           <div className="content-stretch flex gap-[2px] items-center min-w-[160px] relative shrink-0 w-full xl:w-auto">
-                            <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] whitespace-nowrap">回應類型</p>
-                            <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#f44336] text-[16px] whitespace-nowrap">*</p>
-                          </div>
-                          <div className="basis-0 bg-white grow min-h-[48px] relative rounded-[8px] shrink-0 w-full xl:w-auto">
-                            <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-[8px]" />
-                            <div className="flex flex-col justify-center min-h-inherit size-full">
-                              <div className="box-border content-stretch flex flex-col gap-[4px] items-start justify-center min-h-inherit p-[8px] relative w-full cursor-pointer" onClick={() => setIsDropdownOpen(!isDropdownOpen)}>
-                                <div className="content-stretch flex gap-[8px] items-start relative shrink-0 w-full">
-                                  <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] whitespace-nowrap overflow-hidden text-ellipsis">{getReplyTypeLabel(replyType)}</p>
-                                  <div className="relative shrink-0 size-[24px]">
-                                    <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
-                                      <path d={svgPathsModal.p2b927b00} fill="var(--fill-0, #6E6E6E)" />
-                                    </svg>
-                                  </div>
-                                </div>
-                                {isDropdownOpen && (
-                                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-neutral-100 rounded-[8px] shadow-lg z-10">
-                                    {replyTypeOptions
-                                      .filter(opt => selectedChannel !== 'Facebook' || opt.value === 'keyword')
-                                      .map(opt => (
-                                      <div key={opt.value} className="py-[12px] px-[8px] hover:bg-slate-50 cursor-pointer flex items-center" onClick={(e) => { e.stopPropagation(); setReplyType(opt.value); setIsDropdownOpen(false); }}>
-                                        <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#383838] text-[16px] leading-[1.5] whitespace-nowrap">{opt.label}</p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* 回應渠道 */}
-                        <div className="content-stretch flex items-start relative shrink-0 w-full flex-col xl:flex-row gap-[8px] xl:gap-0">
-                          <div className="content-stretch flex gap-[2px] items-center min-w-[160px] relative shrink-0 w-full xl:w-auto">
-                            <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] whitespace-nowrap">回應渠道</p>
+                            <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] whitespace-nowrap">選擇回應平台</p>
                             <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#f44336] text-[16px] whitespace-nowrap">*</p>
                           </div>
                           <div className="basis-0 bg-white grow min-h-[48px] relative rounded-[8px] shrink-0 w-full xl:w-auto">
@@ -683,6 +649,40 @@ export default function CreateAutoReplyInteractive({
                                         }}
                                       >
                                         <ChannelIcon channel={opt.platform} size={20} />
+                                        <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#383838] text-[16px] leading-[1.5] whitespace-nowrap">{opt.label}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 回應類型 */}
+                        <div className="content-stretch flex items-start relative shrink-0 w-full flex-col xl:flex-row gap-[8px] xl:gap-0">
+                          <div className="content-stretch flex gap-[2px] items-center min-w-[160px] relative shrink-0 w-full xl:w-auto">
+                            <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] whitespace-nowrap">回應類型</p>
+                            <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#f44336] text-[16px] whitespace-nowrap">*</p>
+                          </div>
+                          <div className="basis-0 bg-white grow min-h-[48px] relative rounded-[8px] shrink-0 w-full xl:w-auto">
+                            <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-[8px]" />
+                            <div className="flex flex-col justify-center min-h-inherit size-full">
+                              <div className="box-border content-stretch flex flex-col gap-[4px] items-start justify-center min-h-inherit p-[8px] relative w-full cursor-pointer" onClick={() => setIsDropdownOpen(!isDropdownOpen)}>
+                                <div className="content-stretch flex gap-[8px] items-start relative shrink-0 w-full">
+                                  <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] whitespace-nowrap overflow-hidden text-ellipsis">{getReplyTypeLabel(replyType)}</p>
+                                  <div className="relative shrink-0 size-[24px]">
+                                    <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
+                                      <path d={svgPathsModal.p2b927b00} fill="var(--fill-0, #6E6E6E)" />
+                                    </svg>
+                                  </div>
+                                </div>
+                                {isDropdownOpen && (
+                                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-neutral-100 rounded-[8px] shadow-lg z-10">
+                                    {replyTypeOptions
+                                      .filter(opt => selectedChannel !== 'Facebook' || opt.value === 'keyword')
+                                      .map(opt => (
+                                      <div key={opt.value} className="py-[12px] px-[8px] hover:bg-slate-50 cursor-pointer flex items-center" onClick={(e) => { e.stopPropagation(); setReplyType(opt.value); setIsDropdownOpen(false); }}>
                                         <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#383838] text-[16px] leading-[1.5] whitespace-nowrap">{opt.label}</p>
                                       </div>
                                     ))}
