@@ -2,9 +2,18 @@ import React, { createContext, useContext, useState, ReactNode, useCallback, use
 import { toast } from 'sonner';
 import { useAuth } from '../components/auth/AuthContext';
 import { normalizeInteractionTags } from '../utils/interactionTags';
-import type { BackendMessage, FlexMessage } from '../types/api';
+import type { BackendMessage, FlexMessage, FbBroadcastMessage } from '../types/api';
 import type { MessagePlatform } from '../types/channel';
 import { isMessagePlatform } from '../types/channel';
+import { apiGet, apiPost } from '../utils/apiClient';
+import { getAuthToken, getJwtToken } from '../utils/token';
+
+// FB 狀態映射（0=草稿, 1=已發送, 2=已排程）
+const FB_STATUS_MAP: Record<number, Message['status']> = {
+  0: '草稿',
+  1: '已發送',
+  2: '已排程',
+};
 
 /**
  * 訊息數據 Context
@@ -68,7 +77,7 @@ interface MessagesProviderProps {
   children: ReactNode;
 }
 
-// 轉換後端數據為前端格式
+// 轉換後端數據為前端格式 (LINE 本地 DB)
 const transformBackendMessage = (item: BackendMessage): Message => ({
   id: item.id.toString(),
   title: item.message_title || item.template?.name || '未命名訊息',
@@ -85,9 +94,32 @@ const transformBackendMessage = (item: BackendMessage): Message => ({
   updatedAt: item.updated_at,
   thumbnail: item.thumbnail,
   sender: item.created_by
-    ? (item.created_by.full_name || item.created_by.username || '-')
+    ? (item.created_by.username || '-')
     : '-',
 });
+
+// 轉換 FB 外部 API 數據為前端格式
+const transformFbBroadcastMessage = (item: FbBroadcastMessage): Message => {
+  const timestamp = item.create_time ? new Date(item.create_time * 1000).toISOString() : '-';
+
+  return {
+    id: `fb-${item.id}`,
+    title: item.title || '未命名訊息',
+    tags: item.keywords?.map(k => k.name) || [],
+    platform: 'Facebook',
+    channelId: undefined,
+    channelName: item.channel_name,
+    status: FB_STATUS_MAP[item.status] ?? '已發送',
+    recipientCount: item.amount || 0,
+    openCount: 0,
+    clickCount: item.click_amount || 0,
+    sendTime: timestamp,
+    createdAt: timestamp,
+    updatedAt: '-',
+    thumbnail: undefined,
+    sender: '-',
+  };
+};
 
 // Provider 組件
 export function MessagesProvider({ children }: MessagesProviderProps) {
@@ -100,28 +132,55 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
   const hasFetchedRef = useRef(false);
 
   const fetchMessages = useCallback(async () => {
+    const token = getAuthToken();
+    if (!token) {
+      console.warn('未登入，無法獲取訊息列表');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
-        console.warn('未登入，無法獲取訊息列表');
-        return;
+      const jwtToken = getJwtToken();
+      const fbApiBaseUrl = (import.meta.env.VITE_FB_API_URL || '').replace(/\/+$/, '');
+      const allMessages: Message[] = [];
+
+      // 並行獲取 LINE (本地 DB) 和 FB (外部 API) 訊息
+      // 使用 apiGet 自動處理 token 和 401 重試
+      const fetchPromises: Promise<Response>[] = [
+        apiGet('/api/v1/messages?page=1&page_size=100'),
+      ];
+
+      // 僅在有 JWT token 和 FB API URL 時才獲取 FB 訊息
+      // FB 外部 API 使用 jwtToken，不透過 apiClient
+      if (jwtToken && fbApiBaseUrl) {
+        fetchPromises.push(
+          fetch(`${fbApiBaseUrl}/api/v1/admin/meta_page/message/gourp_list`, {
+            headers: { 'Authorization': `Bearer ${jwtToken}` },
+          })
+        );
       }
 
-      const response = await fetch('/api/v1/messages?page=1&page_size=100', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const responses = await Promise.all(fetchPromises);
+      const [lineResponse, fbResponse] = responses;
 
-      if (!response.ok) {
-        throw new Error('獲取訊息列表失敗');
+      // 處理 LINE 訊息
+      if (lineResponse.ok) {
+        const lineResult = await lineResponse.json();
+        const lineMessages = (lineResult.data?.items || []).map(transformBackendMessage);
+        allMessages.push(...lineMessages);
       }
 
-      const result = await response.json();
-      const backendMessages = result.data.items || [];
-      const transformedMessages = backendMessages.map(transformBackendMessage);
-      setMessages(transformedMessages);
+      // 處理 FB 訊息（如果有請求）
+      if (fbResponse?.ok) {
+        const fbResult = await fbResponse.json();
+        const fbMessages = (fbResult.data || []).map(transformFbBroadcastMessage);
+        allMessages.push(...fbMessages);
+      }
+
+      const lineCnt = allMessages.filter(m => m.platform === 'LINE').length;
+      const fbCnt = allMessages.filter(m => m.platform === 'Facebook').length;
+      console.log(`訊息載入完成: LINE ${lineCnt} 筆, FB ${fbCnt} 筆`);
+      setMessages(allMessages);
     } catch (error) {
       console.error('獲取訊息列表錯誤:', error);
       toast.error('獲取訊息列表失敗');
@@ -131,26 +190,20 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
   }, []);
 
   const fetchQuota = useCallback(async () => {
+    const token = getAuthToken();
+    if (!token) {
+      console.warn('未登入，無法獲取配額狀態');
+      setQuotaStatus(null);
+      setQuotaError('請先登入');
+      return;
+    }
+
     setQuotaLoading(true);
     setQuotaError(null);
     try {
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
-        console.warn('未登入，無法獲取配額狀態');
-        setQuotaStatus(null);
-        setQuotaError('請先登入');
-        return;
-      }
-
-      const response = await fetch('/api/v1/messages/quota', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          target_type: 'all_friends'
-        }),
+      // 使用 apiPost 自動處理 token 和 401 重試
+      const response = await apiPost('/api/v1/messages/quota', {
+        target_type: 'all_friends'
       });
 
       if (!response.ok) {

@@ -1,18 +1,25 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
+import {
+  getAuthToken,
+  setAuthToken,
+  getUserEmail,
+  setUserEmail,
+  setLoginMethod,
+  setJwtToken,
+  clearAllAuthData,
+} from '../../utils/token';
+import { setLogoutCallback } from '../../utils/apiClient';
 
 interface User {
   email: string;
   name: string;
-  loginMethod: 'email' | 'google' | 'line';
 }
 
 interface AuthContextType {
   isAuthenticated: boolean;
   user: User | null;
   login: (email: string, password: string) => Promise<boolean>;
-  loginWithGoogle: () => Promise<boolean>;
-  loginWithLine: () => Promise<boolean>;
   logout: () => void;
 }
 
@@ -20,9 +27,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // 同步檢查初始認證狀態（避免重新整理時的狀態閃爍）
 const getInitialAuthState = () => {
-  const token = localStorage.getItem('auth_token');
-  const userEmail = localStorage.getItem('user_email');
-  const loginMethod = localStorage.getItem('login_method') as 'email' | 'google' | 'line' || 'email';
+  const token = getAuthToken();
+  const userEmail = getUserEmail();
 
   if (token && userEmail) {
     return {
@@ -30,7 +36,6 @@ const getInitialAuthState = () => {
       user: {
         email: userEmail,
         name: userEmail.split('@')[0],
-        loginMethod: loginMethod
       }
     };
   }
@@ -42,38 +47,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const initialState = getInitialAuthState();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(initialState.isAuthenticated);
   const [user, setUser] = useState<User | null>(initialState.user);
-  const fbApiBaseUrl = useMemo(
-    () => (import.meta.env.VITE_FB_API_URL?.trim() || 'https://api-youth-tycg.star-bit.io').replace(/\/+$/, ''),
-    []
-  );
-  const fbFirmAccount = useMemo(() => import.meta.env.VITE_FB_FIRM_ACCOUNT?.trim() || 'tycg-admin', []);
-  const fbFirmPassword = useMemo(() => import.meta.env.VITE_FB_FIRM_PASSWORD?.trim() || '123456', []);
+
+  // FB API configuration
+  const fbApiBaseUrl = (import.meta.env.VITE_FB_API_URL?.trim() || 'https://api-youth-tycg.star-bit.io').replace(/\/+$/, '');
+  const fbFirmAccount = import.meta.env.VITE_FB_FIRM_ACCOUNT?.trim() || 'tycg-admin';
+  const fbFirmPassword = import.meta.env.VITE_FB_FIRM_PASSWORD?.trim() || '123456';
+
+  // Logout 函式（先定義，供 apiClient 使用）
+  const logout = useCallback(() => {
+    clearAllAuthData();
+    setIsAuthenticated(false);
+    setUser(null);
+    toast.success('已登出');
+  }, []);
+
+  // 設定 apiClient 的登出回調
+  useEffect(() => {
+    setLogoutCallback(logout);
+  }, [logout]);
 
   const performFirmLogin = useCallback(async (): Promise<string | null> => {
     try {
-      const firmLoginResp = await fetch(`${fbApiBaseUrl}/api/v1/admin/firm_login`, {
+      const response = await fetch(`${fbApiBaseUrl}/api/v1/admin/firm_login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ account: fbFirmAccount, password: fbFirmPassword }),
       });
-      const firmPayload = await firmLoginResp.json().catch(() => null);
-      const firmToken = firmPayload?.data?.access_token;
-      if (firmLoginResp.ok && firmToken) {
-        localStorage.setItem('jwt_token', firmToken);
-        return firmToken;
+
+      const payload = await response.json().catch(() => null);
+      const token = payload?.data?.access_token;
+
+      if (response.ok && token) {
+        setJwtToken(token);
+        return token;
       }
-      console.warn('firm_login 失敗，後續 FB API 可能無法使用', firmPayload);
-      toast.warning(firmPayload?.msg || 'FB 服務登入失敗，請稍後再試');
+
+      const errorMsg = payload?.msg || 'FB 服務登入失敗，請稍後再試';
+      console.warn('firm_login 失敗，後續 FB API 可能無法使用', payload);
+      toast.warning(errorMsg);
       return null;
-    } catch (firmLoginError) {
-      console.error('firm_login 發生錯誤:', firmLoginError);
+    } catch (error) {
+      console.error('firm_login 發生錯誤:', error);
       toast.warning('FB 服務登入失敗，請稍後再試');
       return null;
     }
   }, [fbApiBaseUrl, fbFirmAccount, fbFirmPassword]);
 
   // Email/Password login
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = useCallback(async (email: string, password: string): Promise<boolean> => {
     try {
       // 使用 FormData 格式發送登入請求（符合 OAuth2PasswordRequestForm）
       const formData = new URLSearchParams();
@@ -97,9 +118,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
 
       // 儲存 token 和用戶信息
-      localStorage.setItem('auth_token', data.access_token);
-      localStorage.setItem('user_email', data.user.email);
-      localStorage.setItem('login_method', 'email');
+      setAuthToken(data.access_token);
+      setUserEmail(data.user.email);
+      setLoginMethod('email');
 
       // 連動外部 FB 服務的 firm_login，取得 JWT 作為後續 Authorization
       await performFirmLogin();
@@ -108,7 +129,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser({
         email: data.user.email,
         name: data.user.username || data.user.email.split('@')[0],
-        loginMethod: 'email'
       });
 
       toast.success('登入成功！');
@@ -118,68 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       toast.error('登入失敗，請檢查網絡連接');
       return false;
     }
-  };
-
-  // Google login (simulated)
-  const loginWithGoogle = async (): Promise<boolean> => {
-    // Simulate OAuth flow delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    const mockEmail = 'user@gmail.com';
-    const token = `google_token_${Date.now()}`;
-    
-    localStorage.setItem('auth_token', token);
-    localStorage.setItem('user_email', mockEmail);
-    localStorage.setItem('login_method', 'google');
-    await performFirmLogin();
-
-    setIsAuthenticated(true);
-    setUser({
-      email: mockEmail,
-      name: 'Google User',
-      loginMethod: 'google'
-    });
-
-    toast.success('Google 登入成功！');
-    return true;
-  };
-
-  // LINE login (simulated)
-  const loginWithLine = async (): Promise<boolean> => {
-    // Simulate OAuth flow delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    const mockEmail = 'user@line.me';
-    const token = `line_token_${Date.now()}`;
-    
-    localStorage.setItem('auth_token', token);
-    localStorage.setItem('user_email', mockEmail);
-    localStorage.setItem('login_method', 'line');
-    await performFirmLogin();
-
-    setIsAuthenticated(true);
-    setUser({
-      email: mockEmail,
-      name: 'LINE User',
-      loginMethod: 'line'
-    });
-
-    toast.success('LINE 登入成功！');
-    return true;
-  };
-
-  // Logout
-  const logout = () => {
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('user_email');
-    localStorage.removeItem('login_method');
-    localStorage.removeItem('jwt_token');
-    
-    setIsAuthenticated(false);
-    setUser(null);
-    
-    toast.success('已登出');
-  };
+  }, [performFirmLogin]);
 
   return (
     <AuthContext.Provider
@@ -187,8 +146,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated,
         user,
         login,
-        loginWithGoogle,
-        loginWithLine,
         logout
       }}
     >

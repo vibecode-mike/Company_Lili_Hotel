@@ -19,6 +19,8 @@ import { useAuth } from '../auth/AuthContext';
 import MemberNoteEditor from '../shared/MemberNoteEditor';
 import { useMembers } from '../../contexts/MembersContext';
 import Container from '../../imports/Container-8548-103';
+import { apiFetch, apiGet, apiPost, apiPut } from '../../utils/apiClient';
+import { getJwtToken } from '../../utils/token';
 // 新組件導入 (Figma v1087)
 import { ChatBubble } from './ChatBubble';
 import { ResponseModeIndicator } from './ResponseModeIndicator';
@@ -146,13 +148,10 @@ export default function ChatRoomLayout({
     const targetId = member?.id?.toString() || memberId;
     if (!targetId) return;
     try {
-      const token = localStorage.getItem('auth_token');
       const query = initialPlatform === 'Facebook'
         ? `?platform=${encodeURIComponent(initialPlatform)}`
         : '';
-      const resp = await fetch(`${chatSessionApiBase}/members/${targetId}/chat-session${query}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const resp = await apiGet(`${chatSessionApiBase}/members/${targetId}/chat-session${query}`);
       const result = await resp.json();
       if (result.code === 200 && result.data) {
         const { available_platforms, default_platform, threads } = result.data;
@@ -194,23 +193,14 @@ export default function ChatRoomLayout({
     console.log('🔄 [GPT Timer] 恢復自動模式, member_id:', member.id);
 
     try {
-      // 呼叫 API 設置 gpt_enabled = true
-      const token = localStorage.getItem('auth_token');
+      // 呼叫 API 設置 gpt_enabled = true（使用 apiPut 自動處理 token 和 401 重試）
       console.log('📡 [GPT Timer] 發送 API 請求 (恢復):', {
         url: `/api/v1/members/${member.id}`,
         method: 'PUT',
         body: { gpt_enabled: true },
-        hasToken: !!token
       });
 
-      const response = await fetch(`/api/v1/members/${member.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ gpt_enabled: true })
-      });
+      const response = await apiPut(`/api/v1/members/${member.id}`, { gpt_enabled: true });
 
       console.log('📥 [GPT Timer] API 回應狀態 (恢復):', response.status);
 
@@ -254,23 +244,14 @@ export default function ChatRoomLayout({
     }
 
     try {
-      // 呼叫 API 設置 gpt_enabled = false
-      const token = localStorage.getItem('auth_token');
+      // 呼叫 API 設置 gpt_enabled = false（使用 apiPut 自動處理 token 和 401 重試）
       console.log('📡 [GPT Timer] 發送 API 請求:', {
         url: `/api/v1/members/${member.id}`,
         method: 'PUT',
         body: { gpt_enabled: false },
-        hasToken: !!token
       });
 
-      const response = await fetch(`/api/v1/members/${member.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ gpt_enabled: false })
-      });
+      const response = await apiPut(`/api/v1/members/${member.id}`, { gpt_enabled: false });
 
       console.log('📥 [GPT Timer] API 回應狀態:', response.status);
 
@@ -388,7 +369,7 @@ export default function ChatRoomLayout({
   // FB 渠道：取得 active channel 的 page_id
   useEffect(() => {
     if (currentPlatform === 'Facebook') {
-      fetch('/api/v1/fb_channels')
+      apiGet('/api/v1/fb_channels')
         .then(res => res.ok ? res.json() : [])
         .then(data => {
           const active = Array.isArray(data) ? data.find((ch: { is_active?: boolean }) => ch.is_active) : null;
@@ -473,9 +454,9 @@ export default function ChatRoomLayout({
         let newMessages: ChatMessage[] = [];
         let has_more = false;
 
-        // FB 渠道：直接呼叫外部 FB API
+        // FB 渠道：直接呼叫外部 FB API（使用 jwt_token，不經過 apiClient）
         if (currentPlatform === 'Facebook') {
-          const jwtToken = localStorage.getItem('jwt_token');
+          const jwtToken = getJwtToken();
           // FB 會員的 customer_id 從 member.channelUid 或 memberId 取得
           const customerId = (member as any)?.channelUid || (member as any)?.fb_customer_id || memberId;
 
@@ -498,13 +479,10 @@ export default function ChatRoomLayout({
             return;
           }
         } else {
-          // LINE/Webchat：透過後端 API
-          const token = localStorage.getItem('auth_token');
+          // LINE/Webchat：透過後端 API（使用 apiGet 自動處理 token 和 401 重試）
           const url = `/api/v1/members/${targetId}/chat-messages?page=${pageNum}&page_size=${PAGE_SIZE}&platform=${currentPlatform}`;
 
-          const response = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
+          const response = await apiGet(url);
 
           const result = await response.json();
 
@@ -738,17 +716,15 @@ export default function ChatRoomLayout({
     setIsSending(true);
 
     try {
-      const token = localStorage.getItem('auth_token');
-
       // 建立請求 body
       const requestBody: { text: string; platform: string; jwt_token?: string } = {
         text: trimmedText,
         platform
       };
 
-      // 對於 Facebook 渠道，從 localStorage 取得 jwt_token
+      // 對於 Facebook 渠道，從 token utils 取得 jwt_token
       if (platform === 'Facebook') {
-        const jwtToken = localStorage.getItem('jwt_token');
+        const jwtToken = getJwtToken();
         if (!jwtToken) {
           alert('請先完成 Facebook 授權');
           setIsSending(false);
@@ -757,17 +733,8 @@ export default function ChatRoomLayout({
         requestBody.jwt_token = jwtToken;
       }
 
-      const response = await fetch(
-        `/api/v1/members/${member.id}/chat/send`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(requestBody)
-        }
-      );
+      // 使用 apiPost 自動處理 token 和 401 重試
+      const response = await apiPost(`/api/v1/members/${member.id}/chat/send`, requestBody);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -817,23 +784,10 @@ export default function ChatRoomLayout({
 
   const handleSaveTags = async (newMemberTags: string[], newInteractionTags: string[]): Promise<boolean> => {
     try {
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
-        showToast('請先登入', 'error');
-        return false;
-      }
-
-      // 調用後端 batch-update API
-      const response = await fetch(`/api/v1/members/${member.id}/tags/batch-update`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          member_tags: newMemberTags,
-          interaction_tags: newInteractionTags,
-        }),
+      // 使用 apiPost 自動處理 token 和 401 重試
+      const response = await apiPost(`/api/v1/members/${member?.id}/tags/batch-update`, {
+        member_tags: newMemberTags,
+        interaction_tags: newInteractionTags,
       });
 
       if (!response.ok) {
@@ -995,25 +949,8 @@ export default function ChatRoomLayout({
                   throw new Error('找不到會員資料');
                 }
 
-                const token = localStorage.getItem('auth_token');
-                const headers: Record<string, string> = {
-                  'Content-Type': 'application/json',
-                };
-                if (token) {
-                  headers.Authorization = `Bearer ${token}`;
-                }
-
-                const response = await fetch(`/api/v1/members/${member.id}/notes`, {
-                  method: 'PUT',
-                  headers,
-                  body: JSON.stringify({ internal_note: newNote }),
-                });
-
-                if (response.status === 401) {
-                  showToast('登入已過期，請重新登入', 'error');
-                  logout();
-                  throw new Error('登入已過期');
-                }
+                // 使用 apiPut 自動處理 token 和 401 重試
+                const response = await apiPut(`/api/v1/members/${member.id}/notes`, { internal_note: newNote });
 
                 if (!response.ok) {
                   let errorMessage = '儲存失敗';

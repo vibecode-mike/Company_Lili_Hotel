@@ -3,6 +3,8 @@ import { toast } from 'sonner';
 import type { BackendAutoReply, BackendKeyword, BackendReplyMessage, FbAutoReply } from '../types/api';
 import { useAuth } from '../components/auth/AuthContext';
 import type { AutoReplyChannel } from '../types/channel';
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from '../utils/apiClient';
+import { getAuthToken, getJwtToken } from '../utils/token';
 
 /**
  * 自動回覆數據 Context
@@ -199,13 +201,11 @@ function mapFbAutoResponse(item: FbAutoReply): AutoReply {
   };
 }
 
-function getAuthTokenOrThrow() {
-  const token = localStorage.getItem('auth_token');
-  if (!token) {
-    throw new Error('尚未登入，請重新登入後再試一次');
-  }
+const getAuthTokenOrThrow = () => {
+  const token = getAuthToken();
+  if (!token) throw new Error('尚未登入，請重新登入後再試一次');
   return token;
-}
+};
 
 export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
   const [autoReplies, setAutoReplies] = useState<AutoReply[]>([]);
@@ -232,7 +232,7 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
   );
 
   const fetchAutoReplies = useCallback(async () => {
-    const token = localStorage.getItem('auth_token');
+    const token = getAuthToken();
     if (!token) {
       setAutoReplies([]);
       setError('尚未登入，請先登入以載入自動回應');
@@ -242,12 +242,8 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
     setIsLoading(true);
     setError(null);
     try {
-      // 1. Fetch LINE auto-responses (existing)
-      const lineResponse = await fetch('/api/v1/auto_responses', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      // 1. Fetch LINE auto-responses (使用 apiGet 自動處理 token 和 401 重試)
+      const lineResponse = await apiGet('/api/v1/auto_responses');
 
       if (!lineResponse.ok) {
         const errData = await lineResponse.json().catch(() => null);
@@ -257,16 +253,12 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
       const lineResult = await lineResponse.json();
       const lineReplies = Array.isArray(lineResult?.data) ? lineResult.data.map(mapAutoResponse) : [];
 
-      // 2. Fetch FB auto-responses (new)
+      // 2. Fetch FB auto-responses (使用 apiGet 自動處理 token 和 401 重試)
       let fbReplies: AutoReply[] = [];
-      const jwtToken = localStorage.getItem('jwt_token');
+      const jwtToken = getJwtToken();
       if (jwtToken) {
         try {
-          const fbResponse = await fetch(`/api/v1/auto_responses/fb?jwt_token=${encodeURIComponent(jwtToken)}`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
+          const fbResponse = await apiGet(`/api/v1/auto_responses/fb?jwt_token=${encodeURIComponent(jwtToken)}`);
 
           if (fbResponse.ok) {
             const fbResult = await fbResponse.json();
@@ -291,12 +283,8 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
 
   const fetchAutoReplyById = useCallback(async (id: string) => {
     try {
-      const token = getAuthTokenOrThrow();
-      const response = await fetch(`/api/v1/auto_responses/${id}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      getAuthTokenOrThrow();
+      const response = await apiGet(`/api/v1/auto_responses/${id}`);
 
       if (!response.ok) {
         const errData = await response.json().catch(() => null);
@@ -305,14 +293,16 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
 
       const result = await response.json();
       const mapped = mapAutoResponse(result.data);
-      setAutoReplies(prev => {
-        const filtered = prev.filter(r => r.id !== mapped.id);
-        return sortByCreatedAt([...filtered, mapped]);
-      });
+
+      setAutoReplies(prev =>
+        sortByCreatedAt([...prev.filter(r => r.id !== mapped.id), mapped])
+      );
+
       return mapped;
     } catch (err) {
+      const message = err instanceof Error ? err.message : '取得自動回應詳情失敗';
       console.error('取得自動回應詳情錯誤:', err);
-      toast.error(err instanceof Error ? err.message : '取得自動回應詳情失敗');
+      toast.error(message);
       throw err;
     }
   }, []);
@@ -320,26 +310,19 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
   const saveAutoReply = useCallback(
     async (payload: AutoReplyPayload, id?: string): Promise<SaveAutoReplyResult> => {
       try {
-        const token = getAuthTokenOrThrow();
-        const jwtToken = localStorage.getItem('jwt_token');
+        getAuthTokenOrThrow(); // 僅檢查登入狀態
+        const jwtToken = getJwtToken();
 
-        // 檢測是否為 FB 自動回應編輯
+        // 檢測是否為 FB 自動回應編輯（使用 apiPatch 自動處理 token 和 401 重試）
         if (id?.startsWith('fb-')) {
           const fbId = id.replace('fb-', '');
           const url = `/api/v1/auto_responses/fb/${fbId}?jwt_token=${encodeURIComponent(jwtToken || '')}`;
 
-          const response = await fetch(url, {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              keywords: payload.keywords ?? [],
-              messages: payload.messages,
-              is_active: payload.isActive,
-              trigger_type: payload.triggerType,
-            }),
+          const response = await apiPatch(url, {
+            keywords: payload.keywords ?? [],
+            messages: payload.messages,
+            is_active: payload.isActive,
+            trigger_type: payload.triggerType,
           });
 
           if (!response.ok) {
@@ -352,7 +335,7 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
           return getAutoReplyById(id) || null;
         }
 
-        // 檢測是否為純 FB 渠道新建（直接調用外部 FB API）
+        // 檢測是否為純 FB 渠道新建（直接調用外部 FB API，不透過 apiClient）
         if (!id && payload.channels?.length === 1 && payload.channels[0] === 'Facebook') {
           if (!jwtToken) throw new Error('請先登入 Facebook 帳號');
 
@@ -389,33 +372,30 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
           return null;
         }
 
-        // 原有的 LINE 自動回應邏輯 (POST/PUT)
+        // 原有的 LINE 自動回應邏輯 (POST/PUT，使用 apiClient 自動處理 token 和 401 重試)
         const baseUrl = id ? `/api/v1/auto_responses/${id}` : '/api/v1/auto_responses';
         const url = payload.channels?.includes('Facebook') && jwtToken
           ? `${baseUrl}?jwt_token=${encodeURIComponent(jwtToken)}`
           : baseUrl;
 
-        const response = await fetch(url, {
-          method: id ? 'PUT' : 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            name: payload.name,
-            trigger_type: payload.triggerType,
-            keywords: payload.keywords ?? [],
-            is_active: payload.isActive,
-            messages: payload.messages,
-            trigger_time_start: payload.triggerTimeStart ?? null,
-            trigger_time_end: payload.triggerTimeEnd ?? null,
-            date_range_start: payload.dateRangeStart ?? null,
-            date_range_end: payload.dateRangeEnd ?? null,
-            channels: payload.channels ?? undefined,
-            channel_id: payload.channelId ?? null,
-            force_activate: payload.forceActivate ?? false,
-          }),
-        });
+        const requestBody = {
+          name: payload.name,
+          trigger_type: payload.triggerType,
+          keywords: payload.keywords ?? [],
+          is_active: payload.isActive,
+          messages: payload.messages,
+          trigger_time_start: payload.triggerTimeStart ?? null,
+          trigger_time_end: payload.triggerTimeEnd ?? null,
+          date_range_start: payload.dateRangeStart ?? null,
+          date_range_end: payload.dateRangeEnd ?? null,
+          channels: payload.channels ?? undefined,
+          channel_id: payload.channelId ?? null,
+          force_activate: payload.forceActivate ?? false,
+        };
+
+        const response = id
+          ? await apiPut(url, requestBody)
+          : await apiPost(url, requestBody);
 
         if (!response.ok) {
           const errData = await response.json().catch(() => null);
@@ -451,13 +431,8 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
 
   const removeAutoReply = useCallback(async (id: string) => {
     try {
-      const token = getAuthTokenOrThrow();
-      const response = await fetch(`/api/v1/auto_responses/${id}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      getAuthTokenOrThrow();
+      const response = await apiDelete(`/api/v1/auto_responses/${id}`);
 
       if (!response.ok) {
         const errData = await response.json().catch(() => null);
@@ -467,8 +442,9 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
       setAutoReplies(prev => prev.filter(reply => reply.id !== id));
       toast.success('自動回應已刪除');
     } catch (err) {
+      const message = err instanceof Error ? err.message : '刪除自動回應失敗';
       console.error('刪除自動回應錯誤:', err);
-      toast.error(err instanceof Error ? err.message : '刪除自動回應失敗');
+      toast.error(message);
       throw err;
     }
   }, []);
@@ -479,24 +455,19 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
       const targetState = typeof nextState === 'boolean' ? nextState : !existing?.isActive;
 
       try {
-        const token = getAuthTokenOrThrow();
+        getAuthTokenOrThrow(); // 僅檢查登入狀態
 
         // 構建 URL，若渠道包含 Facebook 則加上 jwt_token
         let url = `/api/v1/auto_responses/${id}/toggle?is_active=${targetState}&force_activate=${forceActivate}`;
         if (existing?.channels?.includes('Facebook')) {
-          const jwtToken = localStorage.getItem('jwt_token');
+          const jwtToken = getJwtToken();
           if (jwtToken) {
             url += `&jwt_token=${encodeURIComponent(jwtToken)}`;
           }
         }
 
-        const response = await fetch(url, {
-            method: 'PATCH',
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        // 使用 apiPatch 自動處理 token 和 401 重試（無 body 傳 undefined）
+        const response = await apiPatch(url, undefined);
 
         if (!response.ok) {
           const errData = await response.json().catch(() => null);
@@ -535,25 +506,20 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
 
   const activateDuplicateKeyword = useCallback(async (keywordId: number) => {
     try {
-      const token = getAuthTokenOrThrow();
-      const response = await fetch(`/api/v1/auto_responses/keywords/${keywordId}/activate`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      getAuthTokenOrThrow();
+      const response = await apiPatch(`/api/v1/auto_responses/keywords/${keywordId}/activate`, undefined);
 
       if (!response.ok) {
         const errData = await response.json().catch(() => null);
         throw new Error(errData?.detail || errData?.message || '操作失敗，請稍後再試');
       }
 
-      // 刷新列表以獲取最新狀態
       await fetchAutoReplies();
       toast.success('標籤已更新');
     } catch (err) {
+      const message = err instanceof Error ? err.message : '操作失敗，請稍後再試';
       console.error('激活重複關鍵字錯誤:', err);
-      toast.error(err instanceof Error ? err.message : '操作失敗，請稍後再試');
+      toast.error(message);
       throw err;
     }
   }, [fetchAutoReplies]);

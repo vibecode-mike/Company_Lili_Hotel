@@ -4,6 +4,8 @@ import type { Member, TagInfo, ChannelType, DisplayMember } from '../types/membe
 import type { ChatPlatform } from '../components/chat-room/types';
 import type { BackendMember, BackendTag } from '../types/api';
 import { useAuth } from '../components/auth/AuthContext';
+import { apiGet, apiPost } from '../utils/apiClient';
+import { getAuthToken, getJwtToken } from '../utils/token';
 
 /**
  * 會員數據 Context
@@ -130,7 +132,7 @@ export function MembersProvider({ children }: MembersProviderProps) {
   const hasFetchedRef = useRef(false);
 
   const fetchMembers = useCallback(async () => {
-    const token = localStorage.getItem('auth_token');
+    const token = getAuthToken();
     if (!token) {
       console.warn('未登入，無法獲取會員列表');
       return;
@@ -139,39 +141,34 @@ export function MembersProvider({ children }: MembersProviderProps) {
     setIsLoading(true);
     setError(null);
 
-    const jwtToken = localStorage.getItem('jwt_token') || '';
+    const jwtToken = getJwtToken() || '';
     const displayRows: DisplayMember[] = [];
 
     try {
       // 1. 並行取得 LINE 會員 + FB 會員 + FB 粉專列表（先顯示，再同步）
+      // 使用 apiGet 自動處理 token 和 401 重試
       const [lineMembersRes, fbMembersRes, fbChannelsRes] = await Promise.all([
-        fetch('/api/v1/members?channel=line&page=1&page_size=200', {
-          headers: { 'Authorization': `Bearer ${token}` },
-        }),
+        apiGet('/api/v1/members?channel=line&page=1&page_size=200'),
         jwtToken
           ? fetch(`/api/v1/fb_channels/message-list?jwt_token=${encodeURIComponent(jwtToken)}`)
           : Promise.resolve({ ok: false } as Response),
         // 取得本地 DB 的 FB 粉專列表，用於顯示粉專名稱
-        fetch('/api/v1/fb_channels', {
-          headers: { 'Authorization': `Bearer ${token}` },
-        }),
+        apiGet('/api/v1/fb_channels'),
       ]);
 
       // 解析 FB 粉專：建立 page_id → channel_name 對照表
-      let fbChannelMap: Record<string, string> = {};
+      const fbChannelMap: Record<string, string> = {};
       let defaultFbChannelName: string | null = null;
+
       if (fbChannelsRes.ok) {
         const fbChannels = await fbChannelsRes.json();
         if (Array.isArray(fbChannels)) {
-          for (const ch of fbChannels) {
+          fbChannels.forEach(ch => {
             if (ch.page_id && ch.channel_name) {
               fbChannelMap[ch.page_id] = ch.channel_name;
             }
-          }
-          // 預設使用第一個粉專名稱（當 API 沒有提供 page_id 時的 fallback）
-          if (fbChannels.length > 0) {
-            defaultFbChannelName = fbChannels[0].channel_name || null;
-          }
+          });
+          defaultFbChannelName = fbChannels[0]?.channel_name || null;
         }
       }
 
@@ -235,24 +232,16 @@ export function MembersProvider({ children }: MembersProviderProps) {
       setDisplayMembers(displayRows);
 
       // 4. 背景同步到 DB（email 合併）- 不阻塞顯示
+      // 使用 apiPost 自動處理 token 和 401 重試
       if (jwtToken) {
-        fetch('/api/v1/fb_channels/sync-members', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${jwtToken}`,
-          },
-          body: JSON.stringify({ jwt_token: jwtToken }),
-        })
+        apiPost('/api/v1/fb_channels/sync-members', { jwt_token: jwtToken })
           .then(res => res.ok ? res.json() : null)
           .then(data => data && console.log('FB 背景同步完成:', data.data))
           .catch(err => console.warn('FB 背景同步失敗:', err));
       }
 
       // 向後相容：維持舊的 members 更新（用於詳情頁等場景）
-      const allMembersRes = await fetch('/api/v1/members?page=1&page_size=200', {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
+      const allMembersRes = await apiGet('/api/v1/members?page=1&page_size=200');
       if (allMembersRes.ok) {
         const allData = await allMembersRes.json();
         const backendMembers = allData.data?.items || [];
@@ -262,9 +251,8 @@ export function MembersProvider({ children }: MembersProviderProps) {
 
     } catch (err) {
       console.error('獲取會員列表錯誤:', err);
-      const message = '獲取會員列表失敗';
-      setError(message);
-      toast.error(message);
+      setError('獲取會員列表失敗');
+      toast.error('獲取會員列表失敗');
     } finally {
       setIsLoading(false);
     }
@@ -304,19 +292,16 @@ export function MembersProvider({ children }: MembersProviderProps) {
   }, [displayMembers]);
 
   const fetchMemberById = useCallback(async (id: string, platform?: ChatPlatform): Promise<Member | null> => {
-    const token = localStorage.getItem('auth_token');
+    const token = getAuthToken();
     if (!token) {
       console.warn('未登入，無法獲取會員詳情');
       return null;
     }
 
     try {
+      // 使用 apiGet 自動處理 token 和 401 重試
       const platformParam = platform === 'Facebook' ? `?platform=${encodeURIComponent(platform)}` : '';
-      const response = await fetch(`/api/v1/members/${id}${platformParam}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const response = await apiGet(`/api/v1/members/${id}${platformParam}`);
 
       if (!response.ok) {
         throw new Error('獲取會員詳情失敗');

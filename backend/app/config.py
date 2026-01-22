@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # 安全配置
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 240  # 4 小時
 
     # LINE Messaging API
     LINE_CHANNEL_ACCESS_TOKEN: str
