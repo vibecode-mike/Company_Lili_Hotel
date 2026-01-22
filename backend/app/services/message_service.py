@@ -102,7 +102,8 @@ class MessageService:
             # 提取圖片與點擊動作
             hero = bubble.get("hero", {})
             image_url = (hero.get("url") or "").strip()
-            if image_url:
+            # FB API 需要完整 HTTPS URL，跳過相對路徑和 placeholder
+            if image_url and image_url.startswith(("http://", "https://")):
                 element["image_url"] = image_url
 
             # 提取 default_action（點擊卡片的動作）
@@ -114,7 +115,8 @@ class MessageService:
                         element["default_action"] = {"type": "postback", "payload": payload}
                 else:
                     url = (hero["action"].get("uri") or "").strip()
-                    if url:
+                    # FB API 需要完整 URL
+                    if url and url.startswith(("http://", "https://")):
                         element["default_action"] = {"type": "web_url", "url": url}
 
             # 提取按鈕 (最多 3 個)
@@ -127,7 +129,8 @@ class MessageService:
 
                     if action.get("type") == "uri":
                         url = (action.get("uri") or "").strip()
-                        if url:
+                        # FB API 需要完整 URL
+                        if url and url.startswith(("http://", "https://")):
                             buttons.append({
                                 "type": "web_url",
                                 "title": btn_title,
@@ -937,7 +940,8 @@ class MessageService:
             payload = self._transform_fb_message_to_api_format(message)
             # 添加 page_id（API.XLSX 規格必填）
             payload["page_id"] = page_id
-            logger.info(f"📦 FB API payload: {payload}")
+            import json
+            logger.info(f"📦 FB API payload: {json.dumps(payload, ensure_ascii=False, indent=2)}")
 
             # 發送到外部 API
             from app.clients.fb_message_client import FbMessageClient
