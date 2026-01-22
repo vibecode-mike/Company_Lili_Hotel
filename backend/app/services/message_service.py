@@ -99,11 +99,23 @@ class MessageService:
                         element["subtitle"] = subtitle
                     break
 
-            # 提取圖片
+            # 提取圖片與點擊動作
             hero = bubble.get("hero", {})
             image_url = (hero.get("url") or "").strip()
             if image_url:
                 element["image_url"] = image_url
+
+            # 提取 default_action（點擊卡片的動作）
+            if hero.get("action"):
+                metadata = bubble.get("_metadata", {})
+                if metadata.get("heroActionType") == "postback":
+                    payload = metadata.get("heroActionPayload", "")
+                    if payload:
+                        element["default_action"] = {"type": "postback", "payload": payload}
+                else:
+                    url = (hero["action"].get("uri") or "").strip()
+                    if url:
+                        element["default_action"] = {"type": "web_url", "url": url}
 
             # 提取按鈕 (最多 3 個)
             footer_contents = bubble.get("footer", {}).get("contents", [])
