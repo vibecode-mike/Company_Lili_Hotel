@@ -198,15 +198,16 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
       setChannelOptions(options);
 
-      // 預設選中第一個渠道（僅在 selectedChannel 為空時）
-      if (options.length > 0 && !selectedChannel) {
+      // 預設選中第一個渠道（僅在新建時，非編輯模式）
+      // 編輯模式會由渠道還原 useEffect 處理
+      if (options.length > 0 && !selectedChannel && !editMessageData?.channelId) {
         setSelectedChannel(options[0].value);
         setSelectedPlatform(options[0].platform);
       }
     };
 
     fetchChannels();
-  }, []);
+  }, [editMessageData?.channelId]);
 
   // Monitor flexMessageJson changes
   useEffect(() => {
@@ -634,8 +635,10 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     const restoredChannel = `${prefix}_${editMessageData.channelId}`;
 
     // 確認該渠道存在於選項中
-    if (channelOptions.some(opt => opt.value === restoredChannel)) {
+    const matchedOption = channelOptions.find(opt => opt.value === restoredChannel);
+    if (matchedOption) {
       setSelectedChannel(restoredChannel);
+      setSelectedPlatform(matchedOption.platform);
     }
   }, [editMessageData, channelOptions]);
 
@@ -867,6 +870,13 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       const selectedChannelOption = channelOptions.find(opt => opt.value === selectedChannel);
       const channelId = selectedChannelOption?.channelId || null;
 
+      console.log('[handleSaveDraft] 保存草稿:', {
+        selectedChannel,
+        selectedChannelOption,
+        channelId,
+        selectedPlatform
+      });
+
       // Prepare request body for draft
       const requestBody: any = {
         target_type: targetType === 'all' ? 'all_friends' : 'filtered',
@@ -915,6 +925,8 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       const isUpdate = !!editMessageId;
       const method = isUpdate ? 'PUT' : 'POST';
       const url = isUpdate ? `/api/v1/messages/${editMessageId}` : '/api/v1/messages';
+
+      console.log('[handleSaveDraft] 發送到後端:', { method, url, requestBody });
 
       // Create or update draft message
       const saveResponse = await fetch(url, {
@@ -1010,6 +1022,61 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       if (invalidIndex !== -1) {
         toast.error(`Facebook 模板第 ${invalidIndex + 1} 個卡片：標題文字為必填`);
         return false;
+      }
+
+      // 驗證每個 bubble 的欄位（圖片、按鈕等）
+      for (let bubbleIndex = 0; bubbleIndex < bubbles.length; bubbleIndex++) {
+        const bubble = bubbles[bubbleIndex];
+        const cardNum = bubbleIndex + 1;
+
+        // 1. 驗證圖片：若啟用但未上傳
+        if (bubble.hero) {
+          const heroUrl = bubble.hero.url || '';
+          if (heroUrl.startsWith('figma:') || !heroUrl) {
+            toast.error(`Facebook 模板第 ${cardNum} 個卡片：已勾選圖片但尚未上傳`);
+            return false;
+          }
+
+          // 2. 驗證圖片點擊動作：若啟用 URL 類型但未填寫
+          if (bubble.hero.action) {
+            const actionType = bubble._metadata?.heroActionType || 'url';
+            const actionUrl = bubble.hero.action.uri || '';
+
+            if (actionType === 'url' && (!actionUrl || actionUrl === 'https://example.com')) {
+              toast.error(`Facebook 模板第 ${cardNum} 個卡片：已勾選點擊圖片觸發 URL 但尚未填寫網址`);
+              return false;
+            }
+          }
+        }
+
+        // 3. 驗證按鈕：若有按鈕但相關欄位未填寫
+        const buttons = bubble.footer?.contents?.filter((c: any) => c.type === 'button') || [];
+        for (let btnIndex = 0; btnIndex < buttons.length; btnIndex++) {
+          const button = buttons[btnIndex];
+          const buttonType = bubble._metadata?.buttonTypes?.[btnIndex] || 'url';
+          const buttonLabel = button.action?.label || '';
+
+          if (!buttonLabel.trim()) {
+            toast.error(`Facebook 模板第 ${cardNum} 個卡片：按鈕 ${btnIndex + 1} 請輸入按鈕文字`);
+            return false;
+          }
+
+          if (buttonType === 'url') {
+            const buttonUrl = button.action?.uri || '';
+            if (!buttonUrl || buttonUrl === 'https://example.com') {
+              toast.error(`Facebook 模板第 ${cardNum} 個卡片：按鈕 ${btnIndex + 1} 請輸入連結網址`);
+              return false;
+            }
+          }
+
+          if (buttonType === 'postback') {
+            const payload = bubble._metadata?.buttonPayloads?.[btnIndex] || '';
+            if (!payload.trim()) {
+              toast.error(`Facebook 模板第 ${cardNum} 個卡片：按鈕 ${btnIndex + 1} 請輸入觸發訊息回覆`);
+              return false;
+            }
+          }
+        }
       }
 
       return !hasError;
