@@ -77,6 +77,25 @@ interface MessagesProviderProps {
   children: ReactNode;
 }
 
+// 狀態映射：統一簡體/繁體
+const normalizeStatus = (status: string): '已排程' | '草稿' | '已發送' | '發送失敗' => {
+  const statusLower = status.toLowerCase();
+  if (statusLower.includes('发送失败') || statusLower.includes('發送失敗') || statusLower.includes('失败') || statusLower.includes('失敗')) {
+    return '發送失敗';
+  }
+  if (statusLower.includes('已发送') || statusLower.includes('已發送') || statusLower.includes('sent')) {
+    return '已發送';
+  }
+  if (statusLower.includes('草稿') || statusLower.includes('draft')) {
+    return '草稿';
+  }
+  if (statusLower.includes('已排程') || statusLower.includes('scheduled')) {
+    return '已排程';
+  }
+  // 默認返回原值或草稿
+  return status as any || '草稿';
+};
+
 // 轉換後端數據為前端格式 (LINE 本地 DB)
 const transformBackendMessage = (item: BackendMessage): Message => ({
   id: item.id.toString(),
@@ -85,7 +104,7 @@ const transformBackendMessage = (item: BackendMessage): Message => ({
   platform: isMessagePlatform(item.platform) ? item.platform : 'LINE',
   channelId: item.channel_id,
   channelName: item.channel_name,
-  status: item.send_status,
+  status: normalizeStatus(item.send_status),
   recipientCount: item.send_count || 0,
   openCount: item.open_count || 0,
   clickCount: item.click_count || 0,
@@ -125,6 +144,7 @@ const transformFbBroadcastMessage = (item: FbBroadcastMessage): Message => {
 export function MessagesProvider({ children }: MessagesProviderProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [backendStatusCounts, setBackendStatusCounts] = useState<Record<string, number>>({});
   const [quotaStatus, setQuotaStatus] = useState<QuotaStatus | null>(null);
   const [quotaLoading, setQuotaLoading] = useState(false);
   const [quotaError, setQuotaError] = useState<string | null>(null);
@@ -132,23 +152,35 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
   const hasFetchedRef = useRef(false);
 
   const fetchMessages = useCallback(async () => {
-    const token = getAuthToken();
-    if (!token) {
-      console.warn('未登入，無法獲取訊息列表');
-      return;
-    }
-
+    console.log('🔄 開始載入訊息...');
+    console.log('🔄 API URL:', '/api/v1/messages?page=1&page_size=100');
     setIsLoading(true);
     try {
       // ✅ 方案 B：只調用一個 API，後端自動合併本地 DB + FB 外部 API 數據
-      const response = await apiGet('/api/v1/messages?page=1&page_size=100');
+      // 增加 page_size 到 500 以包含所有草稿消息
+      const response = await apiGet('/api/v1/messages?page=1&page_size=500');
+      console.log('✅ API Response 對象:', response);
+
+      // ⚠️ 修復：apiGet 返回 Response 對象，需要解析 JSON
+      const jsonData = await response.json();
+      console.log('✅ 解析後的 JSON:', jsonData);
+      console.log('✅ JSON data:', jsonData.data);
 
       // 直接使用返回的數據（後端已經合併好了）
-      const allMessages = (response.data?.items || []).map(transformBackendMessage);
+      const allMessages = (jsonData.data?.items || []).map(transformBackendMessage);
 
       const lineCnt = allMessages.filter(m => m.platform === 'LINE').length;
       const fbCnt = allMessages.filter(m => m.platform === 'Facebook').length;
-      console.log(`訊息載入完成: LINE ${lineCnt} 筆, FB ${fbCnt} 筆`);
+      console.log(`✅ 訊息載入完成: 總計 ${allMessages.length} 筆, LINE ${lineCnt} 筆, FB ${fbCnt} 筆`);
+
+      // ✅ 使用後端返回的 status_counts（包含所有數據，不只是當前頁）
+      const backendCounts = jsonData.data?.status_counts || {};
+      console.log('📊 後端返回的狀態統計:', backendCounts);
+      console.log('📊 backendCounts 類型:', typeof backendCounts, Array.isArray(backendCounts) ? '是數組' : '是對象');
+      console.log('📊 backendCounts keys:', Object.keys(backendCounts));
+      setBackendStatusCounts(backendCounts);
+      console.log('✅ 已設置 backendStatusCounts');
+
       setMessages(allMessages);
     } catch (error) {
       console.error('獲取訊息列表錯誤:', error);
@@ -205,19 +237,30 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
     ]);
   }, [fetchMessages, fetchQuota]);
 
+  // 🔧 全局調試函數
+  useEffect(() => {
+    (window as any).__debugFetchMessages = () => {
+      console.log('🔧 手動觸發 fetchMessages');
+      fetchMessages();
+    };
+    (window as any).__debugStatusCounts = () => {
+      console.log('🔧 當前 backendStatusCounts:', backendStatusCounts);
+      console.log('🔧 當前 messages 數量:', messages.length);
+    };
+    console.log('✅ 全局調試函數已註冊: window.__debugFetchMessages() 和 window.__debugStatusCounts()');
+  }, [fetchMessages, backendStatusCounts, messages.length]);
+
   // 初始載入數據
   useEffect(() => {
-    if (isAuthenticated && !hasFetchedRef.current) {
-      hasFetchedRef.current = true;
-      fetchMessages();
+    console.log('🔍 useEffect 觸發, hasFetchedRef:', hasFetchedRef.current, 'isAuthenticated:', isAuthenticated);
+
+    // ⚠️ 調試：每次 mount 都載入
+    console.log('📞 強制調用 fetchMessages');
+    fetchMessages();
+
+    // 配額查詢仍需要認證
+    if (isAuthenticated) {
       fetchQuota();
-    }
-    if (!isAuthenticated) {
-      hasFetchedRef.current = false;
-      setMessages([]);
-      setQuotaStatus(null);
-      setQuotaLoading(false);
-      setQuotaError(null);
     }
   }, [isAuthenticated, fetchMessages, fetchQuota]);
 
@@ -240,12 +283,20 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
   const totalMessages = useMemo(() => messages.length, [messages]);
 
   const statusCounts = useMemo(() => {
-    return {
-      sent: messages.filter(m => m.status === '已發送').length,
-      scheduled: messages.filter(m => m.status === '已排程').length,
-      draft: messages.filter(m => m.status === '草稿').length,
-    };
-  }, [messages]);
+    console.log('🔢 計算 statusCounts, backendStatusCounts:', backendStatusCounts);
+    console.log('🔢 backendStatusCounts 內容:', JSON.stringify(backendStatusCounts, null, 2));
+
+    // ✅ 直接使用後端返回的 status_counts（包含所有數據庫中的記錄，不受分頁限制）
+    const sent = (backendStatusCounts['已發送'] || 0) + (backendStatusCounts['已发送'] || 0);
+    const scheduled = (backendStatusCounts['已排程'] || 0) + (backendStatusCounts['已排程'] || 0);
+    const draft = (backendStatusCounts['草稿'] || 0);
+
+    console.log('✅ 前端狀態統計:', { sent, scheduled, draft, raw: backendStatusCounts });
+    console.log('✅ sent 計算:', `${backendStatusCounts['已發送']} + ${backendStatusCounts['已发送']} = ${sent}`);
+    console.log('✅ draft 計算:', `${backendStatusCounts['草稿']} = ${draft}`);
+
+    return { sent, scheduled, draft };
+  }, [backendStatusCounts]);
 
   const value = useMemo<MessagesContextType>(() => ({
     messages,

@@ -552,9 +552,49 @@ class MessageService:
 
         return new_message
 
+    async def _get_fb_sent_count_from_api(self) -> int:
+        """
+        從 FB 外部 API 獲取已發送消息的數量（用於全局統計）
+
+        Returns:
+            int: FB 已發送消息數量
+        """
+        try:
+            # 1. Firm Login 獲取 JWT Token
+            fb_client = FbMessageClient()
+            login_result = await fb_client.firm_login(
+                account=settings.FB_FIRM_ACCOUNT,
+                password=settings.FB_FIRM_PASSWORD,
+            )
+
+            if not login_result.get("ok"):
+                logger.warning(f"FB firm_login 失敗: {login_result.get('error')}")
+                return 0
+
+            jwt_token = login_result.get("access_token")
+
+            # 2. 調用 FB 外部 API 獲取群發消息列表
+            broadcast_result = await fb_client.get_broadcast_list(jwt_token)
+
+            if not broadcast_result.get("ok"):
+                logger.warning(f"FB 獲取群發列表失敗: {broadcast_result.get('error')}")
+                return 0
+
+            fb_data = broadcast_result.get("data", [])
+
+            # 3. 只計數已發送 (status === 1)
+            fb_sent_count = sum(1 for item in fb_data if item.get("status") == 1)
+
+            logger.info(f"✅ 從 FB 外部 API 獲取已發送消息數量: {fb_sent_count}")
+            return fb_sent_count
+
+        except Exception as e:
+            logger.error(f"從 FB 外部 API 獲取消息計數失敗: {e}", exc_info=True)
+            return 0
+
     async def _get_fb_sent_messages_from_api(self) -> List[MessageListItem]:
         """
-        從 FB 外部 API 獲取已發送消息
+        從 FB 外部 API 獲取已發送消息的完整數據（用於合併顯示）
 
         Returns:
             List[MessageListItem]: FB 已發送消息列表（轉換為統一格式）
@@ -676,6 +716,15 @@ class MessageService:
             status, count = row
             status_counts[str(status)] = int(count or 0)
 
+        # ✅ 全局狀態統計：始終包含 FB 已發送數量（即使當前查詢其他狀態）
+        # 為了避免重複調用 FB API，這裡只獲取計數
+        try:
+            fb_sent_count = await self._get_fb_sent_count_from_api()
+            status_counts["已發送"] = status_counts.get("已發送", 0) + fb_sent_count
+            logger.info(f"✅ 全局狀態統計已包含 FB 已發送數量: {fb_sent_count}")
+        except Exception as e:
+            logger.error(f"❌ 獲取 FB 已發送計數失敗: {e}")
+
         # 主查詢
         base_query = select(Message).options(
             selectinload(Message.template),
@@ -739,20 +788,28 @@ class MessageService:
                 item.channel_name = channel_name_map.get(f"{message.platform}:{message.channel_id}")
             message_items.append(item)
 
-        # ✅ 方案 B：後端調用 FB 外部 API 並合併數據
-        # 1. 獲取 FB 已發送消息（從外部 API）
-        fb_sent_messages = await self._get_fb_sent_messages_from_api()
+        # ✅ 方案 A：智能判斷是否需要合併 FB 外部 API 數據
+        # 只有在查詢"已發送"或未指定狀態時，才調用 FB API
+        should_merge_fb = (send_status == "已發送" or send_status is None)
 
-        # 2. 合併本地 DB 消息和 FB 已發送消息
-        all_message_items = message_items + fb_sent_messages
+        if should_merge_fb:
+            logger.info(f"✅ 查詢狀態: {send_status or '全部'}, 需要合併 FB 外部 API 數據")
+            # 1. 獲取 FB 已發送消息（從外部 API）
+            fb_sent_messages = await self._get_fb_sent_messages_from_api()
 
-        # 3. 按 created_at 降序排序（確保數據一致性）
+            # 2. 合併本地 DB 消息和 FB 已發送消息
+            all_message_items = message_items + fb_sent_messages
+
+            # 3. 更新總數（status_counts 已在前面全局統計中包含 FB 數據）
+            total_with_fb = total + len(fb_sent_messages)
+        else:
+            logger.info(f"✅ 查詢狀態: {send_status}, 僅使用本地 DB 數據，跳過 FB API")
+            # 草稿、已排程 → 不調用 FB API
+            all_message_items = message_items
+            total_with_fb = total
+
+        # 4. 按 created_at 降序排序（確保數據一致性）
         all_message_items.sort(key=lambda x: x.created_at if x.created_at else datetime.min, reverse=True)
-
-        # 4. 更新總數和狀態統計
-        total_with_fb = total + len(fb_sent_messages)
-        if fb_sent_messages:
-            status_counts["已發送"] = status_counts.get("已發送", 0) + len(fb_sent_messages)
 
         # 5. ✅ 在 Python 中應用分頁（合併後分頁，確保正確的 page_size）
         offset = max(page - 1, 0) * page_size
