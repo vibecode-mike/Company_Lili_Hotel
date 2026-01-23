@@ -145,6 +145,7 @@ class FbMessageClient:
                 )
                 try:
                     data = response.json()
+                    logger.info(f"📥 FB API raw response: {data}")
                 except ValueError:
                     preview = response.text[:200] if response.text else "empty body"
                     logger.error(f"FB broadcast API returned non‑JSON body: {preview}")
@@ -152,13 +153,20 @@ class FbMessageClient:
 
                 status_code = data.get("status", response.status_code)
                 # 根據 body 中的 status 判斷成功/失敗（外部 API 可能回傳 HTTP 200 但 status != 200）
-                if status_code == 200:
+                # 同時支援兩種回應格式：
+                # 格式 1 (舊): {"status": 200, "data": {"success": N, "failure": N, "total_targets": N}}
+                # 格式 2 (新): {"ok": true, "sent": N, "failed": N, "total": N}
+                if status_code == 200 or data.get("ok") is True:
                     result_data = data.get("data", {}) or {}
+                    # 彈性解析：優先取頂層欄位，否則從 data 子物件取
+                    sent = data.get("sent") or result_data.get("success", 0)
+                    failed = data.get("failed") or result_data.get("failure", 0)
+                    total = data.get("total") or result_data.get("total_targets", 0)
                     return {
                         "ok": True,
-                        "sent": result_data.get("success", 0),
-                        "failed": result_data.get("failure", 0),
-                        "total": result_data.get("total_targets", 0),
+                        "sent": sent,
+                        "failed": failed,
+                        "total": total,
                         "msg": data.get("msg", "ok"),
                     }
 
@@ -401,3 +409,41 @@ class FbMessageClient:
             except httpx.RequestError as e:
                 logger.error(f"FB broadcast detail request error: {e}")
                 return {"ok": False, "error": str(e), "data": []}
+
+    async def firm_login(self, account: str, password: str) -> Dict[str, Any]:
+        """
+        Firm Login 獲取 JWT Token
+
+        Args:
+            account: Firm 帳號
+            password: Firm 密碼
+
+        Returns:
+            {
+                "ok": True,
+                "access_token": "eyJ..."
+            }
+        """
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                response = await client.post(
+                    f"{self.base_url}/api/v1/admin/firm_login",
+                    json={"account": account, "password": password},
+                )
+                response.raise_for_status()
+                result = response.json()
+
+                access_token = result.get("data", {}).get("access_token")
+                if not access_token:
+                    logger.error(f"FB firm_login 未返回 access_token: {result}")
+                    return {"ok": False, "error": "未獲取到 access_token"}
+
+                logger.info(f"FB firm_login 成功，已獲取 JWT token")
+                return {"ok": True, "access_token": access_token}
+
+            except httpx.HTTPStatusError as e:
+                logger.error(f"FB firm_login API error: {e.response.status_code} - {e.response.text}")
+                return {"ok": False, "error": f"登入失敗: {e.response.status_code}"}
+            except httpx.RequestError as e:
+                logger.error(f"FB firm_login request error: {e}")
+                return {"ok": False, "error": str(e)}

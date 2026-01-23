@@ -215,6 +215,7 @@ class MessageUpdate(MessageBase):
     fb_message_json: Optional[str] = None  # Facebook Messenger JSON（更新時可選）
     failure_reason: Optional[str] = None  # 發送失敗原因
     scheduled_at: Optional[datetime] = None  # ✅ 排程時間（更新時可選）
+    channel_id: Optional[str] = None  # 渠道ID（LINE channel_id 或 FB page_id）
 
 class TemplateInfo(BaseModel):
     """模板信息

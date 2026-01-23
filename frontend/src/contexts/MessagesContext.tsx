@@ -140,51 +140,11 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
 
     setIsLoading(true);
     try {
-      const jwtToken = getJwtToken();
-      const fbApiBaseUrl = (import.meta.env.VITE_FB_API_URL || '').replace(/\/+$/, '');
-      const allMessages: Message[] = [];
+      // ✅ 方案 B：只調用一個 API，後端自動合併本地 DB + FB 外部 API 數據
+      const response = await apiGet('/api/v1/messages?page=1&page_size=100');
 
-      // 並行獲取訊息：
-      // 1. 本地 DB：LINE 全部 + FB (草稿/已排程/發送失敗)
-      // 2. 外部 API：FB 已發送（不在本地 DB，只前端顯示）
-      const fetchPromises: Promise<Response>[] = [
-        apiGet('/api/v1/messages?page=1&page_size=100'),
-      ];
-
-      // 獲取 FB 已發送訊息（從外部 API）
-      // 重要：本地 DB 沒有已發送記錄，只從外部 API 獲取
-      if (jwtToken && fbApiBaseUrl) {
-        fetchPromises.push(
-          fetch(`${fbApiBaseUrl}/api/v1/admin/meta_page/message/gourp_list`, {
-            headers: { 'Authorization': `Bearer ${jwtToken}` },
-          }).catch(err => {
-            console.error('FB 外部 API 調用失敗:', err);
-            // 降級：返回空數據，不阻斷整體流程
-            return new Response(JSON.stringify({ data: [] }), { status: 200 });
-          })
-        );
-      }
-
-      const responses = await Promise.all(fetchPromises);
-      const [lineResponse, fbResponse] = responses;
-
-      // 處理 LINE 訊息
-      if (lineResponse.ok) {
-        const lineResult = await lineResponse.json();
-        const lineMessages = (lineResult.data?.items || []).map(transformBackendMessage);
-        allMessages.push(...lineMessages);
-      }
-
-      // 處理 FB 訊息（如果有請求）
-      if (fbResponse?.ok) {
-        const fbResult = await fbResponse.json();
-        // ✅ 只取已發送狀態 (status === 1)
-        // 草稿(0)、已排程(2)、發送失敗 從本地 DB 獲取
-        const fbMessages = (fbResult.data || [])
-          .filter((item: FbBroadcastMessage) => item.status === 1) // 只要已發送
-          .map(transformFbBroadcastMessage);
-        allMessages.push(...fbMessages);
-      }
+      // 直接使用返回的數據（後端已經合併好了）
+      const allMessages = (response.data?.items || []).map(transformBackendMessage);
 
       const lineCnt = allMessages.filter(m => m.platform === 'LINE').length;
       const fbCnt = allMessages.filter(m => m.platform === 'Facebook').length;

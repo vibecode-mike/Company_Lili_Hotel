@@ -53,6 +53,8 @@ class Settings(BaseSettings):
 
     # Facebook API (外部 Meta Page 服務)
     FB_API_URL: str = "https://api-youth-tycg.star-bit.io"
+    FB_FIRM_ACCOUNT: str = "tycg-admin"
+    FB_FIRM_PASSWORD: str  # 從 .env 讀取，保密
 
     # Facebook Graph API / Frontend SDK config (no app secret stored here)
     FACEBOOK_GRAPH_API_VERSION: str = "v24.0"
