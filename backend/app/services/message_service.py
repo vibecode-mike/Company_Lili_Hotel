@@ -18,8 +18,10 @@ from app.models.line_channel import LineChannel
 from app.models.fb_channel import FbChannel
 from app.adapters.line_app_adapter import LineAppAdapter
 from app.clients.line_app_client import LineAppClient
+from app.clients.fb_message_client import FbMessageClient
 from app.core.pagination import PageResponse
 from app.schemas.message import MessageListItem, CreatorInfo
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -550,6 +552,80 @@ class MessageService:
 
         return new_message
 
+    async def _get_fb_sent_messages_from_api(self) -> List[MessageListItem]:
+        """
+        從 FB 外部 API 獲取已發送消息
+
+        Returns:
+            List[MessageListItem]: FB 已發送消息列表（轉換為統一格式）
+        """
+        try:
+            # 1. Firm Login 獲取 JWT Token
+            fb_client = FbMessageClient()
+            login_result = await fb_client.firm_login(
+                account=settings.FB_FIRM_ACCOUNT,
+                password=settings.FB_FIRM_PASSWORD,
+            )
+
+            if not login_result.get("ok"):
+                logger.warning(f"FB firm_login 失敗: {login_result.get('error')}")
+                return []
+
+            jwt_token = login_result.get("access_token")
+
+            # 2. 調用 FB 外部 API 獲取群發消息列表
+            broadcast_result = await fb_client.get_broadcast_list(jwt_token)
+
+            if not broadcast_result.get("ok"):
+                logger.warning(f"FB 獲取群發列表失敗: {broadcast_result.get('error')}")
+                return []
+
+            fb_data = broadcast_result.get("data", [])
+
+            # 3. 過濾只要已發送 (status === 1)
+            fb_sent = [item for item in fb_data if item.get("status") == 1]
+
+            # 4. 轉換為 MessageListItem 格式
+            message_items = []
+            for item in fb_sent:
+                try:
+                    # 創建虛擬 template（FB 外部 API 沒有 template 信息）
+                    from app.schemas.message import TemplateInfo
+                    virtual_template = TemplateInfo(
+                        id=-1,  # 虛擬 ID，表示來自外部 API
+                        template_type="Facebook",
+                        name=f"FB_{item.get('title', 'Untitled')}"
+                    )
+
+                    message_item = MessageListItem(
+                        id=item.get("id"),
+                        platform="Facebook",
+                        message_title=item.get("title", ""),
+                        template=virtual_template,  # ✅ 提供 template
+                        send_status="已發送",
+                        send_count=item.get("amount", 0),
+                        click_count=item.get("click_amount", 0),
+                        created_at=datetime.fromtimestamp(item.get("create_time", 0)) if item.get("create_time") else datetime.now(),
+                        send_time=datetime.fromtimestamp(item.get("create_time", 0)) if item.get("create_time") else None,
+                        # 其他欄位使用默認值
+                        scheduled_datetime_utc=None,
+                        channel_id=None,
+                        channel_name=None,
+                        interaction_tags=[],
+                        created_by=None,
+                    )
+                    message_items.append(message_item)
+                except Exception as e:
+                    logger.error(f"轉換 FB 消息格式失敗: {e}, item={item}")
+                    continue
+
+            logger.info(f"✅ 從 FB 外部 API 獲取 {len(message_items)} 條已發送消息")
+            return message_items
+
+        except Exception as e:
+            logger.error(f"從 FB 外部 API 獲取消息失敗: {e}", exc_info=True)
+            return []
+
     async def list_messages(
         self,
         db: AsyncSession,
@@ -560,7 +636,7 @@ class MessageService:
         page: int = 1,
         page_size: int = 20,
     ) -> Dict[str, Any]:
-        """獲取群發訊息列表"""
+        """獲取群發訊息列表（自動合併本地 DB + FB 外部 API）"""
 
         def apply_filters(query):
             if filters:
@@ -610,18 +686,13 @@ class MessageService:
         if send_status:
             base_query = base_query.where(Message.send_status == send_status)
 
-        # 統計總數
+        # 統計總數（僅本地 DB，FB 外部 API 的總數稍後添加）
         count_query = select(func.count()).select_from(base_query.subquery())
         total_result = await db.execute(count_query)
         total = total_result.scalar() or 0
 
-        # 分頁
-        offset = max(page - 1, 0) * page_size
-        query = (
-            base_query.order_by(Message.created_at.desc())
-            .offset(offset)
-            .limit(page_size)
-        )
+        # ⚠️ 先不分頁，獲取所有本地 DB 消息（稍後與 FB 消息合併後再分頁）
+        query = base_query.order_by(Message.created_at.desc())
         result = await db.execute(query)
         messages = result.scalars().all()
 
@@ -668,9 +739,28 @@ class MessageService:
                 item.channel_name = channel_name_map.get(f"{message.platform}:{message.channel_id}")
             message_items.append(item)
 
+        # ✅ 方案 B：後端調用 FB 外部 API 並合併數據
+        # 1. 獲取 FB 已發送消息（從外部 API）
+        fb_sent_messages = await self._get_fb_sent_messages_from_api()
+
+        # 2. 合併本地 DB 消息和 FB 已發送消息
+        all_message_items = message_items + fb_sent_messages
+
+        # 3. 按 created_at 降序排序（確保數據一致性）
+        all_message_items.sort(key=lambda x: x.created_at if x.created_at else datetime.min, reverse=True)
+
+        # 4. 更新總數和狀態統計
+        total_with_fb = total + len(fb_sent_messages)
+        if fb_sent_messages:
+            status_counts["已發送"] = status_counts.get("已發送", 0) + len(fb_sent_messages)
+
+        # 5. ✅ 在 Python 中應用分頁（合併後分頁，確保正確的 page_size）
+        offset = max(page - 1, 0) * page_size
+        paginated_items = all_message_items[offset:offset + page_size]
+
         page_response = PageResponse[MessageListItem].create(
-            items=message_items,
-            total=total,
+            items=paginated_items,
+            total=total_with_fb,
             page=page,
             page_size=page_size,
         )
