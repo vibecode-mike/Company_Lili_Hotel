@@ -241,11 +241,12 @@ class CreatorInfo(BaseModel):
     """創建者信息（用於列表顯示）"""
 
     id: int
-    username: str
-    full_name: Optional[str] = None
+    username: str = Field(alias="name")  # Admin.name 映射到 username
+    full_name: Optional[str] = Field(default=None, alias="email")  # Admin.email 映射到 full_name
 
     model_config = {
         "from_attributes": True,
+        "populate_by_name": True,
     }
 
 

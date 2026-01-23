@@ -592,9 +592,12 @@ class MessageService:
             logger.error(f"從 FB 外部 API 獲取消息計數失敗: {e}", exc_info=True)
             return 0
 
-    async def _get_fb_sent_messages_from_api(self) -> List[MessageListItem]:
+    async def _get_fb_sent_messages_from_api(self, db: AsyncSession) -> List[MessageListItem]:
         """
         從 FB 外部 API 獲取已發送消息的完整數據（用於合併顯示）
+
+        Args:
+            db: 數據庫會話（用於查詢發送人員信息）
 
         Returns:
             List[MessageListItem]: FB 已發送消息列表（轉換為統一格式）
@@ -625,7 +628,41 @@ class MessageService:
             # 3. 過濾只要已發送 (status === 1)
             fb_sent = [item for item in fb_data if item.get("status") == 1]
 
-            # 4. 轉換為 MessageListItem 格式
+            # 4. 收集所有 admin_account 並批量查詢用戶信息
+            from app.models.admin import Admin
+            from app.schemas.message import CreatorInfo
+
+            # FB API 返回 admin_account（帳號名），需要通過 email 或 name 查詢
+            admin_accounts = {item.get("admin_account") for item in fb_sent if item.get("admin_account")}
+            admin_map: Dict[str, CreatorInfo] = {}  # key 改為 admin_account 字符串
+
+            if admin_accounts:
+                # 通過 email 或 name 查詢 Admin（FB API 的 admin_account 可能對應 email 或 name）
+                admin_query = select(Admin).where(
+                    or_(
+                        Admin.email.in_(admin_accounts),
+                        Admin.name.in_(admin_accounts)
+                    )
+                )
+                admin_result = await db.execute(admin_query)
+                admins = admin_result.scalars().all()
+
+                # 創建 account -> CreatorInfo 映射
+                for admin in admins:
+                    creator_info = CreatorInfo(
+                        id=admin.id,
+                        username=admin.name or admin.email,  # 使用 name，若無則用 email
+                        full_name=admin.email  # email 作為 full_name
+                    )
+                    # 同時以 email 和 name 作為 key（因為不確定 FB API 返回的是哪個）
+                    if admin.email:
+                        admin_map[admin.email] = creator_info
+                    if admin.name:
+                        admin_map[admin.name] = creator_info
+
+                logger.info(f"✅ 查詢到 {len(admins)} 位 FB 發送人員信息，創建 {len(admin_map)} 個映射")
+
+            # 5. 轉換為 MessageListItem 格式
             message_items = []
             for item in fb_sent:
                 try:
@@ -636,6 +673,18 @@ class MessageService:
                         template_type="Facebook",
                         name=f"FB_{item.get('title', 'Untitled')}"
                     )
+
+                    # 獲取發送人員信息（使用 admin_account）
+                    admin_account = item.get("admin_account")
+                    created_by = admin_map.get(admin_account) if admin_account and admin_account in admin_map else None
+
+                    # 如果數據庫中找不到對應 Admin，創建虛擬 CreatorInfo（使用 FB API 的 admin_account）
+                    if not created_by and admin_account:
+                        created_by = CreatorInfo(
+                            id=-1,  # 虛擬 ID
+                            username=admin_account,  # 使用 FB API 返回的 admin_account
+                            full_name=None
+                        )
 
                     message_item = MessageListItem(
                         id=item.get("id"),
@@ -652,7 +701,7 @@ class MessageService:
                         channel_id=None,
                         channel_name=None,
                         interaction_tags=[],
-                        created_by=None,
+                        created_by=created_by,  # ✅ 設置發送人員
                     )
                     message_items.append(message_item)
                 except Exception as e:
@@ -794,8 +843,8 @@ class MessageService:
 
         if should_merge_fb:
             logger.info(f"✅ 查詢狀態: {send_status or '全部'}, 需要合併 FB 外部 API 數據")
-            # 1. 獲取 FB 已發送消息（從外部 API）
-            fb_sent_messages = await self._get_fb_sent_messages_from_api()
+            # 1. 獲取 FB 已發送消息（從外部 API，包含發送人員信息）
+            fb_sent_messages = await self._get_fb_sent_messages_from_api(db)
 
             # 2. 合併本地 DB 消息和 FB 已發送消息
             all_message_items = message_items + fb_sent_messages
