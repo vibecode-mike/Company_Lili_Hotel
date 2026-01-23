@@ -39,118 +39,132 @@ class MessageService:
         )
 
     @staticmethod
+    def _ensure_url_protocol(url: str) -> str:
+        """確保 URL 有 https:// 前綴"""
+        url = (url or "").strip()
+        if not url:
+            return ""
+        if url.startswith(("http://", "https://")):
+            return url
+        return f"https://{url}"
+
+    @staticmethod
+    def _get_metadata_value(metadata: dict, key: str, index: int, default: str = "") -> str:
+        """從 metadata 取得值，支援字串和數字索引"""
+        mapping = metadata.get(key, {})
+        value = mapping.get(str(index)) or mapping.get(index, default)
+        return (value or "").strip()
+
+    @staticmethod
+    def _extract_title_from_body(body_contents: list) -> str:
+        """從 body contents 提取標題（size=xl 或 weight=bold 的文字）"""
+        for item in body_contents:
+            if item.get("type") != "text":
+                continue
+            if item.get("size") == "xl" or item.get("weight") == "bold":
+                title = (item.get("text") or "").strip()
+                if title:
+                    return title
+        return "訊息"  # FB 要求 title 必填
+
+    @staticmethod
+    def _extract_subtitle_from_body(body_contents: list) -> str:
+        """從 body contents 提取副標題（size=sm 的文字）"""
+        for item in body_contents:
+            if item.get("type") == "text" and item.get("size") == "sm":
+                return (item.get("text") or "").strip()
+        return ""
+
+    @staticmethod
+    def _build_default_action(hero: dict, metadata: dict) -> dict | None:
+        """建立 default_action（點擊卡片的動作）"""
+        action_type = metadata.get("heroActionType", "url")
+
+        if action_type == "postback":
+            payload = (metadata.get("heroActionPayload") or "").strip()
+            if payload:
+                return {"type": "postback", "payload": payload}
+        else:
+            hero_action = hero.get("action")
+            if hero_action:
+                url = MessageService._ensure_url_protocol(hero_action.get("uri", ""))
+                if url:
+                    return {"type": "web_url", "url": url}
+        return None
+
+    @staticmethod
+    def _build_button(action: dict, metadata: dict, index: int) -> dict | None:
+        """建立單一按鈕"""
+        btn_title = (action.get("label") or "按鈕").strip()
+        btn_type = MessageService._get_metadata_value(metadata, "buttonTypes", index, "url")
+
+        if btn_type == "postback":
+            payload = MessageService._get_metadata_value(metadata, "buttonPayloads", index)
+            if payload:
+                return {"type": "postback", "title": btn_title, "payload": payload}
+        else:
+            url = MessageService._ensure_url_protocol(action.get("uri", ""))
+            if url:
+                return {"type": "web_url", "title": btn_title, "url": url}
+        return None
+
+    @staticmethod
+    def _transform_bubble_to_element(bubble: dict) -> dict:
+        """將單一 bubble 轉換為 FB element"""
+        metadata = bubble.get("_metadata", {})
+        body_contents = bubble.get("body", {}).get("contents", [])
+        hero = bubble.get("hero", {})
+        footer_contents = bubble.get("footer", {}).get("contents", [])
+
+        element = {
+            "title": MessageService._extract_title_from_body(body_contents)
+        }
+
+        subtitle = MessageService._extract_subtitle_from_body(body_contents)
+        if subtitle:
+            element["subtitle"] = subtitle
+
+        image_url = (hero.get("url") or "").strip()
+        if image_url and image_url.startswith(("http://", "https://")):
+            element["image_url"] = image_url
+
+        default_action = MessageService._build_default_action(hero, metadata)
+        if default_action:
+            element["default_action"] = default_action
+
+        buttons = []
+        button_index = 0
+        for item in footer_contents:
+            if item.get("type") != "button" or len(buttons) >= 3:
+                continue
+            button = MessageService._build_button(item.get("action", {}), metadata, button_index)
+            if button:
+                buttons.append(button)
+            button_index += 1
+
+        if buttons:
+            element["buttons"] = buttons
+
+        return element
+
+    @staticmethod
     def _transform_fb_message_to_api_format(message: Message) -> dict:
-        """
-        將 Flex Message 格式轉換為外部 FB API 格式
-
-        Flex Message (前端儲存格式，與 LINE 相同):
-        {
-          "type": "carousel",
-          "contents": [
-            {
-              "type": "bubble",
-              "hero": { "url": "..." },
-              "body": { "contents": [...] },
-              "footer": { "contents": [...] }
-            }
-          ]
-        }
-
-        External API (輸出):
-        {
-          "channel": "FB",
-          "target_type": "all | tagged",
-          "tag_include": ["#tag1", ...],
-          "tag_exclude": ["#tag2", ...],
-          "element": [...]
-        }
-        """
+        """將 Flex Message 格式轉換為外部 FB API 格式"""
         flex_json = json.loads(message.fb_message_json)
 
-        # 取得 bubbles 列表
-        if flex_json.get("type") == "carousel":
+        flex_type = flex_json.get("type")
+        if flex_type == "carousel":
             bubbles = flex_json.get("contents", [])
-        elif flex_json.get("type") == "bubble":
+        elif flex_type == "bubble":
             bubbles = [flex_json]
         else:
             bubbles = []
 
-        # 轉換每個 bubble 為 FB element
-        api_elements = []
-        for bubble in bubbles:
-            element = {}
+        api_elements = [
+            MessageService._transform_bubble_to_element(bubble)
+            for bubble in bubbles
+        ]
 
-            # 提取標題 (body 中 size="xl" 或 weight="bold" 的文字)
-            body_contents = bubble.get("body", {}).get("contents", [])
-            for item in body_contents:
-                if item.get("type") == "text":
-                    if item.get("size") == "xl" or item.get("weight") == "bold":
-                        element["title"] = (item.get("text") or "").strip()
-                        break
-
-            if not element.get("title"):
-                element["title"] = "訊息"  # FB 要求 title 必填
-
-            # 提取副標題 (body 中 size="sm" 的文字)
-            for item in body_contents:
-                if item.get("type") == "text" and item.get("size") == "sm":
-                    subtitle = (item.get("text") or "").strip()
-                    if subtitle:
-                        element["subtitle"] = subtitle
-                    break
-
-            # 提取圖片與點擊動作
-            hero = bubble.get("hero", {})
-            image_url = (hero.get("url") or "").strip()
-            # FB API 需要完整 HTTPS URL，跳過相對路徑和 placeholder
-            if image_url and image_url.startswith(("http://", "https://")):
-                element["image_url"] = image_url
-
-            # 提取 default_action（點擊卡片的動作）
-            if hero.get("action"):
-                metadata = bubble.get("_metadata", {})
-                if metadata.get("heroActionType") == "postback":
-                    payload = metadata.get("heroActionPayload", "")
-                    if payload:
-                        element["default_action"] = {"type": "postback", "payload": payload}
-                else:
-                    url = (hero["action"].get("uri") or "").strip()
-                    # FB API 需要完整 URL
-                    if url and url.startswith(("http://", "https://")):
-                        element["default_action"] = {"type": "web_url", "url": url}
-
-            # 提取按鈕 (最多 3 個)
-            footer_contents = bubble.get("footer", {}).get("contents", [])
-            buttons = []
-            for item in footer_contents:
-                if item.get("type") == "button" and len(buttons) < 3:
-                    action = item.get("action", {})
-                    btn_title = (action.get("label") or "按鈕").strip()
-
-                    if action.get("type") == "uri":
-                        url = (action.get("uri") or "").strip()
-                        # FB API 需要完整 URL
-                        if url and url.startswith(("http://", "https://")):
-                            buttons.append({
-                                "type": "web_url",
-                                "title": btn_title,
-                                "url": url
-                            })
-                    else:
-                        payload = (action.get("data") or "").strip()
-                        if payload:
-                            buttons.append({
-                                "type": "postback",
-                                "title": btn_title,
-                                "payload": payload
-                            })
-
-            if buttons:
-                element["buttons"] = buttons
-
-            api_elements.append(element)
-
-        # 轉換 target_type 和標籤
         if message.target_type == "all_friends":
             target_type = "all"
             tag_include = []
@@ -952,22 +966,28 @@ class MessageService:
             )
             logger.info(f"📬 FB API result: {result}")
 
-            # 更新消息狀態
+            # 處理發送結果
             if result.get("ok"):
-                message.send_status = "已發送"
-                message.send_time = datetime.now()
-                # 彈性解析回應欄位 (sent_count 或 sent)
+                # ✅ FB 發送成功：刪除本地記錄
+                # 已發送消息只在前端顯示（從外部 API 獲取）
                 sent_count = result.get("sent_count") or result.get("sent") or 0
                 failed_count = result.get("failed_count") or result.get("failed") or 0
-                # 更新發送人數統計（用於前端表格顯示）
-                message.send_count = sent_count
+
+                logger.info(f"✅ FB 消息發送成功，刪除本地記錄: message_id={message_id}, sent={sent_count}")
+
+                # 刪除數據庫記錄
+                await db.delete(message)
+                await db.commit()
             else:
+                # ❌ FB 發送失敗：保存失敗狀態
                 message.send_status = "發送失敗"
                 message.failure_reason = result.get("error", "未知錯誤")
                 sent_count = 0
                 failed_count = message.estimated_send_count or 0
 
-            await db.commit()
+                logger.warning(f"⚠️ FB 消息發送失敗: message_id={message_id}, reason={message.failure_reason}")
+
+                await db.commit()
 
             return {
                 "ok": result.get("ok", False),

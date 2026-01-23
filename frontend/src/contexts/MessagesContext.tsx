@@ -144,18 +144,23 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
       const fbApiBaseUrl = (import.meta.env.VITE_FB_API_URL || '').replace(/\/+$/, '');
       const allMessages: Message[] = [];
 
-      // 並行獲取 LINE (本地 DB) 和 FB (外部 API) 訊息
-      // 使用 apiGet 自動處理 token 和 401 重試
+      // 並行獲取訊息：
+      // 1. 本地 DB：LINE 全部 + FB (草稿/已排程/發送失敗)
+      // 2. 外部 API：FB 已發送（不在本地 DB，只前端顯示）
       const fetchPromises: Promise<Response>[] = [
         apiGet('/api/v1/messages?page=1&page_size=100'),
       ];
 
-      // 僅在有 JWT token 和 FB API URL 時才獲取 FB 訊息
-      // FB 外部 API 使用 jwtToken，不透過 apiClient
+      // 獲取 FB 已發送訊息（從外部 API）
+      // 重要：本地 DB 沒有已發送記錄，只從外部 API 獲取
       if (jwtToken && fbApiBaseUrl) {
         fetchPromises.push(
           fetch(`${fbApiBaseUrl}/api/v1/admin/meta_page/message/gourp_list`, {
             headers: { 'Authorization': `Bearer ${jwtToken}` },
+          }).catch(err => {
+            console.error('FB 外部 API 調用失敗:', err);
+            // 降級：返回空數據，不阻斷整體流程
+            return new Response(JSON.stringify({ data: [] }), { status: 200 });
           })
         );
       }
@@ -173,7 +178,11 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
       // 處理 FB 訊息（如果有請求）
       if (fbResponse?.ok) {
         const fbResult = await fbResponse.json();
-        const fbMessages = (fbResult.data || []).map(transformFbBroadcastMessage);
+        // ✅ 只取已發送狀態 (status === 1)
+        // 草稿(0)、已排程(2)、發送失敗 從本地 DB 獲取
+        const fbMessages = (fbResult.data || [])
+          .filter((item: FbBroadcastMessage) => item.status === 1) // 只要已發送
+          .map(transformFbBroadcastMessage);
         allMessages.push(...fbMessages);
       }
 
