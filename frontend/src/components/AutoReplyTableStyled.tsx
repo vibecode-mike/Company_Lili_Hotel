@@ -20,6 +20,7 @@ export interface AutoReplyData {
   keywordObjects?: KeywordObject[];  // 包含重複標記的關鍵字對象
   status: '啟用' | '停用';
   platform: string;
+  channelName?: string;  // 粉專名稱
   triggerCount: number;
   createTime: string;
 }
@@ -239,8 +240,8 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange }: { so
           </div>
 
           {/* 平台 */}
-          <div 
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px] cursor-pointer"
+          <div
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[180px] cursor-pointer"
             onClick={() => onSortChange('platform')}
           >
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
@@ -396,12 +397,13 @@ const AutoReplyRow = memo(function AutoReplyRow({
           </div>
 
           {/* 平台 */}
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[100px]">
-            <div className="basis-0 flex flex-col grow justify-center leading-[0] min-h-px min-w-px not-italic relative shrink-0 text-[#383838] text-[14px] tracking-[0.22px]">
-              <div className="leading-[24px]">
-                <MemberSourceIcon source={row.platform as MemberSourceType} size={28} />
+          <div className="box-border content-stretch flex items-center gap-[8px] px-[12px] py-0 relative shrink-0 w-[180px]">
+            <MemberSourceIcon source={row.platform as MemberSourceType} size={28} />
+            {row.channelName && (
+              <div className="flex-1 flex flex-col justify-center leading-[0] min-h-px min-w-px not-italic relative text-[#383838] text-[14px] tracking-[0.22px]">
+                <p className="leading-[24px] truncate">{row.channelName}</p>
               </div>
-            </div>
+            )}
           </div>
 
           {/* 觸發次數 - 左對齊 */}
@@ -507,12 +509,12 @@ export default function AutoReplyTableStyled({ data, onRowClick, onToggleStatus,
       {/* Table Container - Fixed height container with horizontal scroll */}
       <div className="bg-white rounded-[16px] w-full flex flex-col max-h-[600px] overflow-x-auto table-scroll">
         {/* Table Header - Fixed */}
-        <div className="relative shrink-0 w-[1250px]">
+        <div className="relative shrink-0 w-[1330px]">
           <TableHeader sortConfig={sortConfig} onSortChange={handleSort} />
         </div>
-        
+
         {/* Table Body - Scrollable Container */}
-        <div className="w-[1250px] flex-1 overflow-y-auto table-scroll">
+        <div className="w-[1330px] flex-1 overflow-y-auto table-scroll">
           {sortedData.map((row, index) => (
             <AutoReplyRow
               key={row.id}

@@ -112,6 +112,7 @@ export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNav
       keywordObjects: reply.keywordObjects,  // 包含重複標記的關鍵字對象
       status: reply.isActive ? '啟用' : '停用',
       platform: reply.channels?.[0] || 'LINE',  // 使用實際渠道，預設 LINE
+      channelName: reply.channelName,  // 頻道名稱（LINE 頻道名 / FB 粉專名）
       triggerCount: reply.triggerCount,
       createTime: formatDateTime(reply.createdAt),
     }));

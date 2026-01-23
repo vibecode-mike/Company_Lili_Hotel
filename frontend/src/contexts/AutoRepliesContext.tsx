@@ -30,6 +30,7 @@ export interface AutoReplyKeyword {
 export interface AutoReply {
   id: string;
   name: string;
+  channelName?: string | null; // 頻道名稱（LINE 頻道名 / FB 粉專名）
   triggerType: AutoReplyTriggerType;
   keywords: string[];
   keywordObjects: AutoReplyKeyword[]; // 包含重複標記的關鍵字對象
@@ -142,6 +143,7 @@ function mapAutoResponse(item: BackendAutoReply & { content?: string; messages?:
   return {
     id: item?.id?.toString() ?? generateTempId(),
     name: item?.name ?? '未命名自動回應',
+    channelName: (item as any)?.channel_name ?? null,  // 新增：頻道名稱
     triggerType: (item?.trigger_type ?? 'keyword') as AutoReplyTriggerType,
     keywords,
     keywordObjects,  // 新增：包含重複標記的關鍵字對象

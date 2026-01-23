@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.models.auto_response import AutoResponse, AutoResponseKeyword, TriggerType
 from app.models.auto_response_message import AutoResponseMessage
+from app.models.line_channel import LineChannel
 from app.schemas.common import SuccessResponse
 from app.clients.fb_message_client import FbMessageClient
 from pydantic import BaseModel, conlist
@@ -392,9 +393,13 @@ async def _get_fb_auto_responses_from_api(jwt_token: str, db: AsyncSession) -> L
             # Parse create_time with fallback to current time
             created_at_dt = _parse_datetime(item.get("create_time")) or datetime.now()
 
+            # 粉專名稱
+            channel_name = item.get("channel_name") or f"FB 自動回應 #{item.get('id')}"
+
             fb_auto_response = {
                 "id": f"fb-{item.get('id')}",  # 加上 fb- 前綴避免與 LINE 的 ID 衝突
                 "name": item.get("channel_name") or f"FB 自動回應 #{item.get('id')}",
+                "channel_name": channel_name,  # 新增：粉專名稱（與 LINE 統一）
                 "trigger_type": "keyword" if item.get("response_type") == 2 else "follow",
                 "content": messages_list[0]["content"] if messages_list else "",
                 "is_active": item.get("enabled", False),
@@ -456,13 +461,33 @@ async def get_auto_responses(
     result = await db.execute(query)
     auto_responses = result.scalars().all()
 
+    # 查詢所有 LINE 頻道名稱
+    # 建立兩個映射：channel_id -> channel_name 和 basic_id -> channel_name
+    line_channels_query = select(LineChannel).where(LineChannel.is_active == True)
+    line_channels_result = await db.execute(line_channels_query)
+    line_channels = line_channels_result.scalars().all()
+
+    # 同時建立 channel_id 和 basic_id 的映射，因為自動回應可能存儲任一種
+    channel_name_map = {}
+    for ch in line_channels:
+        if ch.channel_id:
+            channel_name_map[ch.channel_id] = ch.channel_name
+        if ch.basic_id:
+            channel_name_map[ch.basic_id] = ch.channel_name
+
     # 序列化 LINE 自動回應
     line_items = []
     for ar in auto_responses:
+        # 獲取頻道名稱（匹配 channel_id 或 basic_id）
+        channel_name = None
+        if ar.channel_id and ar.channel_id in channel_name_map:
+            channel_name = channel_name_map[ar.channel_id]
+
         line_items.append(
             {
                 "id": ar.id,
                 "name": ar.name,
+                "channel_name": channel_name,  # 新增：頻道名稱
                 "trigger_type": ar.trigger_type,
                 "content": ar.content,
                 "is_active": ar.is_active,
