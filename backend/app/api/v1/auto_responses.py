@@ -2,7 +2,7 @@
 自動回應 API
 """
 import logging
-from datetime import date, time
+from datetime import date, time, datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
@@ -13,9 +13,42 @@ from app.models.auto_response_message import AutoResponseMessage
 from app.schemas.common import SuccessResponse
 from app.clients.fb_message_client import FbMessageClient
 from pydantic import BaseModel, conlist
-from typing import Optional, List, Sequence, Dict, Any
+from typing import Optional, List, Sequence, Dict, Any, Union
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_datetime(value: Union[int, float, str, datetime, None]) -> Optional[datetime]:
+    """
+    Parse various datetime formats into a datetime object.
+
+    Handles:
+    - Unix timestamps (int/float)
+    - ISO datetime strings (with optional 'Z' suffix)
+    - datetime objects (passthrough)
+    - None/missing values
+
+    Returns datetime object or None if parsing fails.
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, datetime):
+        return value
+
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(value)
+        except (ValueError, OSError):
+            return None
+
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace('Z', '+00:00'))
+        except ValueError:
+            return None
+
+    return None
 
 router = APIRouter()
 
@@ -304,13 +337,108 @@ async def _sync_fb_auto_template(
     logger.info(f"FB auto_template synced for auto_response_id={auto_response.id}")
 
 
+async def _get_fb_auto_responses_from_api(jwt_token: str, db: AsyncSession) -> List[Dict[str, Any]]:
+    """
+    從 FB 外部 API 獲取自動回應並轉換為內部格式
+    參考 message_service.py 的合併模式
+    """
+    if not jwt_token:
+        logger.warning("No JWT token provided, skipping FB auto-response fetch")
+        return []
+
+    try:
+        fb_client = FbMessageClient()
+        result = await fb_client.get_auto_templates(jwt_token)
+
+        if not result.get("ok"):
+            error_msg = result.get("error", "未知錯誤")
+            logger.error(f"FB auto_template list failed: {error_msg}")
+            return []
+
+        fb_data = result.get("data", [])
+
+        # 轉換為內部格式
+        fb_auto_responses = []
+        for item in fb_data:
+            # 提取關鍵字
+            fb_keywords = item.get("keywords", [])
+            keywords_list = [
+                {
+                    "id": kw.get("id"),
+                    "keyword": kw.get("name", ""),
+                    "name": kw.get("name", ""),
+                    "type": "keyword",
+                    "match_type": "exact",
+                    "is_enabled": kw.get("enabled", True),
+                    "is_duplicate": not kw.get("enabled", True),  # FB API 的 enabled=false 表示重複
+                    "match_count": 0,
+                    "last_triggered_at": None,
+                }
+                for kw in fb_keywords
+            ]
+
+            # 提取訊息
+            text_items = item.get("text", [])
+            messages_list = [
+                {
+                    "id": -1,  # 虛擬 ID
+                    "content": t.get("text", ""),
+                    "sequence_order": idx + 1,
+                }
+                for idx, t in enumerate(text_items)
+                if t.get("enabled") is not False
+            ]
+
+            # Parse create_time with fallback to current time
+            created_at_dt = _parse_datetime(item.get("create_time")) or datetime.now()
+
+            fb_auto_response = {
+                "id": f"fb-{item.get('id')}",  # 加上 fb- 前綴避免與 LINE 的 ID 衝突
+                "name": item.get("channel_name") or f"FB 自動回應 #{item.get('id')}",
+                "trigger_type": "keyword" if item.get("response_type") == 2 else "follow",
+                "content": messages_list[0]["content"] if messages_list else "",
+                "is_active": item.get("enabled", False),
+                "trigger_count": item.get("count", 0),
+                "success_rate": 0,
+                "created_at": created_at_dt,  # 已轉換為 datetime 對象
+                "updated_at": None,
+                "keywords": keywords_list,
+                "messages": messages_list,
+                "trigger_time_start": None,
+                "trigger_time_end": None,
+                "date_range_start": None,
+                "date_range_end": None,
+                "channels": ["Facebook"],
+                "channel_id": item.get("page_id", ""),
+            }
+
+            fb_auto_responses.append(fb_auto_response)
+
+        logger.info(f"✅ 從 FB API 獲取了 {len(fb_auto_responses)} 個自動回應")
+        return fb_auto_responses
+
+    except Exception as e:
+        logger.error(f"獲取 FB 自動回應失敗（非致命）: {e}")
+        return []
+
+
 @router.get("", response_model=SuccessResponse)
 async def get_auto_responses(
     trigger_type: Optional[TriggerType] = None,
     is_active: Optional[bool] = None,
+    jwt_token: Optional[str] = Query(None, description="FB JWT token for fetching FB auto-responses"),
     db: AsyncSession = Depends(get_db),
 ):
-    """獲取自動回應列表"""
+    """
+    獲取自動回應列表（合併 LINE DB + FB API）
+
+    架構參考活動推播的 list_messages()：
+    - Step 1: 獲取 LINE 自動回應（本地 DB）
+    - Step 2: 獲取 FB 自動回應（外部 API）
+    - Step 3: 合併兩個數據源
+    - Step 4: 排序並返回
+    """
+    # Step 1: 獲取 LINE 自動回應（本地 DB）
     query = (
         select(AutoResponse)
         .options(
@@ -328,9 +456,10 @@ async def get_auto_responses(
     result = await db.execute(query)
     auto_responses = result.scalars().all()
 
-    items = []
+    # 序列化 LINE 自動回應
+    line_items = []
     for ar in auto_responses:
-        items.append(
+        line_items.append(
             {
                 "id": ar.id,
                 "name": ar.name,
@@ -352,7 +481,24 @@ async def get_auto_responses(
             }
         )
 
-    return SuccessResponse(data=items)
+    # Step 2: 獲取 FB 自動回應（外部 API）
+    fb_items = []
+    if jwt_token:
+        fb_items = await _get_fb_auto_responses_from_api(jwt_token, db)
+
+    # Step 3: 合併兩個數據源
+    all_items = line_items + fb_items
+
+    # Step 4: 按創建時間排序（降序）
+    # _parse_datetime ensures type consistency; datetime.min used as fallback for None
+    all_items.sort(
+        key=lambda x: _parse_datetime(x.get("created_at")) or datetime.min,
+        reverse=True
+    )
+
+    logger.info(f"✅ 返回自動回應列表: LINE={len(line_items)}, FB={len(fb_items)}, 總計={len(all_items)}")
+
+    return SuccessResponse(data=all_items)
 
 
 @router.get("/fb", response_model=SuccessResponse)
@@ -513,6 +659,51 @@ async def create_auto_response(
             # 停用重疊的一律回應
             overlapping.is_active = False
 
+    # ✅ 新架構：純 FB 自動回應不保存本地 DB，直接調用 FB API
+    if channels and channels == ['Facebook']:
+        logger.info("⚡ 純 FB 自動回應，只保存到外部 API，不保存本地 DB")
+
+        if not jwt_token:
+            raise HTTPException(
+                status_code=400,
+                detail="缺少 jwt_token，請先完成 Facebook 授權"
+            )
+
+        # 構建 FB API payload
+        payload = {
+            "firm_id": 1,
+            "channel": "FB",
+            "page_id": data.channel_id or "",
+            "response_type": 2 if data.trigger_type == TriggerType.KEYWORD else 3,
+            "enabled": data.is_active,
+            "trigger_time": 0,
+            "tags": keywords,
+            "text": message_list,
+        }
+
+        logger.info(f"Creating FB-only auto_template: {payload}")
+
+        # 調用 FB API
+        fb_client = FbMessageClient()
+        result = await fb_client.set_auto_template(payload, jwt_token)
+
+        if not result.get("ok"):
+            error_msg = result.get("error", "未知錯誤")
+            logger.error(f"FB auto_template creation failed: {error_msg}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"創建 Facebook 自動回應失敗: {error_msg}"
+            )
+
+        fb_id = result.get("data", {}).get("id") or result.get("id", 0)
+        logger.info(f"✅ FB 自動回應創建成功，外部 ID: {fb_id}")
+
+        return SuccessResponse(
+            data={"id": f"fb-{fb_id}", "external_only": True},
+            message="創建成功（已保存到 Facebook API）"
+        )
+
+    # ✅ LINE 或混合渠道：繼續保存到本地 DB
     auto_response = AutoResponse(
         name=data.name,
         trigger_type=data.trigger_type,

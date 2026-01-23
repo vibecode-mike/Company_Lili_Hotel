@@ -242,36 +242,31 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
     setIsLoading(true);
     setError(null);
     try {
-      // 1. Fetch LINE auto-responses (使用 apiGet 自動處理 token 和 401 重試)
-      const lineResponse = await apiGet('/api/v1/auto_responses');
+      // ✅ 新架構：一次 API 調用，後端已合併 LINE DB + FB API 數據
+      const jwtToken = getJwtToken();
+      const url = jwtToken
+        ? `/api/v1/auto_responses?jwt_token=${encodeURIComponent(jwtToken)}`
+        : '/api/v1/auto_responses';
 
-      if (!lineResponse.ok) {
-        const errData = await lineResponse.json().catch(() => null);
+      const response = await apiGet(url);
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => null);
         throw new Error(errData?.detail || errData?.message || '獲取自動回應失敗');
       }
 
-      const lineResult = await lineResponse.json();
-      const lineReplies = Array.isArray(lineResult?.data) ? lineResult.data.map(mapAutoResponse) : [];
+      const result = await response.json();
+      const allReplies = Array.isArray(result?.data)
+        ? result.data.map(mapAutoResponse)
+        : [];
 
-      // 2. Fetch FB auto-responses (使用 apiGet 自動處理 token 和 401 重試)
-      let fbReplies: AutoReply[] = [];
-      const jwtToken = getJwtToken();
-      if (jwtToken) {
-        try {
-          const fbResponse = await apiGet(`/api/v1/auto_responses/fb?jwt_token=${encodeURIComponent(jwtToken)}`);
-
-          if (fbResponse.ok) {
-            const fbResult = await fbResponse.json();
-            fbReplies = Array.isArray(fbResult?.data) ? fbResult.data.map(mapFbAutoResponse) : [];
-          }
-        } catch (fbErr) {
-          console.warn('[AutoReplies] 獲取 FB 自動回應失敗（非致命）:', fbErr);
-        }
-      }
-
-      // 3. Combine and sort
-      const allReplies = [...lineReplies, ...fbReplies];
       setAutoReplies(sortByCreatedAt(allReplies));
+
+      console.log('[AutoReplies] ✅ 獲取成功:', {
+        total: allReplies.length,
+        line: allReplies.filter(r => r.channels?.includes('LINE')).length,
+        fb: allReplies.filter(r => r.channels?.includes('Facebook')).length,
+      });
     } catch (err) {
       console.error('獲取自動回應錯誤:', err);
       setError(err instanceof Error ? err.message : '獲取自動回應失敗');
@@ -335,44 +330,8 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
           return getAutoReplyById(id) || null;
         }
 
-        // 檢測是否為純 FB 渠道新建（直接調用外部 FB API，不透過 apiClient）
-        if (!id && payload.channels?.length === 1 && payload.channels[0] === 'Facebook') {
-          if (!jwtToken) throw new Error('請先登入 Facebook 帳號');
-
-          const fbApiBaseUrl = (import.meta.env.VITE_FB_API_URL || '').replace(/\/+$/, '');
-          if (!fbApiBaseUrl) throw new Error('FB API URL 未設定');
-
-          const fbResponse = await fetch(
-            `${fbApiBaseUrl}/api/v1/admin/meta_page/message/auto_template`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${jwtToken}`,
-              },
-              body: JSON.stringify({
-                firm_id: 1,
-                channel: "FB",
-                page_id: payload.channelId || "",
-                response_type: payload.triggerType === 'keyword' ? 2 : 3,
-                trigger_time: 0,
-                tags: payload.keywords || [],
-                text: payload.messages || [],
-              }),
-            }
-          );
-
-          if (!fbResponse.ok) {
-            const errData = await fbResponse.json().catch(() => null);
-            throw new Error(errData?.msg || errData?.detail || '建立 FB 自動回應失敗');
-          }
-
-          await fetchAutoReplies();
-          toast.success('FB 自動回應已建立');
-          return null;
-        }
-
-        // 原有的 LINE 自動回應邏輯 (POST/PUT，使用 apiClient 自動處理 token 和 401 重試)
+        // ✅ 新架構：統一走後端 API（後端會判斷純 FB 不保存本地 DB）
+        // 移除了原先前端直接調用外部 FB API 的邏輯，統一由後端處理
         const baseUrl = id ? `/api/v1/auto_responses/${id}` : '/api/v1/auto_responses';
         const url = payload.channels?.includes('Facebook') && jwtToken
           ? `${baseUrl}?jwt_token=${encodeURIComponent(jwtToken)}`
