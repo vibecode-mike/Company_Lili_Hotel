@@ -1530,6 +1530,35 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         };
       }
 
+      // ✅ 构建完整的 metadata（包含 buttonTypes 和 buttonPayloads）
+      const buttonTypes: Record<number, string> = {};
+      const buttonPayloads: Record<number, string> = {};
+
+      // 收集按钮类型和 payload（FB 最多 3 个按钮）
+      [1, 2, 3].forEach((num) => {
+        const enableKey = `enableButton${num}` as keyof typeof card;
+        const actionTypeKey = `button${num}ActionType` as keyof typeof card;
+        const tagKey = `button${num}Tag` as keyof typeof card;
+
+        if (card[enableKey]) {
+          const actionType = card[actionTypeKey] as string || 'url';
+          const tag = card[tagKey] as string || '';
+
+          const buttonIndex = num - 1;
+
+          if (selectedPlatform === 'Facebook' && actionType === 'tag' && tag) {
+            buttonTypes[buttonIndex] = 'postback';
+            buttonPayloads[buttonIndex] = tag;
+          } else {
+            buttonTypes[buttonIndex] = 'url';
+          }
+        }
+      });
+
+      // 处理图片动作（如果需要支持图片点击打标签）
+      const heroActionType = card.heroActionType as string || 'url';
+      const heroActionPayload = card.heroTag as string || '';
+
       const interactionMetadata: { heroTag?: string | null; buttonTags?: Array<string | null> } = {};
       const normalizedImageTag = typeof card.imageTag === 'string' ? card.imageTag.trim() : '';
       if (normalizedImageTag) {
@@ -1545,11 +1574,34 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
           return tag ?? null;
         });
       }
+
+      // 构建完整的 _metadata
+      const metadata: any = {
+        ...(bubble._metadata || {}),
+      };
+
+      // 添加按钮 metadata（FB postback 所需）
+      if (Object.keys(buttonTypes).length > 0) {
+        metadata.buttonTypes = buttonTypes;
+        if (Object.keys(buttonPayloads).length > 0) {
+          metadata.buttonPayloads = buttonPayloads;
+        }
+      }
+
+      // 添加图片动作 metadata（如果图片设置了标签动作）
+      if (selectedPlatform === 'Facebook' && heroActionType === 'tag' && heroActionPayload) {
+        metadata.heroActionType = 'postback';
+        metadata.heroActionPayload = heroActionPayload;
+      }
+
+      // 保留 interactionTags（用于统计）
       if (interactionMetadata.heroTag || (interactionMetadata.buttonTags && interactionMetadata.buttonTags.some(Boolean))) {
-        bubble._metadata = {
-          ...(bubble._metadata || {}),
-          interactionTags: interactionMetadata
-        };
+        metadata.interactionTags = interactionMetadata;
+      }
+
+      // 只在有 metadata 时设置
+      if (Object.keys(metadata).length > 0) {
+        bubble._metadata = metadata;
       }
 
       return bubble;
