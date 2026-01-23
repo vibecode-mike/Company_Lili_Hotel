@@ -696,6 +696,20 @@ class MessageService:
                     if not created_by:
                         created_by = default_creator_info
 
+                    # ✅ 提取受众筛选标签（从 FB API 的 keywords 字段）
+                    keywords = item.get("keywords", [])
+                    interaction_tags = []
+                    if keywords and isinstance(keywords, list):
+                        # 提取所有标签名称
+                        interaction_tags = [
+                            k.get("name", "").strip()
+                            for k in keywords
+                            if isinstance(k, dict) and k.get("name")
+                        ]
+                        # 去重和过滤空值
+                        interaction_tags = list(set(filter(None, interaction_tags)))
+                        logger.debug(f"📝 FB 消息 {item.get('id')} 提取到标签: {interaction_tags}")
+
                     message_item = MessageListItem(
                         id=item.get("id"),
                         platform="Facebook",
@@ -710,7 +724,7 @@ class MessageService:
                         scheduled_datetime_utc=None,
                         channel_id=None,
                         channel_name=None,
-                        interaction_tags=[],
+                        interaction_tags=interaction_tags or [],  # ✅ 使用提取的标签
                         created_by=created_by,  # ✅ 設置發送人員
                     )
                     message_items.append(message_item)
