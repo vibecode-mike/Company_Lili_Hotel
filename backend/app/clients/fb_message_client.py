@@ -270,6 +270,72 @@ class FbMessageClient:
                 logger.error(f"FB auto_template PATCH request error: {e}")
                 return {"ok": False, "error": str(e)}
 
+    async def _delete_resource(
+        self,
+        endpoint: str,
+        resource_type: str,
+        resource_id: str,
+        jwt_token: str,
+        params: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        通用 DELETE 請求處理
+
+        Args:
+            endpoint: API 路徑 (不含 base_url)
+            resource_type: 資源類型名稱 (用於日誌)
+            resource_id: 資源 ID (用於日誌)
+            jwt_token: JWT Token
+            params: 可選的查詢參數
+        """
+        headers = self._auth_headers(jwt_token)
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                response = await client.delete(
+                    f"{self.base_url}{endpoint}",
+                    headers=headers,
+                    params=params,
+                )
+                response.raise_for_status()
+                result = response.json()
+                logger.info(f"FB {resource_type} DELETE: {resource_id}")
+                return {"ok": True, **result}
+            except httpx.HTTPStatusError as e:
+                logger.error(f"FB {resource_type} DELETE error: {e.response.status_code} - {e.response.text}")
+                return {"ok": False, "error": f"API error: {e.response.status_code}"}
+            except httpx.RequestError as e:
+                logger.error(f"FB {resource_type} DELETE request error: {e}")
+                return {"ok": False, "error": str(e)}
+
+    async def delete_keyword(self, keyword_id: int, jwt_token: str) -> Dict[str, Any]:
+        """刪除關鍵字 (DELETE /meta_page/message/auto_template/keyword/{id})"""
+        return await self._delete_resource(
+            endpoint=f"/api/v1/admin/meta_page/message/auto_template/keyword/{keyword_id}",
+            resource_type="keyword",
+            resource_id=str(keyword_id),
+            jwt_token=jwt_token,
+        )
+
+    async def delete_reply(self, reply_id: int, jwt_token: str) -> Dict[str, Any]:
+        """刪除訊息 (DELETE /meta_page/message/auto_template/Reply/{id})"""
+        return await self._delete_resource(
+            endpoint=f"/api/v1/admin/meta_page/message/auto_template/Reply/{reply_id}",
+            resource_type="reply",
+            resource_id=str(reply_id),
+            jwt_token=jwt_token,
+        )
+
+    async def delete_template(self, basic_id: str, jwt_token: str) -> Dict[str, Any]:
+        """刪除整組設定 (DELETE /meta_page/message/auto_template?basic_id={id})"""
+        return await self._delete_resource(
+            endpoint="/api/v1/admin/meta_page/message/auto_template",
+            resource_type="template",
+            resource_id=basic_id,
+            jwt_token=jwt_token,
+            params={"basic_id": basic_id},
+        )
+
     async def create_message_template(self, payload: Dict[str, Any], jwt_token: str) -> Dict[str, Any]:
         """
         建立/更新群發訊息模板 (/meta_page/message/template)

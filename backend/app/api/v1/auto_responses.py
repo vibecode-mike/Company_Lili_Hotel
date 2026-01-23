@@ -958,27 +958,94 @@ async def update_auto_response(
 
 @router.delete("/{auto_response_id}", response_model=SuccessResponse)
 async def delete_auto_response(
-    auto_response_id: int,
+    auto_response_id: str,
+    jwt_token: Optional[str] = Query(None, description="FB 渠道需要的 JWT token"),
     db: AsyncSession = Depends(get_db)
 ):
     """刪除自動回應"""
-    result = await db.execute(select(AutoResponse).where(AutoResponse.id == auto_response_id))
+
+    # FB-only auto-response (prefixed with "fb-")
+    if auto_response_id.startswith("fb-"):
+        return await _delete_fb_auto_response(auto_response_id, jwt_token)
+
+    # Local DB auto-response
+    return await _delete_local_auto_response(auto_response_id, jwt_token, db)
+
+
+async def _delete_fb_auto_response(auto_response_id: str, jwt_token: Optional[str]) -> SuccessResponse:
+    """刪除純 FB 自動回應 (ID 以 fb- 開頭)"""
+    logger.info(f"Deleting FB auto-response: {auto_response_id}")
+
+    if not jwt_token:
+        raise HTTPException(status_code=400, detail="缺少 jwt_token，請先完成 Facebook 授權")
+
+    basic_id = auto_response_id[3:]  # Remove "fb-" prefix
+    fb_client = FbMessageClient()
+    result = await fb_client.delete_template(basic_id, jwt_token)
+
+    if not result.get("ok"):
+        error_msg = result.get("error", "未知錯誤")
+        logger.error(f"FB delete failed: {error_msg}")
+        raise HTTPException(status_code=500, detail=f"刪除 Facebook 自動回應失敗: {error_msg}")
+
+    logger.info(f"FB auto-response deleted: {auto_response_id}")
+    return SuccessResponse(message="刪除成功（已從 Facebook API 刪除）")
+
+
+async def _delete_local_auto_response(
+    auto_response_id: str,
+    jwt_token: Optional[str],
+    db: AsyncSession
+) -> SuccessResponse:
+    """刪除本地 DB 自動回應"""
+    try:
+        auto_response_id_int = int(auto_response_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="無效的 auto_response_id 格式")
+
+    result = await db.execute(select(AutoResponse).where(AutoResponse.id == auto_response_id_int))
     auto_response = result.scalar_one_or_none()
 
     if not auto_response:
         raise HTTPException(status_code=404, detail="自動回應不存在")
+
+    # Sync delete to FB API if this auto-response includes Facebook channel
+    await _sync_delete_fb_copy(auto_response, jwt_token)
 
     is_keyword_type = auto_response.trigger_type == TriggerType.KEYWORD.value
 
     await db.delete(auto_response)
     await db.commit()
 
-    # 刪除關鍵字類型後重新檢測重複關鍵字
     if is_keyword_type:
         await _detect_and_mark_duplicate_keywords(db)
         await db.commit()
 
     return SuccessResponse(message="刪除成功")
+
+
+async def _sync_delete_fb_copy(auto_response: AutoResponse, jwt_token: Optional[str]) -> None:
+    """嘗試同步刪除 FB API 副本 (僅對包含 Facebook 渠道的自動回應)"""
+    has_facebook_channel = auto_response.channels and 'Facebook' in auto_response.channels
+    if not has_facebook_channel:
+        return
+
+    if not jwt_token:
+        logger.warning(
+            f"Mixed-channel auto-response {auto_response.id} deleted from local DB, "
+            "but missing jwt_token - cannot delete FB API copy"
+        )
+        return
+
+    logger.info(f"Syncing delete to FB API for mixed-channel auto-response: {auto_response.id}")
+    fb_client = FbMessageClient()
+    fb_result = await fb_client.delete_template(str(auto_response.id), jwt_token)
+
+    if not fb_result.get("ok"):
+        logger.warning(
+            f"FB API copy delete failed (auto_response_id={auto_response.id}): "
+            f"{fb_result.get('error', '未知錯誤')}"
+        )
 
 
 @router.patch("/{auto_response_id}/toggle", response_model=SuccessResponse)
