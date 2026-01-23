@@ -632,6 +632,20 @@ class MessageService:
             from app.models.admin import Admin
             from app.schemas.message import CreatorInfo
 
+            # 先查詢默認 Admin（id=1 或第一個），作為找不到匹配時的後備
+            default_admin_query = select(Admin).order_by(Admin.id).limit(1)
+            default_admin_result = await db.execute(default_admin_query)
+            default_admin = default_admin_result.scalar_one_or_none()
+
+            default_creator_info = None
+            if default_admin:
+                default_creator_info = CreatorInfo(
+                    id=default_admin.id,
+                    username=default_admin.name or default_admin.email,
+                    full_name=default_admin.email
+                )
+                logger.info(f"✅ 設置默認 Admin: {default_creator_info.username} (ID: {default_admin.id})")
+
             # FB API 返回 admin_account（帳號名），需要通過 email 或 name 查詢
             admin_accounts = {item.get("admin_account") for item in fb_sent if item.get("admin_account")}
             admin_map: Dict[str, CreatorInfo] = {}  # key 改為 admin_account 字符串
@@ -678,13 +692,9 @@ class MessageService:
                     admin_account = item.get("admin_account")
                     created_by = admin_map.get(admin_account) if admin_account and admin_account in admin_map else None
 
-                    # 如果數據庫中找不到對應 Admin，創建虛擬 CreatorInfo（使用 FB API 的 admin_account）
-                    if not created_by and admin_account:
-                        created_by = CreatorInfo(
-                            id=-1,  # 虛擬 ID
-                            username=admin_account,  # 使用 FB API 返回的 admin_account
-                            full_name=None
-                        )
+                    # 如果數據庫中找不到對應 Admin，使用默認 Admin（不創建虛擬）
+                    if not created_by:
+                        created_by = default_creator_info
 
                     message_item = MessageListItem(
                         id=item.get("id"),
