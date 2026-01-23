@@ -459,36 +459,32 @@ async def create_member(
 
 @router.put("/{member_id}", response_model=SuccessResponse)
 async def update_member(
-    member_id: int,
+    member_id: str,
     member_data: MemberUpdate,
+    platform: Optional[str] = Query(None, description="渠道：LINE/Facebook/Webchat"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """更新會員資料"""
-    result = await db.execute(select(Member).where(Member.id == member_id))
-    member = result.scalar_one_or_none()
+    """更新會員資料（支援多渠道 ID 格式）"""
+    normalized = _validate_platform(platform)
+    member = await _get_member_by_platform(db, member_id, normalized)
 
     if not member:
         raise HTTPException(status_code=404, detail="會員不存在")
 
-    # 添加調試日誌
     update_data = member_data.model_dump(exclude_unset=True)
-    print(f"🔍 [Update Member] member_id={member_id}, user={current_user.username}")
-    print(f"🔍 [Update Member] Received data: {update_data}")
-    print(f"🔍 [Update Member] Current gpt_enabled: {member.gpt_enabled}")
+    logger.debug(
+        f"[Update Member] member_id={member_id}, user={current_user.username}, "
+        f"data={update_data}, current_gpt_enabled={member.gpt_enabled}"
+    )
 
-    # 更新欄位
     for field, value in update_data.items():
-        print(f"🔍 [Update Member] Setting {field} = {value}")
         setattr(member, field, value)
-
-    print(f"🔍 [Update Member] After update gpt_enabled: {member.gpt_enabled}")
 
     await db.commit()
     await db.refresh(member)
 
-    print(f"🔍 [Update Member] After commit gpt_enabled: {member.gpt_enabled}")
-    print(f"✅ [Update Member] Successfully updated member {member_id}")
+    logger.debug(f"[Update Member] Successfully updated member {member_id}, gpt_enabled={member.gpt_enabled}")
 
     return SuccessResponse(data=MemberDetail.model_validate(member).model_dump())
 

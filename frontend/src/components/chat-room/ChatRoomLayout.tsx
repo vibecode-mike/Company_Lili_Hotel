@@ -186,23 +186,43 @@ export default function ChatRoomLayout({
   const { showToast } = useToast();
   const { logout } = useAuth();
 
+  // GPT 計時器：共用工具函式
+  const getGptApiUrl = useCallback(() => {
+    const platformParam = currentPlatform === 'Facebook' ? '?platform=Facebook' : '';
+    return `/api/v1/members/${member?.id}${platformParam}`;
+  }, [member?.id, currentPlatform]);
+
+  const clearGptTimer = useCallback(() => {
+    if (gptTimerRef.current) {
+      clearTimeout(gptTimerRef.current);
+      gptTimerRef.current = null;
+    }
+  }, []);
+
+  const clearGptLocalStorage = useCallback((memberId: number | string) => {
+    localStorage.removeItem(`gpt_fallback_${memberId}`);
+    localStorage.removeItem(`gpt_timer_${memberId}`);
+  }, []);
+
   // GPT 計時器函式：恢復自動模式（必須在 useEffect 之前定義）
   const restoreGptMode = useCallback(async () => {
     if (!member?.id) return;
 
-    console.log('🔄 [GPT Timer] 恢復自動模式, member_id:', member.id);
+    const apiUrl = getGptApiUrl();
+    console.log('🔄 [GPT Timer] 恢復自動模式', { member_id: member.id, platform: currentPlatform, url: apiUrl });
 
     try {
-      // 呼叫 API 設置 gpt_enabled = true（使用 apiPut 自動處理 token 和 401 重試）
-      console.log('📡 [GPT Timer] 發送 API 請求 (恢復):', {
-        url: `/api/v1/members/${member.id}`,
-        method: 'PUT',
-        body: { gpt_enabled: true },
-      });
-
-      const response = await apiPut(`/api/v1/members/${member.id}`, { gpt_enabled: true });
-
+      const response = await apiPut(apiUrl, { gpt_enabled: true });
       console.log('📥 [GPT Timer] API 回應狀態 (恢復):', response.status);
+
+      // 404 表示會員不存在於 DB，改用 localStorage
+      if (response.status === 404) {
+        console.log('📦 [GPT Timer] 會員不存在於 DB，使用 localStorage fallback (恢復)');
+        clearGptLocalStorage(member.id);
+        setIsGptManualMode(false);
+        clearGptTimer();
+        return;
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -210,50 +230,57 @@ export default function ChatRoomLayout({
         throw new Error(`API 錯誤: ${response.status}`);
       }
 
-      const data = await response.json();
-      console.log('✅ [GPT Timer] API 成功 (恢復):', data);
-
-      // 清除 localStorage 狀態
-      localStorage.removeItem(`gpt_timer_${member.id}`);
-
-      // 更新 UI 狀態
-      setIsGptManualMode(false);
-
-      // 清除計時器
-      if (gptTimerRef.current) {
-        clearTimeout(gptTimerRef.current);
-        gptTimerRef.current = null;
-      }
-
       console.log('✅ [GPT Timer] GPT 自動模式已恢復');
-
+      localStorage.removeItem(`gpt_timer_${member.id}`);
+      setIsGptManualMode(false);
+      clearGptTimer();
     } catch (error) {
       console.error('❌ [GPT Timer] 恢復 GPT 自動模式失敗:', error);
     }
-  }, [member?.id]);
+  }, [member?.id, currentPlatform, getGptApiUrl, clearGptLocalStorage, clearGptTimer]);
 
   // GPT 計時器函式：啟動手動模式
   const startGptTimer = useCallback(async () => {
     if (!member?.id) return;
 
-    console.log('🔄 [GPT Timer] 啟動手動模式, member_id:', member.id);
+    const apiUrl = getGptApiUrl();
+    console.log('🔄 [GPT Timer] 啟動手動模式', { member_id: member.id, platform: currentPlatform, url: apiUrl });
 
-    // 清除現有計時器
-    if (gptTimerRef.current) {
-      clearTimeout(gptTimerRef.current);
-    }
+    clearGptTimer();
+
+    // 內部函式：設定手動模式 UI 和計時器
+    const activateManualMode = () => {
+      setIsGptManualMode(true);
+      gptTimerRef.current = setTimeout(restoreGptMode, MANUAL_MODE_DURATION);
+      console.log('⏱️ [GPT Timer] 計時器已啟動，將在', MANUAL_MODE_DURATION / 1000, '秒後恢復');
+    };
+
+    const saveTimerState = () => {
+      localStorage.setItem(`gpt_timer_${member.id}`, JSON.stringify({
+        memberId: member.id,
+        isManualMode: true,
+        startTime: Date.now()
+      }));
+    };
 
     try {
-      // 呼叫 API 設置 gpt_enabled = false（使用 apiPut 自動處理 token 和 401 重試）
-      console.log('📡 [GPT Timer] 發送 API 請求:', {
-        url: `/api/v1/members/${member.id}`,
-        method: 'PUT',
-        body: { gpt_enabled: false },
-      });
-
-      const response = await apiPut(`/api/v1/members/${member.id}`, { gpt_enabled: false });
-
+      const response = await apiPut(apiUrl, { gpt_enabled: false });
       console.log('📥 [GPT Timer] API 回應狀態:', response.status);
+
+      // 404 表示會員不存在於 DB，改用 localStorage fallback
+      if (response.status === 404) {
+        console.log('📦 [GPT Timer] 會員不存在於 DB，使用 localStorage fallback');
+        localStorage.setItem(`gpt_fallback_${member.id}`, JSON.stringify({
+          memberId: member.id,
+          platform: currentPlatform,
+          gpt_enabled: false,
+          startTime: Date.now(),
+          expiresAt: Date.now() + MANUAL_MODE_DURATION,
+        }));
+        saveTimerState();
+        activateManualMode();
+        return;
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -261,31 +288,14 @@ export default function ChatRoomLayout({
         throw new Error(`API 錯誤: ${response.status}`);
       }
 
-      const data = await response.json();
-      console.log('✅ [GPT Timer] API 成功:', data);
-
-      // 儲存狀態到 localStorage（用於多分頁同步）
-      localStorage.setItem(`gpt_timer_${member.id}`, JSON.stringify({
-        memberId: member.id,
-        isManualMode: true,
-        startTime: Date.now()
-      }));
-
-      // 更新 UI 狀態
-      setIsGptManualMode(true);
-
-      // 啟動 10 分鐘計時器
-      gptTimerRef.current = setTimeout(() => {
-        restoreGptMode();
-      }, MANUAL_MODE_DURATION);
-
-      console.log('⏱️  [GPT Timer] 計時器已啟動, 將在', MANUAL_MODE_DURATION / 1000, '秒後恢復');
-
+      console.log('✅ [GPT Timer] 手動模式已啟動 (DB)');
+      saveTimerState();
+      activateManualMode();
     } catch (error) {
       console.error('❌ [GPT Timer] 啟動 GPT 手動模式失敗:', error);
       showToast?.('操作失敗,請重試', 'error');
     }
-  }, [member?.id, MANUAL_MODE_DURATION, restoreGptMode, showToast]);
+  }, [member?.id, currentPlatform, MANUAL_MODE_DURATION, getGptApiUrl, clearGptTimer, restoreGptMode, showToast]);
 
   const memberLastInteractionRaw = member ? (member as any).last_interaction_at : null;
 
@@ -759,7 +769,11 @@ export default function ChatRoomLayout({
           }
         }
 
-        // 新訊息會透過 WebSocket handleNewMessage 推送，不需要重新載入
+        // Facebook 平台：發送成功後重新載入聊天紀錄（因為沒有 WebSocket 推送）
+        // LINE/WebChat：新訊息透過 WebSocket handleNewMessage 推送
+        if (platform === 'Facebook') {
+          await loadChatMessages(1, false, { silent: true });
+        }
 
         // 滾動到底部
         setTimeout(() => {
@@ -987,13 +1001,35 @@ export default function ChatRoomLayout({
         <div className="content-stretch flex flex-col gap-0 items-start relative self-stretch flex-1 rounded-[20px] overflow-hidden" style={{ height: '900px' }}>
           {/* 頂部白色工具列 - 平台選擇器（左）+ 日期（中） */}
           <div className="w-full px-[16px] py-[12px] flex items-center justify-between rounded-t-[20px] bg-white">
-            {/* 平台選擇器（左側） */}
-            <PlatformSwitcher
-              value={currentPlatform}
-              onChange={(platform) => {
-                setCurrentPlatform(platform);
-              }}
-            />
+            {/* 平台選擇器 + 刷新按鈕（左側） */}
+            <div className="flex items-center gap-2">
+              <PlatformSwitcher
+                value={currentPlatform}
+                onChange={(platform) => {
+                  setCurrentPlatform(platform);
+                }}
+              />
+              <button
+                onClick={() => loadChatMessages(1, false)}
+                disabled={isLoading}
+                title="重新整理聊天紀錄"
+                className="p-1.5 rounded-full hover:bg-gray-100 disabled:opacity-50 transition-colors"
+              >
+                <svg
+                  className={`w-5 h-5 text-gray-500 ${isLoading ? 'animate-spin' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+              </button>
+            </div>
 
             {/* 日期（中間） */}
             <div className="absolute left-1/2 transform -translate-x-1/2">
