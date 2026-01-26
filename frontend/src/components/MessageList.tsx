@@ -411,7 +411,7 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
         status: msg.status,
         sentCount: msg.recipientCount > 0 ? msg.recipientCount.toString() : '-',
         sender: msg.sender || '-',
-        clickCount: msg.clickCount > 0 ? msg.clickCount.toString() : '-',
+        clickCount: msg.status === '已發送' ? (msg.clickCount ?? 0).toString() : '-',
         sendTime: formatDateTime(timeSource),
         timeValue: timeSource
       };
