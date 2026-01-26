@@ -11,6 +11,7 @@ import {
   isFbJwtTokenExpired,
 } from '../../utils/token';
 import { setLogoutCallback } from '../../utils/apiClient';
+import { setFbRefreshCallback, setFbLogoutCallback } from '../../utils/fbApiClient';
 
 interface User {
   email: string;
@@ -65,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 設定 apiClient 的登出回調
   useEffect(() => {
     setLogoutCallback(logout);
+    setFbLogoutCallback(logout);
   }, [logout]);
 
   const performFirmLogin = useCallback(async (): Promise<string | null> => {
@@ -93,6 +95,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return null;
     }
   }, [fbApiBaseUrl, fbFirmAccount, fbFirmPassword]);
+
+  // 設定 fbApiClient 的刷新回調
+  useEffect(() => {
+    setFbRefreshCallback(performFirmLogin);
+  }, [performFirmLogin]);
 
   // 初始化時檢查 FB JWT Token，過期則強制重新登入
   useEffect(() => {

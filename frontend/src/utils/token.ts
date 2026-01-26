@@ -114,3 +114,11 @@ export function isTokenExpiringSoon(thresholdMinutes = 5): boolean {
 export function isFbJwtTokenExpired(): boolean {
   return calculateRemainingTime(getJwtToken()) === 0;
 }
+
+/**
+ * 檢查 FB JWT Token 是否即將過期
+ * @param thresholdMinutes 過期前多少分鐘視為「即將過期」，預設 5 分鐘
+ */
+export function isFbJwtTokenExpiringSoon(thresholdMinutes = 5): boolean {
+  return calculateRemainingTime(getJwtToken()) < thresholdMinutes * 60;
+}
