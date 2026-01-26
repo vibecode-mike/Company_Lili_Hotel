@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     FB_API_URL: str = "https://api-youth-tycg.star-bit.io"
     FB_FIRM_ACCOUNT: str = "tycg-admin"
     FB_FIRM_PASSWORD: str  # 從 .env 讀取，保密
+    FB_BROADCAST_MAX_RECIPIENTS: int = 1000  # FB 群發單次發送人數上限
 
     # Facebook Graph API / Frontend SDK config (no app secret stored here)
     FACEBOOK_GRAPH_API_VERSION: str = "v24.0"

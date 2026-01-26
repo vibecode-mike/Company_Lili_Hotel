@@ -38,6 +38,9 @@ import { ChannelIcon } from './common/icons/ChannelIcon';
 // FB 預設圖片佔位符
 const FB_PLACEHOLDER_IMAGE = "/images/fb-placeholder.png";
 
+// FB 群發單次發送人數上限
+const FB_BROADCAST_MAX_RECIPIENTS = 1000;
+
 // Custom DialogContent without close button
 function DialogContentNoClose({
   className,
@@ -142,6 +145,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   }>>(new Map());
   const [isDirty, setIsDirty] = useState(false); // 追蹤是否有未儲存的變更
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false); // 顯示未儲存確認對話框
+  const [showFbLimitDialog, setShowFbLimitDialog] = useState(false); // 顯示 FB 發送人數上限提示
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null); // 待執行的導航
   const [estimatedRecipientCount, setEstimatedRecipientCount] = useState<number | null>(null); // 預計發送人數
   const cardRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
@@ -1667,6 +1671,12 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       return;
     }
 
+    // FB 平台檢查發送人數是否超過上限
+    if (selectedPlatform === 'Facebook' && estimatedRecipientCount && estimatedRecipientCount > FB_BROADCAST_MAX_RECIPIENTS) {
+      setShowFbLimitDialog(true);
+      return;
+    }
+
     try {
       // LINE 平台需要上傳圖片，Facebook 平台跳過
       let flexMessage = null;
@@ -2529,6 +2539,24 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
             <AlertDialogCancel onClick={handleCancelLeave}>取消</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmLeave} className="bg-[#f44336] hover:bg-[#d32f2f]">
               確認離開
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* FB 發送人數上限提示 Dialog */}
+      <AlertDialog open={showFbLimitDialog} onOpenChange={setShowFbLimitDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>單次發送訊息數量已達上限</AlertDialogTitle>
+            <AlertDialogDescription>
+              當前已超過 Facebook 群發 1,000 則訊息的數量上限，請調整發送對象或分批進行發送。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowFbLimitDialog(false)}>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={() => setShowFbLimitDialog(false)}>
+              確定
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
