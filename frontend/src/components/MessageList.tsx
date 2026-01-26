@@ -294,7 +294,7 @@ const MainContent = memo(function MainContent({
             <div className="box-border content-stretch flex flex-col gap-[8px] items-start justify-center p-[24px] relative w-full">
               <div className="content-stretch flex gap-[8px] items-center relative shrink-0 w-full" data-name="Description Wrapper">
                 <div className="content-stretch flex gap-[10px] items-center justify-center relative shrink-0" data-name="Description Text Container">
-                  <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[16px] text-center text-nowrap whitespace-pre">本月的訊息用量</p>
+                  <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[16px] text-center text-nowrap whitespace-pre">LINE 本月的訊息用量</p>
                 </div>
                 <div className="content-stretch flex gap-[10px] items-center justify-center relative shrink-0" data-name="Description Text Container">
                   <p className="font-['Noto_Sans_TC:Medium',sans-serif] font-medium leading-[1.5] relative shrink-0 text-[#0f6beb] text-[16px] text-center text-nowrap whitespace-pre">
