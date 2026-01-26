@@ -1,64 +1,52 @@
-# 外部服務 Token 管理架構
+# 外部服務 Token 自動維護機制
 
-## 概述
+## 功能描述
 
-本系統採用通用化的 Token 管理架構，統一管理多個外部服務（Facebook、LINE、WhatsApp 等）的認證狀態。
+系統應能管理多個外部服務的認證狀態。當用戶進入系統時，自動檢查所有已註冊的外部服務 Token，若過期則自動刷新，確保用戶無需手動操作即可使用所有功能。
 
-## 架構設計
+---
+
+## 設計模型
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      AuthContext                             │
-│  - 統一登出回調註冊                                            │
-│  - 外部服務註冊/註銷                                           │
-│  - 初始化時統一檢查所有服務                                     │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     TokenManager                             │
-│  - 服務註冊管理 (register/unregister)                         │
-│  - 統一過期檢查 (checkAllServices)                            │
-│  - 單服務 Token 確保有效 (ensureValidToken)                   │
-│  - Promise 去重防止併發刷新                                    │
-│  - 刷新失敗自動登出                                            │
-└─────────────────────────────────────────────────────────────┘
-                              │
-              ┌───────────────┼───────────────┐
-              ▼               ▼               ▼
-        ┌──────────┐   ┌──────────┐   ┌──────────┐
-        │ Facebook │   │   LINE   │   │ WhatsApp │
-        │ Service  │   │ Service  │   │ Service  │
-        └──────────┘   └──────────┘   └──────────┘
+┌─────────────────────────────────────────────────┐
+│            ExternalTokenManager                 │
+├─────────────────────────────────────────────────┤
+│ register(service: ExternalService)              │
+│ checkAndRefreshAll(): Promise<void>             │
+│ getToken(serviceName: string): string | null    │
+└─────────────────────────────────────────────────┘
+                      │
+                      │ 管理多個
+                      ▼
+┌─────────────────────────────────────────────────┐
+│            ExternalService（介面）               │
+├─────────────────────────────────────────────────┤
+│ name: string              // 服務名稱            │
+│ isExpired(): boolean      // 檢查是否過期        │
+│ refresh(): Promise<void>  // 刷新 Token         │
+│ getToken(): string | null // 取得目前 Token      │
+└─────────────────────────────────────────────────┘
+                      │
+          ┌──────────┼──────────┐
+          │          │          │
+          ▼          ▼          ▼
+    ┌──────────┐ ┌──────────┐ ┌──────────┐
+    │ Facebook │ │   LINE   │ │ WhatsApp │
+    │ Service  │ │ Service  │ │ Service  │
+    └──────────┘ └──────────┘ └──────────┘
 ```
 
-## 核心介面
+---
 
-### ExternalService
-
-```typescript
-interface ExternalService {
-  /** 服務名稱（用於日誌和識別） */
-  name: string;
-  /** 檢查 token 是否已過期 */
-  isExpired: () => boolean;
-  /** 檢查 token 是否即將過期 */
-  isExpiringSoon: (thresholdMinutes: number) => boolean;
-  /** 刷新 token，返回新 token 或 null（失敗） */
-  refresh: () => Promise<string | null>;
-  /** 取得目前的 token */
-  getToken: () => string | null;
-}
-```
-
-## 雙模式 Token 管理
+## 雙模式管理邏輯
 
 | 狀態 | 判斷方式 | 行為 |
 |------|---------|------|
 | **沒在使用** | 打開網頁時 token 已過期 | 強制重新登入 |
 | **使用中** | 呼叫 API 時 token 即將過期 | 背景自動刷新 |
 
-### 邏輯流程
+### 流程圖
 
 ```
 用戶打開網頁（沒在使用）
@@ -78,66 +66,96 @@ interface ExternalService {
 └── 繼續 API 呼叫 ✅
 ```
 
-## 檔案結構
-
-```
-src/utils/
-├── token.ts           # Token 存取和解析工具
-├── tokenManager.ts    # 通用外部服務 Token 管理器
-├── apiClient.ts       # 內部 API Client (auth_token)
-└── fbApiClient.ts     # FB API Client (向後兼容)
-
-src/components/auth/
-└── AuthContext.tsx    # 認證上下文，註冊外部服務
-```
+---
 
 ## 使用方式
 
-### 1. 註冊新的外部服務
+### 註冊外部服務
 
 ```typescript
-// 在 AuthContext.tsx 中註冊
-useEffect(() => {
-  const lineService: ExternalService = {
-    name: 'line',
-    isExpired: isLineTokenExpired,
-    isExpiringSoon: isLineTokenExpiringSoon,
-    refresh: performLineLogin,
-    getToken: getLineToken,
-  };
-  tokenManager.register(lineService);
+// 註冊 Facebook 服務
+tokenManager.register({
+  name: 'facebook',
+  isExpired: () => isFbJwtTokenExpired(),
+  isExpiringSoon: (minutes) => isFbJwtTokenExpiringSoon(minutes),
+  refresh: () => performFirmLogin(),
+  getToken: () => getJwtToken(),
+});
 
-  return () => {
-    tokenManager.unregister('line');
-  };
-}, [performLineLogin]);
+// 註冊 LINE 服務
+tokenManager.register({
+  name: 'line',
+  isExpired: () => isLineTokenExpired(),
+  isExpiringSoon: (minutes) => isLineTokenExpiringSoon(minutes),
+  refresh: () => refreshLineToken(),
+  getToken: () => getLineToken(),
+});
 ```
 
-### 2. 在 API 呼叫前確保 Token 有效
+### App 初始化時統一檢查
 
 ```typescript
-// 方式一：使用 TokenManager
+useEffect(() => {
+  if (isAuthenticated) {
+    tokenManager.checkAllServices();
+  }
+}, [isAuthenticated]);
+```
+
+### 呼叫 API 前確保 Token 有效
+
+```typescript
 const token = await tokenManager.ensureValidToken('facebook');
 if (!token) {
   // 已自動登出，不需額外處理
   return;
 }
-
-// 方式二：使用 fbApiClient（向後兼容）
-const token = await ensureValidFbToken();
-if (!token) return;
+// 繼續 API 呼叫
 ```
 
-### 3. 批量檢查所有服務
+---
 
-```typescript
-const allValid = await tokenManager.checkAllServices();
-if (!allValid) {
-  // 已自動登出
-}
+## 場景覆蓋
+
+```
+┌───────────────────────────────────┬──────────┐
+│               場景                │ 是否覆蓋 │
+├───────────────────────────────────┼──────────┤
+│ Facebook API Token 過期           │ ✅       │
+├───────────────────────────────────┼──────────┤
+│ LINE 官方帳號 Token 過期          │ ✅       │
+├───────────────────────────────────┼──────────┤
+│ WhatsApp Business API Token 過期  │ ✅       │
+├───────────────────────────────────┼──────────┤
+│ 第三方支付服務 Token              │ ✅       │
+├───────────────────────────────────┼──────────┤
+│ 任何需要「檢查 + 刷新」的外部認證 │ ✅       │
+└───────────────────────────────────┴──────────┘
 ```
 
-## 關鍵特性
+---
+
+## 複雜度比較
+
+```
+┌──────────────────┬──────────────────┬────────────────────────┐
+│       面向       │     當前方案     │        通用方案        │
+├──────────────────┼──────────────────┼────────────────────────┤
+│ 程式碼量         │ ~20 行           │ ~60 行（含介面定義）   │
+├──────────────────┼──────────────────┼────────────────────────┤
+│ 新增一個外部服務 │ 複製貼上 + 修改  │ 實作介面 + 註冊        │
+├──────────────────┼──────────────────┼────────────────────────┤
+│ 維護成本         │ 每個服務獨立維護 │ 統一入口管理           │
+├──────────────────┼──────────────────┼────────────────────────┤
+│ 學習成本         │ 低               │ 稍高（需理解註冊機制） │
+└──────────────────┴──────────────────┴────────────────────────┘
+```
+
+**結論**：複雜度增加約 3 倍，但如果預期會接入 **2 個以上** 的外部服務，通用方案的投資回報率更高。
+
+---
+
+## 核心特性
 
 ### Promise 去重
 
@@ -166,9 +184,24 @@ tokenManager.setLogoutCallback(() => {
 });
 ```
 
-## 擴展指南
+---
 
-### 新增外部服務 Checklist
+## 檔案結構
+
+```
+src/utils/
+├── token.ts           # Token 存取和解析工具
+├── tokenManager.ts    # 通用外部服務 Token 管理器
+├── apiClient.ts       # 內部 API Client (auth_token)
+└── fbApiClient.ts     # FB API Client（向後兼容層）
+
+src/components/auth/
+└── AuthContext.tsx    # 認證上下文，註冊外部服務
+```
+
+---
+
+## 擴展指南：新增外部服務 Checklist
 
 1. [ ] 在 `token.ts` 新增 token 存取函數（`getXxxToken`, `setXxxToken`）
 2. [ ] 在 `token.ts` 新增過期檢查函數（`isXxxTokenExpired`, `isXxxTokenExpiringSoon`）
