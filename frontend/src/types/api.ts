@@ -52,6 +52,7 @@ export interface BackendKeyword {
  * 後端回應訊息物件
  */
 export interface BackendReplyMessage {
+  id?: number;  // FB API 的 text id（用於編輯時區分編輯 vs 新增）
   content?: string;
   sequence_order?: number;
 }

@@ -27,6 +27,13 @@ export interface AutoReplyKeyword {
   isDuplicate: boolean;
 }
 
+// 訊息對象，包含 FB API 的 id（用於區分編輯 vs 新增）
+export interface AutoReplyMessage {
+  id?: number;  // FB API 的 text id（有 id = 編輯，無 id = 新增）
+  content: string;
+  enabled?: boolean;
+}
+
 export interface AutoReply {
   id: string;
   name: string;
@@ -37,6 +44,7 @@ export interface AutoReply {
   keywordObjects: AutoReplyKeyword[]; // 包含重複標記的關鍵字對象
   tags: string[];
   messages: string[];
+  messageObjects: AutoReplyMessage[]; // 包含 FB id 的訊息對象（用於編輯時保留 id）
   isActive: boolean;
   triggerCount: number;
   successRate: number;
@@ -47,6 +55,18 @@ export interface AutoReply {
   dateRangeStart?: string | null;
   dateRangeEnd?: string | null;
   channels?: AutoReplyChannel[]; // 新增：支持的回應渠道
+}
+
+// FB API 專用的關鍵字/訊息對象（帶 id 為編輯，無 id 為新增）
+export interface FbKeywordPayload {
+  id?: number;
+  name: string;
+}
+
+export interface FbMessagePayload {
+  id?: number;
+  text: string;
+  enabled?: boolean;
 }
 
 export interface AutoReplyPayload {
@@ -62,6 +82,9 @@ export interface AutoReplyPayload {
   channels?: AutoReplyChannel[]; // 新增：支持的回應渠道
   channelId?: string | null; // 渠道ID（LINE channel ID 或 FB page ID）
   forceActivate?: boolean; // 強制啟用（確認切換時使用）
+  // FB 專用：帶 id 的對象陣列（用於編輯時區分編輯 vs 新增）
+  fbKeywords?: FbKeywordPayload[];
+  fbMessages?: FbMessagePayload[];
 }
 
 export interface AutoReplyConflict {
@@ -134,12 +157,25 @@ function mapAutoResponse(item: BackendAutoReply & { content?: string; messages?:
         }))
     : [];
 
-  const messages = Array.isArray(item?.messages) && item.messages.length > 0
-    ? item.messages
-        .sort((a: BackendReplyMessage, b: BackendReplyMessage) => (a?.sequence_order ?? 0) - (b?.sequence_order ?? 0))
-        .map((msg: BackendReplyMessage) => msg?.content ?? '')
-        .filter((msg: string) => msg)
+  // 排序後的訊息陣列
+  const sortedMessages = Array.isArray(item?.messages) && item.messages.length > 0
+    ? [...item.messages].sort((a: BackendReplyMessage, b: BackendReplyMessage) => (a?.sequence_order ?? 0) - (b?.sequence_order ?? 0))
+    : [];
+
+  const messages = sortedMessages.length > 0
+    ? sortedMessages.map((msg: BackendReplyMessage) => msg?.content ?? '').filter((msg: string) => msg)
     : (item?.content ? [item.content] : []);
+
+  // 建立包含 FB id 的訊息對象（用於編輯時保留 id）
+  const messageObjects: AutoReplyMessage[] = sortedMessages.length > 0
+    ? sortedMessages
+        .filter((msg: BackendReplyMessage) => msg?.content)
+        .map((msg: BackendReplyMessage) => ({
+          id: (msg as any)?.id,  // FB API 的 text id
+          content: msg?.content ?? '',
+          enabled: true,
+        }))
+    : (item?.content ? [{ content: item.content, enabled: true }] : []);
 
   return {
     id: item?.id?.toString() ?? generateTempId(),
@@ -151,6 +187,7 @@ function mapAutoResponse(item: BackendAutoReply & { content?: string; messages?:
     keywordObjects,  // 包含重複標記的關鍵字對象
     tags: keywords,
     messages: messages.length > 0 ? messages : [''],
+    messageObjects: messageObjects.length > 0 ? messageObjects : [{ content: '', enabled: true }],
     isActive: Boolean(item?.is_active),
     triggerCount: Number(item?.trigger_count ?? 0),
     successRate: Number(item?.success_rate ?? 0),
@@ -177,12 +214,20 @@ function mapFbAutoResponse(item: FbAutoReply): AutoReply {
   const triggerType: AutoReplyTriggerType = item.response_type === 2 ? 'keyword' : 'follow';
 
   // 正確提取訊息（text 是陣列）
-  const messages = Array.isArray(item?.text)
-    ? item.text
-        .filter(t => t?.enabled !== false)
-        .map(t => t?.text ?? '')
-        .filter(Boolean)
+  const enabledTexts = Array.isArray(item?.text)
+    ? item.text.filter(t => t?.enabled !== false)
     : [];
+
+  const messages = enabledTexts.map(t => t?.text ?? '').filter(Boolean);
+
+  // 建立包含 FB id 的訊息對象（用於編輯時保留 id）
+  const messageObjects: AutoReplyMessage[] = enabledTexts
+    .filter(t => t?.text)
+    .map(t => ({
+      id: t?.id,  // FB API 的 text id
+      content: t?.text ?? '',
+      enabled: true,
+    }));
 
   return {
     id: `fb-${item.id}`,  // 加上 fb- 前綴避免與 LINE 的 ID 衝突
@@ -192,6 +237,7 @@ function mapFbAutoResponse(item: FbAutoReply): AutoReply {
     keywordObjects,
     tags: keywords,
     messages: messages.length > 0 ? messages : [''],
+    messageObjects: messageObjects.length > 0 ? messageObjects : [{ content: '', enabled: true }],
     isActive: item.enabled,
     triggerCount: item.count || 0,
     successRate: 0,
@@ -317,9 +363,19 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
           const fbId = id.replace('fb-', '');
           const url = `/api/v1/auto_responses/fb/${fbId}?jwt_token=${encodeURIComponent(jwtToken || '')}`;
 
+          // FB API 需要帶 id 的對象來區分編輯 vs 新增
+          // 優先使用 fbKeywords/fbMessages（帶 id），否則轉換純字串陣列
+          const keywordsPayload = payload.fbKeywords
+            ? payload.fbKeywords
+            : (payload.keywords ?? []).map(kw => ({ name: kw }));
+
+          const messagesPayload = payload.fbMessages
+            ? payload.fbMessages
+            : payload.messages.map(msg => ({ text: msg, enabled: true }));
+
           const response = await apiPatch(url, {
-            keywords: payload.keywords ?? [],
-            messages: payload.messages,
+            keywords: keywordsPayload,
+            messages: messagesPayload,
             is_active: payload.isActive,
             trigger_type: payload.triggerType,
           });

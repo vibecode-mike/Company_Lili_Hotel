@@ -6,7 +6,7 @@ import KeywordTagsInput from './KeywordTagsInput';
 import TriggerTimeOptions, { TriggerTimeType, ScheduleModeType } from './TriggerTimeOptions';
 import { SimpleBreadcrumb, DeleteButton } from './common';
 import { ChannelIcon } from './common/icons/ChannelIcon';
-import { useAutoReplies, type AutoReply as AutoReplyRecord, type AutoReplyPayload, type AutoReplyConflict } from '../contexts/AutoRepliesContext';
+import { useAutoReplies, type AutoReply as AutoReplyRecord, type AutoReplyPayload, type AutoReplyConflict, type FbKeywordPayload, type FbMessagePayload } from '../contexts/AutoRepliesContext';
 
 // 渠道選項介面（與群發訊息頁面一致）
 interface ChannelOption {
@@ -30,8 +30,9 @@ type ReplyType = 'welcome' | 'keyword' | 'follow';
 type ChannelType = 'LINE' | 'Facebook';
 
 interface MessageItem {
-  id: number;
+  id: number;       // 本地 UI 用的 id（用於 React key）
   text: string;
+  fbId?: number;    // FB API 的 text id（用於編輯時區分編輯 vs 新增）
 }
 
 const INITIAL_SCHEDULE = {
@@ -193,10 +194,18 @@ export default function CreateAutoReplyInteractive({
 
     setReplyType(normalizedType);
     setIsEnabled(record.isActive);
-    const hydratedMessages = (record.messages.length ? record.messages : ['']).map((text, index) => ({
-      id: index + 1,
-      text,
-    }));
+
+    // 優先使用 messageObjects（包含 FB id），否則使用純字串
+    const hydratedMessages = record.messageObjects?.length
+      ? record.messageObjects.map((msg, index) => ({
+          id: index + 1,
+          text: msg.content,
+          fbId: msg.id,  // 保留 FB API 的 text id
+        }))
+      : (record.messages.length ? record.messages : ['']).map((text, index) => ({
+          id: index + 1,
+          text,
+        }));
     setMessages(hydratedMessages);
     setKeywordTags(record.keywords);
 
@@ -362,6 +371,32 @@ export default function CreateAutoReplyInteractive({
     const sendTimeFields = shouldSendSchedule && scheduleMode === 'time';
     const channelId = channelOptions.find(opt => opt.value === selectedChannelValue)?.channelId;
 
+    // 構建 FB 專用的帶 id 對象（用於編輯時區分編輯 vs 新增）
+    const isFbEditing = isEditing && autoReplyId?.startsWith('fb-') && selectedChannel === 'Facebook';
+
+    // 從 messages state 構建帶 fbId 的訊息對象
+    const fbMessagesPayload: FbMessagePayload[] | undefined = isFbEditing
+      ? messages
+          .filter(m => m.text.trim())
+          .map(m => ({
+            ...(m.fbId ? { id: m.fbId } : {}),  // 有 fbId 才帶 id（編輯），無則不帶（新增）
+            text: m.text.trim(),
+            enabled: true,
+          }))
+      : undefined;
+
+    // 從現有記錄的 keywordObjects 構建帶 id 的關鍵字對象
+    const existingRecord = autoReplyId ? getAutoReplyById(autoReplyId) : null;
+    const fbKeywordsPayload: FbKeywordPayload[] | undefined = isFbEditing && replyType === 'keyword'
+      ? keywordTags.map(kw => {
+          // 嘗試從現有記錄找到對應的 keyword id
+          const existing = existingRecord?.keywordObjects?.find(ko => ko.keyword === kw);
+          return existing?.id
+            ? { id: existing.id, name: kw }  // 有 id = 編輯
+            : { name: kw };                   // 無 id = 新增
+        })
+      : undefined;
+
     const payload: AutoReplyPayload = {
       name: `${getReplyTypeLabel(replyType)} - ${trimmedMessages[0].slice(0, 12) || '訊息'}`,
       triggerType: replyType,
@@ -375,6 +410,9 @@ export default function CreateAutoReplyInteractive({
       channels: [selectedChannel],
       channelId: channelId,
       forceActivate,
+      // FB 專用：帶 id 的對象陣列
+      fbKeywords: fbKeywordsPayload,
+      fbMessages: fbMessagesPayload,
     };
 
     setIsSaving(true);

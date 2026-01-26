@@ -378,11 +378,11 @@ async def _get_fb_auto_responses_from_api(jwt_token: str, db: AsyncSession) -> L
                 for kw in fb_keywords
             ]
 
-            # 提取訊息
+            # 提取訊息（保留真實 FB API id）
             text_items = item.get("text", [])
             messages_list = [
                 {
-                    "id": -1,  # 虛擬 ID
+                    "id": t.get("id"),  # 保留 FB API 的真實 id
                     "content": t.get("text", ""),
                     "sequence_order": idx + 1,
                 }
@@ -545,10 +545,23 @@ async def get_fb_auto_responses(
     return SuccessResponse(data=result.get("data", []))
 
 
+class FbKeywordItem(BaseModel):
+    """FB 關鍵字項目（帶 id 為編輯，無 id 為新增）"""
+    id: Optional[int] = None
+    name: str
+
+
+class FbTextItem(BaseModel):
+    """FB 訊息項目（帶 id 為編輯，無 id 為新增）"""
+    id: Optional[int] = None
+    text: str
+    enabled: bool = True
+
+
 class FbAutoResponseUpdate(BaseModel):
     """FB 自動回應更新 payload"""
-    keywords: Optional[List[str]] = None
-    messages: Optional[List[str]] = None
+    keywords: Optional[List[FbKeywordItem]] = None
+    messages: Optional[List[FbTextItem]] = None
     is_active: Optional[bool] = None
     trigger_type: Optional[str] = None
     page_id: Optional[str] = None
@@ -573,10 +586,22 @@ async def update_fb_auto_response(
         payload["response_type"] = 2 if data.trigger_type == "keyword" else 3
     if data.is_active is not None:
         payload["enabled"] = data.is_active
+
+    # 構建 keywords payload（帶 id 為編輯，無 id 為新增）
     if data.keywords is not None:
-        payload["tags"] = data.keywords
+        payload["keywords"] = [
+            {"id": kw.id, "name": kw.name} if kw.id else {"name": kw.name}
+            for kw in data.keywords
+        ]
+
+    # 構建 text payload（帶 id 為編輯，無 id 為新增）
     if data.messages is not None:
-        payload["text"] = data.messages
+        payload["text"] = [
+            {"id": msg.id, "text": msg.text, "enabled": msg.enabled} if msg.id else {"text": msg.text, "enabled": msg.enabled}
+            for msg in data.messages
+        ]
+
+    logger.info(f"Updating FB auto_template {fb_id}: {payload}")
 
     fb_client = FbMessageClient()
     result = await fb_client.update_auto_template(fb_id, payload, jwt_token)
