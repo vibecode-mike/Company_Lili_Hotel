@@ -353,8 +353,8 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
 
           return {
             id: index + 1,
-            enableImage: !!hero,
-            enableTitle: !!cardTitle,
+            enableImage: !!hero?.url,
+            enableTitle: foundTitle,  // 使用 flag，而非 cardTitle 的 truthy 值
             enableContent: !!content,
             enablePrice: !!price,
             enableButton1: buttons.length > 0,
@@ -427,8 +427,8 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
 
         return [{
           id: 1,
-          enableImage: !!hero,
-          enableTitle: !!cardTitle,
+          enableImage: !!hero?.url,
+          enableTitle: foundTitle,  // 使用 flag，而非 cardTitle 的 truthy 值
           enableContent: !!content,
           enablePrice: !!price,
           enableButton1: buttons.length > 0,
