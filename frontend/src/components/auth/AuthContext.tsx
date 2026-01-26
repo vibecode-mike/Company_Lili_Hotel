@@ -8,10 +8,15 @@ import {
   setLoginMethod,
   setJwtToken,
   clearAllAuthData,
+  isTokenExpired,
+  isTokenExpiringSoon,
   isFbJwtTokenExpired,
+  isFbJwtTokenExpiringSoon,
+  getJwtToken,
 } from '../../utils/token';
 import { setLogoutCallback } from '../../utils/apiClient';
 import { setFbRefreshCallback, setFbLogoutCallback } from '../../utils/fbApiClient';
+import { tokenManager, type ExternalService } from '../../utils/tokenManager';
 
 interface User {
   email: string;
@@ -63,10 +68,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     toast.success('已登出');
   }, []);
 
-  // 設定 apiClient 的登出回調
+  // 設定所有登出回調
   useEffect(() => {
     setLogoutCallback(logout);
     setFbLogoutCallback(logout);
+    tokenManager.setLogoutCallback(logout);
   }, [logout]);
 
   const performFirmLogin = useCallback(async (): Promise<string | null> => {
@@ -96,18 +102,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [fbApiBaseUrl, fbFirmAccount, fbFirmPassword]);
 
-  // 設定 fbApiClient 的刷新回調
+  // 設定 fbApiClient 的刷新回調（向後兼容）
   useEffect(() => {
     setFbRefreshCallback(performFirmLogin);
   }, [performFirmLogin]);
 
-  // 初始化時檢查 FB JWT Token，過期則強制重新登入
+  // 註冊外部服務到 TokenManager
   useEffect(() => {
-    if (isAuthenticated && isFbJwtTokenExpired()) {
-      console.log('[AuthContext] FB JWT Token 已過期，需要重新登入');
-      logout();
+    // 註冊 Facebook 服務
+    const fbService: ExternalService = {
+      name: 'facebook',
+      isExpired: isFbJwtTokenExpired,
+      isExpiringSoon: isFbJwtTokenExpiringSoon,
+      refresh: performFirmLogin,
+      getToken: getJwtToken,
+    };
+    tokenManager.register(fbService);
+
+    return () => {
+      tokenManager.unregister('facebook');
+    };
+  }, [performFirmLogin]);
+
+  // 初始化時檢查所有外部服務 Token，任一過期則強制重新登入
+  useEffect(() => {
+    if (isAuthenticated) {
+      tokenManager.checkAllServices().then((allValid) => {
+        if (!allValid) {
+          console.log('[AuthContext] 外部服務 Token 已過期，需要重新登入');
+          // logout 已由 tokenManager 內部觸發
+        }
+      });
     }
-  }, [isAuthenticated, logout]);
+  }, [isAuthenticated]);
 
   // Email/Password login
   const login = useCallback(async (email: string, password: string): Promise<boolean> => {
