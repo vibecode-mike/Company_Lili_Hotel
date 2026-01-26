@@ -7,6 +7,7 @@ import { FlexMessageCardPreview, type CarouselCard } from "./CarouselMessageEdit
 import { ArrowButton } from "./ArrowButton";
 import { SecondaryButton } from "./common/SecondaryButton";
 import { normalizeInteractionTags } from "../utils/interactionTags";
+import { apiGet } from "../utils/apiClient";
 
 interface MessageDetailDrawerProps {
   open: boolean;
@@ -215,7 +216,8 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
           url = `/api/v1/messages/${messageId}`;
         }
 
-        const response = await fetch(url);
+        // 使用 apiGet 自動處理 token 和 401 重試
+        const response = await apiGet(url);
 
         if (!response.ok) {
           throw new Error(`Failed to fetch message: ${response.statusText}`);
