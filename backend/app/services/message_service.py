@@ -723,7 +723,7 @@ class MessageService:
                         # 其他欄位使用默認值
                         scheduled_datetime_utc=None,
                         channel_id=None,
-                        channel_name=None,
+                        channel_name=item.get("channel_name"),  # ✅ 使用 FB API 返回的粉專名稱
                         interaction_tags=interaction_tags or [],  # ✅ 使用提取的标签
                         created_by=created_by,  # ✅ 設置發送人員
                     )

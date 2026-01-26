@@ -424,11 +424,13 @@ class FbMessageClient:
                         "id": 14,
                         "title": "12345",
                         "channel": "FB",
-                        "status": 0,
+                        "channel_name": "粉專名稱",
+                        "status": 0,  // 0=草稿, 1=已發送, 2=已排程
                         "amount": 0,
                         "admin_id": 1,
                         "click_amount": 0,
-                        "create_time": 1768793957
+                        "create_time": 1768793957,
+                        "keywords": [{"id": 1, "basic_id": 14, "name": "#標籤", "enabled": true}]
                     }
                 ],
                 "msg": "ok",
