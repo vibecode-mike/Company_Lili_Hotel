@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { toast } from 'sonner';
 import {
   getAuthToken,
@@ -8,6 +8,7 @@ import {
   setLoginMethod,
   setJwtToken,
   clearAllAuthData,
+  isFbJwtTokenExpired,
 } from '../../utils/token';
 import { setLogoutCallback } from '../../utils/apiClient';
 
@@ -92,6 +93,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return null;
     }
   }, [fbApiBaseUrl, fbFirmAccount, fbFirmPassword]);
+
+  // 初始化時檢查 FB JWT Token，過期則自動重新取得
+  useEffect(() => {
+    if (isAuthenticated && isFbJwtTokenExpired()) {
+      performFirmLogin();
+    }
+  }, [isAuthenticated, performFirmLogin]);
 
   // Email/Password login
   const login = useCallback(async (email: string, password: string): Promise<boolean> => {

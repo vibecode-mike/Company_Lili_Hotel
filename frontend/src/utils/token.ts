@@ -74,11 +74,9 @@ export function parseJwt(token: string): JwtPayload | null {
 }
 
 /**
- * 取得 Token 剩餘有效時間（秒）
- * @returns 剩餘秒數，如果已過期或無效則返回 0
+ * 計算 token 剩餘有效時間（秒）
  */
-export function getTokenRemainingTime(): number {
-  const token = getAuthToken();
+function calculateRemainingTime(token: string | null): number {
   if (!token) return 0;
 
   const payload = parseJwt(token);
@@ -89,13 +87,30 @@ export function getTokenRemainingTime(): number {
 }
 
 /**
- * 檢查 Token 是否已過期
+ * 取得 Auth Token 剩餘有效時間（秒）
  */
-export const isTokenExpired = () => getTokenRemainingTime() === 0;
+export function getTokenRemainingTime(): number {
+  return calculateRemainingTime(getAuthToken());
+}
 
 /**
- * 檢查 Token 是否即將過期
+ * 檢查 Auth Token 是否已過期
+ */
+export function isTokenExpired(): boolean {
+  return getTokenRemainingTime() === 0;
+}
+
+/**
+ * 檢查 Auth Token 是否即將過期
  * @param thresholdMinutes 過期前多少分鐘視為「即將過期」，預設 5 分鐘
  */
-export const isTokenExpiringSoon = (thresholdMinutes = 5) =>
-  getTokenRemainingTime() < thresholdMinutes * 60;
+export function isTokenExpiringSoon(thresholdMinutes = 5): boolean {
+  return getTokenRemainingTime() < thresholdMinutes * 60;
+}
+
+/**
+ * 檢查 FB JWT Token 是否已過期或不存在
+ */
+export function isFbJwtTokenExpired(): boolean {
+  return calculateRemainingTime(getJwtToken()) === 0;
+}
