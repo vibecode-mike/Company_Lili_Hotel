@@ -495,9 +495,13 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
   };
 
   // Map API data to display format
+  // FB 草稿使用 fb_message_json，LINE 使用 flex_message_json
+  // FB 已發送訊息（從外部 API）會轉換為 flex_message_json 格式
   const cards = React.useMemo(() => {
     if (!messageData) return createFallbackCards();
-    return parseFlexMessageToCards(messageData.flex_message_json);
+    // 優先使用 flex_message_json，若無則使用 fb_message_json（FB 草稿）
+    const jsonContent = messageData.flex_message_json || messageData.fb_message_json;
+    return parseFlexMessageToCards(jsonContent);
   }, [messageData]);
 
   const displayData = React.useMemo(() => {
