@@ -79,4 +79,4 @@ export type ResponseMode = 'manual' | 'ai_auto' | 'auto';
 
 // ========== 聊天平台相關 ==========
 
-export type ChatPlatform = 'LINE' | 'Facebook' | 'WebChat';
+export type ChatPlatform = 'LINE' | 'Facebook' | 'Webchat';

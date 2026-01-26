@@ -13,16 +13,13 @@ from app.database import get_db
 from app.models.member import Member
 from app.models.fb_channel import FbChannel
 from app.schemas.common import SuccessResponse
-from app.services.chatroom_service import ChatroomService
+from app.services.chatroom_service import ChatroomService, format_chat_time
 from app.clients.fb_message_client import FbMessageClient
 import json
-from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-TAIPEI_TZ = ZoneInfo("Asia/Taipei")
 
 
 def _ensure_utc(dt: datetime) -> datetime:
@@ -316,50 +313,6 @@ def _resolve_platform_uid(member: Member, platform: str) -> str:
             raise HTTPException(status_code=400, detail="會員未綁定 Webchat")
         return member.webchat_uid
     raise HTTPException(status_code=400, detail="不支援的渠道平台")
-
-
-def format_chat_time(dt: Optional[datetime]) -> str:
-    """
-    格式化聊天時間為 "時段 HH:mm" 格式
-
-    時段分類：
-    - 凌晨: 00:00-05:59
-    - 上午: 06:00-11:59
-    - 中午: 12:00-13:59
-    - 下午: 14:00-17:59
-    - 晚上: 18:00-23:59
-
-    Args:
-        dt: datetime 對象
-
-    Returns:
-        格式化的時間字串，例如 "下午 03:30"
-    """
-    if not dt:
-        return ""
-
-    local_dt = _ensure_utc(dt).astimezone(TAIPEI_TZ)
-    hour = local_dt.hour
-    minute = local_dt.minute
-
-    # 判斷時段
-    if 0 <= hour < 6:
-        period = "凌晨"
-    elif 6 <= hour < 12:
-        period = "上午"
-    elif 12 <= hour < 14:
-        period = "中午"
-    elif 14 <= hour < 18:
-        period = "下午"
-    else:  # 18-23
-        period = "晚上"
-
-    # 轉換為 12 小時制
-    display_hour = hour if hour <= 12 else hour - 12
-    if display_hour == 0:
-        display_hour = 12
-
-    return f"{period} {display_hour:02d}:{minute:02d}"
 
 
 def _extract_fb_template_text(msg_content: dict) -> str:

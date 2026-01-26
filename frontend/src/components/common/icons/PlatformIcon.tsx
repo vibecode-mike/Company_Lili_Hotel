@@ -53,8 +53,8 @@ export function PlatformIcon({
   size = 20,
   className = ''
 }: PlatformIconProps): React.ReactElement {
-  // WebChat 使用圖片圖標
-  if (platform === 'WebChat') {
+  // Webchat 使用圖片圖標
+  if (platform === 'Webchat') {
     return (
       <div
         className={`inline-flex items-center justify-center shrink-0 ${className}`}

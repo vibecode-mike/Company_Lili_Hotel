@@ -54,8 +54,8 @@ function UserAvatar({
   avatar?: string;
   platform?: ChatPlatform;
 }) {
-  // WebChat 平台：顯示專用圖標
-  if (platform === 'WebChat') {
+  // Webchat 平台：顯示專用圖標
+  if (platform === 'Webchat') {
     return (
       <div className="bg-white overflow-clip relative rounded-full shrink-0 size-[45px] flex items-center justify-center shadow-sm">
         <img src={WebChatIcon} alt="WebChat" className="w-[16px] h-[16px]" />

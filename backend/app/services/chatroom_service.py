@@ -166,11 +166,13 @@ class ChatroomService:
         for record in records:
             msg_type = "user" if record.direction == "incoming" else "official"
             if record.created_at:
-                # 假設 naive datetime 是台灣本地時間
+                # naive datetime 視為 UTC（與 append_message 存入方式一致）
                 if record.created_at.tzinfo is None:
-                    created_at_local = TAIPEI_TZ.localize(record.created_at)
+                    utc_dt = record.created_at.replace(tzinfo=timezone.utc)
                 else:
-                    created_at_local = record.created_at.astimezone(TAIPEI_TZ)
+                    utc_dt = record.created_at.astimezone(timezone.utc)
+                # 轉換為台北時間後輸出 ISO 格式
+                created_at_local = utc_dt.astimezone(TAIPEI_TZ)
                 timestamp_str = created_at_local.isoformat()
             else:
                 timestamp_str = None
