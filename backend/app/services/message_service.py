@@ -825,7 +825,7 @@ class MessageService:
                         logger.debug(f"📝 FB 消息 {item.get('id')} 提取到标签: {interaction_tags}")
 
                     message_item = MessageListItem(
-                        id=item.get("id"),
+                        id=f"fb-{item.get('id')}",  # ✅ 加上 fb- 前綴，讓前端識別為 FB 訊息
                         platform="Facebook",
                         message_title=item.get("title", ""),
                         template=virtual_template,  # ✅ 提供 template

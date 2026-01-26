@@ -3,7 +3,7 @@
 注意：原 campaigns 表已重命名為 messages（語意變更）
 """
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -253,7 +253,7 @@ class CreatorInfo(BaseModel):
 class MessageListItem(BaseModel):
     """群發訊息列表項"""
 
-    id: int
+    id: Union[int, str]  # int for local DB, str like "fb-123" for external FB API
     message_title: Optional[str] = None  # 訊息標題（用於列表顯示）
     notification_message: Optional[str] = None  # 通知推播訊息（顯示在手機通知欄）
     thumbnail: Optional[str] = None  # 縮圖 URL

@@ -206,7 +206,16 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
       setError(null);
 
       try {
-        const response = await fetch(`/api/v1/messages/${messageId}`);
+        // 判斷是否為 FB 訊息（ID 以 "fb-" 開頭）
+        let url: string;
+        if (messageId.startsWith('fb-')) {
+          const fbId = messageId.replace('fb-', '');
+          url = `/api/v1/messages/fb/${fbId}`;
+        } else {
+          url = `/api/v1/messages/${messageId}`;
+        }
+
+        const response = await fetch(url);
 
         if (!response.ok) {
           throw new Error(`Failed to fetch message: ${response.statusText}`);

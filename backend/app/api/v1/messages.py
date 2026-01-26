@@ -139,10 +139,11 @@ async def create_message(
             if not data.flex_message_json:
                 raise ValueError("flex_message_json 是必填字段")
 
+        channel_id = getattr(data, 'channel_id', None)
         if data.draft_id:
-            logger.info(f"📤 从草稿发布: draft_id={data.draft_id}, schedule_type={data.schedule_type}, platform={platform}")
+            logger.info(f"📤 从草稿发布: draft_id={data.draft_id}, schedule_type={data.schedule_type}, platform={platform}, channel_id={channel_id}")
         else:
-            logger.info(f"📤 创建群发消息: schedule_type={data.schedule_type}, platform={platform}")
+            logger.info(f"📤 创建群发消息: schedule_type={data.schedule_type}, platform={platform}, channel_id={channel_id}")
 
         message = await message_service.create_message(
             db=db,
@@ -192,6 +193,7 @@ async def update_message(
 
         # 准备更新数据
         update_data = data.model_dump(exclude_unset=True)
+        logger.info(f"📝 更新数据: channel_id={update_data.get('channel_id')}, platform={update_data.get('platform')}")
 
         message = await message_service.update_message(
             db,
@@ -199,7 +201,7 @@ async def update_message(
             **update_data
         )
 
-        logger.info(f"✅ 消息更新成功: ID={message_id}")
+        logger.info(f"✅ 消息更新成功: ID={message_id}, channel_id={message.channel_id}")
 
         return message
 
@@ -279,6 +281,121 @@ async def send_message(
         raise HTTPException(status_code=500, detail=f"发送消息失败: {str(e)}")
 
 
+@router.get("/fb/{fb_message_id}")
+async def get_fb_message_detail(
+    fb_message_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    獲取 FB 訊息詳情（從外部 API）
+
+    Args:
+        fb_message_id: 外部 FB 群發訊息 ID
+
+    Returns:
+        FB 訊息詳情，包含反向轉換後的 flex_message_json
+    """
+    try:
+        from app.clients.fb_message_client import FbMessageClient
+        from app.config import settings
+
+        logger.info(f"📖 獲取 FB 訊息詳情: ID={fb_message_id}")
+
+        fb_client = FbMessageClient()
+
+        # 1. 登入取得 JWT
+        login_result = await fb_client.firm_login(
+            account=settings.FB_FIRM_ACCOUNT,
+            password=settings.FB_FIRM_PASSWORD
+        )
+        if not login_result.get("ok"):
+            logger.error(f"❌ FB 登入失敗: {login_result}")
+            raise HTTPException(status_code=401, detail="FB 登入失敗")
+
+        jwt_token = login_result["access_token"]
+
+        # 2. 取得訊息列表以獲取基本資訊
+        list_result = await fb_client.get_broadcast_list(jwt_token)
+        fb_message = None
+        if list_result.get("ok"):
+            for msg in list_result.get("data", []):
+                if msg.get("id") == fb_message_id:
+                    fb_message = msg
+                    break
+
+        if not fb_message:
+            logger.warning(f"⚠️ FB 訊息不存在: ID={fb_message_id}")
+            raise HTTPException(status_code=404, detail=f"FB 訊息不存在: ID={fb_message_id}")
+
+        # 3. 取得卡片詳情
+        detail_result = await fb_client.get_broadcast_detail(fb_message_id, jwt_token)
+
+        flex_message_json = None
+        if detail_result.get("ok"):
+            fb_cards = detail_result.get("data", [])
+            # 反向轉換為 Flex Message 格式
+            flex_message_json = message_service._transform_fb_detail_to_flex_message(fb_cards)
+            logger.info(f"✅ FB 卡片轉換成功: {len(fb_cards)} 張卡片")
+
+        # 4. 處理時間戳（從 Unix timestamp 轉換）
+        create_time = fb_message.get("create_time")
+        send_time = None
+        if create_time:
+            try:
+                from datetime import datetime
+                send_time = datetime.fromtimestamp(create_time).isoformat()
+            except (ValueError, TypeError):
+                send_time = None
+
+        # 5. 組裝返回資料
+        result = {
+            "id": f"fb-{fb_message_id}",
+            "message_title": fb_message.get("title", "未命名訊息"),
+            "notification_message": None,
+            "thumbnail": None,
+            "template": {
+                "id": 0,
+                "template_type": "FlexMessage",
+                "name": fb_message.get("title", "FB 訊息"),
+            },
+            "platform": "Facebook",
+            "channel_id": fb_message.get("page_id"),
+            "channel_name": fb_message.get("channel_name"),
+            "send_status": "已發送",
+            "send_count": fb_message.get("amount", 0),
+            "open_count": 0,
+            "click_count": fb_message.get("click_amount", 0),
+            "send_time": send_time,
+            "created_at": send_time,
+            "updated_at": None,
+            "interaction_tags": [k.get("name") for k in fb_message.get("keywords", []) if k.get("name")],
+            "flex_message_json": flex_message_json,
+            "fb_message_json": None,
+            "target_type": "all_friends",
+            "target_filter": None,
+            "template_id": 0,
+            "trigger_condition": None,
+            "failure_reason": None,
+            "campaign_id": None,
+            "created_by": None,
+            "estimated_send_count": fb_message.get("amount", 0),
+            "available_quota": 0,
+            "scheduled_at": None,
+            "source_draft_id": None,
+            "open_rate": None,
+            "click_rate": None,
+        }
+
+        logger.info(f"✅ FB 訊息詳情獲取成功: ID={fb_message_id}")
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ 獲取 FB 訊息詳情失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"獲取 FB 訊息詳情失敗: {str(e)}")
+
+
 @router.get("/{message_id}", response_model=MessageDetail)
 async def get_message(
     message_id: int,
@@ -316,6 +433,7 @@ async def get_message(
             "send_status": message.send_status,
             "interaction_tags": message.interaction_tags or [],
             "platform": message.platform or "LINE",
+            "channel_id": message.channel_id,  # 渠道ID（LINE channel_id 或 FB page_id）
             "send_count": message.send_count or 0,
             "open_count": message.open_count or 0,
             "open_rate": None,

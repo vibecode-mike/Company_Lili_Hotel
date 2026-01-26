@@ -279,6 +279,25 @@ export function MembersProvider({ children }: MembersProviderProps) {
     setMembers(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
   }, []);
 
+  const syncDisplayMemberTags = useCallback((updatedMember: Member) => {
+    const displayTags = updatedMember.tags || [];
+    const fbCustomerId = updatedMember.fb_customer_id ? String(updatedMember.fb_customer_id) : null;
+    const lineUid = updatedMember.lineUid ? String(updatedMember.lineUid) : null;
+    const webchatUid = updatedMember.webchat_uid ? String(updatedMember.webchat_uid) : null;
+
+    setDisplayMembers(prev => prev.map(displayMember => {
+      const matchesByOdooId = displayMember.odooMemberId?.toString() === updatedMember.id;
+      const matchesLine = displayMember.channel === 'LINE' && lineUid && displayMember.channelUid === lineUid;
+      const matchesFb = displayMember.channel === 'Facebook' && fbCustomerId && displayMember.channelUid === fbCustomerId;
+      const matchesWebchat = displayMember.channel === 'Webchat' && webchatUid && displayMember.channelUid === webchatUid;
+
+      if (matchesByOdooId || matchesLine || matchesFb || matchesWebchat) {
+        return { ...displayMember, tags: displayTags };
+      }
+      return displayMember;
+    }));
+  }, []);
+
   const deleteMember = useCallback((id: string) => {
     setMembers(prev => prev.filter(m => m.id !== id));
   }, []);
@@ -322,6 +341,8 @@ export function MembersProvider({ children }: MembersProviderProps) {
         }
         return [...prev, transformedMember];
       });
+
+      syncDisplayMemberTags(transformedMember);
 
       return transformedMember;
     } catch (err) {
