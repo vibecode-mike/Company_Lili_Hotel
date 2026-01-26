@@ -106,6 +106,11 @@ const TableHeader = memo(function TableHeader({
     return '發送時間';
   };
 
+  const getSenderColumnLabel = () => {
+    if (statusFilter === '草稿') return '建立人員';
+    return '發送人員';
+  };
+
   return (
     <div className="bg-white rounded-tl-[16px] rounded-tr-[16px] shrink-0 w-full relative">
       <div aria-hidden="true" className="absolute border-[#dddddd] border-[0px_0px_1px] border-solid inset-0 pointer-events-none rounded-tl-[16px] rounded-tr-[16px]" />
@@ -161,12 +166,12 @@ const TableHeader = memo(function TableHeader({
         </div>
         <Divider />
 
-        {/* 發送人員 */}
+        {/* 發送人員 / 建立人員 */}
         <div
           className={`${CELL_BASE} ${COLUMN_WIDTHS.sender} gap-[4px] cursor-pointer`}
           onClick={() => onSortChange('sender')}
         >
-          <span className={CELL_TEXT}>發送人員</span>
+          <span className={CELL_TEXT}>{getSenderColumnLabel()}</span>
           <SortIcon active={isActive('sender')} order={sortConfig.order} />
         </div>
         <Divider />
