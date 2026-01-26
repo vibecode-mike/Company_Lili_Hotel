@@ -560,30 +560,24 @@ export default function CreateAutoReplyInteractive({
   };
 
   const handleDeleteMessage = async (index: number) => {
-    const msg = messages[index];
-    const isFbEditing = isEditing && autoReplyId?.startsWith('fb-');
-
-    // 檢查是否至少保留一則訊息
     if (messages.length === 1) {
       toast.error('至少需保留一則訊息');
       return;
     }
 
-    // FB 編輯模式且訊息有 fbId，需要呼叫 API 刪除
-    if (isFbEditing && msg?.fbId) {
+    const msg = messages[index];
+    const shouldCallFbApi = isEditing && autoReplyId?.startsWith('fb-') && msg?.fbId;
+
+    if (shouldCallFbApi) {
       try {
-        await deleteFbMessage(msg.fbId);
-        toast.success('訊息已刪除');
+        await deleteFbMessage(msg.fbId!);
       } catch {
-        // 錯誤已在 context 處理，刪除失敗不更新 UI
-        return;
+        return; // 錯誤已在 context 處理
       }
-    } else {
-      toast.success('訊息已刪除');
     }
 
-    // 從 UI 移除訊息
     setMessages(prev => prev.filter((_, i) => i !== index));
+    toast.success('訊息已刪除');
   };
 
   const handleAddMessage = () => {
@@ -604,10 +598,9 @@ export default function CreateAutoReplyInteractive({
 
     setIsDeleting(true);
     try {
-      // FB 自動回應使用專用刪除函數
-      if (autoReplyId.startsWith('fb-')) {
-        const basicId = parseInt(autoReplyId.replace('fb-', ''), 10);
-        await deleteFbAutoReply(basicId);
+      const isFb = autoReplyId.startsWith('fb-');
+      if (isFb) {
+        await deleteFbAutoReply(parseInt(autoReplyId.slice(3), 10));
         toast.success('FB 自動回應已刪除');
       } else {
         await removeAutoReply(autoReplyId);

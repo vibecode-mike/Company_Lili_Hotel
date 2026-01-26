@@ -563,82 +563,68 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
     }
   }, [fetchAutoReplies]);
 
+  // 共用的 FB API 刪除函數
+  const deleteFbResource = useCallback(async (
+    endpoint: string,
+    resourceType: string,
+    onSuccess?: () => void
+  ): Promise<void> => {
+    const jwtToken = getJwtToken();
+    if (!jwtToken) {
+      throw new Error('FB 授權已過期，請重新登入');
+    }
+
+    const url = `${endpoint}${endpoint.includes('?') ? '&' : '?'}jwt_token=${encodeURIComponent(jwtToken)}`;
+    const response = await apiDelete(url);
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => null);
+      throw new Error(errData?.detail || errData?.message || `刪除${resourceType}失敗`);
+    }
+
+    onSuccess?.();
+    console.log(`[AutoReplies] ✅ FB ${resourceType}已刪除`);
+  }, []);
+
   const deleteFbKeyword = useCallback(async (keywordId: number) => {
     try {
-      const jwtToken = getJwtToken();
-      if (!jwtToken) {
-        throw new Error('FB 授權已過期，請重新登入');
-      }
-
-      const response = await apiDelete(
-        `/api/v1/admin/meta_page/message/auto_template/keyword/${keywordId}?jwt_token=${encodeURIComponent(jwtToken)}`
+      await deleteFbResource(
+        `/api/v1/admin/meta_page/message/auto_template/keyword/${keywordId}`,
+        '關鍵字'
       );
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => null);
-        throw new Error(errData?.detail || errData?.message || '刪除關鍵字失敗');
-      }
-
-      console.log('[AutoReplies] ✅ FB 關鍵字已刪除:', keywordId);
     } catch (err) {
-      const message = err instanceof Error ? err.message : '刪除關鍵字失敗';
       console.error('刪除 FB 關鍵字錯誤:', err);
-      toast.error(message);
+      toast.error(err instanceof Error ? err.message : '刪除關鍵字失敗');
       throw err;
     }
-  }, []);
+  }, [deleteFbResource]);
 
   const deleteFbMessage = useCallback(async (textId: number) => {
     try {
-      const jwtToken = getJwtToken();
-      if (!jwtToken) {
-        throw new Error('FB 授權已過期，請重新登入');
-      }
-
-      const response = await apiDelete(
-        `/api/v1/admin/meta_page/message/auto_template/Reply/${textId}?jwt_token=${encodeURIComponent(jwtToken)}`
+      await deleteFbResource(
+        `/api/v1/admin/meta_page/message/auto_template/Reply/${textId}`,
+        '訊息'
       );
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => null);
-        throw new Error(errData?.detail || errData?.message || '刪除訊息失敗');
-      }
-
-      console.log('[AutoReplies] ✅ FB 訊息已刪除:', textId);
     } catch (err) {
-      const message = err instanceof Error ? err.message : '刪除訊息失敗';
       console.error('刪除 FB 訊息錯誤:', err);
-      toast.error(message);
+      toast.error(err instanceof Error ? err.message : '刪除訊息失敗');
       throw err;
     }
-  }, []);
+  }, [deleteFbResource]);
 
   const deleteFbAutoReply = useCallback(async (basicId: number) => {
     try {
-      const jwtToken = getJwtToken();
-      if (!jwtToken) {
-        throw new Error('FB 授權已過期，請重新登入');
-      }
-
-      const response = await apiDelete(
-        `/api/v1/admin/meta_page/message/auto_template?basic_id=${basicId}&jwt_token=${encodeURIComponent(jwtToken)}`
+      await deleteFbResource(
+        `/api/v1/admin/meta_page/message/auto_template?basic_id=${basicId}`,
+        '自動回應',
+        () => setAutoReplies(prev => prev.filter(r => r.id !== `fb-${basicId}`))
       );
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => null);
-        throw new Error(errData?.detail || errData?.message || '刪除自動回應失敗');
-      }
-
-      // 從本地 state 移除
-      setAutoReplies(prev => prev.filter(r => r.id !== `fb-${basicId}`));
-      console.log('[AutoReplies] ✅ FB 自動回應已刪除:', basicId);
     } catch (err) {
-      const message = err instanceof Error ? err.message : '刪除自動回應失敗';
       console.error('刪除 FB 自動回應錯誤:', err);
-      toast.error(message);
+      toast.error(err instanceof Error ? err.message : '刪除自動回應失敗');
       throw err;
     }
-  }, []);
+  }, [deleteFbResource]);
 
   const totalAutoReplies = useMemo(() => autoReplies.length, [autoReplies]);
   const activeAutoReplies = useMemo(
