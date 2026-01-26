@@ -31,6 +31,7 @@ export interface AutoReply {
   id: string;
   name: string;
   channelName?: string | null; // 頻道名稱（LINE 頻道名 / FB 粉專名）
+  channelId?: string | null; // 渠道 ID（LINE channel_id 或 FB page_id）
   triggerType: AutoReplyTriggerType;
   keywords: string[];
   keywordObjects: AutoReplyKeyword[]; // 包含重複標記的關鍵字對象
@@ -143,10 +144,11 @@ function mapAutoResponse(item: BackendAutoReply & { content?: string; messages?:
   return {
     id: item?.id?.toString() ?? generateTempId(),
     name: item?.name ?? '未命名自動回應',
-    channelName: (item as any)?.channel_name ?? null,  // 新增：頻道名稱
+    channelName: (item as any)?.channel_name ?? null,  // 頻道名稱
+    channelId: (item as any)?.channel_id ?? null,  // 渠道 ID
     triggerType: (item?.trigger_type ?? 'keyword') as AutoReplyTriggerType,
     keywords,
-    keywordObjects,  // 新增：包含重複標記的關鍵字對象
+    keywordObjects,  // 包含重複標記的關鍵字對象
     tags: keywords,
     messages: messages.length > 0 ? messages : [''],
     isActive: Boolean(item?.is_active),
@@ -158,7 +160,7 @@ function mapAutoResponse(item: BackendAutoReply & { content?: string; messages?:
     triggerTimeEnd: item?.trigger_time_end ?? null,
     dateRangeStart: item?.date_range_start ?? null,
     dateRangeEnd: item?.date_range_end ?? null,
-    channels: item?.channels || undefined,  // 新增：渠道列表映射
+    channels: item?.channels || undefined,  // 渠道列表映射
   };
 }
 

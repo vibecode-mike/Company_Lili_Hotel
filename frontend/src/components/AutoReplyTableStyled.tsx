@@ -506,25 +506,29 @@ export default function AutoReplyTableStyled({ data, onRowClick, onToggleStatus,
 
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0 w-full">
-      {/* Table Container - Fixed height container with horizontal scroll */}
-      <div className="bg-white rounded-[16px] w-full flex flex-col max-h-[600px] overflow-x-auto table-scroll">
-        {/* Table Header - Fixed */}
-        <div className="relative shrink-0 w-[1330px]">
-          <TableHeader sortConfig={sortConfig} onSortChange={handleSort} />
-        </div>
+      {/* Table Container - Horizontal scroll wrapper */}
+      <div className="bg-white rounded-[16px] w-full overflow-x-auto table-scroll">
+        {/* Inner wrapper with fixed min-width to ensure consistent column alignment */}
+        <div className="min-w-[1330px]">
+          {/* Vertical scroll container with sticky header */}
+          <div className="max-h-[600px] overflow-y-auto table-scroll">
+            {/* Table Header - Sticky */}
+            <div className="sticky top-0 z-10">
+              <TableHeader sortConfig={sortConfig} onSortChange={handleSort} />
+            </div>
 
-        {/* Table Body - Scrollable Container */}
-        <div className="w-[1330px] flex-1 overflow-y-auto table-scroll">
-          {sortedData.map((row, index) => (
-            <AutoReplyRow
-              key={row.id}
-              row={row}
-              isLast={index === sortedData.length - 1}
-              onRowClick={handleRowClick}
-              onToggleStatus={handleToggleStatus}
-              onDuplicateKeywordClick={onDuplicateKeywordClick}
-            />
-          ))}
+            {/* Table Body */}
+            {sortedData.map((row, index) => (
+              <AutoReplyRow
+                key={row.id}
+                row={row}
+                isLast={index === sortedData.length - 1}
+                onRowClick={handleRowClick}
+                onToggleStatus={handleToggleStatus}
+                onDuplicateKeywordClick={onDuplicateKeywordClick}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </div>

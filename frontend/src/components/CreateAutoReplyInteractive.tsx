@@ -155,14 +155,17 @@ export default function CreateAutoReplyInteractive({
 
       setChannelOptions(options);
 
-      if (options.length > 0 && !selectedChannelValue) {
+      // 只有在非編輯模式且無已選擇值時，才自動選擇第一個選項
+      // 編輯模式下由 hydrateFromRecord 設定正確的渠道
+      if (options.length > 0 && !selectedChannelValue && !isEditing) {
         setSelectedChannelValue(options[0].value);
         setSelectedChannel(options[0].platform);
       }
     };
 
     fetchChannels();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing]);
 
   // 處理日期/時間模式切換，清空另一模式的值
   const handleScheduleModeChange = useCallback((mode: ScheduleModeType) => {
@@ -199,7 +202,14 @@ export default function CreateAutoReplyInteractive({
 
     // 設定渠道（如果記錄中有渠道信息，使用第一個；否則預設為 LINE）
     if (record.channels && record.channels.length > 0) {
-      setSelectedChannel(record.channels[0] as ChannelType);
+      const channel = record.channels[0] as ChannelType;
+      setSelectedChannel(channel);
+      // 同時設定 selectedChannelValue，避免 fetchChannels 覆蓋
+      // 使用 channelId 或 channel 構建 value（會在 fetchChannels 完成後同步）
+      if (record.channelId) {
+        const prefix = channel === 'Facebook' ? 'FB_' : 'LINE_';
+        setSelectedChannelValue(`${prefix}${record.channelId}`);
+      }
     } else {
       setSelectedChannel('LINE');
     }
