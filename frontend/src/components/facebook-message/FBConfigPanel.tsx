@@ -132,15 +132,15 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
   const normalizedTitleText = titleText.trim();
   const isTitleInvalid = normalizedTitleText === "" || normalizedTitleText === requiredTitlePlaceholder;
 
-  // Subtitle validation - required when checkbox is checked
-  const normalizedSubtitleText = subtitleText.trim();
-  const isSubtitleInvalid = hasSubtitle && (normalizedSubtitleText === "" || normalizedSubtitleText === "內文文字說明");
-
   // Parse subtitle and price from the combined text
   const subtitleParts = fullSubtitleText.split('\n');
   const subtitleText = subtitleParts[0] || "";
   const priceText = subtitleParts.length > 1 ? subtitleParts.slice(1).join('\n') : "";
   const hasPrice = priceText.trim() !== "";
+
+  // Subtitle validation - required when checkbox is checked
+  const normalizedSubtitleText = subtitleText.trim();
+  const isSubtitleInvalid = hasSubtitle && (normalizedSubtitleText === "" || normalizedSubtitleText === "內文文字說明");
 
   const updateHeroUrl = (url: string) => {
     const newBubble = JSON.parse(JSON.stringify(bubble));
