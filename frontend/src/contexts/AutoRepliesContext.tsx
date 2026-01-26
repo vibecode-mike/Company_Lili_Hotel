@@ -334,9 +334,18 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
     }
   }, []);
 
-  const fetchAutoReplyById = useCallback(async (id: string) => {
+  const fetchAutoReplyById = useCallback(async (id: string): Promise<AutoReply | undefined> => {
     try {
       getAuthTokenOrThrow();
+
+      // FB 自動回應的 ID 格式為 fb-{number}，沒有獨立的詳情 API
+      // 直接從本地狀態返回（FB 數據已在 fetchAutoReplies 時載入）
+      if (id.startsWith('fb-')) {
+        // FB 自動回應數據已在列表頁載入，從 state 中查找即可
+        // 如果找不到，說明數據還在載入中，返回 undefined
+        return undefined;
+      }
+
       const response = await apiGet(`/api/v1/auto_responses/${id}`);
 
       if (!response.ok) {
