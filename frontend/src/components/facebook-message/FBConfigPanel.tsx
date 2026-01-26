@@ -132,6 +132,10 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
   const normalizedTitleText = titleText.trim();
   const isTitleInvalid = normalizedTitleText === "" || normalizedTitleText === requiredTitlePlaceholder;
 
+  // Subtitle validation - required when checkbox is checked
+  const normalizedSubtitleText = subtitleText.trim();
+  const isSubtitleInvalid = hasSubtitle && (normalizedSubtitleText === "" || normalizedSubtitleText === "內文文字說明");
+
   // Parse subtitle and price from the combined text
   const subtitleParts = fullSubtitleText.split('\n');
   const subtitleText = subtitleParts[0] || "";
@@ -1120,12 +1124,21 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
                 onChange={(e) => updateSubtitle(e.target.value)}
                 placeholder="輸入內文文字說明"
                 maxLength={80}
-                className="w-full h-[78px] px-[12px] py-[8px] rounded-[10px] border border-neutral-300 text-[14px] leading-[20px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all resize-none"
+                aria-invalid={isSubtitleInvalid}
+                className={`w-full h-[78px] px-[12px] py-[8px] rounded-[10px] text-[14px] leading-[20px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 transition-all resize-none ${
+                  isSubtitleInvalid ? "border-2 focus:ring-[#f44336]/30" : "border border-neutral-300 focus:ring-[#0f6beb]"
+                }`}
+                style={isSubtitleInvalid ? { borderColor: "#f44336", borderWidth: "2px" as const } : undefined}
               />
               <span className="absolute right-[12px] bottom-[8px] text-[12px] leading-[16px] text-[#6a7282]">
                 {subtitleText.length}/80
               </span>
             </div>
+            {isSubtitleInvalid && (
+              <p className="text-[12px] leading-[16px] text-[#f44336] mt-2">
+                請輸入內文文字說明
+              </p>
+            )}
           </div>
         )}
       </div>

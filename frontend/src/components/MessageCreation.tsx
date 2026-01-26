@@ -1024,6 +1024,25 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         return false;
       }
 
+      // 驗證內文文字說明（若勾選但未填寫）
+      const invalidSubtitleIndex = bubbles.findIndex((bubble: any) => {
+        const bodyContents = bubble?.body?.contents || [];
+        // 找到 subtitle 元素（size="sm" 且 color="#666666"）
+        const subtitleItem = bodyContents.find((item: any) =>
+          item?.type === 'text' && item?.size === 'sm' && item?.color === '#666666'
+        );
+        // 如果有 subtitle 元素，檢查內容是否為空或為預設值
+        if (subtitleItem) {
+          const subtitleText = String(subtitleItem?.text ?? '').split('\n')[0].trim();
+          return subtitleText === '' || subtitleText === '內文文字說明';
+        }
+        return false;
+      });
+      if (invalidSubtitleIndex !== -1) {
+        toast.error(`Facebook 模板第 ${invalidSubtitleIndex + 1} 個卡片：請輸入內文文字說明`);
+        return false;
+      }
+
       // 驗證每個 bubble 的欄位（圖片、按鈕等）
       for (let bubbleIndex = 0; bubbleIndex < bubbles.length; bubbleIndex++) {
         const bubble = bubbles[bubbleIndex];
