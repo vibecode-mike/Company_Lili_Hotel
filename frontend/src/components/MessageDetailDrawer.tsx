@@ -334,12 +334,14 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
           let cardTitle = '';
           let content = '';
           let price = '';
+          let foundTitle = false;  // 追蹤是否已找到標題（即使為空）
 
           body.forEach((item: any) => {
-            if (item.type === 'text' && item.weight === 'bold' && !cardTitle) {
-              cardTitle = item.text;
-            } else if (item.type === 'text' && !content && cardTitle) {
-              content = item.text;
+            if (item.type === 'text' && item.weight === 'bold' && !foundTitle) {
+              cardTitle = item.text || '';
+              foundTitle = true;
+            } else if (item.type === 'text' && !content && foundTitle) {
+              content = item.text || '';
             } else if (item.type === 'text' && item.text?.includes('NT$')) {
               price = item.text.replace('NT$', '').trim();
             }
@@ -407,12 +409,14 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
         let cardTitle = '';
         let content = '';
         let price = '';
+        let foundTitle = false;  // 追蹤是否已找到標題（即使為空）
 
         body.forEach((item: any) => {
-          if (item.type === 'text' && item.weight === 'bold' && !cardTitle) {
-            cardTitle = item.text;
-          } else if (item.type === 'text' && !content && cardTitle) {
-            content = item.text;
+          if (item.type === 'text' && item.weight === 'bold' && !foundTitle) {
+            cardTitle = item.text || '';
+            foundTitle = true;
+          } else if (item.type === 'text' && !content && foundTitle) {
+            content = item.text || '';
           } else if (item.type === 'text' && item.text?.includes('NT$')) {
             price = item.text.replace('NT$', '').trim();
           }
