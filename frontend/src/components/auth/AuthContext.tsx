@@ -94,12 +94,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [fbApiBaseUrl, fbFirmAccount, fbFirmPassword]);
 
-  // 初始化時檢查 FB JWT Token，過期則自動重新取得
+  // 初始化時檢查 FB JWT Token，過期則強制重新登入
   useEffect(() => {
     if (isAuthenticated && isFbJwtTokenExpired()) {
-      performFirmLogin();
+      console.log('[AuthContext] FB JWT Token 已過期，需要重新登入');
+      logout();
     }
-  }, [isAuthenticated, performFirmLogin]);
+  }, [isAuthenticated, logout]);
 
   // Email/Password login
   const login = useCallback(async (email: string, password: string): Promise<boolean> => {
