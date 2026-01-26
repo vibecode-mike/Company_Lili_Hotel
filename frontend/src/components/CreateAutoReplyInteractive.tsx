@@ -78,7 +78,7 @@ export default function CreateAutoReplyInteractive({
   onSaved,
   onDeleted,
 }: CreateAutoReplyProps) {
-  const { saveAutoReply, removeAutoReply, getAutoReplyById, fetchAutoReplyById, deleteFbKeyword } = useAutoReplies();
+  const { saveAutoReply, removeAutoReply, getAutoReplyById, fetchAutoReplyById, deleteFbKeyword, deleteFbMessage, deleteFbAutoReply } = useAutoReplies();
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isHydrating, setIsHydrating] = useState<boolean>(Boolean(autoReplyId));
@@ -559,16 +559,31 @@ export default function CreateAutoReplyInteractive({
     }
   };
 
-  const handleDeleteMessage = (index: number) => {
-    setMessages(prev => {
-      if (prev.length === 1) {
-        toast.error('至少需保留一則訊息');
-        return prev;
+  const handleDeleteMessage = async (index: number) => {
+    const msg = messages[index];
+    const isFbEditing = isEditing && autoReplyId?.startsWith('fb-');
+
+    // 檢查是否至少保留一則訊息
+    if (messages.length === 1) {
+      toast.error('至少需保留一則訊息');
+      return;
+    }
+
+    // FB 編輯模式且訊息有 fbId，需要呼叫 API 刪除
+    if (isFbEditing && msg?.fbId) {
+      try {
+        await deleteFbMessage(msg.fbId);
+        toast.success('訊息已刪除');
+      } catch {
+        // 錯誤已在 context 處理，刪除失敗不更新 UI
+        return;
       }
-      const next = prev.filter((_, i) => i !== index);
+    } else {
       toast.success('訊息已刪除');
-      return next;
-    });
+    }
+
+    // 從 UI 移除訊息
+    setMessages(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleAddMessage = () => {
@@ -589,7 +604,14 @@ export default function CreateAutoReplyInteractive({
 
     setIsDeleting(true);
     try {
-      await removeAutoReply(autoReplyId);
+      // FB 自動回應使用專用刪除函數
+      if (autoReplyId.startsWith('fb-')) {
+        const basicId = parseInt(autoReplyId.replace('fb-', ''), 10);
+        await deleteFbAutoReply(basicId);
+        toast.success('FB 自動回應已刪除');
+      } else {
+        await removeAutoReply(autoReplyId);
+      }
       onDeleted?.();
       onBack();
     } catch {

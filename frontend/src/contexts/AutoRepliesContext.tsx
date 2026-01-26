@@ -126,6 +126,8 @@ interface AutoRepliesContextType {
   removeAutoReply: (id: string) => Promise<void>;
   activateDuplicateKeyword: (keywordId: number) => Promise<void>;
   deleteFbKeyword: (keywordId: number) => Promise<void>;
+  deleteFbMessage: (textId: number) => Promise<void>;
+  deleteFbAutoReply: (basicId: number) => Promise<void>;
 }
 
 const AutoRepliesContext = createContext<AutoRepliesContextType | undefined>(undefined);
@@ -586,6 +588,58 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
     }
   }, []);
 
+  const deleteFbMessage = useCallback(async (textId: number) => {
+    try {
+      const jwtToken = getJwtToken();
+      if (!jwtToken) {
+        throw new Error('FB 授權已過期，請重新登入');
+      }
+
+      const response = await apiDelete(
+        `/api/v1/admin/meta_page/message/auto_template/Reply/${textId}?jwt_token=${encodeURIComponent(jwtToken)}`
+      );
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => null);
+        throw new Error(errData?.detail || errData?.message || '刪除訊息失敗');
+      }
+
+      console.log('[AutoReplies] ✅ FB 訊息已刪除:', textId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '刪除訊息失敗';
+      console.error('刪除 FB 訊息錯誤:', err);
+      toast.error(message);
+      throw err;
+    }
+  }, []);
+
+  const deleteFbAutoReply = useCallback(async (basicId: number) => {
+    try {
+      const jwtToken = getJwtToken();
+      if (!jwtToken) {
+        throw new Error('FB 授權已過期，請重新登入');
+      }
+
+      const response = await apiDelete(
+        `/api/v1/admin/meta_page/message/auto_template?basic_id=${basicId}&jwt_token=${encodeURIComponent(jwtToken)}`
+      );
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => null);
+        throw new Error(errData?.detail || errData?.message || '刪除自動回應失敗');
+      }
+
+      // 從本地 state 移除
+      setAutoReplies(prev => prev.filter(r => r.id !== `fb-${basicId}`));
+      console.log('[AutoReplies] ✅ FB 自動回應已刪除:', basicId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '刪除自動回應失敗';
+      console.error('刪除 FB 自動回應錯誤:', err);
+      toast.error(message);
+      throw err;
+    }
+  }, []);
+
   const totalAutoReplies = useMemo(() => autoReplies.length, [autoReplies]);
   const activeAutoReplies = useMemo(
     () => autoReplies.filter(reply => reply.isActive).length,
@@ -622,6 +676,8 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
     removeAutoReply,
     activateDuplicateKeyword,
     deleteFbKeyword,
+    deleteFbMessage,
+    deleteFbAutoReply,
   }), [
     autoReplies,
     addAutoReply,
@@ -639,6 +695,8 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
     removeAutoReply,
     activateDuplicateKeyword,
     deleteFbKeyword,
+    deleteFbMessage,
+    deleteFbAutoReply,
   ]);
 
   return (
