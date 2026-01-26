@@ -403,15 +403,17 @@ export function FacebookMessageEditor({ onJsonChange, initialJson }: FacebookMes
           </div>
 
           {/* Config Panel */}
-          <FBConfigPanel
-            bubble={bubbles[activeBubbleIndex]}
-            onChange={(bubble) => updateBubble(activeBubbleIndex, bubble)}
-            bubbleIndex={activeBubbleIndex}
-            allBubbles={bubbles}
-            onUpdateAllBubbles={setBubbles}
-            onDuplicateBubble={duplicateBubble}
-            canDuplicate={bubbles.length < 10}
-          />
+          {bubbles[activeBubbleIndex] && (
+            <FBConfigPanel
+              bubble={bubbles[activeBubbleIndex]}
+              onChange={(bubble) => updateBubble(activeBubbleIndex, bubble)}
+              bubbleIndex={activeBubbleIndex}
+              allBubbles={bubbles}
+              onUpdateAllBubbles={setBubbles}
+              onDuplicateBubble={duplicateBubble}
+              canDuplicate={bubbles.length < 10}
+            />
+          )}
         </div>
       </div>
     </div>
