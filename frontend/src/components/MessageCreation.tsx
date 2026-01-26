@@ -2554,10 +2554,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setShowFbLimitDialog(false)}>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={() => setShowFbLimitDialog(false)}>
-              確定
-            </AlertDialogAction>
+            <AlertDialogAction>確定</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
