@@ -292,10 +292,7 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
   }];
 
   const parseFlexMessageToCards = (flexMessageJson: string | Record<string, any> | null): CarouselCard[] => {
-    console.log('[parseFlexMessageToCards] Input:', flexMessageJson);
-
     if (!flexMessageJson) {
-      console.log('[parseFlexMessageToCards] No input, returning fallback');
       return createFallbackCards();
     }
 
@@ -317,17 +314,12 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
         flexMessage = flexMessageJson;
       }
 
-      console.log('[parseFlexMessageToCards] Parsed flexMessage:', flexMessage);
-
       // Flex wrapper可能是 { type: 'flex', altText, contents: {...} }
       const root = flexMessage?.type === 'flex'
         ? flexMessage.contents
         : flexMessage;
 
-      console.log('[parseFlexMessageToCards] Root:', root);
-
       if (!root) {
-        console.log('[parseFlexMessageToCards] No root, returning fallback');
         return createFallbackCards();
       }
 
@@ -512,14 +504,35 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
   // FB 草稿使用 fb_message_json，LINE 使用 flex_message_json
   // FB 已發送訊息（從外部 API）會轉換為 flex_message_json 格式
   const cards = React.useMemo(() => {
-    console.log('[cards useMemo] messageData:', messageData);
-    console.log('[cards useMemo] flex_message_json:', messageData?.flex_message_json);
-    console.log('[cards useMemo] fb_message_json:', messageData?.fb_message_json);
-
     if (!messageData) return createFallbackCards();
-    // 優先使用 flex_message_json，若無則使用 fb_message_json（FB 草稿）
-    const jsonContent = messageData.flex_message_json || messageData.fb_message_json;
-    console.log('[cards useMemo] Using jsonContent:', jsonContent);
+
+    // 檢查 flex_message_json 是否有實際內容（非空佔位符）
+    // FB 草稿會存一個空的 flex_message_json 佔位符，需要使用 fb_message_json
+    const hasRealFlexContent = (() => {
+      if (!messageData.flex_message_json) return false;
+      try {
+        const parsed = typeof messageData.flex_message_json === 'string'
+          ? JSON.parse(messageData.flex_message_json)
+          : messageData.flex_message_json;
+        // 檢查是否有實際 body contents
+        if (parsed.type === 'bubble') {
+          const contents = parsed.body?.contents || [];
+          return contents.length > 0;
+        }
+        if (parsed.type === 'carousel') {
+          return (parsed.contents || []).length > 0;
+        }
+        return false;
+      } catch {
+        return false;
+      }
+    })();
+
+    // FB 草稿優先使用 fb_message_json，LINE 使用 flex_message_json
+    const jsonContent = hasRealFlexContent
+      ? messageData.flex_message_json
+      : messageData.fb_message_json || messageData.flex_message_json;
+
     return parseFlexMessageToCards(jsonContent);
   }, [messageData]);
 
