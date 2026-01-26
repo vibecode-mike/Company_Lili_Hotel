@@ -187,6 +187,113 @@ class MessageService:
         }
 
     # ============================================================
+    # FB → LINE 反向轉換（用於顯示 FB 已發送訊息詳情）
+    # ============================================================
+    @staticmethod
+    def _transform_fb_element_to_bubble(element: dict) -> dict:
+        """將 FB element 反向轉換為 LINE Flex Bubble 格式"""
+        bubble = {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": []
+            }
+        }
+
+        # Hero (圖片)
+        if element.get("image_url"):
+            hero = {
+                "type": "image",
+                "url": element["image_url"],
+                "size": "full",
+                "aspectRatio": "20:13",
+                "aspectMode": "cover"
+            }
+            # default_action → hero.action
+            if element.get("default_action"):
+                da = element["default_action"]
+                if da.get("type") == "web_url" and da.get("url"):
+                    hero["action"] = {"type": "uri", "uri": da["url"]}
+            bubble["hero"] = hero
+
+        # Body (標題、副標題)
+        body_contents = []
+        if element.get("title"):
+            body_contents.append({
+                "type": "text",
+                "text": element["title"],
+                "weight": "bold",
+                "size": "xl"
+            })
+        if element.get("subtitle"):
+            body_contents.append({
+                "type": "text",
+                "text": element["subtitle"],
+                "size": "sm",
+                "color": "#999999",
+                "margin": "md"
+            })
+        if body_contents:
+            bubble["body"]["contents"] = body_contents
+
+        # Footer (按鈕)
+        buttons = element.get("buttons", [])
+        if buttons:
+            footer_contents = []
+            for btn in buttons[:3]:  # 最多 3 個按鈕
+                if btn.get("type") == "web_url":
+                    footer_contents.append({
+                        "type": "button",
+                        "style": "link",
+                        "action": {
+                            "type": "uri",
+                            "label": btn.get("title", "按鈕"),
+                            "uri": btn.get("url", "")
+                        }
+                    })
+                elif btn.get("type") == "postback":
+                    footer_contents.append({
+                        "type": "button",
+                        "style": "link",
+                        "action": {
+                            "type": "postback",
+                            "label": btn.get("title", "按鈕"),
+                            "data": btn.get("payload", "")
+                        }
+                    })
+            if footer_contents:
+                bubble["footer"] = {
+                    "type": "box",
+                    "layout": "vertical",
+                    "spacing": "sm",
+                    "contents": footer_contents
+                }
+
+        return bubble
+
+    @staticmethod
+    def _transform_fb_detail_to_flex_message(fb_cards: list) -> str:
+        """將 FB detail API 返回的卡片列表轉換為 Flex Message JSON"""
+        if not fb_cards:
+            return "{}"
+
+        bubbles = [
+            MessageService._transform_fb_element_to_bubble(card)
+            for card in fb_cards
+        ]
+
+        if len(bubbles) == 1:
+            flex_message = bubbles[0]
+        else:
+            flex_message = {
+                "type": "carousel",
+                "contents": bubbles
+            }
+
+        return json.dumps(flex_message, ensure_ascii=False)
+
+    # ============================================================
     # line_app 配置
     # ============================================================
     LINE_APP_URL = "http://localhost:3001"
@@ -692,8 +799,15 @@ class MessageService:
                     admin_account = item.get("admin_account")
                     created_by = admin_map.get(admin_account) if admin_account and admin_account in admin_map else None
 
-                    # 如果數據庫中找不到對應 Admin，使用默認 Admin（不創建虛擬）
-                    if not created_by:
+                    # 如果數據庫中找不到對應 Admin，直接使用 FB API 返回的 admin_account 作為顯示名稱
+                    if not created_by and admin_account:
+                        created_by = CreatorInfo(
+                            id=-1,  # 虛擬 ID，表示來自外部 API
+                            username=admin_account,
+                            full_name=admin_account
+                        )
+                    elif not created_by:
+                        # 若 admin_account 也沒有，才使用默認 Admin
                         created_by = default_creator_info
 
                     # ✅ 提取受众筛选标签（从 FB API 的 keywords 字段）
