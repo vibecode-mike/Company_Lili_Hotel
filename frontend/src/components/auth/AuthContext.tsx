@@ -8,14 +8,11 @@ import {
   setLoginMethod,
   setJwtToken,
   clearAllAuthData,
-  isTokenExpired,
-  isTokenExpiringSoon,
   isFbJwtTokenExpired,
   isFbJwtTokenExpiringSoon,
   getJwtToken,
 } from '../../utils/token';
 import { setLogoutCallback } from '../../utils/apiClient';
-import { setFbRefreshCallback, setFbLogoutCallback } from '../../utils/fbApiClient';
 import { tokenManager, type ExternalService } from '../../utils/tokenManager';
 
 interface User {
@@ -68,10 +65,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     toast.success('已登出');
   }, []);
 
-  // 設定所有登出回調
+  // 設定登出回調（apiClient + tokenManager 統一處理）
   useEffect(() => {
     setLogoutCallback(logout);
-    setFbLogoutCallback(logout);
     tokenManager.setLogoutCallback(logout);
   }, [logout]);
 
@@ -101,11 +97,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return null;
     }
   }, [fbApiBaseUrl, fbFirmAccount, fbFirmPassword]);
-
-  // 設定 fbApiClient 的刷新回調（向後兼容）
-  useEffect(() => {
-    setFbRefreshCallback(performFirmLogin);
-  }, [performFirmLogin]);
 
   // 註冊外部服務到 TokenManager
   useEffect(() => {

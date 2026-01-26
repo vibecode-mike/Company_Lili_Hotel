@@ -197,11 +197,5 @@ class TokenManager {
   }
 }
 
-// 單例模式
+// Singleton instance
 export const tokenManager = new TokenManager();
-
-// 便捷函數
-export const registerService = (service: ExternalService) => tokenManager.register(service);
-export const ensureValidToken = (serviceName: string) => tokenManager.ensureValidToken(serviceName);
-export const getServiceToken = (serviceName: string) => tokenManager.getToken(serviceName);
-export const setTokenManagerLogout = (callback: () => void) => tokenManager.setLogoutCallback(callback);
