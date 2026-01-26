@@ -6,7 +6,7 @@ import KeywordTagsInput from './KeywordTagsInput';
 import TriggerTimeOptions, { TriggerTimeType, ScheduleModeType } from './TriggerTimeOptions';
 import { SimpleBreadcrumb, DeleteButton } from './common';
 import { ChannelIcon } from './common/icons/ChannelIcon';
-import { useAutoReplies, type AutoReply as AutoReplyRecord, type AutoReplyPayload, type AutoReplyConflict, type FbKeywordPayload, type FbMessagePayload } from '../contexts/AutoRepliesContext';
+import { useAutoReplies, type AutoReply as AutoReplyRecord, type AutoReplyPayload, type AutoReplyConflict, type FbKeywordPayload, type FbMessagePayload, type AutoReplyKeyword } from '../contexts/AutoRepliesContext';
 
 // 渠道選項介面（與群發訊息頁面一致）
 interface ChannelOption {
@@ -35,6 +35,12 @@ interface MessageItem {
   fbId?: number;    // FB API 的 text id（用於編輯時區分編輯 vs 新增）
   fbBasicId?: number;  // FB API 的父自動回應 ID
   fbCount?: number;    // FB API 的觸發計數
+}
+
+interface KeywordItem {
+  id: number;       // 本地 UI 用的 id（用於 React key）
+  name: string;
+  fbId?: number;    // FB API 的 keyword id（用於刪除）
 }
 
 const INITIAL_SCHEDULE = {
@@ -72,7 +78,7 @@ export default function CreateAutoReplyInteractive({
   onSaved,
   onDeleted,
 }: CreateAutoReplyProps) {
-  const { saveAutoReply, removeAutoReply, getAutoReplyById, fetchAutoReplyById } = useAutoReplies();
+  const { saveAutoReply, removeAutoReply, getAutoReplyById, fetchAutoReplyById, deleteFbKeyword } = useAutoReplies();
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isHydrating, setIsHydrating] = useState<boolean>(Boolean(autoReplyId));
@@ -84,6 +90,7 @@ export default function CreateAutoReplyInteractive({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
   const [keywordTags, setKeywordTags] = useState<string[]>([]);
+  const [keywordItems, setKeywordItems] = useState<KeywordItem[]>([]);  // 用於追蹤 FB keyword ID
   const [triggerTime, setTriggerTime] = useState<TriggerTimeType>('immediate');
   const [scheduledDateTime, setScheduledDateTime] = useState(() => ({ ...INITIAL_SCHEDULE }));
   const [scheduleMode, setScheduleMode] = useState<ScheduleModeType>('time'); // 新增：日期或時間模式
@@ -104,6 +111,7 @@ export default function CreateAutoReplyInteractive({
     setIsEnabled(true);
     setMessages([{ id: 1, text: '' }]);
     setKeywordTags([]);
+    setKeywordItems([]);
     setTriggerTime('immediate');
     setScheduledDateTime({ ...INITIAL_SCHEDULE });
     setScheduleMode('time');
@@ -190,6 +198,48 @@ export default function CreateAutoReplyInteractive({
     }
   }, []);
 
+  // 處理關鍵字標籤變更（支援 FB 關鍵字刪除）
+  const handleKeywordTagsChange = useCallback(async (newTags: string[]) => {
+    const isFbEditing = isEditing && autoReplyId?.startsWith('fb-') && selectedChannel === 'Facebook';
+
+    // 檢測被刪除的關鍵字
+    const removedTags = keywordTags.filter(tag => !newTags.includes(tag));
+
+    // 如果是 FB 編輯模式且有關鍵字被刪除
+    if (isFbEditing && removedTags.length > 0) {
+      for (const removedTag of removedTags) {
+        // 從 keywordItems 找到對應的 FB keyword ID
+        const removedItem = keywordItems.find(ki => ki.name === removedTag);
+        if (removedItem?.fbId) {
+          try {
+            await deleteFbKeyword(removedItem.fbId);
+            toast.success(`關鍵字「${removedTag}」已刪除`);
+          } catch {
+            // 錯誤已在 context 處理，這裡只是跳過更新 UI
+            return; // 刪除失敗，不更新 state
+          }
+        }
+      }
+    }
+
+    // 更新 keywordTags
+    setKeywordTags(newTags);
+
+    // 同步更新 keywordItems
+    setKeywordItems(prev => {
+      // 保留現有的、移除被刪除的
+      const kept = prev.filter(ki => newTags.includes(ki.name));
+      // 新增新的（沒有 fbId）
+      const newNames = newTags.filter(tag => !prev.some(ki => ki.name === tag));
+      const maxId = kept.length > 0 ? Math.max(...kept.map(ki => ki.id)) : 0;
+      const newItems = newNames.map((name, index) => ({
+        id: maxId + index + 1,
+        name,
+      }));
+      return [...kept, ...newItems];
+    });
+  }, [isEditing, autoReplyId, selectedChannel, keywordTags, keywordItems, deleteFbKeyword]);
+
   const hydrateFromRecord = useCallback((record: AutoReplyRecord) => {
     const normalizedType: ReplyType =
       record.triggerType === 'time' ? 'follow' : (record.triggerType as ReplyType);
@@ -212,6 +262,19 @@ export default function CreateAutoReplyInteractive({
         }));
     setMessages(hydratedMessages);
     setKeywordTags(record.keywords);
+
+    // 初始化 keywordItems（用於追蹤 FB keyword ID）
+    const hydratedKeywords = record.keywordObjects?.length
+      ? record.keywordObjects.map((kw, index) => ({
+          id: index + 1,
+          name: kw.keyword,
+          fbId: kw.id,  // 保留 FB API 的 keyword id
+        }))
+      : record.keywords.map((name, index) => ({
+          id: index + 1,
+          name,
+        }));
+    setKeywordItems(hydratedKeywords);
 
     // 設定渠道（如果記錄中有渠道信息，使用第一個；否則預設為 LINE）
     if (record.channels && record.channels.length > 0) {
@@ -391,15 +454,14 @@ export default function CreateAutoReplyInteractive({
           }))
       : undefined;
 
-    // 從現有記錄的 keywordObjects 構建帶 id 的關鍵字對象
-    const existingRecord = autoReplyId ? getAutoReplyById(autoReplyId) : null;
+    // 從 keywordItems 構建帶 id 的關鍵字對象
     const fbKeywordsPayload: FbKeywordPayload[] | undefined = isFbEditing && replyType === 'keyword'
       ? keywordTags.map(kw => {
-          // 嘗試從現有記錄找到對應的 keyword id
-          const existing = existingRecord?.keywordObjects?.find(ko => ko.keyword === kw);
-          return existing?.id
-            ? { id: existing.id, name: kw }  // 有 id = 編輯
-            : { name: kw };                   // 無 id = 新增
+          // 從 keywordItems 找到對應的 FB keyword id
+          const existing = keywordItems.find(ki => ki.name === kw);
+          return existing?.fbId
+            ? { id: existing.fbId, name: kw }  // 有 fbId = 編輯
+            : { name: kw };                     // 無 fbId = 新增
         })
       : undefined;
 
@@ -796,7 +858,7 @@ export default function CreateAutoReplyInteractive({
                         {replyType === 'keyword' && (
                           <KeywordTagsInput
                             tags={keywordTags}
-                            onChange={setKeywordTags}
+                            onChange={handleKeywordTagsChange}
                             maxTags={20}
                             maxTagLength={20}
                             required={true}

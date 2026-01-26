@@ -125,6 +125,7 @@ interface AutoRepliesContextType {
   saveAutoReply: (payload: AutoReplyPayload, id?: string) => Promise<SaveAutoReplyResult>;
   removeAutoReply: (id: string) => Promise<void>;
   activateDuplicateKeyword: (keywordId: number) => Promise<void>;
+  deleteFbKeyword: (keywordId: number) => Promise<void>;
 }
 
 const AutoRepliesContext = createContext<AutoRepliesContextType | undefined>(undefined);
@@ -560,6 +561,31 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
     }
   }, [fetchAutoReplies]);
 
+  const deleteFbKeyword = useCallback(async (keywordId: number) => {
+    try {
+      const jwtToken = getJwtToken();
+      if (!jwtToken) {
+        throw new Error('FB 授權已過期，請重新登入');
+      }
+
+      const response = await apiDelete(
+        `/api/v1/admin/meta_page/message/auto_template/keyword/${keywordId}?jwt_token=${encodeURIComponent(jwtToken)}`
+      );
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => null);
+        throw new Error(errData?.detail || errData?.message || '刪除關鍵字失敗');
+      }
+
+      console.log('[AutoReplies] ✅ FB 關鍵字已刪除:', keywordId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '刪除關鍵字失敗';
+      console.error('刪除 FB 關鍵字錯誤:', err);
+      toast.error(message);
+      throw err;
+    }
+  }, []);
+
   const totalAutoReplies = useMemo(() => autoReplies.length, [autoReplies]);
   const activeAutoReplies = useMemo(
     () => autoReplies.filter(reply => reply.isActive).length,
@@ -595,6 +621,7 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
     saveAutoReply,
     removeAutoReply,
     activateDuplicateKeyword,
+    deleteFbKeyword,
   }), [
     autoReplies,
     addAutoReply,
@@ -611,6 +638,7 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
     saveAutoReply,
     removeAutoReply,
     activateDuplicateKeyword,
+    deleteFbKeyword,
   ]);
 
   return (
