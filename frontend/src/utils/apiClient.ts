@@ -128,7 +128,8 @@ export async function apiFetch<T = unknown>(
       console.log('[ApiClient] Token 即將過期，主動刷新...');
       const refreshed = await refreshToken();
       if (!refreshed) {
-        console.warn('[ApiClient] 主動刷新失敗，繼續使用原 token');
+        console.error('[ApiClient] 主動刷新失敗，執行登出');
+        handleLogout();
       }
     }
   }
