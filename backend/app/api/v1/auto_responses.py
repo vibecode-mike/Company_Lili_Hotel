@@ -378,12 +378,14 @@ async def _get_fb_auto_responses_from_api(jwt_token: str, db: AsyncSession) -> L
                 for kw in fb_keywords
             ]
 
-            # 提取訊息（保留真實 FB API id）
+            # 提取訊息（保留真實 FB API id、basic_id、count）
             text_items = item.get("text", [])
             messages_list = [
                 {
                     "id": t.get("id"),  # 保留 FB API 的真實 id
+                    "basic_id": t.get("basic_id"),  # 保留父記錄 ID
                     "content": t.get("text", ""),
+                    "count": t.get("count", 0),  # 保留觸發計數
                     "sequence_order": idx + 1,
                 }
                 for idx, t in enumerate(text_items)
@@ -554,7 +556,9 @@ class FbKeywordItem(BaseModel):
 class FbTextItem(BaseModel):
     """FB 訊息項目（帶 id 為編輯，無 id 為新增）"""
     id: Optional[int] = None
+    basic_id: Optional[int] = None  # 父自動回應 ID
     text: str
+    count: int = 0  # 觸發計數
     enabled: bool = True
 
 
@@ -597,7 +601,16 @@ async def update_fb_auto_response(
     # 構建 text payload（帶 id 為編輯，無 id 為新增）
     if data.messages is not None:
         payload["text"] = [
-            {"id": msg.id, "text": msg.text, "enabled": msg.enabled} if msg.id else {"text": msg.text, "enabled": msg.enabled}
+            {
+                "id": msg.id,
+                "basic_id": msg.basic_id,
+                "text": msg.text,
+                "count": msg.count,
+                "enabled": msg.enabled
+            } if msg.id else {
+                "text": msg.text,
+                "enabled": msg.enabled
+            }
             for msg in data.messages
         ]
 

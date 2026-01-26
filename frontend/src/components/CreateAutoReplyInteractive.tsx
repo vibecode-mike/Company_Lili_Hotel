@@ -33,6 +33,8 @@ interface MessageItem {
   id: number;       // 本地 UI 用的 id（用於 React key）
   text: string;
   fbId?: number;    // FB API 的 text id（用於編輯時區分編輯 vs 新增）
+  fbBasicId?: number;  // FB API 的父自動回應 ID
+  fbCount?: number;    // FB API 的觸發計數
 }
 
 const INITIAL_SCHEDULE = {
@@ -195,12 +197,14 @@ export default function CreateAutoReplyInteractive({
     setReplyType(normalizedType);
     setIsEnabled(record.isActive);
 
-    // 優先使用 messageObjects（包含 FB id），否則使用純字串
+    // 優先使用 messageObjects（包含 FB id、basic_id、count），否則使用純字串
     const hydratedMessages = record.messageObjects?.length
       ? record.messageObjects.map((msg, index) => ({
           id: index + 1,
           text: msg.content,
           fbId: msg.id,  // 保留 FB API 的 text id
+          fbBasicId: msg.basicId,  // 保留 FB API 的父自動回應 ID
+          fbCount: msg.count ?? 0,  // 保留 FB API 的觸發計數
         }))
       : (record.messages.length ? record.messages : ['']).map((text, index) => ({
           id: index + 1,
@@ -374,13 +378,15 @@ export default function CreateAutoReplyInteractive({
     // 構建 FB 專用的帶 id 對象（用於編輯時區分編輯 vs 新增）
     const isFbEditing = isEditing && autoReplyId?.startsWith('fb-') && selectedChannel === 'Facebook';
 
-    // 從 messages state 構建帶 fbId 的訊息對象
+    // 從 messages state 構建帶 fbId、basic_id、count 的訊息對象
     const fbMessagesPayload: FbMessagePayload[] | undefined = isFbEditing
       ? messages
           .filter(m => m.text.trim())
           .map(m => ({
             ...(m.fbId ? { id: m.fbId } : {}),  // 有 fbId 才帶 id（編輯），無則不帶（新增）
+            ...(m.fbBasicId ? { basic_id: m.fbBasicId } : {}),  // 保留父自動回應 ID
             text: m.text.trim(),
+            count: m.fbCount ?? 0,  // 保留觸發計數
             enabled: true,
           }))
       : undefined;

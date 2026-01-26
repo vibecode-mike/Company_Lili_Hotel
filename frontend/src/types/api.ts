@@ -53,7 +53,9 @@ export interface BackendKeyword {
  */
 export interface BackendReplyMessage {
   id?: number;  // FB API 的 text id（用於編輯時區分編輯 vs 新增）
+  basic_id?: number;  // FB API 的父自動回應 ID
   content?: string;
+  count?: number;  // FB API 的觸發計數
   sequence_order?: number;
 }
 

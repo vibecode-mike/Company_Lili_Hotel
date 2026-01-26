@@ -30,7 +30,9 @@ export interface AutoReplyKeyword {
 // 訊息對象，包含 FB API 的 id（用於區分編輯 vs 新增）
 export interface AutoReplyMessage {
   id?: number;  // FB API 的 text id（有 id = 編輯，無 id = 新增）
+  basicId?: number;  // FB API 的父自動回應 ID
   content: string;
+  count?: number;  // FB API 的觸發計數
   enabled?: boolean;
 }
 
@@ -65,7 +67,9 @@ export interface FbKeywordPayload {
 
 export interface FbMessagePayload {
   id?: number;
+  basic_id?: number;  // FB API 的父自動回應 ID
   text: string;
+  count?: number;  // FB API 的觸發計數
   enabled?: boolean;
 }
 
@@ -166,13 +170,15 @@ function mapAutoResponse(item: BackendAutoReply & { content?: string; messages?:
     ? sortedMessages.map((msg: BackendReplyMessage) => msg?.content ?? '').filter((msg: string) => msg)
     : (item?.content ? [item.content] : []);
 
-  // 建立包含 FB id 的訊息對象（用於編輯時保留 id）
+  // 建立包含 FB id、basic_id、count 的訊息對象（用於編輯時保留完整資訊）
   const messageObjects: AutoReplyMessage[] = sortedMessages.length > 0
     ? sortedMessages
         .filter((msg: BackendReplyMessage) => msg?.content)
         .map((msg: BackendReplyMessage) => ({
-          id: (msg as any)?.id,  // FB API 的 text id
+          id: msg?.id,  // FB API 的 text id
+          basicId: msg?.basic_id,  // FB API 的父自動回應 ID
           content: msg?.content ?? '',
+          count: msg?.count ?? 0,  // FB API 的觸發計數
           enabled: true,
         }))
     : (item?.content ? [{ content: item.content, enabled: true }] : []);
@@ -220,12 +226,14 @@ function mapFbAutoResponse(item: FbAutoReply): AutoReply {
 
   const messages = enabledTexts.map(t => t?.text ?? '').filter(Boolean);
 
-  // 建立包含 FB id 的訊息對象（用於編輯時保留 id）
+  // 建立包含 FB id、basic_id、count 的訊息對象（用於編輯時保留完整資訊）
   const messageObjects: AutoReplyMessage[] = enabledTexts
     .filter(t => t?.text)
     .map(t => ({
       id: t?.id,  // FB API 的 text id
+      basicId: t?.basic_id,  // FB API 的父自動回應 ID
       content: t?.text ?? '',
+      count: t?.count ?? 0,  // FB API 的觸發計數
       enabled: true,
     }));
 
