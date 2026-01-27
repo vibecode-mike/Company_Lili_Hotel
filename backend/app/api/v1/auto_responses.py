@@ -577,10 +577,12 @@ async def update_fb_auto_response(
     data: FbAutoResponseUpdate,
     jwt_token: str = Query(..., description="FB JWT token"),
 ):
-    """更新 Facebook 自動回應（透過外部 FB API）"""
+    """
+    更新 Facebook 自動回應（透過外部 FB API）
+
+    Note: PATCH 只需要 trigger_time，不需要 firm_id 和 channel（POST 才需要）
+    """
     payload = {
-        "firm_id": 1,
-        "channel": "FB",
         "trigger_time": 0,
     }
 
