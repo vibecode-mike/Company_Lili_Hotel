@@ -80,35 +80,34 @@ class MessageService:
     @staticmethod
     def _build_default_action(hero: dict, metadata: dict) -> dict | None:
         """建立 default_action（點擊卡片的動作）"""
-        action_type = metadata.get("heroActionType", "url")
+        url = MessageService._ensure_url_protocol(hero.get("action", {}).get("uri", ""))
+        if not url:
+            return None
 
+        action_type = metadata.get("heroActionType", "url")
         if action_type == "postback":
-            payload = (metadata.get("heroActionPayload") or "").strip()
-            if payload:
-                return {"type": "postback", "payload": payload}
-        else:
-            hero_action = hero.get("action")
-            if hero_action:
-                url = MessageService._ensure_url_protocol(hero_action.get("uri", ""))
-                if url:
-                    return {"type": "web_url", "url": url}
-        return None
+            return {"type": "postback", "extra_url": url}
+        return {"type": "web_url", "url": url}
 
     @staticmethod
     def _build_button(action: dict, metadata: dict, index: int) -> dict | None:
         """建立單一按鈕"""
         btn_title = (action.get("label") or "按鈕").strip()
         btn_type = MessageService._get_metadata_value(metadata, "buttonTypes", index, "url")
+        url = MessageService._ensure_url_protocol(action.get("uri", ""))
 
         if btn_type == "postback":
             payload = MessageService._get_metadata_value(metadata, "buttonPayloads", index)
-            if payload:
-                return {"type": "postback", "title": btn_title, "payload": payload}
-        else:
-            url = MessageService._ensure_url_protocol(action.get("uri", ""))
-            if url:
-                return {"type": "web_url", "title": btn_title, "url": url}
-        return None
+            return {
+                "type": "postback",
+                "title": btn_title,
+                "payload": payload or "",
+                "extra_url": url or "",
+            }
+
+        if not url:
+            return None
+        return {"type": "web_url", "title": btn_title, "url": url}
 
     @staticmethod
     def _transform_bubble_to_element(bubble: dict) -> dict:
