@@ -86,7 +86,8 @@ class MessageService:
 
         action_type = metadata.get("heroActionType", "url")
         if action_type == "postback":
-            return {"type": "postback", "extra_url": url}
+            payload = metadata.get("heroActionPayload", "")
+            return {"type": "postback", "payload": payload, "extra_url": url}
         return {"type": "web_url", "url": url}
 
     @staticmethod
