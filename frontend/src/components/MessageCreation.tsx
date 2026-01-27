@@ -271,8 +271,18 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
           const fbApiBaseUrl = (import.meta.env.VITE_FB_API_URL?.trim() || 'https://api-youth-tycg.star-bit.io').replace(/\/+$/, '');
           const jwtToken = localStorage.getItem('jwt_token');
 
+          // 取得當前選中的 FB 渠道的 page_id
+          const selectedOption = channelOptions.find(opt => opt.value === selectedChannel);
+          const pageId = selectedOption?.channelId;
+
           // 構建查詢參數
           const params = new URLSearchParams();
+
+          // 加入 page_id 參數
+          if (pageId) {
+            params.set('page_id', pageId);
+          }
+
           if (targetType === 'filtered' && selectedFilterTags.length > 0) {
             const tagNames = selectedFilterTags.map(t => t.name).join(',');
             if (filterCondition === 'include') {
@@ -317,7 +327,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     return () => {
       isActive = false;
     };
-  }, [selectedPlatform, targetType, selectedFilterTags, filterCondition]);
+  }, [selectedPlatform, targetType, selectedFilterTags, filterCondition, selectedChannel, channelOptions]);
 
   const button1TriggerImageInputRef = useRef<HTMLInputElement>(null);
   const button2TriggerImageInputRef = useRef<HTMLInputElement>(null);
