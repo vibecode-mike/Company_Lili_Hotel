@@ -97,12 +97,14 @@ class MessageService:
         btn_type = MessageService._get_metadata_value(metadata, "buttonTypes", index, "url")
         url = MessageService._ensure_url_protocol(action.get("uri", ""))
 
-        payload = MessageService._get_metadata_value(metadata, "buttonPayloads", index)
+        payload = MessageService._get_metadata_value(metadata, "buttonLabels", index)
+        trigger_message = MessageService._get_metadata_value(metadata, "buttonPayloads", index)
 
         if btn_type == "postback":
             return {
                 "type": "postback",
                 "title": btn_title,
+                "subtitle": trigger_message or "",
                 "payload": payload or "",
                 "extra_url": url or "",
             }
