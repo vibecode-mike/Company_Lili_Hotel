@@ -86,7 +86,7 @@ class MessageService:
 
         action_type = metadata.get("heroActionType", "url")
         if action_type == "postback":
-            payload = metadata.get("heroActionPayload", "")
+            payload = metadata.get("heroActionPayload", "") or ""
             return {"type": "postback", "payload": payload, "extra_url": url}
         return {"type": "web_url", "url": url}
 
@@ -97,8 +97,9 @@ class MessageService:
         btn_type = MessageService._get_metadata_value(metadata, "buttonTypes", index, "url")
         url = MessageService._ensure_url_protocol(action.get("uri", ""))
 
+        payload = MessageService._get_metadata_value(metadata, "buttonPayloads", index)
+
         if btn_type == "postback":
-            payload = MessageService._get_metadata_value(metadata, "buttonPayloads", index)
             return {
                 "type": "postback",
                 "title": btn_title,
@@ -108,7 +109,7 @@ class MessageService:
 
         if not url:
             return None
-        return {"type": "web_url", "title": btn_title, "url": url}
+        return {"type": "web_url", "title": btn_title, "url": url, "payload": payload or ""}
 
     @staticmethod
     def _transform_bubble_to_element(bubble: dict) -> dict:
@@ -127,6 +128,7 @@ class MessageService:
             element["subtitle"] = subtitle
 
         image_url = (hero.get("url") or "").strip()
+        element["image_url"] = ""
         if image_url and image_url.startswith(("http://", "https://")):
             element["image_url"] = image_url
 
