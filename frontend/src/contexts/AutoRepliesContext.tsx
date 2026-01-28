@@ -146,6 +146,48 @@ function sortByCreatedAt(list: AutoReply[]) {
 
 const generateTempId = () => `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+interface ToggleRequestParams {
+  url: string;
+  body: { is_active: boolean } | undefined;
+}
+
+function buildToggleRequest(
+  id: string,
+  targetState: boolean,
+  forceActivate: boolean,
+  isFbAutoReply: boolean,
+  existing?: AutoReply
+): ToggleRequestParams {
+  if (isFbAutoReply) {
+    const fbId = id.replace('fb-', '');
+    const jwtToken = getJwtToken();
+    if (!jwtToken) {
+      throw new Error('FB 授權已過期，請重新登入');
+    }
+    return {
+      url: `/api/v1/auto_responses/fb/${fbId}?jwt_token=${encodeURIComponent(jwtToken)}`,
+      body: { is_active: targetState },
+    };
+  }
+
+  const params = new URLSearchParams({
+    is_active: String(targetState),
+    force_activate: String(forceActivate),
+  });
+
+  if (existing?.channels?.includes('Facebook')) {
+    const jwtToken = getJwtToken();
+    if (jwtToken) {
+      params.set('jwt_token', jwtToken);
+    }
+  }
+
+  return {
+    url: `/api/v1/auto_responses/${id}/toggle?${params.toString()}`,
+    body: undefined,
+  };
+}
+
 function mapAutoResponse(item: BackendAutoReply & { content?: string; messages?: BackendReplyMessage[] }): AutoReply {
   const keywords = Array.isArray(item?.keywords)
     ? item.keywords
@@ -493,21 +535,13 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
     async (id: string, nextState?: boolean, forceActivate = false): Promise<ToggleAutoReplyResult> => {
       const existing = autoReplies.find(reply => reply.id === id);
       const targetState = typeof nextState === 'boolean' ? nextState : !existing?.isActive;
+      const isFbAutoReply = id.startsWith('fb-');
 
       try {
-        getAuthTokenOrThrow(); // 僅檢查登入狀態
+        getAuthTokenOrThrow();
 
-        // 構建 URL，若渠道包含 Facebook 則加上 jwt_token
-        let url = `/api/v1/auto_responses/${id}/toggle?is_active=${targetState}&force_activate=${forceActivate}`;
-        if (existing?.channels?.includes('Facebook')) {
-          const jwtToken = getJwtToken();
-          if (jwtToken) {
-            url += `&jwt_token=${encodeURIComponent(jwtToken)}`;
-          }
-        }
-
-        // 使用 apiPatch 自動處理 token 和 401 重試（無 body 傳 undefined）
-        const response = await apiPatch(url, undefined);
+        const { url, body } = buildToggleRequest(id, targetState, forceActivate, isFbAutoReply, existing);
+        const response = await apiPatch(url, body);
 
         if (!response.ok) {
           const errData = await response.json().catch(() => null);
@@ -516,16 +550,14 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
 
         const result = await response.json();
 
-        // 檢查是否有衝突
         if (result?.data?.conflict) {
-          const conflictData: AutoReplyConflict = {
+          return {
             conflict: true,
             conflictType: result.data.conflict_type,
             existingId: result.data.existing_id,
             existingName: result.data.existing_name,
             existingDateRange: result.data.existing_date_range,
           };
-          return conflictData;
         }
 
         setAutoReplies(prev =>
