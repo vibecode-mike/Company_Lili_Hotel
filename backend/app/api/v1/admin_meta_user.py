@@ -83,13 +83,7 @@ async def get_meta_user_profile(
         channel: 指定渠道 (LINE/Facebook/Webchat)，決定顯示哪個來源的 logo 和名稱
 
     Returns:
-        - id: 會員 ID
-        - name: 會員姓名
-        - email: 電子信箱
-        - create_time: 建立時間 (Unix timestamp)
-        - update_time: 更新時間 (Unix timestamp)
-        - channel: 當前選擇的渠道資訊
-        - tags: 標籤列表 (tag_type: 1=會員標籤, 2=互動標籤)
+        完整會員資料，包含所有渠道資訊和標籤 (tag_type: 1=會員標籤, 2=互動標籤)
     """
     # 1. 查詢會員
     result = await db.execute(
@@ -129,7 +123,7 @@ async def get_meta_user_profile(
     elif selected_channel == "Webchat":
         channel_info = _build_channel_info(member, "Webchat", "Webchat")
 
-    # 3. 查詢標籤
+    # 3. 查詢標籤 (使用 tag_type 格式)
     tags = []
 
     # 會員標籤 (tag_type: 1)
@@ -138,7 +132,8 @@ async def get_meta_user_profile(
     )
     for tag in member_tags_result.scalars():
         tags.append({
-            "customer_id": member.id,
+            "id": tag.id,
+            "name": tag.tag_name,
             "tag": tag.tag_name,
             "tag_type": 1  # 會員標籤
         })
@@ -149,17 +144,45 @@ async def get_meta_user_profile(
     )
     for tag in interaction_tags_result.scalars():
         tags.append({
-            "customer_id": member.id,
+            "id": tag.id,
+            "name": tag.tag_name,
             "tag": tag.tag_name,
             "tag_type": 2  # 互動標籤
         })
 
+    # 4. 返回完整會員資料（與 /api/v1/members/{id} 格式相容）
     return SuccessResponse(data={
+        # 基本資訊
         "id": member.id,
         "name": member.name or "",
         "email": member.email or "",
-        "create_time": int(member.created_at.timestamp()) if member.created_at else None,
-        "update_time": int(member.updated_at.timestamp()) if member.updated_at else None,
+        "phone": member.phone or "",
+        "gender": member.gender or "",
+        "birthday": member.birthday or "",
+        "created_at": member.created_at.isoformat() if member.created_at else None,
+        "last_interaction_at": member.updated_at.isoformat() if member.updated_at else None,
+        # LINE 渠道
+        "line_uid": member.line_uid or "",
+        "line_display_name": member.line_display_name or "",
+        "line_avatar": member.line_avatar or "",
+        "channel_id": member.channel_id or "",
+        # Facebook 渠道
+        "fb_customer_id": member.fb_customer_id or "",
+        "fb_customer_name": member.fb_customer_name or "",
+        "fb_avatar": member.fb_avatar or "",
+        # Webchat 渠道
+        "webchat_uid": member.webchat_uid or "",
+        "webchat_name": member.webchat_name or "",
+        "webchat_avatar": member.webchat_avatar or "",
+        # 其他
+        "join_source": member.join_source or "",
+        "id_number": member.id_number or "",
+        "residence": member.residence or "",
+        "passport_number": member.passport_number or "",
+        "internal_note": member.internal_note or "",
+        "gpt_enabled": member.gpt_enabled if member.gpt_enabled is not None else True,
+        # 當前選擇的渠道資訊
         "channel": channel_info,
+        # 標籤 (tag_type 格式)
         "tags": tags
     })

@@ -20,29 +20,49 @@ export interface BackendTag {
 
 /**
  * 後端會員物件（從 API 返回的原始格式）
+ * 支援 /api/v1/members/{id} 和 /api/v1/admin/meta_user/profile 兩種 API
  */
 export interface BackendMember {
-  id: string;
-  username: string;
-  real_name: string;
+  id: string | number;
+  username?: string;
+  real_name?: string;
   tags?: BackendTag[];
   phone?: string;
   email?: string;
   gender?: string;
   birthday?: string;
-  created_at: string;
+  created_at?: string;
   last_chat_time?: string;
   last_interaction_at?: string;
+  // LINE 渠道
   line_uid?: string;
   line_display_name?: string;
   line_avatar?: string;
   channel_id?: string;
+  // Facebook 渠道
+  fb_customer_id?: string | number;
+  fb_customer_name?: string;
+  fb_avatar?: string;
+  // Webchat 渠道
+  webchat_uid?: string;
+  webchat_name?: string;
+  webchat_avatar?: string;
+  // 其他
   join_source?: string;
   id_number?: string;
   residence?: string;
   passport_number?: string;
   internal_note?: string;
   name?: string;
+  gpt_enabled?: boolean;
+  // Meta API 額外欄位
+  channel?: {
+    customer_id: number;
+    channel: string;
+    channel_name: string;
+    channel_avatar?: string;
+    source_name?: string;
+  };
 }
 
 /**

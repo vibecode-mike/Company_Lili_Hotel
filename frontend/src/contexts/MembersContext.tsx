@@ -319,9 +319,9 @@ export function MembersProvider({ children }: MembersProviderProps) {
     }
 
     try {
-      // 使用 apiGet 自動處理 token 和 401 重試
-      const platformParam = platform === 'Facebook' ? `?platform=${encodeURIComponent(platform)}` : '';
-      const response = await apiGet(`/api/v1/members/${id}${platformParam}`);
+      // 使用新的 meta_user API（支援 tag_type 格式）
+      const channelParam = platform ? `&channel=${encodeURIComponent(platform)}` : '';
+      const response = await apiGet(`/api/v1/admin/meta_user/profile?customer_id=${id}${channelParam}`);
 
       if (!response.ok) {
         throw new Error('獲取會員詳情失敗');
