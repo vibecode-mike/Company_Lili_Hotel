@@ -321,16 +321,25 @@ export function MembersProvider({ children }: MembersProviderProps) {
     try {
       // 使用新的 meta_user API（支援 tag_type 格式）
       const channelParam = platform ? `&channel=${encodeURIComponent(platform)}` : '';
-      const response = await apiGet(`/api/v1/admin/meta_user/profile?customer_id=${id}${channelParam}`);
+      const apiUrl = `/api/v1/admin/meta_user/profile?customer_id=${id}${channelParam}`;
+      console.log('[fetchMemberById] 呼叫 API:', apiUrl);
+
+      const response = await apiGet(apiUrl);
 
       if (!response.ok) {
+        console.error('[fetchMemberById] API 回應錯誤:', response.status, response.statusText);
         throw new Error('獲取會員詳情失敗');
       }
 
       const result = await response.json();
       const memberData = result.data;
+      console.log('[fetchMemberById] API 回應資料:', memberData);
+      console.log('[fetchMemberById] tags:', memberData?.tags);
 
       const transformedMember = transformBackendMember(memberData);
+      console.log('[fetchMemberById] 轉換後 memberTags:', transformedMember.memberTags);
+      console.log('[fetchMemberById] 轉換後 interactionTags:', transformedMember.interactionTags);
+      console.log('[fetchMemberById] 轉換後 tagDetails:', transformedMember.tagDetails);
 
       // Update the member in the members array if it exists
       setMembers(prev => {

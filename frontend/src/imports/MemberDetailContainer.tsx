@@ -1807,10 +1807,10 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
                 <ModalTitleContent8 />
                 <div className="flex flex-wrap gap-x-3 gap-y-2 items-start content-start relative min-w-0 max-w-full" data-name="Container">
                   {(member?.tagDetails || [])
-                    .filter(tag => tag.type === 'member')
+                    .filter(tag => tag.type === 'member' || (tag as any).tag_type === 1)
                     .map((tag, index) => (
                       <div key={index} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-                        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-medium grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[14px] text-center">{tag.name}</p>
+                        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-medium grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[14px] text-center">{tag.name || (tag as any).tag}</p>
                       </div>
                     ))}
                 </div>
@@ -1821,14 +1821,14 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
                 <ModalTitleContent9 />
                 <div className="flex flex-wrap gap-x-3 gap-y-2 items-start content-start relative min-w-0 max-w-full" data-name="Container">
                   {(member?.tagDetails || [])
-                    .filter(tag => tag.type === 'interaction')
+                    .filter(tag => tag.type === 'interaction' || (tag as any).tag_type === 2)
                     .map((tag, index) => {
                       // 互動標籤統一使用藍色
                       const bgColor = 'bg-[#f0f6ff]';
                       const textColor = 'text-[#0f6beb]';
                       return (
                         <div key={index} className={`${bgColor} box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0`} data-name="Tag">
-                          <p className={`basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-medium grow leading-[1.5] min-h-px min-w-px relative shrink-0 ${textColor} text-[14px] text-center`}>{tag.name}</p>
+                          <p className={`basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-medium grow leading-[1.5] min-h-px min-w-px relative shrink-0 ${textColor} text-[14px] text-center`}>{tag.name || (tag as any).tag}</p>
                         </div>
                       );
                     })}
