@@ -317,6 +317,29 @@ class FbMessageClient:
             jwt_token=jwt_token,
         )
 
+    async def update_keyword(self, keyword_id: int, enabled: bool, jwt_token: str) -> Dict[str, Any]:
+        """更新關鍵字狀態 (PATCH /meta_page/message/auto_template/keyword)"""
+        headers = self._auth_headers(jwt_token)
+        payload = {"keyword_id": keyword_id, "enabled": enabled}
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                response = await client.patch(
+                    f"{self.base_url}/api/v1/admin/meta_page/message/auto_template/keyword",
+                    json=payload,
+                    headers=headers,
+                )
+                response.raise_for_status()
+                result = response.json()
+                logger.info(f"FB keyword PATCH: id={keyword_id}, enabled={enabled}")
+                return {"ok": True, **result}
+            except httpx.HTTPStatusError as e:
+                logger.error(f"FB keyword PATCH error: {e.response.status_code} - {e.response.text}")
+                return {"ok": False, "error": f"API error: {e.response.status_code}"}
+            except httpx.RequestError as e:
+                logger.error(f"FB keyword PATCH request error: {e}")
+                return {"ok": False, "error": str(e)}
+
     async def delete_reply(self, reply_id: int, jwt_token: str) -> Dict[str, Any]:
         """刪除訊息 (DELETE /meta_page/message/auto_template/Reply/{id})"""
         return await self._delete_resource(

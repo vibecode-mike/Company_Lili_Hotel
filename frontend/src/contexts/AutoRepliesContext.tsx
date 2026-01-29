@@ -125,6 +125,7 @@ interface AutoRepliesContextType {
   saveAutoReply: (payload: AutoReplyPayload, id?: string) => Promise<SaveAutoReplyResult>;
   removeAutoReply: (id: string) => Promise<void>;
   activateDuplicateKeyword: (keywordId: number) => Promise<void>;
+  activateFbDuplicateKeyword: (keywordId: number) => Promise<void>;
   deleteFbKeyword: (keywordId: number) => Promise<void>;
   deleteFbMessage: (textId: number) => Promise<void>;
   deleteFbAutoReply: (basicId: number) => Promise<void>;
@@ -596,6 +597,36 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
     }
   }, [fetchAutoReplies]);
 
+  const activateFbDuplicateKeyword = useCallback(async (keywordId: number) => {
+    const jwtToken = getJwtToken();
+    if (!jwtToken) {
+      const error = new Error('FB 授權已過期，請重新登入');
+      toast.error(error.message);
+      throw error;
+    }
+
+    try {
+      const url = `/api/v1/admin/meta_page/message/auto_template/keyword?jwt_token=${encodeURIComponent(jwtToken)}`;
+      const response = await apiPatch(url, {
+        keyword_id: keywordId,
+        enabled: true  // 啟用此關鍵字（使其成為生效版本）
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => null);
+        throw new Error(errData?.detail || errData?.message || '更新 FB 關鍵字失敗');
+      }
+
+      await fetchAutoReplies();
+      toast.success('標籤已更新');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '更新 FB 關鍵字失敗';
+      console.error('激活 FB 重複關鍵字錯誤:', err);
+      toast.error(message);
+      throw err;
+    }
+  }, [fetchAutoReplies]);
+
   // 共用的 FB API 刪除函數（含錯誤處理）
   const deleteFbResource = useCallback(async (
     endpoint: string,
@@ -687,6 +718,7 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
     saveAutoReply,
     removeAutoReply,
     activateDuplicateKeyword,
+    activateFbDuplicateKeyword,
     deleteFbKeyword,
     deleteFbMessage,
     deleteFbAutoReply,
@@ -706,6 +738,7 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
     saveAutoReply,
     removeAutoReply,
     activateDuplicateKeyword,
+    activateFbDuplicateKeyword,
     deleteFbKeyword,
     deleteFbMessage,
     deleteFbAutoReply,

@@ -1,4 +1,4 @@
-import { useMemo, useState, memo } from 'react';
+import { useMemo, useState, memo, useCallback } from 'react';
 import AutoReplyTableStyled, { AutoReplyData } from './AutoReplyTableStyled';
 import svgPaths from "../imports/svg-icons-common";
 import { PageWithSidebar } from './Sidebar';
@@ -82,11 +82,11 @@ const CancelCircleIcon = memo(function CancelCircleIcon({ onClick }: { onClick: 
 export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNavigateToMembers, onNavigateToSettings }: AutoReplyProps) {
   const { params, navigate } = useNavigation();
   const [searchTerm, setSearchTerm] = useState('');
-  const { autoReplies, isLoading, error, toggleAutoReply, activateDuplicateKeyword, fetchAutoReplies } = useAutoReplies();
+  const { autoReplies, isLoading, error, toggleAutoReply, activateDuplicateKeyword, activateFbDuplicateKeyword, fetchAutoReplies } = useAutoReplies();
 
   // 重複關鍵字確認彈窗狀態
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
-  const [selectedKeyword, setSelectedKeyword] = useState<{ id: number; keyword: string } | null>(null);
+  const [selectedKeyword, setSelectedKeyword] = useState<{ id: number; keyword: string; isFb: boolean } | null>(null);
   const [isActivating, setIsActivating] = useState(false);
 
   // Toggle 衝突確認彈窗狀態
@@ -142,10 +142,12 @@ export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNav
     });
   };
 
-  const closeEditor = () => {
+  const closeEditor = useCallback(() => {
+    // 重新獲取最新資料，確保列表即時更新
+    fetchAutoReplies();
     // 清除 URL 參數回到列表頁面
     navigate('auto-reply', {});
-  };
+  }, [fetchAutoReplies, navigate]);
 
   // 檢查是否為衝突結果
   const isConflictResult = (result: unknown): result is AutoReplyConflict => {
@@ -195,8 +197,9 @@ export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNav
   };
 
   // 處理重複關鍵字點擊
-  const handleDuplicateKeywordClick = (keywordId: number, keyword: string) => {
-    setSelectedKeyword({ id: keywordId, keyword });
+  const handleDuplicateKeywordClick = (keywordId: number, keyword: string, autoReplyId: string) => {
+    const isFb = autoReplyId.startsWith('fb-');
+    setSelectedKeyword({ id: keywordId, keyword, isFb });
     setShowDuplicateDialog(true);
   };
 
@@ -205,7 +208,11 @@ export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNav
     if (!selectedKeyword) return;
     setIsActivating(true);
     try {
-      await activateDuplicateKeyword(selectedKeyword.id);
+      if (selectedKeyword.isFb) {
+        await activateFbDuplicateKeyword(selectedKeyword.id);
+      } else {
+        await activateDuplicateKeyword(selectedKeyword.id);
+      }
       setShowDuplicateDialog(false);
       // 延遲清除 selectedKeyword，等待 Dialog 關閉動畫完成
       setTimeout(() => setSelectedKeyword(null), 200);

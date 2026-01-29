@@ -29,18 +29,20 @@ interface AutoReplyTableProps {
   data: AutoReplyData[];
   onRowClick?: (id: string) => void;
   onToggleStatus?: (id: string, nextState: boolean) => void;
-  onDuplicateKeywordClick?: (keywordId: number, keyword: string) => void;
+  onDuplicateKeywordClick?: (keywordId: number, keyword: string, autoReplyId: string) => void;
 }
 
 // 重複關鍵字標籤組件（帶 Portal Tooltip）
 function DuplicateKeywordTag({
   id,
   keyword,
+  autoReplyId,
   onUpdateClick,
 }: {
   id?: number;
   keyword: string;
-  onUpdateClick?: (keywordId: number, keyword: string) => void;
+  autoReplyId: string;
+  onUpdateClick?: (keywordId: number, keyword: string, autoReplyId: string) => void;
 }) {
   const [showTooltip, setShowTooltip] = useState(false);
   const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
@@ -110,7 +112,7 @@ function DuplicateKeywordTag({
             onClick={(e) => {
               e.stopPropagation();
               if (id && onUpdateClick) {
-                onUpdateClick(id, keyword);
+                onUpdateClick(id, keyword, autoReplyId);
                 setShowTooltip(false);
               }
             }}
@@ -307,7 +309,7 @@ const AutoReplyRow = memo(function AutoReplyRow({
   isLast: boolean;
   onRowClick: (id: string) => void;
   onToggleStatus: (event: React.MouseEvent, id: string, status: AutoReplyData['status']) => void;
-  onDuplicateKeywordClick?: (keywordId: number, keyword: string) => void;
+  onDuplicateKeywordClick?: (keywordId: number, keyword: string, autoReplyId: string) => void;
 }) {
   const EditButton = () => (
     <div onClick={() => onRowClick(row.id)}>
@@ -347,6 +349,7 @@ const AutoReplyRow = memo(function AutoReplyRow({
                       key={idx}
                       id={kwObj.id}
                       keyword={kwObj.keyword}
+                      autoReplyId={row.id}
                       onUpdateClick={onDuplicateKeywordClick}
                     />
                   ) : (
