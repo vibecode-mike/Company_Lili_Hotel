@@ -197,7 +197,7 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
           nextAccounts.push({
             id: data.id?.toString() || 'line-1',
             platform: 'line',
-            name: data.basic_id ? `@${data.basic_id}` : '官方帳號',
+            name: data.channel_name || '官方帳號',
             channelId: data.channel_id,
             status: 'connected',
             lastVerified: '-',
