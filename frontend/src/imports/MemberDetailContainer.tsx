@@ -37,14 +37,18 @@ const mapApiMemberToMemberData = (apiMember: BackendMember, fallback?: MemberDat
   const rawTags = Array.isArray(apiMember?.tags)
     ? apiMember.tags
     : fallback?.tagDetails || [];
+
+  // 支援兩種格式:
+  // 1. 標準格式: type='member'|'interaction', name
+  // 2. Meta 格式: tag_type=1|2, tag
   const memberTags =
     rawTags
-      .filter((tag: BackendTag) => tag?.type === 'member')
-      .map((tag: BackendTag) => tag.name) || [];
+      .filter((tag: BackendTag) => tag?.type === 'member' || tag?.tag_type === 1)
+      .map((tag: BackendTag) => tag.name || tag.tag || '') || [];
   const interactionTags =
     rawTags
-      .filter((tag: BackendTag) => tag?.type === 'interaction')
-      .map((tag: BackendTag) => tag.name) || [];
+      .filter((tag: BackendTag) => tag?.type === 'interaction' || tag?.tag_type === 2)
+      .map((tag: BackendTag) => tag.name || tag.tag || '') || [];
   const combinedTags = Array.from(new Set([...(memberTags || []), ...(interactionTags || [])]));
 
   const displayName = apiMember?.line_display_name;
@@ -1311,21 +1315,17 @@ function Container6({ member, onMemberUpdate }: { member?: MemberData; onMemberU
   );
 }
 
-function Container7({ member, propChannelName }: { member?: MemberData; propChannelName?: string | null }) {
+function Container7({ member, platform }: { member?: MemberData; platform?: ChatPlatform }) {
   const [channelName, setChannelName] = React.useState<string>('');
-  const joinSource = member?.join_source || 'LINE';
   const { getDisplayMemberById } = useMembers();
 
-  React.useEffect(() => {
-    // 優先使用傳入的 propChannelName
-    if (propChannelName) {
-      setChannelName(propChannelName);
-      return;
-    }
+  // 根據當前選擇的渠道 (platform) 決定顯示哪個來源，而非 join_source
+  const displayPlatform = platform || member?.join_source || 'LINE';
 
-    // 嘗試從 displayMembers 獲取正確的渠道名稱
-    const normalizedSource = joinSource?.toLowerCase() || 'line';
-    const isFacebook = normalizedSource === 'facebook' || normalizedSource === 'fb';
+  React.useEffect(() => {
+    // 根據當前選擇的 platform 決定顯示哪個渠道名稱
+    const normalizedPlatform = displayPlatform?.toLowerCase() || 'line';
+    const isFacebook = normalizedPlatform === 'facebook' || normalizedPlatform === 'fb';
 
     if (isFacebook && member?.id) {
       // FB 會員：嘗試從 displayMembers 獲取（可能需要 customer_id）
@@ -1400,7 +1400,7 @@ function Container7({ member, propChannelName }: { member?: MemberData; propChan
     };
 
     fetchChannelInfo();
-  }, [joinSource, propChannelName, member?.id, getDisplayMemberById]);
+  }, [displayPlatform, member?.id, getDisplayMemberById]);
 
   return (
     <div className="content-stretch flex items-center relative shrink-0 w-full" data-name="Container">
@@ -1411,7 +1411,7 @@ function Container7({ member, propChannelName }: { member?: MemberData; propChan
       </div>
       <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0" data-name="Modal/Title&Content">
         <div className="flex items-center gap-2 font-['Noto_Sans_TC:Regular',sans-serif] font-normal relative flex-wrap">
-          <MemberSourceIconSmall source={member?.join_source || 'LINE'} />
+          <MemberSourceIconSmall source={displayPlatform} />
           <span className="text-[14px] text-[#383838]">
             {channelName}
           </span>
@@ -1477,10 +1477,10 @@ function Container10({ member }: { member?: MemberData }) {
   );
 }
 
-function Container11({ member, propChannelName }: { member?: MemberData; propChannelName?: string | null }) {
+function Container11({ member, platform }: { member?: MemberData; platform?: ChatPlatform }) {
   return (
     <div className="content-stretch flex flex-col gap-[12px] items-start relative shrink-0 w-full" data-name="Container">
-      <Container7 member={member} propChannelName={propChannelName} />
+      <Container7 member={member} platform={platform} />
       <Container8 member={member} />
       <Container9 member={member} />
       <Container10 member={member} />
@@ -1488,7 +1488,7 @@ function Container11({ member, propChannelName }: { member?: MemberData; propCha
   );
 }
 
-function Container12({ member, onMemberUpdate, propChannelName }: { member?: MemberData; onMemberUpdate?: (member: MemberData) => void; propChannelName?: string | null }) {
+function Container12({ member, onMemberUpdate, platform }: { member?: MemberData; onMemberUpdate?: (member: MemberData) => void; platform?: ChatPlatform }) {
   return (
     <div className="content-stretch flex flex-col gap-[20px] items-start relative shrink-0 w-full" data-name="Container">
       <Container6 member={member} onMemberUpdate={onMemberUpdate} />
@@ -1499,18 +1499,18 @@ function Container12({ member, onMemberUpdate, propChannelName }: { member?: Mem
           </svg>
         </div>
       </div>
-      <Container11 member={member} propChannelName={propChannelName} />
+      <Container11 member={member} platform={platform} />
     </div>
   );
 }
 
-function Container13({ member, onMemberUpdate, propChannelName }: { member?: MemberData; onMemberUpdate?: (member: MemberData) => void; propChannelName?: string | null }) {
+function Container13({ member, onMemberUpdate, platform }: { member?: MemberData; onMemberUpdate?: (member: MemberData) => void; platform?: ChatPlatform }) {
   return (
     <div className="relative rounded-[20px] shrink-0 w-full" data-name="Container">
       <div aria-hidden="true" className="absolute border border-[#e1ebf9] border-solid inset-0 pointer-events-none rounded-[20px]" />
       <div className="size-full">
         <div className="box-border content-stretch flex flex-col gap-[32px] items-start p-[16px] md:p-[28px] relative w-full">
-          <Container12 member={member} onMemberUpdate={onMemberUpdate} propChannelName={propChannelName} />
+          <Container12 member={member} onMemberUpdate={onMemberUpdate} platform={platform} />
         </div>
       </div>
     </div>
@@ -1720,6 +1720,12 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
   const [interactionTags, setInteractionTags] = useState<string[]>(member?.interactionTags || []); // ✅ 使用真實數據
   const { showToast } = useToast();
   const { logout } = useAuth();
+  const { fetchMemberById } = useMembers();
+
+  React.useEffect(() => {
+    setMemberTags(member?.memberTags || []);
+    setInteractionTags(member?.interactionTags || []);
+  }, [member?.memberTags, member?.interactionTags]);
 
   const handleEdit = () => {
     setIsModalOpen(true);
@@ -1768,23 +1774,12 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
         return false;
       }
 
-      // 保存成功後，重新獲取最新的會員資料
-      const memberResponse = await fetch(`/api/v1/members/${member.id}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-
-      if (memberResponse.ok) {
-        const memberData = await memberResponse.json();
-        const updatedMember = memberData.data;
-
-        // 轉換後端數據格式為前端格式
-        const transformedMember = mapApiMemberToMemberData(updatedMember, member);
-
-        // 更新本地狀態
+      // 保存成功後，重新獲取最新的會員資料（同步列表/內頁/聊天室）
+      const refreshedMember = await fetchMemberById(member.id);
+      if (refreshedMember) {
+        const transformedMember = mapMemberToMemberData(refreshedMember, member);
         setMemberTags(transformedMember.memberTags || []);
         setInteractionTags(transformedMember.interactionTags || []);
-
-        // 通知父組件更新
         onMemberUpdate?.(transformedMember);
       } else {
         // 如果獲取失敗，至少更新本地狀態
@@ -1987,10 +1982,10 @@ function Container24({ member, onMemberUpdate }: { member?: MemberData; onMember
   );
 }
 
-function Container25({ member, onMemberUpdate, propChannelName }: { member?: MemberData; onMemberUpdate?: (member: MemberData) => void; propChannelName?: string | null }) {
+function Container25({ member, onMemberUpdate, platform }: { member?: MemberData; onMemberUpdate?: (member: MemberData) => void; platform?: ChatPlatform }) {
   return (
     <div className="basis-0 content-stretch flex flex-col gap-[32px] grow items-start min-h-px min-w-px relative shrink-0" data-name="Container">
-      <Container13 member={member} onMemberUpdate={onMemberUpdate} propChannelName={propChannelName} />
+      <Container13 member={member} onMemberUpdate={onMemberUpdate} platform={platform} />
       <Container20 member={member} onMemberUpdate={onMemberUpdate} />
       <Container24 member={member} onMemberUpdate={onMemberUpdate} />
     </div>
@@ -2003,19 +1998,17 @@ function Container26({
   onMemberUpdate,
   fallbackMemberName,
   platform,
-  propChannelName,
 }: {
   member?: MemberData;
   onNavigate?: (page: string, params?: { memberId?: string; memberName?: string; platform?: ChatPlatform }) => void;
   onMemberUpdate?: (member: MemberData) => void;
   fallbackMemberName?: string;
   platform?: ChatPlatform;
-  propChannelName?: string | null;
 }) {
   return (
     <div className="content-stretch flex gap-[32px] items-start relative shrink-0 w-full" data-name="Container">
       <Container2 member={member} onNavigate={onNavigate} fallbackMemberName={fallbackMemberName} platform={platform} />
-      <Container25 member={member} onMemberUpdate={onMemberUpdate} propChannelName={propChannelName} />
+      <Container25 member={member} onMemberUpdate={onMemberUpdate} platform={platform} />
     </div>
   );
 }
@@ -2250,14 +2243,12 @@ function MainContent({
   onMemberUpdate,
   fallbackMemberName,
   platform,
-  propChannelName,
 }: {
   member?: MemberData;
   onNavigate?: (page: string, params?: { memberId?: string; memberName?: string; platform?: ChatPlatform }) => void;
   onMemberUpdate?: (member: MemberData) => void;
   fallbackMemberName?: string;
   platform?: ChatPlatform;
-  propChannelName?: string | null;
 }) {
   return (
     <div className="relative shrink-0 w-full" data-name="Main Content">
@@ -2274,7 +2265,6 @@ function MainContent({
             onMemberUpdate={onMemberUpdate}
             fallbackMemberName={fallbackMemberName}
             platform={platform}
-            propChannelName={propChannelName}
           />
           <ConsumptionRecordsSection />
         </div>
@@ -2290,7 +2280,6 @@ export default function MainContainer({
   fallbackMemberName,
   platform,
   autoRefresh = true,
-  channelName: propChannelName,
 }: {
   onBack?: () => void;
   member?: MemberData;
@@ -2298,8 +2287,6 @@ export default function MainContainer({
   fallbackMemberName?: string;
   platform?: ChatPlatform;
   autoRefresh?: boolean;
-  /** 渠道名稱（粉專名/頻道名），優先使用此值 */
-  channelName?: string | null;
 } = {}) {
   const [currentMember, setCurrentMember] = useState<MemberData | undefined>(member);
   const { fetchMemberById } = useMembers();
@@ -2401,7 +2388,6 @@ export default function MainContainer({
         onMemberUpdate={(updatedMember) => setCurrentMember(updatedMember)}
         fallbackMemberName={fallbackMemberName}
         platform={platform}
-        propChannelName={propChannelName}
       />
     </div>
   );

@@ -63,19 +63,20 @@ const formatDateTime = (value?: string | null): string => {
 
 const transformBackendMember = (item: BackendMember): Member => {
   // 保留完整標籤資訊（包含 source）
+  // 支援兩種格式: type='member'|'interaction' 或 tag_type=1|2
   const tagDetails: (TagInfo & { source?: string })[] = (item.tags || []).map((tag: BackendTag & { source?: string }) => ({
     id: tag.id || 0,
-    name: tag.name,
-    type: tag.type,
+    name: tag.name || tag.tag || '',
+    type: tag.type || (tag.tag_type === 1 ? 'member' : tag.tag_type === 2 ? 'interaction' : 'member'),
     source: tag.source,
   }));
 
   const memberTags = (item.tags || [])
-    .filter((tag: BackendTag) => tag.type === 'member')
-    .map((tag: BackendTag) => tag.name);
+    .filter((tag: BackendTag) => tag.type === 'member' || tag.tag_type === 1)
+    .map((tag: BackendTag) => tag.name || tag.tag || '');
   const interactionTags = (item.tags || [])
-    .filter((tag: BackendTag) => tag.type === 'interaction')
-    .map((tag: BackendTag) => tag.name);
+    .filter((tag: BackendTag) => tag.type === 'interaction' || tag.tag_type === 2)
+    .map((tag: BackendTag) => tag.name || tag.tag || '');
   const combinedTags = Array.from(new Set([...(memberTags || []), ...(interactionTags || [])]));
 
   const displayName = item.line_display_name || '';
@@ -189,7 +190,7 @@ export function MembersProvider({ children }: MembersProviderProps) {
             phone: member.phone || null,
             createTime: member.created_at || null,
             lastChatTime: member.last_interaction_at || null,
-            tags: (member.tags || []).map((t: BackendTag) => t.name),
+            tags: (member.tags || []).map((t: BackendTag) => t.name || t.tag || ''),
             // 未回覆狀態
             isUnanswered: member.is_unanswered || false,
             unansweredSince: member.unanswered_since || null,

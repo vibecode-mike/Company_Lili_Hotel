@@ -25,6 +25,8 @@ from app.api.v1 import (
     chat_messages,
     line_channels,
     fb_channels,
+    admin_meta_page,
+    admin_meta_user,
     websocket,
     line_notify,
     chat_session,
@@ -47,6 +49,16 @@ api_router.include_router(consumption_records.router, prefix="/consumption_recor
 api_router.include_router(chat_messages.router, prefix="", tags=["聊天紀錄"])
 api_router.include_router(line_channels.router, prefix="/line_channels", tags=["LINE 頻道設定"])
 api_router.include_router(fb_channels.router, prefix="/fb_channels", tags=["Facebook 頻道設定"])
+api_router.include_router(
+    admin_meta_page.router,
+    prefix="/admin/meta_page/message/auto_template",
+    tags=["Facebook 自動回應 (Proxy)"],
+)
+api_router.include_router(
+    admin_meta_user.router,
+    prefix="/admin/meta_user",
+    tags=["Meta 會員管理"],
+)
 api_router.include_router(websocket.router, prefix="", tags=["WebSocket 即時通訊"])
 api_router.include_router(line_notify.router, prefix="", tags=["LINE 訊息通知"])
 api_router.include_router(chat_session.router, prefix="", tags=["聊天 Session"])

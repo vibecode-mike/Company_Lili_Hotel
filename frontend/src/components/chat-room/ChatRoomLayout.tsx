@@ -329,27 +329,28 @@ export default function ChatRoomLayout({
     return { ...displayMember, lastChatTime: latestChatTimestamp };
   }, [displayMember, latestChatTimestamp]);
 
-  // 獲取渠道名稱（粉專名/頻道名）- 優先從 displayMembers 獲取
+  // 獲取渠道名稱（粉專名/頻道名）- 根據會員的 join_source 決定
   const panelChannelName = useMemo(() => {
-    // 嘗試從 displayMembers 獲取 channelName
     const targetId = member?.id?.toString() || memberId;
-    if (targetId) {
-      // FB 會員 ID 格式：fb-{customer_id}
-      const fbCustomerId = (member as any)?.fb_customer_id || (member as any)?.channelUid;
-      if (fbCustomerId && currentPlatform === 'Facebook') {
-        const displayMemberData = getDisplayMemberById(`fb-${fbCustomerId}`);
-        if (displayMemberData?.channelName) {
-          return displayMemberData.channelName;
-        }
-      }
-      // LINE 會員
-      const displayMemberData = getDisplayMemberById(`line-${targetId}`);
-      if (displayMemberData?.channelName) {
-        return displayMemberData.channelName;
-      }
+    if (!targetId) return null;
+
+    const memberAny = member as Record<string, unknown> | undefined;
+    const joinSource = String(memberAny?.join_source || '').toLowerCase();
+    const fbCustomerId = memberAny?.fb_customer_id || memberAny?.channelUid;
+    const isFacebook = joinSource === 'facebook' || joinSource === 'fb';
+
+    // Facebook 會員：顯示 FB 粉專名稱
+    if (isFacebook && fbCustomerId) {
+      return getDisplayMemberById(`fb-${fbCustomerId}`)?.channelName ?? null;
     }
+
+    // LINE 會員：顯示 LINE 頻道名稱
+    if (joinSource === 'line' || !joinSource) {
+      return getDisplayMemberById(`line-${targetId}`)?.channelName ?? null;
+    }
+
     return null;
-  }, [member?.id, memberId, (member as any)?.fb_customer_id, (member as any)?.channelUid, currentPlatform, getDisplayMemberById]);
+  }, [member, memberId, getDisplayMemberById]);
 
   // Fetch full member details when component mounts
   useEffect(() => {
@@ -811,7 +812,18 @@ export default function ChatRoomLayout({
         return false;
       }
 
-      // API 成功後更新本地狀態
+      // API 成功後刷新會員資料，確保列表/內頁/聊天室一致
+      if (member?.id) {
+        const refreshedMember = await fetchMemberById(member.id);
+        if (refreshedMember) {
+          setMember(refreshedMember);
+          setMemberTags(refreshedMember.memberTags || []);
+          setInteractionTags(refreshedMember.interactionTags || []);
+          return true;
+        }
+      }
+
+      // 若刷新失敗，至少更新本地狀態
       setMemberTags(newMemberTags);
       setInteractionTags(newInteractionTags);
       return true;
