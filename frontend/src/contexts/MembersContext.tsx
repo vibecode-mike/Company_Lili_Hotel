@@ -118,6 +118,74 @@ const transformBackendMember = (item: BackendMember): Member => {
   };
 };
 
+/**
+ * 轉換外部 FB API 回應格式
+ * 外部 API 使用 tag_type: 1=會員標籤, 2=互動標籤
+ */
+const transformExternalMember = (data: {
+  id: number;
+  name?: string;
+  email?: string;
+  create_time?: number;
+  update_time?: number;
+  channel?: Array<{ customer_id: number; channel: string; channel_name: string }>;
+  tags?: Array<{ customer_id: number; tag: string; tag_type: 1 | 2 }>;
+}): Member => {
+  const tags = data.tags || [];
+
+  const memberTags = tags
+    .filter((t) => t.tag_type === 1)
+    .map((t) => t.tag);
+
+  const interactionTags = tags
+    .filter((t) => t.tag_type === 2)
+    .map((t) => t.tag);
+
+  const tagDetails: TagInfo[] = tags.map((t) => ({
+    id: 0,
+    name: t.tag,
+    type: t.tag_type === 1 ? 'member' : 'interaction',
+  }));
+
+  const channelInfo = data.channel?.[0];  // 取第一個渠道
+
+  return {
+    id: String(data.id),
+    username: channelInfo?.channel_name || data.name || '未命名會員',
+    realName: data.name || '',
+    tags: [...memberTags, ...interactionTags],
+    memberTags,
+    interactionTags,
+    tagDetails,
+    phone: '',
+    email: data.email || '',
+    gender: '',
+    birthday: '',
+    createTime: data.create_time ? formatDateTime(new Date(data.create_time * 1000).toISOString()) : '',
+    lastChatTime: data.update_time ? formatDateTime(new Date(data.update_time * 1000).toISOString()) : '',
+    // LINE 渠道 (FB 會員沒有)
+    lineUid: '',
+    lineAvatar: '',
+    line_display_name: '',
+    channel_id: '',
+    // Facebook 渠道
+    fb_customer_id: String(data.id),
+    fb_customer_name: channelInfo?.channel_name || '',
+    fb_avatar: '',
+    // Webchat 渠道
+    webchat_uid: '',
+    webchat_name: '',
+    webchat_avatar: '',
+    // 其他
+    join_source: 'Facebook',
+    id_number: '',
+    residence: '',
+    passport_number: '',
+    internal_note: '',
+    gpt_enabled: true,
+  };
+};
+
 // Provider Props
 interface MembersProviderProps {
   children: ReactNode;
@@ -312,36 +380,71 @@ export function MembersProvider({ children }: MembersProviderProps) {
   }, [displayMembers]);
 
   const fetchMemberById = useCallback(async (id: string, platform?: ChatPlatform): Promise<Member | null> => {
-    const token = getAuthToken();
-    if (!token) {
-      console.warn('未登入，無法獲取會員詳情');
-      return null;
-    }
-
     try {
-      // 使用新的 meta_user API（支援 tag_type 格式）
-      const channelParam = platform ? `&channel=${encodeURIComponent(platform)}` : '';
-      const apiUrl = `/api/v1/admin/meta_user/profile?customer_id=${id}${channelParam}`;
-      console.log('[fetchMemberById] 呼叫 API:', apiUrl);
+      let memberData: unknown;
 
-      const response = await apiGet(apiUrl);
+      if (platform === 'Facebook') {
+        // FB: external API
+        const fbApiBaseUrl = (import.meta.env.VITE_FB_API_URL?.trim() || 'https://api-youth-tycg.star-bit.io').replace(/\/+$/, '');
+        const jwtToken = localStorage.getItem('jwt_token');
 
-      if (!response.ok) {
-        console.error('[fetchMemberById] API 回應錯誤:', response.status, response.statusText);
-        throw new Error('獲取會員詳情失敗');
+        if (!jwtToken) {
+          console.warn('[fetchMemberById] FB: no JWT token');
+          return null;
+        }
+
+        const apiUrl = `${fbApiBaseUrl}/api/v1/admin/meta_user/profile?customer_id=${id}`;
+        console.log('[fetchMemberById] FB API:', apiUrl);
+
+        const response = await fetch(apiUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${jwtToken}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          console.error('[fetchMemberById] FB API error:', response.status, response.statusText);
+          throw new Error('Failed to fetch FB member');
+        }
+
+        const result = await response.json();
+        memberData = result.data;
+      } else {
+        // LINE/Webchat: internal API
+        const token = getAuthToken();
+        if (!token) {
+          console.warn('[fetchMemberById] LINE/Webchat: not logged in');
+          return null;
+        }
+
+        const channelParam = platform ? `&channel=${encodeURIComponent(platform)}` : '';
+        const apiUrl = `/api/v1/admin/meta_user/profile?customer_id=${id}${channelParam}`;
+        console.log('[fetchMemberById] Internal API:', apiUrl);
+
+        const response = await apiGet(apiUrl);
+
+        if (!response.ok) {
+          console.error('[fetchMemberById] API error:', response.status, response.statusText);
+          throw new Error('Failed to fetch member');
+        }
+
+        const result = await response.json();
+        memberData = result.data;
       }
 
-      const result = await response.json();
-      const memberData = result.data;
-      console.log('[fetchMemberById] API 回應資料:', memberData);
-      console.log('[fetchMemberById] tags:', memberData?.tags);
+      if (!memberData) {
+        console.error('[fetchMemberById] No member data in response');
+        return null;
+      }
 
-      const transformedMember = transformBackendMember(memberData);
-      console.log('[fetchMemberById] 轉換後 memberTags:', transformedMember.memberTags);
-      console.log('[fetchMemberById] 轉換後 interactionTags:', transformedMember.interactionTags);
-      console.log('[fetchMemberById] 轉換後 tagDetails:', transformedMember.tagDetails);
+      const transformedMember = platform === 'Facebook'
+        ? transformExternalMember(memberData as Parameters<typeof transformExternalMember>[0])
+        : transformBackendMember(memberData as BackendMember);
 
-      // Update the member in the members array if it exists
+      console.log('[fetchMemberById] Transformed:', transformedMember);
+
       setMembers(prev => {
         const index = prev.findIndex(m => m.id === id);
         if (index !== -1) {
@@ -356,10 +459,10 @@ export function MembersProvider({ children }: MembersProviderProps) {
 
       return transformedMember;
     } catch (err) {
-      console.error('獲取會員詳情失敗:', err);
+      console.error('[fetchMemberById] Error:', err);
       return null;
     }
-  }, []);
+  }, [syncDisplayMemberTags]);
 
   const totalMembers = useMemo(() => members.length, [members]);
   const totalDisplayMembers = useMemo(() => displayMembers.length, [displayMembers]);
