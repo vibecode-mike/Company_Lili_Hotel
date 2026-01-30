@@ -166,7 +166,7 @@ function Container6({
             </div>
           </div>
           <div 
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[320px] cursor-pointer" 
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[260px] cursor-pointer" 
             data-name="Table/Title-atomic"
             onClick={() => onSortChange('tags')}
           >
@@ -271,10 +271,10 @@ function Container6({
               </svg>
             </div>
           </div>
-          <div className="basis-0 grow min-h-px min-w-[200px] relative shrink-0" data-name="Table/Title-atomic">
+          <div className="basis-0 grow min-h-px min-w-[160px] relative shrink-0" data-name="Table/Title-atomic">
             <div className="flex flex-row items-center size-full">
-              <div 
-                className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative w-full min-w-[200px] cursor-pointer"
+              <div
+                className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative w-full min-w-[160px] cursor-pointer"
                 onClick={() => onSortChange('lastChatTime')}
               >
                 <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
@@ -345,17 +345,17 @@ function MemberTags({ member }: { member: DisplayMember }) {
   // 如果沒有任何標籤，顯示 "-"
   if (allDisplayTags.length === 0) {
     return (
-      <div className="box-border flex flex-wrap gap-[4px] items-center justify-start px-[12px] py-0 relative shrink-0 w-[320px]" data-name="Table/List-atomic">
+      <div className="box-border flex flex-wrap gap-[4px] items-center justify-start px-[12px] py-0 relative shrink-0 w-[260px]" data-name="Table/List-atomic">
         <p className="text-[14px] text-[#6e6e6e] leading-[1.5]">-</p>
       </div>
     );
   }
 
   return (
-    <div className="box-border flex flex-wrap gap-[4px] items-center justify-start px-[12px] py-0 relative shrink-0 w-[320px]" data-name="Table/List-atomic">
+    <div className="box-border flex flex-wrap gap-[4px] items-center justify-start px-[12px] py-0 relative shrink-0 w-[260px] max-w-[260px]" data-name="Table/List-atomic">
       {allDisplayTags.map((tag, index) => (
-        <div key={index} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-          <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">{tag}</p>
+        <div key={index} className="bg-[#f0f6ff] box-border flex gap-[2px] items-center justify-center max-w-[80px] p-[4px] rounded-[8px]" data-name="Tag">
+          <p className="font-['Noto_Sans_TC:Regular',sans-serif] leading-[1.5] text-[#0f6beb] text-[16px] text-center truncate">{tag}</p>
         </div>
       ))}
     </div>
@@ -501,7 +501,7 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Displ
             <ChannelIcon channel={member.channel} channelName={member.channelName} />
           </div>
           {/* 最近聊天時間欄位內容 */}
-          <div className="box-border flex items-center justify-start px-[12px] py-0 relative shrink-0 min-w-[200px] grow" data-name="Table/List-atomic">
+          <div className="box-border flex items-center justify-start px-[12px] py-0 relative shrink-0 min-w-[160px] grow" data-name="Table/List-atomic">
             <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[#383838] text-[14px] leading-[1.5] whitespace-nowrap">
               {formatMemberDateTime(getLatestMemberChatTimestamp(member)) || '-'}
             </p>
@@ -516,7 +516,7 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Displ
           >
             <MessageIcon />
           </div>
-          <TextIconButton 
+          <TextIconButton
             text="詳細"
             icon={<ArrowRightIcon color="#0F6BEB" />}
             onClick={(e) => {
