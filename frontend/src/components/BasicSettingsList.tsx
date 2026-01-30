@@ -149,9 +149,11 @@ export const BasicSettingsList = memo(function BasicSettingsList({
         </div>
 
         {/* Table */}
-        <div className="content-stretch flex flex-col items-start relative rounded-[16px] shrink-0 w-full overflow-hidden">
-          {/* Table Header */}
-          <div className="bg-white relative w-full border-b border-[#ddd]">
+        <div className="content-stretch flex flex-col items-start relative rounded-[16px] shrink-0 w-full overflow-hidden bg-white">
+          {/* 垂直滾動容器 + Sticky 表頭 */}
+          <div className="max-h-[600px] overflow-y-auto table-scroll w-full">
+          {/* Table Header - Sticky */}
+          <div className="bg-white relative w-full border-b border-[#ddd] sticky top-0 z-10">
             <div className="flex flex-row items-center size-full">
               <div className="content-stretch flex items-center pb-[12px] pt-[16px] px-[12px] relative w-full">
                 {/* Column: 帳號 */}
@@ -212,7 +214,7 @@ export const BasicSettingsList = memo(function BasicSettingsList({
           {sortedAccounts.map((account, index) => (
             <div
               key={account.id}
-              className={`bg-white relative shrink-0 w-full ${
+              className={`bg-white relative shrink-0 w-full hover:bg-[#f6f9fd] transition-colors cursor-pointer ${
                 index !== sortedAccounts.length - 1 ? 'border-b border-[#ddd]' : ''
               }`}
             >
@@ -278,6 +280,7 @@ export const BasicSettingsList = memo(function BasicSettingsList({
               </div>
             </div>
           ))}
+          </div>
         </div>
       </div>
     </div>

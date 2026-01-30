@@ -546,24 +546,28 @@ function Table8Columns3Actions({
 }) {
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-name="Table/8 Columns+3 Actions">
-      {/* Table Container with Border - Fixed height container with horizontal scroll */}
-      <div className="bg-white rounded-[16px] w-full flex flex-col max-h-[600px] overflow-x-auto table-scroll">
-        {/* Table Header - Fixed */}
-        <div className="relative shrink-0 w-[1630px]">
-          <Container6 sortConfig={sortConfig} onSortChange={onSortChange} />
-        </div>
-        
-        {/* Table Body - Scrollable Container */}
-        <div className="w-[1630px] flex-1 table-scroll">
-          {members.map((member, index) => (
-            <MemberRow 
-              key={member.id} 
-              member={member} 
-              isLast={index === members.length - 1}
-              onOpenChat={onOpenChat}
-              onViewDetail={onViewDetail}
-            />
-          ))}
+      {/* 外層容器 - 水平滾動 */}
+      <div className="bg-white rounded-[16px] w-full overflow-x-auto table-scroll">
+        {/* 內層容器 - 最小寬度確保欄位對齊 */}
+        <div className="min-w-[1160px]">
+          {/* 垂直滾動容器 + Sticky 表頭 */}
+          <div className="max-h-[600px] overflow-y-auto table-scroll">
+            {/* Table Header - Sticky */}
+            <div className="sticky top-0 z-10">
+              <Container6 sortConfig={sortConfig} onSortChange={onSortChange} />
+            </div>
+
+            {/* Table Body */}
+            {members.map((member, index) => (
+              <MemberRow
+                key={member.id}
+                member={member}
+                isLast={index === members.length - 1}
+                onOpenChat={onOpenChat}
+                onViewDetail={onViewDetail}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </div>

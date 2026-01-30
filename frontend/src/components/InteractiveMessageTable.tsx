@@ -259,7 +259,7 @@ const MessageRow = memo(function MessageRow({
   const isEditHidden = message.status === '已發送';
 
   return (
-    <div className={`bg-white shrink-0 w-full relative ${isLast ? 'rounded-bl-[16px] rounded-br-[16px]' : ''}`}>
+    <div className={`bg-white shrink-0 w-full relative hover:bg-[#f6f9fd] transition-colors cursor-pointer ${isLast ? 'rounded-bl-[16px] rounded-br-[16px]' : ''}`}>
       <div
         aria-hidden="true"
         className={`absolute border-[#dddddd] ${isLast ? 'border-0' : 'border-[0px_0px_1px]'} border-solid inset-0 pointer-events-none ${isLast ? 'rounded-bl-[16px] rounded-br-[16px]' : ''}`}
@@ -419,27 +419,32 @@ export default function InteractiveMessageTable({ messages, onEdit, onViewDetail
 
   return (
     <div className="flex flex-col items-start shrink-0 w-full">
-      <div className="bg-white rounded-[16px] w-full flex flex-col max-h-[600px] overflow-x-auto table-scroll">
-        {/* 表頭 */}
-        <div className="shrink-0 w-[1300px]">
-          <TableHeader sortConfig={sortConfig} onSortChange={handleSort} statusFilter={statusFilter} />
-        </div>
+      {/* 外層容器 - 水平滾動 */}
+      <div className="bg-white rounded-[16px] w-full overflow-x-auto table-scroll">
+        {/* 內層容器 - 最小寬度確保欄位對齊 */}
+        <div className="min-w-[1300px]">
+          {/* 垂直滾動容器 + Sticky 表頭 */}
+          <div className="max-h-[600px] overflow-y-auto table-scroll">
+            {/* 表頭 - Sticky */}
+            <div className="sticky top-0 z-10">
+              <TableHeader sortConfig={sortConfig} onSortChange={handleSort} statusFilter={statusFilter} />
+            </div>
 
-        {/* 表格內容 */}
-        <div className="w-[1300px] flex-1 table-scroll">
-          {sortedMessages.length === 0 ? (
-            <EmptyStateRow />
-          ) : (
-            sortedMessages.map((message, index) => (
-              <MessageRow
-                key={message.id}
-                message={message}
-                isLast={index === sortedMessages.length - 1}
-                onEdit={onEdit}
-                onViewDetails={onViewDetails}
-              />
-            ))
-          )}
+            {/* 表格內容 */}
+            {sortedMessages.length === 0 ? (
+              <EmptyStateRow />
+            ) : (
+              sortedMessages.map((message, index) => (
+                <MessageRow
+                  key={message.id}
+                  message={message}
+                  isLast={index === sortedMessages.length - 1}
+                  onEdit={onEdit}
+                  onViewDetails={onViewDetails}
+                />
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>

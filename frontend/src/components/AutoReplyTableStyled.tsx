@@ -162,8 +162,8 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange }: { so
       <div className="flex flex-row items-center size-full">
         <div className="box-border content-stretch flex items-center pb-[12px] pt-[16px] pl-[12px] pr-[12px] relative w-full">
           {/* 訊息內容 */}
-          <div 
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[300px] cursor-pointer" 
+          <div
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[300px] cursor-pointer"
             onClick={() => onSortChange('content')}
           >
             <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
@@ -182,7 +182,7 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange }: { so
           </div>
 
           {/* 回應類型 */}
-          <div 
+          <div
             className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[140px] cursor-pointer"
             onClick={() => onSortChange('replyType')}
           >
@@ -202,7 +202,7 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange }: { so
           </div>
 
           {/* 關鍵字標籤 */}
-          <div 
+          <div
             className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[280px] cursor-pointer"
             onClick={() => onSortChange('keywords')}
           >
@@ -222,7 +222,7 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange }: { so
           </div>
 
           {/* 狀態 */}
-          <div 
+          <div
             className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px] cursor-pointer"
             onClick={() => onSortChange('status')}
           >
@@ -262,7 +262,7 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange }: { so
           </div>
 
           {/* 觸發次數 */}
-          <div 
+          <div
             className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[110px] cursor-pointer"
             onClick={() => onSortChange('triggerCount')}
           >
@@ -281,8 +281,8 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange }: { so
             </div>
           </div>
 
-          {/* 建立時 */}
-          <div 
+          {/* 建立時間 */}
+          <div
             className="box-border content-stretch flex items-center pl-[12px] pr-0 py-0 relative shrink-0 w-[160px] cursor-pointer"
             onClick={() => onSortChange('createTime')}
           >
@@ -318,7 +318,7 @@ const AutoReplyRow = memo(function AutoReplyRow({
   );
 
   return (
-    <div className={`bg-white relative shrink-0 w-full ${isLast ? 'rounded-bl-[16px] rounded-br-[16px]' : ''}`}>
+    <div className={`bg-white relative shrink-0 w-full hover:bg-[#f6f9fd] transition-colors cursor-pointer ${isLast ? 'rounded-bl-[16px] rounded-br-[16px]' : ''}`}>
       <div aria-hidden="true" className={`absolute border-[#dddddd] ${isLast ? 'border-0' : 'border-[0px_0px_1px]'} border-solid inset-0 pointer-events-none ${isLast ? 'rounded-bl-[16px] rounded-br-[16px]' : ''}`} />
       <div className="flex flex-row items-center size-full">
         <div className="box-border content-stretch flex items-center pl-[12px] py-[12px] pr-[12px] relative w-full">
@@ -511,7 +511,7 @@ export default function AutoReplyTableStyled({ data, onRowClick, onToggleStatus,
     <div className="content-stretch flex flex-col items-start relative shrink-0 w-full">
       {/* Table Container - Horizontal scroll wrapper */}
       <div className="bg-white rounded-[16px] w-full overflow-x-auto table-scroll">
-        {/* Inner wrapper with fixed min-width to ensure consistent column alignment */}
+        {/* Inner wrapper with min-width to ensure consistent column alignment */}
         <div className="min-w-[1330px]">
           {/* Vertical scroll container with sticky header */}
           <div className="max-h-[600px] overflow-y-auto table-scroll">
