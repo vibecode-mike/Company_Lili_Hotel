@@ -879,6 +879,7 @@ async def send_member_chat_message(
     platform: str = Body("LINE", embed=True, description="渠道：LINE/Facebook/Webchat"),
     jwt_token: Optional[str] = Body(None, embed=True, description="FB 渠道需要的 JWT token"),
     page_id: Optional[str] = Body(None, embed=True, description="FB 渠道需要的 Page ID"),
+    fb_customer_id: Optional[str] = Body(None, embed=True, description="FB 渠道的 customer_id，用於直接發送"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -888,6 +889,7 @@ async def send_member_chat_message(
     Args:
         member_id: 會員 ID
         text: 訊息文本
+        fb_customer_id: FB 渠道可直接傳入 customer_id，不依賴本地 member
 
     Returns:
         {
@@ -896,21 +898,30 @@ async def send_member_chat_message(
             "sent_at": "2025-11-22T10:30:00Z"
         }
     """
-    # 查詢會員
-    result = await db.execute(select(Member).where(Member.id == member_id))
-    member = result.scalar_one_or_none()
+    platform_stripped = platform.strip()
+    is_facebook_with_customer_id = platform_stripped == "Facebook" and fb_customer_id
 
+    # Facebook 渠道：優先用 fb_customer_id 查詢
+    member = None
+    if is_facebook_with_customer_id:
+        result = await db.execute(select(Member).where(Member.fb_customer_id == fb_customer_id))
+        member = result.scalar_one_or_none()
+
+    # 其他渠道或 FB 沒有 fb_customer_id：用 member_id 查詢
     if not member:
-        raise HTTPException(status_code=404, detail="會員不存在")
+        result = await db.execute(select(Member).where(Member.id == member_id))
+        member = result.scalar_one_or_none()
 
-    platform = platform.strip()
+    # Facebook 渠道即使沒有本地會員，只要有 fb_customer_id 就可以發送
+    if not member and not is_facebook_with_customer_id:
+        raise HTTPException(status_code=404, detail="會員不存在")
 
     # 建立/寫入對話訊息
     from app.services.chatroom_service import ChatroomService
 
     chatroom_service = ChatroomService(db)
 
-    if platform == "LINE":
+    if platform_stripped == "LINE":
         if not member.line_uid:
             raise HTTPException(status_code=400, detail="會員未綁定 LINE 帳號")
 
@@ -964,19 +975,20 @@ async def send_member_chat_message(
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"發送訊息失敗: {str(e)}")
 
-    elif platform == "Facebook":
+    elif platform_stripped == "Facebook":
         # 檢查 jwt_token
         if not jwt_token:
             raise HTTPException(status_code=400, detail="缺少 jwt_token，請先完成 Facebook 授權")
 
-        # 檢查 fb_customer_id
-        if not member.fb_customer_id:
-            raise HTTPException(status_code=400, detail="此會員未綁定 Facebook 帳號")
+        # 決定使用的 fb_customer_id：優先用參數傳入的，否則用 member 的
+        effective_fb_customer_id = fb_customer_id or (member.fb_customer_id if member else None)
+        if not effective_fb_customer_id:
+            raise HTTPException(status_code=400, detail="缺少 fb_customer_id，無法發送 Facebook 訊息")
 
-        # 調用外部 FB API 發送訊息 (使用 fb_customer_id 識別)
+        # 調用外部 FB API 發送訊息
         fb_client = FbMessageClient()
         send_result = await fb_client.send_message(
-            fb_customer_id=member.fb_customer_id,
+            fb_customer_id=effective_fb_customer_id,
             text=text,
             jwt_token=jwt_token
         )
@@ -984,31 +996,33 @@ async def send_member_chat_message(
         if not send_result.get("ok"):
             raise HTTPException(status_code=500, detail=f"發送 Facebook 訊息失敗: {send_result.get('error')}")
 
-        # 成功後寫入對話訊息
-        msg = await chatroom_service.append_message(member, "Facebook", "outgoing", text, message_source="manual", sender_id=current_user.id)
+        # 成功後寫入對話訊息（僅當有本地 member 時）
+        msg = None
+        if member:
+            msg = await chatroom_service.append_message(member, "Facebook", "outgoing", text, message_source="manual", sender_id=current_user.id)
 
-        # WebSocket 推送通知前端即時更新 - 將 UTC 轉為台北時間顯示
-        time_str = format_taipei_time(msg.created_at) if msg.created_at else ""
+            # WebSocket 推送通知前端即時更新 - 將 UTC 轉為台北時間顯示
+            time_str = format_taipei_time(msg.created_at) if msg.created_at else ""
 
-        await manager.send_new_message(msg.thread_id, {
-            "id": msg.id,
-            "type": "official",
-            "text": text,
-            "time": time_str,
-            "timestamp": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg.created_at else None,
-            "thread_id": msg.thread_id,
-            "isRead": True,
-            "source": "manual",
-            "senderName": current_user.username
-        })
+            await manager.send_new_message(msg.thread_id, {
+                "id": msg.id,
+                "type": "official",
+                "text": text,
+                "time": time_str,
+                "timestamp": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg.created_at else None,
+                "thread_id": msg.thread_id,
+                "isRead": True,
+                "source": "manual",
+                "senderName": current_user.username
+            })
 
         # 重新獲取聊天紀錄，檢查是否有外部 API 回推的新訊息
         try:
-            sent_timestamp = int(msg.created_at.replace(tzinfo=timezone.utc).timestamp()) if msg.created_at else 0
+            sent_timestamp = int(msg.created_at.replace(tzinfo=timezone.utc).timestamp()) if msg and msg.created_at else 0
 
-            fb_history = await fb_client.get_chat_history(member.fb_customer_id, page_id, jwt_token)
+            fb_history = await fb_client.get_chat_history(effective_fb_customer_id, page_id, jwt_token)
 
-            if fb_history.get("ok") and fb_history.get("data"):
+            if fb_history.get("ok") and fb_history.get("data") and msg:
                 # 找出比剛發送訊息更新的 ingoing 訊息（FB 可能有自動回覆）
                 for fb_msg in fb_history["data"]:
                     msg_time = fb_msg.get("time", 0)
@@ -1041,21 +1055,21 @@ async def send_member_chat_message(
                         })
                         logger.info(f"FB 同步推送新訊息: thread_id={msg.thread_id}, time={msg_time}")
 
-            logger.info(f"FB 聊天紀錄已同步: customer_id={member.fb_customer_id}")
+            logger.info(f"FB 聊天紀錄已同步: customer_id={effective_fb_customer_id}")
         except Exception as e:
             logger.warning(f"FB 聊天紀錄同步失敗 (非關鍵): {e}")
 
         return {
             "success": True,
-            "message_id": send_result.get("message_id", msg.id),
-            "thread_id": msg.thread_id,
-            "sent_at": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg.created_at else None
+            "message_id": send_result.get("message_id", msg.id if msg else None),
+            "thread_id": msg.thread_id if msg else None,
+            "sent_at": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg and msg.created_at else datetime.now(timezone.utc).isoformat()
         }
 
-    elif platform == "Webchat":
+    elif platform_stripped == "Webchat":
         # Webchat 僅寫入資料庫
         try:
-            msg = await chatroom_service.append_message(member, platform, "outgoing", text, message_source="manual", sender_id=current_user.id)
+            msg = await chatroom_service.append_message(member, platform_stripped, "outgoing", text, message_source="manual", sender_id=current_user.id)
 
             # WebSocket 推送通知前端即時更新 - 將 UTC 轉為台北時間顯示
             time_str = format_taipei_time(msg.created_at) if msg.created_at else ""

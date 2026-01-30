@@ -38,9 +38,12 @@ export default function MemberManagementPage() {
           });
         }}
         onViewDetail={(member: DisplayMember) => {
-          // 使用 odooMemberId 或 channelUid 跳轉到會員詳情頁
-          const memberId = member.odooMemberId?.toString() || member.channelUid;
-          navigate('member-detail', { memberId });
+          // FB 優先使用 channelUid (fb_customer_id)，因為可能尚未同步到本地 DB
+          // 其他渠道優先使用 odooMemberId (本地 DB ID)
+          const memberId = member.channel === 'Facebook'
+            ? (member.channelUid || member.odooMemberId?.toString())
+            : (member.odooMemberId?.toString() || member.channelUid);
+          navigate('member-detail', { memberId, platform: member.channel });
         }}
       />
     </MainLayout>

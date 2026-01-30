@@ -728,12 +728,12 @@ export default function ChatRoomLayout({
 
     try {
       // 建立請求 body
-      const requestBody: { text: string; platform: string; jwt_token?: string } = {
+      const requestBody: { text: string; platform: string; jwt_token?: string; fb_customer_id?: string } = {
         text: trimmedText,
         platform
       };
 
-      // 對於 Facebook 渠道，從 token utils 取得 jwt_token
+      // 對於 Facebook 渠道，從 token utils 取得 jwt_token 和 fb_customer_id
       if (platform === 'Facebook') {
         const jwtToken = getJwtToken();
         if (!jwtToken) {
@@ -742,6 +742,11 @@ export default function ChatRoomLayout({
           return;
         }
         requestBody.jwt_token = jwtToken;
+        // 傳入 fb_customer_id，後端可直接使用，不依賴本地 member 查詢
+        const fbCustomerId = (member as any)?.fb_customer_id || (member as any)?.channelUid;
+        if (fbCustomerId) {
+          requestBody.fb_customer_id = String(fbCustomerId);
+        }
       }
 
       // 使用 apiPost 自動處理 token 和 401 重試
@@ -799,7 +804,45 @@ export default function ChatRoomLayout({
 
   const handleSaveTags = async (newMemberTags: string[], newInteractionTags: string[]): Promise<boolean> => {
     try {
-      // 使用 apiPost 自動處理 token 和 401 重試
+      // Facebook 會員：使用外部 FB API
+      if (currentPlatform === 'Facebook') {
+        const fbCustomerId = (member as any)?.fb_customer_id;
+        if (!fbCustomerId) {
+          showToast('找不到 Facebook 會員 ID', 'error');
+          return false;
+        }
+
+        const { updateFbTags } = await import('../../utils/fbTagApi');
+        const result = await updateFbTags(
+          fbCustomerId,
+          memberTags,
+          newMemberTags,
+          interactionTags,
+          newInteractionTags
+        );
+
+        if (!result.success) {
+          showToast(result.error || 'FB 標籤更新失敗', 'error');
+          return false;
+        }
+
+        // 更新本地狀態
+        setMemberTags(newMemberTags);
+        setInteractionTags(newInteractionTags);
+
+        // 嘗試刷新會員資料
+        if (member?.id) {
+          const refreshedMember = await fetchMemberById(member.id, 'Facebook');
+          if (refreshedMember) {
+            setMember(refreshedMember);
+            setMemberTags(refreshedMember.memberTags || []);
+            setInteractionTags(refreshedMember.interactionTags || []);
+          }
+        }
+        return true;
+      }
+
+      // LINE/Webchat 會員：使用內部 API
       const response = await apiPost(`/api/v1/members/${member?.id}/tags/batch-update`, {
         member_tags: newMemberTags,
         interaction_tags: newInteractionTags,
@@ -935,10 +978,10 @@ export default function ChatRoomLayout({
                 </div>
               </div>
             </div>
-            {/* Username - Channel-specific */}
+            {/* 姓名 - 與姓名欄位顯示相同 */}
             <div className="content-stretch flex items-center justify-center relative shrink-0">
               <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[32px] text-nowrap">
-                <p className="leading-[1.5] whitespace-pre">{displayMember?.username || 'User Name'}</p>
+                <p className="leading-[1.5] whitespace-pre">{displayMember?.realName || '-'}</p>
               </div>
             </div>
           </div>

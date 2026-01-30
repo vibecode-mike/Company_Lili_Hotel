@@ -12,6 +12,9 @@ import type { ChatPlatform } from '../components/chat-room/types';
 export default function MemberDetailPage() {
   const { params, navigate, goBack } = useNavigation();
   const { getMemberById, fetchMemberById, getDisplayMemberById } = useMembers();
+  // 從 URL 參數獲取渠道（從聊天室返回時會帶入）
+  const platform = (params.platform as ChatPlatform) || 'LINE';
+
   const [member, setMember] = useState<Member | undefined>(
     params.memberId ? getMemberById(params.memberId) : undefined
   );
@@ -19,14 +22,14 @@ export default function MemberDetailPage() {
 
   // 獲取完整會員詳情
   useEffect(() => {
-    if (!params.memberId) return;
+    const memberId = params.memberId;
+    if (!memberId) return;
 
     const loadMemberDetail = async () => {
       setIsLoading(true);
-      const fullMember = await fetchMemberById(
-        params.memberId!,
-        platform === 'Facebook' ? platform : undefined
-      );
+      // FB 需要傳入 platform 參數以便從外部 API 獲取會員資料
+      const platformParam = platform === 'Facebook' ? platform : undefined;
+      const fullMember = await fetchMemberById(memberId, platformParam);
       if (fullMember) {
         setMember(fullMember);
       }
@@ -34,10 +37,7 @@ export default function MemberDetailPage() {
     };
 
     loadMemberDetail();
-  }, [params.memberId, fetchMemberById]);
-  
-  // 從 URL 參數獲取渠道（從聊天室返回時會帶入）
-  const platform = (params.platform as ChatPlatform) || 'LINE';
+  }, [params.memberId, platform, fetchMemberById]);
 
   // 根據渠道獲取對應的頭像和名稱
   const getChannelSpecificData = useMemo(() => {
