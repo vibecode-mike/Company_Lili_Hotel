@@ -143,14 +143,14 @@ interface SortConfig {
   order: SortOrder;
 }
 
-// 統一欄位寬度配置 - 全部固定寬度確保 header/body 完美對齊
+// 統一欄位寬度配置 - 使用 flex 彈性分配寬度
 const COLUMN_CONFIG = {
-  content: 'w-[300px]',
-  replyType: 'w-[140px]',
-  keywords: 'w-[280px]',
-  status: 'w-[100px]',
-  platform: 'w-[180px]',
-  triggerCount: 'w-[110px]',
+  content: 'flex-1 min-w-[200px]',
+  replyType: 'w-[120px]',
+  keywords: 'flex-1 min-w-[180px]',
+  status: 'w-[80px]',
+  triggerCount: 'w-[100px]',
+  platform: 'flex-1 min-w-[140px]',
   createTime: 'w-[160px]',
   actions: 'w-[60px]',
 } as const;
@@ -409,10 +409,10 @@ export default function AutoReplyTableStyled({ data, onRowClick, onToggleStatus,
 
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0 w-full">
-      {/* Table Container - Horizontal scroll wrapper */}
-      <div className="bg-white rounded-[16px] w-full overflow-x-auto table-scroll">
-        {/* Inner wrapper - 固定最小寬度確保欄位對齊 */}
-        <div className="min-w-[1330px]">
+      {/* Table Container */}
+      <div className="bg-white rounded-[16px] w-full">
+        {/* Inner wrapper */}
+        <div>
           {/* Vertical scroll container with sticky header */}
           <div className="max-h-[600px] overflow-y-auto table-scroll">
             {/* Table Header - Sticky */}
