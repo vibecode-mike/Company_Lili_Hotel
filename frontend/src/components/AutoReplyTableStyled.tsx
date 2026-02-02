@@ -143,6 +143,21 @@ interface SortConfig {
   order: SortOrder;
 }
 
+// 統一欄位寬度配置 - 全部固定寬度確保 header/body 完美對齊
+const COLUMN_CONFIG = {
+  content: 'w-[300px]',
+  replyType: 'w-[140px]',
+  keywords: 'w-[280px]',
+  status: 'w-[100px]',
+  platform: 'w-[180px]',
+  triggerCount: 'w-[110px]',
+  createTime: 'w-[160px]',
+  actions: 'w-[60px]',
+} as const;
+
+// Cell padding - consistent across header and data rows
+const CELL_PADDING = 'px-[12px]';
+
 // Memoized Table Header Component
 const TableHeader = memo(function TableHeader({ sortConfig, onSortChange }: { sortConfig: SortConfig; onSortChange: (field: SortField) => void }) {
   const SortIcon = ({ active, order }: { active: boolean; order: SortOrder }) => (
@@ -159,139 +174,55 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange }: { so
   return (
     <div className="bg-white relative rounded-tl-[16px] rounded-tr-[16px] shrink-0 w-full">
       <div aria-hidden="true" className="absolute border-[#dddddd] border-[0px_0px_1px] border-solid inset-0 pointer-events-none rounded-tl-[16px] rounded-tr-[16px]" />
-      <div className="flex flex-row items-center size-full">
-        <div className="box-border content-stretch flex items-center pb-[12px] pt-[16px] pl-[12px] pr-[12px] relative w-full">
-          {/* 訊息內容 */}
-          <div
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[300px] cursor-pointer"
-            onClick={() => onSortChange('content')}
-          >
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">訊息內容</p>
-            </div>
-            <SortIcon active={isActive('content')} order={sortConfig.order} />
-          </div>
-
-          {/* Divider */}
-          <div className="h-[12px] relative shrink-0 w-0">
-            <div className="absolute inset-[-3.33%_-0.4px]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
-                <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
-              </svg>
-            </div>
-          </div>
-
-          {/* 回應類型 */}
-          <div
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[140px] cursor-pointer"
-            onClick={() => onSortChange('replyType')}
-          >
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">回應類型</p>
-            </div>
-            <SortIcon active={isActive('replyType')} order={sortConfig.order} />
-          </div>
-
-          {/* Divider */}
-          <div className="h-[12px] relative shrink-0 w-0">
-            <div className="absolute inset-[-3.33%_-0.4px]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
-                <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
-              </svg>
-            </div>
-          </div>
-
-          {/* 關鍵字標籤 */}
-          <div
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[280px] cursor-pointer"
-            onClick={() => onSortChange('keywords')}
-          >
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">關鍵字標籤</p>
-            </div>
-            <SortIcon active={isActive('keywords')} order={sortConfig.order} />
-          </div>
-
-          {/* Divider */}
-          <div className="h-[12px] relative shrink-0 w-0">
-            <div className="absolute inset-[-3.33%_-0.4px]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
-                <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
-              </svg>
-            </div>
-          </div>
-
-          {/* 狀態 */}
-          <div
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px] cursor-pointer"
-            onClick={() => onSortChange('status')}
-          >
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">狀態</p>
-            </div>
-            <SortIcon active={isActive('status')} order={sortConfig.order} />
-          </div>
-
-          {/* Divider */}
-          <div className="h-[12px] relative shrink-0 w-0">
-            <div className="absolute inset-[-3.33%_-0.4px]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
-                <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
-              </svg>
-            </div>
-          </div>
-
-          {/* 平台 */}
-          <div
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[180px] cursor-pointer"
-            onClick={() => onSortChange('platform')}
-          >
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">平台</p>
-            </div>
-            <SortIcon active={isActive('platform')} order={sortConfig.order} />
-          </div>
-
-          {/* Divider */}
-          <div className="h-[12px] relative shrink-0 w-0">
-            <div className="absolute inset-[-3.33%_-0.4px]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
-                <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
-              </svg>
-            </div>
-          </div>
-
-          {/* 觸發次數 */}
-          <div
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[110px] cursor-pointer"
-            onClick={() => onSortChange('triggerCount')}
-          >
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">觸發次數</p>
-            </div>
-            <SortIcon active={isActive('triggerCount')} order={sortConfig.order} />
-          </div>
-
-          {/* Divider */}
-          <div className="h-[12px] relative shrink-0 w-0">
-            <div className="absolute inset-[-3.33%_-0.4px]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
-                <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
-              </svg>
-            </div>
-          </div>
-
-          {/* 建立時間 */}
-          <div
-            className="box-border content-stretch flex items-center pl-[12px] pr-0 py-0 relative shrink-0 w-[160px] cursor-pointer"
-            onClick={() => onSortChange('createTime')}
-          >
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">建立時間</p>
-            </div>
-            <SortIcon active={isActive('createTime')} order={sortConfig.order} />
-          </div>
+      <div className="flex items-center pb-[12px] pt-[16px]">
+        <div
+          className={`flex gap-[4px] items-center ${CELL_PADDING} ${COLUMN_CONFIG.content} cursor-pointer`}
+          onClick={() => onSortChange('content')}
+        >
+          <span className="text-[#383838] text-[14px] leading-[1.5] whitespace-nowrap">訊息內容</span>
+          <SortIcon active={isActive('content')} order={sortConfig.order} />
         </div>
+        <div
+          className={`flex gap-[4px] items-center ${CELL_PADDING} ${COLUMN_CONFIG.replyType} cursor-pointer`}
+          onClick={() => onSortChange('replyType')}
+        >
+          <span className="text-[#383838] text-[14px] leading-[1.5] whitespace-nowrap">回應類型</span>
+          <SortIcon active={isActive('replyType')} order={sortConfig.order} />
+        </div>
+        <div
+          className={`flex gap-[4px] items-center ${CELL_PADDING} ${COLUMN_CONFIG.keywords} cursor-pointer`}
+          onClick={() => onSortChange('keywords')}
+        >
+          <span className="text-[#383838] text-[14px] leading-[1.5] whitespace-nowrap">關鍵字標籤</span>
+          <SortIcon active={isActive('keywords')} order={sortConfig.order} />
+        </div>
+        <div
+          className={`flex gap-[4px] items-center ${CELL_PADDING} ${COLUMN_CONFIG.status} cursor-pointer`}
+          onClick={() => onSortChange('status')}
+        >
+          <span className="text-[#383838] text-[14px] leading-[1.5] whitespace-nowrap">狀態</span>
+          <SortIcon active={isActive('status')} order={sortConfig.order} />
+        </div>
+        <div
+          className={`flex gap-[4px] items-center ${CELL_PADDING} ${COLUMN_CONFIG.triggerCount} cursor-pointer`}
+          onClick={() => onSortChange('triggerCount')}
+        >
+          <span className="text-[#383838] text-[14px] leading-[1.5] whitespace-nowrap">觸發次數</span>
+          <SortIcon active={isActive('triggerCount')} order={sortConfig.order} />
+        </div>
+        <div
+          className={`flex gap-[4px] items-center ${CELL_PADDING} ${COLUMN_CONFIG.platform}`}
+        >
+          <span className="text-[#383838] text-[14px] leading-[1.5] whitespace-nowrap">平台</span>
+        </div>
+        <div
+          className={`flex gap-[4px] items-center ${CELL_PADDING} ${COLUMN_CONFIG.createTime} cursor-pointer`}
+          onClick={() => onSortChange('createTime')}
+        >
+          <span className="text-[#383838] text-[14px] leading-[1.5] whitespace-nowrap">建立時間</span>
+          <SortIcon active={isActive('createTime')} order={sortConfig.order} />
+        </div>
+        <div className={COLUMN_CONFIG.actions} />
       </div>
     </div>
   );
@@ -312,122 +243,91 @@ const AutoReplyRow = memo(function AutoReplyRow({
   onDuplicateKeywordClick?: (keywordId: number, keyword: string, autoReplyId: string) => void;
 }) {
   const EditButton = () => (
-    <div onClick={() => onRowClick(row.id)}>
+    <div className={`${COLUMN_CONFIG.actions} flex items-center justify-center`} onClick={() => onRowClick(row.id)}>
       <ButtonEdit />
     </div>
   );
 
+  const keywordList = row.keywordObjects && row.keywordObjects.length > 0
+    ? row.keywordObjects
+    : row.keywords.map(kw => ({ keyword: kw, isDuplicate: false }));
+
   return (
     <div className={`bg-white relative shrink-0 w-full hover:bg-[#f6f9fd] transition-colors cursor-pointer ${isLast ? 'rounded-bl-[16px] rounded-br-[16px]' : ''}`}>
-      <div aria-hidden="true" className={`absolute border-[#dddddd] ${isLast ? 'border-0' : 'border-[0px_0px_1px]'} border-solid inset-0 pointer-events-none ${isLast ? 'rounded-bl-[16px] rounded-br-[16px]' : ''}`} />
-      <div className="flex flex-row items-center size-full">
-        <div className="box-border content-stretch flex items-center pl-[12px] py-[12px] pr-[12px] relative w-full">
-          {/* 訊息內容 */}
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[300px]">
-            <div className="basis-0 flex flex-col grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[1.5] line-clamp-2">{row.content}</p>
-            </div>
-          </div>
-
-          {/* 回應類型 */}
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[140px]">
-            <div className="basis-0 flex flex-col grow justify-center leading-[0] min-h-px min-w-px not-italic relative shrink-0 text-[#383838] text-[14px] tracking-[0.22px]">
-              <p className="leading-[24px]">{row.replyType}</p>
-            </div>
-          </div>
-
-          {/* 關鍵字標籤 */}
-          <div className="box-border content-stretch flex flex-wrap gap-[4px] items-start px-[12px] py-0 relative shrink-0 w-[280px]">
-            {row.keywords.length > 0 ? (
-              <>
-                {(row.keywordObjects && row.keywordObjects.length > 0
-                  ? row.keywordObjects
-                  : row.keywords.map(kw => ({ keyword: kw, isDuplicate: false }))
-                ).map((kwObj, idx) => (
-                  kwObj.isDuplicate ? (
-                    <DuplicateKeywordTag
-                      key={idx}
-                      id={kwObj.id}
-                      keyword={kwObj.keyword}
-                      autoReplyId={row.id}
-                      onUpdateClick={onDuplicateKeywordClick}
-                    />
-                  ) : (
-                    <div
-                      key={idx}
-                      className="box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] px-[8px] py-[4px] relative rounded-[8px] shrink-0 bg-[#f0f6ff]"
-                    >
-                      <p className="leading-[1.5] relative shrink-0 text-[14px] text-center whitespace-nowrap text-[#0f6beb]">
-                        {kwObj.keyword}
-                      </p>
-                    </div>
-                  )
-                ))}
-              </>
-            ) : (
-              <p className="text-[14px] text-[#6e6e6e] leading-[1.5]">-</p>
-            )}
-          </div>
-
-          {/* 狀態 */}
-          <div className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px]">
-            <button
-              onClick={(e) => onToggleStatus(e, row.id, row.status)}
-              className="flex items-center justify-center"
-            >
-              <div className="relative size-[40px]">
-                <svg className="block size-full" fill="none" viewBox="0 0 40 40">
-                  <g clipPath="url(#clip0_8236_70)" id="Toggle">
-                    <g id="Vector"></g>
-                    <path 
-                      d={row.status === '啟用' 
-                        ? svgPaths.p13e42a00 
-                        : svgPaths.p3ed4d200
-                      }
-                      fill={row.status === '啟用' ? '#0F6BEB' : '#E5E7EB'}
-                      id="Vector_2"
-                      className="transition-all duration-300 ease-in-out"
-                    />
-                  </g>
-                  <defs>
-                    <clipPath id="clip0_8236_70">
-                      <rect fill="white" height="40" width="40" />
-                    </clipPath>
-                  </defs>
-                </svg>
-              </div>
-            </button>
-          </div>
-
-          {/* 平台 */}
-          <div className="box-border content-stretch flex items-center gap-[8px] px-[12px] py-0 relative shrink-0 w-[180px]">
-            <MemberSourceIcon source={row.platform as MemberSourceType} size={28} />
-            {row.channelName && (
-              <div className="flex-1 flex flex-col justify-center leading-[0] min-h-px min-w-px not-italic relative text-[#383838] text-[14px] tracking-[0.22px]">
-                <p className="leading-[24px] truncate">{row.channelName}</p>
-              </div>
-            )}
-          </div>
-
-          {/* 觸發次數 - 左對齊 */}
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[110px]">
-            <div className="flex flex-col justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] tracking-[0.22px]">
-              <p className="leading-[24px]">
-                {row.triggerCount === 0 ? '-' : row.triggerCount.toLocaleString()}
-              </p>
-            </div>
-          </div>
-
-          {/* 建立時間 */}
-          <div className="box-border content-stretch flex items-center pl-[12px] pr-0 py-0 relative shrink-0 w-[160px]">
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[1.5] whitespace-nowrap">{row.createTime}</p>
-            </div>
-          </div>
-
-          {/* 編輯按鈕 */}
-          <EditButton />
+      <div aria-hidden="true" className={`absolute border-[#dddddd] border-[0px_0px_1px] border-solid inset-0 pointer-events-none ${isLast ? 'rounded-bl-[16px] rounded-br-[16px]' : ''}`} />
+      <div className="flex items-center py-[12px]">
+        <div className={`flex items-center ${CELL_PADDING} ${COLUMN_CONFIG.content}`}>
+          <p className="text-[#383838] text-[14px] leading-[1.5] line-clamp-2">{row.content}</p>
         </div>
+        <div className={`flex items-center ${CELL_PADDING} ${COLUMN_CONFIG.replyType}`}>
+          <p className="text-[#383838] text-[14px] leading-[1.5]">{row.replyType}</p>
+        </div>
+        <div className={`flex flex-wrap gap-[4px] items-start ${CELL_PADDING} ${COLUMN_CONFIG.keywords}`}>
+          {row.keywords.length > 0 ? (
+            keywordList.map((kwObj, idx) =>
+              kwObj.isDuplicate ? (
+                <DuplicateKeywordTag
+                  key={idx}
+                  id={kwObj.id}
+                  keyword={kwObj.keyword}
+                  autoReplyId={row.id}
+                  onUpdateClick={onDuplicateKeywordClick}
+                />
+              ) : (
+                <div
+                  key={idx}
+                  className="flex items-center justify-center min-w-[32px] px-[8px] py-[4px] rounded-[8px] bg-[#f0f6ff]"
+                >
+                  <p className="text-[14px] text-center whitespace-nowrap text-[#0f6beb] leading-[1.5]">
+                    {kwObj.keyword}
+                  </p>
+                </div>
+              )
+            )
+          ) : (
+            <p className="text-[14px] text-[#6e6e6e] leading-[1.5]">-</p>
+          )}
+        </div>
+        <div className={`flex items-center ${CELL_PADDING} ${COLUMN_CONFIG.status}`}>
+          <button
+            onClick={(e) => onToggleStatus(e, row.id, row.status)}
+            className="flex items-center justify-center"
+          >
+            <div className="relative size-[40px]">
+              <svg className="block size-full" fill="none" viewBox="0 0 40 40">
+                <g clipPath="url(#clip0_8236_70)" id="Toggle">
+                  <g id="Vector"></g>
+                  <path
+                    d={row.status === '啟用' ? svgPaths.p13e42a00 : svgPaths.p3ed4d200}
+                    fill={row.status === '啟用' ? '#0F6BEB' : '#E5E7EB'}
+                    id="Vector_2"
+                    className="transition-all duration-300 ease-in-out"
+                  />
+                </g>
+                <defs>
+                  <clipPath id="clip0_8236_70">
+                    <rect fill="white" height="40" width="40" />
+                  </clipPath>
+                </defs>
+              </svg>
+            </div>
+          </button>
+        </div>
+        <div className={`flex items-center ${CELL_PADDING} ${COLUMN_CONFIG.triggerCount}`}>
+          <p className="text-[#383838] text-[14px] leading-[1.5]">
+            {row.triggerCount === 0 ? '-' : row.triggerCount.toLocaleString()}
+          </p>
+        </div>
+        <div className={`flex items-center gap-[8px] ${CELL_PADDING} ${COLUMN_CONFIG.platform}`}>
+          <MemberSourceIcon source={row.platform as MemberSourceType} size={28} />
+          {row.channelName && (
+            <p className="text-[#383838] text-[14px] leading-[1.5] truncate">{row.channelName}</p>
+          )}
+        </div>
+        <div className={`flex items-center ${CELL_PADDING} ${COLUMN_CONFIG.createTime}`}>
+          <p className="text-[#383838] text-[14px] leading-[1.5] whitespace-nowrap">{row.createTime}</p>
+        </div>
+        <EditButton />
       </div>
     </div>
   );
@@ -511,7 +411,7 @@ export default function AutoReplyTableStyled({ data, onRowClick, onToggleStatus,
     <div className="content-stretch flex flex-col items-start relative shrink-0 w-full">
       {/* Table Container - Horizontal scroll wrapper */}
       <div className="bg-white rounded-[16px] w-full overflow-x-auto table-scroll">
-        {/* Inner wrapper with min-width to ensure consistent column alignment */}
+        {/* Inner wrapper - 固定最小寬度確保欄位對齊 */}
         <div className="min-w-[1330px]">
           {/* Vertical scroll container with sticky header */}
           <div className="max-h-[600px] overflow-y-auto table-scroll">

@@ -35,15 +35,15 @@ interface SortConfig {
   order: SortOrder;
 }
 
-// 統一欄位寬度配置 - 全部固定寬度確保 header/body 完美對齊
+// 統一欄位寬度配置 - 使用 flex 彈性分配寬度
 const COLUMN_CONFIG = {
-  title: 'w-[160px]',
-  tags: 'w-[180px]',
-  platform: 'w-[140px]',
-  status: 'w-[100px]',
+  title: 'flex-1 min-w-[160px]',
+  tags: 'w-[180px]',  // 已隱藏
+  platform: 'flex-1 min-w-[140px]',
+  status: 'w-[100px]',  // 已隱藏
   sentCount: 'w-[120px]',
-  sender: 'w-[160px]',
-  clickCount: 'w-[160px]',
+  sender: 'flex-1 min-w-[140px]',
+  clickCount: 'w-[140px]',
   sendTime: 'w-[180px]',
   actions: 'w-[120px]',
 } as const;
@@ -55,9 +55,9 @@ const PLATFORM_DISPLAY_NAMES: Record<string, string> = {
   'Webchat': 'Webchat',
 } as const;
 
-// 統一欄位樣式
-const CELL_BASE_FIRST = 'box-border flex items-center px-[12px] py-0 shrink-0';  // 第一欄
-const CELL_BASE = 'box-border flex items-center pl-[4px] pr-[12px] py-0 shrink-0';  // 其他欄
+// 統一欄位樣式 - 移除 shrink-0 讓 flex-1 欄位可以自動擴展
+const CELL_BASE_FIRST = 'box-border flex items-center px-[12px] py-0';  // 第一欄
+const CELL_BASE = 'box-border flex items-center pl-[4px] pr-[12px] py-0';  // 其他欄
 const CELL_TEXT = 'text-[#383838] text-[14px] leading-[24px] whitespace-nowrap';
 
 // 分隔線組件
@@ -127,25 +127,19 @@ const TableHeader = memo(function TableHeader({
         </div>
         <Divider />
 
-        {/* 互動標籤 */}
-        <div
-          className={`${CELL_BASE} ${COLUMN_CONFIG.tags} gap-[4px] cursor-pointer`}
-          onClick={() => onSortChange('tags')}
-        >
-          <span className={CELL_TEXT}>互動標籤</span>
-          <SortIcon active={isActive('tags')} order={sortConfig.order} />
-        </div>
-        <Divider />
-
-        {/* 平台 */}
-        <div
-          className={`${CELL_BASE} ${COLUMN_CONFIG.platform} gap-[4px] ${isSortDisabled ? '' : 'cursor-pointer'}`}
-          onClick={isSortDisabled ? undefined : () => onSortChange('platform')}
-        >
-          <span className={CELL_TEXT}>平台</span>
-          {!isSortDisabled && <SortIcon active={isActive('platform')} order={sortConfig.order} />}
-        </div>
-        <Divider />
+        {/* 互動標籤 - 隱藏 */}
+        {false && (
+          <>
+            <div
+              className={`${CELL_BASE} ${COLUMN_CONFIG.tags} gap-[4px] cursor-pointer`}
+              onClick={() => onSortChange('tags')}
+            >
+              <span className={CELL_TEXT}>互動標籤</span>
+              <SortIcon active={isActive('tags')} order={sortConfig.order} />
+            </div>
+            <Divider />
+          </>
+        )}
 
         {/* 狀態 - 隱藏 */}
         {false && (
@@ -200,6 +194,16 @@ const TableHeader = memo(function TableHeader({
             </Tooltip>
           </TooltipProvider>
           <SortIcon active={isActive('clickCount')} order={sortConfig.order} />
+        </div>
+        <Divider />
+
+        {/* 平台 */}
+        <div
+          className={`${CELL_BASE} ${COLUMN_CONFIG.platform} gap-[4px] ${isSortDisabled ? '' : 'cursor-pointer'}`}
+          onClick={isSortDisabled ? undefined : () => onSortChange('platform')}
+        >
+          <span className={CELL_TEXT}>平台</span>
+          {!isSortDisabled && <SortIcon active={isActive('platform')} order={sortConfig.order} />}
         </div>
         <Divider />
 
@@ -277,22 +281,19 @@ const MessageRow = memo(function MessageRow({
         </div>
         <Divider visible={false} />
 
-        {/* 互動標籤 */}
-        <div className={`${CELL_BASE} ${COLUMN_CONFIG.tags} flex-wrap gap-[4px] items-start`}>
-          {message.tags.map((tag, index) => (
-            <div key={index} className="bg-[#f0f6ff] flex items-center justify-center min-w-[32px] px-[8px] py-[4px] rounded-[8px]">
-              <span className="text-[#0f6beb] text-[14px] leading-[1.5] whitespace-nowrap">{tag}</span>
+        {/* 互動標籤 - 隱藏 */}
+        {false && (
+          <>
+            <div className={`${CELL_BASE} ${COLUMN_CONFIG.tags} flex-wrap gap-[4px] items-start`}>
+              {message.tags.map((tag, index) => (
+                <div key={index} className="bg-[#f0f6ff] flex items-center justify-center min-w-[32px] px-[8px] py-[4px] rounded-[8px]">
+                  <span className="text-[#0f6beb] text-[14px] leading-[1.5] whitespace-nowrap">{tag}</span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        <Divider visible={false} />
-
-        {/* 平台 */}
-        <div className={`${CELL_BASE} ${COLUMN_CONFIG.platform} gap-[8px]`}>
-          <MemberSourceIcon source={message.platform as MemberSourceType} size={24} />
-          <span className={`${CELL_TEXT} truncate`}>{message.channelName || PLATFORM_DISPLAY_NAMES[message.platform] || message.platform}</span>
-        </div>
-        <Divider visible={false} />
+            <Divider visible={false} />
+          </>
+        )}
 
         {/* 狀態 - 隱藏 */}
         {false && (
@@ -323,6 +324,13 @@ const MessageRow = memo(function MessageRow({
         </div>
         <Divider visible={false} />
 
+        {/* 平台 */}
+        <div className={`${CELL_BASE} ${COLUMN_CONFIG.platform} gap-[8px]`}>
+          <MemberSourceIcon source={message.platform as MemberSourceType} size={24} />
+          <span className={`${CELL_TEXT} truncate`}>{message.channelName || PLATFORM_DISPLAY_NAMES[message.platform] || message.platform}</span>
+        </div>
+        <Divider visible={false} />
+
         {/* 時間欄位 */}
         <div className={`${CELL_BASE} ${COLUMN_CONFIG.sendTime}`}>
           <span className={CELL_TEXT}>{message.sendTime}</span>
@@ -330,7 +338,7 @@ const MessageRow = memo(function MessageRow({
         <Divider visible={false} />
 
         {/* 操作按鈕 */}
-        <div className={`${CELL_BASE} ${COLUMN_CONFIG.actions} gap-[4px] justify-start`}>
+        <div className={`box-border flex items-center px-0 py-0 shrink-0 ${COLUMN_CONFIG.actions} gap-[4px] justify-start`}>
           {!isEditHidden && (
             <ButtonEdit onClick={() => onEdit(message.id)} />
           )}
@@ -429,9 +437,9 @@ export default function InteractiveMessageTable({ messages, onEdit, onViewDetail
   return (
     <div className="flex flex-col items-start shrink-0 w-full">
       {/* 外層容器 - 水平滾動 */}
-      <div className="bg-white rounded-[16px] w-full overflow-x-auto table-scroll">
-        {/* 內層容器 - 固定最小寬度確保欄位對齊 */}
-        <div className="min-w-[1220px]">
+      <div className="bg-white rounded-[16px] w-full">
+        {/* 內層容器 */}
+        <div>
           {/* 垂直滾動容器 + Sticky 表頭 */}
           <div className="max-h-[600px] overflow-y-auto table-scroll">
             {/* 表頭 - Sticky */}
