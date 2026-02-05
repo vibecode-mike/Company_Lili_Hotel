@@ -978,12 +978,10 @@ export default function ChatRoomLayout({
                 </div>
               </div>
             </div>
-            {/* 姓名 - 與姓名欄位顯示相同 */}
-            <div className="content-stretch flex items-center justify-center relative shrink-0">
-              <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[32px] text-nowrap">
-                <p className="leading-[1.5] whitespace-pre">{displayMember?.realName || '-'}</p>
-              </div>
-            </div>
+            {/* 姓名 - 與詳情頁一致顯示 username */}
+            <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[#383838] text-[32px] text-center whitespace-nowrap">
+              {displayMember?.username || displayMember?.realName || '-'}
+            </p>
           </div>
           
           {/* Member Info Panel */}
