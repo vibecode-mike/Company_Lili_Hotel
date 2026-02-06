@@ -46,13 +46,14 @@ const PLATFORM_DISPLAY_NAMES: Record<string, string> = {
 const CELL_BASE = 'box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0';
 const CELL_TEXT = 'text-[#383838] text-[14px] leading-[1.5]';
 
-// 固定欄位寬度 - 參照會員管理頁
-const COL_TITLE = 'w-[200px]';       // 訊息標題
+// 固定欄位寬度 - 均衡排版
+const COL_TITLE = 'min-w-[200px] !shrink grow'; // 訊息標題 (彈性填滿)
 const COL_SENT_COUNT = 'w-[100px]';  // 發送人數
-const COL_SENDER = 'w-[140px]';      // 發送人員
+const COL_SENDER = 'w-[120px]';      // 發送人員
 const COL_CLICK_COUNT = 'w-[120px]'; // 點擊次數
-const COL_PLATFORM = 'w-[200px]';    // 平台
-const COL_TIME = 'min-w-[180px] grow'; // 時間 (最後一欄用 grow)
+const COL_PLATFORM = 'w-[180px]';    // 平台
+const COL_TIME = 'w-[160px]';        // 時間 (固定寬度)
+const COL_ACTION = 'w-[100px]';      // 操作按鈕
 
 // 排序圖標組件
 const SortIcon = memo(function SortIcon({ active, order }: { active: boolean; order: SortOrder }) {
@@ -154,32 +155,31 @@ const TableHeader = memo(function TableHeader({
             <SortIcon active={isActive('platform')} order={sortConfig.order} />
           </div>
 
-          {/* 時間欄位 - 使用 grow 填滿剩餘空間 */}
-          <div className="basis-0 grow min-h-px min-w-[180px] relative shrink-0">
-            <div className="flex flex-row items-center size-full">
-              <div
-                className={`${CELL_BASE} w-full ${COL_TIME} gap-[4px] cursor-pointer`}
-                onClick={() => onSortChange('sendTime')}
-              >
-                <span className={`${CELL_TEXT} whitespace-nowrap`}>{getTimeColumnLabel()}</span>
-                {statusFilter === '草稿' && (
-                  <TooltipProvider>
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
-                        <div className="shrink-0 size-[20px]" onClick={(e) => e.stopPropagation()}>
-                          <IcInfo />
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>草稿不會因發送而移除，可重複使用</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-                <SortIcon active={isActive('sendTime')} order={sortConfig.order} />
-              </div>
-            </div>
+          {/* 時間欄位 */}
+          <div
+            className={`${CELL_BASE} ${COL_TIME} gap-[4px] cursor-pointer`}
+            onClick={() => onSortChange('sendTime')}
+          >
+            <span className={`${CELL_TEXT} whitespace-nowrap`}>{getTimeColumnLabel()}</span>
+            {statusFilter === '草稿' && (
+              <TooltipProvider>
+                <Tooltip delayDuration={0}>
+                  <TooltipTrigger asChild>
+                    <div className="shrink-0 size-[20px]" onClick={(e) => e.stopPropagation()}>
+                      <IcInfo />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>草稿不會因發送而移除，可重複使用</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            <SortIcon active={isActive('sendTime')} order={sortConfig.order} />
           </div>
+
+          {/* 操作欄位佔位 */}
+          <div className={`${CELL_BASE} ${COL_ACTION}`} />
         </div>
       </div>
     </div>
@@ -249,13 +249,13 @@ const MessageRow = memo(function MessageRow({
             <span className={`${CELL_TEXT} truncate`}>{message.channelName || PLATFORM_DISPLAY_NAMES[message.platform] || message.platform}</span>
           </div>
 
-          {/* 時間欄位 - 使用 grow 填滿剩餘空間 */}
+          {/* 時間欄位 */}
           <div className={`${CELL_BASE} ${COL_TIME}`}>
             <span className={`${CELL_TEXT} whitespace-nowrap`}>{message.sendTime}</span>
           </div>
 
           {/* 操作按鈕 */}
-          <div className="content-stretch flex items-center gap-[4px] shrink-0">
+          <div className={`${CELL_BASE} ${COL_ACTION} justify-end gap-[4px]`}>
             {!isEditHidden && (
               <ButtonEdit onClick={() => onEdit(message.id)} />
             )}
@@ -357,7 +357,7 @@ export default function InteractiveMessageTable({ messages, onEdit, onViewDetail
       {/* 外層容器 - 水平滾動 */}
       <div className="bg-white rounded-[16px] w-full overflow-x-auto table-scroll">
         {/* 內層容器 - 最小寬度確保欄位對齊 */}
-        <div className="min-w-[1060px]">
+        <div className="min-w-[980px]">
           {/* 垂直滾動容器 + Sticky 表頭 */}
           <div className="max-h-[600px] overflow-y-auto table-scroll">
             {/* 表頭 - Sticky */}
