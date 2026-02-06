@@ -24,6 +24,7 @@ import requests
 import uuid
 import time  # 用來在 backfill 抓所有好友個資時 時稍微 sleep，避免打太兇
 from pathlib import Path
+from typing import Optional
 
 # 確保以任何工作目錄啟動時都能匯入同目錄模組
 # 取得 app.py 所在目錄的絕對路徑
@@ -67,7 +68,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote_plus, quote
 from linebot.exceptions import InvalidSignatureError
 
-from flask import Flask, request, abort, jsonify, render_template_string, redirect, send_from_directory
+from flask import Flask, request, abort, jsonify, render_template_string, redirect, send_from_directory, g
 
 # LINE Bot SDK v3
 from linebot.v3 import WebhookHandler
@@ -249,7 +250,8 @@ def get_messaging_api(channel_id: str | None = None):
         return messaging_api  # 相容舊行為
     cred = get_credentials(channel_id)
     if not cred or not cred.get("token"):
-        return messaging_api  # 找不到就退回預設，避免出錯
+        # 有指定 channel_id 但找不到 → 明確錯誤，不 fallback
+        raise RuntimeError(f"Invalid channel_id or missing token: {channel_id}")
     cfg = Configuration(access_token=cred["token"])
     return MessagingApi(ApiClient(cfg))
 
@@ -303,6 +305,40 @@ def get_login_access_token(channel_id: str, channel_secret: str) -> str:
     )
     resp.raise_for_status()
     return resp.json().get("access_token", "")
+
+
+# 多 LINE 帳號切換（工程最終版）
+def get_channel_access_token_by_channel_id(line_channel_id: Optional[str]) -> str:
+    """
+    多 LINE 專頁支援：
+    - 有 line_channel_id → 從 DB 取對應的 channel_access_token
+    - 沒有 line_channel_id → fallback 使用 .env 的 LINE_CHANNEL_ACCESS_TOKEN
+    - 任何情況下：一定回傳 str，否則直接丟 RuntimeError
+    """
+
+    # 1️⃣ 指定了 line_channel_id → 從 DB 查
+    if line_channel_id:
+        row = fetchone("""
+            SELECT channel_access_token
+            FROM line_channels
+            WHERE channel_id = :cid
+            LIMIT 1
+        """, {"cid": line_channel_id})
+
+        if row:
+            token = row.get("channel_access_token")
+            if token:
+                return token
+
+        # 有給 line_channel_id 但查不到 → 明確錯誤
+        raise RuntimeError(f"Invalid line_channel_id or missing token: {line_channel_id}")
+
+    # 2️⃣ 沒指定 line_channel_id → fallback 用 .env（舊行為）
+    token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
+    if not token:
+        raise RuntimeError("LINE_CHANNEL_ACCESS_TOKEN not set in environment")
+
+    return token
 
 
 # 用 access_token 建立 LIFF App 並回傳 liffId，同時寫回資料庫的 liff_id_open
@@ -368,6 +404,28 @@ def fetch_line_profile(user_id: str) -> tuple[Optional[str], Optional[str]]:
         pass
     return None, None
 
+
+def fetch_member_profile(line_uid: str) -> dict:
+    """
+    從 members 表抓 LINE 顯示名稱/頭像（已統一欄位：line_display_name / line_avatar）。
+
+    回傳 keys：
+      - line_display_name
+      - line_avatar
+    """
+    line_uid = (line_uid or "").strip()
+    if not line_uid:
+        return {}
+
+    sql = """
+        SELECT line_display_name, line_avatar
+        FROM members
+        WHERE line_uid=:u
+        LIMIT 1
+    """
+    return fetchone(sql, {"u": line_uid}) or {}
+
+
 # 補使用者line資料
 def maybe_update_member_profile(uid: str) -> None:
     """
@@ -375,14 +433,9 @@ def maybe_update_member_profile(uid: str) -> None:
     抓不到（None）時不覆蓋，以避免把舊值清空。
     """
     try:
-        row = fetchone("""
-            SELECT line_display_name, line_picture_url
-            FROM members
-            WHERE line_uid = :uid
-        """, {"uid": uid})
-
+        row = fetch_member_profile(uid)
         has_name = bool(row and row.get("line_display_name"))
-        has_pic  = bool(row and row.get("line_picture_url"))
+        has_pic = bool(row and row.get("line_avatar"))
         if has_name and has_pic:
             return  # 都有就不打 API
 
@@ -511,7 +564,9 @@ def insert_conversation_message(*, thread_id: str, role: str, direction: str,
                                 response: str | None = None,
                                 event_id: str | None = None,
                                 status: str = "received",
-                                message_source: str | None = None):
+                                message_source: str | None = None,
+                                message_id: str | None = None,
+                                platform: str | None = "LINE"):
     """
     儲存對話訊息到 conversation_messages 表
 
@@ -525,16 +580,35 @@ def insert_conversation_message(*, thread_id: str, role: str, direction: str,
         logging.warning("thread_id is empty, cannot insert message")
         return None
 
-    msg_id = uuid.uuid4().hex
+    # 呼叫端可傳入 message_id（如 LINE reply_token / message.id）；未傳則產生 UUID
+    msg_id = message_id.strip() if isinstance(message_id, str) and message_id.strip() else uuid.uuid4().hex
 
     try:
-        execute("""
-            INSERT INTO conversation_messages
-                (id, thread_id, role, direction, message_type,
-                 question, response, event_id, status, message_source, created_at, updated_at)
-            VALUES
-                (:id, :tid, :role, :dir, :mt, :q, :r, :eid, :st, :src, NOW(), NOW())
-        """, {
+        columns = [
+            "id",
+            "thread_id",
+            "role",
+            "direction",
+            "message_type",
+            "question",
+            "response",
+            "event_id",
+            "status",
+            "message_source",
+        ]
+        values = [
+            ":id",
+            ":tid",
+            ":role",
+            ":dir",
+            ":mt",
+            ":q",
+            ":r",
+            ":eid",
+            ":st",
+            ":src",
+        ]
+        params = {
             "id": msg_id,
             "tid": thread_id,
             "role": role,
@@ -545,7 +619,25 @@ def insert_conversation_message(*, thread_id: str, role: str, direction: str,
             "eid": event_id,
             "st": status,
             "src": message_source
-        })
+        }
+
+        if platform and _table_has("conversation_messages", "platform"):
+            columns.append("platform")
+            values.append(":platform")
+            params["platform"] = platform
+
+        columns.extend(["created_at", "updated_at"])
+        values.extend(["NOW()", "NOW()"])
+
+        execute(
+            f"""
+            INSERT IGNORE INTO conversation_messages
+                ({", ".join(columns)})
+            VALUES
+                ({", ".join(values)})
+            """,
+            params,
+        )
         logging.info(f"Inserted message: {msg_id}, thread: {thread_id}, source: {message_source}")
         return msg_id
 
@@ -560,7 +652,7 @@ def insert_conversation_message(*, thread_id: str, role: str, direction: str,
 # members：會員基本資料 upsert
 # 會同時處理：
 #   - line_uid
-#   - line_name / line_avatar（對應 LINE displayName / pictureUrl）
+#   - line_display_name / line_avatar（對應 LINE displayName / pictureUrl）
 #   - join_source（預設 "LINE"）
 #   - 其他問卷欄位（gender / birthday / email / phone ...）
 # --------------------------------------------
@@ -574,10 +666,11 @@ def upsert_member(line_uid: str,
                   join_source: Optional[str] = None,
                   name: Optional[str] = None,
                   id_number: Optional[str] = None,
-                  passport_number: Optional[str] = None,      # ← 新增
+                  passport_number: Optional[str] = None,
                   residence: Optional[str] = None,
-                  address_detail: Optional[str] = None,       # ← 新增
-                  receive_notification: Optional[int] = None) -> int:
+                  address_detail: Optional[str] = None,
+                  receive_notification: Optional[int] = None,
+                  line_channel_id: Optional[str] = None) -> int:
 
     fields, ph, p = ["line_uid"], [":uid"], {"uid": line_uid}
 
@@ -593,17 +686,11 @@ def upsert_member(line_uid: str,
 
     # display name
     if display_name is not None:
-        if _table_has("members", "line_name"):
-            add("line_name", "dn", display_name)
-        elif _table_has("members", "line_display_name"):
-            add("line_display_name", "dn", display_name)
+        add("line_display_name", "dn", display_name)
 
     # avatar
     if picture_url is not None:
-        if _table_has("members", "line_avatar"):
-            add("line_avatar", "pu", picture_url)
-        elif _table_has("members", "line_picture_url"):
-            add("line_picture_url", "pu", picture_url)
+        add("line_avatar", "pu", picture_url)
 
     # form fields
     add("gender", "g", gender)
@@ -616,6 +703,9 @@ def upsert_member(line_uid: str,
     add("residence", "res", residence)
     add("address_detail", "addr", address_detail)    # ← 新增
     add("receive_notification", "rn", receive_notification)
+
+    # line channel id (來自哪個 LINE 官方帳號)
+    add("line_channel_id", "lcid", line_channel_id)
 
     # join source
     js_val = join_source or "LINE"
@@ -635,11 +725,18 @@ def upsert_member(line_uid: str,
         ph.append(":uat")
         p["uat"] = utcnow()
 
+    # 統一使用 UTC 時間存儲 last_interaction_at
+    if _table_has("members", "last_interaction_at"):
+        fields.append("last_interaction_at")
+        ph.append(":liat")
+        p["liat"] = utcnow()
+
     # UPDATE part
     set_parts = []
     for k in (
-        "line_name", "line_display_name",
-        "line_avatar", "line_picture_url",
+        "line_display_name",
+        "line_avatar",
+        "line_channel_id",                         # ← 新增：多帳號支援
         "gender", "birthday", "email", "phone",
         "join_source", "source",
         "name", "id_number", "passport_number",    # ← 新增
@@ -652,8 +749,9 @@ def upsert_member(line_uid: str,
     if _table_has("members", "updated_at"):
         set_parts.append("updated_at=VALUES(updated_at)")
 
+    # 使用 VALUES(last_interaction_at) 保持 UTC 一致性
     if _table_has("members", "last_interaction_at"):
-        set_parts.append("last_interaction_at=NOW()")
+        set_parts.append("last_interaction_at=VALUES(last_interaction_at)")
 
     sql = (
         f"INSERT INTO members ({', '.join(fields)}) "
@@ -1502,12 +1600,13 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
     logging.info(f"Exclude tags: {exclude_tags}")
 
     if target_audience == "all":
-        # 情境 A: 發送給所有會員
+        # 情境 A: 發送給所有會員（只發給正在關注的）
         rs = fetchall("""
             SELECT m.line_uid, m.id
             FROM members m
             WHERE m.line_uid IS NOT NULL
               AND m.line_uid != ''
+              AND m.is_following = 1
         """)
     elif target_audience == "filtered":
         # 根據 include 和 exclude 標籤進行篩選
@@ -1526,6 +1625,7 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
                 INNER JOIN member_tags mt ON m.id = mt.member_id
                 WHERE m.line_uid IS NOT NULL
                   AND m.line_uid != ''
+                  AND m.is_following = 1
                   AND mt.tag_name IN ({include_placeholders})
                   AND m.id NOT IN (
                       SELECT DISTINCT m2.id
@@ -1546,6 +1646,7 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
                 INNER JOIN member_tags mt ON m.id = mt.member_id
                 WHERE m.line_uid IS NOT NULL
                   AND m.line_uid != ''
+                  AND m.is_following = 1
                   AND mt.tag_name IN ({include_placeholders})
             """, params)
 
@@ -1559,6 +1660,7 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
                 FROM members m
                 WHERE m.line_uid IS NOT NULL
                   AND m.line_uid != ''
+                  AND m.is_following = 1
                   AND m.id NOT IN (
                       SELECT DISTINCT m2.id
                       FROM members m2
@@ -1567,20 +1669,22 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
                   )
             """, params)
         else:
-            # 沒有指定標籤，發送給所有會員
+            # 沒有指定標籤，發送給所有會員（只發給正在關注的）
             rs = fetchall("""
                 SELECT m.line_uid, m.id
                 FROM members m
                 WHERE m.line_uid IS NOT NULL
                   AND m.line_uid != ''
+                  AND m.is_following = 1
             """)
     else:
-        # 預設發送給所有會員
+        # 預設發送給所有會員（只發給正在關注的）
         rs = fetchall("""
             SELECT m.line_uid, m.id
             FROM members m
             WHERE m.line_uid IS NOT NULL
               AND m.line_uid != ''
+              AND m.is_following = 1
         """)
 
     logging.info(f"Found {len(rs)} members with line_uid")
@@ -1625,9 +1729,9 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
         return {"ok": False, "campaign_id": cid, "sent": 0, "error": error_msg}
 
     # 在迴圈外先決定要用哪個 Messaging API（避免重複 new client）
-    line_cid = (payload or {}).get("line_channel_id")
-    inner_cid = (payload or {}).get("channel_id")
-    api = get_messaging_api_by_line_id(line_cid) if line_cid else get_messaging_api(inner_cid)
+    # channel_id 和 line_channel_id 都是 LINE 官方的 Channel ID，統一用 get_messaging_api_by_line_id()
+    line_cid = (payload or {}).get("line_channel_id") or (payload or {}).get("channel_id")
+    api = get_messaging_api_by_line_id(line_cid)
 
     sent = 0
     failed = 0
@@ -2323,10 +2427,9 @@ def push_survey_entry(
     for i, m in enumerate(msgs):
         logging.info(f"  [{i}] {type(m).__name__}")
 
-    if line_channel_id:
-        api = get_messaging_api_by_line_id(line_channel_id)
-    else:
-        api = get_messaging_api(channel_id)
+    # channel_id 和 line_channel_id 都是 LINE 官方的 Channel ID，統一用 get_messaging_api_by_line_id()
+    line_cid = line_channel_id or channel_id
+    api = get_messaging_api_by_line_id(line_cid)
 
     # --- 收件者名單 ---
     test_uids = [u.strip() for u in os.getenv("TEST_UIDS", "").split(",") if u.strip()]
@@ -2382,8 +2485,8 @@ def get_messaging_api_by_line_id(line_channel_id: str | None) -> MessagingApi:
 
     cred = get_credentials_by_line_id(line_channel_id)
     if not cred or not cred.get("token"):
-        logging.warning(f"[MSGAPI] line_channel_id={line_channel_id} not found; fallback to default")
-        return messaging_api
+        # 有指定 line_channel_id 但找不到 → 明確錯誤，不 fallback
+        raise RuntimeError(f"Invalid line_channel_id or missing token: {line_channel_id}")
 
     cfg = Configuration(access_token=cred["token"])
     return MessagingApi(ApiClient(cfg))
@@ -2514,6 +2617,12 @@ def __track():
 
     # ---- 3) upsert：不再用 FIND_IN_SET；直接寫入合併後的 merged_str ----
     try:
+        member_display_subq = (
+            f"(SELECT m.line_display_name FROM `{MYSQL_DB}`.`members` m WHERE m.line_uid = :uid LIMIT 1)"
+        )
+        insert_display_expr = f"COALESCE(:dname, {member_display_subq})"
+        update_display_expr = f"COALESCE(:dname, {member_display_subq}, line_display_name)"
+
         execute(f"""
             INSERT INTO `{MYSQL_DB}`.`click_tracking_demo`
                 (line_id, source_campaign_id, line_display_name, total_clicks, last_clicked_at, last_click_tag)
@@ -2521,18 +2630,14 @@ def __track():
                 (
                     :uid,
                     :src,
-                    COALESCE(:dname, (SELECT m.line_display_name FROM `{MYSQL_DB}`.`members` m WHERE m.line_uid = :uid LIMIT 1)),
+                    {insert_display_expr},
                     1,
                     NOW(),
                     :merged
                 )
             ON DUPLICATE KEY UPDATE
                 total_clicks = 1,
-                line_display_name = COALESCE(
-                    :dname,
-                    (SELECT m.line_display_name FROM `{MYSQL_DB}`.`members` m WHERE m.line_uid = :uid LIMIT 1),
-                    line_display_name
-                ),
+                line_display_name = {update_display_expr},
                 last_click_tag = :merged,
                 last_clicked_at = NOW();
         """, {"uid": uid, "src": src, "dname": display_name, "merged": merged_str})
@@ -2749,6 +2854,26 @@ def api_send_chat_message():
         )
         logging.info(f"[api_send_chat_message] 記錄訊息 {msg_id} 到 DB")
 
+        # 4. 通知 Backend 進行 WebSocket 推送（讓前端聊天室即時更新）
+        try:
+            backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8700")
+            current_ts = int(time.time() * 1000)
+            requests.post(
+                f"{backend_url}/api/v1/line/message-notify",
+                json={
+                    "line_uid": line_uid,
+                    "message_text": text,
+                    "timestamp": current_ts,
+                    "message_id": str(msg_id),
+                    "direction": "outgoing",
+                    "source": "manual"
+                },
+                timeout=5
+            )
+            logging.info(f"[api_send_chat_message] 已通知 Backend WebSocket 推送")
+        except Exception as notify_err:
+            logging.warning(f"[api_send_chat_message] 通知 Backend 失敗: {notify_err}")
+
         return jsonify({
             "ok": True,
             "message_id": msg_id,
@@ -2891,12 +3016,13 @@ def api_member_form_submit():
         return jsonify({"ok": False, "error": "無效的 LINE userId"}), 400
 
     answers = data.get("answers") or {}
+    line_channel_id = data.get("line_channel_id")  # 若前端有傳 line_channel_id
 
     # 2) 取最新 LINE profile（名字、頭像）
     try:
         dn, pu = fetch_line_profile(uid)
     except Exception:
-        dn = answers.get("line_name") or None
+        dn = answers.get("line_display_name") or None
         pu = answers.get("line_avatar") or None
 
     # 3) 先更新 members
@@ -2920,6 +3046,7 @@ def api_member_form_submit():
 
         join_source=answers.get("join_source") or "LINE",
         receive_notification=answers.get("receive_notification") or 1,
+        line_channel_id=line_channel_id,  # 多帳號支援
     )
 
     # 4) 同步更新 line_friends
@@ -3003,6 +3130,9 @@ def callback_by_line_id(line_channel_id):
         logging.error(f"[callback] unknown line_channel_id={line_channel_id}")
         return "channel not found", 404
 
+    # 1.1) 儲存 line_channel_id 到 Flask g，讓 event handler 可以存取
+    g.line_channel_id = line_channel_id
+
     # 2) 讀 header 與 body
     signature = request.headers.get("X-Line-Signature")
     if not signature:
@@ -3042,12 +3172,23 @@ def on_follow(event: FollowEvent):
     檢查是否有啟用的歡迎訊息自動回應
     """
     uid = getattr(event.source, "user_id", None)
+    reply_token = getattr(event, "reply_token", None)
 
     # 確保 uid 去除空白字元
     if uid:
         uid = uid.strip()
 
     logging.info(f"[on_follow] uid={uid}")
+
+    # 若同一個 follow 事件被多個 webhook 觸發（reply_token 相同），直接跳過以避免重複回覆
+    if reply_token:
+        try:
+            existed = fetchone("SELECT 1 FROM conversation_messages WHERE id=:id", {"id": reply_token})
+            if existed:
+                logging.info(f"[on_follow] Duplicate follow detected (reply_token={reply_token}), skip welcome.")
+                return
+        except Exception:
+            logging.exception("[on_follow] Duplicate check failed, continue to handle follow")
 
     # === 1. 檢查是否有啟用的歡迎訊息 ===
     welcome_msg = None
@@ -3089,7 +3230,9 @@ def on_follow(event: FollowEvent):
             )
 
             # 兼容性：同時更新 members 表
-            mid = upsert_member(uid, dn, pu)
+            # 從 Flask g 取得 line_channel_id（webhook 路徑 /callback/<line_channel_id>）
+            channel_id = getattr(g, 'line_channel_id', None)
+            mid = upsert_member(uid, dn, pu, line_channel_id=channel_id)
 
             # 關聯 LINE 好友和會員
             if friend_id and mid:
@@ -3112,7 +3255,9 @@ def on_follow(event: FollowEvent):
                     message_type="text",
                     response=welcome_msg,
                     message_source="welcome",
-                    status="sent"
+                    status="sent",
+                    # 使用 LINE reply_token 當作 message_id，避免同一個 follow 事件重複寫入聊天室紀錄
+                    message_id=getattr(event, "reply_token", None)
                 )
                 logging.info(f"[on_follow] Welcome message saved to conversation_messages for uid={uid}")
             except Exception:
@@ -3145,16 +3290,14 @@ def on_postback(event: PostbackEvent):
     data = getattr(event.postback, "data", "") if getattr(event, "postback", None) else ""
     if uid:
         try:
-            cur = fetchone(
-                "SELECT line_display_name, line_picture_url FROM members WHERE line_uid=:u",
-                {"u": uid}
-            ) or {}
+            cur = fetch_member_profile(uid) or {}
             api_dn, api_pu = fetch_line_profile(uid)
             dn_to_write = api_dn if (api_dn and api_dn != cur.get("line_display_name")) else None
-            pu_to_write = api_pu if (api_pu and api_pu != cur.get("line_picture_url")) else None
+            pu_to_write = api_pu if (api_pu and api_pu != cur.get("line_avatar")) else None
 
             # 1) 一樣先處理 members（問卷用的那張表）
-            mid = upsert_member(uid, dn_to_write, pu_to_write)
+            channel_id = getattr(g, 'line_channel_id', None)
+            mid = upsert_member(uid, dn_to_write, pu_to_write, line_channel_id=channel_id)
 
             # 2) ★新增：同時把這個使用者寫/更新到 line_friends
             #    只要有 postback（操作選單），就視為有互動 = 是好友
@@ -3162,7 +3305,7 @@ def on_postback(event: PostbackEvent):
                 line_uid=uid,
                 # 優先用 API 最新 profile，沒有就退回 DB 原本的值
                 display_name=api_dn or cur.get("line_display_name"),
-                picture_url=api_pu or cur.get("line_picture_url"),
+                picture_url=api_pu or cur.get("line_avatar"),
                 member_id=mid,
                 is_following=True,
             )
@@ -3210,45 +3353,21 @@ def on_text(event: MessageEvent):
             message_type="text",
             question=text_in,
             event_id=event.message.id,
-            status="received"
+            status="received",
+            message_source="webhook",
+            message_id=event.message.id,
         )
     except Exception:
         logging.exception("[on_text] Failed to save incoming message")
 
-    # === 2. 寫入 chat_logs ===
-    try:
-        with engine.begin() as conn:
-            conn.execute(sql_text("""
-                INSERT INTO chat_logs
-                (platform, user_id, direction, message_type, text, content, event_id, status, created_at)
-                VALUES (:platform, :user_id, :direction, :message_type, :text, :content, :event_id, :status, NOW())
-            """), {
-                "platform": "LINE",
-                "user_id": uid,
-                "direction": "incoming",
-                "message_type": "text",
-                "text": text_in,
-                "content": json.dumps({
-                    "type": "text",
-                    "text": text_in
-                }, ensure_ascii=False),
-                "event_id": event.message.id,
-                "status": "received"
-            })
-    except Exception as e:
-        logging.exception(f"[on_text] Failed to save chat_log: {e}")
-
-    # === 3. 更新會員資訊 ===
+    # === 2. 更新會員資訊 ===
     mid = None
     if uid:
         try:
             # 讀取現有 DB 資料
-            cur = fetchone(
-                "SELECT line_display_name, line_picture_url FROM members WHERE line_uid=:u",
-                {"u": uid}
-            ) or {}
+            cur = fetch_member_profile(uid) or {}
             cur_dn = cur.get("line_display_name")
-            cur_pu = cur.get("line_picture_url")
+            cur_pu = cur.get("line_avatar")
 
             # 從 LINE API 取得最新 profile
             api_dn, api_pu = fetch_line_profile(uid)
@@ -3258,7 +3377,8 @@ def on_text(event: MessageEvent):
             pu_to_write = api_pu if (api_pu and api_pu != cur_pu) else None
 
             # 更新 members 表
-            mid = upsert_member(uid, dn_to_write, pu_to_write)
+            channel_id = getattr(g, 'line_channel_id', None)
+            mid = upsert_member(uid, dn_to_write, pu_to_write, line_channel_id=channel_id)
 
             # 更新 line_friends 表
             upsert_line_friend(
@@ -3267,19 +3387,7 @@ def on_text(event: MessageEvent):
                 picture_url=api_pu or cur_pu,
                 member_id=mid,
                 is_following=True,
-            )
-
-            # 插入訊息記錄到 conversation_messages 表（1:1 對話）
-            thread_id = ensure_thread_for_user(uid)
-            insert_conversation_message(
-                thread_id=thread_id,
-                role="user",
-                direction="incoming",
-                message_type="text",
-                question=text_in,
-                message_source="webhook",
-                status="received"
-            )
+	            )
         except Exception:
             logging.exception("[on_text] Failed to update member/line_friends")
 
@@ -3360,13 +3468,14 @@ def on_text(event: MessageEvent):
                 # 這樣前端聊天室可以即時顯示自動回應
                 try:
                     backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8700")
+                    current_ts = int(time.time() * 1000)  # time.time() 返回 UTC epoch 秒數
                     requests.post(
                         f"{backend_url}/api/v1/line/message-notify",
                         json={
                             "line_uid": uid,
                             "message_text": reply_text,
-                            "timestamp": int(datetime.datetime.now().timestamp() * 1000),
-                            "message_id": str(msg_id) if msg_id else f"auto_{int(datetime.datetime.now().timestamp())}",
+                            "timestamp": current_ts,
+                            "message_id": str(msg_id) if msg_id else f"auto_{current_ts}",
                             "direction": "outgoing",
                             "source": message_source  # gpt/keyword/always
                         },
@@ -3385,14 +3494,13 @@ def on_text(event: MessageEvent):
     # 移除 mid 條件：line_notify.py 會自己根據 line_uid 查詢 member_id
     if uid:
         try:
-            import requests
             backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8700")
             resp = requests.post(
                 f"{backend_url}/api/v1/line/message-notify",
                 json={
                     "line_uid": uid,
                     "message_text": text_in,
-                    "timestamp": int(datetime.datetime.now().timestamp() * 1000),
+                    "timestamp": event.timestamp,  # 使用 LINE 官方時間戳 (毫秒)
                     "message_id": event.message.id
                 },
                 timeout=5

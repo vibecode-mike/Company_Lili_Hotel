@@ -22,35 +22,33 @@ async def create_tables():
     print("✅ 資料庫表創建成功")
 
 
+async def ensure_user(session: AsyncSession, username: str, email: str, password: str):
+    from sqlalchemy import select
+
+    result = await session.execute(select(User).where(User.username == username))
+    existing = result.scalar_one_or_none()
+    if existing:
+        print(f"⚠️  帳號已存在，跳過: {username} ({existing.email})")
+        return
+
+    admin = User(
+        username=username,
+        email=email,
+        password_hash=get_password_hash(password),
+        full_name="系統管理員",
+        role=UserRole.ADMIN,
+        is_active=True,
+    )
+    session.add(admin)
+    await session.commit()
+    print(f"✅ 建立帳號成功: {username} / {password}")
+
+
 async def create_default_admin():
-    """創建默認管理員賬戶"""
+    """創建默認管理員賬戶以及外部登入帳號"""
     async with AsyncSessionLocal() as session:
-        from sqlalchemy import select
-
-        # 檢查是否已存在管理員
-        result = await session.execute(select(User).where(User.username == "admin"))
-        existing_admin = result.scalar_one_or_none()
-
-        if existing_admin:
-            print("⚠️  管理員賬戶已存在，跳過創建")
-            return
-
-        # 創建管理員
-        admin = User(
-            username="admin",
-            email="admin@lilihotel.com",
-            password_hash=get_password_hash("admin123"),
-            full_name="系統管理員",
-            role=UserRole.ADMIN,
-            is_active=True,
-        )
-
-        session.add(admin)
-        await session.commit()
-        print("✅ 管理員賬戶創建成功")
-        print("   用戶名: admin")
-        print("   密碼: admin123")
-        print("   ⚠️  請立即修改默認密碼！")
+        await ensure_user(session, "admin", "admin@lilihotel.com", "admin123")
+        await ensure_user(session, "tycg-admin", "tycg-admin@lilihotel.com", "123456")
 
 
 async def main():

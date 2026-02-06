@@ -295,3 +295,36 @@ html {
 .table-scroll:hover {
   scrollbar-color: rgba(255, 255, 255, 0.8) transparent;
 }
+
+/* 平台選擇卡片 hover/active 效果 */
+.platform-card {
+  background-color: #ffffff;
+  transition: background-color 0.2s ease;
+}
+
+.platform-card:hover,
+.platform-card:active {
+  background-color: #f6f9fd;
+}
+
+/* 帳號狀態徽章 */
+.status-badge-connected {
+  background-color: #e4fcea;
+}
+
+.status-badge-connected p {
+  color: #00470c;
+}
+
+.status-badge-expired {
+  background-color: #ffebee;
+}
+
+.status-badge-expired p {
+  color: #b71c1c;
+}
+
+/* 重新授權按鈕 */
+.btn-reauthorize {
+  color: #b71c1c;
+}

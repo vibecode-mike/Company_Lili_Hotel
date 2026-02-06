@@ -37,7 +37,7 @@ export interface PlatformSwitcherProps {
 const PLATFORMS: { value: ChatPlatform; label: string }[] = [
   { value: 'LINE', label: 'LINE' },
   { value: 'Facebook', label: 'Facebook' },
-  { value: 'WebChat', label: 'Web Chat' }
+  { value: 'Webchat', label: 'Web Chat' }
 ];
 
 /**

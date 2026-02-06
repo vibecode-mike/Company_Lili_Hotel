@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, ChevronUp, ExternalLink, X, Check } from 'lucide-react';
+import { ChevronDown, ChevronUp, ExternalLink, X, Check, ArrowLeft } from 'lucide-react';
 import { Checkbox } from './ui/checkbox';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useToast } from './ToastProvider';
@@ -16,7 +16,14 @@ import imgStep7 from "figma:asset/f05dee67f2743d5c7b8183a074546e987c63f567.png";
 import imgStep8 from "figma:asset/9c06d369cd4b66fb5b16a4209259f1271ce88ec7.png";
 import svgPaths from "../imports/svg-587iyatkp7";
 
-export default function LineApiSettingsContent() {
+interface LineApiSettingsContentProps {
+  /** 設定完成後的回調，若提供則不顯示內建完成頁面 */
+  onComplete?: () => void;
+  /** 返回上一頁的回調，若提供則顯示返回按鈕 */
+  onBack?: () => void;
+}
+
+export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSettingsContentProps = {}) {
   const [expandedCard, setExpandedCard] = useState<number>(1);
   const [channelId, setChannelId] = useState<string>('');
   const [channelSecret, setChannelSecret] = useState<string>('');
@@ -261,8 +268,14 @@ export default function LineApiSettingsContent() {
 
       await verifyMessageUsage();
       setIsSetupComplete(true);
-      showToast('設定完成，帶您前往會員管理頁', 'success');
-      navigate('member-management');
+
+      // 如果有提供 onComplete 回調，則使用它；否則使用內建導航
+      if (onComplete) {
+        onComplete();
+      } else {
+        showToast('設定完成，帶您前往會員管理頁', 'success');
+        navigate('member-management');
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : '無法抓取本月訊息用量，請確認設定後再試';
       showToast(message, 'error');
@@ -273,8 +286,9 @@ export default function LineApiSettingsContent() {
 
   const canSubmitConnection = Boolean(loginChannelSecret.trim()) && !isVerifyingUsage;
 
-  // 如果已完成設定，顯示完成頁面
-  if (isSetupComplete) {
+  // 如果已完成設定且沒有提供 onComplete（獨立使用模式），顯示完成頁面
+  // 當有 onComplete 時，由父元件控制流程，這裡顯示設定精靈讓用戶重新設定
+  if (isSetupComplete && !onComplete) {
     return (
       <div className="bg-[#f6f9fd] min-h-screen w-full">
         <div className="max-w-[1240px] mx-auto px-[20px] sm:px-[40px] pt-[48px] pb-[80px]">
@@ -398,6 +412,17 @@ export default function LineApiSettingsContent() {
   return (
     <div className="bg-[#f6f9fd] min-h-screen w-full">
       <div className="max-w-[1240px] mx-auto px-[40px] pt-[48px] pb-[80px]">
+        {/* 返回按鈕 - 僅在 onBack 提供時顯示 */}
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="flex items-center gap-[8px] text-[#6e6e6e] hover:text-[#383838] mb-[24px] transition-colors"
+          >
+            <ArrowLeft className="size-[20px]" />
+            <span className="text-[14px] leading-[20px]">返回</span>
+          </button>
+        )}
+
         {/* Header Section */}
         <div className="flex flex-col gap-[8px] mb-[32px]">
           <h1 className="text-[24px] leading-[36px] text-[#0f6beb] text-center">

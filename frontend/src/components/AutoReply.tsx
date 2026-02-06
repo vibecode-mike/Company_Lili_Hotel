@@ -1,11 +1,19 @@
-import { useMemo, useState, memo, useEffect } from 'react';
+import { useMemo, useState, memo, useCallback } from 'react';
 import AutoReplyTableStyled, { AutoReplyData } from './AutoReplyTableStyled';
 import svgPaths from "../imports/svg-icons-common";
 import { PageWithSidebar } from './Sidebar';
 import { PageHeaderWithBreadcrumb } from './common/Breadcrumb';
 import CreateAutoReplyInteractive from './CreateAutoReplyInteractive';
-import { useAutoReplies } from '../contexts/AutoRepliesContext';
+import { useAutoReplies, type AutoReplyConflict } from '../contexts/AutoRepliesContext';
 import { useNavigation } from '../contexts/NavigationContext';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from './ui/dialog';
+import { Button } from './ui/button';
 
 interface AutoReplyProps {
   onBack: () => void;
@@ -74,7 +82,22 @@ const CancelCircleIcon = memo(function CancelCircleIcon({ onClick }: { onClick: 
 export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNavigateToMembers, onNavigateToSettings }: AutoReplyProps) {
   const { params, navigate } = useNavigation();
   const [searchTerm, setSearchTerm] = useState('');
-  const { autoReplies, isLoading, error, toggleAutoReply } = useAutoReplies();
+  const { autoReplies, isLoading, error, toggleAutoReply, activateDuplicateKeyword, activateFbDuplicateKeyword, fetchAutoReplies } = useAutoReplies();
+
+  // 重複關鍵字確認彈窗狀態
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+  const [selectedKeyword, setSelectedKeyword] = useState<{ id: number; keyword: string; isFb: boolean } | null>(null);
+  const [isActivating, setIsActivating] = useState(false);
+
+  // Toggle 衝突確認彈窗狀態
+  const [showToggleConflictDialog, setShowToggleConflictDialog] = useState(false);
+  const [toggleConflictData, setToggleConflictData] = useState<{
+    targetId: string;
+    conflictType: 'welcome' | 'always_date_overlap';
+    existingName: string;
+    existingDateRange?: string;
+  } | null>(null);
+  const [isToggling, setIsToggling] = useState(false);
 
   // 從 URL 參數讀取狀態
   const view = params.view === 'edit' ? 'editor' : 'list';
@@ -86,8 +109,10 @@ export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNav
       content: reply.messages[0] ?? '',
       replyType: getReplyTypeLabel(reply.triggerType),
       keywords: reply.keywords,
+      keywordObjects: reply.keywordObjects,  // 包含重複標記的關鍵字對象
       status: reply.isActive ? '啟用' : '停用',
-      platform: 'LINE',
+      platform: reply.channels?.[0] || 'LINE',  // 使用實際渠道，預設 LINE
+      channelName: reply.channelName,  // 頻道名稱（LINE 頻道名 / FB 粉專名）
       triggerCount: reply.triggerCount,
       createTime: formatDateTime(reply.createdAt),
     }));
@@ -117,16 +142,93 @@ export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNav
     });
   };
 
-  const closeEditor = () => {
+  const closeEditor = useCallback(() => {
+    // 重新獲取最新資料，確保列表即時更新
+    fetchAutoReplies();
     // 清除 URL 參數回到列表頁面
     navigate('auto-reply', {});
+  }, [fetchAutoReplies, navigate]);
+
+  // 檢查是否為衝突結果
+  const isConflictResult = (result: unknown): result is AutoReplyConflict => {
+    return typeof result === 'object' && result !== null && 'conflict' in result && (result as AutoReplyConflict).conflict === true;
   };
 
   const handleToggleStatus = async (id: string, nextState: boolean) => {
     try {
-      await toggleAutoReply(id, nextState);
+      const result = await toggleAutoReply(id, nextState);
+      if (isConflictResult(result)) {
+        setToggleConflictData({
+          targetId: id,
+          conflictType: result.conflictType,
+          existingName: result.existingName,
+          existingDateRange: result.existingDateRange,
+        });
+        setShowToggleConflictDialog(true);
+      }
     } catch {
       // 已在 context 中處理錯誤提示
+    }
+  };
+
+  // 確認切換（強制啟用，停用舊的）
+  const handleConfirmToggleSwitch = async () => {
+    if (!toggleConflictData) return;
+    setIsToggling(true);
+    try {
+      await toggleAutoReply(toggleConflictData.targetId, true, true); // forceActivate=true
+      // 重新載入列表以反映舊的被停用的狀態
+      await fetchAutoReplies();
+      setShowToggleConflictDialog(false);
+      setTimeout(() => setToggleConflictData(null), 200);
+    } catch {
+      // 錯誤已在 context 中處理
+    } finally {
+      setIsToggling(false);
+    }
+  };
+
+  // 關閉 toggle 衝突彈窗
+  const handleCloseToggleConflictDialog = () => {
+    if (!isToggling) {
+      setShowToggleConflictDialog(false);
+      setTimeout(() => setToggleConflictData(null), 200);
+    }
+  };
+
+  // 處理重複關鍵字點擊
+  const handleDuplicateKeywordClick = (keywordId: number, keyword: string, autoReplyId: string) => {
+    const isFb = autoReplyId.startsWith('fb-');
+    setSelectedKeyword({ id: keywordId, keyword, isFb });
+    setShowDuplicateDialog(true);
+  };
+
+  // 確認激活重複關鍵字
+  const handleConfirmActivate = async () => {
+    if (!selectedKeyword) return;
+    setIsActivating(true);
+    try {
+      if (selectedKeyword.isFb) {
+        await activateFbDuplicateKeyword(selectedKeyword.id);
+      } else {
+        await activateDuplicateKeyword(selectedKeyword.id);
+      }
+      setShowDuplicateDialog(false);
+      // 延遲清除 selectedKeyword，等待 Dialog 關閉動畫完成
+      setTimeout(() => setSelectedKeyword(null), 200);
+    } catch {
+      // 錯誤已在 context 中處理，彈窗保持開啟讓用戶可以重試
+    } finally {
+      setIsActivating(false);
+    }
+  };
+
+  // 關閉彈窗
+  const handleCloseDuplicateDialog = () => {
+    if (!isActivating) {
+      setShowDuplicateDialog(false);
+      // 延遲清除 selectedKeyword，等待 Dialog 關閉動畫完成
+      setTimeout(() => setSelectedKeyword(null), 200);
     }
   };
 
@@ -222,6 +324,7 @@ export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNav
               data={filteredData}
               onRowClick={(id) => openEditor(id)}
               onToggleStatus={handleToggleStatus}
+              onDuplicateKeywordClick={handleDuplicateKeywordClick}
             />
           ) : (
             <div className="flex h-[240px] items-center justify-center rounded-[16px] border border-dashed border-[#dddddd] bg-white text-[#6e6e6e]">
@@ -230,6 +333,110 @@ export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNav
           )}
         </div>
       </div>
+
+      {/* 重複關鍵字確認彈窗 */}
+      <Dialog open={showDuplicateDialog} onOpenChange={handleCloseDuplicateDialog}>
+        <DialogContent className="sm:max-w-[600px]" style={{ width: '600px', maxWidth: '600px' }}>
+          <DialogHeader>
+            <DialogTitle className="font-medium" style={{ fontSize: '22px', color: '#383838' }}>
+              確認更新標籤？
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-[14px] leading-[1.6]" style={{ color: '#383838' }}>
+              相同名稱的標籤已存在，是否要以最新建立的標籤取代？
+            </p>
+            {selectedKeyword && (
+              <div className="mt-3 inline-flex items-center px-3 py-1.5 rounded-lg bg-[#ffebee]">
+                <span className="text-[14px] text-[#f44336]">{selectedKeyword.keyword}</span>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="gap-3 sm:gap-3">
+            <Button
+              variant="outline"
+              onClick={handleCloseDuplicateDialog}
+              disabled={isActivating}
+              className="px-6 h-[40px] border-[#dddddd] text-[#6e6e6e] hover:bg-[#f5f5f5]"
+            >
+              取消
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleConfirmActivate}
+              disabled={isActivating}
+              className="px-6 h-[40px] hover:bg-[#ffebee]"
+              style={{ borderColor: '#f44336', color: '#f44336' }}
+            >
+              {isActivating ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#f44336] border-r-transparent" />
+                  處理中...
+                </span>
+              ) : (
+                '確認更新'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Toggle 衝突確認彈窗 */}
+      <Dialog open={showToggleConflictDialog} onOpenChange={handleCloseToggleConflictDialog}>
+        <DialogContent className="sm:max-w-[600px]" style={{ width: '600px', maxWidth: '600px' }}>
+          <DialogHeader>
+            <DialogTitle className="font-medium" style={{ fontSize: '22px', color: '#383838' }}>
+              {toggleConflictData?.conflictType === 'welcome' ? '歡迎訊息衝突' : '時間區間衝突'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-[14px] leading-[1.6]" style={{ color: '#383838' }}>
+              {toggleConflictData?.conflictType === 'welcome'
+                ? '系統目前已啟用中的歡迎訊息，是否切換至新的設定？'
+                : '與現有一律回應的日期區間重疊，是否切換至新的設定？'}
+            </p>
+            {toggleConflictData && (
+              <div className="mt-3 p-3 rounded-lg bg-[#fff3e0]">
+                <p className="text-[14px] text-[#e65100]">
+                  <span className="font-medium">現有設定：</span> {toggleConflictData.existingName}
+                  {toggleConflictData.existingDateRange && (
+                    <span className="ml-2">（{toggleConflictData.existingDateRange}）</span>
+                  )}
+                </p>
+              </div>
+            )}
+            <p className="mt-3 text-[13px]" style={{ color: '#6e6e6e' }}>
+              確認切換後，原有的設定將會自動停用。
+            </p>
+          </div>
+          <DialogFooter className="gap-3 sm:gap-3">
+            <Button
+              variant="outline"
+              onClick={handleCloseToggleConflictDialog}
+              disabled={isToggling}
+              className="px-6 h-[40px] border-[#dddddd] text-[#6e6e6e] hover:bg-[#f5f5f5]"
+            >
+              取消
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleConfirmToggleSwitch}
+              disabled={isToggling}
+              className="px-6 h-[40px] hover:bg-[#fff3e0]"
+              style={{ borderColor: '#e65100', color: '#e65100' }}
+            >
+              {isToggling ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#e65100] border-r-transparent" />
+                  處理中...
+                </span>
+              ) : (
+                '確認切換'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageWithSidebar>
   );
 }

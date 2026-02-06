@@ -4,7 +4,7 @@
 """
 from typing import Dict, Any, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, not_, or_, cast, String, text
+from sqlalchemy import select, func, and_, or_, cast, String, text
 from sqlalchemy.orm import selectinload
 from datetime import datetime
 import logging
@@ -13,13 +13,15 @@ import os
 
 from app.models.message import Message
 from app.models.template import MessageTemplate
-from app.models.member import Member
-from app.models.tag import MemberTag, InteractionTag
-from app.models.tracking import ComponentInteractionLog
+from app.models.tracking import ComponentInteractionLog, InteractionType
+from app.models.line_channel import LineChannel
+from app.models.fb_channel import FbChannel
 from app.adapters.line_app_adapter import LineAppAdapter
 from app.clients.line_app_client import LineAppClient
+from app.clients.fb_message_client import FbMessageClient
 from app.core.pagination import PageResponse
-from app.schemas.message import MessageListItem
+from app.schemas.message import MessageListItem, CreatorInfo
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +39,263 @@ class MessageService:
             and message.send_status == "已排程"
             and bool(message.scheduled_datetime_utc)
         )
+
+    @staticmethod
+    def _ensure_url_protocol(url: str) -> str:
+        """確保 URL 有 https:// 前綴"""
+        url = (url or "").strip()
+        if not url:
+            return ""
+        if url.startswith(("http://", "https://")):
+            return url
+        return f"https://{url}"
+
+    @staticmethod
+    def _get_metadata_value(metadata: dict, key: str, index: int, default: str = "") -> str:
+        """從 metadata 取得值，支援字串和數字索引"""
+        mapping = metadata.get(key, {})
+        value = mapping.get(str(index)) or mapping.get(index, default)
+        return (value or "").strip()
+
+    @staticmethod
+    def _extract_title_from_body(body_contents: list) -> str:
+        """從 body contents 提取標題（size=xl 或 weight=bold 的文字）"""
+        for item in body_contents:
+            if item.get("type") != "text":
+                continue
+            if item.get("size") == "xl" or item.get("weight") == "bold":
+                title = (item.get("text") or "").strip()
+                if title:
+                    return title
+        return "訊息"  # FB 要求 title 必填
+
+    @staticmethod
+    def _extract_subtitle_from_body(body_contents: list) -> str:
+        """從 body contents 提取副標題（size=sm 的文字）"""
+        for item in body_contents:
+            if item.get("type") == "text" and item.get("size") == "sm":
+                return (item.get("text") or "").strip()
+        return ""
+
+    @staticmethod
+    def _build_default_action(hero: dict, metadata: dict) -> dict | None:
+        """建立 default_action（點擊卡片的動作）"""
+        url = MessageService._ensure_url_protocol(hero.get("action", {}).get("uri", ""))
+        if not url:
+            return None
+
+        action_type = metadata.get("heroActionType", "url")
+        if action_type == "postback":
+            payload = metadata.get("heroActionPayload", "") or ""
+            return {"type": "postback", "payload": payload, "extra_url": url}
+        return {"type": "web_url", "url": url}
+
+    @staticmethod
+    def _build_button(action: dict, metadata: dict, index: int) -> dict | None:
+        """建立單一按鈕"""
+        btn_title = (action.get("label") or "按鈕").strip()
+        btn_type = MessageService._get_metadata_value(metadata, "buttonTypes", index, "url")
+        url = MessageService._ensure_url_protocol(action.get("uri", ""))
+
+        payload = MessageService._get_metadata_value(metadata, "buttonLabels", index)
+        trigger_message = MessageService._get_metadata_value(metadata, "buttonPayloads", index)
+
+        if btn_type == "postback":
+            return {
+                "type": "postback",
+                "title": btn_title,
+                "subtitle": trigger_message or "",
+                "payload": payload or "",
+                "extra_url": url or "",
+            }
+
+        if not url:
+            return None
+        return {"type": "web_url", "title": btn_title, "url": url, "payload": payload or ""}
+
+    @staticmethod
+    def _transform_bubble_to_element(bubble: dict) -> dict:
+        """將單一 bubble 轉換為 FB element"""
+        metadata = bubble.get("_metadata", {})
+        body_contents = bubble.get("body", {}).get("contents", [])
+        hero = bubble.get("hero", {})
+        footer_contents = bubble.get("footer", {}).get("contents", [])
+
+        element = {
+            "title": MessageService._extract_title_from_body(body_contents)
+        }
+
+        subtitle = MessageService._extract_subtitle_from_body(body_contents)
+        if subtitle:
+            element["subtitle"] = subtitle
+
+        image_url = (hero.get("url") or "").strip()
+        element["image_url"] = ""
+        if image_url and image_url.startswith(("http://", "https://")):
+            element["image_url"] = image_url
+
+        default_action = MessageService._build_default_action(hero, metadata)
+        if default_action:
+            element["default_action"] = default_action
+
+        buttons = []
+        button_index = 0
+        for item in footer_contents:
+            if item.get("type") != "button" or len(buttons) >= 3:
+                continue
+            button = MessageService._build_button(item.get("action", {}), metadata, button_index)
+            if button:
+                buttons.append(button)
+            button_index += 1
+
+        if buttons:
+            element["buttons"] = buttons
+
+        return element
+
+    @staticmethod
+    def _transform_fb_message_to_api_format(message: Message) -> dict:
+        """將 Flex Message 格式轉換為外部 FB API 格式"""
+        flex_json = json.loads(message.fb_message_json)
+
+        flex_type = flex_json.get("type")
+        if flex_type == "carousel":
+            bubbles = flex_json.get("contents", [])
+        elif flex_type == "bubble":
+            bubbles = [flex_json]
+        else:
+            bubbles = []
+
+        api_elements = [
+            MessageService._transform_bubble_to_element(bubble)
+            for bubble in bubbles
+        ]
+
+        if message.target_type == "all_friends":
+            target_type = "all"
+            tag_include = []
+            tag_exclude = []
+        else:
+            target_type = "tagged"
+            target_filter = message.target_filter or {}
+            tag_include = target_filter.get("include", [])
+            tag_exclude = target_filter.get("exclude", [])
+
+        return {
+            "title": message.message_title or "",
+            "channel": "FB",
+            "target_type": target_type,
+            "tag_include": tag_include,
+            "tag_exclude": tag_exclude,
+            "element": api_elements
+        }
+
+    # ============================================================
+    # FB → LINE 反向轉換（用於顯示 FB 已發送訊息詳情）
+    # ============================================================
+    @staticmethod
+    def _transform_fb_element_to_bubble(element: dict) -> dict:
+        """將 FB element 反向轉換為 LINE Flex Bubble 格式"""
+        bubble = {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": []
+            }
+        }
+
+        # Hero (圖片)
+        if element.get("image_url"):
+            hero = {
+                "type": "image",
+                "url": element["image_url"],
+                "size": "full",
+                "aspectRatio": "20:13",
+                "aspectMode": "cover"
+            }
+            # default_action → hero.action
+            if element.get("default_action"):
+                da = element["default_action"]
+                if da.get("type") == "web_url" and da.get("url"):
+                    hero["action"] = {"type": "uri", "uri": da["url"]}
+            bubble["hero"] = hero
+
+        # Body (標題、副標題)
+        body_contents = []
+        if element.get("title"):
+            body_contents.append({
+                "type": "text",
+                "text": element["title"],
+                "weight": "bold",
+                "size": "xl"
+            })
+        if element.get("subtitle"):
+            body_contents.append({
+                "type": "text",
+                "text": element["subtitle"],
+                "size": "sm",
+                "color": "#999999",
+                "margin": "md"
+            })
+        if body_contents:
+            bubble["body"]["contents"] = body_contents
+
+        # Footer (按鈕)
+        buttons = element.get("buttons", [])
+        if buttons:
+            footer_contents = []
+            for btn in buttons[:3]:  # 最多 3 個按鈕
+                if btn.get("type") == "web_url":
+                    footer_contents.append({
+                        "type": "button",
+                        "style": "link",
+                        "action": {
+                            "type": "uri",
+                            "label": btn.get("title", "按鈕"),
+                            "uri": btn.get("url", "")
+                        }
+                    })
+                elif btn.get("type") == "postback":
+                    footer_contents.append({
+                        "type": "button",
+                        "style": "link",
+                        "action": {
+                            "type": "postback",
+                            "label": btn.get("title", "按鈕"),
+                            "data": btn.get("payload", "")
+                        }
+                    })
+            if footer_contents:
+                bubble["footer"] = {
+                    "type": "box",
+                    "layout": "vertical",
+                    "spacing": "sm",
+                    "contents": footer_contents
+                }
+
+        return bubble
+
+    @staticmethod
+    def _transform_fb_detail_to_flex_message(fb_cards: list) -> str:
+        """將 FB detail API 返回的卡片列表轉換為 Flex Message JSON"""
+        if not fb_cards:
+            return "{}"
+
+        bubbles = [
+            MessageService._transform_fb_element_to_bubble(card)
+            for card in fb_cards
+        ]
+
+        if len(bubbles) == 1:
+            flex_message = bubbles[0]
+        else:
+            flex_message = {
+                "type": "carousel",
+                "contents": bubbles
+            }
+
+        return json.dumps(flex_message, ensure_ascii=False)
 
     # ============================================================
     # line_app 配置
@@ -58,13 +317,18 @@ class MessageService:
         interaction_tags: Optional[List[str]] = None,
         admin_id: Optional[int] = None,
         message_title: Optional[str] = None,
-        draft_id: Optional[int] = None
+        draft_id: Optional[int] = None,
+        platform: Optional[str] = "LINE",
+        fb_message_json: Optional[str] = None,
+        estimated_send_count: Optional[int] = None,
+        created_by: Optional[int] = None,
+        channel_id: Optional[str] = None,
     ) -> Message:
         """创建群发消息
 
         Args:
             db: 数据库 session
-            flex_message_json: 前端生成的 Flex Message JSON 字符串
+            flex_message_json: LINE Flex Message JSON 字符串
             target_type: 发送对象类型 ("all_friends" | "filtered")
             schedule_type: 发送方式 ("immediate" | "scheduled" | "draft")
             template_name: 模板名称（可选）
@@ -77,6 +341,10 @@ class MessageService:
             admin_id: 创建者 ID（可选）
             message_title: 消息标题（可选，用于列表显示）
             draft_id: 来源草稿 ID（可选，有值时复制草稿发布，原草稿保留）
+            platform: 发送平台 ("LINE" | "Facebook" | "Instagram")
+            fb_message_json: Facebook Messenger JSON 字符串（可选）
+            estimated_send_count: 預計發送人數（可选，FB 渠道由前端傳入）
+            channel_id: 渠道 ID（LINE channel_id 或 FB page_id）
 
         Returns:
             创建的消息对象
@@ -95,6 +363,10 @@ class MessageService:
                 thumbnail=thumbnail,
                 interaction_tags=interaction_tags,
                 message_title=message_title,
+                platform=platform,
+                fb_message_json=fb_message_json,
+                estimated_send_count=estimated_send_count,
+                created_by=created_by,
             )
 
         # 1. 创建基础模板（仅用于关联，实际内容存储在 Message.flex_message_json）
@@ -127,25 +399,38 @@ class MessageService:
             target_filter=target_filter or {},
             send_status=send_status,
             campaign_id=campaign_id,
-            flex_message_json=flex_message_json,  # 直接存储 Flex Message JSON
+            platform=platform or "LINE",  # 發送平台
+            channel_id=channel_id,  # 渠道 ID（LINE channel_id 或 FB page_id）
+            flex_message_json=flex_message_json,  # LINE Flex Message JSON
+            fb_message_json=fb_message_json,  # Facebook Messenger JSON
             message_title=message_title or notification_message or thumbnail,  # 优先使用前端传入的 message_title（訊息標題）
             notification_message=notification_message,  # 保存通知推播文字
             thumbnail=thumbnail,
             interaction_tags=normalized_tags,
-            # created_by=admin_id  # 如果 Message 模型有此字段
+            created_by=created_by,  # 發送人員（當前登入者 ID）
         )
         if scheduled_at:
             message.scheduled_datetime_utc = scheduled_at
 
-        try:
-            estimated_count = await self._calculate_target_count(
-                db,
-                target_type,
-                target_filter or {},
-            )
-        except Exception as e:
-            logger.error(f"❌ 計算預計發送人數失敗: {e}")
-            estimated_count = 0
+        # 計算預計發送人數
+        # FB 渠道：使用前端傳入的值（來自外部 FB API）
+        # LINE 渠道：使用本地計算
+        if estimated_send_count and estimated_send_count > 0:
+            # 前端已傳入預計人數（FB 渠道）
+            estimated_count = estimated_send_count
+            logger.info(f"📊 使用前端傳入的預計發送人數: {estimated_count} (platform={platform})")
+        else:
+            # 本地計算（LINE 渠道）
+            try:
+                estimated_count = await self._calculate_target_count(
+                    db,
+                    target_type,
+                    target_filter or {},
+                )
+                logger.info(f"📊 本地計算預計發送人數: {estimated_count} (platform={platform})")
+            except Exception as e:
+                logger.error(f"❌ 計算預計發送人數失敗: {e}")
+                estimated_count = 0
 
         message.estimated_send_count = estimated_count
         db.add(message)
@@ -261,13 +546,17 @@ class MessageService:
         thumbnail: Optional[str] = None,
         interaction_tags: Optional[List[str]] = None,
         message_title: Optional[str] = None,
+        platform: Optional[str] = None,
+        fb_message_json: Optional[str] = None,
+        estimated_send_count: Optional[int] = None,
+        created_by: Optional[int] = None,
     ) -> Message:
         """从草稿发布 - 复制成新记录，原草稿保留
 
         Args:
             db: 数据库 session
             draft_id: 来源草稿 ID
-            flex_message_json: Flex Message JSON（可覆盖草稿内容）
+            flex_message_json: LINE Flex Message JSON（可覆盖草稿内容）
             target_type: 发送对象类型
             schedule_type: 发送方式 ("immediate" | "scheduled")
             target_filter: 筛选条件
@@ -276,6 +565,9 @@ class MessageService:
             thumbnail: 缩略图 URL
             interaction_tags: 互动标签列表
             message_title: 消息标题
+            platform: 发送平台
+            fb_message_json: Facebook Messenger JSON（可覆盖草稿内容）
+            estimated_send_count: 預計發送人數（可选，FB 渠道由前端傳入）
 
         Returns:
             新创建的消息对象（原草稿保持不变）
@@ -315,27 +607,40 @@ class MessageService:
             target_filter=target_filter if target_filter is not None else draft.target_filter,
             send_status=send_status,
             campaign_id=draft.campaign_id,
+            platform=platform or draft.platform or "LINE",  # 發送平台
             flex_message_json=flex_message_json or draft.flex_message_json,
+            fb_message_json=fb_message_json or draft.fb_message_json,  # Facebook JSON
             message_title=message_title or draft.message_title,
             notification_message=notification_message or draft.notification_message,
             thumbnail=thumbnail or draft.thumbnail,
             interaction_tags=normalized_tags,
             source_draft_id=draft_id,  # 记录来源草稿
+            created_by=created_by,  # 發送人員（當前登入者 ID）
         )
 
         if scheduled_at and schedule_type == "scheduled":
             new_message.scheduled_datetime_utc = scheduled_at
 
         # 5. 计算预计发送人数
-        try:
-            estimated_count = await self._calculate_target_count(
-                db,
-                new_message.target_type,
-                new_message.target_filter or {},
-            )
-        except Exception as e:
-            logger.error(f"❌ 計算預計發送人數失敗: {e}")
-            estimated_count = 0
+        # FB 渠道：使用前端傳入的值（來自外部 FB API）
+        # LINE 渠道：使用本地計算
+        actual_platform = new_message.platform or "LINE"
+        if estimated_send_count and estimated_send_count > 0:
+            # 前端已傳入預計人數（FB 渠道）
+            estimated_count = estimated_send_count
+            logger.info(f"📊 使用前端傳入的預計發送人數: {estimated_count} (platform={actual_platform})")
+        else:
+            # 本地計算（LINE 渠道）
+            try:
+                estimated_count = await self._calculate_target_count(
+                    db,
+                    new_message.target_type,
+                    new_message.target_filter or {},
+                )
+                logger.info(f"📊 本地計算預計發送人數: {estimated_count} (platform={actual_platform})")
+            except Exception as e:
+                logger.error(f"❌ 計算預計發送人數失敗: {e}")
+                estimated_count = 0
 
         new_message.estimated_send_count = estimated_count
 
@@ -358,6 +663,200 @@ class MessageService:
 
         return new_message
 
+    async def _get_fb_sent_count_from_api(self) -> int:
+        """
+        從 FB 外部 API 獲取已發送消息的數量（用於全局統計）
+
+        Returns:
+            int: FB 已發送消息數量
+        """
+        try:
+            # 1. Firm Login 獲取 JWT Token
+            fb_client = FbMessageClient()
+            login_result = await fb_client.firm_login(
+                account=settings.FB_FIRM_ACCOUNT,
+                password=settings.FB_FIRM_PASSWORD,
+            )
+
+            if not login_result.get("ok"):
+                logger.warning(f"FB firm_login 失敗: {login_result.get('error')}")
+                return 0
+
+            jwt_token = login_result.get("access_token")
+
+            # 2. 調用 FB 外部 API 獲取群發消息列表
+            broadcast_result = await fb_client.get_broadcast_list(jwt_token)
+
+            if not broadcast_result.get("ok"):
+                logger.warning(f"FB 獲取群發列表失敗: {broadcast_result.get('error')}")
+                return 0
+
+            fb_data = broadcast_result.get("data", [])
+
+            # 3. 只計數已發送 (status === 1)
+            fb_sent_count = sum(1 for item in fb_data if item.get("status") == 1)
+
+            logger.info(f"✅ 從 FB 外部 API 獲取已發送消息數量: {fb_sent_count}")
+            return fb_sent_count
+
+        except Exception as e:
+            logger.error(f"從 FB 外部 API 獲取消息計數失敗: {e}", exc_info=True)
+            return 0
+
+    async def _get_fb_sent_messages_from_api(self, db: AsyncSession) -> List[MessageListItem]:
+        """
+        從 FB 外部 API 獲取已發送消息的完整數據（用於合併顯示）
+
+        Args:
+            db: 數據庫會話（用於查詢發送人員信息）
+
+        Returns:
+            List[MessageListItem]: FB 已發送消息列表（轉換為統一格式）
+        """
+        try:
+            # 1. Firm Login 獲取 JWT Token
+            fb_client = FbMessageClient()
+            login_result = await fb_client.firm_login(
+                account=settings.FB_FIRM_ACCOUNT,
+                password=settings.FB_FIRM_PASSWORD,
+            )
+
+            if not login_result.get("ok"):
+                logger.warning(f"FB firm_login 失敗: {login_result.get('error')}")
+                return []
+
+            jwt_token = login_result.get("access_token")
+
+            # 2. 調用 FB 外部 API 獲取群發消息列表
+            broadcast_result = await fb_client.get_broadcast_list(jwt_token)
+
+            if not broadcast_result.get("ok"):
+                logger.warning(f"FB 獲取群發列表失敗: {broadcast_result.get('error')}")
+                return []
+
+            fb_data = broadcast_result.get("data", [])
+
+            # 3. 過濾只要已發送 (status === 1)
+            fb_sent = [item for item in fb_data if item.get("status") == 1]
+
+            # 4. 收集所有 admin_account 並批量查詢用戶信息
+            from app.models.admin import Admin
+            from app.schemas.message import CreatorInfo
+
+            # 先查詢默認 Admin（id=1 或第一個），作為找不到匹配時的後備
+            default_admin_query = select(Admin).order_by(Admin.id).limit(1)
+            default_admin_result = await db.execute(default_admin_query)
+            default_admin = default_admin_result.scalar_one_or_none()
+
+            default_creator_info = None
+            if default_admin:
+                default_creator_info = CreatorInfo(
+                    id=default_admin.id,
+                    username=default_admin.name or default_admin.email,
+                    full_name=default_admin.email
+                )
+                logger.info(f"✅ 設置默認 Admin: {default_creator_info.username} (ID: {default_admin.id})")
+
+            # FB API 返回 admin_account（帳號名），需要通過 email 或 name 查詢
+            admin_accounts = {item.get("admin_account") for item in fb_sent if item.get("admin_account")}
+            admin_map: Dict[str, CreatorInfo] = {}  # key 改為 admin_account 字符串
+
+            if admin_accounts:
+                # 通過 email 或 name 查詢 Admin（FB API 的 admin_account 可能對應 email 或 name）
+                admin_query = select(Admin).where(
+                    or_(
+                        Admin.email.in_(admin_accounts),
+                        Admin.name.in_(admin_accounts)
+                    )
+                )
+                admin_result = await db.execute(admin_query)
+                admins = admin_result.scalars().all()
+
+                # 創建 account -> CreatorInfo 映射
+                for admin in admins:
+                    creator_info = CreatorInfo(
+                        id=admin.id,
+                        username=admin.name or admin.email,  # 使用 name，若無則用 email
+                        full_name=admin.email  # email 作為 full_name
+                    )
+                    # 同時以 email 和 name 作為 key（因為不確定 FB API 返回的是哪個）
+                    if admin.email:
+                        admin_map[admin.email] = creator_info
+                    if admin.name:
+                        admin_map[admin.name] = creator_info
+
+                logger.info(f"✅ 查詢到 {len(admins)} 位 FB 發送人員信息，創建 {len(admin_map)} 個映射")
+
+            # 5. 轉換為 MessageListItem 格式
+            message_items = []
+            for item in fb_sent:
+                try:
+                    # 創建虛擬 template（FB 外部 API 沒有 template 信息）
+                    from app.schemas.message import TemplateInfo
+                    virtual_template = TemplateInfo(
+                        id=-1,  # 虛擬 ID，表示來自外部 API
+                        template_type="Facebook",
+                        name=f"FB_{item.get('title', 'Untitled')}"
+                    )
+
+                    # 獲取發送人員信息（使用 admin_account）
+                    admin_account = item.get("admin_account")
+                    created_by = admin_map.get(admin_account) if admin_account and admin_account in admin_map else None
+
+                    # 如果數據庫中找不到對應 Admin，直接使用 FB API 返回的 admin_account 作為顯示名稱
+                    if not created_by and admin_account:
+                        created_by = CreatorInfo(
+                            id=-1,  # 虛擬 ID，表示來自外部 API
+                            username=admin_account,
+                            full_name=admin_account
+                        )
+                    elif not created_by:
+                        # 若 admin_account 也沒有，才使用默認 Admin
+                        created_by = default_creator_info
+
+                    # ✅ 提取受众筛选标签（从 FB API 的 keywords 字段）
+                    keywords = item.get("keywords", [])
+                    interaction_tags = []
+                    if keywords and isinstance(keywords, list):
+                        # 提取所有标签名称
+                        interaction_tags = [
+                            k.get("name", "").strip()
+                            for k in keywords
+                            if isinstance(k, dict) and k.get("name")
+                        ]
+                        # 去重和过滤空值
+                        interaction_tags = list(set(filter(None, interaction_tags)))
+                        logger.debug(f"📝 FB 消息 {item.get('id')} 提取到标签: {interaction_tags}")
+
+                    message_item = MessageListItem(
+                        id=f"fb-{item.get('id')}",  # ✅ 加上 fb- 前綴，讓前端識別為 FB 訊息
+                        platform="Facebook",
+                        message_title=item.get("title", ""),
+                        template=virtual_template,  # ✅ 提供 template
+                        send_status="已發送",
+                        send_count=item.get("amount", 0),
+                        click_count=item.get("click_amount", 0),
+                        created_at=datetime.fromtimestamp(item.get("create_time", 0)) if item.get("create_time") else datetime.now(),
+                        send_time=datetime.fromtimestamp(item.get("create_time", 0)) if item.get("create_time") else None,
+                        # 其他欄位使用默認值
+                        scheduled_datetime_utc=None,
+                        channel_id=None,
+                        channel_name=item.get("channel_name"),  # ✅ 使用 FB API 返回的粉專名稱
+                        interaction_tags=interaction_tags or [],  # ✅ 使用提取的标签
+                        created_by=created_by,  # ✅ 設置發送人員
+                    )
+                    message_items.append(message_item)
+                except Exception as e:
+                    logger.error(f"轉換 FB 消息格式失敗: {e}, item={item}")
+                    continue
+
+            logger.info(f"✅ 從 FB 外部 API 獲取 {len(message_items)} 條已發送消息")
+            return message_items
+
+        except Exception as e:
+            logger.error(f"從 FB 外部 API 獲取消息失敗: {e}", exc_info=True)
+            return []
+
     async def list_messages(
         self,
         db: AsyncSession,
@@ -368,7 +867,7 @@ class MessageService:
         page: int = 1,
         page_size: int = 20,
     ) -> Dict[str, Any]:
-        """獲取群發訊息列表"""
+        """獲取群發訊息列表（自動合併本地 DB + FB 外部 API）"""
 
         def apply_filters(query):
             if filters:
@@ -408,40 +907,108 @@ class MessageService:
             status, count = row
             status_counts[str(status)] = int(count or 0)
 
+        # ✅ 全局狀態統計：始終包含 FB 已發送數量（即使當前查詢其他狀態）
+        # 為了避免重複調用 FB API，這裡只獲取計數
+        try:
+            fb_sent_count = await self._get_fb_sent_count_from_api()
+            status_counts["已發送"] = status_counts.get("已發送", 0) + fb_sent_count
+            logger.info(f"✅ 全局狀態統計已包含 FB 已發送數量: {fb_sent_count}")
+        except Exception as e:
+            logger.error(f"❌ 獲取 FB 已發送計數失敗: {e}")
+
         # 主查詢
-        base_query = select(Message).options(selectinload(Message.template))
+        base_query = select(Message).options(
+            selectinload(Message.template),
+            selectinload(Message.creator),
+        )
         base_query = apply_filters(base_query)
 
         if send_status:
             base_query = base_query.where(Message.send_status == send_status)
 
-        # 統計總數
+        # 統計總數（僅本地 DB，FB 外部 API 的總數稍後添加）
         count_query = select(func.count()).select_from(base_query.subquery())
         total_result = await db.execute(count_query)
         total = total_result.scalar() or 0
 
-        # 分頁
-        offset = max(page - 1, 0) * page_size
-        query = (
-            base_query.order_by(Message.created_at.desc())
-            .offset(offset)
-            .limit(page_size)
-        )
+        # ⚠️ 先不分頁，獲取所有本地 DB 消息（稍後與 FB 消息合併後再分頁）
+        query = base_query.order_by(Message.created_at.desc())
         result = await db.execute(query)
         messages = result.scalars().all()
 
-        # 為每條訊息計算 click_count
+        # 收集所有 channel_id 並查詢對應的 channel_name
+        line_channel_ids = {msg.channel_id for msg in messages if msg.channel_id and msg.platform == "LINE"}
+        fb_page_ids = {msg.channel_id for msg in messages if msg.channel_id and msg.platform in ("Facebook", "Instagram")}
+
+        # 查詢頻道名稱並建立映射
+        channel_name_map: Dict[str, str] = {}
+        if line_channel_ids:
+            line_result = await db.execute(
+                select(LineChannel.channel_id, LineChannel.channel_name).where(
+                    LineChannel.channel_id.in_(line_channel_ids)
+                )
+            )
+            channel_name_map.update({
+                f"LINE:{row.channel_id}": row.channel_name
+                for row in line_result.all() if row.channel_id and row.channel_name
+            })
+
+        if fb_page_ids:
+            fb_result = await db.execute(
+                select(FbChannel.page_id, FbChannel.channel_name).where(
+                    FbChannel.page_id.in_(fb_page_ids)
+                )
+            )
+            channel_name_map.update({
+                f"Facebook:{row.page_id}": row.channel_name
+                for row in fb_result.all() if row.page_id and row.channel_name
+            })
+
+        # 為每條訊息計算 click_count 和設定頻道名稱
+        click_counts_by_message_id = await self.get_messages_click_counts(
+            db,
+            [int(m.id) for m in messages if m and m.id is not None],
+        )
         message_items = []
         for message in messages:
             item = MessageListItem.model_validate(message)
-            # 計算該訊息的點擊次數（互動標籤 trigger_member_count 加總）
-            click_count = await self.get_message_click_count(db, message.id)
-            item.click_count = click_count
+            item.click_count = int(click_counts_by_message_id.get(int(message.id), 0))
+            if message.creator:
+                item.created_by = CreatorInfo.model_validate(message.creator)
+            if message.channel_id and message.platform:
+                item.channel_name = channel_name_map.get(f"{message.platform}:{message.channel_id}")
             message_items.append(item)
 
+        # ✅ 方案 A：智能判斷是否需要合併 FB 外部 API 數據
+        # 只有在查詢"已發送"或未指定狀態時，才調用 FB API
+        should_merge_fb = (send_status == "已發送" or send_status is None)
+
+        if should_merge_fb:
+            logger.info(f"✅ 查詢狀態: {send_status or '全部'}, 需要合併 FB 外部 API 數據")
+            # 1. 獲取 FB 已發送消息（從外部 API，包含發送人員信息）
+            fb_sent_messages = await self._get_fb_sent_messages_from_api(db)
+
+            # 2. 合併本地 DB 消息和 FB 已發送消息
+            all_message_items = message_items + fb_sent_messages
+
+            # 3. 更新總數（status_counts 已在前面全局統計中包含 FB 數據）
+            total_with_fb = total + len(fb_sent_messages)
+        else:
+            logger.info(f"✅ 查詢狀態: {send_status}, 僅使用本地 DB 數據，跳過 FB API")
+            # 草稿、已排程 → 不調用 FB API
+            all_message_items = message_items
+            total_with_fb = total
+
+        # 4. 按 created_at 降序排序（確保數據一致性）
+        all_message_items.sort(key=lambda x: x.created_at if x.created_at else datetime.min, reverse=True)
+
+        # 5. ✅ 在 Python 中應用分頁（合併後分頁，確保正確的 page_size）
+        offset = max(page - 1, 0) * page_size
+        paginated_items = all_message_items[offset:offset + page_size]
+
         page_response = PageResponse[MessageListItem].create(
-            items=message_items,
-            total=total,
+            items=paginated_items,
+            total=total_with_fb,
             page=page,
             page_size=page_size,
         )
@@ -476,9 +1043,12 @@ class MessageService:
             }
         """
         # 1. 计算预计发送人数
-        estimated_count = await self._calculate_target_count(
-            db, target_type, target_filter
-        )
+        try:
+            estimated_count = await self._calculate_target_count(db, target_type, target_filter)
+        except Exception as e:
+            # 容错：若目标人数统计失败（例如资料表尚未建立），仍回传配额资讯避免前端卡在「载入中」
+            logger.error(f"❌ 预计发送人数统计失败: {e}", exc_info=True)
+            estimated_count = 0
 
         logger.info(f"📊 预计发送人数: {estimated_count}")
 
@@ -517,7 +1087,7 @@ class MessageService:
         target_type: str,
         target_filter: Optional[Dict] = None
     ) -> int:
-        """计算符合条件的 LINE 好友数量（使用 line_friends 表）
+        """计算符合条件的會員數量（使用 members 表，配合 is_following、member_tags 和 member_interaction_tags）
 
         Args:
             db: 数据库 session
@@ -525,7 +1095,7 @@ class MessageService:
             target_filter: 筛选条件 {"include": [...], "exclude": [...]}
 
         Returns:
-            符合条件的 LINE 好友数量
+            符合条件的會員數量
         """
         # 容错处理：filtered 但没有 filter 时，视为 all_friends
         if target_type == "filtered":
@@ -536,85 +1106,95 @@ class MessageService:
                 target_type = "all_friends"
 
         if target_type == "all_friends":
-            # 查询所有正在关注的 LINE 好友
+            # 查询所有正在关注的會員
             result = await db.execute(
                 text("""
                     SELECT COUNT(*)
-                    FROM line_friends
+                    FROM members
                     WHERE line_uid IS NOT NULL
                       AND line_uid != ''
                       AND is_following = 1
                 """)
             )
             count = result.scalar() or 0
-            logger.debug(f"📊 所有 LINE 好友数量: {count}")
+            logger.debug(f"📊 所有正在關注的會員數量: {count}")
             return count
 
         elif target_type == "filtered" and target_filter:
-            # 根据标签筛选 LINE 好友（通过 member_id 关联）
+            # 根据标签筛选會員（同時查詢 member_tags 和 member_interaction_tags）
             include_tags = target_filter.get("include", [])
             exclude_tags = target_filter.get("exclude", [])
 
             if include_tags:
-                # 包含指定标签的 LINE 好友
+                # 包含指定标签的會員（查詢會員標籤和互動標籤兩個表）
                 tag_placeholders = ", ".join([f":tag{i}" for i in range(len(include_tags))])
                 tag_params = {f"tag{i}": tag for i, tag in enumerate(include_tags)}
 
                 query_str = f"""
-                    SELECT COUNT(DISTINCT lf.id)
-                    FROM line_friends lf
-                    LEFT JOIN members m ON lf.member_id = m.id
-                    LEFT JOIN member_tags mt ON m.id = mt.member_id
-                    WHERE lf.line_uid IS NOT NULL
-                      AND lf.line_uid != ''
-                      AND lf.is_following = 1
-                      AND mt.tag_name IN ({tag_placeholders})
+                    SELECT COUNT(DISTINCT m.id)
+                    FROM members m
+                    WHERE m.line_uid IS NOT NULL
+                      AND m.line_uid != ''
+                      AND m.is_following = 1
+                      AND (
+                          m.id IN (
+                              SELECT member_id FROM member_tags
+                              WHERE tag_name IN ({tag_placeholders})
+                          )
+                          OR
+                          m.id IN (
+                              SELECT member_id FROM member_interaction_tags
+                              WHERE tag_name IN ({tag_placeholders})
+                          )
+                      )
                 """
 
-                # 如果同時有排除标签，添加排除条件
+                # 如果同時有排除标签，添加排除条件（同時排除兩個表的標籤）
                 if exclude_tags:
                     exclude_placeholders = ", ".join([f":exclude_tag{i}" for i in range(len(exclude_tags))])
                     exclude_params = {f"exclude_tag{i}": tag for i, tag in enumerate(exclude_tags)}
                     tag_params.update(exclude_params)
 
                     query_str += f"""
-                      AND lf.id NOT IN (
-                          SELECT DISTINCT lf2.id
-                          FROM line_friends lf2
-                          LEFT JOIN members m2 ON lf2.member_id = m2.id
-                          LEFT JOIN member_tags mt2 ON m2.id = mt2.member_id
-                          WHERE mt2.tag_name IN ({exclude_placeholders})
+                      AND m.id NOT IN (
+                          SELECT member_id FROM member_tags
+                          WHERE tag_name IN ({exclude_placeholders})
+                      )
+                      AND m.id NOT IN (
+                          SELECT member_id FROM member_interaction_tags
+                          WHERE tag_name IN ({exclude_placeholders})
                       )
                     """
 
                 result = await db.execute(text(query_str), tag_params)
                 count = result.scalar() or 0
-                logger.debug(f"📊 筛选后的 LINE 好友数量: {count}, filter={target_filter}")
+                logger.debug(f"📊 篩選後的會員數量: {count}, filter={target_filter}")
                 return count
 
             elif exclude_tags:
-                # 只有排除标签的情况
+                # 只有排除标签的情况（同時排除兩個表的標籤）
                 exclude_placeholders = ", ".join([f":exclude_tag{i}" for i in range(len(exclude_tags))])
                 exclude_params = {f"exclude_tag{i}": tag for i, tag in enumerate(exclude_tags)}
 
                 query_str = f"""
-                    SELECT COUNT(DISTINCT lf.id)
-                    FROM line_friends lf
-                    WHERE lf.line_uid IS NOT NULL
-                      AND lf.line_uid != ''
-                      AND lf.is_following = 1
-                      AND lf.id NOT IN (
-                          SELECT DISTINCT lf2.id
-                          FROM line_friends lf2
-                          LEFT JOIN members m ON lf2.member_id = m.id
-                          LEFT JOIN member_tags mt ON m.id = mt.member_id
-                          WHERE mt.tag_name IN ({exclude_placeholders})
+                    SELECT COUNT(DISTINCT m.id)
+                    FROM members m
+                    WHERE m.line_uid IS NOT NULL
+                      AND m.line_uid != ''
+                      AND m.is_following = 1
+                      AND m.id NOT IN (
+                          SELECT member_id FROM member_tags
+                          WHERE tag_name IN ({exclude_placeholders})
+                      )
+                      AND m.id NOT IN (
+                          SELECT member_id FROM member_interaction_tags
+                          WHERE tag_name IN ({exclude_placeholders})
                       )
                 """
 
                 result = await db.execute(text(query_str), exclude_params)
                 count = result.scalar() or 0
-                logger.debug(f"📊 排除标签后的 LINE 好友数量: {count}, filter={target_filter}")
+                logger.debug(f"📊 排除標籤後的會員數量: {count}, filter={target_filter}")
                 return count
 
         return 0
@@ -667,7 +1247,9 @@ class MessageService:
         self,
         db: AsyncSession,
         message_id: int,
-        channel_id: Optional[str] = None
+        channel_id: Optional[str] = None,
+        jwt_token: Optional[str] = None,
+        page_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """发送群发消息
 
@@ -675,6 +1257,8 @@ class MessageService:
             db: 数据库 session
             message_id: 消息 ID
             channel_id: LINE 频道 ID
+            jwt_token: FB 渠道需要的 JWT token
+            page_id: FB 粉絲專頁 ID
 
         Returns:
             {
@@ -689,17 +1273,82 @@ class MessageService:
         if not message:
             raise ValueError(f"消息不存在: ID={message_id}")
 
-        if not message.flex_message_json:
-            raise ValueError(f"消息缺少 Flex Message JSON 内容")
+        # 2. 根據平台路由發送
+        platform = message.platform or "LINE"
+        logger.info(f"📤 准备发送消息: ID={message_id}, Platform={platform}")
 
-        if self._is_scheduled(message):
-            await self._cancel_message_job(message_id)
-            message.scheduled_datetime_utc = None
-            logger.info(f"⏹️  Cleared scheduler job before sending message {message_id}")
+        if platform == "Facebook":
+            # Facebook 發送
+            if not message.fb_message_json:
+                raise ValueError("消息缺少 Facebook Messenger JSON 内容")
 
-        # 2. 发送消息
-        logger.info(f"📤 准备发送消息: ID={message_id}")
-        return await self._send_via_http(db, message, channel_id)
+            if not jwt_token:
+                raise ValueError("Facebook 發送需要 jwt_token")
+
+            if not page_id:
+                raise ValueError("Facebook 發送需要 page_id")
+
+            # 轉換格式
+            payload = self._transform_fb_message_to_api_format(message)
+            # 添加 page_id（API.XLSX 規格必填）
+            payload["page_id"] = page_id
+            import json
+            logger.info(f"📦 FB API payload: {json.dumps(payload, ensure_ascii=False, indent=2)}")
+
+            # 發送到外部 API
+            from app.clients.fb_message_client import FbMessageClient
+            fb_client = FbMessageClient()
+            result = await fb_client.send_broadcast_message(
+                payload=payload,
+                jwt_token=jwt_token
+            )
+            logger.info(f"📬 FB API result: {result}")
+
+            # 處理發送結果
+            if result.get("ok"):
+                # ✅ FB 發送成功：刪除本地記錄
+                # 已發送消息只在前端顯示（從外部 API 獲取）
+                sent_count = result.get("sent_count") or result.get("sent") or 0
+                failed_count = result.get("failed_count") or result.get("failed") or 0
+
+                logger.info(f"✅ FB 消息發送成功，刪除本地記錄: message_id={message_id}, sent={sent_count}")
+
+                # 刪除數據庫記錄
+                await db.delete(message)
+                await db.commit()
+            else:
+                # ❌ FB 發送失敗：保存失敗狀態
+                message.send_status = "發送失敗"
+                message.failure_reason = result.get("error", "未知錯誤")
+                sent_count = 0
+                failed_count = message.estimated_send_count or 0
+
+                logger.warning(f"⚠️ FB 消息發送失敗: message_id={message_id}, reason={message.failure_reason}")
+
+                await db.commit()
+
+            return {
+                "ok": result.get("ok", False),
+                "sent": sent_count,
+                "failed": failed_count,
+                "errors": [result.get("error")] if result.get("error") else None
+            }
+
+        elif platform == "Instagram":
+            # Instagram 發送（預留結構）
+            raise NotImplementedError("Instagram 發送功能開發中")
+
+        else:
+            # LINE 發送（現有邏輯）
+            if not message.flex_message_json:
+                raise ValueError(f"消息缺少 Flex Message JSON 内容")
+
+            if self._is_scheduled(message):
+                await self._cancel_message_job(message_id)
+                message.scheduled_datetime_utc = None
+                logger.info(f"⏹️  Cleared scheduler job before sending message {message_id}")
+
+            return await self._send_via_http(db, message, channel_id)
 
     async def _send_via_http(
         self,
@@ -840,36 +1489,47 @@ class MessageService:
         db: AsyncSession,
         message_id: int
     ) -> int:
-        """获取消息的点击次数（互動標籤的 trigger_member_count 加總）
+        """获取消息的点击次数（依規格：從 ComponentInteractionLog 統計）
 
         Args:
             db: 数据库 session
             message_id: 消息 ID
 
         Returns:
-            点击次数总计（各互動標籤的 trigger_member_count 加總）
+            點擊次數（不重複 line_id，僅計算 interaction_type='button_url'）
         """
-        # 1. 先取得訊息的 interaction_tags
-        msg_stmt = select(Message.interaction_tags).where(Message.id == message_id)
-        msg_result = await db.execute(msg_stmt)
-        interaction_tags_json = msg_result.scalar_one_or_none()
+        counts = await self.get_messages_click_counts(db, [int(message_id)])
+        return int(counts.get(int(message_id), 0))
 
-        if not interaction_tags_json:
-            return 0
+    async def get_messages_click_counts(
+        self,
+        db: AsyncSession,
+        message_ids: List[int],
+    ) -> Dict[int, int]:
+        """批量获取消息点击次数（依規格：從 ComponentInteractionLog 統計）"""
+        normalized_ids = [int(mid) for mid in message_ids if mid is not None]
+        if not normalized_ids:
+            return {}
 
-        # 2. 查詢這些標籤的 trigger_member_count 加總
-        tag_names = interaction_tags_json  # JSON 已經是 list
-        if not tag_names:
-            return 0
-
-        stmt = select(func.sum(InteractionTag.trigger_member_count)).where(
-            InteractionTag.tag_name.in_(tag_names)
+        stmt = (
+            select(
+                ComponentInteractionLog.message_id.label("message_id"),
+                func.count(func.distinct(ComponentInteractionLog.line_id)).label(
+                    "unique_clicks"
+                ),
+            )
+            .where(
+                ComponentInteractionLog.message_id.in_(normalized_ids),
+                ComponentInteractionLog.interaction_type == InteractionType.BUTTON_URL,
+            )
+            .group_by(ComponentInteractionLog.message_id)
         )
-        result = await db.execute(stmt)
-        total = result.scalar() or 0
 
-        logger.debug(f"📊 消息 ID={message_id} 點擊次數: {total} (來自標籤: {tag_names})")
-        return total
+        result = await db.execute(stmt)
+        counts: Dict[int, int] = {int(row.message_id): int(row.unique_clicks or 0) for row in result.all()}
+        for mid in normalized_ids:
+            counts.setdefault(int(mid), 0)
+        return counts
 
     async def delete_message(
         self,
@@ -888,35 +1548,72 @@ class MessageService:
         Raises:
             ValueError: 消息不存在或狀態不允許刪除
         """
-        # 1. 查詢消息
-        stmt = select(Message).where(Message.id == message_id).options(
-            selectinload(Message.template)
-        )
+        # 查詢消息並驗證
+        message = await self._get_message_for_deletion(db, message_id)
+        template_id = message.template_id
+
+        logger.info(f"🗑️ 開始刪除消息: ID={message_id}, 狀態={message.send_status}")
+
+        # 取消排程任務
+        if self._is_scheduled(message):
+            await self._cancel_message_job(message.id)
+
+        # 刪除消息
+        await db.delete(message)
+        await db.flush()
+
+        # 清理未使用的模板
+        await self._cleanup_orphaned_template(db, template_id)
+
+        await db.commit()
+        logger.info(f"✅ 消息刪除成功: ID={message_id}")
+        return True
+
+    async def _get_message_for_deletion(
+        self,
+        db: AsyncSession,
+        message_id: int
+    ) -> Message:
+        """獲取並驗證可刪除的消息"""
+        stmt = select(Message).where(Message.id == message_id)
         result = await db.execute(stmt)
         message = result.scalar_one_or_none()
 
         if not message:
             raise ValueError(f"消息不存在: ID={message_id}")
 
-        # 2. 檢查狀態（僅允許刪除草稿和已排程）
         allowed_statuses = ["草稿", "已排程"]
         if message.send_status not in allowed_statuses:
-            raise ValueError(f"無法刪除狀態為「{message.send_status}」的消息，僅可刪除草稿或已排程消息")
+            raise ValueError(
+                f"無法刪除狀態為「{message.send_status}」的消息，僅可刪除草稿或已排程消息"
+            )
 
-        logger.info(f"🗑️ 開始刪除消息: ID={message_id}, 狀態={message.send_status}")
+        return message
 
-        if self._is_scheduled(message):
-            await self._cancel_message_job(message.id)
+    async def _cleanup_orphaned_template(
+        self,
+        db: AsyncSession,
+        template_id: int | None
+    ) -> None:
+        """刪除未被任何消息引用的模板"""
+        if not template_id:
+            return
 
-        # 3. 刪除關聯的 template（如果存在）
-        if message.template:
-            template_id = message.template.id
-            await db.delete(message.template)
-            logger.debug(f"🗑️ 刪除關聯模板: ID={template_id}")
+        # 檢查是否有其他消息引用此模板
+        count_stmt = select(func.count()).select_from(Message).where(
+            Message.template_id == template_id
+        )
+        count = await db.scalar(count_stmt)
 
-        # 4. 刪除消息本身
-        await db.delete(message)
-        await db.commit()
+        if count == 0:
+            from app.models.template import MessageTemplate
+            template_stmt = select(MessageTemplate).where(
+                MessageTemplate.id == template_id
+            )
+            template = await db.scalar(template_stmt)
 
-        logger.info(f"✅ 消息刪除成功: ID={message_id}")
-        return True
+            if template:
+                logger.debug(f"🗑️ 刪除關聯模板: ID={template_id}")
+                await db.delete(template)
+        else:
+            logger.debug(f"⏭️ 保留模板 ID={template_id}，仍有 {count} 個消息使用")

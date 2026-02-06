@@ -19,6 +19,8 @@ import { useAuth } from '../auth/AuthContext';
 import MemberNoteEditor from '../shared/MemberNoteEditor';
 import { useMembers } from '../../contexts/MembersContext';
 import Container from '../../imports/Container-8548-103';
+import { apiFetch, apiGet, apiPost, apiPut } from '../../utils/apiClient';
+import { getJwtToken } from '../../utils/token';
 // 新組件導入 (Figma v1087)
 import { ChatBubble } from './ChatBubble';
 import { ResponseModeIndicator } from './ResponseModeIndicator';
@@ -40,44 +42,79 @@ const formatDateWithWeekday = (dateStr?: string | null): string => {
   return `${year}/${month}/${day}（${weekday}）`;
 };
 
-// Removed mock messages - will load from API
-const mockMessages_REMOVED: ChatMessage[] = [
-  { id: 1, type: 'user', text: '文字訊息', time: '下午 03:30', isRead: false },
-  { id: 2, type: 'official', text: '官方文字訊息', time: '下午 03:40', isRead: true },
-  { id: 3, type: 'user', text: '文字訊息', time: '下午 04:30', isRead: false },
-  { id: 4, type: 'official', text: '官方文字訊息', time: '下午 04:50', isRead: true },
-  { id: 5, type: 'user', text: '文字訊息', time: '下午 05:30', isRead: false },
-  { id: 6, type: 'official', text: '官方文字訊息', time: '下午 05:40', isRead: true },
-];
+const TIMESTAMP_KEYS = ['timestamp', 'created_at', 'createdAt', 'sent_at', 'sentAt', 'created_at_iso', 'createdAtIso'] as const;
 
-const extractMessageTimestamp = (message: ChatMessage): string | undefined => {
-  return (
-    message.timestamp ||
-    (message as any)?.created_at ||
-    (message as any)?.createdAt ||
-    (message as any)?.sent_at ||
-    (message as any)?.sentAt ||
-    (message as any)?.created_at_iso ||
-    (message as any)?.createdAtIso ||
-    undefined
-  ) ?? undefined;
-};
-
-const findLatestMessageTimestamp = (messages: ChatMessage[]): string | undefined => {
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const ts = extractMessageTimestamp(messages[i]);
-    if (ts) {
-      return ts;
+function extractMessageTimestamp(message: ChatMessage): string | undefined {
+  const msg = message as Record<string, unknown>;
+  for (const key of TIMESTAMP_KEYS) {
+    if (typeof msg[key] === 'string') {
+      return msg[key] as string;
     }
   }
   return undefined;
-};
+}
+
+function findLatestMessageTimestamp(messages: ChatMessage[]): string | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const ts = extractMessageTimestamp(messages[i]);
+    if (ts) return ts;
+  }
+  return undefined;
+}
 
 // 內嵌組件已移至獨立檔案:
 // - UserAvatar, OfficialAvatar, MessageBubble → ChatBubble.tsx
 
-export default function ChatRoomLayout({ member: initialMember, memberId }: ChatRoomLayoutProps) {
-  const { fetchMemberById } = useMembers();
+// FB 訊息轉換函式：將外部 FB API 格式轉換為 ChatMessage 格式
+function transformFbMessages(fbData: Array<{
+  direction?: string;
+  message?: string | object;
+  time?: number;
+}>): ChatMessage[] {
+  const messages: ChatMessage[] = fbData.map((item, idx) => {
+    const directionRaw = (item.direction || 'outgoing').toLowerCase();
+    const isIncoming = ['ingoing', 'incoming'].includes(directionRaw);
+    const timestamp = item.time || 0;
+
+    // 解析訊息內容（支援 Template 格式）
+    let text: string;
+    if (typeof item.message === 'object' && item.message !== null) {
+      const attachment = (item.message as any)?.attachment;
+      if (attachment?.type === 'template') {
+        const elements = attachment.payload?.elements || [];
+        text = elements.map((el: any) => `${el.title || ''} - ${el.subtitle || ''}`).join('\n') || '[模板訊息]';
+      } else {
+        text = JSON.stringify(item.message);
+      }
+    } else {
+      text = String(item.message || '');
+    }
+
+    const dt = timestamp ? new Date(timestamp * 1000) : new Date();
+    return {
+      id: `fb_${idx}_${timestamp}`,
+      type: isIncoming ? 'user' : 'official',
+      text,
+      time: dt.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }),
+      timestamp: dt.toISOString(),
+      isRead: true,
+      source: isIncoming ? undefined : 'external',
+    } as ChatMessage;
+  });
+
+  // 按時間正序排列（舊→新）
+  messages.sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+  return messages;
+}
+
+export default function ChatRoomLayout({
+  member: initialMember,
+  memberId,
+  chatSessionApiBase = '/api/v1',
+  onPlatformChange,
+  initialPlatform,
+}: ChatRoomLayoutProps) {
+  const { fetchMemberById, getDisplayMemberById } = useMembers();
   const [member, setMember] = useState<Member | undefined>(initialMember);
   const [isLoadingMember, setIsLoadingMember] = useState(false);
 
@@ -96,7 +133,41 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
   const [interactionTags, setInteractionTags] = useState<string[]>(member?.interactionTags || []); // ✅ 使用真實互動標籤
 
   // 平台切換狀態 (Figma v1087)
-  const [currentPlatform, setCurrentPlatform] = useState<ChatPlatform>('LINE');
+  const [currentPlatform, setCurrentPlatform] = useState<ChatPlatform>(initialPlatform || 'LINE');
+  const [threadsMap, setThreadsMap] = useState<Record<string, string>>({});
+
+  // FB 外部 API 設定
+  const fbApiBaseUrl = useMemo(
+    () => (import.meta.env.VITE_FB_API_URL?.trim() || 'https://api-youth-tycg.star-bit.io').replace(/\/+$/, ''),
+    []
+  );
+  const [fbPageId, setFbPageId] = useState<string | null>(null);
+
+  // 載入 chat-session：平台與 thread 映射
+  const loadChatSession = useCallback(async () => {
+    const targetId = member?.id?.toString() || memberId;
+    if (!targetId) return;
+    try {
+      const query = initialPlatform === 'Facebook'
+        ? `?platform=${encodeURIComponent(initialPlatform)}`
+        : '';
+      const resp = await apiGet(`${chatSessionApiBase}/members/${targetId}/chat-session${query}`);
+      const result = await resp.json();
+      if (result.code === 200 && result.data) {
+        const { available_platforms, default_platform, threads } = result.data;
+        const platforms = (Array.isArray(result.data)
+          ? result.data
+          : Object.keys(threads || {})) as ChatPlatform[];
+        const finalPlatforms = (platforms.length ? platforms : ['LINE']) as ChatPlatform[];
+        setThreadsMap(threads || {});
+        const nextPlatform = (default_platform as ChatPlatform) || finalPlatforms[0] || 'LINE';
+        setCurrentPlatform(nextPlatform);
+        onPlatformChange?.(nextPlatform);
+      }
+    } catch (e) {
+      console.error('載入 chat-session 失敗', e);
+    }
+  }, [member?.id, memberId, onPlatformChange, chatSessionApiBase, initialPlatform]);
 
   // GPT 計時器狀態
   const [isGptManualMode, setIsGptManualMode] = useState(false);
@@ -109,37 +180,49 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
   const [isAvatarPressed, setIsAvatarPressed] = useState(false);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
   const messageTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const hasInitialScrolled = useRef(false);  // 追蹤是否已完成初次滾動
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
   const { logout } = useAuth();
 
+  // GPT 計時器：共用工具函式
+  const getGptApiUrl = useCallback(() => {
+    const platformParam = currentPlatform === 'Facebook' ? '?platform=Facebook' : '';
+    return `/api/v1/members/${member?.id}${platformParam}`;
+  }, [member?.id, currentPlatform]);
+
+  const clearGptTimer = useCallback(() => {
+    if (gptTimerRef.current) {
+      clearTimeout(gptTimerRef.current);
+      gptTimerRef.current = null;
+    }
+  }, []);
+
+  const clearGptLocalStorage = useCallback((memberId: number | string) => {
+    localStorage.removeItem(`gpt_fallback_${memberId}`);
+    localStorage.removeItem(`gpt_timer_${memberId}`);
+  }, []);
+
   // GPT 計時器函式：恢復自動模式（必須在 useEffect 之前定義）
   const restoreGptMode = useCallback(async () => {
     if (!member?.id) return;
 
-    console.log('🔄 [GPT Timer] 恢復自動模式, member_id:', member.id);
+    const apiUrl = getGptApiUrl();
+    console.log('🔄 [GPT Timer] 恢復自動模式', { member_id: member.id, platform: currentPlatform, url: apiUrl });
 
     try {
-      // 呼叫 API 設置 gpt_enabled = true
-      const token = localStorage.getItem('auth_token');
-      console.log('📡 [GPT Timer] 發送 API 請求 (恢復):', {
-        url: `/api/v1/members/${member.id}`,
-        method: 'PUT',
-        body: { gpt_enabled: true },
-        hasToken: !!token
-      });
-
-      const response = await fetch(`/api/v1/members/${member.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ gpt_enabled: true })
-      });
-
+      const response = await apiPut(apiUrl, { gpt_enabled: true });
       console.log('📥 [GPT Timer] API 回應狀態 (恢復):', response.status);
+
+      // 404 表示會員不存在於 DB，改用 localStorage
+      if (response.status === 404) {
+        console.log('📦 [GPT Timer] 會員不存在於 DB，使用 localStorage fallback (恢復)');
+        clearGptLocalStorage(member.id);
+        setIsGptManualMode(false);
+        clearGptTimer();
+        return;
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -147,59 +230,57 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
         throw new Error(`API 錯誤: ${response.status}`);
       }
 
-      const data = await response.json();
-      console.log('✅ [GPT Timer] API 成功 (恢復):', data);
-
-      // 清除 localStorage 狀態
-      localStorage.removeItem(`gpt_timer_${member.id}`);
-
-      // 更新 UI 狀態
-      setIsGptManualMode(false);
-
-      // 清除計時器
-      if (gptTimerRef.current) {
-        clearTimeout(gptTimerRef.current);
-        gptTimerRef.current = null;
-      }
-
       console.log('✅ [GPT Timer] GPT 自動模式已恢復');
-
+      localStorage.removeItem(`gpt_timer_${member.id}`);
+      setIsGptManualMode(false);
+      clearGptTimer();
     } catch (error) {
       console.error('❌ [GPT Timer] 恢復 GPT 自動模式失敗:', error);
     }
-  }, [member?.id]);
+  }, [member?.id, currentPlatform, getGptApiUrl, clearGptLocalStorage, clearGptTimer]);
 
   // GPT 計時器函式：啟動手動模式
   const startGptTimer = useCallback(async () => {
     if (!member?.id) return;
 
-    console.log('🔄 [GPT Timer] 啟動手動模式, member_id:', member.id);
+    const apiUrl = getGptApiUrl();
+    console.log('🔄 [GPT Timer] 啟動手動模式', { member_id: member.id, platform: currentPlatform, url: apiUrl });
 
-    // 清除現有計時器
-    if (gptTimerRef.current) {
-      clearTimeout(gptTimerRef.current);
-    }
+    clearGptTimer();
+
+    // 內部函式：設定手動模式 UI 和計時器
+    const activateManualMode = () => {
+      setIsGptManualMode(true);
+      gptTimerRef.current = setTimeout(restoreGptMode, MANUAL_MODE_DURATION);
+      console.log('⏱️ [GPT Timer] 計時器已啟動，將在', MANUAL_MODE_DURATION / 1000, '秒後恢復');
+    };
+
+    const saveTimerState = () => {
+      localStorage.setItem(`gpt_timer_${member.id}`, JSON.stringify({
+        memberId: member.id,
+        isManualMode: true,
+        startTime: Date.now()
+      }));
+    };
 
     try {
-      // 呼叫 API 設置 gpt_enabled = false
-      const token = localStorage.getItem('auth_token');
-      console.log('📡 [GPT Timer] 發送 API 請求:', {
-        url: `/api/v1/members/${member.id}`,
-        method: 'PUT',
-        body: { gpt_enabled: false },
-        hasToken: !!token
-      });
-
-      const response = await fetch(`/api/v1/members/${member.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ gpt_enabled: false })
-      });
-
+      const response = await apiPut(apiUrl, { gpt_enabled: false });
       console.log('📥 [GPT Timer] API 回應狀態:', response.status);
+
+      // 404 表示會員不存在於 DB，改用 localStorage fallback
+      if (response.status === 404) {
+        console.log('📦 [GPT Timer] 會員不存在於 DB，使用 localStorage fallback');
+        localStorage.setItem(`gpt_fallback_${member.id}`, JSON.stringify({
+          memberId: member.id,
+          platform: currentPlatform,
+          gpt_enabled: false,
+          startTime: Date.now(),
+          expiresAt: Date.now() + MANUAL_MODE_DURATION,
+        }));
+        saveTimerState();
+        activateManualMode();
+        return;
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -207,31 +288,14 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
         throw new Error(`API 錯誤: ${response.status}`);
       }
 
-      const data = await response.json();
-      console.log('✅ [GPT Timer] API 成功:', data);
-
-      // 儲存狀態到 localStorage（用於多分頁同步）
-      localStorage.setItem(`gpt_timer_${member.id}`, JSON.stringify({
-        memberId: member.id,
-        isManualMode: true,
-        startTime: Date.now()
-      }));
-
-      // 更新 UI 狀態
-      setIsGptManualMode(true);
-
-      // 啟動 10 分鐘計時器
-      gptTimerRef.current = setTimeout(() => {
-        restoreGptMode();
-      }, MANUAL_MODE_DURATION);
-
-      console.log('⏱️  [GPT Timer] 計時器已啟動, 將在', MANUAL_MODE_DURATION / 1000, '秒後恢復');
-
+      console.log('✅ [GPT Timer] 手動模式已啟動 (DB)');
+      saveTimerState();
+      activateManualMode();
     } catch (error) {
       console.error('❌ [GPT Timer] 啟動 GPT 手動模式失敗:', error);
       showToast?.('操作失敗,請重試', 'error');
     }
-  }, [member?.id, MANUAL_MODE_DURATION, restoreGptMode, showToast]);
+  }, [member?.id, currentPlatform, MANUAL_MODE_DURATION, getGptApiUrl, clearGptTimer, restoreGptMode, showToast]);
 
   const memberLastInteractionRaw = member ? (member as any).last_interaction_at : null;
 
@@ -241,23 +305,64 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
     return member?.lastChatTime || memberLastInteractionRaw || null;
   }, [messages, member?.lastChatTime, memberLastInteractionRaw]);
 
-  const panelMember = useMemo(() => {
+  const displayMember = useMemo(() => {
     if (!member) return undefined;
-    if (!latestChatTimestamp || latestChatTimestamp === member.lastChatTime) {
-      return member;
+    const overrides: Partial<Member> = {};
+    if (currentPlatform === 'LINE') {
+      overrides.avatar = member.lineAvatar || member.line_avatar;
+      overrides.username = member.line_display_name || member.username;
+    } else if (currentPlatform === 'Facebook') {
+      overrides.avatar = (member as any).fb_avatar;
+      overrides.username = (member as any).fb_customer_name || member.username;
+    } else if (currentPlatform === 'Webchat') {
+      overrides.avatar = (member as any).webchat_avatar;
+      overrides.username = (member as any).webchat_name || member.username;
     }
-    return { ...member, lastChatTime: latestChatTimestamp };
-  }, [member, latestChatTimestamp]);
+    return { ...member, ...overrides };
+  }, [member, currentPlatform]);
+
+  const panelMember = useMemo(() => {
+    if (!displayMember) return undefined;
+    if (!latestChatTimestamp || latestChatTimestamp === displayMember.lastChatTime) {
+      return displayMember;
+    }
+    return { ...displayMember, lastChatTime: latestChatTimestamp };
+  }, [displayMember, latestChatTimestamp]);
+
+  // 獲取渠道名稱（粉專名/頻道名）- 根據會員的 join_source 決定
+  const panelChannelName = useMemo(() => {
+    const targetId = member?.id?.toString() || memberId;
+    if (!targetId) return null;
+
+    const memberAny = member as Record<string, unknown> | undefined;
+    const joinSource = String(memberAny?.join_source || '').toLowerCase();
+    const fbCustomerId = memberAny?.fb_customer_id || memberAny?.channelUid;
+    const isFacebook = joinSource === 'facebook' || joinSource === 'fb';
+
+    // Facebook 會員：顯示 FB 粉專名稱
+    if (isFacebook && fbCustomerId) {
+      return getDisplayMemberById(`fb-${fbCustomerId}`)?.channelName ?? null;
+    }
+
+    // LINE 會員：顯示 LINE 頻道名稱
+    if (joinSource === 'line' || !joinSource) {
+      return getDisplayMemberById(`line-${targetId}`)?.channelName ?? null;
+    }
+
+    return null;
+  }, [member, memberId, getDisplayMemberById]);
 
   // Fetch full member details when component mounts
-  // 支援兩種情況：1) initialMember 存在  2) 只有 memberId
   useEffect(() => {
     const targetId = initialMember?.id || memberId;
     if (!targetId) return;
 
     const loadMemberDetail = async () => {
       setIsLoadingMember(true);
-      const fullMember = await fetchMemberById(targetId);
+      const fullMember = await fetchMemberById(
+        targetId,
+        initialPlatform === 'Facebook' ? initialPlatform : undefined
+      );
       if (fullMember) {
         setMember(fullMember);
       }
@@ -266,6 +371,30 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
 
     loadMemberDetail();
   }, [initialMember?.id, memberId, fetchMemberById]);
+
+  // 初始載入 chat session (platforms, threads)
+  useEffect(() => {
+    loadChatSession();
+  }, [loadChatSession]);
+
+  // FB 渠道：取得 active channel 的 page_id
+  useEffect(() => {
+    if (currentPlatform === 'Facebook') {
+      apiGet('/api/v1/fb_channels')
+        .then(res => res.ok ? res.json() : [])
+        .then(data => {
+          const active = Array.isArray(data) ? data.find((ch: { is_active?: boolean }) => ch.is_active) : null;
+          setFbPageId(active?.page_id || null);
+        })
+        .catch(() => setFbPageId(null));
+    }
+  }, [currentPlatform]);
+
+  useEffect(() => {
+    if (onPlatformChange) {
+      onPlatformChange(currentPlatform);
+    }
+  }, [currentPlatform, onPlatformChange]);
 
   // Sync member data for related UI pieces when member changes
   useEffect(() => {
@@ -276,10 +405,25 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
     }
   }, [member]);
 
-  // WebSocket 監聽新訊息
+  // 先計算 threadId，再用於 WS 與推播過濾
+  const currentThreadId = threadsMap[currentPlatform];
+
+  // WebSocket 監聽新訊息（thread 維度）
   const handleNewMessage = useCallback((wsMessage: any) => {
+    console.log('📩 [WS] 收到訊息:', JSON.stringify(wsMessage, null, 2));
+    console.log('📩 [WS] currentThreadId:', currentThreadId);
+
     if (wsMessage.type === 'new_message' && wsMessage.data) {
-      // 將新訊息添加到列表末尾
+      const incomingThread = wsMessage.data.thread_id || wsMessage.data.threadId;
+      console.log('📩 [WS] incomingThread:', incomingThread, '比對結果:', incomingThread === currentThreadId);
+
+      if (currentThreadId && incomingThread && incomingThread !== currentThreadId) {
+        // 忽略非當前 thread 的推播
+        console.log('📩 [WS] ❌ thread 不匹配，忽略');
+        return;
+      }
+
+      // 將新訊息添加到列表末尾（messages 維持「舊 → 新」排序）
       setMessages(prev => {
         // 避免重複添加 (檢查 message_id)
         const exists = prev.some(msg => msg.id === wsMessage.data.id);
@@ -293,93 +437,144 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
       if (member) {
         setMember({
           ...member,
-          lastChatTime: new Date().toISOString()
+          lastChatTime: wsMessage.data.timestamp || new Date().toISOString()
         });
       }
 
-      // 自動滾動到底部
-      setTimeout(() => {
-        if (chatContainerRef.current) {
-          chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-        }
-      }, 100);
+      // 收到新訊息時不自動滾動，保持當前位置
     }
-  }, [member]);
-
-  // 建立 WebSocket 連線（優先使用 member?.id，其次使用傳入的 memberId）
-  const wsTargetId = member?.id?.toString() || memberId;
-  const { isConnected: isRealtimeConnected } = useWebSocket(wsTargetId, handleNewMessage);
-
-  // 初始載入訊息後設定 visibleDate（顯示最新訊息的日期）
-  useEffect(() => {
-    if (visibleDate) return;
-    if (messages.length > 0) {
-      // 初次載入時，顯示最後一則（最新）訊息的日期
-      const lastMessage = messages[messages.length - 1];
-      const timestampFromMessage = extractMessageTimestamp(lastMessage);
-      if (timestampFromMessage) {
-        setVisibleDate(formatDateWithWeekday(timestampFromMessage));
-        return;
-      }
-    }
-    if (latestChatTimestamp) {
-      setVisibleDate(formatDateWithWeekday(latestChatTimestamp));
-    }
-  }, [messages, latestChatTimestamp, visibleDate]);
+  }, [member, currentThreadId]);
 
   // Load chat messages from API
   // 支援兩種情況：1) member?.id 存在  2) 只有 memberId
-  const loadChatMessages = useCallback(async (
-    pageNum: number = 1,
-    append: boolean = false,
-    options?: { silent?: boolean },
-  ) => {
-    const targetId = member?.id?.toString() || memberId;
-    if (!targetId) return;
+  // FB 渠道：直接呼叫外部 FB API
+  const loadChatMessages = useCallback(
+    async (
+      pageNum: number = 1,
+      append: boolean = false,
+      options?: { silent?: boolean },
+    ) => {
+      const targetId = member?.id?.toString() || memberId;
+      if (!targetId) return;
 
-    const silent = options?.silent ?? false;
-    if (!silent) {
-      setIsLoading(true);
-    }
-    try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(
-        `/api/v1/members/${targetId}/chat-messages?page=${pageNum}&page_size=${PAGE_SIZE}`,
-        {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }
-      );
+      const silent = options?.silent ?? false;
+      if (!silent) {
+        setIsLoading(true);
+      }
+      try {
+        let newMessages: ChatMessage[] = [];
+        let has_more = false;
 
-      const result = await response.json();
+        // FB 渠道：直接呼叫外部 FB API（使用 jwt_token，不經過 apiClient）
+        if (currentPlatform === 'Facebook') {
+          const jwtToken = getJwtToken();
+          // FB 會員的 customer_id 從 member.channelUid 或 memberId 取得
+          const customerId = (member as any)?.channelUid || (member as any)?.fb_customer_id || memberId;
 
-      // ✅ 修正：backend 使用 SuccessResponse，返回 code: 200，而非 success: true
-      if (result.code === 200 && result.data) {
-        const { messages: newMessages, has_more } = result.data;
+          if (!jwtToken || !fbPageId || !customerId) {
+            console.error('FB 聊天紀錄載入失敗：缺少必要參數', { jwtToken: !!jwtToken, fbPageId, customerId });
+            return;
+          }
 
-        // API 返回降序（最新在前），需反轉為升序（最舊在前）
-        const reversedMessages = [...newMessages].reverse();
+          const fbResponse = await fetch(
+            `${fbApiBaseUrl}/api/v1/admin/meta_page/message/history?customer_id=${customerId}&page_id=${fbPageId}`,
+            { headers: { 'Authorization': `Bearer ${jwtToken}` } }
+          );
+          const fbResult = await fbResponse.json();
 
-        if (append) {
-          // 向上滾動載入更早訊息 - 添加到前面
-          setMessages(prev => [...reversedMessages, ...prev]);
+          if (fbResult.status === 200 && fbResult.data) {
+            newMessages = transformFbMessages(fbResult.data);
+            has_more = false; // 外部 API 一次返回全部訊息
+          } else {
+            console.error('FB API 回應錯誤:', fbResult);
+            return;
+          }
         } else {
-          // 初次載入 - 替換全部
-          setMessages(reversedMessages);
+          // LINE/Webchat：透過後端 API（使用 apiGet 自動處理 token 和 401 重試）
+          const url = `/api/v1/members/${targetId}/chat-messages?page=${pageNum}&page_size=${PAGE_SIZE}&platform=${currentPlatform}`;
+
+          const response = await apiGet(url);
+
+          const result = await response.json();
+
+          if (result.code === 200 && result.data) {
+            newMessages = result.data.messages;
+            has_more = result.data.has_more;
+          } else {
+            console.error('API 回應格式錯誤:', result);
+            return;
+          }
+        }
+
+        // 處理訊息列表
+        if (append) {
+          // append=true 表示載入更早訊息（往上翻頁），需「前插」以維持舊→新排序
+          setMessages(prev => {
+            const existingIds = new Set(prev.map(msg => msg.id));
+            const uniqueNewMessages = newMessages.filter((msg: ChatMessage) => !existingIds.has(msg.id));
+            return [...uniqueNewMessages, ...prev];
+          });
+        } else {
+          setMessages(newMessages);
         }
 
         setHasMore(has_more);
         setPage(pageNum);
-      } else {
-        console.error('API 回應格式錯誤:', result);
+      } catch (error) {
+        console.error('載入聊天訊息失敗:', error);
+      } finally {
+        if (!silent) {
+          setIsLoading(false);
+        }
       }
-    } catch (error) {
-      console.error('載入聊天訊息失敗:', error);
-    } finally {
-      if (!silent) {
-        setIsLoading(false);
+    },
+    [member?.id, (member as any)?.channelUid, (member as any)?.fb_customer_id, memberId, currentPlatform, fbApiBaseUrl, fbPageId]
+  );
+
+  // 建立 WebSocket 連線（依當前平台 thread_id）
+  const { isConnected: isRealtimeConnected } = useWebSocket(currentThreadId, handleNewMessage);
+
+  // 平台切換時重置訊息狀態並重新載入
+  useEffect(() => {
+    // Facebook 平台需要等待 fbPageId 獲取完成
+    if (currentPlatform === 'Facebook' && !fbPageId) {
+      return;
+    }
+    setMessages([]);
+    setPage(1);
+    setHasMore(true);
+    setVisibleDate('');
+    loadChatMessages(1, false);
+  }, [currentPlatform, loadChatMessages, fbPageId]);
+
+  // 初始載入訊息後設定 visibleDate（顯示最新訊息的日期）
+  useEffect(() => {
+    const container = chatContainerRef.current;
+    const isNearBottom =
+      !container || container.scrollHeight - container.scrollTop - container.clientHeight < 24;
+
+    if (messages.length > 0) {
+      // 停在底部時，visibleDate 應隨最新訊息更新；不在底部則交給 scroll handler 決定顯示哪一天
+      if (!visibleDate || isNearBottom) {
+        const lastMessage = messages[messages.length - 1];
+        const timestampFromMessage = extractMessageTimestamp(lastMessage);
+        if (timestampFromMessage) {
+          const next = formatDateWithWeekday(timestampFromMessage);
+          if (next && next !== visibleDate) {
+            setVisibleDate(next);
+          }
+          return;
+        }
       }
     }
-  }, [member?.id, memberId]);
+
+    if (!visibleDate && latestChatTimestamp) {
+      const next = formatDateWithWeekday(latestChatTimestamp);
+      if (next && next !== visibleDate) {
+        setVisibleDate(next);
+      }
+    }
+  }, [messages, latestChatTimestamp, visibleDate]);
 
   // Handle scroll for infinite scrolling and visible date update
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
@@ -410,8 +605,8 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
       }
     }
 
-    // 滾動到頂部 + 還有更多訊息 + 不在載入中
-    if (container.scrollTop === 0 && hasMore && !isLoading) {
+    // 接近頂部（< 50px）+ 還有更多訊息 + 不在載入中
+    if (container.scrollTop < 50 && hasMore && !isLoading) {
       const prevScrollHeight = container.scrollHeight;
 
       const loadMore = async () => {
@@ -428,45 +623,38 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
     }
   }, [hasMore, isLoading, page, loadChatMessages, visibleDate]);
 
-  // Load initial messages when member changes or memberId is available
+  // Auto-scroll to bottom on initial load (只執行一次)
+  // Note: Initial message loading is handled by the platform switch effect above
   useEffect(() => {
-    const targetId = member?.id?.toString() || memberId;
-    if (targetId) {
-      loadChatMessages(1, false);
-    }
-  }, [member?.id, memberId, loadChatMessages]);
-
-  // Fallback polling when WebSocket 無法建立，仍定期刷新訊息
-  useEffect(() => {
-    const targetId = member?.id?.toString() || memberId;
-    if (!targetId || isRealtimeConnected) {
-      return;
-    }
-
-    const interval = setInterval(() => {
-      loadChatMessages(1, false, { silent: true });
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [isRealtimeConnected, member?.id, memberId, loadChatMessages]);
-
-  // Auto-scroll to bottom on initial load
-  useEffect(() => {
-    if (messages.length > 0 && chatContainerRef.current && page === 1) {
+    if (messages.length > 0 && chatContainerRef.current && page === 1 && !hasInitialScrolled.current) {
       requestAnimationFrame(() => {
         if (chatContainerRef.current) {
           chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+          hasInitialScrolled.current = true;  // 標記已完成初次滾動
         }
       });
     }
   }, [messages, page]);
 
-  // Auto-scroll to bottom when messages change (legacy - keep for new message functionality)
+  // 切換會員或平台時重置初次滾動標記
   useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    hasInitialScrolled.current = false;
+  }, [member?.id, memberId, currentPlatform]);
+
+  // 當內容不夠滾動但還有更多訊息時，自動載入更多
+  useEffect(() => {
+    const container = chatContainerRef.current;
+    if (!container || !hasMore || isLoading) return;
+
+    // 檢查是否可以滾動（內容高度 > 容器高度）
+    const canScroll = container.scrollHeight > container.clientHeight;
+
+    if (!canScroll && messages.length > 0) {
+      loadChatMessages(page + 1, true);
     }
-  }, [messages]);
+  }, [messages, hasMore, isLoading, page, loadChatMessages]);
+
+  // Note: 不要在 messages 每次變動就強制滾到底部，否則會破壞「向上載入更早訊息」的滾動位置保持。
 
   // GPT 計時器 useEffect：多分頁同步
   useEffect(() => {
@@ -491,43 +679,27 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
     };
   }, [member?.id]);
 
-  // GPT 計時器 useEffect：頁面重新整理時清除手動模式狀態
+  // GPT 計時器初始化：清除殘留狀態並從資料庫同步
   useEffect(() => {
     if (!member?.id) return;
 
-    // 頁面載入時，檢查是否有殘留的計時器狀態
     const timerKey = `gpt_timer_${member.id}`;
     const storedTimer = localStorage.getItem(timerKey);
 
+    // 清除頁面重新整理時的殘留狀態
     if (storedTimer) {
-      console.log('🔄 [GPT Timer] 偵測到頁面重新整理，清除手動模式狀態');
-      // 清除 localStorage 中的計時器資料
       localStorage.removeItem(timerKey);
-      // 確保狀態為自動模式（已經是 false，但明確設置）
-      setIsGptManualMode(false);
-      // 清除任何可能殘留的計時器
       if (gptTimerRef.current) {
         clearTimeout(gptTimerRef.current);
         gptTimerRef.current = null;
       }
     }
-  }, [member?.id]);
 
-  // GPT 計時器 useEffect：頁面載入時從資料庫同步 GPT 模式狀態
-  useEffect(() => {
-    if (!member?.id) return;
-
-    // 從資料庫載入的 gpt_enabled 值來設定初始狀態
+    // 從資料庫同步 GPT 模式狀態
     if (member.gpt_enabled !== undefined) {
-      // gpt_enabled = true → 自動模式 → isGptManualMode = false
-      // gpt_enabled = false → 手動模式 → isGptManualMode = true
       const shouldBeManualMode = !member.gpt_enabled;
-
       if (shouldBeManualMode !== isGptManualMode) {
-        console.log(`🔄 [GPT Timer] 頁面載入：從資料庫同步 GPT 模式 (gpt_enabled=${member.gpt_enabled})`);
         setIsGptManualMode(shouldBeManualMode);
-
-        // 如果是手動模式，需要啟動計時器
         if (shouldBeManualMode) {
           startGptTimer();
         }
@@ -535,48 +707,54 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
     }
   }, [member?.id, member?.gpt_enabled]);
 
-  // GPT 計時器 useEffect：會員切換時清理
+  // GPT 計時器清理：會員切換或組件卸載時
   useEffect(() => {
-    // 當會員變更時，恢復上一個會員的 GPT 模式
     return () => {
       if (member?.id && isGptManualMode) {
         restoreGptMode();
       }
-    };
-  }, [member?.id, isGptManualMode, restoreGptMode]);
-
-  // GPT 計時器 useEffect：組件卸載時清理
-  useEffect(() => {
-    return () => {
-      // 組件卸載時清除計時器
       if (gptTimerRef.current) {
         clearTimeout(gptTimerRef.current);
       }
     };
-  }, []);
+  }, [member?.id, isGptManualMode, restoreGptMode]);
 
   const handleSendMessage = async () => {
     const trimmedText = messageInput.trim();
     if (!trimmedText || !member?.id || isSending) return;
+    const platform = currentPlatform || 'LINE';
 
     setIsSending(true);
 
     try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(
-        `/api/v1/members/${member.id}/chat/send`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ text: trimmedText })
+      // 建立請求 body
+      const requestBody: { text: string; platform: string; jwt_token?: string; fb_customer_id?: string } = {
+        text: trimmedText,
+        platform
+      };
+
+      // 對於 Facebook 渠道，從 token utils 取得 jwt_token 和 fb_customer_id
+      if (platform === 'Facebook') {
+        const jwtToken = getJwtToken();
+        if (!jwtToken) {
+          alert('請先完成 Facebook 授權');
+          setIsSending(false);
+          return;
         }
-      );
+        requestBody.jwt_token = jwtToken;
+        // 傳入 fb_customer_id，後端可直接使用，不依賴本地 member 查詢
+        const fbCustomerId = (member as any)?.fb_customer_id || (member as any)?.channelUid;
+        if (fbCustomerId) {
+          requestBody.fb_customer_id = String(fbCustomerId);
+        }
+      }
+
+      // 使用 apiPost 自動處理 token 和 401 重試
+      const response = await apiPost(`/api/v1/members/${member.id}/chat/send`, requestBody);
 
       if (!response.ok) {
-        throw new Error('發送失敗');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || '發送失敗');
       }
 
       const result = await response.json();
@@ -597,10 +775,13 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
           }
         }
 
-        // 重新載入訊息列表（確保顯示最新訊息）
-        await loadChatMessages(1, false);
+        // Facebook 平台：發送成功後重新載入聊天紀錄（因為沒有 WebSocket 推送）
+        // LINE/WebChat：新訊息透過 WebSocket handleNewMessage 推送
+        if (platform === 'Facebook') {
+          await loadChatMessages(1, false, { silent: true });
+        }
 
-        // 可選：滾動到底部
+        // 滾動到底部
         setTimeout(() => {
           if (chatContainerRef.current) {
             chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
@@ -623,23 +804,48 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
 
   const handleSaveTags = async (newMemberTags: string[], newInteractionTags: string[]): Promise<boolean> => {
     try {
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
-        showToast('請先登入', 'error');
-        return false;
+      // Facebook 會員：使用外部 FB API
+      if (currentPlatform === 'Facebook') {
+        const fbCustomerId = (member as any)?.fb_customer_id;
+        if (!fbCustomerId) {
+          showToast('找不到 Facebook 會員 ID', 'error');
+          return false;
+        }
+
+        const { updateFbTags } = await import('../../utils/fbTagApi');
+        const result = await updateFbTags(
+          fbCustomerId,
+          memberTags,
+          newMemberTags,
+          interactionTags,
+          newInteractionTags
+        );
+
+        if (!result.success) {
+          showToast(result.error || 'FB 標籤更新失敗', 'error');
+          return false;
+        }
+
+        // 更新本地狀態
+        setMemberTags(newMemberTags);
+        setInteractionTags(newInteractionTags);
+
+        // 嘗試刷新會員資料
+        if (member?.id) {
+          const refreshedMember = await fetchMemberById(member.id, 'Facebook');
+          if (refreshedMember) {
+            setMember(refreshedMember);
+            setMemberTags(refreshedMember.memberTags || []);
+            setInteractionTags(refreshedMember.interactionTags || []);
+          }
+        }
+        return true;
       }
 
-      // 調用後端 batch-update API
-      const response = await fetch(`/api/v1/members/${member.id}/tags/batch-update`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          member_tags: newMemberTags,
-          interaction_tags: newInteractionTags,
-        }),
+      // LINE/Webchat 會員：使用內部 API
+      const response = await apiPost(`/api/v1/members/${member?.id}/tags/batch-update`, {
+        member_tags: newMemberTags,
+        interaction_tags: newInteractionTags,
       });
 
       if (!response.ok) {
@@ -649,7 +855,18 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
         return false;
       }
 
-      // API 成功後更新本地狀態
+      // API 成功後刷新會員資料，確保列表/內頁/聊天室一致
+      if (member?.id) {
+        const refreshedMember = await fetchMemberById(member.id);
+        if (refreshedMember) {
+          setMember(refreshedMember);
+          setMemberTags(refreshedMember.memberTags || []);
+          setInteractionTags(refreshedMember.interactionTags || []);
+          return true;
+        }
+      }
+
+      // 若刷新失敗，至少更新本地狀態
       setMemberTags(newMemberTags);
       setInteractionTags(newInteractionTags);
       return true;
@@ -718,10 +935,10 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
                 onChange={handleAvatarFileChange}
               />
 
-              {/* LINE Avatar or Default User Icon */}
-              {member?.lineAvatar ? (
+              {/* Channel-specific Avatar or Default User Icon */}
+              {displayMember?.avatar ? (
                 <img
-                  src={member.lineAvatar}
+                  src={displayMember.avatar}
                   alt="會員頭像"
                   className="w-full h-full object-cover"
                 />
@@ -761,27 +978,26 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
                 </div>
               </div>
             </div>
-            {/* Username */}
-            <div className="content-stretch flex items-center justify-center relative shrink-0">
-              <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[32px] text-nowrap">
-                <p className="leading-[1.5] whitespace-pre">{member?.username || 'User Name'}</p>
-              </div>
-            </div>
+            {/* 姓名 - 與詳情頁一致顯示 username */}
+            <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[#383838] text-[32px] text-center whitespace-nowrap">
+              {displayMember?.username || displayMember?.realName || '-'}
+            </p>
           </div>
           
           {/* Member Info Panel */}
           <div className="relative rounded-[20px] shrink-0 w-full">
             <div aria-hidden="true" className="absolute border border-[#e1ebf9] border-solid inset-0 pointer-events-none rounded-[20px]" />
             <div className="size-full">
-              <div className="box-border content-stretch flex flex-col gap-[32px] items-start p-[28px] relative w-full">
-                {panelMember ? (
-                  <MemberInfoPanelComplete
-                    member={panelMember}
-                    memberTags={memberTags}
-                    interactionTags={interactionTags}
-                    onEditTags={handleEditTags}
-                  />
-                ) : (
+          <div className="box-border content-stretch flex flex-col gap-[32px] items-start p-[28px] relative w-full">
+            {panelMember ? (
+              <MemberInfoPanelComplete
+                member={panelMember}
+                memberTags={memberTags}
+                interactionTags={interactionTags}
+                onEditTags={handleEditTags}
+                channelName={panelChannelName}
+              />
+            ) : (
                   <div className="w-full text-center text-[#6e6e6e] text-[16px]">
                     載入會員資料中...
                   </div>
@@ -800,25 +1016,8 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
                   throw new Error('找不到會員資料');
                 }
 
-                const token = localStorage.getItem('auth_token');
-                const headers: Record<string, string> = {
-                  'Content-Type': 'application/json',
-                };
-                if (token) {
-                  headers.Authorization = `Bearer ${token}`;
-                }
-
-                const response = await fetch(`/api/v1/members/${member.id}/notes`, {
-                  method: 'PUT',
-                  headers,
-                  body: JSON.stringify({ internal_note: newNote }),
-                });
-
-                if (response.status === 401) {
-                  showToast('登入已過期，請重新登入', 'error');
-                  logout();
-                  throw new Error('登入已過期');
-                }
+                // 使用 apiPut 自動處理 token 和 401 重試
+                const response = await apiPut(`/api/v1/members/${member.id}/notes`, { internal_note: newNote });
 
                 if (!response.ok) {
                   let errorMessage = '儲存失敗';
@@ -855,11 +1054,35 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
         <div className="content-stretch flex flex-col gap-0 items-start relative self-stretch flex-1 rounded-[20px] overflow-hidden" style={{ height: '900px' }}>
           {/* 頂部白色工具列 - 平台選擇器（左）+ 日期（中） */}
           <div className="w-full px-[16px] py-[12px] flex items-center justify-between rounded-t-[20px] bg-white">
-            {/* 平台選擇器（左側） */}
-            <PlatformSwitcher
-              value={currentPlatform}
-              onChange={setCurrentPlatform}
-            />
+            {/* 平台選擇器 + 刷新按鈕（左側） */}
+            <div className="flex items-center gap-2">
+              <PlatformSwitcher
+                value={currentPlatform}
+                onChange={(platform) => {
+                  setCurrentPlatform(platform);
+                }}
+              />
+              <button
+                onClick={() => loadChatMessages(1, false)}
+                disabled={isLoading}
+                title="重新整理聊天紀錄"
+                className="p-1.5 rounded-full hover:bg-gray-100 disabled:opacity-50 transition-colors"
+              >
+                <svg
+                  className={`w-5 h-5 text-gray-500 ${isLoading ? 'animate-spin' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+              </button>
+            </div>
 
             {/* 日期（中間） */}
             <div className="absolute left-1/2 transform -translate-x-1/2">
@@ -920,10 +1143,16 @@ export default function ChatRoomLayout({ member: initialMember, memberId }: Chat
 
               {/* Messages list (使用 ChatBubble - Figma v1087) */}
               {messages.map((message) => (
-                <div key={message.id} data-timestamp={message.timestamp || ''} className="w-full">
+                <div key={message.id} data-timestamp={extractMessageTimestamp(message) || ''} className="w-full">
                   <ChatBubble
                     message={message}
-                    memberAvatar={member?.lineAvatar}
+                    memberAvatar={
+                      currentPlatform === 'LINE'
+                        ? panelMember?.lineAvatar || (panelMember as any)?.avatar
+                        : currentPlatform === 'Facebook'
+                        ? (panelMember as any)?.fb_avatar
+                        : (panelMember as any)?.webchat_avatar
+                    }
                     platform={currentPlatform}
                   />
                 </div>

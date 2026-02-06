@@ -270,8 +270,8 @@ export default function FlexMessageEditorNew({ onFlexMessageChange }: FlexMessag
   };
 
   const addButton = () => {
-    if (currentBubble.buttons.length >= 4) {
-      toast.error('最多只能新增 4 個按鈕');
+    if (currentBubble.buttons.length >= 3) {
+      toast.error('最多只能新增 3 個按鈕');
       return;
     }
     updateBubble({
@@ -715,7 +715,7 @@ export default function FlexMessageEditorNew({ onFlexMessageChange }: FlexMessag
                   </div>
                   <button
                     onClick={addButton}
-                    disabled={!isFirstBubble || currentBubble.buttons.length >= 4}
+                    disabled={!isFirstBubble || currentBubble.buttons.length >= 3}
                     className="h-8 px-3 bg-white border border-[rgba(0,0,0,0.1)] rounded-lg flex items-center gap-1.5 text-sm text-neutral-950 hover:border-gray-300 disabled:opacity-50"
                   >
                     <Plus className="size-4" strokeWidth={1.33} />

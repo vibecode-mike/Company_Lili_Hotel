@@ -118,12 +118,10 @@ class TestPushMessageIntegration:
 
     @patch('app.execute')
     @patch('app.fetchone')
-    @patch('app.insert_message')
     @patch('app.utcnow')
     def test_click_tracking_integration(
         self,
         mock_utcnow,
-        mock_insert,
         mock_fetchone,
         mock_execute
     ):
@@ -149,20 +147,7 @@ class TestPushMessageIntegration:
             {"u": user_id}
         )
 
-        # 2. Insert tracking record
-        if member:
-            try:
-                mock_insert(
-                    member["id"],
-                    "incoming",
-                    "text",
-                    {"event": "campaign_click", "campaign_id": message_id, "target": target_url},
-                    campaign_id=message_id
-                )
-            except Exception:
-                pass
-
-        # 3. Update click count
+        # 2. Update click count (current implementation does not call insert_message)
         try:
             mock_execute(
                 "UPDATE messages SET click_count=click_count+1, updated_at=:now WHERE id=:cid",
@@ -173,7 +158,6 @@ class TestPushMessageIntegration:
 
         # Verify all steps were called
         mock_fetchone.assert_called_once()
-        mock_insert.assert_called_once()
         mock_execute.assert_called_once()
 
         # Verify query structure

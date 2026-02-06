@@ -48,17 +48,32 @@ class MemberListItem(BaseModel):
     """會員列表項"""
 
     id: int
+    # LINE 渠道
     line_uid: Optional[str] = None
-    line_name: Optional[str] = None  # 改名為 line_name
-    line_avatar: Optional[str] = None  # 改名為 line_avatar
+    line_display_name: Optional[str] = None
+    line_avatar: Optional[str] = None
     channel_id: Optional[str] = None  # LINE channel ID
-    name: Optional[str] = None  # 統一單欄位
+    # Facebook 渠道
+    fb_customer_id: Optional[str] = None
+    fb_customer_name: Optional[str] = None
+    fb_avatar: Optional[str] = None
+    # Webchat 渠道
+    webchat_uid: Optional[str] = None
+    webchat_name: Optional[str] = None
+    webchat_avatar: Optional[str] = None
+    # 基本資訊
+    name: Optional[str] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
-    join_source: str = "LINE"  # 加入來源：LINE/CRM/PMS/ERP/系統
+    join_source: str = "LINE"  # 加入來源：LINE/CRM/PMS/ERP/系統/Facebook
     tags: List[TagInfo] = []
     created_at: datetime
     last_interaction_at: Optional[datetime] = None
+    # 未回覆狀態
+    is_unanswered: bool = False  # 是否有未回覆的訊息
+    unanswered_since: Optional[datetime] = None  # 未回覆訊息的時間戳
+    # 渠道名稱
+    channel_name: Optional[str] = None  # 渠道帳號名稱 (e.g., "下班解憂所")
 
     class Config:
         from_attributes = True

@@ -79,8 +79,19 @@ export interface CarouselCard {
   imageTag: string;
 }
 
+type TagFieldKey = 'button1Tag' | 'button2Tag' | 'button3Tag';
+
+const splitTags = (value?: string) =>
+  (value || '')
+    .split(/[\s,，]+/)
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+
+const joinTags = (tags: string[]) => tags.join(', ');
+
 interface CardErrors {
   image?: string;
+  imageUrl?: string;
   cardTitle?: string;
   content?: string;
   price?: string;
@@ -172,7 +183,7 @@ export const FlexMessageCardPreview = memo(function FlexMessageCardPreview({ car
       )}
 
       {/* Footer - Buttons */}
-      {(card.enableButton1 || card.enableButton2 || card.enableButton3 || card.enableButton4) && (
+      {(card.enableButton1 || card.enableButton2 || card.enableButton3) && (
         <div className="px-[16px] pb-[16px]" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
           {card.enableButton1 && (
             <button
@@ -231,11 +242,97 @@ export default function CarouselMessageEditor({
   selectedPlatform = 'LINE'
 }: CarouselMessageEditorProps) {
   const imageUploadRef = useRef<HTMLInputElement>(null);
+  const isComposingRef = useRef(false);
   const currentCard = cards.find(c => c.id === activeTab) || cards[0];
   const prevAspectRatioRef = useRef<"1:1" | "1.91:1" | null>(null);
   const masterCardId = cards[0]?.id;
   const isMasterCard = currentCard?.id === masterCardId;
   const structureLocked = !isMasterCard;
+  const [tagInputState, setTagInputState] = useState<Record<TagFieldKey, string>>({
+    button1Tag: '',
+    button2Tag: '',
+    button3Tag: ''
+  });
+
+  useEffect(() => {
+    setTagInputState({
+      button1Tag: '',
+      button2Tag: '',
+      button3Tag: ''
+    });
+  }, [activeTab]);
+
+  const renderTagInput = (
+    field: TagFieldKey,
+    placeholder: string,
+    helperText?: string
+  ) => {
+    const tags = splitTags(currentCard?.[field]);
+    const inputValue = tagInputState[field] || '';
+
+    const addTag = () => {
+      const newTag = inputValue.trim();
+      if (!newTag) return;
+
+      // 檢查重複標籤
+      if (tags.includes(newTag)) {
+        toast.warning(`標籤「${newTag}」已存在`);
+        setTagInputState(prev => ({ ...prev, [field]: '' }));
+        return;
+      }
+
+      const nextTags = [...tags, newTag];
+      onUpdateCard({ [field]: joinTags(nextTags) } as Partial<CarouselCard>);
+      setTagInputState(prev => ({ ...prev, [field]: '' }));
+    };
+
+    const removeTag = (tagToRemove: string) => {
+      const nextTags = tags.filter(tag => tag !== tagToRemove);
+      onUpdateCard({ [field]: joinTags(nextTags) } as Partial<CarouselCard>);
+    };
+
+    return (
+      <div className="flex flex-col gap-[4px]">
+        <div className="flex flex-wrap gap-[6px] items-center min-h-[44px] w-full px-[12px] py-[8px] rounded-[8px] border border-neutral-200 bg-white">
+          {tags.map(tag => (
+            <div key={tag} className="flex items-center gap-[4px] bg-[#f0f6ff] text-[#0f6beb] text-[12px] px-[8px] py-[4px] rounded-[6px]">
+              <span className="leading-[16px]">{tag}</span>
+              <button
+                type="button"
+                onClick={() => removeTag(tag)}
+                className="text-[#a8a8a8] hover:text-[#6a6a6a] leading-none"
+                aria-label={`刪除標籤 ${tag}`}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          <input
+            type="text"
+            value={inputValue}
+            onChange={(e) => setTagInputState(prev => ({ ...prev, [field]: e.target.value }))}
+            onKeyDown={(e) => {
+              const isImeComposing = isComposingRef.current || (e.nativeEvent as any).isComposing;
+              if (e.key === 'Enter' && !isImeComposing) {
+                e.preventDefault();
+                addTag();
+              }
+            }}
+            onCompositionStart={() => {
+              isComposingRef.current = true;
+            }}
+            onCompositionEnd={() => {
+              isComposingRef.current = false;
+            }}
+            placeholder={tags.length === 0 ? placeholder : '按 Enter 新增標籤'}
+            maxLength={50}
+            className="flex-1 min-w-[120px] bg-transparent text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none"
+          />
+        </div>
+        {helperText && <p className="text-xs text-gray-500">{helperText}</p>}
+      </div>
+    );
+  };
 
   const preventStructureEdit = () => {
     if (structureLocked) {
@@ -373,7 +470,6 @@ export default function CarouselMessageEditor({
     currentCard.enableButton1,
     currentCard.enableButton2,
     currentCard.enableButton3,
-    currentCard.enableButton4,
     currentCard.originalFile
   ]);
 
@@ -391,6 +487,7 @@ export default function CarouselMessageEditor({
   const showContentInlineError = currentCard.enableContent && isEmpty(currentCard.content);
   const showPriceInlineError = currentCard.enablePrice && isEmpty(currentCard.price);
   const showImageUrlInlineError = currentCard.enableImageUrl && isEmpty(currentCard.imageUrl);
+  const showImageInlineError = currentCard.enableImage && isEmpty(currentCard.uploadedImageUrl || currentCard.image);
 
   const showButton1TextError = currentCard.enableButton1 && isEmpty(currentCard.button1);
   const showButton1UrlError = currentCard.enableButton1 && isEmpty(currentCard.button1Url);
@@ -398,8 +495,6 @@ export default function CarouselMessageEditor({
   const showButton2UrlError = currentCard.enableButton2 && isEmpty(currentCard.button2Url);
   const showButton3TextError = currentCard.enableButton3 && isEmpty(currentCard.button3);
   const showButton3UrlError = currentCard.enableButton3 && isEmpty(currentCard.button3Url);
-  const showButton4TextError = currentCard.enableButton4 && isEmpty(currentCard.button4);
-  const showButton4UrlError = currentCard.enableButton4 && isEmpty(currentCard.button4Url);
 
   const requiredFieldClasses = (hasError: boolean) =>
     hasError
@@ -529,9 +624,9 @@ export default function CarouselMessageEditor({
                 </div>
 
                 {/* Image Error */}
-                {errors?.image && (
+                {(showImageInlineError || errors?.image) && (
                   <p className="text-[12px] leading-[16px] text-red-500 mt-2">
-                    {errors.image}
+                    {showImageInlineError ? '請選擇圖片' : errors?.image}
                   </p>
                 )}
 
@@ -558,15 +653,15 @@ export default function CarouselMessageEditor({
                           value={currentCard.imageUrl}
                           onChange={(e) => onUpdateCard({ imageUrl: e.target.value })}
                           placeholder="https://example.com"
-                          aria-invalid={showImageUrlInlineError}
+                          aria-invalid={showImageUrlInlineError || Boolean(errors?.imageUrl)}
                           className={`w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
-                            requiredFieldClasses(showImageUrlInlineError)
+                            requiredFieldClasses(showImageUrlInlineError || Boolean(errors?.imageUrl))
                           }`}
-                          style={requiredFieldStyle(showImageUrlInlineError)}
+                          style={requiredFieldStyle(showImageUrlInlineError || Boolean(errors?.imageUrl))}
                         />
-                        {showImageUrlInlineError && (
+                        {(showImageUrlInlineError || errors?.imageUrl) && (
                           <p className="text-[12px] leading-[16px] text-[#f44336]">
-                            請輸入點擊後跳轉網址
+                            {showImageUrlInlineError ? '請輸入點擊後跳轉網址' : errors?.imageUrl}
                           </p>
                         )}
                         <p className="text-[12px] leading-[16px] text-[#6a7282]">使用者點擊圖片時會開啟此網址</p>
@@ -758,7 +853,7 @@ export default function CarouselMessageEditor({
             {currentCard.enableButton1 && (
               <div className="flex flex-col gap-[12px] pl-[24px] border-l-2 border-neutral-200">
                 <div className="flex items-center justify-between">
-                  <span className="text-[14px] leading-[20px] text-neutral-950 font-medium">動作按鈕一</span>
+                  <span className="text-[12px] leading-[16px] text-[#4a5565] font-medium">動作按鈕一</span>
                   <button
                     onClick={() => {
                       if (preventStructureEdit()) return;
@@ -775,15 +870,10 @@ export default function CarouselMessageEditor({
                           button2Url: currentCard.button3Url,
                           button2Tag: currentCard.button3Tag,
                           button2Mode: currentCard.button3Mode,
-                          enableButton3: currentCard.enableButton4,
-                          button3: currentCard.button4,
-                          button3Url: currentCard.button4Url,
-                          button3Tag: currentCard.button4Tag,
-                          button3Mode: currentCard.button4Mode,
-                          enableButton4: false,
-                          button4: '',
-                          button4Url: '',
-                          button4Tag: '',
+                          enableButton3: false,
+                          button3: '',
+                          button3Url: '',
+                          button3Tag: '',
                         });
                       } else {
                         onUpdateCard({ 
@@ -889,14 +979,7 @@ export default function CarouselMessageEditor({
                     {/* 互動標籤 */}
                     <div className="flex flex-col gap-[4px]">
                       <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">互動標籤</p>
-                      <input
-                        type="text"
-                        value={currentCard.button1Tag}
-                        onChange={(e) => onUpdateCard({ button1Tag: e.target.value })}
-                        placeholder="輸入互動標籤，例如：#訂房行為"
-                        maxLength={50}
-                        className="w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all border border-neutral-200"
-                      />
+                      {renderTagInput('button1Tag', '輸入或按 Enter 新增互動標籤，例如：#訂房行為')}
                     </div>
 
                     {/* 觸發訊息文字（選填） */}
@@ -920,15 +1003,7 @@ export default function CarouselMessageEditor({
                 {selectedPlatform === 'LINE' && (
                   <div className="flex flex-col gap-[4px]">
                     <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">互動標籤</p>
-                    <input
-                      type="text"
-                      value={currentCard.button1Tag}
-                      onChange={(e) => onUpdateCard({ button1Tag: e.target.value })}
-                      placeholder="輸入互動標籤（僅供後台紀錄）"
-                      maxLength={50}
-                      className="w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all border border-neutral-200"
-                    />
-                    <p className="text-xs text-gray-500">此欄位不影響 Flex Message，僅供後台紀錄使用</p>
+                    {renderTagInput('button1Tag', '輸入按 Enter 新增互動標籤(僅供後台紀錄)', '此欄位不影響 Flex Message，僅供後台紀錄使用')}
                   </div>
                 )}
 
@@ -974,7 +1049,7 @@ export default function CarouselMessageEditor({
             {currentCard.enableButton2 && (
               <div className="flex flex-col gap-[12px] pl-[24px] border-l-2 border-neutral-200">
                 <div className="flex items-center justify-between">
-                  <span className="text-[14px] leading-[20px] text-neutral-950 font-medium">動作按鈕二</span>
+                  <span className="text-[12px] leading-[16px] text-[#4a5565] font-medium">動作按鈕二</span>
                   <button
                     onClick={() => {
                       if (preventStructureEdit()) return;
@@ -1095,14 +1170,7 @@ export default function CarouselMessageEditor({
                     {/* 互動標籤 */}
                     <div className="flex flex-col gap-[4px]">
                       <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">互動標籤</p>
-                      <input
-                        type="text"
-                        value={currentCard.button2Tag}
-                        onChange={(e) => onUpdateCard({ button2Tag: e.target.value })}
-                        placeholder="輸入互動標籤，例如：#訂房行為"
-                        maxLength={50}
-                        className="w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all border border-neutral-200"
-                      />
+                      {renderTagInput('button2Tag', '輸入或按 Enter 新增互動標籤，例如：#訂房行為')}
                     </div>
 
                     {/* 觸發訊息文字（選填） */}
@@ -1126,15 +1194,7 @@ export default function CarouselMessageEditor({
                 {selectedPlatform === 'LINE' && (
                   <div className="flex flex-col gap-[4px]">
                     <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">互動標籤</p>
-                    <input
-                      type="text"
-                      value={currentCard.button2Tag}
-                      onChange={(e) => onUpdateCard({ button2Tag: e.target.value })}
-                      placeholder="輸入互動標籤（僅供後台紀錄）"
-                      maxLength={50}
-                      className="w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all border border-neutral-200"
-                    />
-                    <p className="text-xs text-gray-500">此欄位不影響 Flex Message，僅供後台紀錄使用</p>
+                    {renderTagInput('button2Tag', '輸入按 Enter 新增互動標籤(僅供後台紀錄)', '此欄位不影響 Flex Message，僅供後台紀錄使用')}
                   </div>
                 )}
 
@@ -1180,12 +1240,12 @@ export default function CarouselMessageEditor({
             {currentCard.enableButton3 && (
               <div className="flex flex-col gap-[12px] pl-[24px] border-l-2 border-neutral-200">
                 <div className="flex items-center justify-between">
-                  <span className="text-[14px] leading-[20px] text-neutral-950 font-medium">動作按鈕三</span>
+                  <span className="text-[12px] leading-[16px] text-[#4a5565] font-medium">動作按鈕三</span>
                   <button
                     onClick={() => {
                       if (preventStructureEdit()) return;
-                      onUpdateCard({
-                        enableButton3: false,
+                      onUpdateCard({ 
+                        enableButton3: false, 
                         button3: '',
                         button3Url: '',
                         button3Tag: ''
@@ -1286,14 +1346,7 @@ export default function CarouselMessageEditor({
                     {/* 互動標籤 */}
                     <div className="flex flex-col gap-[4px]">
                       <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">互動標籤</p>
-                      <input
-                        type="text"
-                        value={currentCard.button3Tag}
-                        onChange={(e) => onUpdateCard({ button3Tag: e.target.value })}
-                        placeholder="輸入互動標籤，例如：#訂房行為"
-                        maxLength={50}
-                        className="w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all border border-neutral-200"
-                      />
+                      {renderTagInput('button3Tag', '輸入或按 Enter 新增互動標籤，例如：#訂房行為')}
                     </div>
 
                     {/* 觸發訊息文字（選填） */}
@@ -1317,15 +1370,7 @@ export default function CarouselMessageEditor({
                 {selectedPlatform === 'LINE' && (
                   <div className="flex flex-col gap-[4px]">
                     <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">互動標籤</p>
-                    <input
-                      type="text"
-                      value={currentCard.button3Tag}
-                      onChange={(e) => onUpdateCard({ button3Tag: e.target.value })}
-                      placeholder="輸入互動標籤（僅供後台紀錄）"
-                      maxLength={50}
-                      className="w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all border border-neutral-200"
-                    />
-                    <p className="text-xs text-gray-500">此欄位不影響 Flex Message，僅供後台紀錄使用</p>
+                    {renderTagInput('button3Tag', '輸入按 Enter 新增互動標籤(僅供後台紀錄)', '此欄位不影響 Flex Message，僅供後台紀錄使用')}
                   </div>
                 )}
 

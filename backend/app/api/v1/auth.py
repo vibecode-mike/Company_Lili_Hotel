@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict
 from app.database import get_db
 from app.models.user import User
-from app.schemas.auth import LoginRequest, TokenResponse, UserInfo
+from app.schemas.auth import TokenResponse, UserInfo
 from app.core.security import verify_password, create_access_token, decode_access_token
 from app.config import settings
 
@@ -20,31 +20,32 @@ oauth2_scheme = OAuth2PasswordBearer(
 )
 
 
-async def _get_default_active_user(db: AsyncSession) -> Optional[User]:
-    result = await db.execute(select(User).where(User.is_active).order_by(User.id))
-    return result.scalars().first()
-
-
 async def get_current_user(
     token: Optional[str] = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """獲取當前用戶（無 Token 時自動回退為第一位啟用帳號）"""
+    """獲取當前用戶（無有效 Token 時拋出 401 錯誤）"""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="無效的認證憑證",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    payload: Optional[Dict[str, int]] = decode_access_token(token) if token else None
-    if payload is None:
-        fallback_user = await _get_default_active_user(db)
-        if fallback_user is None:
-            raise credentials_exception
-        return fallback_user
+    # 無 token 直接拋出錯誤，不再使用回退機制
+    if not token:
+        raise credentials_exception
 
-    user_id: Optional[int] = payload.get("sub")  # type: ignore[arg-type]
-    if user_id is None:
+    payload: Optional[Dict[str, str]] = decode_access_token(token)
+    if payload is None:
+        raise credentials_exception
+
+    sub: Optional[str] = payload.get("sub")
+    if sub is None:
+        raise credentials_exception
+
+    try:
+        user_id = int(sub)
+    except (ValueError, TypeError):
         raise credentials_exception
 
     result = await db.execute(select(User).where(User.id == user_id))
@@ -91,7 +92,7 @@ async def login(
     # 創建訪問令牌
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.id}, expires_delta=access_token_expires
+        data={"sub": str(user.id)}, expires_delta=access_token_expires
     )
 
     return TokenResponse(
@@ -109,7 +110,7 @@ async def refresh_token(
     """刷新 Token"""
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": current_user.id}, expires_delta=access_token_expires
+        data={"sub": str(current_user.id)}, expires_delta=access_token_expires
     )
 
     return TokenResponse(

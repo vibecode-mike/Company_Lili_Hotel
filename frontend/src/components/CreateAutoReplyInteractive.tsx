@@ -3,9 +3,18 @@ import { toast } from 'sonner';
 import Sidebar from './Sidebar';
 import svgPathsModal from "../imports/svg-9n0wtrekj3";
 import KeywordTagsInput from './KeywordTagsInput';
-import TriggerTimeOptions, { TriggerTimeType } from './TriggerTimeOptions';
+import TriggerTimeOptions, { TriggerTimeType, ScheduleModeType } from './TriggerTimeOptions';
 import { SimpleBreadcrumb, DeleteButton } from './common';
-import { useAutoReplies, type AutoReply as AutoReplyRecord, type AutoReplyPayload } from '../contexts/AutoRepliesContext';
+import { ChannelIcon } from './common/icons/ChannelIcon';
+import { useAutoReplies, type AutoReply as AutoReplyRecord, type AutoReplyPayload, type AutoReplyConflict, type FbKeywordPayload, type FbMessagePayload, type AutoReplyKeyword } from '../contexts/AutoRepliesContext';
+
+// 渠道選項介面（與群發訊息頁面一致）
+interface ChannelOption {
+  value: string;              // "LINE_xxx" 或 "FB_xxx"
+  platform: 'LINE' | 'Facebook';
+  channelId: string;          // LINE channel_id 或 FB page_id
+  label: string;              // 渠道名稱
+}
 
 interface CreateAutoReplyProps {
   onBack: () => void;
@@ -21,8 +30,17 @@ type ReplyType = 'welcome' | 'keyword' | 'follow';
 type ChannelType = 'LINE' | 'Facebook';
 
 interface MessageItem {
-  id: number;
+  id: number;       // 本地 UI 用的 id（用於 React key）
   text: string;
+  fbId?: number;    // FB API 的 text id（用於編輯時區分編輯 vs 新增）
+  fbBasicId?: number;  // FB API 的父自動回應 ID
+  fbCount?: number;    // FB API 的觸發計數
+}
+
+interface KeywordItem {
+  id: number;       // 本地 UI 用的 id（用於 React key）
+  name: string;
+  fbId?: number;    // FB API 的 keyword id（用於刪除）
 }
 
 const INITIAL_SCHEDULE = {
@@ -60,7 +78,7 @@ export default function CreateAutoReplyInteractive({
   onSaved,
   onDeleted,
 }: CreateAutoReplyProps) {
-  const { saveAutoReply, removeAutoReply, getAutoReplyById, fetchAutoReplyById } = useAutoReplies();
+  const { saveAutoReply, removeAutoReply, getAutoReplyById, fetchAutoReplyById, deleteFbKeyword, deleteFbMessage, deleteFbAutoReply } = useAutoReplies();
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isHydrating, setIsHydrating] = useState<boolean>(Boolean(autoReplyId));
@@ -72,19 +90,155 @@ export default function CreateAutoReplyInteractive({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
   const [keywordTags, setKeywordTags] = useState<string[]>([]);
+  const [keywordItems, setKeywordItems] = useState<KeywordItem[]>([]);  // 用於追蹤 FB keyword ID
   const [triggerTime, setTriggerTime] = useState<TriggerTimeType>('immediate');
   const [scheduledDateTime, setScheduledDateTime] = useState(() => ({ ...INITIAL_SCHEDULE }));
+  const [scheduleMode, setScheduleMode] = useState<ScheduleModeType>('time'); // 新增：日期或時間模式
   const textareaRefs = useRef<{ [key: number]: HTMLTextAreaElement | null }>({});
   const isEditing = Boolean(autoReplyId);
+
+  // 衝突對話框狀態
+  const [showConflictDialog, setShowConflictDialog] = useState(false);
+  const [conflictData, setConflictData] = useState<AutoReplyConflict | null>(null);
+  const [pendingPayload, setPendingPayload] = useState<AutoReplyPayload | null>(null);
+
+  // 渠道選項狀態（動態從 API 獲取）
+  const [channelOptions, setChannelOptions] = useState<ChannelOption[]>([]);
+  const [selectedChannelValue, setSelectedChannelValue] = useState<string>('');
 
   const resetForm = useCallback(() => {
     setReplyType('welcome');
     setIsEnabled(true);
     setMessages([{ id: 1, text: '' }]);
     setKeywordTags([]);
+    setKeywordItems([]);
     setTriggerTime('immediate');
     setScheduledDateTime({ ...INITIAL_SCHEDULE });
+    setScheduleMode('time');
   }, []);
+
+  // 獲取渠道列表（動態構建選項，與群發訊息頁面一致）
+  useEffect(() => {
+    const fetchChannels = async () => {
+      const options: ChannelOption[] = [];
+      const token = localStorage.getItem('auth_token');
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      };
+
+      try {
+        const [lineRes, fbRes] = await Promise.all([
+          fetch('/api/v1/line_channels/current', { headers }),
+          fetch('/api/v1/fb_channels', { headers })
+        ]);
+
+        if (lineRes.ok) {
+          const lineChannel = await lineRes.json();
+          if (lineChannel?.channel_id) {
+            options.push({
+              value: `LINE_${lineChannel.channel_id}`,
+              platform: 'LINE',
+              channelId: lineChannel.channel_id,
+              label: lineChannel.channel_name || 'LINE 官方帳號',
+            });
+          }
+        }
+
+        if (fbRes.ok) {
+          const fbChannels = await fbRes.json();
+          if (Array.isArray(fbChannels)) {
+            fbChannels.forEach((fb: { page_id: string; channel_name: string }) => {
+              if (fb.page_id) {
+                options.push({
+                  value: `FB_${fb.page_id}`,
+                  platform: 'Facebook',
+                  channelId: fb.page_id,
+                  label: fb.channel_name || 'Facebook 粉專',
+                });
+              }
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('渠道獲取失敗', e);
+      }
+
+      setChannelOptions(options);
+
+      // 只有在非編輯模式且無已選擇值時，才自動選擇第一個選項
+      // 編輯模式下由 hydrateFromRecord 設定正確的渠道
+      if (options.length > 0 && !selectedChannelValue && !isEditing) {
+        setSelectedChannelValue(options[0].value);
+        setSelectedChannel(options[0].platform);
+      }
+    };
+
+    fetchChannels();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing]);
+
+  // 處理日期/時間模式切換，清空另一模式的值
+  const handleScheduleModeChange = useCallback((mode: ScheduleModeType) => {
+    setScheduleMode(mode);
+    if (mode === 'date') {
+      // 切換到日期模式，清空時間
+      setScheduledDateTime(prev => ({
+        ...prev,
+        startTime: '',
+        endTime: '',
+      }));
+    } else {
+      // 切換到時間模式，清空日期
+      setScheduledDateTime(prev => ({
+        ...prev,
+        startDate: '',
+        endDate: '',
+      }));
+    }
+  }, []);
+
+  // 處理關鍵字標籤變更（支援 FB 關鍵字刪除）
+  const handleKeywordTagsChange = useCallback(async (newTags: string[]) => {
+    const isFbEditing = isEditing && autoReplyId?.startsWith('fb-') && selectedChannel === 'Facebook';
+
+    // 檢測被刪除的關鍵字
+    const removedTags = keywordTags.filter(tag => !newTags.includes(tag));
+
+    // 如果是 FB 編輯模式且有關鍵字被刪除
+    if (isFbEditing && removedTags.length > 0) {
+      for (const removedTag of removedTags) {
+        // 從 keywordItems 找到對應的 FB keyword ID
+        const removedItem = keywordItems.find(ki => ki.name === removedTag);
+        if (removedItem?.fbId) {
+          try {
+            await deleteFbKeyword(removedItem.fbId);
+            toast.success(`關鍵字「${removedTag}」已刪除`);
+          } catch {
+            // 錯誤已在 context 處理，這裡只是跳過更新 UI
+            return; // 刪除失敗，不更新 state
+          }
+        }
+      }
+    }
+
+    // 更新 keywordTags
+    setKeywordTags(newTags);
+
+    // 同步更新 keywordItems
+    setKeywordItems(prev => {
+      // 保留現有的、移除被刪除的
+      const kept = prev.filter(ki => newTags.includes(ki.name));
+      // 新增新的（沒有 fbId）
+      const newNames = newTags.filter(tag => !prev.some(ki => ki.name === tag));
+      const maxId = kept.length > 0 ? Math.max(...kept.map(ki => ki.id)) : 0;
+      const newItems = newNames.map((name, index) => ({
+        id: maxId + index + 1,
+        name,
+      }));
+      return [...kept, ...newItems];
+    });
+  }, [isEditing, autoReplyId, selectedChannel, keywordTags, keywordItems, deleteFbKeyword]);
 
   const hydrateFromRecord = useCallback((record: AutoReplyRecord) => {
     const normalizedType: ReplyType =
@@ -92,16 +246,46 @@ export default function CreateAutoReplyInteractive({
 
     setReplyType(normalizedType);
     setIsEnabled(record.isActive);
-    const hydratedMessages = (record.messages.length ? record.messages : ['']).map((text, index) => ({
-      id: index + 1,
-      text,
-    }));
+
+    // 優先使用 messageObjects（包含 FB id、basic_id、count），否則使用純字串
+    const hydratedMessages = record.messageObjects?.length
+      ? record.messageObjects.map((msg, index) => ({
+          id: index + 1,
+          text: msg.content,
+          fbId: msg.id,  // 保留 FB API 的 text id
+          fbBasicId: msg.basicId,  // 保留 FB API 的父自動回應 ID
+          fbCount: msg.count ?? 0,  // 保留 FB API 的觸發計數
+        }))
+      : (record.messages.length ? record.messages : ['']).map((text, index) => ({
+          id: index + 1,
+          text,
+        }));
     setMessages(hydratedMessages);
     setKeywordTags(record.keywords);
 
+    // 初始化 keywordItems（用於追蹤 FB keyword ID）
+    const hydratedKeywords = record.keywordObjects?.length
+      ? record.keywordObjects.map((kw, index) => ({
+          id: index + 1,
+          name: kw.keyword,
+          fbId: kw.id,  // 保留 FB API 的 keyword id
+        }))
+      : record.keywords.map((name, index) => ({
+          id: index + 1,
+          name,
+        }));
+    setKeywordItems(hydratedKeywords);
+
     // 設定渠道（如果記錄中有渠道信息，使用第一個；否則預設為 LINE）
     if (record.channels && record.channels.length > 0) {
-      setSelectedChannel(record.channels[0] as ChannelType);
+      const channel = record.channels[0] as ChannelType;
+      setSelectedChannel(channel);
+      // 同時設定 selectedChannelValue，避免 fetchChannels 覆蓋
+      // 使用 channelId 或 channel 構建 value（會在 fetchChannels 完成後同步）
+      if (record.channelId) {
+        const prefix = channel === 'Facebook' ? 'FB_' : 'LINE_';
+        setSelectedChannelValue(`${prefix}${record.channelId}`);
+      }
     } else {
       setSelectedChannel('LINE');
     }
@@ -117,6 +301,13 @@ export default function CreateAutoReplyInteractive({
       startTime: record.triggerTimeStart ?? '',
       endTime: record.triggerTimeEnd ?? '',
     });
+
+    // 根據現有資料決定 scheduleMode
+    if (record.dateRangeStart || record.dateRangeEnd) {
+      setScheduleMode('date');
+    } else {
+      setScheduleMode('time');
+    }
   }, []);
 
   useEffect(() => {
@@ -150,18 +341,12 @@ export default function CreateAutoReplyInteractive({
     { value: 'follow', label: '一律回應' }
   ];
 
-  const channelOptions: { value: ChannelType; label: string }[] = [
-    { value: 'LINE', label: 'LINE' },
-    { value: 'Facebook', label: 'Facebook' }
-  ];
-
   const getReplyTypeLabel = (type: ReplyType) => {
     return replyTypeOptions.find(opt => opt.value === type)?.label || '';
   };
 
-  const getChannelLabel = (channel: ChannelType) => {
-    return channelOptions.find(opt => opt.value === channel)?.label || '';
-  };
+  const getChannelLabel = (channel: ChannelType) =>
+    channelOptions.find(opt => opt.platform === channel)?.label || channel;
 
   const handleInsertVariable = (index: number) => {
     const target = messages[index];
@@ -214,7 +399,12 @@ export default function CreateAutoReplyInteractive({
     );
   };
 
-  const handleSave = async () => {
+  // 檢查結果是否為衝突
+  const isConflict = (result: unknown): result is AutoReplyConflict => {
+    return typeof result === 'object' && result !== null && 'conflict' in result && (result as AutoReplyConflict).conflict === true;
+  };
+
+  const handleSave = async (forceActivate = false) => {
     if (isSaving) return;
     const trimmedMessages = messages
       .map((msg) => msg.text.trim())
@@ -230,10 +420,50 @@ export default function CreateAutoReplyInteractive({
     }
 
     const shouldSendSchedule = replyType === 'follow' && triggerTime === 'scheduled';
-    if (shouldSendSchedule && (!scheduledDateTime.startTime || !scheduledDateTime.endTime)) {
-      toast.error('請設定完整的觸發時間區間');
-      return;
+    if (shouldSendSchedule) {
+      if (scheduleMode === 'date') {
+        if (!scheduledDateTime.startDate || !scheduledDateTime.endDate) {
+          toast.error('請設定完整的日期區間');
+          return;
+        }
+      } else {
+        if (!scheduledDateTime.startTime || !scheduledDateTime.endTime) {
+          toast.error('請設定完整的時間區間');
+          return;
+        }
+      }
     }
+
+    const sendDateFields = shouldSendSchedule && scheduleMode === 'date';
+    const sendTimeFields = shouldSendSchedule && scheduleMode === 'time';
+    const channelId = channelOptions.find(opt => opt.value === selectedChannelValue)?.channelId;
+
+    // 構建 FB 專用的帶 id 對象（用於編輯時區分編輯 vs 新增）
+    const isFbEditing = isEditing && autoReplyId?.startsWith('fb-') && selectedChannel === 'Facebook';
+
+    // 從 messages state 構建帶 fbId、basic_id、count 的訊息對象
+    const fbMessagesPayload: FbMessagePayload[] | undefined = isFbEditing
+      ? messages
+          .filter(m => m.text.trim())
+          .map(m => ({
+            ...(m.fbId ? { id: m.fbId } : {}),  // 有 fbId 才帶 id（編輯），無則不帶（新增）
+            ...(m.fbBasicId ? { basic_id: m.fbBasicId } : {}),  // 保留父自動回應 ID
+            text: m.text.trim(),
+            count: m.fbCount ?? 0,  // 保留觸發計數
+            enabled: true,
+          }))
+      : undefined;
+
+    // 從 keywordItems 構建帶 id 的關鍵字對象
+    const fbKeywordsPayload: FbKeywordPayload[] | undefined = isFbEditing && replyType === 'keyword'
+      ? keywordTags.map(kw => {
+          // 從 keywordItems 找到對應的 FB keyword id
+          const existing = keywordItems.find(ki => ki.name === kw);
+          return existing?.fbId
+            ? { id: existing.fbId, name: kw }  // 有 fbId = 編輯
+            : { name: kw };                     // 無 fbId = 新增
+        })
+      : undefined;
 
     const payload: AutoReplyPayload = {
       name: `${getReplyTypeLabel(replyType)} - ${trimmedMessages[0].slice(0, 12) || '訊息'}`,
@@ -241,16 +471,56 @@ export default function CreateAutoReplyInteractive({
       messages: trimmedMessages,
       keywords: replyType === 'keyword' ? keywordTags : [],
       isActive: isEnabled,
-      triggerTimeStart: shouldSendSchedule ? scheduledDateTime.startTime || null : null,
-      triggerTimeEnd: shouldSendSchedule ? scheduledDateTime.endTime || null : null,
-      dateRangeStart: shouldSendSchedule ? normalizeDateForApi(scheduledDateTime.startDate) : null,
-      dateRangeEnd: shouldSendSchedule ? normalizeDateForApi(scheduledDateTime.endDate) : null,
-      channels: [selectedChannel], // 新增：包含選擇的渠道
+      triggerTimeStart: sendTimeFields ? scheduledDateTime.startTime || null : null,
+      triggerTimeEnd: sendTimeFields ? scheduledDateTime.endTime || null : null,
+      dateRangeStart: sendDateFields ? normalizeDateForApi(scheduledDateTime.startDate) : null,
+      dateRangeEnd: sendDateFields ? normalizeDateForApi(scheduledDateTime.endDate) : null,
+      channels: [selectedChannel],
+      channelId: channelId,
+      forceActivate,
+      // FB 專用：帶 id 的對象陣列
+      fbKeywords: fbKeywordsPayload,
+      fbMessages: fbMessagesPayload,
     };
 
     setIsSaving(true);
     try {
-      await saveAutoReply(payload, autoReplyId ?? undefined);
+      const result = await saveAutoReply(payload, autoReplyId ?? undefined);
+
+      // 檢查是否有衝突
+      if (isConflict(result)) {
+        setConflictData(result);
+        setPendingPayload(payload);
+        setShowConflictDialog(true);
+        setIsSaving(false);
+        return;
+      }
+
+      onSaved?.();
+      onBack();
+    } catch {
+      // 錯誤提示已由 context 處理
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 確認切換：停用舊的，啟用新的
+  const handleConfirmSwitch = async () => {
+    if (!pendingPayload) return;
+    setShowConflictDialog(false);
+    await handleSave(true);
+  };
+
+  // 保存但不啟用
+  const handleSaveInactive = async () => {
+    if (!pendingPayload) return;
+    setShowConflictDialog(false);
+    const inactivePayload = { ...pendingPayload, isActive: false };
+    setIsSaving(true);
+    try {
+      await saveAutoReply(inactivePayload, autoReplyId ?? undefined);
+      toast.success('自動回應已保存（停用狀態）');
       onSaved?.();
       onBack();
     } catch {
@@ -289,16 +559,25 @@ export default function CreateAutoReplyInteractive({
     }
   };
 
-  const handleDeleteMessage = (index: number) => {
-    setMessages(prev => {
-      if (prev.length === 1) {
-        toast.error('至少需保留一則訊息');
-        return prev;
+  const handleDeleteMessage = async (index: number) => {
+    if (messages.length === 1) {
+      toast.error('至少需保留一則訊息');
+      return;
+    }
+
+    const msg = messages[index];
+    const shouldCallFbApi = isEditing && autoReplyId?.startsWith('fb-') && msg?.fbId;
+
+    if (shouldCallFbApi) {
+      try {
+        await deleteFbMessage(msg.fbId!);
+      } catch {
+        return; // 錯誤已在 context 處理
       }
-      const next = prev.filter((_, i) => i !== index);
-      toast.success('訊息已刪除');
-      return next;
-    });
+    }
+
+    setMessages(prev => prev.filter((_, i) => i !== index));
+    toast.success('訊息已刪除');
   };
 
   const handleAddMessage = () => {
@@ -319,7 +598,13 @@ export default function CreateAutoReplyInteractive({
 
     setIsDeleting(true);
     try {
-      await removeAutoReply(autoReplyId);
+      const isFb = autoReplyId.startsWith('fb-');
+      if (isFb) {
+        await deleteFbAutoReply(parseInt(autoReplyId.slice(3), 10));
+        toast.success('FB 自動回應已刪除');
+      } else {
+        await removeAutoReply(autoReplyId);
+      }
       onDeleted?.();
       onBack();
     } catch {
@@ -387,7 +672,7 @@ export default function CreateAutoReplyInteractive({
                     )}
                     <button
                       type="button"
-                      onClick={handleSave}
+                      onClick={() => handleSave()}
                       disabled={isSaving || isHydrating}
                       className={`bg-[#242424] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 transition-colors ${
                         isSaving || isHydrating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-[#383838] active:bg-[#4a4a4a]'
@@ -452,6 +737,59 @@ export default function CreateAutoReplyInteractive({
                   <div className="basis-0 content-stretch flex flex-col gap-[24px] grow items-start min-h-px min-w-px relative shrink-0">
                     <div className="content-stretch flex flex-col gap-[40px] items-end min-h-[200px] relative shrink-0 w-full">
                       <div className="content-stretch flex flex-col gap-[32px] items-end relative shrink-0 w-full">
+                        {/* 選擇回應平台 */}
+                        <div className="content-stretch flex items-start relative shrink-0 w-full flex-col xl:flex-row gap-[8px] xl:gap-0">
+                          <div className="content-stretch flex gap-[2px] items-center min-w-[160px] relative shrink-0 w-full xl:w-auto">
+                            <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] whitespace-nowrap">選擇回應平台</p>
+                            <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#f44336] text-[16px] whitespace-nowrap">*</p>
+                          </div>
+                          <div className="basis-0 bg-white grow min-h-[48px] relative rounded-[8px] shrink-0 w-full xl:w-auto">
+                            <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-[8px]" />
+                            <div className="flex flex-col justify-center min-h-inherit size-full">
+                              <div className="box-border content-stretch flex flex-col gap-[4px] items-start justify-center min-h-inherit p-[8px] relative w-full cursor-pointer" onClick={() => setIsChannelDropdownOpen(!isChannelDropdownOpen)}>
+                                <div className="content-stretch flex gap-[8px] items-center relative shrink-0 w-full">
+                                  {/* 顯示選中渠道的圖標和名稱 */}
+                                  {channelOptions.length > 0 && selectedChannel ? (
+                                    <>
+                                      <ChannelIcon channel={selectedChannel} size={20} />
+                                      <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] whitespace-nowrap overflow-hidden text-ellipsis">{getChannelLabel(selectedChannel)}</p>
+                                    </>
+                                  ) : (
+                                    <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] text-[#9e9e9e] text-[16px]">請先至基本設定連結渠道</p>
+                                  )}
+                                  <div className="relative shrink-0 size-[24px]">
+                                    <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
+                                      <path d={svgPathsModal.p2b927b00} fill="var(--fill-0, #6E6E6E)" />
+                                    </svg>
+                                  </div>
+                                </div>
+                                {isChannelDropdownOpen && channelOptions.length > 0 && (
+                                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-neutral-100 rounded-[8px] shadow-lg z-10">
+                                    {channelOptions.map(opt => (
+                                      <div
+                                        key={opt.value}
+                                        className="py-[12px] px-[8px] hover:bg-slate-50 cursor-pointer flex items-center gap-[8px]"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedChannelValue(opt.value);
+                                          setSelectedChannel(opt.platform);
+                                          if (opt.platform === 'Facebook' && replyType !== 'keyword') {
+                                            setReplyType('keyword');
+                                          }
+                                          setIsChannelDropdownOpen(false);
+                                        }}
+                                      >
+                                        <ChannelIcon channel={opt.platform} size={20} />
+                                        <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#383838] text-[16px] leading-[1.5] whitespace-nowrap">{opt.label}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
                         {/* 回應類型 */}
                         <div className="content-stretch flex items-start relative shrink-0 w-full flex-col xl:flex-row gap-[8px] xl:gap-0">
                           <div className="content-stretch flex gap-[2px] items-center min-w-[160px] relative shrink-0 w-full xl:w-auto">
@@ -472,40 +810,10 @@ export default function CreateAutoReplyInteractive({
                                 </div>
                                 {isDropdownOpen && (
                                   <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-neutral-100 rounded-[8px] shadow-lg z-10">
-                                    {replyTypeOptions.map(opt => (
+                                    {replyTypeOptions
+                                      .filter(opt => selectedChannel !== 'Facebook' || opt.value === 'keyword')
+                                      .map(opt => (
                                       <div key={opt.value} className="py-[12px] px-[8px] hover:bg-slate-50 cursor-pointer flex items-center" onClick={(e) => { e.stopPropagation(); setReplyType(opt.value); setIsDropdownOpen(false); }}>
-                                        <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#383838] text-[16px] leading-[1.5] whitespace-nowrap">{opt.label}</p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* 回應渠道 */}
-                        <div className="content-stretch flex items-start relative shrink-0 w-full flex-col xl:flex-row gap-[8px] xl:gap-0">
-                          <div className="content-stretch flex gap-[2px] items-center min-w-[160px] relative shrink-0 w-full xl:w-auto">
-                            <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] whitespace-nowrap">回應渠道</p>
-                            <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#f44336] text-[16px] whitespace-nowrap">*</p>
-                          </div>
-                          <div className="basis-0 bg-white grow min-h-[48px] relative rounded-[8px] shrink-0 w-full xl:w-auto">
-                            <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-[8px]" />
-                            <div className="flex flex-col justify-center min-h-inherit size-full">
-                              <div className="box-border content-stretch flex flex-col gap-[4px] items-start justify-center min-h-inherit p-[8px] relative w-full cursor-pointer" onClick={() => setIsChannelDropdownOpen(!isChannelDropdownOpen)}>
-                                <div className="content-stretch flex gap-[8px] items-start relative shrink-0 w-full">
-                                  <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] whitespace-nowrap overflow-hidden text-ellipsis">{getChannelLabel(selectedChannel)}</p>
-                                  <div className="relative shrink-0 size-[24px]">
-                                    <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
-                                      <path d={svgPathsModal.p2b927b00} fill="var(--fill-0, #6E6E6E)" />
-                                    </svg>
-                                  </div>
-                                </div>
-                                {isChannelDropdownOpen && (
-                                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-neutral-100 rounded-[8px] shadow-lg z-10">
-                                    {channelOptions.map(opt => (
-                                      <div key={opt.value} className="py-[12px] px-[8px] hover:bg-slate-50 cursor-pointer flex items-center" onClick={(e) => { e.stopPropagation(); setSelectedChannel(opt.value); setIsChannelDropdownOpen(false); }}>
                                         <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#383838] text-[16px] leading-[1.5] whitespace-nowrap">{opt.label}</p>
                                       </div>
                                     ))}
@@ -555,6 +863,8 @@ export default function CreateAutoReplyInteractive({
                               scheduledDateTime={scheduledDateTime}
                               setScheduledDateTime={setScheduledDateTime}
                               showScheduledOption={replyType === 'follow'} // 只有"一律回應"才顯示"指定日期或時間"
+                              scheduleMode={scheduleMode}
+                              onScheduleModeChange={handleScheduleModeChange}
                             />
                           </div>
                         </div>
@@ -563,7 +873,7 @@ export default function CreateAutoReplyInteractive({
                         {replyType === 'keyword' && (
                           <KeywordTagsInput
                             tags={keywordTags}
-                            onChange={setKeywordTags}
+                            onChange={handleKeywordTagsChange}
                             maxTags={20}
                             maxTagLength={20}
                             required={true}
@@ -641,9 +951,11 @@ export default function CreateAutoReplyInteractive({
                                           rows={3}
                                         />
 
-                                        <div className="bg-neutral-100 box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer hover:bg-neutral-200 transition-colors" onClick={() => handleInsertVariable(index)}>
-                                          <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] text-center">好友的顯示名稱</p>
-                                        </div>
+                                        {selectedChannel !== 'Facebook' && (
+                                          <div className="bg-neutral-100 box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer hover:bg-neutral-200 transition-colors" onClick={() => handleInsertVariable(index)}>
+                                            <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] text-center">好友的顯示名稱</p>
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
                                   </div>
@@ -681,6 +993,52 @@ export default function CreateAutoReplyInteractive({
           </div>
         </div>
       </main>
+
+      {/* 衝突對話框 */}
+      {showConflictDialog && conflictData && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-[16px] p-[24px] max-w-[480px] w-full mx-4 shadow-xl">
+            <h2 className="font-['Noto_Sans_TC:Regular',sans-serif] text-[20px] text-[#383838] mb-[16px]">
+              {conflictData.conflictType === 'welcome'
+                ? '系統目前已啟用中的歡迎訊息'
+                : '日期區間衝突'}
+            </h2>
+            <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] text-[#6e6e6e] mb-[8px]">
+              {conflictData.conflictType === 'welcome'
+                ? `目前啟用的歡迎訊息：「${conflictData.existingName}」`
+                : `與現有一律回應「${conflictData.existingName}」的日期區間重疊`}
+            </p>
+            {conflictData.existingDateRange && (
+              <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[14px] text-[#a8a8a8] mb-[24px]">
+                日期區間：{conflictData.existingDateRange}
+              </p>
+            )}
+            <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] text-[#383838] mb-[24px]">
+              是否切換至新的設定？
+            </p>
+            <div className="flex gap-[12px] justify-end">
+              <button
+                type="button"
+                onClick={handleSaveInactive}
+                className="bg-neutral-100 box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[16px] py-[8px] rounded-[16px] cursor-pointer hover:bg-neutral-200 transition-colors"
+              >
+                <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[16px] text-[#383838]">
+                  保存
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSwitch}
+                className="bg-[#0f6beb] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[16px] py-[8px] rounded-[16px] cursor-pointer hover:bg-[#0d5bc9] transition-colors"
+              >
+                <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[16px] text-white">
+                  確認切換
+                </p>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

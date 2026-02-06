@@ -5,9 +5,9 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "../components/ui/toolti
 import TooltipComponent from "./Tooltip";
 import { PageHeaderWithBreadcrumb } from "../components/common/Breadcrumb";
 import { TextIconButton, ArrowRightIcon, Tag } from "../components/common";
-import { MemberSourceIconLarge } from "../components/common/icons";
+import { MemberSourceIconLarge, ChannelIcon as CommonChannelIcon } from "../components/common/icons";
 import { useMembers } from "../contexts/MembersContext";
-import { formatMemberDateTime, getLatestMemberChatTimestamp } from "../utils/memberTime";
+import { formatMemberDateTime, getLatestMemberChatTimestamp, formatUnansweredTime } from "../utils/memberTime";
 
 /**
  * 會員管理列表頁面組件
@@ -20,14 +20,12 @@ import { formatMemberDateTime, getLatestMemberChatTimestamp } from "../utils/mem
  * 注意：此文件名為 Figma 導入時自動生成的名稱
  */
 
-// 使用共享的 Member 类型
-export type { Member } from "../types/member";
-import type { Member } from "../types/member";
+import type { DisplayMember, ChannelType } from "../types/member";
 
 interface MemberMainContainerProps {
   onAddMember?: () => void;
-  onOpenChat?: (member: Member) => void;
-  onViewDetail?: (member: Member) => void;
+  onOpenChat?: (member: DisplayMember) => void;
+  onViewDetail?: (member: DisplayMember) => void;
 }
 
 
@@ -68,33 +66,37 @@ function Container2({ searchValue, onSearchChange, onSearch, onClearSearch, onAd
   );
 }
 
-function Container3({ count }: { count: number }) {
+function Container3({ count, totalMembers }: { count: number; totalMembers?: number }) {
   return (
     <div className="content-stretch flex gap-[10px] items-center relative shrink-0" data-name="Container">
       <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#6e6e6e] text-[12px]">
-        共 {count} 筆
+        {totalMembers !== undefined ? (
+          <>共 {totalMembers} 位會員（{count} 筆渠道記錄）</>
+        ) : (
+          <>共 {count} 筆</>
+        )}
       </p>
     </div>
   );
 }
 
-function Container4({ count }: { count: number }) {
+function Container4({ count, totalMembers }: { count: number; totalMembers?: number }) {
   return (
     <div className="box-border content-stretch flex items-center pl-[4px] pr-0 py-0 relative shrink-0" data-name="Container">
-      <Container3 count={count} />
+      <Container3 count={count} totalMembers={totalMembers} />
     </div>
   );
 }
 
-function Container5({ count }: { count: number }) {
+function Container5({ count, totalMembers }: { count: number; totalMembers?: number }) {
   return (
     <div className="content-stretch flex gap-[12px] items-center relative shrink-0 w-full" data-name="Container">
-      <Container4 count={count} />
+      <Container4 count={count} totalMembers={totalMembers} />
     </div>
   );
 }
 
-type SortField = 'realName' | 'tags' | 'phone' | 'email' | 'createTime' | 'lastChatTime';
+type SortField = 'realName' | 'tags' | 'phone' | 'email' | 'lastChatTime';
 type SortOrder = 'asc' | 'desc';
 interface SortConfig {
   field: SortField;
@@ -164,7 +166,7 @@ function Container6({
             </div>
           </div>
           <div 
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[320px] cursor-pointer" 
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[260px] cursor-pointer" 
             data-name="Table/Title-atomic"
             onClick={() => onSortChange('tags')}
           >
@@ -241,7 +243,7 @@ function Container6({
           </div>
           {/* 平台欄位表頭 */}
           <div
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[120px]"
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[200px]"
             data-name="Table/Title-atomic"
           >
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
@@ -255,16 +257,6 @@ function Container6({
               </svg>
             </div>
           </div>
-          <div
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[140px] cursor-pointer"
-            data-name="Table/Title-atomic"
-            onClick={() => onSortChange('createTime')}
-          >
-            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">建立時間</p>
-            </div>
-            <SortingIcon active={isActive('createTime')} order={sortConfig.order} />
-          </div>
           <div className="h-[12px] relative shrink-0 w-0" data-name="Divier">
             <div className="absolute inset-[-3.33%_-0.4px]">
               <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
@@ -279,24 +271,10 @@ function Container6({
               </svg>
             </div>
           </div>
-          <div className="h-[12px] relative shrink-0 w-0" data-name="Divier">
-            <div className="absolute inset-[-3.33%_-0.4px]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
-                <path d="M0.4 0.4V12.4" id="Divier" stroke="var(--stroke-0, #DDDDDD)" strokeLinecap="round" strokeWidth="0.8" />
-              </svg>
-            </div>
-          </div>
-          <div className="h-[12px] relative shrink-0 w-0" data-name="Divier">
-            <div className="absolute inset-[-3.33%_-0.4px]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
-                <path d="M0.4 0.4V12.4" id="Divier" stroke="var(--stroke-0, #DDDDDD)" strokeLinecap="round" strokeWidth="0.8" />
-              </svg>
-            </div>
-          </div>
-          <div className="basis-0 grow min-h-px min-w-[200px] relative shrink-0" data-name="Table/Title-atomic">
+          <div className="basis-0 grow min-h-px min-w-[160px] relative shrink-0" data-name="Table/Title-atomic">
             <div className="flex flex-row items-center size-full">
-              <div 
-                className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative w-full min-w-[200px] cursor-pointer"
+              <div
+                className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative w-full min-w-[160px] cursor-pointer"
                 onClick={() => onSortChange('lastChatTime')}
               >
                 <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
@@ -359,68 +337,32 @@ function Avatar({ avatarUrl, altText }: { avatarUrl?: string; altText?: string }
   );
 }
 
-function Container7() {
-  return (
-    <div className="content-stretch flex items-center relative shrink-0 w-[260px]" data-name="Container">
-      <div className="overflow-clip relative shrink-0 size-[68px]" data-name="Avatar">
-        <Avatar />
-      </div>
-      <div className="basis-0 grow min-h-px min-w-px relative shrink-0" data-name="Table/List-atomic">
-        <div className="flex flex-row items-center size-full">
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative w-full">
-            <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[1.5]">User Name</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TableListAtomic() {
-  return (
-    <div className="box-border content-center flex flex-wrap gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[320px]" data-name="Table/List-atomic">
-      <Tag variant="blue">優惠活動</Tag>
-      <Tag variant="blue">伴手禮</Tag>
-      <Tag variant="blue">KOL</Tag>
-      <Tag variant="blue">優惠活動</Tag>
-      <Tag variant="blue">伴手禮</Tag>
-      <Tag variant="blue">KOL</Tag>
-    </div>
-  );
-}
-
 // Dynamic Tags Component
-function MemberTags({ member }: { member: Member }) {
-  // 取會員標籤最新的3個
-  const displayMemberTags = (member.memberTags || []).slice(0, 3);
-  // 取互動標籤最新的3個
-  const displayInteractionTags = (member.interactionTags || []).slice(0, 3);
-  // 合併顯示
-  const allDisplayTags = [...displayMemberTags, ...displayInteractionTags];
+function MemberTags({ member }: { member: DisplayMember }) {
+  // 顯示最多 6 個標籤
+  const allDisplayTags = (member.tags || []).slice(0, 6);
 
   // 如果沒有任何標籤，顯示 "-"
   if (allDisplayTags.length === 0) {
     return (
-      <div className="box-border content-center flex flex-wrap gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[320px]" data-name="Table/List-atomic">
+      <div className="box-border flex flex-wrap gap-[4px] items-center justify-start px-[12px] py-0 relative shrink-0 w-[260px]" data-name="Table/List-atomic">
         <p className="text-[14px] text-[#6e6e6e] leading-[1.5]">-</p>
       </div>
     );
   }
 
   return (
-    <div className="box-border content-center flex flex-wrap gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[320px]" data-name="Table/List-atomic">
+    <div className="box-border flex flex-wrap gap-[4px] items-center justify-start px-[12px] py-0 relative shrink-0 w-[260px] max-w-[260px]" data-name="Table/List-atomic">
       {allDisplayTags.map((tag, index) => (
-        <div key={index} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-          <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">{tag}</p>
+        <div key={index} className="bg-[#f0f6ff] box-border flex gap-[2px] items-center justify-center max-w-[80px] p-[4px] rounded-[8px]" data-name="Tag">
+          <p className="font-['Noto_Sans_TC:Regular',sans-serif] leading-[1.5] text-[#0f6beb] text-[16px] text-center truncate">{tag}</p>
         </div>
       ))}
     </div>
   );
 }
 
-function MynauiMessageSolid() {
+function MessageIcon() {
   return (
     <div className="relative shrink-0 size-[24px]" data-name="mynaui:message-solid">
       <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
@@ -432,17 +374,52 @@ function MynauiMessageSolid() {
   );
 }
 
+// 渠道圖標組件（使用統一組件）
+function ChannelIcon({ channel, channelName }: { channel: ChannelType; channelName?: string | null }) {
+  // 顯示渠道名稱，如果沒有則使用預設名稱
+  const displayName = channelName || (channel === 'LINE' ? 'LINE' : channel === 'Facebook' ? 'FB' : 'Web');
+
+  // LINE 和 Facebook 使用統一組件，Webchat 使用內嵌 SVG
+  if (channel === 'LINE' || channel === 'Facebook') {
+    return (
+      <div className="flex items-center gap-[8px]">
+        <CommonChannelIcon channel={channel} size={20} />
+        <span className="text-[14px] text-[#383838] truncate">{displayName}</span>
+      </div>
+    );
+  }
+
+  // Webchat 使用內嵌 SVG
+  return (
+    <div className="flex items-center gap-[8px]">
+      <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" fill="#6E6E6E">
+        <path d="M12 2C6.477 2 2 6.145 2 11.243c0 2.936 1.444 5.545 3.684 7.227V22l3.266-1.793c.87.24 1.792.369 2.75.369h.3c5.523 0 10-4.145 10-9.243S17.523 2 12 2z"/>
+      </svg>
+      <span className="text-[14px] text-[#383838] truncate">{displayName}</span>
+    </div>
+  );
+}
+
 // Dynamic Member Row Component
-function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Member; isLast?: boolean; onOpenChat?: (member: Member) => void; onViewDetail?: (member: Member) => void }) {
+function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: DisplayMember; isLast?: boolean; onOpenChat?: (member: DisplayMember) => void; onViewDetail?: (member: DisplayMember) => void }) {
   const [isPressed, setIsPressed] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   const handleRowClick = () => {
-    onViewDetail?.(member);
+    // 點擊行直接開啟聊天室
+    onOpenChat?.(member);
   };
 
   const handleMouseDown = () => setIsPressed(true);
   const handleMouseUp = () => setIsPressed(false);
-  const handleMouseLeave = () => setIsPressed(false);
+  const handleMouseLeave = () => {
+    setIsPressed(false);
+    setIsHovered(false);
+  };
+  const handleMouseEnter = () => setIsHovered(true);
+
+  // 計算未回覆時間顯示
+  const unansweredTimeText = member.isUnanswered ? formatUnansweredTime(member.unansweredSince) : null;
 
   return (
     <div
@@ -452,6 +429,7 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Membe
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseLeave}
+      onMouseEnter={handleMouseEnter}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
@@ -460,20 +438,44 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Membe
       }}
       className={`relative shrink-0 w-full transition-colors group cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0f6beb]/30 ${isLast ? 'rounded-bl-[16px] rounded-br-[16px]' : 'border-b border-[#dddddd]'}`}
       data-name="Container"
-      style={{ backgroundColor: isPressed ? '#edf3ff' : 'white' }}
+      style={{ backgroundColor: isPressed || isHovered ? '#F8FAFC' : 'white' }}
     >
+      {/* 未回覆藍點指示器 */}
+      {member.isUnanswered && (
+        <div
+          style={{
+            position: 'absolute',
+            left: '4px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: '7px',
+            height: '7px',
+            borderRadius: '50%',
+            backgroundColor: '#0F6BEB',
+            zIndex: 10,
+          }}
+          data-name="Unanswered Indicator"
+        />
+      )}
       <div className="flex flex-row items-center size-full">
         <div className="box-border content-stretch flex items-center p-[12px] relative w-full">
-          <div className="content-stretch flex items-center relative shrink-0 w-[260px]" data-name="Container">
-            <div className="bg-white relative rounded-full shrink-0 size-[68px]" data-name="Avatar">
-              <Avatar avatarUrl={member.lineAvatar} altText={member.username || '會員頭像'} />
+          <div className="flex items-center relative shrink-0 w-[260px]" data-name="Container">
+            <div className="bg-white relative rounded-full shrink-0 size-[68px] ml-[8px]" data-name="Avatar">
+              <Avatar avatarUrl={member.avatar} altText={member.displayName || '會員頭像'} />
             </div>
             <div className="basis-0 grow min-h-px min-w-px relative shrink-0" data-name="Table/List-atomic">
               <div className="flex flex-row items-center size-full">
-                <div className="box-border content-stretch flex items-center px-[12px] py-0 relative w-full">
-                  <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-                    <p className="leading-[1.5]">{member.username || '未命名會員'}</p>
-                  </div>
+                <div className="box-border content-stretch flex flex-col items-start justify-center px-[12px] py-0 relative w-full">
+                  {/* 用戶名稱 - hover/press 時變藍色 */}
+                  <p className={`font-['Noto_Sans_TC:Regular',sans-serif] text-[14px] leading-[1.5] transition-colors ${isPressed || isHovered ? 'text-[#0F6BEB]' : 'text-[#383838]'}`}>
+                    {member.displayName || '未命名會員'}
+                  </p>
+                  {/* 未回覆時間顯示 */}
+                  {unansweredTimeText && (
+                    <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[12px] leading-[1.5] text-[#6E6E6E] mt-[4px]">
+                      {unansweredTimeText}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -495,36 +497,26 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Membe
             </div>
           </div>
           {/* 平台欄位內容 */}
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[120px]" data-name="Table/List-atomic">
-            <div className="flex items-center justify-start font-['Noto_Sans_TC:Regular',sans-serif] relative text-[#383838]">
-              <MemberSourceIconLarge source={member.join_source || 'LINE'} />
-            </div>
+          <div className="box-border flex items-center justify-start px-[12px] py-0 relative shrink-0 w-[200px]" data-name="Table/List-atomic">
+            <ChannelIcon channel={member.channel} channelName={member.channelName} />
           </div>
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[140px]" data-name="Table/List-atomic">
-            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">{formatMemberDateTime(member.createTime) || '-'}</p>
-            </div>
+          {/* 最近聊天時間欄位內容 */}
+          <div className="box-border flex items-center justify-start px-[12px] py-0 relative shrink-0 min-w-[160px] grow" data-name="Table/List-atomic">
+            <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[#383838] text-[14px] leading-[1.5] whitespace-nowrap">
+              {formatMemberDateTime(getLatestMemberChatTimestamp(member)) || '-'}
+            </p>
           </div>
-          <div className="basis-0 grow min-h-px min-w-[200px] relative shrink-0" data-name="Table/List-atomic">
-            <div className="flex flex-row items-center size-full">
-              <div className="box-border content-stretch flex items-center px-[12px] py-0 relative w-full">
-                <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px] whitespace-nowrap">
-                  <p className="leading-[1.5] whitespace-pre">{formatMemberDateTime(getLatestMemberChatTimestamp(member)) || '-'}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div 
+          <div
             onClick={(e) => {
               e.stopPropagation();
               onOpenChat?.(member);
             }}
-            className="content-stretch flex items-center justify-center min-h-[28px] min-w-[28px] relative rounded-[8px] shrink-0 size-[28px] cursor-pointer hover:bg-[#f0f6ff] transition-colors" 
+            className="content-stretch flex items-center justify-center min-h-[28px] min-w-[28px] relative rounded-[8px] shrink-0 size-[28px] cursor-pointer hover:bg-[#f0f6ff] transition-colors"
             data-name="Icon Button"
           >
-            <MynauiMessageSolid />
+            <MessageIcon />
           </div>
-          <TextIconButton 
+          <TextIconButton
             text="詳細"
             icon={<ArrowRightIcon color="#0F6BEB" />}
             onClick={(e) => {
@@ -539,461 +531,78 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Membe
   );
 }
 
-function Container8() {
-  return (
-    <div className="bg-white relative shrink-0 w-full" data-name="Container">
-      <div aria-hidden="true" className="absolute border-[#dddddd] border-[0px_0px_1px] border-solid inset-0 pointer-events-none" />
-      <div className="flex flex-row items-center size-full">
-        <div className="box-border content-stretch flex items-center p-[12px] relative w-full">
-          <Container7 />
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[180px]" data-name="Table/List-atomic">
-            <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[1.5]">Real Name</p>
-            </div>
-          </div>
-          <TableListAtomic />
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[140px]" data-name="Table/List-atomic">
-            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] w-[90px]">
-              <p className="leading-[1.5]">0987654321</p>
-            </div>
-          </div>
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[200px]" data-name="Table/List-atomic">
-            <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[1.5]">Chox.ox@gmail.com</p>
-            </div>
-          </div>
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[140px]" data-name="Table/List-atomic">
-            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">2025-10-02 10:40</p>
-            </div>
-          </div>
-          <div className="basis-0 grow min-h-px min-w-px relative shrink-0" data-name="Table/List-atomic">
-            <div className="flex flex-row items-center size-full">
-              <div className="box-border content-stretch flex items-center px-[12px] py-0 relative w-full">
-                <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-                  <p className="leading-[1.5]">2025-10-02 18:40</p>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="content-stretch flex items-center justify-center min-h-[28px] min-w-[28px] relative rounded-[8px] shrink-0 size-[28px]" data-name="Icon Button">
-            <MynauiMessageSolid />
-          </div>
-          <div className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0" data-name="Table/List-atomic">
-            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#0f6beb] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">詳細</p>
-            </div>
-            <div className="flex items-center justify-center relative shrink-0">
-              <div className="flex-none rotate-[180deg]">
-                <div className="overflow-clip relative size-[16px]" data-name="Arrow">
-                  <div className="absolute flex inset-[23.56%_36.29%_29.88%_36.27%] items-center justify-center">
-                    <div className="flex-none h-[4.39px] rotate-[90deg] w-[7.45px]">
-                      <div className="relative size-full" data-name="Vector">
-                        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 8 5">
-                          <path d={svgPaths.p1c38d100} fill="var(--fill-0, #0F6BEB)" id="Vector" />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Icons8Account1() {
-  return (
-    <div className="absolute left-1/2 size-[18.667px] top-1/2 translate-x-[-50%] translate-y-[-50%]" data-name="icons8-account 1">
-      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 19 19">
-        <g id="icons8-account 1">
-          <path d={svgPaths.p17f8c200} fill="var(--fill-0, #383838)" id="Vector" />
-        </g>
-      </svg>
-    </div>
-  );
-}
-
-function Frame2() {
-  return (
-    <div className="basis-0 bg-[#edf0f8] content-stretch flex grow items-center justify-center min-h-px min-w-px relative shrink-0 w-full">
-      <div className="relative shrink-0 size-[28px]" data-name="Avatar">
-        <Icons8Account1 />
-      </div>
-    </div>
-  );
-}
-
-function Avatar1() {
-  return (
-    <div className="absolute bg-[#f6f9fd] content-stretch flex flex-col items-center left-1/2 overflow-clip rounded-[60px] size-[60px] top-1/2 translate-x-[-50%] translate-y-[-50%]" data-name="Avatar">
-      <Frame2 />
-    </div>
-  );
-}
-
-function Container9() {
-  return (
-    <div className="content-stretch flex items-center relative shrink-0 w-[260px]" data-name="Container">
-      <div className="overflow-clip relative shrink-0 size-[68px]" data-name="Avatar">
-        <Avatar1 />
-      </div>
-      <div className="basis-0 grow min-h-px min-w-px relative shrink-0" data-name="Table/List-atomic">
-        <div className="flex flex-row items-center size-full">
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative w-full">
-            <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[1.5]">JaneDoe88</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TableListAtomic1() {
-  return (
-    <div className="box-border content-center flex flex-wrap gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[320px]" data-name="Table/List-atomic">
-      <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">夏季特惠</p>
-      </div>
-      <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">手工皂</p>
-      </div>
-      <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">BeautyBlogger</p>
-      </div>
-      <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">夏季特惠</p>
-      </div>
-      <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">手工皂</p>
-      </div>
-      <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">BeautyBlogger</p>
-      </div>
-    </div>
-  );
-}
-
-function MynauiMessageSolid1() {
-  return (
-    <div className="relative shrink-0 size-[24px]" data-name="mynaui:message-solid">
-      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
-        <g id="mynaui:message-solid">
-          <path d={svgPaths.pc989200} fill="var(--fill-0, #0F6BEB)" id="Vector" />
-        </g>
-      </svg>
-    </div>
-  );
-}
-
-function Container10() {
-  return (
-    <div className="bg-white relative shrink-0 w-full" data-name="Container">
-      <div aria-hidden="true" className="absolute border-[#dddddd] border-[0px_0px_1px] border-solid inset-0 pointer-events-none" />
-      <div className="flex flex-row items-center size-full">
-        <div className="box-border content-stretch flex items-center p-[12px] relative w-full">
-          <Container9 />
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[180px]" data-name="Table/List-atomic">
-            <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[1.5]">Jane Doe</p>
-            </div>
-          </div>
-          <TableListAtomic1 />
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[140px]" data-name="Table/List-atomic">
-            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] w-[90px]">
-              <p className="leading-[1.5]">0912345678</p>
-            </div>
-          </div>
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[200px]" data-name="Table/List-atomic">
-            <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[1.5]">JaneDoe88@example.com</p>
-            </div>
-          </div>
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[140px]" data-name="Table/List-atomic">
-            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">2025-10-03 10:00</p>
-            </div>
-          </div>
-          <div className="basis-0 grow min-h-px min-w-px relative shrink-0" data-name="Table/List-atomic">
-            <div className="flex flex-row items-center size-full">
-              <div className="box-border content-stretch flex items-center px-[12px] py-0 relative w-full">
-                <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-                  <p className="leading-[1.5]">2025-10-03 10:30</p>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="content-stretch flex items-center justify-center min-h-[28px] min-w-[28px] relative rounded-[8px] shrink-0 size-[28px]" data-name="Icon Button">
-            <MynauiMessageSolid1 />
-          </div>
-          <div className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0" data-name="Table/List-atomic">
-            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#0f6beb] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">詳情</p>
-            </div>
-            <div className="flex items-center justify-center relative shrink-0">
-              <div className="flex-none rotate-[180deg]">
-                <div className="overflow-clip relative size-[16px]" data-name="Arrow">
-                  <div className="absolute flex inset-[23.56%_36.29%_29.88%_36.27%] items-center justify-center">
-                    <div className="flex-none h-[4.39px] rotate-[90deg] w-[7.45px]">
-                      <div className="relative size-full" data-name="Vector">
-                        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 8 5">
-                          <path d={svgPaths.p1c38d100} fill="var(--fill-0, #0F6BEB)" id="Vector" />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Icons8Account2() {
-  return (
-    <div className="absolute left-1/2 size-[18.667px] top-1/2 translate-x-[-50%] translate-y-[-50%]" data-name="icons8-account 1">
-      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 19 19">
-        <g id="icons8-account 1">
-          <path d={svgPaths.p17f8c200} fill="var(--fill-0, #383838)" id="Vector" />
-        </g>
-      </svg>
-    </div>
-  );
-}
-
-function Frame3() {
-  return (
-    <div className="basis-0 bg-[#edf0f8] content-stretch flex grow items-center justify-center min-h-px min-w-px relative shrink-0 w-full">
-      <div className="relative shrink-0 size-[28px]" data-name="Avatar">
-        <Icons8Account2 />
-      </div>
-    </div>
-  );
-}
-
-function Avatar2() {
-  return (
-    <div className="absolute bg-[#f6f9fd] content-stretch flex flex-col items-center left-1/2 overflow-clip rounded-[60px] size-[60px] top-1/2 translate-x-[-50%] translate-y-[-50%]" data-name="Avatar">
-      <Frame3 />
-    </div>
-  );
-}
-
-function Container11() {
-  return (
-    <div className="content-stretch flex items-center relative shrink-0 w-[260px]" data-name="Container">
-      <div className="overflow-clip relative shrink-0 size-[68px]" data-name="Avatar">
-        <Avatar2 />
-      </div>
-      <div className="basis-0 grow min-h-px min-w-px relative shrink-0" data-name="Table/List-atomic">
-        <div className="flex flex-row items-center size-full">
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative w-full">
-            <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[1.5]">MarkSmith</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TableListAtomic2() {
-  return (
-    <div className="box-border content-center flex flex-wrap gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[320px]" data-name="Table/List-atomic">
-      <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">聖誕促銷</p>
-      </div>
-      <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">巧克力禮盒</p>
-      </div>
-      <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">Foodie</p>
-      </div>
-      <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">聖誕促銷</p>
-      </div>
-      <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">巧克力禮盒</p>
-      </div>
-      <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">Foodie</p>
-      </div>
-    </div>
-  );
-}
-
-function MynauiMessageSolid2() {
-  return (
-    <div className="relative shrink-0 size-[24px]" data-name="mynaui:message-solid">
-      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
-        <g id="mynaui:message-solid">
-          <path d={svgPaths.pc989200} fill="var(--fill-0, #0F6BEB)" id="Vector" />
-        </g>
-      </svg>
-    </div>
-  );
-}
-
-function Container12() {
-  return (
-    <div className="bg-white relative rounded-bl-[16px] rounded-br-[16px] shrink-0 w-full" data-name="Container">
-      <div className="flex flex-row items-center size-full">
-        <div className="box-border content-stretch flex items-center p-[12px] relative w-full">
-          <Container11 />
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[180px]" data-name="Table/List-atomic">
-            <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[1.5]">Mark Smith</p>
-            </div>
-          </div>
-          <TableListAtomic2 />
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[140px]" data-name="Table/List-atomic">
-            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] w-[90px]">
-              <p className="leading-[1.5]">0923456789</p>
-            </div>
-          </div>
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[200px]" data-name="Table/List-atomic">
-            <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[1.5]">MarkSmith@example.com</p>
-            </div>
-          </div>
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[140px]" data-name="Table/List-atomic">
-            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">2025-10-04 15:30</p>
-            </div>
-          </div>
-          <div className="basis-0 grow min-h-px min-w-px relative shrink-0" data-name="Table/List-atomic">
-            <div className="flex flex-row items-center size-full">
-              <div className="box-border content-stretch flex items-center px-[12px] py-0 relative w-full">
-                <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-                  <p className="leading-[1.5]">2025-10-04 18:30</p>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="content-stretch flex items-center justify-center min-h-[28px] min-w-[28px] relative rounded-[8px] shrink-0 size-[28px]" data-name="Icon Button">
-            <MynauiMessageSolid2 />
-          </div>
-          <div className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0" data-name="Table/List-atomic">
-            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#0f6beb] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">詳細</p>
-            </div>
-            <div className="flex items-center justify-center relative shrink-0">
-              <div className="flex-none rotate-[180deg]">
-                <div className="overflow-clip relative size-[16px]" data-name="Arrow">
-                  <div className="absolute flex inset-[23.56%_36.29%_29.88%_36.27%] items-center justify-center">
-                    <div className="flex-none h-[4.39px] rotate-[90deg] w-[7.45px]">
-                      <div className="relative size-full" data-name="Vector">
-                        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 8 5">
-                          <path d={svgPaths.p1c38d100} fill="var(--fill-0, #0F6BEB)" id="Vector" />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Table8Columns3Actions({ 
-  members, 
-  sortConfig, 
+function Table8Columns3Actions({
+  members,
+  sortConfig,
   onSortChange,
   onOpenChat,
   onViewDetail
-}: { 
-  members: Member[]; 
-  sortConfig: SortConfig; 
+}: {
+  members: DisplayMember[];
+  sortConfig: SortConfig;
   onSortChange: (field: SortField) => void;
-  onOpenChat?: (member: Member) => void;
-  onViewDetail?: (member: Member) => void;
+  onOpenChat?: (member: DisplayMember) => void;
+  onViewDetail?: (member: DisplayMember) => void;
 }) {
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-name="Table/8 Columns+3 Actions">
-      {/* Table Container with Border - Fixed height container with horizontal scroll */}
-      <div className="bg-white rounded-[16px] w-full flex flex-col max-h-[600px] overflow-x-auto table-scroll">
-        {/* Table Header - Fixed */}
-        <div className="relative shrink-0 w-[1630px]">
-          <Container6 sortConfig={sortConfig} onSortChange={onSortChange} />
-        </div>
-        
-        {/* Table Body - Scrollable Container */}
-        <div className="w-[1630px] flex-1 overflow-y-auto table-scroll">
-          {members.map((member, index) => (
-            <MemberRow 
-              key={member.id} 
-              member={member} 
-              isLast={index === members.length - 1}
-              onOpenChat={onOpenChat}
-              onViewDetail={onViewDetail}
-            />
-          ))}
+      {/* 外層容器 - 水平滾動 */}
+      <div className="bg-white rounded-[16px] w-full overflow-x-auto table-scroll">
+        {/* 內層容器 - 最小寬度確保欄位對齊 */}
+        <div className="min-w-[1160px]">
+          {/* 垂直滾動容器 + Sticky 表頭 */}
+          <div className="max-h-[600px] overflow-y-auto table-scroll">
+            {/* Table Header - Sticky */}
+            <div className="sticky top-0 z-10">
+              <Container6 sortConfig={sortConfig} onSortChange={onSortChange} />
+            </div>
+
+            {/* Table Body */}
+            {members.map((member, index) => (
+              <MemberRow
+                key={member.id}
+                member={member}
+                isLast={index === members.length - 1}
+                onOpenChat={onOpenChat}
+                onViewDetail={onViewDetail}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function Container13({ 
-  members, 
-  sortConfig, 
-  onSortChange,
-  onOpenChat,
-  onViewDetail
-}: { 
-  members: Member[]; 
-  sortConfig: SortConfig; 
-  onSortChange: (field: SortField) => void;
-  onOpenChat?: (member: Member) => void;
-  onViewDetail?: (member: Member) => void;
-}) {
-  return (
-    <div className="content-stretch flex flex-col gap-[8px] items-start relative shrink-0 w-full" data-name="Container">
-      <Container5 count={members.length} />
-      <Table8Columns3Actions members={members} sortConfig={sortConfig} onSortChange={onSortChange} onOpenChat={onOpenChat} onViewDetail={onViewDetail} />
-    </div>
-  );
-}
 
-function MainContent({ 
-  searchValue, 
-  onSearchChange, 
-  onSearch, 
-  onClearSearch, 
-  filteredMembers, 
-  sortConfig, 
-  onSortChange, 
-  onAddMember, 
-  onOpenChat, 
+function MainContent({
+  searchValue,
+  onSearchChange,
+  onSearch,
+  onClearSearch,
+  filteredMembers,
+  sortConfig,
+  onSortChange,
+  onAddMember,
+  onOpenChat,
   onViewDetail,
   isLoading,
   error,
-}: { 
-  searchValue: string; 
+  totalMembers,
+}: {
+  searchValue: string;
   onSearchChange: (value: string) => void;
   onSearch: () => void;
   onClearSearch: () => void;
-  filteredMembers: Member[];
+  filteredMembers: DisplayMember[];
   sortConfig: SortConfig;
   onSortChange: (field: SortField) => void;
   onAddMember?: () => void;
-  onOpenChat?: (member: Member) => void;
-  onViewDetail?: (member: Member) => void;
+  onOpenChat?: (member: DisplayMember) => void;
+  onViewDetail?: (member: DisplayMember) => void;
   isLoading: boolean;
   error: string | null;
+  totalMembers: number;
 }) {
   return (
     <div className="relative shrink-0 w-full" data-name="Main Content">
@@ -1012,7 +621,7 @@ function MainContent({
           
           {/* Count */}
           <div className="px-[40px] pb-[12px]">
-            <Container5 count={filteredMembers.length} />
+            <Container5 count={filteredMembers.length} totalMembers={totalMembers} />
           </div>
           
           {/* Table */}
@@ -1043,7 +652,7 @@ function MainContent({
 }
 
 export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }: MemberMainContainerProps = {}) {
-  const { members, isLoading, error } = useMembers();
+  const { displayMembers, totalDisplayMembers, isLoading, error } = useMembers();
   const [searchValue, setSearchValue] = useState('');
   const [appliedSearchValue, setAppliedSearchValue] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({
@@ -1059,20 +668,21 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
     return Number.isNaN(timestamp) ? 0 : timestamp;
   };
 
-  // Filter and sort members
+  // Filter and sort display members
   const filteredMembers = useMemo(() => {
-    let result = members;
-    
+    let result = displayMembers;
+
     // Apply search filter
     if (appliedSearchValue.trim()) {
       const searchLower = appliedSearchValue.toLowerCase();
       result = result.filter((member) => {
         return (
-          (member.username || '').toLowerCase().includes(searchLower) ||
+          (member.displayName || '').toLowerCase().includes(searchLower) ||
           (member.realName || '').toLowerCase().includes(searchLower) ||
           (member.tags || []).some(tag => tag.toLowerCase().includes(searchLower)) ||
           (member.phone || '').includes(searchLower) ||
-          (member.email || '').toLowerCase().includes(searchLower)
+          (member.email || '').toLowerCase().includes(searchLower) ||
+          member.channel.toLowerCase().includes(searchLower)
         );
       });
     }
@@ -1093,9 +703,6 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
         case 'email':
           comparison = (a.email || '').localeCompare(b.email || '');
           break;
-        case 'createTime':
-          comparison = parseDateTime(a.createTime) - parseDateTime(b.createTime);
-          break;
         case 'lastChatTime':
           comparison = parseDateTime(a.lastChatTime) - parseDateTime(b.lastChatTime);
           break;
@@ -1106,7 +713,7 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
     });
 
     return sorted;
-  }, [members, appliedSearchValue, sortConfig]);
+  }, [displayMembers, appliedSearchValue, sortConfig]);
 
   const handleSearch = () => {
     setAppliedSearchValue(searchValue);
@@ -1126,7 +733,7 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
           order: prev.order === 'desc' ? 'asc' : 'desc',
         };
       }
-      const defaultOrder: SortOrder = field === 'createTime' || field === 'lastChatTime' ? 'desc' : 'asc';
+      const defaultOrder: SortOrder = field === 'lastChatTime' ? 'desc' : 'asc';
       return { field, order: defaultOrder };
     });
   };
@@ -1142,7 +749,7 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
         description="管理會員資料與一對一訊息，查看互動內容與紀錄"
       />
       
-      <MainContent 
+      <MainContent
         searchValue={searchValue}
         onSearchChange={setSearchValue}
         onSearch={handleSearch}
@@ -1155,6 +762,7 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
         onViewDetail={onViewDetail}
         isLoading={isLoading}
         error={error}
+        totalMembers={totalDisplayMembers}
       />
     </div>
   );

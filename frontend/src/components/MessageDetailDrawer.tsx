@@ -7,6 +7,7 @@ import { FlexMessageCardPreview, type CarouselCard } from "./CarouselMessageEdit
 import { ArrowButton } from "./ArrowButton";
 import { SecondaryButton } from "./common/SecondaryButton";
 import { normalizeInteractionTags } from "../utils/interactionTags";
+import { apiGet } from "../utils/apiClient";
 
 interface MessageDetailDrawerProps {
   open: boolean;
@@ -206,7 +207,17 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
       setError(null);
 
       try {
-        const response = await fetch(`/api/v1/messages/${messageId}`);
+        // 判斷是否為 FB 訊息（ID 以 "fb-" 開頭）
+        let url: string;
+        if (messageId.startsWith('fb-')) {
+          const fbId = messageId.replace('fb-', '');
+          url = `/api/v1/messages/fb/${fbId}`;
+        } else {
+          url = `/api/v1/messages/${messageId}`;
+        }
+
+        // 使用 apiGet 自動處理 token 和 401 重試
+        const response = await apiGet(url);
 
         if (!response.ok) {
           throw new Error(`Failed to fetch message: ${response.statusText}`);
@@ -323,12 +334,14 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
           let cardTitle = '';
           let content = '';
           let price = '';
+          let foundTitle = false;  // 追蹤是否已找到標題（即使為空）
 
           body.forEach((item: any) => {
-            if (item.type === 'text' && item.weight === 'bold' && !cardTitle) {
-              cardTitle = item.text;
-            } else if (item.type === 'text' && !content && cardTitle) {
-              content = item.text;
+            if (item.type === 'text' && item.weight === 'bold' && !foundTitle) {
+              cardTitle = item.text || '';
+              foundTitle = true;
+            } else if (item.type === 'text' && !content && foundTitle) {
+              content = item.text || '';
             } else if (item.type === 'text' && item.text?.includes('NT$')) {
               price = item.text.replace('NT$', '').trim();
             }
@@ -340,8 +353,8 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
 
           return {
             id: index + 1,
-            enableImage: !!hero,
-            enableTitle: !!cardTitle,
+            enableImage: !!hero?.url,
+            enableTitle: foundTitle,  // 使用 flag，而非 cardTitle 的 truthy 值
             enableContent: !!content,
             enablePrice: !!price,
             enableButton1: buttons.length > 0,
@@ -396,12 +409,14 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
         let cardTitle = '';
         let content = '';
         let price = '';
+        let foundTitle = false;  // 追蹤是否已找到標題（即使為空）
 
         body.forEach((item: any) => {
-          if (item.type === 'text' && item.weight === 'bold' && !cardTitle) {
-            cardTitle = item.text;
-          } else if (item.type === 'text' && !content && cardTitle) {
-            content = item.text;
+          if (item.type === 'text' && item.weight === 'bold' && !foundTitle) {
+            cardTitle = item.text || '';
+            foundTitle = true;
+          } else if (item.type === 'text' && !content && foundTitle) {
+            content = item.text || '';
           } else if (item.type === 'text' && item.text?.includes('NT$')) {
             price = item.text.replace('NT$', '').trim();
           }
@@ -412,8 +427,8 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
 
         return [{
           id: 1,
-          enableImage: !!hero,
-          enableTitle: !!cardTitle,
+          enableImage: !!hero?.url,
+          enableTitle: foundTitle,  // 使用 flag，而非 cardTitle 的 truthy 值
           enableContent: !!content,
           enablePrice: !!price,
           enableButton1: buttons.length > 0,
@@ -486,9 +501,39 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
   };
 
   // Map API data to display format
+  // FB 草稿使用 fb_message_json，LINE 使用 flex_message_json
+  // FB 已發送訊息（從外部 API）會轉換為 flex_message_json 格式
   const cards = React.useMemo(() => {
     if (!messageData) return createFallbackCards();
-    return parseFlexMessageToCards(messageData.flex_message_json);
+
+    // 檢查 flex_message_json 是否有實際內容（非空佔位符）
+    // FB 草稿會存一個空的 flex_message_json 佔位符，需要使用 fb_message_json
+    const hasRealFlexContent = (() => {
+      if (!messageData.flex_message_json) return false;
+      try {
+        const parsed = typeof messageData.flex_message_json === 'string'
+          ? JSON.parse(messageData.flex_message_json)
+          : messageData.flex_message_json;
+        // 檢查是否有實際 body contents
+        if (parsed.type === 'bubble') {
+          const contents = parsed.body?.contents || [];
+          return contents.length > 0;
+        }
+        if (parsed.type === 'carousel') {
+          return (parsed.contents || []).length > 0;
+        }
+        return false;
+      } catch {
+        return false;
+      }
+    })();
+
+    // FB 草稿優先使用 fb_message_json，LINE 使用 flex_message_json
+    const jsonContent = hasRealFlexContent
+      ? messageData.flex_message_json
+      : messageData.fb_message_json || messageData.flex_message_json;
+
+    return parseFlexMessageToCards(jsonContent);
   }, [messageData]);
 
   const displayData = React.useMemo(() => {
@@ -603,37 +648,41 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
                 </div>
               </InfoRow>
 
-              <InfoRow label="發送人數">
-                <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0" data-name="Table/List-atomic">
-                  <div className="flex flex-col font-['Inter:Regular',sans-serif] font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] text-nowrap tracking-[0.22px]">
-                    <p className="leading-[24px] whitespace-pre">{displayData.recipients}</p>
-                  </div>
-                </div>
-              </InfoRow>
+              {displayData.status === '已發送' && (
+                <>
+                  <InfoRow label="發送人數">
+                    <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0" data-name="Table/List-atomic">
+                      <div className="flex flex-col font-['Inter:Regular',sans-serif] font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] text-nowrap tracking-[0.22px]">
+                        <p className="leading-[24px] whitespace-pre">{displayData.recipients}</p>
+                      </div>
+                    </div>
+                  </InfoRow>
 
-              <InfoRow label="已開啟次數">
-                <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0" data-name="Table/List-atomic">
-                  <div className="flex flex-col font-['Inter:Regular',sans-serif] font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] text-nowrap tracking-[0.22px]">
-                    <p className="leading-[24px] whitespace-pre">{displayData.opens}</p>
-                  </div>
-                </div>
-              </InfoRow>
+                  <InfoRow label="已開啟次數">
+                    <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0" data-name="Table/List-atomic">
+                      <div className="flex flex-col font-['Inter:Regular',sans-serif] font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] text-nowrap tracking-[0.22px]">
+                        <p className="leading-[24px] whitespace-pre">{displayData.opens}</p>
+                      </div>
+                    </div>
+                  </InfoRow>
 
-              <InfoRow label="點擊次數">
-                <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0" data-name="Table/List-atomic">
-                  <div className="flex flex-col font-['Inter:Regular',sans-serif] font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] text-nowrap tracking-[0.22px]">
-                    <p className="leading-[24px] whitespace-pre">{displayData.clicks}</p>
-                  </div>
-                </div>
-              </InfoRow>
+                  <InfoRow label="點擊次數">
+                    <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0" data-name="Table/List-atomic">
+                      <div className="flex flex-col font-['Inter:Regular',sans-serif] font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] text-nowrap tracking-[0.22px]">
+                        <p className="leading-[24px] whitespace-pre">{displayData.clicks}</p>
+                      </div>
+                    </div>
+                  </InfoRow>
 
-              <InfoRow label="發送時間">
-                <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0" data-name="Table/List-atomic">
-                  <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-                    <p className="leading-[1.5] whitespace-pre">{displayData.sendTime}</p>
-                  </div>
-                </div>
-              </InfoRow>
+                  <InfoRow label="發送時間">
+                    <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0" data-name="Table/List-atomic">
+                      <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
+                        <p className="leading-[1.5] whitespace-pre">{displayData.sendTime}</p>
+                      </div>
+                    </div>
+                  </InfoRow>
+                </>
+              )}
               {displayData.status === '草稿' && (
                 <InfoRow label="最後更新時間">
                   <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0">

@@ -18,6 +18,7 @@ import { MemberSourceIconSmall } from "../components/common/icons";
 import { useMembers } from "../contexts/MembersContext";
 import { useAuth } from "../components/auth/AuthContext";
 import type { Member, MemberData } from "../types/member";
+import type { ChatPlatform } from "../components/chat-room/types";
 export type { MemberData } from "../types/member";
 import type { BackendMember, BackendTag } from "../types/api";
 import { formatMemberDateTime, getLatestMemberChatTimestamp } from "../utils/memberTime";
@@ -36,20 +37,26 @@ const mapApiMemberToMemberData = (apiMember: BackendMember, fallback?: MemberDat
   const rawTags = Array.isArray(apiMember?.tags)
     ? apiMember.tags
     : fallback?.tagDetails || [];
+
+  // 支援兩種格式:
+  // 1. 標準格式: type='member'|'interaction', name
+  // 2. Meta 格式: tag_type=1|2, tag
   const memberTags =
     rawTags
-      .filter((tag: BackendTag) => tag?.type === 'member')
-      .map((tag: BackendTag) => tag.name) || [];
+      .filter((tag: BackendTag) => tag?.type === 'member' || tag?.tag_type === 1)
+      .map((tag: BackendTag) => tag.name || tag.tag || '') || [];
   const interactionTags =
     rawTags
-      .filter((tag: BackendTag) => tag?.type === 'interaction')
-      .map((tag: BackendTag) => tag.name) || [];
+      .filter((tag: BackendTag) => tag?.type === 'interaction' || tag?.tag_type === 2)
+      .map((tag: BackendTag) => tag.name || tag.tag || '') || [];
   const combinedTags = Array.from(new Set([...(memberTags || []), ...(interactionTags || [])]));
+
+  const displayName = apiMember?.line_display_name;
 
   return {
     id: apiMember?.id?.toString() ?? fallback?.id ?? '',
-    username: apiMember?.line_name || apiMember?.name || fallback?.username || '未命名會員',
-    realName: apiMember?.name || fallback?.realName || apiMember?.line_name || '未命名會員',
+    username: displayName || apiMember?.name || fallback?.username || '未命名會員',
+    realName: apiMember?.name || fallback?.realName || displayName || '未命名會員',
     tags: combinedTags,
     memberTags,
     interactionTags,
@@ -261,11 +268,21 @@ function Container({ member }: { member?: MemberData }) {
   );
 }
 
-function Container1({ member, onNavigate, fallbackMemberName }: { member?: MemberData; onNavigate?: (page: string, params?: { memberId?: string; memberName?: string }) => void; fallbackMemberName?: string }) {
+function Container1({
+  member,
+  onNavigate,
+  fallbackMemberName,
+  platform,
+}: {
+  member?: MemberData;
+  onNavigate?: (page: string, params?: { memberId?: string; memberName?: string; platform?: ChatPlatform }) => void;
+  fallbackMemberName?: string;
+  platform?: ChatPlatform;
+}) {
   const handleChatClick = () => {
     if (!member?.id) return;
     const targetName = member.username || member.realName || fallbackMemberName;
-    onNavigate?.("chat-room", { memberId: member.id, memberName: targetName });
+    onNavigate?.("chat-room", { memberId: member.id, memberName: targetName, platform });
   };
 
   return (
@@ -283,10 +300,20 @@ function Container1({ member, onNavigate, fallbackMemberName }: { member?: Membe
   );
 }
 
-function Container2({ member, onNavigate, fallbackMemberName }: { member?: MemberData; onNavigate?: (page: string, params?: { memberId?: string; memberName?: string }) => void; fallbackMemberName?: string }) {
+function Container2({
+  member,
+  onNavigate,
+  fallbackMemberName,
+  platform,
+}: {
+  member?: MemberData;
+  onNavigate?: (page: string, params?: { memberId?: string; memberName?: string; platform?: ChatPlatform }) => void;
+  fallbackMemberName?: string;
+  platform?: ChatPlatform;
+}) {
   return (
     <div className="basis-0 content-stretch flex flex-col gap-[24px] grow items-center max-w-[360px] min-h-px min-w-px relative self-stretch shrink-0" data-name="Container">
-      <Container1 member={member} onNavigate={onNavigate} fallbackMemberName={fallbackMemberName} />
+      <Container1 member={member} onNavigate={onNavigate} fallbackMemberName={fallbackMemberName} platform={platform} />
     </div>
   );
 }
@@ -1288,37 +1315,92 @@ function Container6({ member, onMemberUpdate }: { member?: MemberData; onMemberU
   );
 }
 
-function Container7({ member }: { member?: MemberData }) {
-  const [channelName, setChannelName] = React.useState<string>('LINE');
+function Container7({ member, platform }: { member?: MemberData; platform?: ChatPlatform }) {
+  const [channelName, setChannelName] = React.useState<string>('');
+  const { getDisplayMemberById } = useMembers();
+
+  // 根據當前選擇的渠道 (platform) 決定顯示哪個來源，而非 join_source
+  const displayPlatform = platform || member?.join_source || 'LINE';
 
   React.useEffect(() => {
+    // 根據當前選擇的 platform 決定顯示哪個渠道名稱
+    const normalizedPlatform = displayPlatform?.toLowerCase() || 'line';
+    const isFacebook = normalizedPlatform === 'facebook' || normalizedPlatform === 'fb';
+
+    if (isFacebook && member?.id) {
+      // FB 會員：嘗試從 displayMembers 獲取（可能需要 customer_id）
+      // 嘗試多種 ID 格式
+      const fbId = (member as any)?.fb_customer_id || member.id;
+      const displayMember = getDisplayMemberById(`fb-${fbId}`);
+      if (displayMember?.channelName) {
+        setChannelName(displayMember.channelName);
+        return;
+      }
+    } else if (member?.id) {
+      // LINE 會員：使用 member.id 查找
+      const displayMember = getDisplayMemberById(`line-${member.id}`);
+      if (displayMember?.channelName) {
+        setChannelName(displayMember.channelName);
+        return;
+      }
+    }
+
+    // 如果從 displayMembers 找不到，則使用 API 獲取
     const fetchChannelInfo = async () => {
       try {
         const token = localStorage.getItem('auth_token');
         if (!token) return;
 
-        const response = await fetch('/api/v1/line_channels/current', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
+        if (isFacebook) {
+          // Facebook 渠道：獲取粉專名稱
+          const response = await fetch('/api/v1/fb_channels', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
 
-        if (!response.ok) return;
+          if (!response.ok) {
+            setChannelName('Facebook');
+            return;
+          }
 
-        const result = await response.json();
-        // 優先使用 channel_name，如果沒有則使用 channel_id
-        if (result?.channel_name) {
-          setChannelName(result.channel_name);
-        } else if (result?.channel_id) {
-          setChannelName(result.channel_id);
+          const fbChannels = await response.json();
+          // 如果只有一個粉專，使用它
+          if (Array.isArray(fbChannels) && fbChannels.length > 0) {
+            setChannelName(fbChannels[0].channel_name || 'Facebook');
+          } else {
+            setChannelName('Facebook');
+          }
+        } else {
+          // LINE 渠道：獲取 LINE 頻道名稱
+          const response = await fetch('/api/v1/line_channels/current', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+
+          if (!response.ok) {
+            setChannelName('LINE');
+            return;
+          }
+
+          const result = await response.json();
+          if (result?.channel_name) {
+            setChannelName(result.channel_name);
+          } else if (result?.channel_id) {
+            setChannelName(result.channel_id);
+          } else {
+            setChannelName('LINE');
+          }
         }
       } catch (error) {
         console.error('Failed to fetch channel info:', error);
+        setChannelName(isFacebook ? 'Facebook' : 'LINE');
       }
     };
 
     fetchChannelInfo();
-  }, []);
+  }, [displayPlatform, member?.id, getDisplayMemberById]);
 
   return (
     <div className="content-stretch flex items-center relative shrink-0 w-full" data-name="Container">
@@ -1329,7 +1411,7 @@ function Container7({ member }: { member?: MemberData }) {
       </div>
       <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0" data-name="Modal/Title&Content">
         <div className="flex items-center gap-2 font-['Noto_Sans_TC:Regular',sans-serif] font-normal relative flex-wrap">
-          <MemberSourceIconSmall source={member?.join_source || 'LINE'} />
+          <MemberSourceIconSmall source={displayPlatform} />
           <span className="text-[14px] text-[#383838]">
             {channelName}
           </span>
@@ -1395,10 +1477,10 @@ function Container10({ member }: { member?: MemberData }) {
   );
 }
 
-function Container11({ member }: { member?: MemberData }) {
+function Container11({ member, platform }: { member?: MemberData; platform?: ChatPlatform }) {
   return (
     <div className="content-stretch flex flex-col gap-[12px] items-start relative shrink-0 w-full" data-name="Container">
-      <Container7 member={member} />
+      <Container7 member={member} platform={platform} />
       <Container8 member={member} />
       <Container9 member={member} />
       <Container10 member={member} />
@@ -1406,7 +1488,7 @@ function Container11({ member }: { member?: MemberData }) {
   );
 }
 
-function Container12({ member, onMemberUpdate }: { member?: MemberData; onMemberUpdate?: (member: MemberData) => void }) {
+function Container12({ member, onMemberUpdate, platform }: { member?: MemberData; onMemberUpdate?: (member: MemberData) => void; platform?: ChatPlatform }) {
   return (
     <div className="content-stretch flex flex-col gap-[20px] items-start relative shrink-0 w-full" data-name="Container">
       <Container6 member={member} onMemberUpdate={onMemberUpdate} />
@@ -1417,18 +1499,18 @@ function Container12({ member, onMemberUpdate }: { member?: MemberData; onMember
           </svg>
         </div>
       </div>
-      <Container11 member={member} />
+      <Container11 member={member} platform={platform} />
     </div>
   );
 }
 
-function Container13({ member, onMemberUpdate }: { member?: MemberData; onMemberUpdate?: (member: MemberData) => void }) {
+function Container13({ member, onMemberUpdate, platform }: { member?: MemberData; onMemberUpdate?: (member: MemberData) => void; platform?: ChatPlatform }) {
   return (
     <div className="relative rounded-[20px] shrink-0 w-full" data-name="Container">
       <div aria-hidden="true" className="absolute border border-[#e1ebf9] border-solid inset-0 pointer-events-none rounded-[20px]" />
       <div className="size-full">
         <div className="box-border content-stretch flex flex-col gap-[32px] items-start p-[16px] md:p-[28px] relative w-full">
-          <Container12 member={member} onMemberUpdate={onMemberUpdate} />
+          <Container12 member={member} onMemberUpdate={onMemberUpdate} platform={platform} />
         </div>
       </div>
     </div>
@@ -1638,6 +1720,12 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
   const [interactionTags, setInteractionTags] = useState<string[]>(member?.interactionTags || []); // ✅ 使用真實數據
   const { showToast } = useToast();
   const { logout } = useAuth();
+  const { fetchMemberById } = useMembers();
+
+  React.useEffect(() => {
+    setMemberTags(member?.memberTags || []);
+    setInteractionTags(member?.interactionTags || []);
+  }, [member?.memberTags, member?.interactionTags]);
 
   const handleEdit = () => {
     setIsModalOpen(true);
@@ -1686,23 +1774,12 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
         return false;
       }
 
-      // 保存成功後，重新獲取最新的會員資料
-      const memberResponse = await fetch(`/api/v1/members/${member.id}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-
-      if (memberResponse.ok) {
-        const memberData = await memberResponse.json();
-        const updatedMember = memberData.data;
-
-        // 轉換後端數據格式為前端格式
-        const transformedMember = mapApiMemberToMemberData(updatedMember, member);
-
-        // 更新本地狀態
+      // 保存成功後，重新獲取最新的會員資料（同步列表/內頁/聊天室）
+      const refreshedMember = await fetchMemberById(member.id);
+      if (refreshedMember) {
+        const transformedMember = mapMemberToMemberData(refreshedMember, member);
         setMemberTags(transformedMember.memberTags || []);
         setInteractionTags(transformedMember.interactionTags || []);
-
-        // 通知父組件更新
         onMemberUpdate?.(transformedMember);
       } else {
         // 如果獲取失敗，至少更新本地狀態
@@ -1730,10 +1807,10 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
                 <ModalTitleContent8 />
                 <div className="flex flex-wrap gap-x-3 gap-y-2 items-start content-start relative min-w-0 max-w-full" data-name="Container">
                   {(member?.tagDetails || [])
-                    .filter(tag => tag.type === 'member')
+                    .filter(tag => tag.type === 'member' || (tag as any).tag_type === 1)
                     .map((tag, index) => (
                       <div key={index} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-                        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-medium grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[14px] text-center">{tag.name}</p>
+                        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-medium grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[14px] text-center">{tag.name || (tag as any).tag}</p>
                       </div>
                     ))}
                 </div>
@@ -1744,14 +1821,14 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
                 <ModalTitleContent9 />
                 <div className="flex flex-wrap gap-x-3 gap-y-2 items-start content-start relative min-w-0 max-w-full" data-name="Container">
                   {(member?.tagDetails || [])
-                    .filter(tag => tag.type === 'interaction')
+                    .filter(tag => tag.type === 'interaction' || (tag as any).tag_type === 2)
                     .map((tag, index) => {
                       // 互動標籤統一使用藍色
                       const bgColor = 'bg-[#f0f6ff]';
                       const textColor = 'text-[#0f6beb]';
                       return (
                         <div key={index} className={`${bgColor} box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0`} data-name="Tag">
-                          <p className={`basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-medium grow leading-[1.5] min-h-px min-w-px relative shrink-0 ${textColor} text-[14px] text-center`}>{tag.name}</p>
+                          <p className={`basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-medium grow leading-[1.5] min-h-px min-w-px relative shrink-0 ${textColor} text-[14px] text-center`}>{tag.name || (tag as any).tag}</p>
                         </div>
                       );
                     })}
@@ -1905,21 +1982,33 @@ function Container24({ member, onMemberUpdate }: { member?: MemberData; onMember
   );
 }
 
-function Container25({ member, onMemberUpdate }: { member?: MemberData; onMemberUpdate?: (member: MemberData) => void }) {
+function Container25({ member, onMemberUpdate, platform }: { member?: MemberData; onMemberUpdate?: (member: MemberData) => void; platform?: ChatPlatform }) {
   return (
     <div className="basis-0 content-stretch flex flex-col gap-[32px] grow items-start min-h-px min-w-px relative shrink-0" data-name="Container">
-      <Container13 member={member} onMemberUpdate={onMemberUpdate} />
+      <Container13 member={member} onMemberUpdate={onMemberUpdate} platform={platform} />
       <Container20 member={member} onMemberUpdate={onMemberUpdate} />
       <Container24 member={member} onMemberUpdate={onMemberUpdate} />
     </div>
   );
 }
 
-function Container26({ member, onNavigate, onMemberUpdate, fallbackMemberName }: { member?: MemberData; onNavigate?: (page: string, params?: { memberId?: string; memberName?: string }) => void; onMemberUpdate?: (member: MemberData) => void; fallbackMemberName?: string }) {
+function Container26({
+  member,
+  onNavigate,
+  onMemberUpdate,
+  fallbackMemberName,
+  platform,
+}: {
+  member?: MemberData;
+  onNavigate?: (page: string, params?: { memberId?: string; memberName?: string; platform?: ChatPlatform }) => void;
+  onMemberUpdate?: (member: MemberData) => void;
+  fallbackMemberName?: string;
+  platform?: ChatPlatform;
+}) {
   return (
     <div className="content-stretch flex gap-[32px] items-start relative shrink-0 w-full" data-name="Container">
-      <Container2 member={member} onNavigate={onNavigate} fallbackMemberName={fallbackMemberName} />
-      <Container25 member={member} onMemberUpdate={onMemberUpdate} />
+      <Container2 member={member} onNavigate={onNavigate} fallbackMemberName={fallbackMemberName} platform={platform} />
+      <Container25 member={member} onMemberUpdate={onMemberUpdate} platform={platform} />
     </div>
   );
 }
@@ -2148,7 +2237,19 @@ function ConsumptionRecordsSection() {
   );
 }
 
-function MainContent({ member, onNavigate, onMemberUpdate, fallbackMemberName }: { member?: MemberData; onNavigate?: (page: string, params?: { memberId?: string; memberName?: string }) => void; onMemberUpdate?: (member: MemberData) => void; fallbackMemberName?: string }) {
+function MainContent({
+  member,
+  onNavigate,
+  onMemberUpdate,
+  fallbackMemberName,
+  platform,
+}: {
+  member?: MemberData;
+  onNavigate?: (page: string, params?: { memberId?: string; memberName?: string; platform?: ChatPlatform }) => void;
+  onMemberUpdate?: (member: MemberData) => void;
+  fallbackMemberName?: string;
+  platform?: ChatPlatform;
+}) {
   return (
     <div className="relative shrink-0 w-full" data-name="Main Content">
       <div className="size-full">
@@ -2158,7 +2259,13 @@ function MainContent({ member, onNavigate, onMemberUpdate, fallbackMemberName }:
               <TitleWrapper />
             </SharedTitleContainer>
           </SharedHeaderContainer>
-          <Container26 member={member} onNavigate={onNavigate} onMemberUpdate={onMemberUpdate} fallbackMemberName={fallbackMemberName} />
+          <Container26
+            member={member}
+            onNavigate={onNavigate}
+            onMemberUpdate={onMemberUpdate}
+            fallbackMemberName={fallbackMemberName}
+            platform={platform}
+          />
           <ConsumptionRecordsSection />
         </div>
       </div>
@@ -2166,17 +2273,19 @@ function MainContent({ member, onNavigate, onMemberUpdate, fallbackMemberName }:
   );
 }
 
-export default function MainContainer({ 
-  onBack, 
-  member, 
+export default function MainContainer({
+  onBack,
+  member,
   onNavigate,
   fallbackMemberName,
+  platform,
   autoRefresh = true,
-}: { 
-  onBack?: () => void; 
+}: {
+  onBack?: () => void;
   member?: MemberData;
-  onNavigate?: (page: string, params?: { memberId?: string; memberName?: string }) => void;
+  onNavigate?: (page: string, params?: { memberId?: string; memberName?: string; platform?: ChatPlatform }) => void;
   fallbackMemberName?: string;
+  platform?: ChatPlatform;
   autoRefresh?: boolean;
 } = {}) {
   const [currentMember, setCurrentMember] = useState<MemberData | undefined>(member);
@@ -2194,7 +2303,10 @@ export default function MainContainer({
 
     const loadMemberDetail = async () => {
       try {
-        const fullMember = await fetchMemberById(memberId);
+        const fullMember = await fetchMemberById(
+          memberId,
+          platform === 'Facebook' ? platform : undefined
+        );
         if (!fullMember || isCancelled) return;
         setCurrentMember((prev) => mapMemberToMemberData(fullMember, prev));
       } catch (error) {
@@ -2207,7 +2319,7 @@ export default function MainContainer({
     return () => {
       isCancelled = true;
     };
-  }, [member?.id, fetchMemberById, autoRefresh]);
+  }, [member?.id, fetchMemberById, autoRefresh, platform]);
 
   React.useEffect(() => {
     if (!currentMember?.id) return;
@@ -2275,6 +2387,7 @@ export default function MainContainer({
         onNavigate={onNavigate}
         onMemberUpdate={(updatedMember) => setCurrentMember(updatedMember)}
         fallbackMemberName={fallbackMemberName}
+        platform={platform}
       />
     </div>
   );

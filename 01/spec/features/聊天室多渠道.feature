@@ -7,8 +7,9 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
     說明:
       - Webchat 聊天紀錄獨立存在，不會覆蓋 LINE 或 Facebook 的訊息。
       - 當用戶在 Webchat 上登入 LINE 或 Facebook OAuth 時，系統會取得該渠道會員資訊（line_uid / fb_uid、email），並與 members 表進行關聯。
-      - LINE / Facebook 的好友資料仍然存在各自表中（line_friends / fb_friends）。聊天紀錄統一存放於 chat_logs 表。
-      - 客服在系統介面看到的訊息流，是依 member_id 整合的三個渠道訊息，聊天紀錄存放於 chat_logs 表，好友資料保留在各自 friends 表。
+      - LINE / Facebook 的好友資料仍然存在各自表中（line_friends / fb_friends）。
+      - 聊天紀錄統一存放於 conversation_threads（對話線程）和 conversation_messages（對話訊息）表。
+      - 客服在系統介面看到的訊息流，是依 member_id 整合的三個渠道訊息，好友資料保留在各自 friends 表。
 
     Given Webchat 為互動入口，使用者在 Webchat 互動時，需要透過 LINE 或 Facebook OAuth 登入
     And 三個渠道各自有自己的好友追蹤表：
@@ -25,6 +26,13 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
       | last_interaction_at| 最後互動時間                                        |
     And 跨渠道關聯透過各 friends 表的 member_id 欄位建立
     And 上次互動渠道依據 member_id 下所有渠道 friends 表的 last_interaction_at 最晚者
+    And 聊天紀錄表結構如下：
+      | 表名                  | 主要欄位                                                                         |
+      | conversation_threads  | id (thread_id), member_id, platform, platform_uid, last_message_at              |
+      | conversation_messages | id, thread_id, platform, direction, question, response, message_source, created_at |
+    And conversation_threads 的 id (thread_id) 格式為 platform_uid（如 "U66da9a54ad9341376212e673d7fd7228"）
+    And 渠道識別透過 platform 欄位區分（"LINE" / "Facebook" / "Webchat"）
+    And 查詢訊息時使用 thread_id + platform 兩個條件
 
   # =============================================================================
   # Webchat 使用 LINE OAuth 登入
@@ -69,7 +77,8 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
       And 客服聊天室僅顯示 Webchat 訊息
       And 加入來源顯示「Webchat」
       And 登入方式顯示 LINE ICON + channel_name + line_uid
-      And 客服聊天室不提供渠道切換
+      And 客服聊天室顯示渠道切換下拉選單，始終列出 LINE / Facebook / Webchat
+      And 未綁定的渠道以灰色禁用樣式顯示並提示「尚未綁定」
 
   # =============================================================================
   # OAuth 登入失敗處理
@@ -110,7 +119,8 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
       And 客服聊天室僅顯示 Webchat 訊息
       And 加入來源顯示「Webchat」
       And 登入方式顯示 Google ICON + Email
-      And 客服聊天室不提供渠道切換
+      And 客服聊天室顯示渠道切換下拉選單，始終列出 LINE / Facebook / Webchat
+      And 未綁定的渠道以灰色禁用樣式顯示並提示「尚未綁定」
 
     Example: Google OAuth 已有 email 的會員
       Given members 表中已有 email "guser@example.com" 的會員，並關聯 line_friends 表中 line_uid "U123"
@@ -127,12 +137,19 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
 
   Rule: 客服聊天室應顯示所有整合後訊息，並標示來源
 
+    說明:
+      渠道來源標示採用「渠道圖示 + 文字標籤」組合，以下拉選單呈現：
+        | 渠道     | 圖示         | 文字標籤   | 顯示範例                    |
+        | LINE     | LINE 綠色圖示 | LINE      | [LINE 圖示] LINE ▼          |
+        | Facebook | FB 藍色圖示   | Facebook  | [FB 圖示] Facebook ▼        |
+        | Webchat  | Webchat 灰色圖示 | Webchat | [Webchat 圖示] Webchat ▼   |
+
     Example: 整合多渠道訊息顯示
       Given 某會員已關聯 line_friends、fb_friends 及 webchat_friends 三個渠道
       Then 客服聊天室依時間排序顯示所有訊息
-      And 每則訊息標示來源 (LINE / FB / Webchat)
+      And 每則訊息旁標示渠道圖示與文字標籤（如 [LINE 圖示] LINE）
       And 加入來源欄位顯示所有已綁定渠道
-      And 若多渠道存在，客服可切換回覆渠道
+      And 若多渠道存在，客服可透過下拉選單切換回覆渠道
 
   Rule: 開啟聊天室時預設回覆渠道 = 最近互動渠道
 
@@ -260,8 +277,99 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
         | Webchat  |
         | LINE     |
         | Facebook |
-      And 聊天室訊息依選擇渠道顯示對應紀錄（從 chat_logs 表依 platform 篩選）
+      And 聊天室訊息依選擇渠道顯示對應紀錄（從 conversation_messages 表依 thread_id + platform 篩選）
       And 好友資料保留在各自 friends 表中
+
+    Example: 僅綁定單一渠道時隱藏下拉選單
+      Given 某會員 member_id "M002" 僅關聯 line_friends (line_uid "U999")
+      When 客服打開該會員的客服聊天室
+      Then 系統不顯示渠道切換下拉選單
+      And 僅顯示當前渠道圖示（LINE 圖示）
+      And 無法進行渠道切換操作
+
+  Rule: 客服切換渠道時若有未發送的草稿，系統應彈出確認對話框詢問是否捨棄
+
+    說明:
+      - 草稿不跨渠道保留（不同渠道可能有不同的訊息格式限制）
+      - 使用者必須明確選擇捨棄草稿才能切換渠道
+
+    Example: 切換渠道時有未發送草稿 - 確認捨棄
+      Given 客服正在 LINE 渠道輸入訊息草稿「請問需要什麼協助？」
+      When 客服點擊下拉選單切換至 Facebook 渠道
+      Then 系統彈出確認對話框「您有未發送的訊息，切換渠道將捨棄草稿，是否繼續？」
+      And 對話框提供選項：
+        | 選項     | 行為                           |
+        | 確認捨棄 | 清空草稿，切換至新渠道         |
+        | 取消     | 關閉對話框，維持當前渠道並保留草稿 |
+
+    Example: 切換渠道時有未發送草稿 - 取消切換
+      Given 客服正在 LINE 渠道輸入訊息草稿「請問需要什麼協助？」
+      When 客服點擊下拉選單切換至 Facebook 渠道
+      And 系統彈出確認對話框
+      And 客服點擊「取消」
+      Then 對話框關閉
+      And 客服維持在 LINE 渠道
+      And 輸入框保留原草稿內容「請問需要什麼協助？」
+
+    Example: 切換渠道時無草稿
+      Given 客服在 LINE 渠道，輸入框為空
+      When 客服點擊下拉選單切換至 Facebook 渠道
+      Then 系統直接切換渠道，不彈出確認對話框
+      And 聊天室顯示 Facebook 渠道訊息
+
+  # =============================================================================
+  # 聊天訊息資料查詢規格
+  # =============================================================================
+
+  Rule: 聊天訊息查詢使用 thread_id（platform_uid）+ platform 欄位組合作為查詢條件
+
+    Example: 查詢 LINE 渠道訊息
+      Given 會員 member_id "M001" 的 LINE UID 為 "U66da9a54ad9341376212e673d7fd7228"
+      When 客服選擇 LINE 渠道查看聊天紀錄
+      Then 系統查詢 conversation_messages 表：
+        | 條件欄位   | 值                                     |
+        | thread_id  | U66da9a54ad9341376212e673d7fd7228      |
+        | platform   | LINE                                    |
+      And 結果依 created_at 排序顯示
+
+    Example: 查詢 Facebook 渠道訊息
+      Given 會員 member_id "M001" 的 FB UID 為 "F123456789"
+      When 客服選擇 Facebook 渠道查看聊天紀錄
+      Then 系統查詢 conversation_messages 表：
+        | 條件欄位   | 值                                     |
+        | thread_id  | F123456789                              |
+        | platform   | Facebook                                |
+      And 結果依 created_at 排序顯示
+
+    Example: 查詢 Webchat 渠道訊息
+      Given 會員 member_id "M001" 的 Webchat UID 為 "550e8400-e29b-41d4-a716-446655440000"
+      When 客服選擇 Webchat 渠道查看聊天紀錄
+      Then 系統查詢 conversation_messages 表：
+        | 條件欄位   | 值                                          |
+        | thread_id  | 550e8400-e29b-41d4-a716-446655440000        |
+        | platform   | Webchat                                      |
+      And 結果依 created_at 排序顯示
+
+  Rule: conversation_threads 表用於追蹤對話線程狀態，id 直接使用 platform_uid
+
+    Example: 開啟聊天會話時建立或更新 thread
+      Given 會員 member_id "M001" 的 LINE UID 為 "U123"
+      When 客服開啟該會員的 LINE 聊天室
+      Then 系統查詢或建立 conversation_threads 記錄：
+        | 欄位         | 值      |
+        | id           | U123    |
+        | member_id    | M001    |
+        | platform     | LINE    |
+        | platform_uid | U123    |
+      And 系統更新 last_message_at 為最後訊息時間
+
+    Example: 同會員多渠道各自獨立 thread
+      Given 會員 member_id "M001" 綁定 LINE (U123) 和 Facebook (F456)
+      Then conversation_threads 表存在兩筆記錄：
+        | id    | member_id | platform | platform_uid |
+        | U123  | M001      | LINE     | U123         |
+        | F456  | M001      | Facebook | F456         |
+      And 每個渠道的訊息透過各自的 thread_id + platform 查詢
 
   # =============================================================================
   # Webchat 訪客會話狀態管理
@@ -394,3 +502,43 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
       And webchat_friends.last_interaction_at 為最晚
       When 客服查看會員列表
       Then 最近互動欄位顯示 Webchat ICON + webchat_friends.webchat_picture_url + webchat_friends.webchat_display_name
+
+  # =============================================================================
+  # 會員列表加入來源欄位顯示格式
+  # =============================================================================
+
+  Rule: 會員列表「加入來源」欄位應顯示所有已綁定渠道，格式為「渠道圖示 + 帳號名稱 + UID」，依加入時間由舊到新排序
+
+    說明:
+      - 每個渠道顯示格式：[渠道圖示] + 帳號名稱 + UID
+      - 複數渠道時全部顯示，不折疊
+      - 排序依據各 friends 表的 followed_at（加入時間），由舊到新
+      - 首次加入的渠道優先顯示（最上方/最左方）
+
+    Example: 單一渠道會員
+      Given 會員 member_id "M001" 僅關聯 line_friends
+        | 欄位              | 值                    |
+        | line_uid          | U123456789            |
+        | line_display_name | 王小明                |
+        | followed_at       | 2025-01-01 10:00:00   |
+      When 客服查看會員列表的「加入來源」欄位
+      Then 顯示為：[LINE 圖示] 王小明 (U123456789)
+
+    Example: 多渠道會員依加入時間排序
+      Given 會員 member_id "M002" 關聯三個渠道
+        | 渠道     | UID        | 帳號名稱   | followed_at         |
+        | LINE     | U123       | 王小明     | 2025-01-01 10:00:00 |
+        | Facebook | F456       | Ming Wang  | 2025-02-15 14:30:00 |
+        | Webchat  | W789       | 訪客_W789  | 2025-03-20 09:00:00 |
+      When 客服查看會員列表的「加入來源」欄位
+      Then 顯示順序依 followed_at 由舊到新排列：
+        | 順序 | 顯示內容                          |
+        | 1    | [LINE 圖示] 王小明 (U123)         |
+        | 2    | [FB 圖示] Ming Wang (F456)        |
+        | 3    | [Webchat 圖示] 訪客_W789 (W789)   |
+
+    Example: 會員詳情頁加入來源顯示
+      Given 會員 member_id "M002" 關聯 LINE 與 Facebook 兩個渠道
+      When 客服開啟該會員的詳情頁面
+      Then 加入來源區塊顯示所有渠道資訊，格式同會員列表
+      And 每個渠道可點擊展開查看完整 UID

@@ -154,6 +154,11 @@ class MessageCreate(BaseModel):
 
     # Flex Message 支援
     flex_message_json: Optional[str] = None  # LINE Flex Message JSON 字串
+    fb_message_json: Optional[str] = None  # Facebook Messenger JSON 字串
+
+    # 平台設定
+    platform: Optional[str] = Field(default="LINE", description="發送平台：LINE/Facebook/Instagram")
+    channel_id: Optional[str] = Field(default=None, description="渠道ID：LINE channel_id 或 FB page_id")
 
     # 系統欄位
     campaign_id: Optional[int] = None  # 關聯活動ID（選填）
@@ -207,8 +212,10 @@ class MessageUpdate(MessageBase):
     target_type: Optional[str] = None  # 更新時可選
     message_title: Optional[str] = None  # 訊息標題（更新時可選）
     flex_message_json: Optional[str] = None  # Flex Message JSON（更新時可選）
+    fb_message_json: Optional[str] = None  # Facebook Messenger JSON（更新時可選）
     failure_reason: Optional[str] = None  # 發送失敗原因
     scheduled_at: Optional[datetime] = None  # ✅ 排程時間（更新時可選）
+    channel_id: Optional[str] = None  # 渠道ID（LINE channel_id 或 FB page_id）
 
 class TemplateInfo(BaseModel):
     """模板信息
@@ -230,20 +237,35 @@ class TemplateInfo(BaseModel):
     }
 
 
+class CreatorInfo(BaseModel):
+    """創建者信息（用於列表顯示）"""
+
+    id: int
+    username: str = Field(alias="name")  # Admin.name 映射到 username
+    full_name: Optional[str] = Field(default=None, alias="email")  # Admin.email 映射到 full_name
+
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True,
+    }
+
+
 class MessageListItem(BaseModel):
     """群發訊息列表項"""
 
-    id: int
+    id: Union[int, str]  # int for local DB, str like "fb-123" for external FB API
     message_title: Optional[str] = None  # 訊息標題（用於列表顯示）
     notification_message: Optional[str] = None  # 通知推播訊息（顯示在手機通知欄）
     thumbnail: Optional[str] = None  # 縮圖 URL
     template: TemplateInfo
     send_status: str  # 已排程/已發送/草稿/發送失敗
     interaction_tags: Optional[List[str]] = None  # 互動標籤數組
-    platform: str = "LINE"  # 平台名稱（目前固定為 LINE）
+    platform: str = "LINE"  # 平台名稱
+    channel_id: Optional[str] = None  # 渠道ID（LINE channel_id 或 FB page_id）
+    channel_name: Optional[str] = None  # 渠道名稱（頻道名/粉專名）
     send_count: int = 0  # 傳送人數
     open_count: int = 0  # 開啟次數（不重複）
-    click_count: int = 0  # 點擊次數（互動標籤 trigger_member_count 加總）
+    click_count: int = 0  # 點擊次數（依規格：從 ComponentInteractionLog 統計）
     open_rate: Optional[float] = None
     click_rate: Optional[float] = None
     scheduled_at: Optional[datetime] = Field(
@@ -253,8 +275,17 @@ class MessageListItem(BaseModel):
     )
     send_time: Optional[datetime] = None  # 傳送時間
     source_draft_id: Optional[int] = None  # 來源草稿ID
+    created_by: Optional[CreatorInfo] = None  # 發送人員（創建者）
     created_at: datetime
     updated_at: Optional[datetime] = None  # 最後更新時間
+
+    @field_validator("created_by", mode="before")
+    @classmethod
+    def validate_created_by(cls, v):
+        """處理 created_by 為整數（外鍵值）的情況，由 service 層設置實際 CreatorInfo"""
+        if isinstance(v, int):
+            return None
+        return v
 
     model_config = {
         "from_attributes": True,
@@ -288,6 +319,7 @@ class MessageDetail(MessageListItem):
     available_quota: int = 0  # 可用訊息配額用量
     click_count: int = 0  # 點擊次數（從ComponentInteractionLog統計）
     flex_message_json: Optional[str] = None  # Flex Message JSON字串（用於前端預覽）
+    fb_message_json: Optional[str] = None  # Facebook Messenger JSON字串（用於前端預覽）
 
 
 class MessageSearchParams(BaseModel):
@@ -359,6 +391,8 @@ class MessageSendRequest(BaseModel):
     """消息發送請求"""
 
     channel_id: Optional[str] = None  # LINE 頻道 ID（多租戶支持）
+    jwt_token: Optional[str] = None  # FB 渠道需要的 JWT token
+    page_id: Optional[str] = None  # FB 粉絲專頁 ID
 
 
 class MessageSendResponse(BaseModel):

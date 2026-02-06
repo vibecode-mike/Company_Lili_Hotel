@@ -1,5 +1,4 @@
-import { useState, useMemo, memo } from 'react';
-import svgPaths from "../imports/svg-noih6nla1w";
+import { useMemo, useState, memo } from 'react';
 import { TextIconButton } from './common/buttons';
 import { ArrowRightIcon } from './common/icons/ArrowIcon';
 import ButtonEdit from '../imports/ButtonEdit';
@@ -13,9 +12,10 @@ export interface Message {
   title: string;
   tags: string[];
   platform: string;
+  channelName?: string; // 渠道名稱（頻道名/粉專名）
   status: string;
   sentCount: string;
-  openCount: string;
+  sender: string;  // 發送人員
   clickCount: string;
   sendTime: string;
   timeValue?: string | null;
@@ -28,22 +28,36 @@ interface InteractiveMessageTableProps {
   statusFilter: string;
 }
 
-type SortField = 'title' | 'tags' | 'platform' | 'status' | 'sentCount' | 'openCount' | 'clickCount' | 'sendTime';
+type SortField = 'title' | 'tags' | 'platform' | 'status' | 'sentCount' | 'sender' | 'clickCount' | 'sendTime';
 type SortOrder = 'asc' | 'desc';
 interface SortConfig {
   field: SortField;
   order: SortOrder;
 }
 
-// Memoized Table Header Component
-const TableHeader = memo(function TableHeader({ sortConfig, onSortChange, statusFilter }: { sortConfig: SortConfig; onSortChange: (field: SortField) => void; statusFilter: string }) {
-  const SortIcon = ({ active, order }: { active: boolean; order: SortOrder }) => (
-    <div className="overflow-clip relative shrink-0 size-[20px]">
-      <div className="absolute inset-0">
-        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
-          <g id="Vector"></g>
-        </svg>
-      </div>
+// 平台顯示名稱對應
+const PLATFORM_DISPLAY_NAMES: Record<string, string> = {
+  'LINE': 'LINE',
+  'Facebook': 'Facebook',
+  'Webchat': 'Webchat',
+} as const;
+
+// 統一欄位樣式 - 參照會員管理頁的對齊方式
+const CELL_BASE = 'box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0';
+const CELL_TEXT = 'text-[#383838] text-[14px] leading-[1.5]';
+
+// 固定欄位寬度 - 參照會員管理頁
+const COL_TITLE = 'w-[200px]';       // 訊息標題
+const COL_SENT_COUNT = 'w-[100px]';  // 發送人數
+const COL_SENDER = 'w-[140px]';      // 發送人員
+const COL_CLICK_COUNT = 'w-[120px]'; // 點擊次數
+const COL_PLATFORM = 'w-[200px]';    // 平台
+const COL_TIME = 'min-w-[180px] grow'; // 時間 (最後一欄用 grow)
+
+// 排序圖標組件
+const SortIcon = memo(function SortIcon({ active, order }: { active: boolean; order: SortOrder }) {
+  return (
+    <div className="overflow-clip shrink-0 size-[20px] relative">
       <div
         className={`absolute h-[8px] left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%] w-[12px] ${active && order === 'asc' ? 'rotate-180' : ''}`}
       >
@@ -53,190 +67,118 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange, status
       </div>
     </div>
   );
-  const isActive = (field: SortField) => sortConfig.field === field;
+});
 
-  // Determine time column label based on status filter
+// 表頭組件
+const TableHeader = memo(function TableHeader({
+  sortConfig,
+  onSortChange,
+  statusFilter
+}: {
+  sortConfig: SortConfig;
+  onSortChange: (field: SortField) => void;
+  statusFilter: string;
+}) {
+  const isActive = (field: SortField) => sortConfig.field === field;
+  const isSortDisabled = statusFilter === '已發送' || statusFilter === '已排程' || statusFilter === '草稿';
+
   const getTimeColumnLabel = () => {
     if (statusFilter === '已排程') return '預計發送時間';
     if (statusFilter === '草稿') return '最後更新時間';
-    return '發送時間'; // Default for '已發送'
+    return '發送時間';
+  };
+
+  const getSenderColumnLabel = () => {
+    if (statusFilter === '草稿') return '建立人員';
+    return '發送人員';
   };
 
   return (
-    <div className="bg-white relative rounded-tl-[16px] rounded-tr-[16px] shrink-0 w-full">
-      <div aria-hidden="true" className="absolute border-[#dddddd] border-[0px_0px_1px] border-solid inset-0 pointer-events-none rounded-tl-[16px] rounded-tr-[16px]" />
-      <div className="flex flex-row items-center size-full">
+    <div className="bg-white relative shrink-0 w-full" data-name="TableHeader">
+      <div className="flex flex-row items-center size-full border-b border-[#dddddd]">
         <div className="box-border content-stretch flex items-center pb-[12px] pt-[16px] px-[12px] relative w-full">
           {/* 訊息標題 */}
-          <div 
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[250px] cursor-pointer" 
+          <div
+            className={`${CELL_BASE} ${COL_TITLE} gap-[4px] cursor-pointer`}
             onClick={() => onSortChange('title')}
           >
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[1.5]">訊息標題</p>
-            </div>
+            <span className={`${CELL_TEXT} whitespace-nowrap`}>訊息標題</span>
             <SortIcon active={isActive('title')} order={sortConfig.order} />
           </div>
 
-          {/* Divider */}
-          <div className="h-[12px] relative shrink-0 w-0">
-            <div className="absolute inset-[-3.33%_-0.4px]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
-                <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
-              </svg>
-            </div>
-          </div>
-
-          {/* 互動標籤 */}
-          <div 
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[200px] cursor-pointer"
-            onClick={() => onSortChange('tags')}
+          {/* 發送人數 */}
+          <div
+            className={`${CELL_BASE} ${COL_SENT_COUNT} gap-[4px] cursor-pointer`}
+            onClick={() => onSortChange('sentCount')}
           >
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">互動標籤</p>
-            </div>
-            <SortIcon active={isActive('tags')} order={sortConfig.order} />
+            <span className={`${CELL_TEXT} whitespace-nowrap`}>發送人數</span>
+            <SortIcon active={isActive('sentCount')} order={sortConfig.order} />
           </div>
 
-          {/* Divider */}
-          <div className="h-[12px] relative shrink-0 w-0">
-            <div className="absolute inset-[-3.33%_-0.4px]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
-                <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
-              </svg>
-            </div>
+          {/* 發送人員 / 建立人員 */}
+          <div
+            className={`${CELL_BASE} ${COL_SENDER} gap-[4px] cursor-pointer`}
+            onClick={() => onSortChange('sender')}
+          >
+            <span className={`${CELL_TEXT} whitespace-nowrap`}>{getSenderColumnLabel()}</span>
+            <SortIcon active={isActive('sender')} order={sortConfig.order} />
+          </div>
+
+          {/* 點擊次數 */}
+          <div
+            className={`${CELL_BASE} ${COL_CLICK_COUNT} gap-[4px] cursor-pointer`}
+            onClick={() => onSortChange('clickCount')}
+          >
+            <span className={`${CELL_TEXT} whitespace-nowrap`}>點擊次數</span>
+            <TooltipProvider>
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <div className="shrink-0 size-[20px]" onClick={(e) => e.stopPropagation()}>
+                    <IcInfo />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>使用者需點擊訊息內的按鈕/圖片（追蹤連結）才會累積點擊次數</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <SortIcon active={isActive('clickCount')} order={sortConfig.order} />
           </div>
 
           {/* 平台 */}
           <div
-            className={`box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px] ${statusFilter === '已發送' || statusFilter === '已排程' || statusFilter === '草稿' ? '' : 'cursor-pointer'}`}
-            onClick={statusFilter === '已發送' || statusFilter === '已排程' || statusFilter === '草稿' ? undefined : () => onSortChange('platform')}
+            className={`${CELL_BASE} ${COL_PLATFORM} gap-[4px] cursor-pointer`}
+            onClick={() => onSortChange('platform')}
           >
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">平台</p>
-            </div>
-            {!(statusFilter === '已發送' || statusFilter === '已排程' || statusFilter === '草稿') && (
-              <SortIcon active={isActive('platform')} order={sortConfig.order} />
-            )}
+            <span className={`${CELL_TEXT} whitespace-nowrap`}>平台</span>
+            <SortIcon active={isActive('platform')} order={sortConfig.order} />
           </div>
 
-          {/* Divider */}
-          <div className="h-[12px] relative shrink-0 w-0">
-            <div className="absolute inset-[-3.33%_-0.4px]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
-                <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
-              </svg>
+          {/* 時間欄位 - 使用 grow 填滿剩餘空間 */}
+          <div className="basis-0 grow min-h-px min-w-[180px] relative shrink-0">
+            <div className="flex flex-row items-center size-full">
+              <div
+                className={`${CELL_BASE} w-full ${COL_TIME} gap-[4px] cursor-pointer`}
+                onClick={() => onSortChange('sendTime')}
+              >
+                <span className={`${CELL_TEXT} whitespace-nowrap`}>{getTimeColumnLabel()}</span>
+                {statusFilter === '草稿' && (
+                  <TooltipProvider>
+                    <Tooltip delayDuration={0}>
+                      <TooltipTrigger asChild>
+                        <div className="shrink-0 size-[20px]" onClick={(e) => e.stopPropagation()}>
+                          <IcInfo />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>草稿不會因發送而移除，可重複使用</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+                <SortIcon active={isActive('sendTime')} order={sortConfig.order} />
+              </div>
             </div>
-          </div>
-
-          {/* 狀態 */}
-          <div
-            className={`box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px] ${statusFilter === '已發送' || statusFilter === '已排程' || statusFilter === '草稿' ? '' : 'cursor-pointer'}`}
-            onClick={statusFilter === '已發送' || statusFilter === '已排程' || statusFilter === '草稿' ? undefined : () => onSortChange('status')}
-          >
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">狀態</p>
-            </div>
-            {!(statusFilter === '已發送' || statusFilter === '已排程' || statusFilter === '草稿') && (
-              <SortIcon active={isActive('status')} order={sortConfig.order} />
-            )}
-          </div>
-
-          {/* Divider */}
-          <div className="h-[12px] relative shrink-0 w-0">
-            <div className="absolute inset-[-3.33%_-0.4px]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
-                <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
-              </svg>
-            </div>
-          </div>
-
-          {/* 發送人數 */}
-          <div 
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px] cursor-pointer"
-            onClick={() => onSortChange('sentCount')}
-          >
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">發送人數</p>
-            </div>
-            <SortIcon active={isActive('sentCount')} order={sortConfig.order} />
-          </div>
-
-          {/* Divider */}
-          <div className="h-[12px] relative shrink-0 w-0">
-            <div className="absolute inset-[-3.33%_-0.4px]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
-                <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
-              </svg>
-            </div>
-          </div>
-
-          {/* 已開啟次數 */}
-          <div 
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[120px] cursor-pointer"
-            onClick={() => onSortChange('openCount')}
-          >
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">已開啟次數</p>
-            </div>
-            <SortIcon active={isActive('openCount')} order={sortConfig.order} />
-          </div>
-
-          {/* Divider */}
-          <div className="h-[12px] relative shrink-0 w-0">
-            <div className="absolute inset-[-3.33%_-0.4px]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
-                <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
-              </svg>
-            </div>
-          </div>
-
-          {/* 點擊次數 */}
-          <div 
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px] cursor-pointer"
-            onClick={() => onSortChange('clickCount')}
-          >
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">點擊次數</p>
-            </div>
-            <SortIcon active={isActive('clickCount')} order={sortConfig.order} />
-          </div>
-
-          {/* Divider */}
-          <div className="h-[12px] relative shrink-0 w-0">
-            <div className="absolute inset-[-3.33%_-0.4px]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 13">
-                <path d="M0.4 0.4V12.4" stroke="#DDDDDD" strokeLinecap="round" strokeWidth="0.8" />
-              </svg>
-            </div>
-          </div>
-
-          {/* 時間欄位 - 動態標籤 */}
-          <div 
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[150px] cursor-pointer"
-            onClick={() => onSortChange('sendTime')}
-          >
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">{getTimeColumnLabel()}</p>
-            </div>
-            {statusFilter === '草稿' && (
-              <TooltipProvider>
-                <Tooltip delayDuration={0}>
-                  <TooltipTrigger asChild>
-                    <div 
-                      className="relative shrink-0 size-[24px]"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <IcInfo />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>草稿不會因發送而移除，可重複使用</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-            <SortIcon active={isActive('sendTime')} order={sortConfig.order} />
           </div>
         </div>
       </div>
@@ -244,20 +186,20 @@ const TableHeader = memo(function TableHeader({ sortConfig, onSortChange, status
   );
 });
 
-// Memoized Message Row Component
-const MessageRow = memo(function MessageRow({ 
-  message, 
-  isLast, 
-  onEdit, 
-  onViewDetails 
-}: { 
-  message: Message; 
-  isLast: boolean; 
-  onEdit: (id: string) => void; 
-  onViewDetails: (id: string) => void; 
+// 資料列組件
+const MessageRow = memo(function MessageRow({
+  message,
+  isLast,
+  onEdit,
+  onViewDetails
+}: {
+  message: Message;
+  isLast: boolean;
+  onEdit: (id: string) => void;
+  onViewDetails: (id: string) => void;
 }) {
   const CheckSuccess = () => (
-    <div className="relative shrink-0 size-[16px]">
+    <div className="shrink-0 size-[16px]">
       <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 16 16">
         <g clipPath="url(#clip0_check)">
           <path d="M6.66667 10.1147L12.7947 3.98599L13.7381 4.92866L6.66667 12L2.42468 7.75801L3.36734 6.81534L6.66667 10.1147Z" fill="#00C853" />
@@ -271,116 +213,78 @@ const MessageRow = memo(function MessageRow({
     </div>
   );
 
-  const EditButton = () => {
-    const isDisabled = message.status === '已發送';
-    return (
-      <ButtonEdit onClick={() => onEdit(message.id)} hidden={isDisabled} />
-    );
-  };
-
-  const Arrow = () => (
-    <div className="relative size-[16px]">
-      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 16 16">
-        <path d="M6 12L10 8L6 4" fill="#0F6BEB" />
-      </svg>
-    </div>
-  );
+  const isEditHidden = message.status === '已發送';
 
   return (
-    <div className={`bg-white relative shrink-0 w-full ${isLast ? 'rounded-bl-[16px] rounded-br-[16px]' : ''}`}>
-      <div aria-hidden="true" className={`absolute border-[#dddddd] ${isLast ? 'border-0' : 'border-[0px_0px_1px]'} border-solid inset-0 pointer-events-none ${isLast ? 'rounded-bl-[16px] rounded-br-[16px]' : ''}`} />
+    <div
+      className={`relative shrink-0 w-full transition-colors hover:bg-[#F8FAFC] cursor-pointer ${isLast ? 'rounded-bl-[16px] rounded-br-[16px]' : 'border-b border-[#dddddd]'}`}
+      style={{ backgroundColor: 'white' }}
+      data-name="MessageRow"
+    >
       <div className="flex flex-row items-center size-full">
         <div className="box-border content-stretch flex items-center p-[12px] relative w-full">
           {/* 訊息標題 */}
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[250px]">
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[1.5] truncate">{message.title}</p>
-            </div>
+          <div className={`${CELL_BASE} ${COL_TITLE}`}>
+            <span className={`${CELL_TEXT} truncate`}>{message.title}</span>
           </div>
 
-          {/* 互動標籤 */}
-          <div className="box-border content-stretch flex flex-wrap gap-[4px] items-start px-[12px] py-0 relative shrink-0 w-[200px]">
-            {message.tags.map((tag, index) => (
-              <div key={index} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] px-[8px] py-[4px] relative rounded-[8px] shrink-0">
-                <p className="leading-[1.5] relative shrink-0 text-[#0f6beb] text-[14px] text-center whitespace-nowrap">{tag}</p>
-              </div>
-            ))}
+          {/* 發送人數 */}
+          <div className={`${CELL_BASE} ${COL_SENT_COUNT}`}>
+            <span className={CELL_TEXT}>{message.sentCount}</span>
           </div>
 
-          {/* 平台 */}
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[100px]">
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
-              <div className="leading-[24px]">
-                <MemberSourceIcon source={message.platform as MemberSourceType} size={28} />
-              </div>
-            </div>
+          {/* 發送人員 */}
+          <div className={`${CELL_BASE} ${COL_SENDER}`}>
+            <span className={`${CELL_TEXT} truncate`}>{message.sender}</span>
           </div>
 
-          {/* 狀態 */}
-          <div className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[100px]">
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">{message.status}</p>
-            </div>
-            {(message.status === '已排程' || message.status === '已發送') && <CheckSuccess />}
+          {/* 點擊次數 */}
+          <div className={`${CELL_BASE} ${COL_CLICK_COUNT}`}>
+            <span className={CELL_TEXT}>{message.clickCount}</span>
           </div>
 
-          {/* 發送人數 - 左對齊 */}
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[100px]">
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[24px]">{message.sentCount}</p>
-            </div>
+          {/* 平台 - 文字超過時顯示 ... */}
+          <div className={`${CELL_BASE} ${COL_PLATFORM} gap-[8px]`}>
+            <MemberSourceIcon source={message.platform as MemberSourceType} size={24} />
+            <span className={`${CELL_TEXT} truncate`}>{message.channelName || PLATFORM_DISPLAY_NAMES[message.platform] || message.platform}</span>
           </div>
 
-          {/* 已開啟次數 - 左對齊 */}
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[120px]">
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[24px]">{message.openCount}</p>
-            </div>
+          {/* 時間欄位 - 使用 grow 填滿剩餘空間 */}
+          <div className={`${CELL_BASE} ${COL_TIME}`}>
+            <span className={`${CELL_TEXT} whitespace-nowrap`}>{message.sendTime}</span>
           </div>
 
-          {/* 點擊次數 - 左對齊 */}
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[100px]">
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[24px]">{message.clickCount}</p>
-            </div>
+          {/* 操作按鈕 */}
+          <div className="content-stretch flex items-center gap-[4px] shrink-0">
+            {!isEditHidden && (
+              <ButtonEdit onClick={() => onEdit(message.id)} />
+            )}
+            <TextIconButton
+              text="詳細"
+              icon={<ArrowRightIcon color="#0F6BEB" />}
+              onClick={() => onViewDetails(message.id)}
+              variant="primary"
+            />
           </div>
-
-          {/* 時間欄位 - 動態標籤 */}
-          <div className="box-border content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[150px]">
-            <div className="flex flex-col justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[1.5] whitespace-nowrap">{message.sendTime}</p>
-            </div>
-          </div>
-
-          {/* 編輯按鈕 */}
-          <EditButton />
-
-          {/* 詳細按鈕 */}
-          <TextIconButton 
-            text="詳細"
-            icon={<ArrowRightIcon color="#0F6BEB" />}
-            onClick={() => onViewDetails(message.id)}
-            variant="primary"
-          />
         </div>
       </div>
     </div>
   );
 });
 
+// 空狀態組件
 const EmptyStateRow = memo(function EmptyStateRow() {
   return (
-    <div className="bg-white relative shrink-0 w-full rounded-bl-[16px] rounded-br-[16px]" aria-live="polite">
+    <div className="bg-white shrink-0 w-full rounded-bl-[16px] rounded-br-[16px] relative" aria-live="polite">
       <div aria-hidden="true" className="absolute border-[#dddddd] border border-solid inset-0 pointer-events-none rounded-bl-[16px] rounded-br-[16px]" />
-      <div className="flex flex-row items-center size-full">
-        <div className="box-border content-stretch flex items-center justify-center p-[40px] relative w-full">
-          <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[#a8a8a8] text-[16px]">尚無此資料</p>
-        </div>
+      <div className="flex items-center justify-center p-[40px]">
+        <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[#a8a8a8] text-[16px]">尚無此資料</p>
       </div>
     </div>
   );
 });
 
+// 主表格組件
 export default function InteractiveMessageTable({ messages, onEdit, onViewDetails, statusFilter }: InteractiveMessageTableProps) {
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     field: 'sendTime',
@@ -391,7 +295,6 @@ export default function InteractiveMessageTable({ messages, onEdit, onViewDetail
     switch (field) {
       case 'sendTime':
       case 'sentCount':
-      case 'openCount':
       case 'clickCount':
         return 'desc';
       default:
@@ -428,66 +331,55 @@ export default function InteractiveMessageTable({ messages, onEdit, onViewDetail
       return Number.isNaN(timestamp) ? 0 : timestamp;
     };
 
-    const list = [...messages];
-    list.sort((a, b) => {
-      let comparison = 0;
-      switch (sortConfig.field) {
-        case 'title':
-          comparison = compareString(a.title, b.title);
-          break;
-        case 'tags':
-          comparison = compareString(a.tags?.[0], b.tags?.[0]);
-          break;
-        case 'platform':
-          comparison = compareString(a.platform, b.platform);
-          break;
-        case 'status':
-          comparison = compareString(a.status, b.status);
-          break;
-        case 'sentCount':
-          comparison = parseNumber(a.sentCount) - parseNumber(b.sentCount);
-          break;
-        case 'openCount':
-          comparison = parseNumber(a.openCount) - parseNumber(b.openCount);
-          break;
-        case 'clickCount':
-          comparison = parseNumber(a.clickCount) - parseNumber(b.clickCount);
-          break;
-        case 'sendTime':
-          comparison = parseTime(a.timeValue ?? a.sendTime) - parseTime(b.timeValue ?? b.sendTime);
-          break;
-        default:
-          comparison = 0;
+    const getComparison = (a: Message, b: Message): number => {
+      const { field } = sortConfig;
+      if (field === 'title' || field === 'platform' || field === 'status' || field === 'sender') {
+        return compareString(a[field], b[field]);
       }
+      if (field === 'tags') return compareString(a.tags?.[0], b.tags?.[0]);
+      if (field === 'sentCount' || field === 'clickCount') {
+        return parseNumber(a[field]) - parseNumber(b[field]);
+      }
+      if (field === 'sendTime') {
+        return parseTime(a.timeValue ?? a.sendTime) - parseTime(b.timeValue ?? b.sendTime);
+      }
+      return 0;
+    };
+
+    return [...messages].sort((a, b) => {
+      const comparison = getComparison(a, b);
       return sortConfig.order === 'asc' ? comparison : -comparison;
     });
-    return list;
   }, [messages, sortConfig]);
 
   return (
-    <div className="content-stretch flex flex-col items-start relative shrink-0 w-full">
-      {/* Table Container - Fixed height container with horizontal scroll */}
-      <div className="bg-white rounded-[16px] w-full flex flex-col max-h-[600px] overflow-x-auto table-scroll">
-        {/* Table Header - Fixed */}
-        <div className="relative shrink-0 w-[1250px]">
-          <TableHeader sortConfig={sortConfig} onSortChange={handleSort} statusFilter={statusFilter} />
-        </div>
-        
-        {/* Table Body - Scrollable Container */}
-        <div className="w-[1250px] flex-1 table-scroll">
-          {sortedMessages.length === 0 ? (
-            <EmptyStateRow />
-          ) : (
-            sortedMessages.map((message, index) => (
-              <MessageRow 
-                key={message.id} 
-                message={message} 
-                isLast={index === sortedMessages.length - 1}
-                onEdit={onEdit}
-                onViewDetails={onViewDetails}
-              />
-            ))
-          )}
+    <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-name="MessageTable">
+      {/* 外層容器 - 水平滾動 */}
+      <div className="bg-white rounded-[16px] w-full overflow-x-auto table-scroll">
+        {/* 內層容器 - 最小寬度確保欄位對齊 */}
+        <div className="min-w-[1060px]">
+          {/* 垂直滾動容器 + Sticky 表頭 */}
+          <div className="max-h-[600px] overflow-y-auto table-scroll">
+            {/* 表頭 - Sticky */}
+            <div className="sticky top-0 z-10">
+              <TableHeader sortConfig={sortConfig} onSortChange={handleSort} statusFilter={statusFilter} />
+            </div>
+
+            {/* 表格內容 */}
+            {sortedMessages.length === 0 ? (
+              <EmptyStateRow />
+            ) : (
+              sortedMessages.map((message, index) => (
+                <MessageRow
+                  key={message.id}
+                  message={message}
+                  isLast={index === sortedMessages.length - 1}
+                  onEdit={onEdit}
+                  onViewDetails={onViewDetails}
+                />
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>

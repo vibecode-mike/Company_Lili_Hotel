@@ -15,6 +15,7 @@ export interface ChatMessage {
   timestamp?: string | null;  // ✅ 新增：ISO 格式完整時間戳，用於日期顯示
   isRead: boolean;
   source?: string | null;  // ✅ 新增：message_source 欄位 ('manual' | 'gpt' | 'keyword' | 'welcome' | 'always' | null)
+  senderName?: string | null;  // ✅ 新增：發送人員名稱（manual 顯示人員名稱，其他顯示「系統」）
 }
 
 // ========== 组件 Props 接口 ==========
@@ -53,6 +54,9 @@ export interface ChatInputProps {
 export interface ChatRoomLayoutProps {
   member?: Member;
   memberId?: string;  // 支援直接傳入 memberId，用於 WebSocket 連線
+  chatSessionApiBase?: string; // 可覆寫 API 基底路徑（預設 /api/v1）
+  onPlatformChange?: (platform: ChatPlatform) => void;
+  initialPlatform?: ChatPlatform;
 }
 
 // ========== 标签相关 ==========
@@ -75,4 +79,4 @@ export type ResponseMode = 'manual' | 'ai_auto' | 'auto';
 
 // ========== 聊天平台相關 ==========
 
-export type ChatPlatform = 'LINE' | 'Facebook' | 'WebChat';
+export type ChatPlatform = 'LINE' | 'Facebook' | 'Webchat';

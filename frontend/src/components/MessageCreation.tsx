@@ -21,6 +21,7 @@ import uploadIconPaths from '../imports/svg-wb8nmg8j6i';
 import messageTextSvgPaths from '../imports/svg-hbkooryl5v';
 import FlexMessageEditorNew from './flex-message/FlexMessageEditorNew';
 import CarouselMessageEditor, { type CarouselCard } from './CarouselMessageEditor';
+import { FacebookMessageEditor, FlexMessage as FBFlexMessage } from './facebook-message';
 import { TriggerImagePreview, TriggerTextPreview, GradientPreviewContainer, DeleteButton } from './common';
 import ActionTriggerTextMessage from '../imports/ActionTriggerTextMessage';
 import ActionTriggerImageMessage from '../imports/ActionTriggerImageMessage';
@@ -32,6 +33,13 @@ import { useMessages } from '../contexts/MessagesContext';
 import { CAROUSEL_STRUCTURE_FIELDS } from './carouselStructure';
 import type { FlexMessage, FlexBubble } from '../types/api';
 import type { MessagePlatform } from '../types/channel';
+import { ChannelIcon } from './common/icons/ChannelIcon';
+
+// FB 預設圖片佔位符
+const FB_PLACEHOLDER_IMAGE = "/images/fb-placeholder.png";
+
+// FB 群發單次發送人數上限
+const FB_BROADCAST_MAX_RECIPIENTS = 1000;
 
 // Custom DialogContent without close button
 function DialogContentNoClose({
@@ -60,6 +68,15 @@ function DialogContentNoClose({
   );
 }
 
+// 渠道選項型別（用於平台選擇下拉選單）
+interface ChannelOption {
+  value: string;           // 唯一識別碼 (e.g., "LINE_123" or "FB_456")
+  platform: 'LINE' | 'Facebook';
+  channelId: string;       // LINE channel_id 或 FB page_id
+  label: string;           // 顯示名稱
+  disabled: boolean;
+}
+
 interface MessageCreationProps {
   onBack?: () => void;
   onNavigate?: (page: string) => void;
@@ -72,6 +89,7 @@ interface MessageCreationProps {
     targetType: string;
     templateType: string;
     platform?: MessagePlatform;
+    channelId?: string | null; // LINE channel_id 或 FB page_id
     flexMessageJson?: FlexMessage;
     selectedFilterTags?: Array<{ id: string; name: string }>;
     filterCondition?: 'include' | 'exclude';
@@ -84,7 +102,7 @@ interface MessageCreationProps {
 
 export default function MessageCreation({ onBack, onNavigate, onNavigateToSettings, editMessageId, editMessageData, onDelete }: MessageCreationProps = {}) {
   // Get quota status and refreshAll from MessagesContext
-  const { quotaStatus, refreshAll } = useMessages();
+  const { quotaStatus, quotaLoading, quotaError, refreshAll } = useMessages();
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [templateType, setTemplateType] = useState('select');
@@ -96,12 +114,16 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   const [activeTab, setActiveTab] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [flexMessageJson, setFlexMessageJson] = useState<FlexMessage | null>(null);
+  const [fbMessageJson, setFbMessageJson] = useState<FBFlexMessage | null>(null);
   const [selectedFilterTags, setSelectedFilterTags] = useState<Array<{ id: string; name: string }>>([]);
   const [filterCondition, setFilterCondition] = useState<'include' | 'exclude'>('include');
   const [scheduledDate, setScheduledDate] = useState<Date | undefined>(undefined);
   const [scheduledTime, setScheduledTime] = useState({ hours: '12', minutes: '00' });
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<MessagePlatform>('LINE');
+  // 渠道選項狀態（動態從 API 獲取）
+  const [channelOptions, setChannelOptions] = useState<ChannelOption[]>([]);
+  const [selectedChannel, setSelectedChannel] = useState<string>('');
   // 個別欄位錯誤狀態
   const [titleError, setTitleError] = useState('');
   const [notificationMsgError, setNotificationMsgError] = useState('');
@@ -123,62 +145,189 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   }>>(new Map());
   const [isDirty, setIsDirty] = useState(false); // 追蹤是否有未儲存的變更
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false); // 顯示未儲存確認對話框
+  const [showFbLimitDialog, setShowFbLimitDialog] = useState(false); // 顯示 FB 發送人數上限提示
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null); // 待執行的導航
   const [estimatedRecipientCount, setEstimatedRecipientCount] = useState<number | null>(null); // 預計發送人數
   const cardRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
 
-  // Platform selector options
-  const platformOptions: Array<{ value: MessagePlatform; label: string; disabled: boolean }> = [
-    { value: 'LINE', label: 'LINE', disabled: false },
-    { value: 'Facebook', label: 'Facebook', disabled: false },
-  ];
+  // 獲取可用渠道列表
+  useEffect(() => {
+    const fetchChannels = async () => {
+      const options: ChannelOption[] = [];
+      const token = localStorage.getItem('auth_token');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      };
+
+      // 獲取 LINE 頻道
+      try {
+        const lineRes = await fetch('/api/v1/line_channels/current', { headers });
+        if (lineRes.ok) {
+          const lineChannel = await lineRes.json();
+          if (lineChannel?.channel_id) {
+            options.push({
+              value: `LINE_${lineChannel.channel_id}`,
+              platform: 'LINE',
+              channelId: lineChannel.channel_id,
+              label: lineChannel.channel_name || 'LINE 官方帳號',
+              disabled: false
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch LINE channel:', error);
+      }
+
+      // 獲取 Facebook 粉專
+      try {
+        const fbRes = await fetch('/api/v1/fb_channels', { headers });
+        if (fbRes.ok) {
+          const fbChannels = await fbRes.json();
+          fbChannels.forEach((fb: { page_id: string; channel_name: string; is_active: boolean }) => {
+            if (fb.page_id) {
+              options.push({
+                value: `FB_${fb.page_id}`,
+                platform: 'Facebook',
+                channelId: fb.page_id,
+                label: fb.channel_name || 'Facebook 粉專',
+                disabled: false
+              });
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch FB channels:', error);
+      }
+
+      setChannelOptions(options);
+
+      // 預設選中第一個渠道（僅在新建時，非編輯模式）
+      // 編輯模式會由渠道還原 useEffect 處理
+      if (options.length > 0 && !selectedChannel && !editMessageData?.channelId) {
+        setSelectedChannel(options[0].value);
+        setSelectedPlatform(options[0].platform);
+      }
+    };
+
+    fetchChannels();
+  }, [editMessageData?.channelId]);
 
   // Monitor flexMessageJson changes
   useEffect(() => {
     // Flex Message JSON is ready for use
   }, [flexMessageJson]);
 
-  // Fetch estimated recipient count when target settings change
+  // Fetch estimated recipient count when target settings or platform change
+  // Triggers on: initial mount (LINE default), page refresh, or platform selection change
   useEffect(() => {
-    const fetchEstimatedRecipientCount = async () => {
-      try {
-        const token = localStorage.getItem('auth_token');
-        if (!token) return;
+    let isActive = true;
 
-        // Prepare request body for quota API (same endpoint gives us recipient count)
-        const requestBody: any = {
-          target_type: targetType === 'all' ? 'all_friends' : 'filtered'
-        };
-
-        // Add filter conditions for filtered audience
-        if (targetType === 'filtered' && selectedFilterTags.length > 0) {
-          requestBody.target_filter = {
-            [filterCondition]: selectedFilterTags.map(t => t.name)
+    const fetchCount = async () => {
+      // LINE 渠道 - 使用 Python backend quota API
+      if (selectedPlatform === 'LINE') {
+        try {
+          const requestBody: Record<string, unknown> = {
+            target_type: targetType === 'all' ? 'all_friends' : 'filtered'
           };
-        }
 
-        const response = await fetch('/api/v1/messages/quota', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
+          if (targetType === 'filtered' && selectedFilterTags.length > 0) {
+            requestBody.target_filter = {
+              [filterCondition]: selectedFilterTags.map(t => t.name)
+            };
+          }
+
+          const headers: Record<string, string> = {
             'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(requestBody)
-        });
+          };
+          const token = localStorage.getItem('auth_token');
+          if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+          }
 
-        if (response.ok) {
-          const result = await response.json();
-          // The quota API returns estimated_send_count
-          setEstimatedRecipientCount(result.estimated_send_count || 0);
+          const response = await fetch('/api/v1/messages/quota', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(requestBody)
+          });
+
+          if (!isActive) return;
+
+          if (response.ok) {
+            const result = await response.json();
+            setEstimatedRecipientCount(result.estimated_send_count ?? 0);
+          } else {
+            setEstimatedRecipientCount(0);
+          }
+        } catch {
+          if (isActive) {
+            setEstimatedRecipientCount(0);
+          }
         }
-      } catch (error) {
-        console.error('獲取預計發送人數錯誤:', error);
-        // Don't show error to user, just keep showing loading state
+      }
+      // Facebook 渠道 - 使用外部 API (tags/amount)
+      else if (selectedPlatform === 'Facebook') {
+        try {
+          const fbApiBaseUrl = (import.meta.env.VITE_FB_API_URL?.trim() || 'https://api-youth-tycg.star-bit.io').replace(/\/+$/, '');
+          const jwtToken = localStorage.getItem('jwt_token');
+
+          // 取得當前選中的 FB 渠道的 page_id
+          const selectedOption = channelOptions.find(opt => opt.value === selectedChannel);
+          const pageId = selectedOption?.channelId;
+
+          // 構建查詢參數
+          const params = new URLSearchParams();
+
+          // 加入 page_id 參數
+          if (pageId) {
+            params.set('page_id', pageId);
+          }
+
+          if (targetType === 'filtered' && selectedFilterTags.length > 0) {
+            const tagNames = selectedFilterTags.map(t => t.name).join(',');
+            if (filterCondition === 'include') {
+              params.set('tag_include', tagNames);
+            } else {
+              params.set('tag_exclude', tagNames);
+            }
+          }
+
+          const queryString = params.toString();
+          const url = `${fbApiBaseUrl}/api/v1/admin/meta_page/tags/amount${queryString ? '?' + queryString : ''}`;
+
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${jwtToken}`,
+            },
+          });
+
+          if (!isActive) return;
+
+          if (response.ok) {
+            const result = await response.json();
+            setEstimatedRecipientCount(result.data ?? 0);
+          } else {
+            setEstimatedRecipientCount(0);
+          }
+        } catch {
+          if (isActive) {
+            setEstimatedRecipientCount(0);
+          }
+        }
+      }
+      // 其他渠道 (Webchat 等) - 暫不支援
+      else {
+        setEstimatedRecipientCount(0);
       }
     };
 
-    fetchEstimatedRecipientCount();
-  }, [targetType, selectedFilterTags, filterCondition]);
+    fetchCount();
+
+    return () => {
+      isActive = false;
+    };
+  }, [selectedPlatform, targetType, selectedFilterTags, filterCondition, selectedChannel, channelOptions]);
 
   const button1TriggerImageInputRef = useRef<HTMLInputElement>(null);
   const button2TriggerImageInputRef = useRef<HTMLInputElement>(null);
@@ -240,6 +389,25 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
   const currentCard = cards.find(c => c.id === activeTab) || cards[0];
 
+  // Handle platform change with content conversion
+  const handlePlatformChange = (newPlatform: MessagePlatform) => {
+    if (selectedPlatform === newPlatform) return;
+    if (newPlatform === 'Facebook') {
+      // Facebook 不支援排程發送，強制設為立即發送
+      setScheduleType('immediate');
+    }
+    setSelectedPlatform(newPlatform);
+  };
+
+  // Handle channel selection change
+  const handleChannelChange = (value: string) => {
+    const selected = channelOptions.find(opt => opt.value === value);
+    if (selected) {
+      setSelectedChannel(value);
+      handlePlatformChange(selected.platform);
+    }
+  };
+
   const updateCard = (updates: Partial<CarouselCard>) => {
     setCards(prevCards => {
       if (prevCards.length === 0) {
@@ -287,7 +455,10 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     setSelectedFilterTags(editMessageData.selectedFilterTags || []);
     setFilterCondition(editMessageData.filterCondition || 'include');
     setTemplateType(editMessageData.templateType || 'carousel');
-    setSelectedPlatform((editMessageData.platform as MessagePlatform) || 'LINE');
+
+    // ✅ 還原平台（渠道由獨立 useEffect 處理，等待 channelOptions 載入）
+    const platform = (editMessageData.platform as MessagePlatform) || 'LINE';
+    setSelectedPlatform(platform);
 
     if (editMessageData.scheduledDate) {
       setScheduledDate(editMessageData.scheduledDate);
@@ -468,6 +639,22 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       }
     }
   }, [editMessageData]);
+
+  // ✅ 獨立處理渠道還原（等待 channelOptions 載入後）
+  useEffect(() => {
+    if (!editMessageData?.channelId || channelOptions.length === 0) return;
+
+    const platform = (editMessageData.platform as MessagePlatform) || 'LINE';
+    const prefix = platform === 'Facebook' ? 'FB' : 'LINE';
+    const restoredChannel = `${prefix}_${editMessageData.channelId}`;
+
+    // 確認該渠道存在於選項中
+    const matchedOption = channelOptions.find(opt => opt.value === restoredChannel);
+    if (matchedOption) {
+      setSelectedChannel(restoredChannel);
+      setSelectedPlatform(matchedOption.platform);
+    }
+  }, [editMessageData, channelOptions]);
 
   // 監聽表單變更，標記為未儲存
   useEffect(() => {
@@ -675,14 +862,17 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     }
 
     try {
-      // 批量上傳裁切後的圖片
-      const uploadSuccess = await uploadCroppedImages();
-      if (!uploadSuccess) {
-        return; // 上傳失敗，已經顯示錯誤訊息
+      // LINE 平台需要上傳圖片，Facebook 平台跳過
+      let flexMessage = null;
+      if (selectedPlatform === 'LINE') {
+        // 批量上傳裁切後的圖片
+        const uploadSuccess = await uploadCroppedImages();
+        if (!uploadSuccess) {
+          return; // 上傳失敗，已經顯示錯誤訊息
+        }
+        // Generate flex message JSON from cards (使用 uploadedImageUrl)
+        flexMessage = generateFlexMessage(cards);
       }
-
-      // Generate flex message JSON from cards (使用 uploadedImageUrl)
-      const flexMessage = generateFlexMessage(cards);
 
       const token = localStorage.getItem('auth_token');
       if (!token) {
@@ -690,17 +880,41 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         return;
       }
 
+      // 取得選中渠道的 ID
+      const selectedChannelOption = channelOptions.find(opt => opt.value === selectedChannel);
+      const channelId = selectedChannelOption?.channelId || null;
+
+      console.log('[handleSaveDraft] 保存草稿:', {
+        selectedChannel,
+        selectedChannelOption,
+        channelId,
+        selectedPlatform
+      });
+
       // Prepare request body for draft
       const requestBody: any = {
-        flex_message_json: JSON.stringify(flexMessage),
         target_type: targetType === 'all' ? 'all_friends' : 'filtered',
         schedule_type: 'draft',  // ✅ 必填欄位：固定為 draft
         notification_message: notificationMsg,
         message_title: title || notificationMsg || '未命名訊息',
         platform: selectedPlatform,
+        channel_id: channelId,  // LINE channel_id 或 FB page_id
         thumbnail: cards[0]?.uploadedImageUrl || cards[0]?.image || null,
         interaction_tags: collectInteractionTags(),
       };
+
+      // 根據平台設置對應的 JSON 欄位
+      if (selectedPlatform === 'Facebook') {
+        if (!fbMessageJson) {
+          toast.error('請先編輯 Facebook 訊息內容');
+          return;
+        }
+        requestBody.fb_message_json = JSON.stringify(fbMessageJson);
+        // Facebook 平台也需要 flex_message_json（後端 required）
+        requestBody.flex_message_json = JSON.stringify({ type: 'bubble', body: { type: 'box', layout: 'vertical', contents: [] } });
+      } else {
+        requestBody.flex_message_json = JSON.stringify(flexMessage);
+      }
 
       // Add target filter for filtered audience
       if (targetType === 'filtered' && selectedFilterTags.length > 0) {
@@ -725,6 +939,8 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       const isUpdate = !!editMessageId;
       const method = isUpdate ? 'PUT' : 'POST';
       const url = isUpdate ? `/api/v1/messages/${editMessageId}` : '/api/v1/messages';
+
+      console.log('[handleSaveDraft] 發送到後端:', { method, url, requestBody });
 
       // Create or update draft message
       const saveResponse = await fetch(url, {
@@ -775,26 +991,144 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
     let hasError = false;
 
-    // ✅ 群發訊息類型：title 和 notificationMsg 為必填欄位
+    // ✅ 群發訊息類型：title 為必填欄位
+    // ✅ notificationMsg 只對 LINE 平台必填（Facebook 沒有此功能）
     // ✅ UI 已經有即時錯誤提示（紅色邊框 + 錯誤文字），不需要在這裡重複設置錯誤訊息
-    // ✅ 只需要簡單檢查是否為空，以阻止發布
     if (!title || title.trim() === '') {
       hasError = true;
     }
 
-    if (!notificationMsg || notificationMsg.trim() === '') {
+    // 只有 LINE 平台才驗證 notificationMsg
+    if (selectedPlatform === 'LINE' && (!notificationMsg || notificationMsg.trim() === '')) {
       hasError = true;
     }
 
-    // 驗證卡片欄位
+    // Facebook 平台跳過卡片驗證（使用獨立編輯器）
+    if (selectedPlatform === 'Facebook') {
+      // Facebook 只需要有 fbMessageJson (Flex 格式)
+      if (!fbMessageJson) {
+        toast.error('請先編輯 Facebook 訊息內容');
+        return false;
+      }
+
+      // 取得 bubbles 列表 (Flex 格式：carousel 有 contents，bubble 本身就是單一卡片)
+      let bubbles: any[] = [];
+      if (fbMessageJson.type === 'carousel' && fbMessageJson.contents) {
+        bubbles = fbMessageJson.contents;
+      } else if (fbMessageJson.type === 'bubble') {
+        bubbles = [fbMessageJson];
+      }
+
+      if (bubbles.length === 0) {
+        toast.error('請先編輯 Facebook 訊息內容');
+        return false;
+      }
+
+      // 驗證每個 bubble 是否有標題 (body 中 size="xl" 或 weight="bold" 的文字)
+      const invalidIndex = bubbles.findIndex((bubble: any) => {
+        const bodyContents = bubble?.body?.contents || [];
+        const titleItem = bodyContents.find((item: any) =>
+          item?.type === 'text' && (item?.size === 'xl' || item?.weight === 'bold')
+        );
+        const title = String(titleItem?.text ?? '').trim();
+        return title === '';
+      });
+      if (invalidIndex !== -1) {
+        toast.error(`Facebook 模板第 ${invalidIndex + 1} 個卡片：標題文字為必填`);
+        return false;
+      }
+
+      // 驗證內文文字說明（若勾選但未填寫）
+      const invalidSubtitleIndex = bubbles.findIndex((bubble: any) => {
+        const bodyContents = bubble?.body?.contents || [];
+        // 找到 subtitle 元素（size="sm" 且 color="#666666"）
+        const subtitleItem = bodyContents.find((item: any) =>
+          item?.type === 'text' && item?.size === 'sm' && item?.color === '#666666'
+        );
+        // 如果有 subtitle 元素，檢查內容是否為空或為預設值
+        if (subtitleItem) {
+          const subtitleText = String(subtitleItem?.text ?? '').split('\n')[0].trim();
+          return subtitleText === '' || subtitleText === '內文文字說明';
+        }
+        return false;
+      });
+      if (invalidSubtitleIndex !== -1) {
+        toast.error(`Facebook 模板第 ${invalidSubtitleIndex + 1} 個卡片：請輸入內文文字說明`);
+        return false;
+      }
+
+      // 驗證每個 bubble 的欄位（圖片、按鈕等）
+      for (let bubbleIndex = 0; bubbleIndex < bubbles.length; bubbleIndex++) {
+        const bubble = bubbles[bubbleIndex];
+        const cardNum = bubbleIndex + 1;
+
+        // 1. 驗證圖片：若啟用但未上傳
+        if (bubble.hero) {
+          const heroUrl = bubble.hero.url || '';
+          if (heroUrl.startsWith('figma:') || !heroUrl) {
+            toast.error(`Facebook 模板第 ${cardNum} 個卡片：已勾選圖片但尚未上傳`);
+            return false;
+          }
+
+          // 2. 驗證圖片點擊動作：若啟用 URL 類型但未填寫
+          if (bubble.hero.action) {
+            const actionType = bubble._metadata?.heroActionType || 'url';
+            const actionUrl = bubble.hero.action.uri || '';
+
+            if (actionType === 'url' && (!actionUrl || actionUrl === 'https://example.com')) {
+              toast.error(`Facebook 模板第 ${cardNum} 個卡片：已勾選點擊圖片觸發 URL 但尚未填寫網址`);
+              return false;
+            }
+          }
+        }
+
+        // 3. 驗證按鈕：若有按鈕但相關欄位未填寫
+        const buttons = bubble.footer?.contents?.filter((c: any) => c.type === 'button') || [];
+        for (let btnIndex = 0; btnIndex < buttons.length; btnIndex++) {
+          const button = buttons[btnIndex];
+          const buttonType = bubble._metadata?.buttonTypes?.[btnIndex] || 'url';
+          const buttonLabel = button.action?.label || '';
+
+          if (!buttonLabel.trim()) {
+            toast.error(`Facebook 模板第 ${cardNum} 個卡片：按鈕 ${btnIndex + 1} 請輸入按鈕文字`);
+            return false;
+          }
+
+          if (buttonType === 'url') {
+            const buttonUrl = button.action?.uri || '';
+            if (!buttonUrl || buttonUrl === 'https://example.com') {
+              toast.error(`Facebook 模板第 ${cardNum} 個卡片：按鈕 ${btnIndex + 1} 請輸入連結網址`);
+              return false;
+            }
+          }
+
+          if (buttonType === 'postback') {
+            const payload = bubble._metadata?.buttonPayloads?.[btnIndex] || '';
+            if (!payload.trim()) {
+              toast.error(`Facebook 模板第 ${cardNum} 個卡片：按鈕 ${btnIndex + 1} 請輸入觸發訊息回覆`);
+              return false;
+            }
+          }
+        }
+      }
+
+      return !hasError;
+    }
+
+    // LINE 平台：驗證卡片欄位
     const newCardErrors = new Map();
 
     cards.forEach((card) => {
       const errors: any = {};
 
       // 驗證圖片（只有啟用時才驗證）
-      if (card.enableImage && !card.image) {
+      if (card.enableImage && !(card.uploadedImageUrl || card.image)) {
         errors.image = '請選擇圖片';
+      }
+
+      // 驗證點擊圖片觸發 URL（只有啟用時才驗證）
+      if (card.enableImageUrl && (!card.imageUrl || card.imageUrl.trim() === '')) {
+        errors.imageUrl = '請輸入點擊後跳轉網址';
       }
 
       // 驗證標題文字（只有啟用時才驗證）
@@ -912,8 +1246,8 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       hasError = true;
     }
 
-    // 驗證排程時間必須在未來
-    if (scheduleType === 'scheduled') {
+    // 驗證排程時間必須在未來（僅 LINE 平台需要驗證，Facebook 只能立即發送）
+    if (selectedPlatform === 'LINE' && scheduleType === 'scheduled') {
       if (!scheduledDate) {
         // 已由現有的 UI 驗證處理（第 1591-1595 行）
         hasError = true;
@@ -1229,6 +1563,35 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         };
       }
 
+      // ✅ 构建完整的 metadata（包含 buttonTypes 和 buttonPayloads）
+      const buttonTypes: Record<number, string> = {};
+      const buttonPayloads: Record<number, string> = {};
+
+      // 收集按钮类型和 payload（FB 最多 3 个按钮）
+      [1, 2, 3].forEach((num) => {
+        const enableKey = `enableButton${num}` as keyof typeof card;
+        const actionTypeKey = `button${num}ActionType` as keyof typeof card;
+        const tagKey = `button${num}Tag` as keyof typeof card;
+
+        if (card[enableKey]) {
+          const actionType = card[actionTypeKey] as string || 'url';
+          const tag = card[tagKey] as string || '';
+
+          const buttonIndex = num - 1;
+
+          if (selectedPlatform === 'Facebook' && actionType === 'tag' && tag) {
+            buttonTypes[buttonIndex] = 'postback';
+            buttonPayloads[buttonIndex] = tag;
+          } else {
+            buttonTypes[buttonIndex] = 'url';
+          }
+        }
+      });
+
+      // 处理图片动作（如果需要支持图片点击打标签）
+      const heroActionType = card.heroActionType as string || 'url';
+      const heroActionPayload = card.heroTag as string || '';
+
       const interactionMetadata: { heroTag?: string | null; buttonTags?: Array<string | null> } = {};
       const normalizedImageTag = typeof card.imageTag === 'string' ? card.imageTag.trim() : '';
       if (normalizedImageTag) {
@@ -1244,11 +1607,34 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
           return tag ?? null;
         });
       }
+
+      // 构建完整的 _metadata
+      const metadata: any = {
+        ...(bubble._metadata || {}),
+      };
+
+      // 添加按钮 metadata（FB postback 所需）
+      if (Object.keys(buttonTypes).length > 0) {
+        metadata.buttonTypes = buttonTypes;
+        if (Object.keys(buttonPayloads).length > 0) {
+          metadata.buttonPayloads = buttonPayloads;
+        }
+      }
+
+      // 添加图片动作 metadata（如果图片设置了标签动作）
+      if (selectedPlatform === 'Facebook' && heroActionType === 'tag' && heroActionPayload) {
+        metadata.heroActionType = 'postback';
+        metadata.heroActionPayload = heroActionPayload;
+      }
+
+      // 保留 interactionTags（用于统计）
       if (interactionMetadata.heroTag || (interactionMetadata.buttonTags && interactionMetadata.buttonTags.some(Boolean))) {
-        bubble._metadata = {
-          ...(bubble._metadata || {}),
-          interactionTags: interactionMetadata
-        };
+        metadata.interactionTags = interactionMetadata;
+      }
+
+      // 只在有 metadata 时设置
+      if (Object.keys(metadata).length > 0) {
+        bubble._metadata = metadata;
       }
 
       return bubble;
@@ -1295,16 +1681,25 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       return;
     }
 
-    try {
-      // ✅ 先上傳所有圖片到後端
-      const uploadSuccess = await uploadCroppedImages();
-      if (!uploadSuccess) {
-        toast.error('圖片上傳失敗，請重試');
-        return;
-      }
+    // FB 平台檢查發送人數是否超過上限
+    if (selectedPlatform === 'Facebook' && estimatedRecipientCount && estimatedRecipientCount > FB_BROADCAST_MAX_RECIPIENTS) {
+      setShowFbLimitDialog(true);
+      return;
+    }
 
-      // Generate flex message JSON from cards (使用 uploadedImageUrl)
-      const flexMessage = generateFlexMessage(cards);
+    try {
+      // LINE 平台需要上傳圖片，Facebook 平台跳過
+      let flexMessage = null;
+      if (selectedPlatform === 'LINE') {
+        // ✅ 先上傳所有圖片到後端
+        const uploadSuccess = await uploadCroppedImages();
+        if (!uploadSuccess) {
+          toast.error('圖片上傳失敗，請重試');
+          return;
+        }
+        // Generate flex message JSON from cards (使用 uploadedImageUrl)
+        flexMessage = generateFlexMessage(cards);
+      }
 
       const token = localStorage.getItem('auth_token');
       if (!token) {
@@ -1312,17 +1707,35 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         return;
       }
 
+      // 取得選中渠道的 ID（LINE channel_id 或 FB page_id）
+      const selectedChannelOption = channelOptions.find(opt => opt.value === selectedChannel);
+      const channelId = selectedChannelOption?.channelId || null;
+
       // Prepare request body
       const requestBody: any = {
-        flex_message_json: JSON.stringify(flexMessage),
         target_type: targetType === 'all' ? 'all_friends' : 'filtered',
         schedule_type: scheduleType,
         notification_message: notificationMsg,
         message_title: title || notificationMsg || '未命名訊息',
         platform: selectedPlatform,
+        channel_id: channelId,  // LINE channel_id 或 FB page_id
         thumbnail: cards[0]?.uploadedImageUrl || cards[0]?.image || null,
         interaction_tags: collectInteractionTags(),
+        estimated_send_count: estimatedRecipientCount || 0,  // 預計發送人數（FB 渠道由前端計算）
       };
+
+      // 根據平台設置對應的 JSON 欄位
+      if (selectedPlatform === 'Facebook') {
+        if (!fbMessageJson) {
+          toast.error('請先編輯 Facebook 訊息內容');
+          return;
+        }
+        requestBody.fb_message_json = JSON.stringify(fbMessageJson);
+        // Facebook 平台也需要 flex_message_json（後端 required）
+        requestBody.flex_message_json = JSON.stringify({ type: 'bubble', body: { type: 'box', layout: 'vertical', contents: [] } });
+      } else {
+        requestBody.flex_message_json = JSON.stringify(flexMessage);
+      }
 
       // Add target filter for filtered audience
       if (targetType === 'filtered' && selectedFilterTags.length > 0) {
@@ -1386,12 +1799,35 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       }
 
       if (scheduleType === 'immediate') {
+        // 準備發送請求的 body
+        const sendBody: Record<string, string> = {};
+
+        // 取得選中渠道的 channelId
+        const selectedChannelOption = channelOptions.find(opt => opt.value === selectedChannel);
+        const channelId = selectedChannelOption?.channelId || null;
+
+        // FB 平台需要帶入 jwt_token 和 page_id
+        if (selectedPlatform === 'Facebook') {
+          const jwtToken = localStorage.getItem('jwt_token');
+          if (!jwtToken) {
+            toast.error('請先登入 Facebook 帳號');
+            return;
+          }
+          sendBody.jwt_token = jwtToken;
+          if (channelId) {
+            sendBody.page_id = channelId;  // FB 使用 page_id
+          }
+        } else if (selectedPlatform === 'LINE' && channelId) {
+          sendBody.channel_id = channelId;  // LINE 使用 channel_id
+        }
+
         const sendResponse = await fetch(`/api/v1/messages/${messageId}/send`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
-          }
+          },
+          body: Object.keys(sendBody).length > 0 ? JSON.stringify(sendBody) : undefined
         });
 
         if (!sendResponse.ok) {
@@ -1654,30 +2090,43 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
             <div className="flex flex-col xl:flex-row gap-[32px] xl:gap-[120px] items-start w-full">
               <div className="flex-1 flex flex-col sm:flex-row items-start gap-4 w-full">
                 <Label className="min-w-[120px] sm:min-w-[140px] lg:min-w-[160px] pt-3 flex items-center gap-1">
-                  <span className="text-[16px] text-[#383838]">發佈渠道</span>
+                  <span className="text-[16px] text-[#383838]">選擇發佈平台</span>
                   <span className="text-[16px] text-[#f44336]">*</span>
                 </Label>
                 <div className="flex-1 flex flex-col gap-[2px]">
-                  <Select
-                    value={selectedPlatform}
-                    onValueChange={(value) => setSelectedPlatform(value as MessagePlatform)}
-                  >
-                    <SelectTrigger className="w-full h-[48px] rounded-[8px] bg-white border border-neutral-100">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {platformOptions.map((option) => (
-                        <SelectItem
-                          key={option.value}
-                          value={option.value}
-                          disabled={option.disabled}
-                          className={option.disabled ? 'opacity-50 cursor-not-allowed' : ''}
-                        >
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {channelOptions.length === 0 ? (
+                    <div className="text-[14px] text-[#999] p-3 bg-gray-50 rounded-[8px] border border-neutral-100">
+                      請先至「基本設定」連結 LINE 或 Facebook 渠道
+                    </div>
+                  ) : (
+                    <Select value={selectedChannel} onValueChange={handleChannelChange}>
+                      <SelectTrigger className="w-full h-[48px] rounded-[8px] bg-white border border-neutral-100">
+                        {selectedChannel ? (
+                          <div className="flex items-center gap-2">
+                            <ChannelIcon
+                              channel={channelOptions.find(opt => opt.value === selectedChannel)?.platform || 'LINE'}
+                              size={24}
+                            />
+                            <span className="truncate">
+                              {channelOptions.find(opt => opt.value === selectedChannel)?.label}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-[#a8a8a8]">請選擇發佈平台</span>
+                        )}
+                      </SelectTrigger>
+                      <SelectContent>
+                        {channelOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
+                            <div className="flex items-center gap-2">
+                              <ChannelIcon channel={option.platform} size={24} />
+                              <span>{option.label}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               </div>
             </div>
@@ -1733,7 +2182,8 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
               </div>
             </div>
 
-            {/* Form Fields Row 2 */}
+            {/* Form Fields Row 2 - 通知推播 (僅 LINE 顯示) */}
+            {selectedPlatform === 'LINE' && (
             <div className="flex flex-col xl:flex-row gap-[32px] xl:gap-[120px] items-start w-full">
               <div className="flex-1 flex flex-col sm:flex-row items-start gap-4 w-full">
                 <Label className="min-w-[120px] sm:min-w-[140px] lg:min-w-[160px] pt-3 flex items-center gap-1">
@@ -1784,8 +2234,10 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
               </div>
 
             </div>
+            )}
 
-            {/* Schedule Section */}
+            {/* Schedule Section - 僅 LINE 顯示 */}
+            {selectedPlatform === 'LINE' && (
             <div className="flex items-start gap-4 w-full">
               <Label className="min-w-[160px] pt-1 flex items-center gap-1">
                 <span className="text-[16px] text-[#383838]">自訂時間</span>
@@ -1912,6 +2364,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                 )}
               </div>
             </div>
+            )}
 
             {/* Target Audience Section */}
             <div className="flex items-start gap-4 w-full">
@@ -2006,12 +2459,21 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                       ? `${estimatedRecipientCount.toLocaleString()} 人`
                       : '計算中...'}
                   </p>
-                  <p className="text-[16px] text-[#383838] mt-[10px]">
-                    可用訊息則數：
-                    {quotaStatus
-                      ? `${quotaStatus.availableQuota.toLocaleString()} 則`
-                      : '載入中...'}
-                  </p>
+                  {/* LINE 才顯示可用訊息則數，Facebook 只有速率限制不顯示 */}
+                  {selectedPlatform === 'LINE' && (
+                    <p className="text-[16px] text-[#383838] mt-[10px]">
+                      可用訊息則數：
+                      {quotaLoading
+                        ? '載入中...'
+                        : quotaError
+                          ? quotaError === '請先登入'
+                            ? '請先登入'
+                            : '無法取得'
+                          : quotaStatus
+                            ? `${quotaStatus.availableQuota.toLocaleString()} 則`
+                            : '—'}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -2019,33 +2481,40 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
           {/* Carousel Message Editor Section - Full Width */}
           <div className="border-t-2 border-[#E5E5E5]">
-            {/* Carousel Message Editor - Full Height */}
+            {/* Editor - conditionally render LINE or Facebook editor */}
             <div className="h-[calc(100vh-300px)] min-h-[600px]">
-              <CarouselMessageEditor
-                cards={cards}
-                activeTab={activeTab}
-                onTabChange={setActiveTab}
-                onAddCarousel={addCarousel}
-                onUpdateCard={updateCard}
-                onImageUpload={(file) => handleImageUpload(file, currentCard)}
-                errors={cardErrors.get(currentCard.id)}
-                onDeleteCarousel={deleteCard}
-                selectedPlatform={selectedPlatform}
-                onCopyCard={() => {
-                  // 檢查是否已達到上限
-                  if (cards.length >= 10) {
-                    toast.error('最多可新增10個輪播');
-                    return;
-                  }
+              {selectedPlatform === 'LINE' ? (
+                <CarouselMessageEditor
+                  cards={cards}
+                  activeTab={activeTab}
+                  onTabChange={setActiveTab}
+                  onAddCarousel={addCarousel}
+                  onUpdateCard={updateCard}
+                  onImageUpload={(file) => handleImageUpload(file, currentCard)}
+                  errors={cardErrors.get(currentCard.id)}
+                  onDeleteCarousel={deleteCard}
+                  selectedPlatform={selectedPlatform}
+                  onCopyCard={() => {
+                    // 檢查是否已達到上限
+                    if (cards.length >= 10) {
+                      toast.error('最多可新增10個輪播');
+                      return;
+                    }
 
-                  // Copy current card functionality
-                  const newId = Math.max(...cards.map(c => c.id)) + 1;
-                  const copiedCard = { ...currentCard, id: newId };
-                  setCards([...cards, copiedCard]);
-                  setActiveTab(newId);
-                  toast.success('已複製圖卡');
-                }}
-              />
+                    // Copy current card functionality
+                    const newId = Math.max(...cards.map(c => c.id)) + 1;
+                    const copiedCard = { ...currentCard, id: newId };
+                    setCards([...cards, copiedCard]);
+                    setActiveTab(newId);
+                    toast.success('已複製圖卡');
+                  }}
+                />
+              ) : (
+                <FacebookMessageEditor
+                  onJsonChange={setFbMessageJson}
+                  initialJson={fbMessageJson}
+                />
+              )}
             </div>
           </div>
         </main>
@@ -2081,6 +2550,21 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
             <AlertDialogAction onClick={handleConfirmLeave} className="bg-[#f44336] hover:bg-[#d32f2f]">
               確認離開
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* FB 發送人數上限提示 Dialog */}
+      <AlertDialog open={showFbLimitDialog} onOpenChange={setShowFbLimitDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>單次發送訊息數量已達上限</AlertDialogTitle>
+            <AlertDialogDescription>
+              當前已超過 Facebook 群發 1,000 則訊息的數量上限，請調整發送對象或分批進行發送。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction>確定</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

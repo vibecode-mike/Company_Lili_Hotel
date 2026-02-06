@@ -2,7 +2,8 @@
  * WebSocket Hook
  * 用於建立和管理與 Backend 的 WebSocket 連線,接收即時訊息推送
  */
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { config } from '@/config';
 
 export interface WebSocketMessage {
   type: 'new_message' | 'pong';
@@ -20,7 +21,7 @@ interface UseWebSocketResult {
 }
 
 export function useWebSocket(
-  memberId: string | undefined,
+  threadId: string | undefined,
   onMessage: (message: WebSocketMessage) => void
 ): UseWebSocketResult {
   const wsRef = useRef<WebSocket | null>(null);
@@ -28,8 +29,12 @@ export function useWebSocket(
   const pingIntervalRef = useRef<NodeJS.Timeout>();
   const [isConnected, setIsConnected] = useState(false);
 
-  const connect = useCallback(() => {
-    if (!memberId) {
+  // 使用 ref 保存 onMessage 避免依賴變化導致重連
+  const onMessageRef = useRef(onMessage);
+  onMessageRef.current = onMessage;
+
+  useEffect(() => {
+    if (!threadId) {
       setIsConnected(false);
       return;
     }
@@ -37,62 +42,70 @@ export function useWebSocket(
     // 清理舊連線
     if (wsRef.current) {
       wsRef.current.close();
+      wsRef.current = null;
     }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/v1/ws/chat/${memberId}`;
+    // 使用統一配置取得 WebSocket URL
+    const wsUrl = config.ws.getUrl(`/api/v1/ws/chat/${threadId}`);
 
-    const ws = new WebSocket(wsUrl);
+    let reconnectAttempt = 0;
+    const { maxAttempts, baseDelay, maxDelay } = config.reconnect;
 
-    ws.onopen = () => {
-      wsRef.current = ws;
-      setIsConnected(true);
+    const connect = () => {
+      const ws = new WebSocket(wsUrl);
 
-      // 啟動 ping/pong 保活機制 (每 30 秒)
-      pingIntervalRef.current = setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send('ping');
+      ws.onopen = () => {
+        wsRef.current = ws;
+        setIsConnected(true);
+        reconnectAttempt = 0; // 重置重連計數
+
+        // 啟動 ping/pong 保活機制
+        pingIntervalRef.current = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send('ping');
+          }
+        }, config.heartbeat.interval);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const message: WebSocketMessage = JSON.parse(event.data);
+          if (message.type === 'pong') {
+            // 收到 pong 回應,連線正常
+            return;
+          }
+          onMessageRef.current(message);
+        } catch (error) {
+          console.error('❌ Failed to parse WebSocket message:', error);
         }
-      }, 30000);
-    };
+      };
 
-    ws.onmessage = (event) => {
-      try {
-        const message: WebSocketMessage = JSON.parse(event.data);
-        if (message.type === 'pong') {
-          // 收到 pong 回應,連線正常
-          return;
+      ws.onerror = (error) => {
+        console.error('❌ WebSocket error:', error);
+      };
+
+      ws.onclose = (event) => {
+        wsRef.current = null;
+        setIsConnected(false);
+
+        // 清理 ping 定時器
+        if (pingIntervalRef.current) {
+          clearInterval(pingIntervalRef.current);
+          pingIntervalRef.current = undefined;
         }
-        onMessage(message);
-      } catch (error) {
-        console.error('❌ Failed to parse WebSocket message:', error);
-      }
+
+        // 自動重連（指數退避）
+        if (!event.wasClean && reconnectAttempt < maxAttempts) {
+          reconnectAttempt++;
+          const delay = Math.min(baseDelay * Math.pow(2, reconnectAttempt), maxDelay);
+          console.log(`🔄 WebSocket 重連中... (${reconnectAttempt}/${maxAttempts})`);
+          reconnectTimeoutRef.current = setTimeout(connect, delay);
+        }
+      };
+
+      return ws;
     };
 
-    ws.onerror = (error) => {
-      console.error('❌ WebSocket error:', error);
-    };
-
-    ws.onclose = (event) => {
-      wsRef.current = null;
-      setIsConnected(false);
-
-      // 清理 ping 定時器
-      if (pingIntervalRef.current) {
-        clearInterval(pingIntervalRef.current);
-        pingIntervalRef.current = undefined;
-      }
-
-      // 自動重連 (3秒後)
-      if (!event.wasClean) {
-        reconnectTimeoutRef.current = setTimeout(connect, 3000);
-      }
-    };
-
-    return ws;
-  }, [memberId, onMessage]);
-
-  useEffect(() => {
     const ws = connect();
 
     return () => {
@@ -107,11 +120,11 @@ export function useWebSocket(
       }
 
       // 關閉 WebSocket 連線
-      if (ws) {
+      if (ws && ws.readyState !== WebSocket.CLOSED) {
         ws.close(1000, 'Component unmounted');
       }
     };
-  }, [connect]);
+  }, [threadId]); // 只依賴 threadId，不依賴 onMessage
 
   return { isConnected };
 }

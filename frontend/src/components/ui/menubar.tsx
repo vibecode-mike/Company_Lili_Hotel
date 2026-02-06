@@ -6,6 +6,7 @@ import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react";
 
 import { cn } from "./utils";
 
+
 function Menubar({
   className,
   ...props
@@ -37,7 +38,8 @@ function MenubarGroup({
 function MenubarPortal({
   ...props
 }: React.ComponentProps<typeof MenubarPrimitive.Portal>) {
-  return <MenubarPrimitive.Portal data-slot="menubar-portal" {...props} />;
+  
+  return <MenubarPrimitive.Portal data-slot="menubar-portal"  {...props} />;
 }
 
 function MenubarRadioGroup({

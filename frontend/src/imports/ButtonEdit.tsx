@@ -71,7 +71,7 @@ export default function ButtonEdit({
   }
 
   return (
-    <div 
+    <div
       className={`relative rounded-[8px] transition-colors hover:bg-[#f0f6ff] active:bg-[#f0f6ff] cursor-pointer ${className || 'size-[28px]'}`}
       data-name="Button/Edit"
       onClick={onClick}

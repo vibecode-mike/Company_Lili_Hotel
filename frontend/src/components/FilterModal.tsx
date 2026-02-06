@@ -26,6 +26,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
   const [isLoading, setIsLoading] = useState(true);
   const [selectedTags, setSelectedTags] = useState<Tag[]>(initialSelectedTags || []);
   const [searchInput, setSearchInput] = useState('');
+  const isComposingRef = useRef(false);
   const [isInclude, setIsInclude] = useState(initialIsInclude ?? true);
   const [scrollTop, setScrollTop] = useState(0);
   const [isDraggingScrollbar, setIsDraggingScrollbar] = useState(false);
@@ -92,7 +93,8 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
     : displayTags.filter(tag => !selectedTags.find(st => st.id === tag.id));
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+    const isImeComposing = isComposingRef.current || (e.nativeEvent as any).isComposing;
+    if (e.key === 'Enter' && !isImeComposing) {
       if (searchInput.trim()) {
         // Check if reached tag limit
         if (selectedTags.length >= MAX_TAGS) {
@@ -317,6 +319,12 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
                     value={searchInput}
                     onChange={(e) => handleSearchChange(e.target.value)}
                     onKeyDown={handleKeyDown}
+                    onCompositionStart={() => {
+                      isComposingRef.current = true;
+                    }}
+                    onCompositionEnd={() => {
+                      isComposingRef.current = false;
+                    }}
                     placeholder={selectedTags.length === 0 ? "輸入或按 Enter 新增標籤" : ""}
                     maxLength={20}
                     className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] flex-1 min-w-[120px] outline-none text-[#383838] text-[16px] placeholder:text-[#a8a8a8] bg-transparent"

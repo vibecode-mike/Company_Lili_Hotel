@@ -474,7 +474,7 @@ interface Member {
 - 支持 LINE/Facebook/Instagram 選擇
 - 渠道圖標顯示
 - 單選/多選模式
-- 渠道狀態驗證
+ - 渠道切換管理（availablePlatforms 都可切換；若無 thread/資料則顯示空訊息）
 
 #### 數據結構
 

@@ -2,7 +2,7 @@
 配置管理模組
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List
+from typing import List, Optional
 from pathlib import Path
 import os
 
@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # 安全配置
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 240  # 4 小時
 
     # LINE Messaging API
     LINE_CHANNEL_ACCESS_TOKEN: str
@@ -51,6 +51,15 @@ class Settings(BaseSettings):
     # LINE App 服務 URL
     LINE_APP_URL: str = "http://localhost:3001"
 
+    # Facebook API (外部 Meta Page 服務)
+    FB_API_URL: str = "https://api-youth-tycg.star-bit.io"
+    FB_FIRM_ACCOUNT: str = "tycg-admin"
+    FB_FIRM_PASSWORD: str  # 從 .env 讀取，保密
+    FB_BROADCAST_MAX_RECIPIENTS: int = 1000  # FB 群發單次發送人數上限
+
+    # Facebook Graph API / Frontend SDK config (no app secret stored here)
+    FACEBOOK_GRAPH_API_VERSION: str = "v24.0"
+    VITE_FACEBOOK_APP_ID: Optional[str] = "851348804294287"
     # 路由配置
     UPLOAD_ROUTE_PREFIX: str = "/uploads"
 

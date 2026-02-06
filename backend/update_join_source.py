@@ -15,7 +15,7 @@ async def main():
 
             print(f"發現 {len(members_to_update)} 筆需要更新的會員：")
             for member in members_to_update:
-                print(f"  ID {member.id}: {member.name or member.line_name}")
+                print(f"  ID {member.id}: {member.name or member.line_display_name}")
 
             if len(members_to_update) == 0:
                 print("\n✅ 沒有需要更新的數據")
@@ -34,14 +34,14 @@ async def main():
 
             # 驗證更新結果
             result = await session.execute(
-                select(Member.join_source, Member.id, Member.name, Member.line_name)
+                select(Member.join_source, Member.id, Member.name, Member.line_display_name)
                 .order_by(Member.id)
             )
             all_members = result.all()
 
             print("\n=== 更新後的會員列表 ===")
-            for join_source, member_id, name, line_name in all_members:
-                print(f"ID {member_id}: {name or line_name} - join_source: {join_source}")
+            for join_source, member_id, name, line_display_name in all_members:
+                print(f"ID {member_id}: {name or line_display_name} - join_source: {join_source}")
 
         except Exception as e:
             await session.rollback()

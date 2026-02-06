@@ -7,12 +7,11 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
 from app.config import settings
-from app.database import init_db, close_db
+from app.database import close_db
 from app.api.v1 import api_router
 from app.core.exceptions import AppException
 from app.services.scheduler import scheduler
 from datetime import datetime
-from pathlib import Path
 import logging
 
 # 配置日誌

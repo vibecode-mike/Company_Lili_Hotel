@@ -21,6 +21,8 @@ export interface MemberInfoPanelCompleteProps {
   memberTags?: string[];
   interactionTags?: string[];
   onEditTags?: () => void;
+  /** 渠道名稱（粉專名/頻道名），優先使用此值 */
+  channelName?: string | null;
 }
 
 const normalizeGender = (value?: string | null): 'male' | 'female' | 'undisclosed' => {
@@ -43,7 +45,7 @@ const getMemberString = (member?: Member, keys: string[] = [], fallback = ''): s
   return fallback;
 };
 
-export default function MemberInfoPanelComplete({ member, memberTags, interactionTags, onEditTags }: MemberInfoPanelCompleteProps) {
+export default function MemberInfoPanelComplete({ member, memberTags, interactionTags, onEditTags, channelName: propChannelName }: MemberInfoPanelCompleteProps) {
   const [isEditing, setIsEditing] = React.useState(false);
   const [birthdayPopoverOpen, setBirthdayPopoverOpen] = React.useState(false);
   const [realName, setRealName] = React.useState(
@@ -110,37 +112,77 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
 
   const lineUid = getMemberString(member, ['lineUid', 'line_uid'], '');
   const joinSource = getMemberString(member, ['join_source'], 'LINE');
-  const lineName = getMemberString(member, ['lineName', 'line_name'], '');
-  const [channelName, setChannelName] = React.useState<string>('LINE');
+  const lineName = getMemberString(member, ['lineDisplayName', 'line_display_name', 'lineName'], '');
+  const [channelName, setChannelName] = React.useState<string>(propChannelName || '');
 
   React.useEffect(() => {
+    // 如果已有 propChannelName，優先使用
+    if (propChannelName) {
+      setChannelName(propChannelName);
+      return;
+    }
+
     const fetchChannelInfo = async () => {
       try {
         const token = localStorage.getItem('auth_token');
         if (!token) return;
 
-        const response = await fetch('/api/v1/line_channels/current', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
+        // 根據 join_source 獲取對應的渠道名稱
+        const normalizedSource = joinSource?.toLowerCase() || 'line';
 
-        if (!response.ok) return;
+        if (normalizedSource === 'facebook' || normalizedSource === 'fb') {
+          // Facebook 渠道：獲取粉專名稱
+          const response = await fetch('/api/v1/fb_channels', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
 
-        const result = await response.json();
-        // 優先使用 channel_name，如果沒有則使用 channel_id，最後使用 'LINE'
-        if (result?.channel_name) {
-          setChannelName(result.channel_name);
-        } else if (result?.channel_id) {
-          setChannelName(result.channel_id);
+          if (!response.ok) {
+            setChannelName('Facebook');
+            return;
+          }
+
+          const fbChannels = await response.json();
+          // 優先使用第一個粉專的名稱
+          if (Array.isArray(fbChannels) && fbChannels.length > 0) {
+            setChannelName(fbChannels[0].channel_name || 'Facebook');
+          } else {
+            setChannelName('Facebook');
+          }
+        } else {
+          // LINE 渠道：獲取 LINE 頻道名稱
+          const response = await fetch('/api/v1/line_channels/current', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+
+          if (!response.ok) {
+            setChannelName('LINE');
+            return;
+          }
+
+          const result = await response.json();
+          // 優先使用 channel_name，如果沒有則使用 channel_id，最後使用 'LINE'
+          if (result?.channel_name) {
+            setChannelName(result.channel_name);
+          } else if (result?.channel_id) {
+            setChannelName(result.channel_id);
+          } else {
+            setChannelName('LINE');
+          }
         }
       } catch (error) {
         console.error('Failed to fetch channel info:', error);
+        // 錯誤時使用預設名稱
+        const normalizedSource = joinSource?.toLowerCase() || 'line';
+        setChannelName(normalizedSource === 'facebook' || normalizedSource === 'fb' ? 'Facebook' : 'LINE');
       }
     };
 
     fetchChannelInfo();
-  }, []);
+  }, [joinSource, propChannelName]);
 
   React.useEffect(() => {
     if (member) {

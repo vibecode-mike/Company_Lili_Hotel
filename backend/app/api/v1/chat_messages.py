@@ -4,19 +4,52 @@
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 from app.database import get_db
 from app.models.member import Member
+from app.models.fb_channel import FbChannel
 from app.schemas.common import SuccessResponse
+from app.services.chatroom_service import ChatroomService, format_chat_time
+from app.clients.fb_message_client import FbMessageClient
 import json
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _ensure_utc(dt: datetime) -> datetime:
+    """Treat naive datetimes as UTC and return an aware UTC datetime."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def parse_iso_datetime(value: str) -> Optional[datetime]:
+    """
+    Parse an ISO datetime string into an aware UTC datetime.
+    - Accepts strings ending with 'Z'
+    - Treats naive strings as UTC
+    """
+    if not value:
+        return None
+    normalized = value.strip()
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        return _ensure_utc(datetime.fromisoformat(normalized))
+    except ValueError:
+        return None
+
+
+def format_iso_utc(dt: Optional[datetime]) -> Optional[str]:
+    if not dt:
+        return None
+    return _ensure_utc(dt).isoformat()
 
 
 def extract_message_text(message_content: str) -> str:
@@ -87,6 +120,7 @@ class ChatMessage(BaseModel):
     timestamp: Optional[str] = None  # ISO 格式完整時間戳，用於日期顯示
     isRead: bool = False
     source: Optional[str] = None  # 'manual' | 'gpt' | 'keyword' | 'welcome' | 'always'
+    senderName: Optional[str] = None  # 發送人員名稱：manual 顯示人員名稱，其他顯示「系統」
 
     class Config:
         from_attributes = True
@@ -106,6 +140,8 @@ async def get_chat_messages(
     member_id: int,
     page: int = Query(1, ge=1, description="頁碼"),
     page_size: int = Query(50, ge=1, le=100, description="每頁筆數"),
+    platform: Optional[str] = Query(None, description="渠道：LINE/Facebook/Webchat"),
+    jwt_token: Optional[str] = Query(None, description="FB 渠道需要的 JWT token"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -125,158 +161,199 @@ async def get_chat_messages(
         聊天消息列表
     """
     try:
-        from sqlalchemy import func, text
-
         logger.info(f"📖 獲取會員聊天紀錄: member_id={member_id}, page={page}, page_size={page_size}")
 
-        # 先查詢會員的 line_uid
-        member_query = select(Member.line_uid).where(Member.id == member_id)
-        member_result = await db.execute(member_query)
-        line_uid = member_result.scalar_one_or_none()
+        resolved_platform = _resolve_platform(platform)
+        member = await _resolve_member_by_platform(db, member_id, resolved_platform)
 
-        if not line_uid:
-            logger.warning(f"⚠️ 會員 {member_id} 未綁定 LINE 帳號")
-            raise HTTPException(status_code=400, detail="會員未綁定 LINE 帳號")
+        if not member:
+            raise HTTPException(status_code=404, detail="會員不存在")
 
-        logger.info(f"🔍 使用 line_uid={line_uid} 查詢 conversation_messages")
+        chatroom_service = ChatroomService(db)
 
-        # 計算總數
-        count_query = text("""
-            SELECT COUNT(*) as total
-            FROM conversation_messages
-            WHERE thread_id = :thread_id
-        """)
-        count_result = await db.execute(count_query, {"thread_id": line_uid})
-        total = count_result.scalar() or 0
+        # Facebook 渠道：從外部 API 獲取聊天記錄
+        if resolved_platform == "Facebook":
+            if not jwt_token:
+                raise HTTPException(status_code=400, detail="缺少 jwt_token")
 
-        # 計算分頁
-        offset = (page - 1) * page_size
-        has_more = (offset + page_size) < total
+            # 查詢 active FbChannel 取得 page_id
+            fb_channel_result = await db.execute(
+                select(FbChannel.page_id).where(FbChannel.is_active == True).limit(1)
+            )
+            page_id = fb_channel_result.scalar()
 
-        # 查詢聊天紀錄
-        query = text("""
-            SELECT
-                id,
-                direction,
-                CASE
-                    WHEN direction = 'outgoing' THEN response
-                    WHEN direction = 'incoming' THEN question
-                    ELSE ''
-                END as message_content,
-                status as message_status,
-                created_at,
-                message_source
-            FROM conversation_messages
-            WHERE thread_id = :thread_id
-            ORDER BY created_at DESC
-            LIMIT :limit OFFSET :offset
-        """)
+            if not page_id:
+                raise HTTPException(status_code=400, detail="未設定 Facebook 粉絲專頁")
 
-        result = await db.execute(
-            query,
-            {
-                "thread_id": line_uid,
-                "limit": page_size,
-                "offset": offset
-            }
-        )
-        records = result.fetchall()
+            fb_client = FbMessageClient()
+            fb_result = await fb_client.get_chat_history(member.fb_customer_id, page_id, jwt_token)
 
-        # 轉換為前端格式
+            if not fb_result.get("ok"):
+                raise HTTPException(status_code=500, detail=f"獲取 FB 聊天記錄失敗: {fb_result.get('error')}")
+
+            # 轉換外部 API 格式為內部格式
+            messages = []
+            for idx, item in enumerate(fb_result.get("data", [])):
+                direction_raw = (item.get("direction") or "outgoing").lower()
+                is_incoming = direction_raw in {"ingoing", "incoming"}
+                msg_content = item.get("message", "")
+                timestamp = item.get("time", 0)
+
+                # 解析訊息內容
+                if isinstance(msg_content, dict):
+                    # Template 訊息：提取標題或 subtitle
+                    text = _extract_fb_template_text(msg_content)
+                else:
+                    text = str(msg_content)
+
+                # 轉換時間戳（epoch 秒 -> UTC）
+                dt = datetime.fromtimestamp(timestamp, tz=timezone.utc) if timestamp else None
+                time_str = format_chat_time(dt)
+
+                messages.append(ChatMessage(
+                    id=f"fb_{idx}_{timestamp}",
+                    type="user" if is_incoming else "official",
+                    text=text,
+                    time=time_str,
+                    timestamp=format_iso_utc(dt),
+                    isRead=True,
+                    source="external" if not is_incoming else None,
+                ))
+
+            # FB 訊息按時間正序排列
+            messages.sort(key=lambda m: m.timestamp or "")
+
+            logger.info(f"✅ 成功獲取 {len(messages)} 筆 FB 聊天紀錄")
+
+            return SuccessResponse(
+                data=ChatMessagesResponse(
+                    messages=messages,
+                    total=len(messages),
+                    page=1,
+                    page_size=len(messages),
+                    has_more=False
+                ).model_dump()
+            )
+
+        # LINE/Webchat：從本地資料庫獲取
+        result = await chatroom_service.get_messages(member, resolved_platform, page, page_size)
+
         messages = []
-        for record in records:
-            # 格式化時間
-            created_at = record.created_at if hasattr(record, 'created_at') else record[4]
+        for record in result["messages"]:
+            ts_raw = record.get("timestamp")
+            created_at = parse_iso_datetime(ts_raw) if ts_raw else None
             time_str = format_chat_time(created_at)
-
-            # 判斷消息類型
-            direction = record.direction if hasattr(record, 'direction') else record[1]
-            msg_type = 'user' if direction == 'incoming' else 'official'
-
-            # 判斷是否已讀
-            status = record.message_status if hasattr(record, 'message_status') else record[3]
-            is_read = status == 'read' if status else False
-
-            # 獲取消息內容
-            content = record.message_content if hasattr(record, 'message_content') else record[2]
-
-            # 解析並提取實際的消息文字
-            text_content = extract_message_text(content) if content else ''
-
-            # 獲取 ID
-            msg_id = record.id if hasattr(record, 'id') else record[0]
-
-            # 獲取 message_source（新增）
-            msg_source = record.message_source if hasattr(record, 'message_source') else record[5]
-
-            # 轉換時間為 ISO 格式
-            timestamp_str = created_at.isoformat() if created_at else None
+            text_content = extract_message_text(record.get("text", "")) if record.get("text") else ""
 
             messages.append(ChatMessage(
-                id=msg_id,
-                type=msg_type,
+                id=record["id"],
+                type=record["type"],
                 text=text_content,
                 time=time_str,
-                timestamp=timestamp_str,
-                isRead=is_read,
-                source=msg_source
+                timestamp=format_iso_utc(created_at) if created_at else record.get("timestamp"),
+                isRead=record.get("isRead", False),
+                source=record.get("source"),
+                senderName=record.get("senderName"),
             ))
 
-        logger.info(f"✅ 成功獲取 {len(messages)} 筆聊天紀錄（共 {total} 筆）")
+        logger.info(f"✅ 成功獲取 {len(messages)} 筆聊天紀錄（共 {result['total']} 筆）")
 
         return SuccessResponse(
             data=ChatMessagesResponse(
                 messages=messages,
-                total=total,
+                total=result["total"],
                 page=page,
                 page_size=page_size,
-                has_more=has_more
+                has_more=result["has_more"]
             ).model_dump()
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"❌ 獲取聊天紀錄失敗: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"獲取聊天紀錄失敗: {str(e)}")
 
 
-def format_chat_time(dt: datetime) -> str:
-    """
-    格式化聊天時間為 "時段 HH:mm" 格式
+def _resolve_platform(request_platform: Optional[str]) -> str:
+    if request_platform is None:
+        return "LINE"
+    normalized = request_platform.strip()
+    allowed = {"LINE", "Facebook", "Webchat"}
+    if normalized not in allowed:
+        raise HTTPException(status_code=400, detail="不支援的渠道平台")
+    return normalized
 
-    時段分類：
-    - 凌晨: 00:00-05:59
-    - 上午: 06:00-11:59
-    - 中午: 12:00-13:59
-    - 下午: 14:00-17:59
-    - 晚上: 18:00-23:59
+
+async def _resolve_member_by_platform(
+    db: AsyncSession,
+    member_id: int,
+    platform: str,
+) -> Optional[Member]:
+    if platform == "Facebook":
+        result = await db.execute(select(Member).where(Member.fb_customer_id == str(member_id)))
+        member = result.scalar_one_or_none()
+        if member:
+            return member
+    result = await db.execute(select(Member).where(Member.id == member_id))
+    return result.scalar_one_or_none()
+
+
+def _resolve_platform_uid(member: Member, platform: str) -> str:
+    if platform == "LINE":
+        if not member.line_uid:
+            raise HTTPException(status_code=400, detail="會員未綁定 LINE 帳號")
+        return member.line_uid
+    if platform == "Facebook":
+        if not member.fb_customer_id:
+            raise HTTPException(status_code=400, detail="會員未綁定 Facebook 帳號")
+        return member.fb_customer_id
+    if platform == "Webchat":
+        if not member.webchat_uid:
+            raise HTTPException(status_code=400, detail="會員未綁定 Webchat")
+        return member.webchat_uid
+    raise HTTPException(status_code=400, detail="不支援的渠道平台")
+
+
+def _extract_fb_template_text(msg_content: dict) -> str:
+    """
+    從 FB Template 訊息中提取文字
+
+    FB Template 訊息格式：
+    {
+        "attachment": {
+            "type": "template",
+            "payload": {
+                "template_type": "generic",
+                "elements": [
+                    {"title": "標題", "subtitle": "副標題", ...}
+                ]
+            }
+        }
+    }
 
     Args:
-        dt: datetime 對象
+        msg_content: FB 訊息內容 (dict)
 
     Returns:
-        格式化的時間字串，例如 "下午 03:30"
+        提取的文字內容
     """
-    if not dt:
-        return ""
+    try:
+        # 嘗試從 attachment.payload.elements 中提取
+        attachment = msg_content.get("attachment", {})
+        payload = attachment.get("payload", {})
+        elements = payload.get("elements", [])
 
-    hour = dt.hour
-    minute = dt.minute
+        if elements:
+            first_element = elements[0]
+            title = first_element.get("title", "")
+            subtitle = first_element.get("subtitle", "")
+            return f"{title} - {subtitle}" if subtitle else title
 
-    # 判斷時段
-    if 0 <= hour < 6:
-        period = "凌晨"
-    elif 6 <= hour < 12:
-        period = "上午"
-    elif 12 <= hour < 14:
-        period = "中午"
-    elif 14 <= hour < 18:
-        period = "下午"
-    else:  # 18-23
-        period = "晚上"
+        # 如果有 text 欄位
+        if msg_content.get("text"):
+            return msg_content["text"]
 
-    # 轉換為 12 小時制
-    display_hour = hour if hour <= 12 else hour - 12
-    if display_hour == 0:
-        display_hour = 12
-
-    return f"{period} {display_hour:02d}:{minute:02d}"
+        return "[圖文訊息]"
+    except Exception:
+        return "[圖文訊息]"

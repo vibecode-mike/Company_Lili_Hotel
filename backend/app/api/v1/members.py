@@ -1,16 +1,17 @@
 """
 會員管理 API
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi import APIRouter, Depends, HTTPException, status, Body, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_, and_, func, delete
+from sqlalchemy import select, or_, and_, func, delete, update
 from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.models.member import Member
 from app.models.tag import MemberTag, MemberInteractionTag
 from app.models.user import User
-from app.models.chat_log import ChatLog
+from app.models.conversation import ConversationMessage
 from app.models.line_channel import LineChannel
+from app.models.fb_channel import FbChannel
 from app.schemas.member import (
     MemberCreate,
     MemberUpdate,
@@ -26,20 +27,79 @@ from app.schemas.common import SuccessResponse
 from app.core.pagination import PageParams, PageResponse, paginate_query
 from app.api.v1.auth import get_current_user
 from app.clients.line_app_client import LineAppClient
+from app.clients.fb_message_client import FbMessageClient
 from datetime import datetime, timezone
+from typing import Optional
 import os
+import pytz
+import logging
 
+logger = logging.getLogger(__name__)
+
+from app.services.chatroom_service import ChatroomService
+from app.api.v1.chat_messages import _extract_fb_template_text
+
+# 台北時區
+TAIPEI_TZ = pytz.timezone('Asia/Taipei')
+from app.websocket_manager import manager
 router = APIRouter()
+
+
+def format_taipei_time(dt: datetime) -> str:
+    """
+    將 UTC datetime 轉換為台北時間格式字串
+
+    Args:
+        dt: UTC datetime (naive 或 aware)
+
+    Returns:
+        格式化的時間字串，例如：「上午 10:30」
+    """
+    # 確保是 UTC aware datetime
+    if dt.tzinfo is None:
+        utc_dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        utc_dt = dt
+
+    # 轉換為台北時間
+    local_dt = utc_dt.astimezone(TAIPEI_TZ)
+    hour = local_dt.hour
+    minute = local_dt.minute
+
+    # 判斷時段
+    if 0 <= hour < 6:
+        period = "凌晨"
+    elif 6 <= hour < 12:
+        period = "上午"
+    elif 12 <= hour < 14:
+        period = "中午"
+    elif 14 <= hour < 18:
+        period = "下午"
+    else:
+        period = "晚上"
+
+    # 轉換為 12 小時制
+    hour_12 = hour if hour <= 12 else hour - 12
+    if hour_12 == 0:
+        hour_12 = 12
+
+    return f"{period} {hour_12:02d}:{minute:02d}"
 
 
 @router.get("", response_model=SuccessResponse)
 async def get_members(
     params: MemberSearchParams = Depends(),
     page_params: PageParams = Depends(),
+    channel: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     # current_user: User = Depends(get_current_user),  # 暫時移除認證，開發階段使用
 ):
-    """獲取會員列表"""
+    """
+    獲取會員列表
+
+    Args:
+        channel: 篩選渠道 (line, facebook, webchat)，不指定則返回所有會員
+    """
     query = select(Member)
 
     # 搜索條件（已在 Schema 層驗證和清理）
@@ -57,7 +117,7 @@ async def get_members(
                 Member.name.like(search_pattern, escape='\\'),
                 Member.email.like(search_pattern, escape='\\'),
                 Member.phone.like(search_pattern, escape='\\'),
-                Member.line_name.like(search_pattern, escape='\\'),
+                Member.line_display_name.like(search_pattern, escape='\\'),
             )
         )
 
@@ -70,6 +130,39 @@ async def get_members(
         tag_names = params.tags.split(",")  # 現在使用標籤名稱而非ID
         query = query.join(MemberTag).where(
             MemberTag.tag_name.in_(tag_names)
+        )
+
+    # 取得所有啟用中的 LINE channel_id
+    active_line_channel_ids_result = await db.execute(
+        select(LineChannel.channel_id).where(LineChannel.is_active == True)
+    )
+    active_line_channel_ids = [row[0] for row in active_line_channel_ids_result.fetchall()]
+
+    # 渠道篩選
+    if channel:
+        channel_lower = channel.lower()
+        if channel_lower == "line":
+            # 只顯示屬於啟用中 LINE 帳號的會員
+            if active_line_channel_ids:
+                query = query.where(
+                    and_(
+                        Member.line_uid.isnot(None),
+                        Member.line_channel_id.in_(active_line_channel_ids)
+                    )
+                )
+            else:
+                query = query.where(False)  # 無啟用 LINE 帳號時不顯示任何會員
+        elif channel_lower == "facebook":
+            query = query.where(Member.fb_customer_id.isnot(None))
+        elif channel_lower == "webchat":
+            query = query.where(Member.webchat_uid.isnot(None))
+    elif active_line_channel_ids:
+        # 無渠道篩選時，過濾掉未啟用 LINE 帳號的會員
+        query = query.where(
+            or_(
+                Member.line_uid.is_(None),
+                Member.line_channel_id.in_(active_line_channel_ids)
+            )
         )
 
     # 排序 (MySQL 兼容版本)
@@ -105,30 +198,48 @@ async def get_members(
     # 批量查詢所有會員的最後聊天時間（避免 N+1）
     member_line_uids = [m.line_uid for m in members if m.line_uid]
     last_chat_times = {}
+    unanswered_members = {}  # 儲存未回覆的會員: {thread_id: unanswered_since}
 
     if member_line_uids:
-        # 使用子查詢找出每個 user_id 的最新聊天時間
-        from sqlalchemy import and_
-
+        # 使用子查詢找出每個 thread_id (line_uid) 的最新聊天時間
+        # conversation_messages 的 thread_id = platform_uid (line_uid)
+        # 注意：platform 可能是 'LINE' 或 NULL，都需要包含
         subq = (
             select(
-                ChatLog.user_id,
-                func.max(ChatLog.created_at).label('max_created_at')
+                ConversationMessage.thread_id,
+                func.max(ConversationMessage.created_at).label('max_created_at')
             )
-            .where(ChatLog.user_id.in_(member_line_uids))
-            .group_by(ChatLog.user_id)
+            .where(
+                ConversationMessage.thread_id.in_(member_line_uids),
+                or_(ConversationMessage.platform == 'LINE', ConversationMessage.platform.is_(None))
+            )
+            .group_by(ConversationMessage.thread_id)
         ).subquery()
 
         chat_result = await db.execute(
-            select(ChatLog.user_id, ChatLog.created_at)
+            select(
+                ConversationMessage.thread_id,
+                ConversationMessage.created_at,
+                ConversationMessage.direction
+            )
             .join(subq, and_(
-                ChatLog.user_id == subq.c.user_id,
-                ChatLog.created_at == subq.c.max_created_at
+                ConversationMessage.thread_id == subq.c.thread_id,
+                ConversationMessage.created_at == subq.c.max_created_at
             ))
         )
 
-        for user_id, created_at in chat_result:
-            last_chat_times[user_id] = created_at
+        for thread_id, created_at, direction in chat_result:
+            last_chat_times[thread_id] = created_at
+            # 如果最新訊息是 incoming（客戶發送），則標記為未回覆
+            if direction == 'incoming':
+                unanswered_members[thread_id] = created_at
+
+    # 查詢 LINE 渠道名稱
+    line_channel_name = None
+    line_channel_result = await db.execute(
+        select(LineChannel.channel_name).where(LineChannel.is_active == True).limit(1)
+    )
+    line_channel_name = line_channel_result.scalar()
 
     # 組裝響應數據
     items = []
@@ -155,6 +266,17 @@ async def get_members(
         # 使用批量查詢的聊天時間（無需額外查詢）
         if member.line_uid and member.line_uid in last_chat_times:
             member_dict["last_interaction_at"] = last_chat_times[member.line_uid]
+
+        # 添加未回覆狀態
+        if member.line_uid and member.line_uid in unanswered_members:
+            member_dict["is_unanswered"] = True
+            member_dict["unanswered_since"] = unanswered_members[member.line_uid]
+        else:
+            member_dict["is_unanswered"] = False
+            member_dict["unanswered_since"] = None
+
+        # 添加渠道名稱
+        member_dict["channel_name"] = line_channel_name
 
         items.append(member_dict)
 
@@ -196,22 +318,44 @@ async def get_member_count(
     return SuccessResponse(data={"count": count or 0})
 
 
+def _validate_platform(platform: Optional[str]) -> Optional[str]:
+    """Validate and normalize platform parameter."""
+    if not platform:
+        return None
+    normalized = platform.strip()
+    if normalized not in {"LINE", "Facebook", "Webchat"}:
+        raise HTTPException(status_code=400, detail="不支援的渠道平台")
+    return normalized
+
+
+async def _get_member_by_platform(
+    db: AsyncSession, member_id: str, platform: Optional[str]
+) -> Optional[Member]:
+    """Resolve member by ID based on platform type."""
+    if platform == "Facebook":
+        fb_customer_id = member_id.removeprefix("fb-")
+        result = await db.execute(
+            select(Member).where(Member.fb_customer_id == fb_customer_id)
+        )
+        return result.scalar_one_or_none()
+
+    try:
+        internal_id = int(member_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="無效的會員 ID")
+    result = await db.execute(select(Member).where(Member.id == internal_id))
+    return result.scalar_one_or_none()
+
+
 @router.get("/{member_id}", response_model=SuccessResponse)
 async def get_member(
-    member_id: int,
+    member_id: str,
+    platform: Optional[str] = Query(None, description="渠道：LINE/Facebook/Webchat"),
     db: AsyncSession = Depends(get_db),
-    # current_user: User = Depends(get_current_user),  # 暫時移除認證，開發階段使用
 ):
-    """
-    獲取會員詳情
-
-    優化說明：
-    1. 使用索引查詢：member_id 和 line_uid 都有索引
-    2. 平行查詢：三個標籤查詢可以平行執行（未來可用 asyncio.gather 進一步優化）
-    3. 去重邏輯：使用 Python set 進行記憶體內去重，效率高於 SQL DISTINCT
-    """
-    result = await db.execute(select(Member).where(Member.id == member_id))
-    member = result.scalar_one_or_none()
+    """獲取會員詳情"""
+    normalized = _validate_platform(platform)
+    member = await _get_member_by_platform(db, member_id, normalized)
 
     if not member:
         raise HTTPException(status_code=404, detail="會員不存在")
@@ -248,12 +392,16 @@ async def get_member(
         tags.append(TagInfo(id=tag_id, name=tag_name, type="interaction"))
 
     # 查詢該會員最後一條聊天訊息的時間
+    # 使用 conversation_messages，thread_id = platform_uid (line_uid)
     last_chat_time = member.last_interaction_at
     if member.line_uid:
         last_chat_result = await db.execute(
-            select(ChatLog.created_at)
-            .where(ChatLog.user_id == member.line_uid)
-            .order_by(ChatLog.created_at.desc())
+            select(ConversationMessage.created_at)
+            .where(
+                ConversationMessage.thread_id == member.line_uid,
+                ConversationMessage.platform == 'LINE'
+            )
+            .order_by(ConversationMessage.created_at.desc())
             .limit(1)
         )
         last_chat_row = last_chat_result.scalar()
@@ -264,7 +412,7 @@ async def get_member(
     member_data = {
         "id": member.id,
         "line_uid": member.line_uid,
-        "line_name": member.line_name,
+        "line_display_name": member.line_display_name,
         "line_avatar": member.line_avatar,
         "channel_id": channel_id,
         "name": member.name,
@@ -311,36 +459,32 @@ async def create_member(
 
 @router.put("/{member_id}", response_model=SuccessResponse)
 async def update_member(
-    member_id: int,
+    member_id: str,
     member_data: MemberUpdate,
+    platform: Optional[str] = Query(None, description="渠道：LINE/Facebook/Webchat"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """更新會員資料"""
-    result = await db.execute(select(Member).where(Member.id == member_id))
-    member = result.scalar_one_or_none()
+    """更新會員資料（支援多渠道 ID 格式）"""
+    normalized = _validate_platform(platform)
+    member = await _get_member_by_platform(db, member_id, normalized)
 
     if not member:
         raise HTTPException(status_code=404, detail="會員不存在")
 
-    # 添加調試日誌
     update_data = member_data.model_dump(exclude_unset=True)
-    print(f"🔍 [Update Member] member_id={member_id}, user={current_user.username}")
-    print(f"🔍 [Update Member] Received data: {update_data}")
-    print(f"🔍 [Update Member] Current gpt_enabled: {member.gpt_enabled}")
+    logger.debug(
+        f"[Update Member] member_id={member_id}, user={current_user.username}, "
+        f"data={update_data}, current_gpt_enabled={member.gpt_enabled}"
+    )
 
-    # 更新欄位
     for field, value in update_data.items():
-        print(f"🔍 [Update Member] Setting {field} = {value}")
         setattr(member, field, value)
-
-    print(f"🔍 [Update Member] After update gpt_enabled: {member.gpt_enabled}")
 
     await db.commit()
     await db.refresh(member)
 
-    print(f"🔍 [Update Member] After commit gpt_enabled: {member.gpt_enabled}")
-    print(f"✅ [Update Member] Successfully updated member {member_id}")
+    logger.debug(f"[Update Member] Successfully updated member {member_id}, gpt_enabled={member.gpt_enabled}")
 
     return SuccessResponse(data=MemberDetail.model_validate(member).model_dump())
 
@@ -732,6 +876,10 @@ async def update_member_notes(
 async def send_member_chat_message(
     member_id: int,
     text: str = Body(..., embed=True),
+    platform: str = Body("LINE", embed=True, description="渠道：LINE/Facebook/Webchat"),
+    jwt_token: Optional[str] = Body(None, embed=True, description="FB 渠道需要的 JWT token"),
+    page_id: Optional[str] = Body(None, embed=True, description="FB 渠道需要的 Page ID"),
+    fb_customer_id: Optional[str] = Body(None, embed=True, description="FB 渠道的 customer_id，用於直接發送"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -741,6 +889,7 @@ async def send_member_chat_message(
     Args:
         member_id: 會員 ID
         text: 訊息文本
+        fb_customer_id: FB 渠道可直接傳入 customer_id，不依賴本地 member
 
     Returns:
         {
@@ -749,38 +898,207 @@ async def send_member_chat_message(
             "sent_at": "2025-11-22T10:30:00Z"
         }
     """
-    # 查詢會員
-    result = await db.execute(select(Member).where(Member.id == member_id))
-    member = result.scalar_one_or_none()
+    platform_stripped = platform.strip()
+    is_facebook_with_customer_id = platform_stripped == "Facebook" and fb_customer_id
 
+    # Facebook 渠道：優先用 fb_customer_id 查詢
+    member = None
+    if is_facebook_with_customer_id:
+        result = await db.execute(select(Member).where(Member.fb_customer_id == fb_customer_id))
+        member = result.scalar_one_or_none()
+
+    # 其他渠道或 FB 沒有 fb_customer_id：用 member_id 查詢
     if not member:
+        result = await db.execute(select(Member).where(Member.id == member_id))
+        member = result.scalar_one_or_none()
+
+    # Facebook 渠道即使沒有本地會員，只要有 fb_customer_id 就可以發送
+    if not member and not is_facebook_with_customer_id:
         raise HTTPException(status_code=404, detail="會員不存在")
 
-    if not member.line_uid:
-        raise HTTPException(status_code=400, detail="會員未綁定 LINE 帳號")
+    # 建立/寫入對話訊息
+    from app.services.chatroom_service import ChatroomService
 
-    # 調用 line_app 發送訊息
-    line_app_url = os.getenv("LINE_APP_URL", "http://localhost:3001")
-    client = LineAppClient(base_url=line_app_url)
+    chatroom_service = ChatroomService(db)
 
-    try:
-        send_result = await client.send_chat_message(
-            line_uid=member.line_uid,
-            text=text
+    if platform_stripped == "LINE":
+        if not member.line_uid:
+            raise HTTPException(status_code=400, detail="會員未綁定 LINE 帳號")
+
+        # 調用 line_app 發送訊息
+        line_app_url = os.getenv("LINE_APP_URL", "http://localhost:3001")
+        client = LineAppClient(base_url=line_app_url)
+
+        try:
+            send_result = await client.send_chat_message(
+                line_uid=member.line_uid,
+                text=text
+            )
+
+            if not send_result.get("ok"):
+                raise HTTPException(status_code=500, detail="發送訊息失敗")
+
+            # LINE app 已建立訊息記錄，這裡更新 sent_by 欄位
+            line_msg_id = send_result.get("message_id")
+            thread_id = send_result.get("thread_id")
+            if line_msg_id:
+                await db.execute(
+                    update(ConversationMessage)
+                    .where(ConversationMessage.id == line_msg_id)
+                    .values(sent_by=current_user.id)
+                )
+                await db.flush()
+
+                # WebSocket 推送通知前端即時更新（包含 senderName）
+                now_utc = datetime.now(timezone.utc)
+                time_str = format_taipei_time(now_utc)
+                sender_name = current_user.username
+                await manager.send_new_message(thread_id, {
+                    "id": line_msg_id,
+                    "type": "official",
+                    "text": text,
+                    "time": time_str,
+                    "timestamp": now_utc.isoformat(),
+                    "thread_id": thread_id,
+                    "isRead": True,
+                    "source": "manual",
+                    "senderName": sender_name
+                })
+
+            return {
+                "success": True,
+                "message_id": line_msg_id,
+                "thread_id": thread_id,
+                "sent_at": datetime.now(timezone.utc).isoformat()
+            }
+
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"發送訊息失敗: {str(e)}")
+
+    elif platform_stripped == "Facebook":
+        # 檢查 jwt_token
+        if not jwt_token:
+            raise HTTPException(status_code=400, detail="缺少 jwt_token，請先完成 Facebook 授權")
+
+        # 決定使用的 fb_customer_id：優先用參數傳入的，否則用 member 的
+        effective_fb_customer_id = fb_customer_id or (member.fb_customer_id if member else None)
+        if not effective_fb_customer_id:
+            raise HTTPException(status_code=400, detail="缺少 fb_customer_id，無法發送 Facebook 訊息")
+
+        # 調用外部 FB API 發送訊息
+        fb_client = FbMessageClient()
+        send_result = await fb_client.send_message(
+            fb_customer_id=effective_fb_customer_id,
+            text=text,
+            jwt_token=jwt_token
         )
 
         if not send_result.get("ok"):
-            raise HTTPException(status_code=500, detail="發送訊息失敗")
+            raise HTTPException(status_code=500, detail=f"發送 Facebook 訊息失敗: {send_result.get('error')}")
+
+        # 成功後寫入對話訊息（僅當有本地 member 時）
+        msg = None
+        if member:
+            msg = await chatroom_service.append_message(member, "Facebook", "outgoing", text, message_source="manual", sender_id=current_user.id)
+
+            # WebSocket 推送通知前端即時更新 - 將 UTC 轉為台北時間顯示
+            time_str = format_taipei_time(msg.created_at) if msg.created_at else ""
+
+            await manager.send_new_message(msg.thread_id, {
+                "id": msg.id,
+                "type": "official",
+                "text": text,
+                "time": time_str,
+                "timestamp": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg.created_at else None,
+                "thread_id": msg.thread_id,
+                "isRead": True,
+                "source": "manual",
+                "senderName": current_user.username
+            })
+
+        # 重新獲取聊天紀錄，檢查是否有外部 API 回推的新訊息
+        try:
+            sent_timestamp = int(msg.created_at.replace(tzinfo=timezone.utc).timestamp()) if msg and msg.created_at else 0
+
+            fb_history = await fb_client.get_chat_history(effective_fb_customer_id, page_id, jwt_token)
+
+            if fb_history.get("ok") and fb_history.get("data") and msg:
+                # 找出比剛發送訊息更新的 ingoing 訊息（FB 可能有自動回覆）
+                for fb_msg in fb_history["data"]:
+                    msg_time = fb_msg.get("time", 0)
+                    direction = (fb_msg.get("direction") or "").lower()
+                    # 如果是新訊息且是 ingoing（來自 FB 的回覆）
+                    if direction in ("ingoing", "incoming") and msg_time > sent_timestamp:
+                        # 解析訊息內容
+                        msg_content = fb_msg.get("message", "")
+                        if isinstance(msg_content, dict):
+                            # Template 訊息
+                            fb_text = _extract_fb_template_text(msg_content)
+                        else:
+                            fb_text = str(msg_content)
+
+                        # 轉換時間
+                        fb_dt = datetime.fromtimestamp(msg_time, tz=timezone.utc)
+                        fb_time_str = format_taipei_time(fb_dt)
+
+                        # 透過 WebSocket 推送給前端
+                        await manager.send_new_message(msg.thread_id, {
+                            "id": f"fb_sync_{msg_time}",
+                            "type": "user",
+                            "text": fb_text,
+                            "time": fb_time_str,
+                            "timestamp": fb_dt.isoformat(),
+                            "thread_id": msg.thread_id,
+                            "isRead": True,
+                            "source": None,
+                            "senderName": None
+                        })
+                        logger.info(f"FB 同步推送新訊息: thread_id={msg.thread_id}, time={msg_time}")
+
+            logger.info(f"FB 聊天紀錄已同步: customer_id={effective_fb_customer_id}")
+        except Exception as e:
+            logger.warning(f"FB 聊天紀錄同步失敗 (非關鍵): {e}")
 
         return {
             "success": True,
-            "message_id": send_result.get("message_id"),
-            "thread_id": send_result.get("thread_id"),
-            "sent_at": datetime.now().isoformat()
+            "message_id": send_result.get("message_id", msg.id if msg else None),
+            "thread_id": msg.thread_id if msg else None,
+            "sent_at": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg and msg.created_at else datetime.now(timezone.utc).isoformat()
         }
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"發送訊息失敗: {str(e)}")
+    elif platform_stripped == "Webchat":
+        # Webchat 僅寫入資料庫
+        try:
+            msg = await chatroom_service.append_message(member, platform_stripped, "outgoing", text, message_source="manual", sender_id=current_user.id)
+
+            # WebSocket 推送通知前端即時更新 - 將 UTC 轉為台北時間顯示
+            time_str = format_taipei_time(msg.created_at) if msg.created_at else ""
+
+            await manager.send_new_message(msg.thread_id, {
+                "id": msg.id,
+                "type": "official",
+                "text": text,
+                "time": time_str,
+                "timestamp": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg.created_at else None,
+                "thread_id": msg.thread_id,
+                "isRead": True,
+                "source": "manual",
+                "senderName": current_user.full_name or current_user.username
+            })
+
+            return {
+                "success": True,
+                "message_id": msg.id,
+                "thread_id": msg.thread_id,
+                "sent_at": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg.created_at else None
+            }
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"發送訊息失敗: {str(e)}")
+
+    else:
+        raise HTTPException(status_code=400, detail="不支援的渠道平台")
 
 
 @router.put("/{member_id}/chat/mark-read")

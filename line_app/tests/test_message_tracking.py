@@ -23,7 +23,8 @@ class TestMessageTracking:
 
     def setup_method(self):
         """Setup test fixtures"""
-        self.mock_engine = Mock()
+        # Use MagicMock so context manager magic methods exist when needed.
+        self.mock_engine = MagicMock()
         self.mock_conn = Mock()
         self.mock_engine.begin.return_value.__enter__.return_value = self.mock_conn
 
@@ -45,7 +46,7 @@ class TestMessageTracking:
         # Verify NO old table/column names
         assert "campaigns" not in query.lower() or "messages" in query.lower(), \
             "Query should not use old 'campaigns' table"
-        assert "sent_count" in query, \
+        assert "sent_count" not in query, \
             "Query should use 'send_count' not 'sent_count'"
 
     def test_click_count_update_query_structure(self):
