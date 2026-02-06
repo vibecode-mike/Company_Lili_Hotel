@@ -151,7 +151,7 @@ const transformExternalMember = (data: {
 
   return {
     id: String(data.id),
-    username: channelInfo?.channel_name || data.name || '未命名會員',
+    username: data.name || '未命名會員',
     realName: data.name || '',
     tags: [...memberTags, ...interactionTags],
     memberTags,
@@ -170,7 +170,7 @@ const transformExternalMember = (data: {
     channel_id: '',
     // Facebook 渠道
     fb_customer_id: String(data.id),
-    fb_customer_name: channelInfo?.channel_name || '',
+    fb_customer_name: data.name || '',
     fb_avatar: '',
     // Webchat 渠道
     webchat_uid: '',

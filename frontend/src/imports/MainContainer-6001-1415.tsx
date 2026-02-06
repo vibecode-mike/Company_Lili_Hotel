@@ -271,19 +271,18 @@ function Container6({
               </svg>
             </div>
           </div>
-          <div className="basis-0 grow min-h-px min-w-[160px] relative shrink-0" data-name="Table/Title-atomic">
-            <div className="flex flex-row items-center size-full">
-              <div
-                className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative w-full min-w-[160px] cursor-pointer"
-                onClick={() => onSortChange('lastChatTime')}
-              >
-                <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-                  <p className="leading-[1.5] whitespace-pre">最近聊天時間</p>
-                </div>
-                <SortingIcon active={isActive('lastChatTime')} order={sortConfig.order} />
-              </div>
+          <div
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[180px] cursor-pointer"
+            data-name="Table/Title-atomic"
+            onClick={() => onSortChange('lastChatTime')}
+          >
+            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
+              <p className="leading-[1.5] whitespace-pre">最近聊天時間</p>
             </div>
+            <SortingIcon active={isActive('lastChatTime')} order={sortConfig.order} />
           </div>
+          {/* 操作欄位佔位 */}
+          <div className="shrink-0 w-[100px]" />
         </div>
       </div>
     </div>
@@ -501,30 +500,33 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Displ
             <ChannelIcon channel={member.channel} channelName={member.channelName} />
           </div>
           {/* 最近聊天時間欄位內容 */}
-          <div className="box-border flex items-center justify-start px-[12px] py-0 relative shrink-0 min-w-[160px] grow" data-name="Table/List-atomic">
+          <div className="box-border flex items-center justify-start px-[12px] py-0 relative shrink-0 w-[180px]" data-name="Table/List-atomic">
             <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[#383838] text-[14px] leading-[1.5] whitespace-nowrap">
               {formatMemberDateTime(getLatestMemberChatTimestamp(member)) || '-'}
             </p>
           </div>
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenChat?.(member);
-            }}
-            className="content-stretch flex items-center justify-center min-h-[28px] min-w-[28px] relative rounded-[8px] shrink-0 size-[28px] cursor-pointer hover:bg-[#f0f6ff] transition-colors"
-            data-name="Icon Button"
-          >
-            <MessageIcon />
+          {/* 操作按鈕 */}
+          <div className="box-border flex items-center justify-end gap-[4px] px-[12px] py-0 relative shrink-0 w-[100px]">
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenChat?.(member);
+              }}
+              className="content-stretch flex items-center justify-center min-h-[28px] min-w-[28px] relative rounded-[8px] shrink-0 size-[28px] cursor-pointer hover:bg-[#f0f6ff] transition-colors"
+              data-name="Icon Button"
+            >
+              <MessageIcon />
+            </div>
+            <TextIconButton
+              text="詳細"
+              icon={<ArrowRightIcon color="#0F6BEB" />}
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewDetail?.(member);
+              }}
+              variant="primary"
+            />
           </div>
-          <TextIconButton
-            text="詳細"
-            icon={<ArrowRightIcon color="#0F6BEB" />}
-            onClick={(e) => {
-              e.stopPropagation();
-              onViewDetail?.(member);
-            }}
-            variant="primary"
-          />
         </div>
       </div>
     </div>
@@ -549,7 +551,7 @@ function Table8Columns3Actions({
       {/* 外層容器 - 水平滾動 */}
       <div className="bg-white rounded-[16px] w-full overflow-x-auto table-scroll">
         {/* 內層容器 - 最小寬度確保欄位對齊 */}
-        <div className="min-w-[1160px]">
+        <div style={{ minWidth: '1220px' }}>
           {/* 垂直滾動容器 + Sticky 表頭 */}
           <div className="max-h-[600px] overflow-y-auto table-scroll">
             {/* Table Header - Sticky */}
