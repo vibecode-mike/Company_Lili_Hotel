@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>會員管理 | 聊天室</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Noto+Sans+TC:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <button class="icon-button sidebar__menu" aria-label="Menu">
+        <span class="sidebar__menu-icon">
+          <img src="https://www.figma.com/api/mcp/asset/64754b6a-324b-4817-97bd-c84850e61f57" alt="" />
+          <img src="https://www.figma.com/api/mcp/asset/38393bfd-64d4-4210-a478-a5938fcb5324" alt="" />
+        </span>
+      </button>
+      <div class="sidebar__spacer"></div>
+      <div class="sidebar__footer">
+        <div class="sidebar__avatar">
+          <img src="https://www.figma.com/api/mcp/asset/cfc65076-210c-422c-9d76-682d043412ac" alt="" />
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <span class="breadcrumb__item">會員管理</span>
+        <span class="breadcrumb__divider">/</span>
+        <span class="breadcrumb__item">ChocLover</span>
+        <span class="breadcrumb__divider">/</span>
+        <span class="breadcrumb__item is-current">聊天室</span>
+      </nav>
+
+      <div class="layout">
+        <section class="member-panel">
+          <div class="member-hero">
+            <div class="member-avatar">
+              <div class="member-avatar__ring">
+                <div class="member-avatar__inner">
+                  <img src="https://www.figma.com/api/mcp/asset/8bdd7c42-4b40-4f7d-8069-ef7f927c3999" alt="" />
+                </div>
+                <button class="member-avatar__edit" aria-label="Edit avatar">
+                  <div class="member-avatar__edit-icon">
+                    <img src="https://www.figma.com/api/mcp/asset/d9896398-3731-4cf8-9bb7-0f4d7c3fd217" alt="" />
+                    <img src="https://www.figma.com/api/mcp/asset/a7e62015-6793-4901-9541-6dac656a84a6" alt="" />
+                  </div>
+                </button>
+              </div>
+            </div>
+            <h1 class="member-name">ChocLover</h1>
+          </div>
+
+          <div class="card member-card">
+            <div class="member-fields">
+              <div class="field">
+                <label>姓名<span class="required">*</span></label>
+                <input type="text" value="John Smith" />
+              </div>
+              <div class="field field--birth">
+                <label>生日</label>
+                <div class="input-with-icon">
+                  <input type="text" value="2000-12-12" />
+                  <span class="icon-chip">
+                    <img src="https://www.figma.com/api/mcp/asset/466e73e6-9b99-4010-bf65-334f9508a92b" alt="" />
+                  </span>
+                </div>
+              </div>
+              <div class="field field--inline">
+                <label>生理性別</label>
+                <div class="radio-group" role="radiogroup">
+                  <label class="radio">
+                    <input type="radio" name="gender" value="male" />
+                    <span>男性</span>
+                  </label>
+                  <label class="radio">
+                    <input type="radio" name="gender" value="female" checked />
+                    <span>女性</span>
+                  </label>
+                  <label class="radio">
+                    <input type="radio" name="gender" value="na" />
+                    <span>不透露</span>
+                  </label>
+                </div>
+              </div>
+              <div class="field">
+                <label>居住地</label>
+                <input type="text" value="台北市" />
+              </div>
+              <div class="field">
+                <label>手機號碼<span class="required">*</span></label>
+                <input type="text" value="0909000000" />
+              </div>
+              <div class="field">
+                <label>Email<span class="required">*</span></label>
+                <input type="text" value="info@mail.com" />
+              </div>
+              <div class="field">
+                <label>身分證字號</label>
+                <input type="text" value="IDDDDD090909" />
+              </div>
+              <div class="field">
+                <label>護照號碼</label>
+                <input type="text" value="399999999" />
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="readonly-fields">
+              <div class="readonly">
+                <span class="readonly__label">加入來源</span>
+                <span class="readonly__value">
+                  <img src="assets/figma/Icon-line-32.svg" alt="" class="inline-icon" />
+                  ChocLover
+                  <span class="muted">LINE UID: 3</span>
+                </span>
+              </div>
+              <div class="readonly">
+                <span class="readonly__label">建立時間</span>
+                <span class="readonly__value">2025-01-01</span>
+              </div>
+              <div class="readonly">
+                <span class="readonly__label">最近聊天時間</span>
+                <span class="readonly__value">2025-08-08</span>
+              </div>
+              <div class="readonly">
+                <span class="readonly__label">會員 ID</span>
+                <span class="readonly__value">000000001</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card tag-card">
+            <div class="tag-group">
+              <div class="tag-group__label">會員標籤</div>
+              <div class="tag-group__list" id="memberTags"></div>
+            </div>
+            <div class="tag-group">
+              <div class="tag-group__label">互動標籤</div>
+              <div class="tag-group__list" id="interactionTags"></div>
+            </div>
+            <button class="icon-button card-edit" id="editTags" aria-label="Edit tags">
+              <img src="https://www.figma.com/api/mcp/asset/daf4e81f-d2f0-4b90-885f-11d25c41a622" alt="" />
+            </button>
+          </div>
+
+          <div class="card note-card">
+            <textarea id="memberNote" placeholder="輸入會員備註，如：喜好、重要紀錄或追蹤事項。"></textarea>
+            <button class="icon-button card-edit" id="editNote" aria-label="Edit note">
+              <img src="https://www.figma.com/api/mcp/asset/daf4e81f-d2f0-4b90-885f-11d25c41a622" alt="" />
+            </button>
+          </div>
+        </section>
+
+        <section class="chat-panel">
+          <div class="chat-header">
+            <button class="platform-button" id="platformButton" aria-haspopup="listbox" aria-expanded="false">
+              <span id="platformIconSlot" class="platform-icon-slot" aria-hidden="true">
+                <img id="platformIcon" src="https://www.figma.com/api/mcp/asset/746db23b-752c-48ea-a36b-97af6a994aa2" alt="" />
+              </span>
+              <span id="platformLabel">Facebook</span>
+              <span class="platform-chevron" aria-hidden="true">
+                <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <path d="M4.27 6.0L8.0 9.65L11.73 6.0" />
+                </svg>
+              </span>
+            </button>
+            <div class="chat-date">2025/10/08（三）</div>
+            <button class="platform-button platform-button--ghost" aria-hidden="true">
+              <img src="https://www.figma.com/api/mcp/asset/f5a7410f-28c4-4823-97e2-9ba877facb37" alt="" />
+              <span>LINE</span>
+              <img class="arrow" src="https://www.figma.com/api/mcp/asset/207a130c-f727-4db8-9958-8bb36b5f86d0" alt="" />
+            </button>
+          </div>
+
+          <div class="chat-window" id="chatWindow"></div>
+
+          <div class="chat-input">
+            <textarea id="messageInput" placeholder="輸入訊息文字"></textarea>
+            <div class="chat-actions">
+              <button class="ai-toggle" id="aiToggle">
+                AI 自動回覆
+                <img src="https://www.figma.com/api/mcp/asset/7529c952-5b99-4764-9f7f-742ad195ad80" alt="" />
+              </button>
+              <button class="send-button" id="sendButton" disabled>傳送</button>
+            </div>
+          </div>
+
+          <div class="platform-dropdown" id="platformDropdown" role="listbox" aria-hidden="true">
+            <button class="platform-item" data-platform="line">
+              <img src="assets/figma/Icon-line-32.svg" alt="" />
+              <span>LINE</span>
+              <span class="check" aria-hidden="true">
+                <span class="platform-check-icon">
+                  <img src="https://www.figma.com/api/mcp/asset/f99a5408-f4f3-4f30-979b-8566fea3a03c" alt="" />
+                  <img src="https://www.figma.com/api/mcp/asset/71433123-8d02-4d8d-9bf9-1dc2e5c4911c" alt="" />
+                </span>
+              </span>
+            </button>
+            <button class="platform-item" data-platform="facebook">
+              <img src="https://www.figma.com/api/mcp/asset/0075f921-1828-4f67-9cae-67fbdbb59821" alt="" />
+              <span>Facebook</span>
+              <span class="check" aria-hidden="true">
+                <span class="platform-check-icon">
+                  <img src="https://www.figma.com/api/mcp/asset/f99a5408-f4f3-4f30-979b-8566fea3a03c" alt="" />
+                  <img src="https://www.figma.com/api/mcp/asset/71433123-8d02-4d8d-9bf9-1dc2e5c4911c" alt="" />
+                </span>
+              </span>
+            </button>
+            <button class="platform-item" data-platform="webchat">
+              <img src="https://www.figma.com/api/mcp/asset/0428bf38-35d6-4fea-a798-8408f98be85a" alt="" />
+              <span>Web Chat</span>
+              <span class="check" aria-hidden="true">
+                <span class="platform-check-icon">
+                  <img src="https://www.figma.com/api/mcp/asset/f99a5408-f4f3-4f30-979b-8566fea3a03c" alt="" />
+                  <img src="https://www.figma.com/api/mcp/asset/71433123-8d02-4d8d-9bf9-1dc2e5c4911c" alt="" />
+                </span>
+              </span>
+            </button>
+          </div>
+
+          <div class="tooltip" id="audioTooltip">004abcdefghijklmnopqrstuvwxy.wav</div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

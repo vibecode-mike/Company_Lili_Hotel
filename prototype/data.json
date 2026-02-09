@@ -1,0 +1,14 @@
+{
+  "memberTags": ["聖誕促銷", "巧克力禮盒", "Foodie"],
+  "interactionTags": ["優惠活動", "限時折扣", "滿額贈品", "會員專屬優惠", "手工芝", "BeautyBlogger"],
+  "messages": [
+    {"id": 1, "from": "oa", "text": "文字訊息訊息", "time": "下午 03:30", "platform": "facebook"},
+    {"id": 2, "from": "agent", "text": "官方文字訊息", "time": "下午 03:40 已讀", "platform": "facebook"},
+    {"id": 3, "from": "oa", "text": "文字訊息訊息", "time": "下午 04:30", "platform": "facebook"},
+    {"id": 4, "from": "agent", "text": "官方文字訊息", "time": "下午 04:50 已讀", "platform": "facebook"},
+    {"id": 5, "from": "oa", "text": "文字", "time": "下午 05:30", "platform": "facebook"},
+    {"id": 6, "from": "agent", "text": "官方文字訊息", "time": "下午 05:40 已讀", "platform": "facebook", "audio": true}
+  ],
+  "audioFile": "004abcdefghijklmnopqrstuvwxy.wav",
+  "autoReply": "已收到您的訊息，我們會盡快回覆。"
+}
