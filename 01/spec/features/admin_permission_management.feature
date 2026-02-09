@@ -5,6 +5,7 @@ Feature: 管理員權限管理
 
   Rule: 系統初始化時載入預設角色
 
+    @not-implemented
     Example: 系統啟動時建立預設角色
       Given 系統首次啟動或資料庫為空
       When 系統執行初始化程序
@@ -16,6 +17,7 @@ Feature: 管理員權限管理
 
   Rule: 系統初始化時載入預設權限
 
+    @not-implemented
     Example: 系統啟動時建立預設權限清單
       Given 系統首次啟動或資料庫為空
       When 系統執行初始化程序
@@ -32,6 +34,7 @@ Feature: 管理員權限管理
         | admin.manage    | 管理管理員      | admin    | manage | 管理管理員角色與權限 |
         | system.config   | 系統設定        | system   | config | 設定系統參數         |
 
+    @not-implemented
     Example: superadmin 角色預設擁有所有權限
       Given 系統已建立預設角色「superadmin」
       And 系統已建立所有預設權限
@@ -40,6 +43,7 @@ Feature: 管理員權限管理
 
   Rule: 超級管理員指派角色給管理員
 
+    @not-implemented
     Example: 超級管理員為新管理員指派角色
       Given 超級管理員「admin001」已登入系統
       And 系統中存在管理員「admin002」
@@ -49,6 +53,7 @@ Feature: 管理員權限管理
       And 關聯記錄包含指派時間與指派人「admin001」
       And 管理員「admin002」獲得角色「staff」的所有權限
 
+    @not-implemented
     Example: 管理員可擁有多個角色
       Given 超級管理員「admin001」已登入系統
       And 管理員「admin002」已擁有角色「staff」
@@ -58,6 +63,7 @@ Feature: 管理員權限管理
 
   Rule: 超級管理員配置角色權限
 
+    @not-implemented
     Example: 為角色新增權限
       Given 超級管理員「admin001」已登入系統
       And 系統中存在角色「staff」
@@ -67,6 +73,7 @@ Feature: 管理員權限管理
       And 關聯記錄包含授予時間與授予人「admin001」
       And 所有擁有角色「staff」的管理員立即獲得權限「message.send」
 
+    @not-implemented
     Example: 從角色移除權限
       Given 超級管理員「admin001」已登入系統
       And 角色「staff」目前擁有權限「member.delete」
@@ -77,6 +84,7 @@ Feature: 管理員權限管理
 
   Rule: 管理員權限計算（多角色權限聯集）
 
+    @not-implemented
     Example: 管理員擁有多個角色時計算權限聯集
       Given 系統中存在以下角色與權限配置
         | role_code | permissions               |
@@ -93,6 +101,7 @@ Feature: 管理員權限管理
 
   Rule: 功能存取控制（權限檢查）
 
+    @not-implemented
     Example: 管理員存取功能時檢查權限
       Given 管理員「admin002」已登入系統
       And 管理員「admin002」擁有權限「member.view」
@@ -102,6 +111,7 @@ Feature: 管理員權限管理
       When 管理員「admin002」嘗試刪除會員「M001」
       Then 系統拒絕存取，顯示錯誤訊息「您沒有權限執行此操作」
 
+    @not-implemented
     Example: 未擁有任何角色的管理員無法存取功能
       Given 管理員「admin003」已登入系統
       And 管理員「admin003」未被指派任何角色
@@ -110,6 +120,7 @@ Feature: 管理員權限管理
 
   Rule: 超級管理員管理自訂角色
 
+    @not-implemented
     Example: 超級管理員新增自訂角色
       Given 超級管理員「admin001」已登入系統
       When 超級管理員「admin001」建立新角色
@@ -119,6 +130,7 @@ Feature: 管理員權限管理
       And 角色「marketer」的 is_system_role 欄位為 false
       And 超級管理員可為角色「marketer」配置權限
 
+    @not-implemented
     Example: 超級管理員刪除自訂角色
       Given 超級管理員「admin001」已登入系統
       And 系統中存在自訂角色「marketer」（is_system_role = false）
@@ -126,6 +138,7 @@ Feature: 管理員權限管理
       When 超級管理員「admin001」刪除角色「marketer」
       Then 系統刪除角色「marketer」及其所有權限關聯記錄
 
+    @not-implemented
     Example: 自訂角色被使用時無法刪除
       Given 超級管理員「admin001」已登入系統
       And 系統中存在自訂角色「marketer」
@@ -133,6 +146,7 @@ Feature: 管理員權限管理
       When 超級管理員「admin001」嘗試刪除角色「marketer」
       Then 系統拒絕刪除，顯示錯誤訊息「該角色目前有管理員使用，無法刪除」
 
+    @not-implemented
     Example: 系統預設角色無法刪除
       Given 超級管理員「admin001」已登入系統
       And 系統中存在預設角色「admin」（is_system_role = true）
@@ -141,12 +155,14 @@ Feature: 管理員權限管理
 
   Rule: 僅擁有 admin.manage 權限的管理員可管理角色與權限
 
+    @not-implemented
     Example: 一般管理員無法指派角色
       Given 管理員「admin002」已登入系統
       And 管理員「admin002」不擁有權限「admin.manage」
       When 管理員「admin002」嘗試為管理員「admin003」指派角色「staff」
       Then 系統拒絕操作，顯示錯誤訊息「您沒有權限執行此操作」
 
+    @not-implemented
     Example: 擁有 admin.manage 權限的管理員可管理角色
       Given 管理員「admin002」已登入系統
       And 管理員「admin002」擁有權限「admin.manage」
@@ -156,6 +172,7 @@ Feature: 管理員權限管理
 
   Rule: 動態權限配置即時生效
 
+    @not-implemented
     Example: 角色權限變更後管理員權限立即更新
       Given 管理員「admin002」已登入系統
       And 管理員「admin002」擁有角色「staff」
@@ -167,6 +184,7 @@ Feature: 管理員權限管理
 
   Rule: 權限快取失效策略（事件驅動 + 定期清理）
 
+    @not-implemented
     Example: 角色/權限變更時立即失效快取
       Given 管理員「admin002」權限來自角色「staff」
       And 系統使用權限快取（查詢 admin_id → 權限集合）
@@ -175,6 +193,7 @@ Feature: 管理員權限管理
       And 所有節點收到事件後立刻清除「staff」相關的權限快取
       And 管理員「admin002」下一次請求時重新載入最新權限
 
+    @not-implemented
     Example: 定期清理快取避免遺漏事件
       Given 權限快取已啟用
       And 系統設定背景清理 TTL 為 1 小時

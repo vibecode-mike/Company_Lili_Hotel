@@ -463,6 +463,7 @@ Feature: 建立訊息推播
 
   Rule: 支援取消排程發送,無時間限制
 
+    @not-implemented
     Example: 取消排程發送
       Given 訊息的 send_status 為「排程發送」
       And 排程發送時間為「2025/02/01 10:00」
@@ -471,6 +472,7 @@ Feature: 建立訊息推播
       And 保留所有訊息資料（message_content, scheduled_datetime_utc, target_filter, template_id 等）
       And 訊息狀態變為可編輯
 
+    @not-implemented
     Example: 發送前任何時間都可取消
       Given 訊息的 send_status 為「排程發送」
       And 排程發送時間為「2025/02/01 10:00」
@@ -479,12 +481,14 @@ Feature: 建立訊息推播
       Then 系統允許取消
       And 系統將 send_status 改為「草稿」
 
+    @not-implemented
     Example: 取消後可重新編輯並再次排程
       Given 訊息原為「排程發送」狀態,已取消改為「草稿」
       When 行銷人員編輯訊息內容並調整排程時間
       Then 系統允許重新設定排程
       And 可再次將 send_status 設為「排程發送」
 
+    @not-implemented
     Example: 已發送的訊息無法取消
       Given 訊息的 send_status 為「已發送」
       When 行銷人員嘗試取消訊息
@@ -876,6 +880,7 @@ Feature: 建立訊息推播
       - MessageDelivery 失敗的標記（delivery_status = failed）
       - 自動建立新草稿,包含失敗會員名單,方便手動重發
 
+    @not-implemented
     Example: 發送中途系統崩潰 - 自動建立失敗會員草稿
       Given 系統正在發送訊息「春節優惠活動」給 1000 位會員
       And Message.send_status 為「sending」
@@ -898,6 +903,7 @@ Feature: 建立訊息推播
       And 系統記錄新草稿的 message_id 至原訊息的備註
       And 前端顯示通知：「發送中斷：已成功 500 人,失敗 500 人。已自動建立草稿供重發」
 
+    @not-implemented
     Example: 查看發送失敗的訊息詳情
       Given 訊息「春節優惠活動」的 send_status 為「failed」
       And failure_reason 為「發送中斷：系統崩潰」
@@ -911,6 +917,7 @@ Feature: 建立訊息推播
         | 自動建立草稿   | [重發] 春節優惠活動（500 人）         |
       And 系統提供「查看草稿」按鈕,點擊後跳轉至新建立的草稿
 
+    @not-implemented
     Example: 編輯並重發失敗會員草稿
       Given 系統已自動建立草稿「[重發] 春節優惠活動」
       And 草稿的 target_filter 包含失敗的 500 位會員 member_id
@@ -922,6 +929,7 @@ Feature: 建立訊息推播
       Then 系統僅發送給草稿中的 500 位失敗會員
       And 不會重複發送給原本已成功的 500 位會員
 
+    @not-implemented
     Example: 網路錯誤導致部分發送失敗
       Given 系統正在發送訊息給 1000 位會員
       And 已成功發送 300 筆
@@ -933,6 +941,7 @@ Feature: 建立訊息推播
       And 失敗的 700 筆標記為「failed」
       And 自動建立草稿「[重發] 訊息名稱（700 人）」
 
+    @not-implemented
     Example: 系統正常完成發送 - 不建立草稿
       Given 系統正在發送訊息給 1000 位會員
       When 系統順利完成所有 1000 筆發送

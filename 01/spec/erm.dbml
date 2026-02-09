@@ -1,8 +1,9 @@
-// 力麗飯店 LineOA CRM 管理後台 - 資料模型 (v0.4.5)
+// 力麗飯店 LineOA CRM 管理後台 - 資料模型 (v0.5.0)
 // 根據規格文檔萃取的實體關係模型
-// 版本: v0.4.5
-// 更新日期: 2025-12-26
+// 版本: v0.5.0
+// 更新日期: 2026-02-09
 // 變更摘要:
+//   - v0.5.0: 所有表 PK 統一改為 bigint autoincrement；標記已棄用表；欄位名稱對齊實作
 //   - v0.4.5: 移除 AutoResponsePushLog 表及主動推播模式（自動回應僅支援被動觸發）
 //   - v0.4.3: ConversationThread / ConversationMessage 表擴展多渠道支援（方案 A：單表 + platform 欄位）
 //   - v0.4.3: ConversationThread 新增 member_id / platform / platform_uid / last_message_at 欄位
@@ -45,16 +46,16 @@
 //    - 其他未明確標註的 string 欄位：使用 TEXT 型別
 
 Table Member {
-  member_id string(50) [pk, note: '會員唯一識別碼，上限 50 字元']
+  id bigint [pk, increment, note: '會員唯一識別碼']
   // LINE 相關資訊
   line_uid string(100) [unique, note: 'LINE 官方帳號會員的唯一識別碼，長度上限 100 字元（當前格式為 U 開頭加 32 位英數字，預留未來 LINE 格式變更空間）']
   line_avatar string(500) [note: 'LINE 會員頭像 CDN URL，上限 500 字元（儲存 LINE 提供的完整 URL，如 https://profile.line-scdn.net/xxxxx），若無頭像或 URL 失效則顯示預設頭像。URL 來源：會員加入時從 LINE Profile API 取得，儲存後不定期更新。前端顯示時直接載入此 URL']
-  line_name string(100) [note: 'LINE 會員顯示名稱，上限 100 字元']
+  line_display_name string(100) [note: 'LINE 會員顯示名稱，上限 100 字元']
 
   // Facebook 相關資訊
-  fb_uid string(100) [unique, note: 'Facebook User ID，長度上限 100 字元，唯一性約束（NULL 值不受約束）。透過 Facebook OAuth 登入時取得']
+  fb_customer_id string(100) [unique, note: 'Facebook User ID，長度上限 100 字元，唯一性約束（NULL 值不受約束）。透過 Facebook OAuth 登入時取得']
   fb_avatar string(500) [note: 'Facebook 會員頭像 URL，上限 500 字元（儲存 Facebook 提供的完整 URL），若無頭像或 URL 失效則顯示預設頭像']
-  fb_name string(100) [note: 'Facebook 顯示名稱，上限 100 字元']
+  fb_customer_name string(100) [note: 'Facebook 顯示名稱，上限 100 字元']
 
   // Webchat 相關資訊
   webchat_uid string(100) [unique, note: 'Webchat 訪客 ID，長度上限 100 字元，唯一性約束（NULL 值不受約束）。系統自動生成或透過 OAuth 關聯取得']
@@ -66,7 +67,7 @@ Table Member {
   email string(255) [unique, note: '電子信箱，上限 255 字元，唯一性約束（NULL 值不受約束），用於會員識別與登入。格式驗證規則：基本 email 格式驗證（必須包含 @ 符號與 . 符號），驗證邏輯：前端與後端 API 皆實施驗證，使用正則表達式 /^[^\s@]+@[^\s@]+\.[^\s@]+$/ 進行格式檢查']
   phone string(20) [note: '手機號碼，上限 20 字元，允許重複（考慮家庭成員共用號碼情境）。格式驗證規則：台灣手機號碼格式（09 開頭 10 碼數字），驗證邏輯：前端與後端使用正則表達式 /^09\d{8}$/ 驗證，允許 NULL（會員可選擇不提供）']
   id_number string(20) [unique, note: '身分證/護照號碼，上限 20 字元（唯一值），用於與 PMS 系統比對。資料保護：明文儲存於資料庫，前端預設顯示遮罩格式（如 A12****789），可手動解除查看完整號碼']
-  residence string(10) [note: '居住地，上限 10 字元，值域限制為台灣 22 縣市標準名稱：台北市、新北市、桃園市、台中市、台南市、高雄市、基隆市、新竹市、嘉義市、新竹縣、苗栗縣、彰化縣、南投縣、雲林縣、嘉義縣、屏東縣、宜蘭縣、花蓮縣、台東縣、澎湖縣、金門縣、連江縣。允許 NULL（會員可選擇不提供）']
+  residence string(100) [note: '居住地，上限 100 字元，值域限制為台灣 22 縣市標準名稱：台北市、新北市、桃園市、台中市、台南市、高雄市、基隆市、新竹市、嘉義市、新竹縣、苗栗縣、彰化縣、南投縣、雲林縣、嘉義縣、屏東縣、宜蘭縣、花蓮縣、台東縣、澎湖縣、金門縣、連江縣。允許 NULL（會員可選擇不提供）']
   join_source string(20) [note: '加入來源，上限 20 字元，採用可擴充設計，支援透過設定檔動態管理來源清單。初始值域：LINE（LINE 官方帳號加入）、CRM（CRM 系統匯入）、PMS（德安 PMS 系統整合）、ERP（ERP 系統整合）、系統（後台手動建立）。未來可透過管理後台或設定檔新增其他來源（如：問券、活動報名等），無需修改程式碼。必填欄位，不允許 NULL']
   created_at timestamp [note: '建立時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串（如：2025-01-15T10:30:00Z）。前端顯示時轉換為台灣時區（UTC+8）']
   last_interaction_at timestamp [note: '最後回覆時間（UTC）。更新觸發條件：僅當會員主動發送文字或圖片訊息時更新。不更新情境：被動接收推播訊息、點擊按鈕互動、開啟訊息等行為皆不更新此欄位。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串']
@@ -75,6 +76,8 @@ Table Member {
   passport_number string(50) [note: '護照號碼，上限 50 字元。用於外籍會員識別']
   address_detail string(255) [note: '詳細地址，上限 255 字元。用於配送或寄送用途']
   gpt_enabled bool [default: true, note: '是否啟用 GPT 自動回應。預設值：true。設為 false 時，該會員的訊息不會觸發 GPT 自動回應']
+  line_channel_id string(100) [note: 'LINE 頻道 ID，關聯 LineChannel']
+  updated_at timestamp [note: '更新時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串']
 
   indexes {
     email_index (email) [note: '優化會員 email 搜尋與登入查詢']
@@ -82,7 +85,7 @@ Table Member {
     id_number_index (id_number) [note: '優化 PMS 比對關鍵欄位查詢']
     last_interaction_index (last_interaction_at) [note: '優化最近回覆日期排序查詢']
     join_source_index (join_source) [note: '優化會員來源篩選查詢']
-    fb_uid_index (fb_uid) [note: '優化 Facebook UID 查詢（高頻操作）']
+    fb_customer_id_index (fb_customer_id) [note: '優化 Facebook UID 查詢（高頻操作）']
     webchat_uid_index (webchat_uid) [note: '優化 Webchat UID 查詢（高頻操作）']
   }
 
@@ -110,10 +113,10 @@ Table Member {
   '''
 }
 
-Table LineFriend {
+Table LineFriend [note: 'DEPRECATED - 僅在 line_app 中以 raw SQL 管理，無 SQLAlchemy model'] {
   id bigint [pk, increment, note: 'LINE 好友唯一識別碼']
   line_uid string(100) [unique, not null, note: 'LINE User ID，唯一性約束。格式：U 開頭加 32 位英數字（如 U1234567890abcdef1234567890abcdef）']
-  member_id string(50) [ref: > Member.member_id, note: '關聯的會員 ID（選填）。填寫問卷成為會員後建立關聯，未填寫問卷則為 NULL']
+  member_id bigint [ref: > Member.id, note: '關聯的會員 ID（選填）。填寫問卷成為會員後建立關聯，未填寫問卷則為 NULL']
   line_display_name string(100) [note: 'LINE 顯示名稱，從 LINE Profile API 取得，上限 100 字元']
   line_picture_url string(500) [note: 'LINE 頭像 URL，從 LINE Profile API 取得（如 https://profile.line-scdn.net/xxxxx），上限 500 字元']
   is_following bool [note: '是否追蹤中：true 為當前好友 / false 為已取消追蹤。預設值：true']
@@ -200,10 +203,10 @@ Table LineFriend {
   '''
 }
 
-Table FbFriend {
+Table FbFriend [note: 'DEPRECATED - 僅在 chatroom_multichannel_mock.py 中，無 SQLAlchemy model'] {
   id bigint [pk, increment, note: 'Facebook 好友唯一識別碼']
   fb_uid string(100) [unique, not null, note: 'Facebook User ID，唯一性約束']
-  member_id bigint [ref: > Member.member_id, note: '關聯的會員 ID（選填）。OAuth 授權成為會員後建立關聯，未授權則為 NULL']
+  member_id bigint [ref: > Member.id, note: '關聯的會員 ID（選填）。OAuth 授權成為會員後建立關聯，未授權則為 NULL']
   fb_display_name string(255) [note: 'Facebook 顯示名稱，從 Facebook Graph API 取得，上限 255 字元']
   fb_picture_url string(500) [note: 'Facebook 頭像 URL，從 Facebook Graph API 取得，上限 500 字元']
   email string(255) [note: 'Facebook 授權取得的 email，用於跨渠道會員比對']
@@ -263,10 +266,10 @@ Table FbFriend {
   '''
 }
 
-Table WebchatFriend {
+Table WebchatFriend [note: 'DEPRECATED - 僅在 chatroom_multichannel_mock.py 中，無 SQLAlchemy model'] {
   id bigint [pk, increment, note: 'Webchat 訪客唯一識別碼']
   webchat_uid string(100) [unique, not null, note: 'Webchat 訪客 ID，唯一性約束。格式：UUID v4（如 550e8400-e29b-41d4-a716-446655440000）。生成時機：訪客首次連線時由後端生成，儲存於 localStorage 供重新訪問時識別']
-  member_id bigint [ref: > Member.member_id, note: '關聯的會員 ID（選填）。OAuth 授權成為會員後建立關聯']
+  member_id bigint [ref: > Member.id, note: '關聯的會員 ID（選填）。OAuth 授權成為會員後建立關聯']
   webchat_display_name string(100) [note: 'Webchat 顯示名稱，上限 100 字元']
   webchat_picture_url string(500) [note: 'Webchat 頭像 URL，上限 500 字元']
   email string(255) [note: 'OAuth 授權取得的 email，用於跨渠道會員比對']
@@ -349,7 +352,7 @@ Table WebchatFriend {
 
 Table MemberTag {
   id bigint [pk, increment, note: '會員標籤唯一識別碼']
-  member_id bigint [ref: > Member.member_id, not null, note: '所屬會員 ID']
+  member_id bigint [ref: > Member.id, not null, note: '所屬會員 ID']
   tag_name string(20) [not null, note: '標籤名稱，不得超過 20 個字元（中英文皆計算，每個字元計 1）。格式限制：僅允許中文（\u4e00-\u9fa5）、英文（a-zA-Z）、數字（0-9）、空格，禁止特殊字元與 Emoji。驗證：前端使用正則表達式 /^[\u4e00-\u9fa5a-zA-Z0-9\s]+$/ 即時驗證']
   tag_source string(20) [note: '標籤來源，上限 20 字元：CRM / PMS / 問券 / 後台自訂（不包含訊息互動，訊息互動標籤使用 InteractionTag 和 MemberInteractionTag）']
   trigger_count int [default: 0, note: '觸發次數（保留欄位，用於統計），>= 0']
@@ -415,7 +418,7 @@ Table MemberTag {
 }
 
 Table TagRule {
-  rule_id string(50) [pk, note: '規則唯一識別碼，上限 50 字元']
+  id bigint [pk, increment, note: '規則唯一識別碼']
   tag_name string(20) [note: '標籤名稱（如：高消費客戶、常客），上限 20 字元']
   tag_source string(20) [note: '標籤來源，上限 20 字元：CRM / PMS / 問券 / 後台自訂 / LINE互動。必填欄位']
   rule_type string(30) [note: '規則類型，上限 30 字元：consumption_amount（消費金額）/ visit_frequency（訪問頻率）/ interaction_time（互動時間）/ room_type（房型分類）。必填欄位']
@@ -516,7 +519,7 @@ Table InteractionTag {
 
 Table MemberInteractionTag {
   id bigint [pk, increment, note: '會員互動標籤唯一識別碼']
-  member_id bigint [ref: > Member.member_id, not null, note: '所屬會員 ID']
+  member_id bigint [ref: > Member.id, not null, note: '所屬會員 ID']
   tag_name string(20) [not null, note: '標籤名稱，不得超過 20 個字元（中英文皆計算，每個字元計 1）。格式限制：僅允許中文（\u4e00-\u9fa5）、英文（a-zA-Z）、數字（0-9）、空格，禁止特殊字元與 Emoji。驗證：前端使用正則表達式 /^[\u4e00-\u9fa5a-zA-Z0-9\s]+$/ 即時驗證']
   tag_source string(20) [default: 'CRM', note: '標籤來源：固定為 CRM（手動新增）']
   trigger_count int [default: 0, note: '觸發次數（保留欄位，手動標籤固定為 0）']
@@ -603,12 +606,12 @@ Table ComponentInteractionLog {
 }
 
 Table Message {
-  message_id string [pk, note: '訊息唯一識別碼']
-  campaign_id string [ref: > Campaign.campaign_id, note: '所屬活動ID（選填）。若此訊息屬於特定行銷活動，關聯至 Campaign；若為獨立訊息則為 NULL']
-  template_id string [ref: > MessageTemplate.template_id, note: '使用的訊息模板ID']
-  sent_at timestamp [note: '實際傳送時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串。前端顯示時轉換為台灣時區（UTC+8）']
+  id bigint [pk, increment, note: '訊息唯一識別碼']
+  campaign_id bigint [ref: > Campaign.id, note: '所屬活動ID（選填）。若此訊息屬於特定行銷活動，關聯至 Campaign；若為獨立訊息則為 NULL']
+  template_id bigint [ref: > MessageTemplate.id, note: '使用的訊息模板ID']
+  send_time timestamp [note: '實際傳送時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串。前端顯示時轉換為台灣時區（UTC+8）']
   send_count int [note: '傳送人數，>= 0']
-  message_content string(500) [note: '訊息內容摘要（用於列表顯示），上限 500 字元']
+  message_title string(500) [note: '訊息標題（用於列表顯示），上限 500 字元']
   open_count int [note: '開啟次數（會員已讀訊息的不重複人數），>= 0。計算邏輯：COUNT(DISTINCT member_id WHERE 已讀)']
   send_status string(20) [note: '發送狀態：draft（草稿）/ scheduled（排程發送）/ sending（發送中）/ sent（已發送）/ failed（發送失敗）。狀態轉換規則：draft ⇄ scheduled → sending → sent（終止）/ failed → draft（可修改重試）。sending 為過渡狀態，表示系統正在執行發送作業；sent 為終止狀態不可變更；failed 後可改回 draft 修正問題並重新排程。重試策略：僅支援手動重試，不提供自動重試機制。失敗處理流程：(1) 系統記錄失敗原因到 failure_reason 欄位、(2) 狀態改為 failed、(3) 管理員檢視失敗原因並決定處理方式、(4) 手動將狀態改回 draft、(5) 修正問題（如確認配額充足、修改訊息內容）後重新排程發送']
 
@@ -629,15 +632,19 @@ Table Message {
   thumbnail string(500) [note: '縮圖 URL，上限 500 字元，無圖片則為系統預設圖']
   flex_message_json text [note: 'Flex Message JSON 內容（選填），由前端 Flex Message Simulator 產生。後端驗證：(1) JSON 格式正確性（可解析）、(2) 基本結構完整性。前端使用 LINE 官方 Simulator 確保符合 LINE Flex Message 規範']
   platform string(20) [default: 'LINE', note: '發送平台：LINE / Facebook；Instagram 暫不支援且不允許選取。預設值：LINE。未來若加入 Instagram，需補齊好友表、配額查詢與投遞管線後再開放']
-  source_draft_id bigint [ref: > Message.message_id, note: '來源草稿 ID。當訊息從草稿發布時，記錄原始草稿的 message_id，用於追蹤訊息來源']
+  source_draft_id bigint [ref: > Message.id, note: '來源草稿 ID。當訊息從草稿發布時，記錄原始草稿的 message_id，用於追蹤訊息來源']
   notification_message string(200) [note: '通知推播訊息，上限 200 字元。顯示在手機通知欄的文字內容']
+  fb_message_json text [note: 'Facebook Messenger 訊息 JSON 內容']
+  created_by bigint [note: '建立者 ID']
+  channel_id string(100) [note: '頻道 ID']
+  interaction_tags json [note: '互動標籤（JSON 格式）']
   created_at timestamp [note: '建立時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串']
   updated_at timestamp [note: '最後更新時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串']
 
   indexes {
     send_status_index (send_status) [note: '優化發送狀態篩選查詢（草稿/已排程/已發送）']
     scheduled_time_index (scheduled_datetime_utc) [note: '優化排程任務觸發查詢']
-    sent_time_index (sent_at) [note: '優化歷史訊息時間排序查詢']
+    sent_time_index (send_time) [note: '優化歷史訊息時間排序查詢']
     campaign_index (campaign_id) [note: '優化活動訊息查詢']
     source_draft_id_index (source_draft_id) [note: '優化來源草稿查詢']
   }
@@ -681,9 +688,9 @@ Table Message {
 }
 
 Table MessageDelivery {
-  delivery_id string(50) [pk, note: '發送記錄唯一識別碼，上限 50 字元']
-  message_id string(50) [ref: > Message.message_id, note: '所屬訊息ID']
-  member_id string(50) [ref: > Member.member_id, note: '所屬會員ID']
+  id bigint [pk, increment, note: '發送記錄唯一識別碼']
+  message_id bigint [ref: > Message.id, note: '所屬訊息ID']
+  member_id bigint [ref: > Member.id, note: '所屬會員ID']
   delivery_status string(20) [note: '發送狀態，上限 20 字元：pending（待發送）/ sent（已發送）/ failed（發送失敗）/ opened（已開啟）/ clicked（已點擊）']
   sent_at timestamp [note: '實際發送時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串。允許 NULL（pending 狀態時為 NULL）']
   opened_at timestamp [note: '開啟時間（UTC）。會員首次開啟訊息的時間。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串。允許 NULL（未開啟）']
@@ -727,10 +734,10 @@ Table MessageDelivery {
   '''
 }
 
-Table MessageDeliveryArchive {
-  delivery_id string(50) [pk, note: '歸檔後的發送記錄唯一識別碼，來源於 MessageDelivery.delivery_id']
-  message_id string(50) [note: '所屬訊息ID']
-  member_id string(50) [note: '所屬會員ID']
+Table MessageDeliveryArchive [note: 'DEPRECATED - 未實作'] {
+  id bigint [pk, increment, note: '歸檔後的發送記錄唯一識別碼']
+  message_id bigint [note: '所屬訊息ID']
+  member_id bigint [note: '所屬會員ID']
   delivery_status string(20) [note: '發送狀態：pending / sent / failed / opened / clicked']
   sent_at timestamp [note: '實際發送時間（UTC）']
   opened_at timestamp [note: '開啟時間（UTC）']
@@ -754,10 +761,10 @@ Table MessageDeliveryArchive {
 }
 
 Table MessageTemplate {
-  template_id string(50) [pk, note: '模板唯一識別碼，上限 50 字元']
-  template_name string(100) [note: '模板名稱（選填，用於模板庫顯示），上限 100 字元。建議格式：「春節促銷」、「新會員歡迎」等描述性名稱']
+  id bigint [pk, increment, note: '模板唯一識別碼']
+  name string(100) [note: '模板名稱（選填，用於模板庫顯示），上限 100 字元。建議格式：「春節促銷」、「新會員歡迎」等描述性名稱']
   is_in_library bool [note: '是否加入模板庫：true 加入模板庫（可在模板庫選擇）/ false 不加入（僅限該群發使用）。預設值：false']
-  source_template_id string(50) [note: '複製來源模板ID（選填），上限 50 字元。若此模板是從模板庫選擇並複製而來，記錄原始模板ID，用於追蹤來源。允許 NULL（從空白建立的模板）']
+  source_template_id bigint [note: '複製來源模板ID（選填）。若此模板是從模板庫選擇並複製而來，記錄原始模板ID，用於追蹤來源。允許 NULL（從空白建立的模板）']
   text_content text [note: '文字內容（選填），使用 TEXT 型別不限長度']
   image_url string(500) [note: '圖片 URL（選填），上限 500 字元。圖片格式限制：僅支援 JPG/JPEG 格式（副檔名 .jpg 或 .jpeg），驗證邏輯：前端上傳時檢查檔案 MIME type 為 image/jpeg，後端 API 驗證檔案副檔名與 Content-Type。圖片尺寸要求：最小 800x800 像素（確保 LINE 訊息清晰度），前端驗證圖片尺寸，後端 API 二次驗證，拒絕小於此尺寸的圖片。圖片處理流程：(1) 前端上傳原圖（檔案大小 <= 1 MB）、(2) 前端顯示裁切預覽工具，使用者可拖曳調整裁切位置、(3) 裁切為正方形（1:1 比例）、(4) 儲存裁切後圖片 URL']
   title string(100) [note: '標題（選填），上限 100 字元']
@@ -812,8 +819,8 @@ Table MessageTemplate {
 }
 
 Table TemplateCarouselItem {
-  carousel_item_id string(50) [pk, note: '輪播圖卡唯一識別碼，上限 50 字元']
-  template_id string(50) [ref: > MessageTemplate.template_id, note: '所屬訊息模板ID']
+  id bigint [pk, increment, note: '輪播圖卡唯一識別碼']
+  template_id bigint [ref: > MessageTemplate.id, note: '所屬訊息模板ID']
   sequence_order int [note: '圖卡順序編號（1-9），用於控制輪播顯示順序。範圍：1-9，對應 MessageTemplate.carousel_count。刪除圖卡後自動遞補序號，保持連續。資料庫層建議使用 CHECK 約束：CHECK (sequence_order >= 1 AND sequence_order <= 9)']
   image_url string(500) [note: '圖片 URL，上限 500 字元。圖片格式限制：僅支援 JPG/JPEG 格式（副檔名 .jpg 或 .jpeg），驗證邏輯：前端上傳時檢查檔案 MIME type 為 image/jpeg，後端 API 驗證檔案副檔名與 Content-Type。圖片尺寸要求：最小 800x800 像素（確保 LINE 訊息清晰度），前端驗證圖片尺寸，後端 API 二次驗證，拒絕小於此尺寸的圖片。圖片處理流程：(1) 前端上傳原圖（檔案大小 <= 1 MB）、(2) 前端顯示裁切預覽工具，使用者可拖曳調整裁切位置、(3) 裁切為正方形（1:1 比例）、(4) 儲存裁切後圖片 URL']
   title string(100) [note: '圖卡標題（選填），上限 100 字元']
@@ -863,9 +870,9 @@ Table TemplateCarouselItem {
 // 詳見：implementation_decisions.md
 // ============================================
 
-Table MessageRecord {
-  record_id string [pk, note: '訊息紀錄唯一識別碼']
-  member_id string [ref: > Member.member_id, note: '所屬會員']
+Table MessageRecord [note: 'DEPRECATED - 已被 ConversationMessage 取代，migration 97c1b3771116 刪除'] {
+  id bigint [pk, increment, note: '訊息紀錄唯一識別碼']
+  member_id bigint [ref: > Member.id, note: '所屬會員']
   message_content string [note: '訊息內容']
   message_type string [note: '訊息類型：純文字 / 圖片 / 訊息模板']
   message_status string [note: '訊息狀態：已讀 / 未讀（未讀不標記）']
@@ -913,21 +920,30 @@ Table MessageRecord {
 }
 
 Table AutoResponse {
-  response_id string [pk, note: '自動回應唯一識別碼']
+  id bigint [pk, increment, note: '自動回應唯一識別碼']
   trigger_type string [note: '觸發類型，採用可擴充設計，支援透過設定檔動態管理觸發類型清單。初始值域：新好友歡迎訊息（會員加入好友時觸發）、關鍵字觸發（會員訊息包含關鍵字時觸發）、指定時間觸發（特定時間/日期區間內觸發）。未來可透過管理後台或設定檔新增其他觸發類型（如：取消追蹤、加入群組、特定事件等），無需修改程式碼。必填欄位，不允許 NULL']
-  time_range_start string [note: '指定時間區間起始（當 trigger_type = 指定時間觸發時使用）。格式：HH:mm（24小時制），如「18:00」。驗證規則：正則表達式 ^([01]\\d|2[0-3]):[0-5]\\d$，確保格式正確。允許 NULL（非指定時間觸發時為 NULL）']
-  time_range_end string [note: '指定時間區間結束（當 trigger_type = 指定時間觸發時使用）。格式：HH:mm（24小時制），如「09:00」。驗證規則：正則表達式 ^([01]\\d|2[0-3]):[0-5]\\d$，確保格式正確。跨日判斷：當 time_range_end < time_range_start 時表示跨日（如 18:00-09:00 表示晚上 18:00 到隔天早上 09:00）。允許 NULL（非指定時間觸發時為 NULL）']
+  trigger_time_start string [note: '指定時間區間起始（當 trigger_type = 指定時間觸發時使用）。格式：HH:mm（24小時制），如「18:00」。驗證規則：正則表達式 ^([01]\\d|2[0-3]):[0-5]\\d$，確保格式正確。允許 NULL（非指定時間觸發時為 NULL）']
+  trigger_time_end string [note: '指定時間區間結束（當 trigger_type = 指定時間觸發時使用）。格式：HH:mm（24小時制），如「09:00」。驗證規則：正則表達式 ^([01]\\d|2[0-3]):[0-5]\\d$，確保格式正確。跨日判斷：當 time_range_end < time_range_start 時表示跨日（如 18:00-09:00 表示晚上 18:00 到隔天早上 09:00）。允許 NULL（非指定時間觸發時為 NULL）']
   date_range_start string(20) [note: '指定日期區間起始（當 trigger_type = 指定時間觸發時使用）。格式：yyyy/mm/dd，如「2025/02/01」。允許 NULL（不限定日期範圍時為 NULL）']
   date_range_end string(20) [note: '指定日期區間結束（當 trigger_type = 指定時間觸發時使用）。格式：yyyy/mm/dd，如「2025/02/28」。允許 NULL（不限定日期範圍時為 NULL）']
   weekdays string(20) [note: '週期性規則（選填），上限 20 字元。格式：逗號分隔的數字，1=週一, 2=週二, ..., 7=週日。範例：「1,2,3,4,5」表示週一至週五，「6,7」表示週末。允許 NULL（不限定星期）。用途：實現「每週一至週五 18:00-09:00」等週期性自動回應']
   scheduled_mode string(20) [note: '指定時間觸發模式（當 trigger_type = 指定時間觸發時使用），上限 20 字元。目前僅支援 passive（被動回應模式）：會員發訊息時判斷時間是否在範圍內，符合則回應。注意：自動回應不支援主動推播模式，僅支援被動觸發']
-  is_enabled bool [note: '啟用狀態：true 啟用 / false 停用']
+  is_active bool [note: '啟用狀態：true 啟用 / false 停用']
   response_count int [note: '設定的自動回應訊息數量（至少 1 筆，最多 5 筆），>= 1。驗證層級：應用層驗證，UI 層限制輸入範圍 1-5。此欄位應與 AutoResponseMessage 記錄數量一致']
   channels json [note: '支持的渠道列表（JSON 格式），如 ["LINE", "Facebook"]。若為 NULL 表示全部渠道。用於多渠道自動回應篩選']
+  name string(100) [note: '自動回應名稱']
+  content text [not null, note: '回應內容']
+  template_id bigint [note: '關聯訊息模板 ID']
+  keywords json [note: '關鍵字列表（JSON 格式）']
+  channel_id string(100) [note: '頻道 ID']
+  version int [default: 1, note: '版本號']
+  is_duplicate bool [default: false, note: '是否為複製']
+  trigger_count int [default: 0, note: '觸發次數']
+  success_rate decimal(5,2) [note: '成功率']
   created_at timestamp [note: '建立時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串。前端顯示時轉換為台灣時區（UTC+8）']
 
   indexes {
-    trigger_type_enabled (trigger_type, is_enabled, created_at) [note: '優化自動回應觸發查詢，支援優先順序排序']
+    trigger_type_enabled (trigger_type, is_active, created_at) [note: '優化自動回應觸發查詢，支援優先順序排序']
   }
 
   Note: '''
@@ -970,17 +986,17 @@ Table AutoResponse {
 }
 
 Table AutoResponseKeyword {
-  keyword_id string [pk, note: '關鍵字唯一識別碼']
-  response_id string [ref: > AutoResponse.response_id, note: '所屬自動回應']
-  keyword_text string [note: '關鍵字文字，不區分大小寫，支援中英文與特殊字元，長度上限 50 字元。空字串驗證：不允許空字串或僅包含空白字元的關鍵字，前端與後端 API 皆驗證拒絕。自動處理：儲存前自動去除前後空白字元（trim），確保資料一致性']
+  id bigint [pk, increment, note: '關鍵字唯一識別碼']
+  auto_response_id bigint [ref: > AutoResponse.id, note: '所屬自動回應']
+  keyword string [note: '關鍵字文字，不區分大小寫，支援中英文與特殊字元，長度上限 50 字元。空字串驗證：不允許空字串或僅包含空白字元的關鍵字，前端與後端 API 皆驗證拒絕。自動處理：儲存前自動去除前後空白字元（trim），確保資料一致性']
   match_type string [note: '比對類型：包含匹配（預設）/ 完全匹配 / 正則表達式（未來擴充）。包含匹配：會員訊息包含此關鍵字即觸發；完全匹配：會員訊息完全等於此關鍵字才觸發']
   is_enabled bool [note: '是否啟用：true 啟用（參與比對）/ false 停用（不參與比對）。預設值：true']
-  trigger_count int [note: '觸發次數，記錄該關鍵字被觸發的累計次數，>= 0。用途：統計分析哪些關鍵字最常被觸發']
+  match_count int [note: '匹配次數，記錄該關鍵字被匹配的累計次數，>= 0。用途：統計分析哪些關鍵字最常被觸發']
   last_triggered_at timestamp [note: '最近觸發時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串。用途：追蹤關鍵字活躍度']
   created_at timestamp [note: '建立時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串']
 
   indexes {
-    unique_response_keyword [unique, note: '確保 (response_id, keyword_text) 組合唯一性，同一自動回應不可有重複關鍵字'] (response_id, keyword_text)
+    unique_response_keyword [unique, note: '確保 (auto_response_id, keyword) 組合唯一性，同一自動回應不可有重複關鍵字'] (auto_response_id, keyword)
   }
 
   Note: '''
@@ -996,14 +1012,14 @@ Table AutoResponseKeyword {
 }
 
 Table AutoResponseMessage {
-  message_id string [pk, note: '訊息唯一識別碼']
-  response_id string [ref: > AutoResponse.response_id, note: '所屬自動回應']
+  id bigint [pk, increment, note: '訊息唯一識別碼']
+  auto_response_id bigint [ref: > AutoResponse.id, note: '所屬自動回應']
   message_content string [note: '訊息內容（純文字）。長度限制：建議 <= 500 字元（LINE 訊息建議長度）']
   sequence_order int [note: 'UI 顯示順序與發送順序，範圍 1-5。發送時依此順序由小到大依序發送。資料庫層建議 CHECK 約束：CHECK (sequence_order >= 1 AND sequence_order <= 5)，確保與自動回應訊息數量上限一致']
   created_at timestamp [note: '建立時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串']
 
   indexes {
-    unique_response_sequence [unique, note: '確保 (response_id, sequence_order) 組合唯一性，同一自動回應不可有重複順序'] (response_id, sequence_order)
+    unique_response_sequence [unique, note: '確保 (auto_response_id, sequence_order) 組合唯一性，同一自動回應不可有重複順序'] (auto_response_id, sequence_order)
   }
 
   Note: '''
@@ -1021,8 +1037,8 @@ Table AutoResponseMessage {
 
 
 Table ConsumptionRecord {
-  record_id string [pk, note: '消費紀錄唯一識別碼']
-  member_id string [ref: > Member.member_id, note: '所屬會員']
+  id bigint [pk, increment, note: '消費紀錄唯一識別碼']
+  member_id bigint [ref: > Member.id, note: '所屬會員']
   consumption_time timestamp [note: '消費時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串']
   amount float [note: '消費金額，>= 0，無特別上限限制（使用 float 型別範圍內）']
   room_type string [note: '房型或套餐']
@@ -1046,7 +1062,7 @@ Table ConsumptionRecord {
 }
 
 Table Campaign {
-  campaign_id string [pk, note: '活動唯一識別碼']
+  id bigint [pk, increment, note: '活動唯一識別碼']
   campaign_name string(100) [note: '活動名稱，上限 100 字元']
   campaign_tag string(50) [note: '活動標籤，用於分類與篩選，上限 50 字元']
   campaign_date date [note: '活動日期，格式：yyyy-mm-dd。（保留欄位，建議改用 start_date / end_date）']
@@ -1093,14 +1109,14 @@ Table Campaign {
 }
 
 Table PMS_Integration {
-  integration_id string [pk, note: 'PMS 整合資料唯一識別碼']
+  id bigint [pk, increment, note: 'PMS 整合資料唯一識別碼']
   pms_type string [note: 'PMS 系統類型，採用可擴充設計。初始值域：dean_pms（德安）/ opera_pms（Oracle Opera）/ fidelio_pms（Fidelio）。未來可透過新增 Adapter 擴展其他 PMS 系統，無需修改資料庫結構。必填欄位，不允許 NULL']
   api_endpoint string [note: 'PMS API 端點完整 URL。格式：https://domain.com/api/v1。每家飯店可配置不同的 endpoint。必填欄位']
   api_key string [note: 'API 認證金鑰（加密儲存）。用於 API 請求認證，儲存前需使用加密演算法（如 AES-256）加密。必填欄位']
   config_json string [note: 'PMS 特定配置（JSON 格式）。包含：adapter_settings（adapter 特定設定）、field_mapping（欄位映射規則，如 {"id_number": "guestIdNo", "phone": "mobile"}）、auth_type（認證類型：bearer_token / api_key / oauth2）、sync_interval（同步頻率：realtime / hourly / daily）、retry_policy（重試策略）等。允許 NULL（使用預設配置）']
   id_number string [note: '身分證字號（用於關聯會員）。從 PMS 同步取得']
   phone string [note: '手機號碼（用於關聯會員）。從 PMS 同步取得']
-  member_id string [ref: > Member.member_id, note: '關聯的會員ID。會員比對成功後建立關聯']
+  member_id bigint [ref: > Member.id, note: '關聯的會員ID。會員比對成功後建立關聯']
   sync_status string [note: '同步狀態，值域：active（正常同步）/ failed（同步失敗）/ disabled（已停用）。預設值：active']
   last_sync_at timestamp [note: '最後同步時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串。記錄最近一次成功同步的時間']
   error_message string [note: '同步錯誤訊息。當 sync_status = failed 時記錄錯誤原因，用於除錯與監控。允許 NULL']
@@ -1140,10 +1156,10 @@ Table PMS_Integration {
   '''
 }
 
-Table StayRecord {
-  record_id string [pk, note: '住宿紀錄唯一識別碼']
-  member_id string [ref: > Member.member_id, note: '所屬會員']
-  pms_integration_id string [ref: > PMS_Integration.integration_id, note: 'PMS 整合來源']
+Table StayRecord [note: 'DEPRECATED - 已被 PMS_Integration.stay_records JSON 欄位取代'] {
+  id bigint [pk, increment, note: '住宿紀錄唯一識別碼']
+  member_id bigint [ref: > Member.id, note: '所屬會員']
+  pms_integration_id bigint [ref: > PMS_Integration.id, note: 'PMS 整合來源']
   check_in date [note: '入住日期，格式：yyyy-mm-dd']
   check_out date [note: '退房日期，格式：yyyy-mm-dd。日期關係驗證：check_out >= check_in（退房日期必須大於等於入住日期），允許同一天入住退房（如當日住宿情境）。驗證邏輯：前端與後端 API 皆實施驗證，拒絕 check_out < check_in 的資料']
   room_type string [note: '房型（如：雙人房、商務房、豪華套房）']
@@ -1171,7 +1187,7 @@ Table StayRecord {
 }
 
 Table Admin {
-  admin_id string [pk, note: '管理員唯一識別碼']
+  id bigint [pk, increment, note: '管理員唯一識別碼']
   email string [unique, note: '登入信箱，作為識別帳號']
   password_hash string [note: '密碼雜湊值（使用 bcrypt/Argon2 加密儲存）。密碼複雜度要求：長度 8-64 字元、至少包含 3 種類型（大寫字母、小寫字母、數字、特殊符號）、不允許連續字元或超過 3 次重複字元、不允許常見弱密碼、不允許與信箱相同。允許的特殊符號：!@#$%^&*()-_=+[]{}|;:,.<>?/~']
   name string [note: '管理員名稱']
@@ -1187,7 +1203,7 @@ Table Admin {
 }
 
 Table Role {
-  role_id string [pk, note: '角色唯一識別碼']
+  id bigint [pk, increment, note: '角色唯一識別碼']
   role_name string [unique, note: '角色名稱，如「超級管理員」「管理員」「一般員工」，不得重複']
   role_code string [unique, note: '角色代碼，如「superadmin」「admin」「staff」，用於程式識別，不得重複']
   description string [note: '角色描述，說明該角色的職責與適用範圍']
@@ -1209,7 +1225,7 @@ Table Role {
 }
 
 Table Permission {
-  permission_id string [pk, note: '權限唯一識別碼']
+  id bigint [pk, increment, note: '權限唯一識別碼']
   permission_name string [unique, note: '權限名稱，如「查看會員資料」「發送群發訊息」「管理標籤」，不得重複']
   permission_code string [unique, note: '權限代碼，如「member.view」「message.send」「tag.manage」，用於程式判斷，不得重複']
   resource string [note: '資源類別，如「member」「message」「tag」「campaign」「admin」等']
@@ -1244,9 +1260,9 @@ Table Permission {
 }
 
 Table AdminRole {
-  admin_role_id string [pk, note: '關聯唯一識別碼']
-  admin_id string [ref: > Admin.admin_id, note: '管理員 ID']
-  role_id string [ref: > Role.role_id, note: '角色 ID']
+  id bigint [pk, increment, note: '關聯唯一識別碼']
+  admin_id bigint [ref: > Admin.id, note: '管理員 ID']
+  role_id bigint [ref: > Role.id, note: '角色 ID']
   assigned_at timestamp [note: '指派時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串']
   assigned_by string [note: '指派人（管理員 ID），記錄由誰指派此角色']
 
@@ -1268,9 +1284,9 @@ Table AdminRole {
 }
 
 Table RolePermission {
-  role_permission_id string [pk, note: '關聯唯一識別碼']
-  role_id string [ref: > Role.role_id, note: '角色 ID']
-  permission_id string [ref: > Permission.permission_id, note: '權限 ID']
+  id bigint [pk, increment, note: '關聯唯一識別碼']
+  role_id bigint [ref: > Role.id, note: '角色 ID']
+  permission_id bigint [ref: > Permission.id, note: '權限 ID']
   granted_at timestamp [note: '授予時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串']
   granted_by string [note: '授予人（管理員 ID），記錄由誰授予此權限']
 
@@ -1287,9 +1303,9 @@ Table RolePermission {
   '''
 }
 
-Table LineOAConfig {
-  config_id string [pk, note: '設定唯一識別碼']
-  admin_id string [ref: > Admin.admin_id, note: '所屬管理員']
+Table LineOAConfig [note: 'DEPRECATED - 功能已由 LineChannel 表取代'] {
+  id bigint [pk, increment, note: '設定唯一識別碼']
+  admin_id bigint [ref: > Admin.id, note: '所屬管理員']
   channel_id string [note: 'Messaging API Channel ID。格式要求：10 位數字。範例：1234567890。驗證：前端即時驗證格式，後端最終驗證']
   channel_secret string [note: 'Messaging API Channel Secret。格式要求：32 字元英數字。範例：abcdef1234567890abcdef1234567890。驗證：前端即時驗證格式，後端最終驗證。用途：計算 Webhook 簽章（HMAC-SHA256）']
   channel_access_token string [note: 'Messaging API Channel Access Token。格式要求：最少 50 字元。驗證：前端檢查最小長度，後端調用 LINE Get Bot Info API (GET https://api.line.me/v2/bot/info) 驗證有效性']
@@ -1307,9 +1323,9 @@ Table LineOAConfig {
   '''
 }
 
-Table LoginConfig {
-  config_id string [pk, note: '設定唯一識別碼']
-  admin_id string [ref: > Admin.admin_id, note: '所屬管理員']
+Table LoginConfig [note: 'DEPRECATED - 功能已由 LineChannel 表取代'] {
+  id bigint [pk, increment, note: '設定唯一識別碼']
+  admin_id bigint [ref: > Admin.id, note: '所屬管理員']
   channel_id string [note: 'Login Channel ID，格式：以 165 開頭的 10 位數字（LINE Login 官方格式）']
   channel_secret string [note: 'Login Channel Secret，32 位大小寫英數字（LINE Login 官方格式）']
   is_verified bool [note: '是否已完成 LINE 驗證']
@@ -1324,9 +1340,9 @@ Table LoginConfig {
   '''
 }
 
-Table LoginSession {
-  session_id string [pk, note: '會話唯一識別碼。生成規則：使用 UUID v4（標準隨機 UUID，128 位元），格式為 8-4-4-4-12 的 36 字元字串（如：550e8400-e29b-41d4-a716-446655440000）。UUID v4 提供全球唯一性保證、無碰撞風險、不可預測性，確保會話安全性。前後端 API 使用標準 UUID 字串格式傳輸']
-  admin_id string [ref: > Admin.admin_id, note: '所屬管理員']
+Table LoginSession [note: 'DEPRECATED - 未實作，使用 JWT Token'] {
+  id bigint [pk, increment, note: '會話唯一識別碼。生成規則：使用 UUID v4（標準隨機 UUID，128 位元），格式為 8-4-4-4-12 的 36 字元字串（如：550e8400-e29b-41d4-a716-446655440000）。UUID v4 提供全球唯一性保證、無碰撞風險、不可預測性，確保會話安全性。前後端 API 使用標準 UUID 字串格式傳輸']
+  admin_id bigint [ref: > Admin.id, note: '所屬管理員']
   login_method string [note: '登入方式：email_password / google / line']
   login_time timestamp [note: '登入時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串。前端顯示時轉換為台灣時區（UTC+8）']
   expire_time timestamp [note: '會話過期時間（UTC）。取「登入時間 + 24 小時」與「下一個 00:00（UTC+8）」兩者較早者。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串']
@@ -1353,9 +1369,9 @@ Table LoginSession {
   '''
 }
 
-Table SystemAuthorization {
-  auth_id string [pk, note: '授權唯一識別碼']
-  admin_id string [ref: > Admin.admin_id, note: '所屬管理員']
+Table SystemAuthorization [note: 'DEPRECATED - 未實作'] {
+  id bigint [pk, increment, note: '授權唯一識別碼']
+  admin_id bigint [ref: > Admin.id, note: '所屬管理員']
   expire_date date [note: '授權到期日，格式：yyyy-mm-dd']
   is_active bool [note: '授權是否有效']
   created_at timestamp [note: '建立時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串']
@@ -1405,7 +1421,8 @@ Table LineChannel {
 }
 
 Table FbChannel {
-  page_id string(255) [pk, note: 'Facebook Page ID']
+  id bigint [pk, increment, note: 'Facebook 頻道唯一識別碼']
+  page_id string(255) [unique, note: 'Facebook Page ID']
   page_access_token string(500) [not null, note: 'FB 頻道存取權杖']
   app_id string(255) [note: 'Facebook App ID']
   app_secret string(255) [note: 'Facebook App Secret']
@@ -1422,7 +1439,7 @@ Table FbChannel {
 }
 
 Table ConversationThread {
-  id string(150) [pk, note: '對話串 ID，格式：{platform}:{uid}，例如 LINE:U123xxx、FB:F456xxx、WEB:W789xxx']
+  id bigint [pk, increment, note: '對話串唯一識別碼']
   member_id bigint [ref: > Member.id, note: '關聯會員 ID（選填）。已關聯會員後填入，用於跨渠道整合查詢']
   platform string(20) [not null, note: '渠道類型：LINE / Facebook / Webchat']
   platform_uid string(100) [not null, note: '渠道原始 UID（LINE UID / FB UID / Webchat UID）']
@@ -1465,8 +1482,8 @@ Table ConversationThread {
 }
 
 Table ConversationMessage {
-  id string(100) [pk, note: '訊息 ID（UUID）']
-  thread_id string(150) [ref: > ConversationThread.id, not null, note: '所屬對話串 ID，格式：{platform}:{uid}']
+  id bigint [pk, increment, note: '訊息唯一識別碼']
+  thread_id bigint [ref: > ConversationThread.id, not null, note: '所屬對話串 ID']
   platform string(20) [not null, note: '渠道類型：LINE / Facebook / Webchat（冗餘欄位，方便查詢時避免 JOIN）']
   role string(20) [note: '角色：user（會員訊息）/ assistant（系統回應，包括客服、GPT、自動回應）']
   direction string(20) [not null, note: '方向：incoming（收到）/ outgoing（發出）']
@@ -1515,7 +1532,7 @@ Table ConversationMessage {
   '''
 }
 
-Table ChatLog {
+Table ChatLog [note: 'DEPRECATED - migration fec53deadf8b 已刪除'] {
   id bigint [pk, increment, note: '聊天記錄唯一識別碼']
   platform string(50) [not null, note: '平台類型：LINE / Facebook / Webchat']
   user_id string(100) [not null, note: '用戶 UID（LINE UID / FB UID / Webchat UID）']
@@ -1572,7 +1589,7 @@ Table ChatLog {
 // 問卷系統相關資料表
 // ============================================
 
-Table SurveyTemplate {
+Table SurveyTemplate [note: 'DEPRECATED - 僅有 migration，無 SQLAlchemy model'] {
   id bigint [pk, increment, note: '問卷範本唯一識別碼']
   name string(100) [not null, note: '範本名稱']
   description text [note: '範本描述']
@@ -1591,7 +1608,7 @@ Table SurveyTemplate {
   '''
 }
 
-Table Survey {
+Table Survey [note: 'DEPRECATED - 僅有 migration，無 SQLAlchemy model'] {
   id bigint [pk, increment, note: '問卷唯一識別碼']
   name string(200) [not null, note: '問卷名稱']
   template_id bigint [ref: > SurveyTemplate.id, not null, note: '範本 ID']
@@ -1621,7 +1638,7 @@ Table Survey {
   '''
 }
 
-Table SurveyQuestion {
+Table SurveyQuestion [note: 'DEPRECATED - 僅有 migration，無 SQLAlchemy model'] {
   id bigint [pk, increment, note: '題目唯一識別碼']
   survey_id bigint [ref: > Survey.id, not null, note: '問卷 ID']
   question_type string(20) [not null, note: '題目類型：NAME / PHONE / EMAIL / BIRTHDAY / ADDRESS / GENDER / ID_NUMBER / LINK / VIDEO / IMAGE']
@@ -1664,10 +1681,10 @@ Table SurveyQuestion {
   '''
 }
 
-Table SurveyResponse {
+Table SurveyResponse [note: 'DEPRECATED - 僅有 migration，無 SQLAlchemy model'] {
   id bigint [pk, increment, note: '回覆唯一識別碼']
   survey_id bigint [ref: > Survey.id, not null, note: '問卷 ID']
-  member_id bigint [ref: > Member.member_id, not null, note: '會員 ID']
+  member_id bigint [ref: > Member.id, not null, note: '會員 ID']
   answers json [not null, note: '答案（JSON 格式）']
   is_completed bool [not null, note: '是否完成']
   completed_at timestamp [note: '完成時間']
@@ -1727,10 +1744,10 @@ Table User {
 
 Table TagTriggerLog {
   id bigint [pk, increment, note: '觸發記錄唯一識別碼']
-  member_id bigint [ref: > Member.member_id, not null, note: '會員 ID']
+  member_id bigint [ref: > Member.id, not null, note: '會員 ID']
   tag_id bigint [ref: > InteractionTag.id, not null, note: '標籤 ID']
-  message_id bigint [ref: > Message.message_id, note: '群發訊息 ID（選填）']
-  campaign_id bigint [ref: > Campaign.campaign_id, note: '活動 ID（選填）']
+  message_id bigint [ref: > Message.id, note: '群發訊息 ID（選填）']
+  campaign_id bigint [ref: > Campaign.id, note: '活動 ID（選填）']
   trigger_source string(20) [not null, note: '觸發來源：CLICK（按鈕點擊）/ INTERACTION（互動）/ MANUAL（手動）']
   triggered_at timestamp [not null, note: '觸發時間']
   created_at timestamp [not null, note: '建立時間（UTC）']

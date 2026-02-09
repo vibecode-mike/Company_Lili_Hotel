@@ -308,6 +308,7 @@ Feature: LINE 好友管理
 
   Rule: 好友統計資料
 
+    @not-implemented
     Example: 統計當前好友總數
       Given line_friends 表中存在以下記錄
         | line_uid | is_following |
@@ -319,6 +320,7 @@ Feature: LINE 好友管理
       Then 系統統計 is_following = true 的總數
       And 顯示「當前好友數：3」
 
+    @not-implemented
     Example: 統計新增好友趨勢（本月 vs 上月）
       Given 當前時間為 2025-11-17
       And line_friends 表中存在以下記錄
@@ -476,6 +478,7 @@ Feature: LINE 好友管理
 
   Rule: 資料保留策略
 
+    @not-implemented
     Example: 已取消追蹤的好友保留 90 天
       Given line_friends 表中存在以下記錄
         | line_uid | is_following | unfollowed_at       | member_id |
@@ -486,6 +489,7 @@ Feature: LINE 好友管理
       Then 系統刪除 unfollowed_at < 2025-08-19（90 天前）且 member_id IS NULL 的記錄
       And 系統保留 U222（取消追蹤未滿 90 天）
 
+    @not-implemented
     Example: 有會員關聯的記錄永久保留
       Given line_friends 表中存在以下記錄
         | line_uid | is_following | unfollowed_at       | member_id |

@@ -31,6 +31,7 @@ Feature: 會員標籤管理
   
   Rule: 錯誤處理：外部來源回傳無效標籤時跳過該筆資料
 
+    @not-implemented
     Example: CRM 回傳未定義的標籤值
       Given CRM 系統應僅回傳前端設定檔內允許的標籤值
       And CRM 仍回傳會員「張三」的標籤「🔥VIP🔥」（不在允許清單內）
@@ -41,6 +42,7 @@ Feature: 會員標籤管理
 
   Rule: 滾動12個月的時間範圍計算採用從當前日期往前推算365天
 
+    @not-implemented
     Example: 滾動12個月的計算基準日範例
       Given 今日為「2025/06/15」
       When 系統計算「過去 12 個月」的時間範圍
@@ -146,6 +148,7 @@ Feature: 會員標籤管理
 
   Rule: 互動標籤來源支援會員互動模板（訊息圖文模板）
 
+    @not-implemented
     Example: 訊息圖文模板的互動標籤
       Given 會員「李十三」點擊文字按鈕確認型模板
       When 系統處理互動事件
@@ -153,6 +156,7 @@ Feature: 會員標籤管理
 
   Rule: 互動標籤來源支援會員互動模板（問券模板）
 
+    @not-implemented
     Example: 問券模板的互動標籤
       Given 會員「王十四」完成滿意度調查問券
       When 系統處理互動事件

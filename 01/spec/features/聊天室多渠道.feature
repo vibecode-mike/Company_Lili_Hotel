@@ -40,6 +40,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
 
   Rule: 當會員在 Webchat 登入 LINE OAuth，系統應整合 LINE 聊天紀錄到客服聊天室，但保留原 Webchat 紀錄
 
+    @not-implemented
     Example: Webchat 使用 LINE OAuth 登入，已有 LINE 紀錄
       Given members 表中已存在該會員 email "user@example.com"
       And line_friends 表有 line_uid "U123" 的好友紀錄
@@ -55,6 +56,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
 
   Rule: 當會員在 Webchat 登入 Facebook OAuth，系統應整合 FB 訊息到客服聊天室，但保留原 Webchat 紀錄
 
+    @not-implemented
     Example: Webchat 使用 Facebook OAuth 登入，已有 FB 紀錄
       Given members 表中已存在該會員 email "user@example.com"
       And fb_friends 表有 fb_uid "F321" 的好友紀錄
@@ -70,6 +72,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
 
   Rule: 當會員第一次在 Webchat 使用 LINE 或 FB OAuth 登入，但該渠道無歷史聊天紀錄，僅建立會員身份
 
+    @not-implemented
     Example: 新 LINE 使用者
       Given members 表中無該 line_uid 的紀錄
       When 使用者 Webchat 登入 LINE OAuth，line_uid 為 "U999"，email 為 "newuser@example.com"
@@ -86,6 +89,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
 
   Rule: 當 Webchat OAuth 登入失敗時，系統應提示錯誤並要求重新登入或選擇其他登入方式
 
+    @not-implemented
     Example: LINE OAuth 登入失敗
       Given 使用者在 Webchat 嘗試 LINE OAuth 登入
       When OAuth 授權失敗（用戶取消授權、網路逾時、或服務異常）
@@ -94,12 +98,14 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
       And 不允許匿名聊天，用戶必須完成登入才能開始對話
       And 後端記錄錯誤日誌（含錯誤類型、時間戳、用戶 IP）
 
+    @not-implemented
     Example: Facebook OAuth 登入失敗
       Given 使用者在 Webchat 嘗試 Facebook OAuth 登入
       When OAuth 授權失敗
       Then 系統顯示錯誤訊息並提供重試或切換登入方式選項
       And 不允許匿名聊天
 
+    @not-implemented
     Example: Google OAuth 登入失敗
       Given 使用者在 Webchat 嘗試 Google OAuth 登入
       When OAuth 授權失敗
@@ -112,6 +118,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
 
   Rule: 當會員在 Webchat 使用 Google OAuth 登入時，僅建立登入身份，除非 email 與既有會員匹配才整合
 
+    @not-implemented
     Example: Google OAuth 新使用者
       Given members 表中無該 email 的紀錄
       When 使用者 Webchat 使用 Google OAuth 登入，email 為 "guser@example.com"
@@ -122,6 +129,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
       And 客服聊天室顯示渠道切換下拉選單，始終列出 LINE / Facebook / Webchat
       And 未綁定的渠道以灰色禁用樣式顯示並提示「尚未綁定」
 
+    @not-implemented
     Example: Google OAuth 已有 email 的會員
       Given members 表中已有 email "guser@example.com" 的會員，並關聯 line_friends 表中 line_uid "U123"
       And 該會員在 Webchat 有聊天紀錄
@@ -193,6 +201,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
 
   Rule: OAuth 登入成功後依混合策略合併會員（優先順序：email → 渠道 UID → 建立新會員）
 
+    @not-implemented
     Example: 有 email 時用 email 合併（LINE → 既有會員）
       Given members 表中已有 email "user@example.com" 的會員 member_id "M001"
       And 該會員原本僅關聯 fb_friends（fb_uid "F321"）
@@ -207,6 +216,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
       And 系統更新 webchat_friends 記錄的 member_id 為 "M001"
       And 客服聊天室立即顯示整合後的跨渠道訊息
 
+    @not-implemented
     Example: 無 email 但渠道 UID 已存在（同一用戶重複登入）
       Given line_friends 表中已有 line_uid "U123" 的記錄，關聯 member_id "M001"
       When 使用者在 Webchat 登入 LINE OAuth，取得 line_uid "U123"，但用戶未授權 email
@@ -214,6 +224,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
       And 系統使用既有 member_id "M001"
       And 系統更新 webchat_friends 記錄的 member_id 為 "M001"
 
+    @not-implemented
     Example: 無 email 且渠道 UID 不存在（全新用戶）
       Given members 表和 line_friends 表都沒有相關記錄
       When 使用者在 Webchat 登入 LINE OAuth，取得 line_uid "U888"，但用戶未授權 email
@@ -222,6 +233,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
       And 系統更新 webchat_friends 記錄的 member_id 為 "M003"
       And 日後若取得 email 且與既有會員相同，再觸發合併
 
+    @not-implemented
     Example: 日後取得 email 觸發延遲合併
       Given 會員 member_id "M003" 原本無 email（LINE OAuth 未授權）
       And members 表中已有 email "user@example.com" 的會員 member_id "M001"
@@ -230,6 +242,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
       And 系統觸發會員合併，將 "M003" 的資料合併至 "M001"
       And 原 "M003" 的 friends 記錄更新 member_id 為 "M001"
 
+    @not-implemented
     Example: 多渠道會員合併至同一 member_id
       Given members 表中已有 email "user@example.com" 的會員
       When 使用者在 Webchat 登入 LINE OAuth，email 為 "user@example.com"，line_uid "U123"
@@ -241,6 +254,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
 
   Rule: 會員合併時資料衝突的處理策略（新資料優先，空白不覆蓋）
 
+    @not-implemented
     Example: 會員資料合併衝突處理
       Given 系統已有會員資料
         | field    | value      | updated_at          |
@@ -377,6 +391,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
 
   Rule: Webchat 訪客會話結束判定依據 WebSocket 連線狀態，斷線時自動設為已離線
 
+    @not-implemented
     Example: 訪客關閉瀏覽器時會話自動結束
       Given 訪客 webchat_uid "W123" 正在 Webchat 對話中（is_following = true）
       And WebSocket 連線維持心跳（每 30 秒 ping/pong）
@@ -386,12 +401,14 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
       And 系統記錄 unfollowed_at = 當前時間
       And 客服聊天室標示「Webchat 用戶已離線」
 
+    @not-implemented
     Example: 訪客網路中斷後重新連線
       Given 訪客 webchat_uid "W123" 的 WebSocket 連線因網路問題斷開
       When 訪客在 60 秒內重新連線
       Then 系統視為同一會話，不更新 is_following 狀態
       And 聊天可正常繼續
 
+    @not-implemented
     Example: 訪客重新訪問網站
       Given 訪客 webchat_uid "W123" 曾結束會話（is_following = false）
       When 訪客重新訪問 Webchat 並建立連線
@@ -433,6 +450,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
 
   Rule: 當 Webchat OAuth 登入 email 不存在於 members 表時，建立新的 member_id
 
+    @not-implemented
     Example: 新 Webchat 會員建立
       Given members 表中無 email "newuser@example.com"
       When 使用者 Webchat 登入 LINE OAuth，email "newuser@example.com"，line_uid "U999"

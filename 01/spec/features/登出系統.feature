@@ -5,6 +5,7 @@
 
   Rule: 管理員必須處於已登入狀態
 
+    @not-implemented
     Example: 已登入管理員可登出
       Given 管理員已透過 email/password、Google 或 LINE 登入
       And Session 狀態為有效（is_active = true）
@@ -14,6 +15,7 @@
 
   Rule: 登出後清除會話並導向登入頁面
 
+    @not-implemented
     Example: 管理員成功登出並清除所有會話資料
       Given 管理員已登入系統
       And 前端儲存了登入憑證於 Cookie 與 LocalStorage
@@ -24,6 +26,7 @@
       And 後端將該 Session 的 is_active 設為 false
       And 前端導向登入頁面
 
+    @not-implemented
     Example: 登出 API 呼叫失敗但本地資料已清除
       Given 管理員已登入系統
       And 前端儲存了登入憑證

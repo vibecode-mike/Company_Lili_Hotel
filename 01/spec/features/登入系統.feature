@@ -16,12 +16,14 @@
 
   Rule: 快速登入需驗證信箱已獲得系統授權
 
+    @not-implemented
     Example: 快速登入時驗證授權成功
       Given 系統中存在管理員，信箱為「admin@example.com」
       And 該管理員已獲得系統授權
       When 管理員使用 Google 快速登入信箱「admin@example.com」
       Then 登入成功
 
+    @not-implemented
     Example: 快速登入時驗證授權失敗
       Given 信箱「noauth@example.com」尚未註冊或未獲得授權
       When 管理員使用 Google 快速登入信箱「noauth@example.com」
@@ -30,48 +32,56 @@
 
   Rule: 密碼複雜度要求：長度 8-64 字元，至少包含 3 種類型（大寫字母、小寫字母、數字、特殊符號）
 
+    @not-implemented
     Example: 密碼符合複雜度要求（包含 3 種類型）
       Given 管理員正在設定密碼
       When 管理員輸入密碼「Pass123」（包含大寫、小寫、數字，共 3 種類型）
       Then 系統驗證密碼符合複雜度要求
       And 允許設定此密碼
 
+    @not-implemented
     Example: 密碼符合複雜度要求（包含 4 種類型）
       Given 管理員正在設定密碼
       When 管理員輸入密碼「Pass123!」（包含大寫、小寫、數字、特殊符號，共 4 種類型）
       Then 系統驗證密碼符合複雜度要求
       And 允許設定此密碼
 
+    @not-implemented
     Example: 密碼長度不足 8 字元
       Given 管理員正在設定密碼
       When 管理員輸入密碼「Pass12」（僅 6 字元）
       Then 系統驗證密碼不符合複雜度要求
       And 系統顯示錯誤訊息「密碼長度必須為 8-64 字元」
 
+    @not-implemented
     Example: 密碼僅包含 2 種類型
       Given 管理員正在設定密碼
       When 管理員輸入密碼「password123」（僅包含小寫、數字，共 2 種類型）
       Then 系統驗證密碼不符合複雜度要求
       And 系統顯示錯誤訊息「密碼必須包含至少 3 種類型（大寫字母、小寫字母、數字、特殊符號）」
 
+    @not-implemented
     Example: 密碼包含連續字元
       Given 管理員正在設定密碼
       When 管理員輸入密碼「Pabc123!」（包含連續字元 abc）
       Then 系統驗證密碼不符合複雜度要求
       And 系統顯示錯誤訊息「密碼不可包含連續字元」
 
+    @not-implemented
     Example: 密碼包含超過 3 次重複字元
       Given 管理員正在設定密碼
       When 管理員輸入密碼「Passss123」（包含 4 個連續的 s）
       Then 系統驗證密碼不符合複雜度要求
       And 系統顯示錯誤訊息「密碼不可包含超過 3 次重複字元」
 
+    @not-implemented
     Example: 密碼為常見弱密碼
       Given 管理員正在設定密碼
       When 管理員輸入密碼「Password123」（常見弱密碼）
       Then 系統驗證密碼不符合複雜度要求
       And 系統顯示錯誤訊息「此密碼過於常見，請使用更安全的密碼」
 
+    @not-implemented
     Example: 密碼與信箱相同
       Given 管理員信箱為「admin@example.com」
       When 管理員設定密碼為「admin@example.com」
@@ -144,6 +154,7 @@
 
   Rule: 登入會話於當日零時 00:00 自動登出（使用台灣時區 UTC+8），無緩衝
 
+    @not-implemented
     Example: 逾越當日零時自動登出（台灣時區）
       Given 管理員於「2025/06/01 21:00（UTC+8）」登入系統
       And 系統建立的 Session 標記有效期至「2025/06/02 00:00（UTC+8）」
@@ -151,6 +162,7 @@
       Then 系統將該 Session 標記為失效
       And 前端導向登入頁面要求管理員重新登入
 
+    @not-implemented
     Example: 無預警、無延長，時間到立即登出
       Given 管理員於「2025/06/01 23:55（UTC+8）」登入系統
       And 系統建立的 Session 標記有效期至「2025/06/02 00:00（UTC+8）」
@@ -159,6 +171,7 @@
       And 前端導向登入頁並提示「已登出，請重新登入」
       And 不自動延長或滑動過期
 
+    @not-implemented
     Example: 所有使用者統一於台灣時間零時登出
       Given 管理員 A 於「2025/06/01 10:00（UTC+8）」在台灣登入
       And 管理員 B 於「2025/06/01 18:00（UTC+8）」在美國登入

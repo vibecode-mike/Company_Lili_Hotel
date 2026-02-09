@@ -5,6 +5,7 @@ Feature: PMS 系統整合
 
   Rule: 支援多種 PMS 系統透過 Adapter Pattern 整合
 
+    @not-implemented
     Example: 配置德安 PMS 整合
       Given 系統管理員在 PMS 整合設定頁面
       When 管理員選擇 PMS 類型「德安 PMS」
@@ -14,6 +15,7 @@ Feature: PMS 系統整合
       And 系統使用 DeanPMSAdapter 處理資料同步
       And 系統加密 api_key 後儲存
 
+    @not-implemented
     Example: 未來支援 Opera PMS
       Given 系統新增 OperaPMSAdapter 實作
       When 管理員選擇 PMS 類型「Opera PMS」
@@ -25,6 +27,7 @@ Feature: PMS 系統整合
 
   Rule: API 連線配置獨立管理
 
+    @not-implemented
     Example: 每家飯店使用獨立 API 端點
       Given 飯店 A 配置 api_endpoint「https://pms-a.example.com」
       And 飯店 B 配置 api_endpoint「https://pms-b.example.com」
@@ -32,6 +35,7 @@ Feature: PMS 系統整合
       Then 系統向「https://pms-a.example.com」發送 API 請求
       And 使用飯店 A 的 api_key 認證
 
+    @not-implemented
     Example: API 認證金鑰加密儲存
       Given 管理員輸入 api_key「plain_text_key_123」
       When 系統儲存 PMS 整合配置
@@ -41,6 +45,7 @@ Feature: PMS 系統整合
 
   Rule: 欄位映射規則透過 config_json 動態配置
 
+    @not-implemented
     Example: 德安 PMS 欄位映射
       Given 德安 PMS 使用欄位名稱「guestIdNo」表示身分證字號
       And 德安 PMS 使用欄位名稱「mobile」表示手機號碼
@@ -58,6 +63,7 @@ Feature: PMS 系統整合
         """
       And 同步時根據映射規則轉換欄位名稱
 
+    @not-implemented
     Example: Opera PMS 使用不同欄位映射
       Given Opera PMS 使用欄位名稱「guestID」表示身分證字號
       And Opera PMS 使用欄位名稱「phoneNumber」表示手機號碼
@@ -76,6 +82,7 @@ Feature: PMS 系統整合
 
   Rule: 同步頻率與認證類型可配置
 
+    @not-implemented
     Example: 配置每日同步
       Given 管理員配置 PMS 整合
       When 管理員在 config_json 設定 sync_interval 為「daily」
@@ -83,6 +90,7 @@ Feature: PMS 系統整合
       Then 系統每日執行一次資料同步
       And 使用 Bearer Token 認證方式
 
+    @not-implemented
     Example: 配置即時同步
       Given 管理員配置 PMS 整合
       When 管理員在 config_json 設定 sync_interval 為「realtime」
@@ -133,6 +141,7 @@ Feature: PMS 系統整合
       - 繼續處理其他記錄（不中斷整批同步）
       - 完成後統計成功/失敗數量，顯示「部分同步失敗」
 
+    @not-implemented
     Example: 欄位缺失跳過該筆記錄
       Given PMS 同步回傳 3 筆會員資料
         | 記錄編號 | id_number  | phone      | room_type | stay_date  |
@@ -146,6 +155,7 @@ Feature: PMS 系統整合
       And 系統成功同步 2 筆記錄（記錄 1、3）
       And 系統失敗 1 筆記錄（記錄 2）
 
+    @not-implemented
     Example: 型別錯誤跳過該筆記錄
       Given PMS 同步回傳 3 筆會員資料
         | 記錄編號 | id_number  | phone        | room_type | stay_date    |
@@ -159,6 +169,7 @@ Feature: PMS 系統整合
       And 系統成功同步 2 筆記錄
       And 系統失敗 1 筆記錄
 
+    @not-implemented
     Example: 值域超範圍跳過該筆記錄
       Given PMS 同步回傳 3 筆會員資料
         | 記錄編號 | id_number  | phone      | room_type | stay_date  |
@@ -172,6 +183,7 @@ Feature: PMS 系統整合
       And 系統成功同步 2 筆記錄
       And 系統失敗 1 筆記錄
 
+    @not-implemented
     Example: 完成後顯示同步結果統計
       Given PMS 同步處理 100 筆記錄
       And 其中 5 筆因格式錯誤被跳過
@@ -182,6 +194,7 @@ Feature: PMS 系統整合
       And 系統在管理介面顯示「部分同步失敗（95/100 成功）」
       And 系統提供「查看錯誤記錄」按鈕，可下載錯誤 log
 
+    @not-implemented
     Example: 全部成功時不顯示錯誤提示
       Given PMS 同步處理 50 筆記錄
       And 所有記錄格式正確
@@ -191,6 +204,7 @@ Feature: PMS 系統整合
       And 系統清除 error_message
       And 系統顯示「同步成功（50/50 成功）」
 
+    @not-implemented
     Example: 全部失敗時標記為失敗
       Given PMS 同步處理 10 筆記錄
       And 所有記錄都有格式錯誤
@@ -224,6 +238,7 @@ Feature: PMS 系統整合
 
   Rule: 停用整合保留歷史資料
 
+    @not-implemented
     Example: 停用 PMS 整合
       Given PMS 整合配置 sync_status 為「active」
       When 管理員停用 PMS 整合
@@ -234,6 +249,7 @@ Feature: PMS 系統整合
 
   Rule: 跨系統同步欄位衝突處理（依最新時間覆蓋，空白不覆蓋）
 
+    @not-implemented
     Example: PMS 與 CRM 同時回傳會員資料，採用最新事件
       Given 現有會員「王小明」資料
         | 欄位      | 值              | updated_at           |
@@ -261,12 +277,14 @@ Feature: PMS 系統整合
 
   Rule: 安全性與敏感資訊保護
 
+    @not-implemented
     Example: config_json 不儲存敏感資訊
       Given 管理員配置 PMS 整合
       When 系統儲存 config_json
       Then config_json 僅包含非敏感配置（field_mapping、sync_interval、retry_policy）
       And config_json 不包含 api_key 或密碼
 
+    @not-implemented
     Example: API 請求使用加密連線
       Given PMS 整合配置 api_endpoint「https://pms.example.com」
       When 系統發送 API 請求
@@ -276,6 +294,7 @@ Feature: PMS 系統整合
 
   Rule: 大批量同步拆批與超時處理
 
+    @not-implemented
     Example: 超過 10K 筆自動拆批，並設定每批超時
       Given PMS 端回傳 12000 筆會員資料
       When 系統處理同步

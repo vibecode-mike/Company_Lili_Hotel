@@ -195,12 +195,14 @@ Feature: 會員管理
 
   Rule: 支援批次匯入會員資料（CSV 與 Excel 格式）
 
+    @not-implemented
     Example: 下載批次匯入範本檔案
       Given 行銷人員需要批次匯入會員資料
       When 行銷人員點擊「下載匯入範本」
       Then 系統提供 CSV 與 Excel 兩種格式範本下載
       And 範本包含必填欄位說明（LINE UID、姓名、電子信箱、手機號碼等）
 
+    @not-implemented
     Example: 上傳 CSV 格式批次匯入會員
       Given 行銷人員已準備好會員資料 CSV 檔案
       When 行銷人員上傳 CSV 檔案
@@ -208,6 +210,7 @@ Feature: 會員管理
       And 系統批次建立會員資料
       And 系統顯示匯入結果「成功 50 筆 / 失敗 5 筆」
 
+    @not-implemented
     Example: 上傳 Excel 格式批次匯入會員
       Given 行銷人員已準備好會員資料 Excel 檔案（.xlsx）
       When 行銷人員上傳 Excel 檔案
@@ -215,12 +218,14 @@ Feature: 會員管理
       And 系統批次建立會員資料
       And 系統顯示匯入結果「成功 50 筆 / 失敗 5 筆」
 
+    @not-implemented
     Example: 重複資料處理（依 LINE UID 判斷）
       Given 系統中已存在 LINE UID 為「U1234567890abcdef」的會員
       When 行銷人員上傳的批次匯入檔案中包含相同 LINE UID
       Then 系統跳過該筆重複資料
       And 系統在匯入報告中標註「重複跳過」
 
+    @not-implemented
     Example: 批次匯入驗證錯誤處理
       Given 行銷人員上傳 CSV 檔案包含以下資料
         | line_uid         | name | email           | phone      |
@@ -233,6 +238,7 @@ Feature: 會員管理
       And 系統顯示匯入結果「成功 2 筆 / 失敗 1 筆」
       And 系統提供錯誤明細「第 2 筆：email 格式錯誤、phone 格式錯誤」
 
+    @not-implemented
     Example: 批次匯入空檔案處理
       Given 行銷人員上傳空白的 CSV 檔案（無資料列）
       When 系統驗證批次匯入檔案
@@ -651,6 +657,7 @@ Feature: 會員管理
 
   Rule: 消費紀錄資料透過定期同步機制從 CRM 系統批次匯入
 
+    @not-implemented
     Example: 定期同步消費紀錄（每日凌晨 02:00 全量同步）
       Given CRM 系統中有會員的最新消費資料
       When 系統執行定期同步任務（每日凌晨 02:00）
@@ -658,6 +665,7 @@ Feature: 會員管理
       And 系統記錄同步時間「2025/01/25 02:00」
       And 系統記錄同步筆數「1,250 筆」
 
+    @not-implemented
     Example: 定期同步新增消費紀錄
       Given CRM 系統中有會員「張三」的新消費資料
         | consumption_date | amount | room_type  |
@@ -667,6 +675,7 @@ Feature: 會員管理
       Then 系統新增該筆消費紀錄至 ConsumptionRecord 資料表
       And 系統記錄同步時間「2025/01/25 02:00」
 
+    @not-implemented
     Example: 定期同步更新消費紀錄
       Given CRM 系統中會員「李四」的消費金額從「5000」更新為「5500」
       And 上次同步時間為「2025/01/24 02:00」
@@ -676,6 +685,7 @@ Feature: 會員管理
 
   Rule: 消費紀錄查看權限控制（v0.2 功能）
 
+    @not-implemented
     Example: v0.2 加入消費紀錄查看權限控制
       Given 系統版本為 v0.2
       And 系統已建立「consumption.view」權限

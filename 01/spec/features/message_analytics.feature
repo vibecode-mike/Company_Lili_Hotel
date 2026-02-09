@@ -192,6 +192,7 @@ Feature: 訊息數據成效
 
   Rule: 排程發送狀態的訊息可取消排程
 
+    @not-implemented
     Example: 取消排程訊息
       Given 系統中存在訊息「春節促銷」，發送狀態為「排程發送」
       And 排程發送時間為「2025/02/01 10:00」（UTC: 2025-02-01T02:00:00Z）
@@ -200,6 +201,7 @@ Feature: 訊息數據成效
       And 系統保留所有訊息資料（內容、排程時間、篩選條件、訊息模板、互動標籤等）
       And 系統顯示訊息「已取消排程，訊息已改為草稿狀態」
 
+    @not-implemented
     Example: 取消後資料完整保留
       Given 系統中存在排程訊息「VIP 專屬優惠」
         | 欄位                   | 值                       |
@@ -216,6 +218,7 @@ Feature: 訊息數據成效
         | target_filter          | {"include": ["VIP"]}     |
         | template_id            | template_123             |
 
+    @not-implemented
     Example: 取消後可重新編輯並再次排程
       Given 訊息「限時優惠」已取消排程，send_status 為「草稿」
       When 行銷人員重新編輯該訊息
