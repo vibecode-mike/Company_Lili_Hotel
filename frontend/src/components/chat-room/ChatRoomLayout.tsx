@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { ChatRoomLayoutProps, ChatMessage, ChatPlatform } from './types';
 import type { Member } from '../../types/member';
-import { useWebSocket } from '../../hooks/useWebSocket';
+import { useSSE } from '../../hooks/useWebSocket';
 import MemberAvatar from './MemberAvatar';
 import MemberInfoPanelComplete from './MemberInfoPanelComplete';
 import MemberTagEditModal from '../MemberTagEditModal';
@@ -405,43 +405,39 @@ export default function ChatRoomLayout({
     }
   }, [member]);
 
-  // 先計算 threadId，再用於 WS 與推播過濾
+  // 先計算 threadId，再用於 SSE 與推播過濾
   const currentThreadId = threadsMap[currentPlatform];
 
-  // WebSocket 監聽新訊息（thread 維度）
-  const handleNewMessage = useCallback((wsMessage: any) => {
-    console.log('📩 [WS] 收到訊息:', JSON.stringify(wsMessage, null, 2));
-    console.log('📩 [WS] currentThreadId:', currentThreadId);
+  // SSE 監聽新訊息（thread 維度）
+  const handleNewMessage = useCallback((sseMessage: any) => {
+    console.log('[SSE] 收到訊息:', JSON.stringify(sseMessage, null, 2));
+    console.log('[SSE] currentThreadId:', currentThreadId);
 
-    if (wsMessage.type === 'new_message' && wsMessage.data) {
-      const incomingThread = wsMessage.data.thread_id || wsMessage.data.threadId;
-      console.log('📩 [WS] incomingThread:', incomingThread, '比對結果:', incomingThread === currentThreadId);
+    if (sseMessage.type === 'new_message' && sseMessage.data) {
+      const incomingThread = sseMessage.data.thread_id || sseMessage.data.threadId;
+      console.log('[SSE] incomingThread:', incomingThread, '比對結果:', incomingThread === currentThreadId);
 
       if (currentThreadId && incomingThread && incomingThread !== currentThreadId) {
-        // 忽略非當前 thread 的推播
-        console.log('📩 [WS] ❌ thread 不匹配，忽略');
+        console.log('[SSE] thread 不匹配，忽略');
         return;
       }
 
-      // 將新訊息添加到列表末尾（messages 維持「舊 → 新」排序）
+      // 將新訊息添加到列表末尾（messages 維持「舊 -> 新」排序）
       setMessages(prev => {
-        // 避免重複添加 (檢查 message_id)
-        const exists = prev.some(msg => msg.id === wsMessage.data.id);
+        const exists = prev.some(msg => msg.id === sseMessage.data.id);
         if (exists) {
           return prev;
         }
-        return [...prev, wsMessage.data];
+        return [...prev, sseMessage.data];
       });
 
       // 同步更新會員的最後聊天時間
       if (member) {
         setMember({
           ...member,
-          lastChatTime: wsMessage.data.timestamp || new Date().toISOString()
+          lastChatTime: sseMessage.data.timestamp || new Date().toISOString()
         });
       }
-
-      // 收到新訊息時不自動滾動，保持當前位置
     }
   }, [member, currentThreadId]);
 
@@ -531,8 +527,38 @@ export default function ChatRoomLayout({
     [member?.id, (member as any)?.channelUid, (member as any)?.fb_customer_id, memberId, currentPlatform, fbApiBaseUrl, fbPageId]
   );
 
-  // 建立 WebSocket 連線（依當前平台 thread_id）
-  const { isConnected: isRealtimeConnected } = useWebSocket(currentThreadId, handleNewMessage);
+  // 建立 SSE 連線（依當前平台 thread_id）
+  const { isConnected: isRealtimeConnected } = useSSE(currentThreadId, handleNewMessage);
+
+  // Polling fallback：當 SSE 無法連線時，自動輪詢新訊息
+  useEffect(() => {
+    // 僅在 SSE 未連線 & LINE/Webchat 平台時啟用 polling
+    if (isRealtimeConnected || currentPlatform === 'Facebook') return;
+    const targetId = member?.id?.toString() || memberId;
+    if (!targetId) return;
+
+    const poll = async () => {
+      try {
+        const url = `/api/v1/members/${targetId}/chat-messages?page=1&page_size=${PAGE_SIZE}&platform=${currentPlatform}`;
+        const response = await apiGet(url);
+        const result = await response.json();
+        if (result.code === 200 && result.data?.messages) {
+          const fetched: ChatMessage[] = result.data.messages;
+          setMessages(prev => {
+            const existingIds = new Set(prev.map(m => m.id));
+            const brandNew = fetched.filter(m => !existingIds.has(m.id));
+            if (brandNew.length === 0) return prev;
+            return [...prev, ...brandNew];
+          });
+        }
+      } catch {
+        // polling 失敗不顯示錯誤
+      }
+    };
+
+    const intervalId = setInterval(poll, 3000);
+    return () => clearInterval(intervalId);
+  }, [isRealtimeConnected, currentPlatform, member?.id, memberId]);
 
   // 平台切換時重置訊息狀態並重新載入
   useEffect(() => {
@@ -775,9 +801,9 @@ export default function ChatRoomLayout({
           }
         }
 
-        // Facebook 平台：發送成功後重新載入聊天紀錄（因為沒有 WebSocket 推送）
-        // LINE/WebChat：新訊息透過 WebSocket handleNewMessage 推送
-        if (platform === 'Facebook') {
+        // Facebook 平台或 SSE 未連線：發送成功後重新載入聊天紀錄
+        // LINE/Webchat（SSE 已連線）：新訊息透過 SSE handleNewMessage 推送
+        if (platform === 'Facebook' || !isRealtimeConnected) {
           await loadChatMessages(1, false, { silent: true });
         }
 
@@ -1062,6 +1088,13 @@ export default function ChatRoomLayout({
                   setCurrentPlatform(platform);
                 }}
               />
+              {/* 即時連線狀態指示 */}
+              {currentPlatform !== 'Facebook' && (
+                <span
+                  title={isRealtimeConnected ? '即時連線中' : '輪詢模式（每 3 秒更新）'}
+                  className={`inline-block w-2 h-2 rounded-full ${isRealtimeConnected ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`}
+                />
+              )}
               <button
                 onClick={() => loadChatMessages(1, false)}
                 disabled={isLoading}

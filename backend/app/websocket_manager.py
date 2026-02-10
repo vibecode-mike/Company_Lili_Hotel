@@ -1,71 +1,68 @@
 """
-WebSocket 連線管理器
-用於即時推送 LINE 使用者訊息到前端聊天室
+SSE 連線管理器
+用於即時推送訊息到前端聊天室（透過 Server-Sent Events）
 """
+import asyncio
 import logging
 from typing import Dict, Set
-from fastapi import WebSocket
 
 logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
-    """管理 WebSocket 連線"""
+    """管理 SSE 連線（以 asyncio.Queue 作為傳輸介質）"""
 
     def __init__(self):
-        # thread_id -> Set[WebSocket]
-        self.active_connections: Dict[str, Set[WebSocket]] = {}
+        # thread_id -> Set[asyncio.Queue]
+        self.active_connections: Dict[str, Set[asyncio.Queue]] = {}
 
-    async def connect(self, websocket: WebSocket, thread_id: str):
-        """建立 WebSocket 連線"""
-        await websocket.accept()
+    def connect(self, thread_id: str) -> asyncio.Queue:
+        """建立 SSE 連線，返回該連線的訊息 Queue"""
+        queue: asyncio.Queue = asyncio.Queue()
         if thread_id not in self.active_connections:
             self.active_connections[thread_id] = set()
-        self.active_connections[thread_id].add(websocket)
+        self.active_connections[thread_id].add(queue)
         logger.info(
-            f"✅ WebSocket connected for thread {thread_id}, total connections: {self.get_connection_count(thread_id)}"
+            f"✅ SSE connected for thread {thread_id}, total connections: {self.get_connection_count(thread_id)}"
         )
+        return queue
 
-    def disconnect(self, websocket: WebSocket, thread_id: str):
-        """斷開 WebSocket 連線"""
+    def disconnect(self, thread_id: str, queue: asyncio.Queue):
+        """斷開 SSE 連線"""
         if thread_id in self.active_connections:
-            self.active_connections[thread_id].discard(websocket)
+            self.active_connections[thread_id].discard(queue)
             if not self.active_connections[thread_id]:
                 del self.active_connections[thread_id]
-        logger.info(f"🔌 WebSocket disconnected for thread {thread_id}")
+        logger.info(f"🔌 SSE disconnected for thread {thread_id}")
 
     async def send_new_message(self, thread_id: str, message_data: dict):
         """
         通知前端有新訊息
 
         Args:
-            thread_id: 對話 thread ID（格式：{platform}:{uid}）
+            thread_id: 對話 thread ID
             message_data: 訊息資料 (符合前端 ChatMessage 格式)
         """
         if thread_id not in self.active_connections:
-            logger.debug(f"No active WebSocket for thread {thread_id}")
+            logger.debug(f"No active SSE connections for thread {thread_id}")
             return
 
-        disconnected = set()
+        stale = set()
         success_count = 0
 
-        for connection in self.active_connections[thread_id]:
+        for queue in self.active_connections[thread_id]:
             try:
-                await connection.send_json({
-                    "type": "new_message",
-                    "data": message_data
-                })
+                await queue.put({"type": "new_message", "data": message_data})
                 success_count += 1
             except Exception as e:
-                logger.error(f"❌ Failed to send message to WebSocket: {e}")
-                disconnected.add(connection)
+                logger.error(f"❌ Failed to push message to SSE queue: {e}")
+                stale.add(queue)
 
-        # 清理斷開的連線
-        for conn in disconnected:
-            self.disconnect(conn, thread_id)
+        for q in stale:
+            self.disconnect(thread_id, q)
 
         if success_count > 0:
-            logger.info(f"📤 Sent message to {success_count} WebSocket connection(s) for thread {thread_id}")
+            logger.info(f"📤 Sent message to {success_count} SSE connection(s) for thread {thread_id}")
 
     def get_connection_count(self, thread_id: str = None) -> int:
         """獲取連線數量"""

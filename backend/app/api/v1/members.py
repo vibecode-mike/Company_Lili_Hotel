@@ -28,62 +28,17 @@ from app.core.pagination import PageParams, PageResponse, paginate_query
 from app.api.v1.auth import get_current_user
 from app.clients.line_app_client import LineAppClient
 from app.clients.fb_message_client import FbMessageClient
+from app.services.chatroom_service import ChatroomService
+from app.api.v1.chat_messages import _extract_fb_template_text
+from app.utils.time_utils import ensure_taipei_aware, format_taipei_time, to_taipei_isoformat
+from app.websocket_manager import manager
 from datetime import datetime, timezone
 from typing import Optional
 import os
-import pytz
 import logging
 
 logger = logging.getLogger(__name__)
-
-from app.services.chatroom_service import ChatroomService
-from app.api.v1.chat_messages import _extract_fb_template_text
-
-# 台北時區
-TAIPEI_TZ = pytz.timezone('Asia/Taipei')
-from app.websocket_manager import manager
 router = APIRouter()
-
-
-def format_taipei_time(dt: datetime) -> str:
-    """
-    將 UTC datetime 轉換為台北時間格式字串
-
-    Args:
-        dt: UTC datetime (naive 或 aware)
-
-    Returns:
-        格式化的時間字串，例如：「上午 10:30」
-    """
-    # 確保是 UTC aware datetime
-    if dt.tzinfo is None:
-        utc_dt = dt.replace(tzinfo=timezone.utc)
-    else:
-        utc_dt = dt
-
-    # 轉換為台北時間
-    local_dt = utc_dt.astimezone(TAIPEI_TZ)
-    hour = local_dt.hour
-    minute = local_dt.minute
-
-    # 判斷時段
-    if 0 <= hour < 6:
-        period = "凌晨"
-    elif 6 <= hour < 12:
-        period = "上午"
-    elif 12 <= hour < 14:
-        period = "中午"
-    elif 14 <= hour < 18:
-        period = "下午"
-    else:
-        period = "晚上"
-
-    # 轉換為 12 小時制
-    hour_12 = hour if hour <= 12 else hour - 12
-    if hour_12 == 0:
-        hour_12 = 12
-
-    return f"{period} {hour_12:02d}:{minute:02d}"
 
 
 @router.get("", response_model=SuccessResponse)
@@ -949,7 +904,7 @@ async def send_member_chat_message(
                 )
                 await db.flush()
 
-                # WebSocket 推送通知前端即時更新（包含 senderName）
+                # SSE 推送通知前端即時更新（包含 senderName）
                 now_utc = datetime.now(timezone.utc)
                 time_str = format_taipei_time(now_utc)
                 sender_name = current_user.username
@@ -1001,15 +956,15 @@ async def send_member_chat_message(
         if member:
             msg = await chatroom_service.append_message(member, "Facebook", "outgoing", text, message_source="manual", sender_id=current_user.id)
 
-            # WebSocket 推送通知前端即時更新 - 將 UTC 轉為台北時間顯示
-            time_str = format_taipei_time(msg.created_at) if msg.created_at else ""
+            # SSE 推送通知前端即時更新 - 將 UTC 轉為台北時間顯示
+            time_str = format_taipei_time(msg.created_at)
 
             await manager.send_new_message(msg.thread_id, {
                 "id": msg.id,
                 "type": "official",
                 "text": text,
                 "time": time_str,
-                "timestamp": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg.created_at else None,
+                "timestamp": to_taipei_isoformat(msg.created_at),
                 "thread_id": msg.thread_id,
                 "isRead": True,
                 "source": "manual",
@@ -1018,7 +973,7 @@ async def send_member_chat_message(
 
         # 重新獲取聊天紀錄，檢查是否有外部 API 回推的新訊息
         try:
-            sent_timestamp = int(msg.created_at.replace(tzinfo=timezone.utc).timestamp()) if msg and msg.created_at else 0
+            sent_timestamp = int(ensure_taipei_aware(msg.created_at).timestamp()) if msg and msg.created_at else 0
 
             fb_history = await fb_client.get_chat_history(effective_fb_customer_id, page_id, jwt_token)
 
@@ -1041,7 +996,7 @@ async def send_member_chat_message(
                         fb_dt = datetime.fromtimestamp(msg_time, tz=timezone.utc)
                         fb_time_str = format_taipei_time(fb_dt)
 
-                        # 透過 WebSocket 推送給前端
+                        # 透過 SSE 推送給前端
                         await manager.send_new_message(msg.thread_id, {
                             "id": f"fb_sync_{msg_time}",
                             "type": "user",
@@ -1063,7 +1018,7 @@ async def send_member_chat_message(
             "success": True,
             "message_id": send_result.get("message_id", msg.id if msg else None),
             "thread_id": msg.thread_id if msg else None,
-            "sent_at": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg and msg.created_at else datetime.now(timezone.utc).isoformat()
+            "sent_at": to_taipei_isoformat(msg.created_at) if msg else datetime.now(timezone.utc).isoformat()
         }
 
     elif platform_stripped == "Webchat":
@@ -1071,15 +1026,15 @@ async def send_member_chat_message(
         try:
             msg = await chatroom_service.append_message(member, platform_stripped, "outgoing", text, message_source="manual", sender_id=current_user.id)
 
-            # WebSocket 推送通知前端即時更新 - 將 UTC 轉為台北時間顯示
-            time_str = format_taipei_time(msg.created_at) if msg.created_at else ""
+            # SSE 推送通知前端即時更新 - 將 UTC 轉為台北時間顯示
+            time_str = format_taipei_time(msg.created_at)
 
             await manager.send_new_message(msg.thread_id, {
                 "id": msg.id,
                 "type": "official",
                 "text": text,
                 "time": time_str,
-                "timestamp": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg.created_at else None,
+                "timestamp": to_taipei_isoformat(msg.created_at),
                 "thread_id": msg.thread_id,
                 "isRead": True,
                 "source": "manual",
@@ -1090,7 +1045,7 @@ async def send_member_chat_message(
                 "success": True,
                 "message_id": msg.id,
                 "thread_id": msg.thread_id,
-                "sent_at": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg.created_at else None
+                "sent_at": to_taipei_isoformat(msg.created_at)
             }
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))

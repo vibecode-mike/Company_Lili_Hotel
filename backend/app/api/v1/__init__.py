@@ -59,6 +59,6 @@ api_router.include_router(
     prefix="/admin/meta_user",
     tags=["Meta 會員管理"],
 )
-api_router.include_router(websocket.router, prefix="", tags=["WebSocket 即時通訊"])
+api_router.include_router(websocket.router, prefix="", tags=["SSE 即時通訊"])
 api_router.include_router(line_notify.router, prefix="", tags=["LINE 訊息通知"])
 api_router.include_router(chat_session.router, prefix="", tags=["聊天 Session"])

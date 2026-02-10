@@ -1,9 +1,12 @@
 """
-WebSocket API 路由
-提供即時訊息推送功能
+SSE (Server-Sent Events) API 路由
+提供即時訊息推送功能，兼容 HTTP/2
 """
+import asyncio
+import json
 import logging
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Request
+from fastapi.responses import StreamingResponse
 
 from app.websocket_manager import manager
 
@@ -11,31 +14,40 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.websocket("/ws/chat/{thread_id}")
-async def websocket_endpoint(websocket: WebSocket, thread_id: str):
+@router.get("/sse/chat/{thread_id}")
+async def sse_chat(thread_id: str, request: Request):
     """
-    WebSocket 連線端點
-    前端連線此端點後,當對應 thread 有訊息時會即時收到通知
+    SSE 連線端點
+    前端透過 EventSource 連線此端點，當對應 thread 有訊息時會即時收到推送
 
     Args:
-        thread_id: 對話 Thread ID（格式：{platform}:{uid}）
+        thread_id: 對話 Thread ID
     """
-    await manager.connect(websocket, thread_id)
+    queue = manager.connect(thread_id)
 
-    try:
-        # 保持連線活躍
-        while True:
-            # 接收前端的 ping 或其他保活訊息
-            data = await websocket.receive_text()
-            logger.debug(f"Received from WebSocket (thread {thread_id}): {data}")
+    async def event_stream():
+        try:
+            while True:
+                # 檢查客戶端是否已斷開
+                if await request.is_disconnected():
+                    break
+                try:
+                    msg = await asyncio.wait_for(queue.get(), timeout=30)
+                    yield f"data: {json.dumps(msg, ensure_ascii=False)}\n\n"
+                except asyncio.TimeoutError:
+                    # SSE keepalive comment（防止代理或瀏覽器關閉連線）
+                    yield ": keepalive\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            manager.disconnect(thread_id, queue)
 
-            # 回應 pong
-            if data == "ping":
-                await websocket.send_json({"type": "pong"})
-
-    except WebSocketDisconnect:
-        logger.info(f"WebSocket disconnected normally for thread {thread_id}")
-    except Exception as e:
-        logger.error(f"WebSocket error for thread {thread_id}: {e}")
-    finally:
-        manager.disconnect(websocket, thread_id)
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # 告知 Nginx 不要緩衝
+        },
+    )

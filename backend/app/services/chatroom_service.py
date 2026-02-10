@@ -1,63 +1,24 @@
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
-import pytz
-from sqlalchemy import select, func, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.conversation import ConversationMessage, ConversationThread
 from app.models.member import Member
-from app.models.conversation import ConversationThread, ConversationMessage
-from app.models.user import User
+from app.utils.time_utils import TAIPEI_TZ, format_taipei_time, to_taipei_isoformat
 
 logger = logging.getLogger(__name__)
-
-# 台北時區
-TAIPEI_TZ = pytz.timezone('Asia/Taipei')
-
-
-def format_chat_time(dt: Optional[datetime]) -> str:
-    """格式化為 '時段 HH:mm' 格式，例如 '下午 03:30'"""
-    if not dt:
-        return ""
-
-    # 統一處理：假設 naive datetime 是 UTC 時間，然後轉換為台北時間顯示
-    if dt.tzinfo is None:
-        # naive datetime 視為 UTC
-        utc_dt = dt.replace(tzinfo=timezone.utc)
-        local_dt = utc_dt.astimezone(TAIPEI_TZ)
-    else:
-        local_dt = dt.astimezone(TAIPEI_TZ)
-    hour = local_dt.hour
-    minute = local_dt.minute
-
-    # 判斷時段 (台灣時間)
-    if 0 <= hour < 6:
-        period = "凌晨"
-        display_hour = hour if hour > 0 else 12
-    elif 6 <= hour < 12:
-        period = "上午"
-        display_hour = hour
-    elif 12 <= hour < 14:
-        period = "中午"
-        display_hour = 12 if hour == 12 else hour - 12
-    elif 14 <= hour < 18:
-        period = "下午"
-        display_hour = hour - 12
-    else:  # 18-23
-        period = "晚上"
-        display_hour = hour - 12
-
-    return f"{period} {display_hour:02d}:{minute:02d}"
 
 
 class ChatroomService:
     """
     多渠道聊天室服務
     - 使用 conversation_threads / conversation_messages 表
-    - thread_id 格式：{platform}:{platform_uid}
+    - thread_id = platform_uid，透過 platform 欄位區分渠道
     """
 
     def __init__(self, db: AsyncSession):
@@ -110,7 +71,7 @@ class ChatroomService:
             response=content if direction == "outgoing" else None,
             message_source=message_source,
             sent_by=sender_id,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(TAIPEI_TZ).replace(tzinfo=None),
         )
         self.db.add(msg)
         thread.last_message_at = msg.created_at
@@ -165,17 +126,7 @@ class ChatroomService:
         messages = []
         for record in records:
             msg_type = "user" if record.direction == "incoming" else "official"
-            if record.created_at:
-                # naive datetime 視為 UTC（與 append_message 存入方式一致）
-                if record.created_at.tzinfo is None:
-                    utc_dt = record.created_at.replace(tzinfo=timezone.utc)
-                else:
-                    utc_dt = record.created_at.astimezone(timezone.utc)
-                # 轉換為台北時間後輸出 ISO 格式
-                created_at_local = utc_dt.astimezone(TAIPEI_TZ)
-                timestamp_str = created_at_local.isoformat()
-            else:
-                timestamp_str = None
+            timestamp_str = to_taipei_isoformat(record.created_at)
 
             # 計算 senderName：manual 訊息顯示發送人員名稱，其他顯示「系統」
             sender_name = None
@@ -190,9 +141,9 @@ class ChatroomService:
                     "id": record.id,
                     "type": msg_type,
                     "text": record.question if record.direction == "incoming" else record.response,
-                    "time": format_chat_time(record.created_at),  # 格式化為 "下午 03:30"
+                    "time": format_taipei_time(record.created_at),
                     "timestamp": timestamp_str,
-                    "isRead": record.status == "read" if hasattr(record, "status") else False,
+                    "isRead": record.status == "read",
                     "source": record.message_source,
                     "senderName": sender_name,
                 }

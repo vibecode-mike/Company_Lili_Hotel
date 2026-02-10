@@ -13,7 +13,8 @@ from app.database import get_db
 from app.models.member import Member
 from app.models.fb_channel import FbChannel
 from app.schemas.common import SuccessResponse
-from app.services.chatroom_service import ChatroomService, format_chat_time
+from app.services.chatroom_service import ChatroomService
+from app.utils.time_utils import format_taipei_time as format_chat_time
 from app.clients.fb_message_client import FbMessageClient
 import json
 
