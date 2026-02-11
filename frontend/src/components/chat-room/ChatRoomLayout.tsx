@@ -62,6 +62,22 @@ function findLatestMessageTimestamp(messages: ChatMessage[]): string | undefined
   return undefined;
 }
 
+/**
+ * Merge new messages into an existing sorted (oldest-first) array,
+ * deduplicating by `id` and keeping chronological order by timestamp.
+ */
+function mergeNewMessages(existing: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
+  const existingIds = new Set(existing.map(m => m.id));
+  const unique = incoming.filter(m => !existingIds.has(m.id));
+  if (unique.length === 0) return existing;
+
+  const merged = [...existing, ...unique];
+  merged.sort((a, b) =>
+    (extractMessageTimestamp(a) || '').localeCompare(extractMessageTimestamp(b) || '')
+  );
+  return merged;
+}
+
 // 內嵌組件已移至獨立檔案:
 // - UserAvatar, OfficialAvatar, MessageBubble → ChatBubble.tsx
 
@@ -422,14 +438,8 @@ export default function ChatRoomLayout({
         return;
       }
 
-      // 將新訊息添加到列表末尾（messages 維持「舊 -> 新」排序）
-      setMessages(prev => {
-        const exists = prev.some(msg => msg.id === sseMessage.data.id);
-        if (exists) {
-          return prev;
-        }
-        return [...prev, sseMessage.data];
-      });
+      // 將新訊息按時間戳插入正確位置（messages 維持「舊 -> 新」排序）
+      setMessages(prev => mergeNewMessages(prev, [sseMessage.data]));
 
       // 同步更新會員的最後聊天時間
       if (member) {
@@ -544,12 +554,7 @@ export default function ChatRoomLayout({
         const result = await response.json();
         if (result.code === 200 && result.data?.messages) {
           const fetched: ChatMessage[] = result.data.messages;
-          setMessages(prev => {
-            const existingIds = new Set(prev.map(m => m.id));
-            const brandNew = fetched.filter(m => !existingIds.has(m.id));
-            if (brandNew.length === 0) return prev;
-            return [...prev, ...brandNew];
-          });
+          setMessages(prev => mergeNewMessages(prev, fetched));
         }
       } catch {
         // polling 失敗不顯示錯誤

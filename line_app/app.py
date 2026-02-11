@@ -3178,6 +3178,48 @@ def _source_key(ev_source) -> str:
     return "anonymous"
 
 
+def _is_duplicate_webhook(message_id: str, handler_name: str = "webhook") -> bool:
+    """
+    檢查 webhook 事件是否已處理過（LINE 在未及時收到 200 時會重送）。
+    透過 conversation_messages.id 比對，避免重複處理。
+    """
+    try:
+        if fetchone("SELECT 1 FROM conversation_messages WHERE id = :mid LIMIT 1", {"mid": message_id}):
+            logging.info(f"[{handler_name}] Skipping duplicate webhook: msg_id={message_id}")
+            return True
+    except Exception:
+        pass  # 查詢失敗時不阻擋正常流程
+    return False
+
+
+def _notify_backend(*, line_uid: str, message_text: str, timestamp, message_id: str,
+                    direction: str = "incoming", source: str | None = None,
+                    handler_name: str = "webhook"):
+    """
+    通知 Backend 有新訊息（觸發 SSE 推送給前端）。
+    """
+    backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8700")
+    payload = {
+        "line_uid": line_uid,
+        "message_text": message_text,
+        "timestamp": timestamp,
+        "message_id": message_id,
+    }
+    if direction != "incoming":
+        payload["direction"] = direction
+    if source:
+        payload["source"] = source
+    try:
+        resp = requests.post(
+            f"{backend_url}/api/v1/line/message-notify",
+            json=payload,
+            timeout=5,
+        )
+        logging.info(f"[{handler_name}] Backend notify ({direction}): {resp.status_code} - {resp.text[:200]}")
+    except Exception as e:
+        logging.error(f"[{handler_name}] Failed to notify backend ({direction}): {e}")
+
+
 def on_follow(event: FollowEvent):
     """
     處理用戶加入好友事件
@@ -3360,6 +3402,10 @@ def on_text(event: MessageEvent):
 
     logging.info(f"[on_text] uid={uid} text={text_in[:80]}")
 
+    # === 0. 防止 webhook 重試造成重複處理 ===
+    if _is_duplicate_webhook(event.message.id, "on_text"):
+        return
+
     # === 1. 建立 thread 並儲存用戶的 incoming message ===
     thread_id = None
     try:
@@ -3491,53 +3537,39 @@ def on_text(event: MessageEvent):
                     status="sent"
                 )
 
-                # ✅ 通知後端自動回應（GPT/keyword/always 都要通知）
-                # 這樣前端聊天室可以即時顯示自動回應
-                try:
-                    backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8700")
-                    current_ts = int(time.time() * 1000)  # time.time() 返回 UTC epoch 秒數
-                    requests.post(
-                        f"{backend_url}/api/v1/line/message-notify",
-                        json={
-                            "line_uid": uid,
-                            "message_text": reply_text,
-                            "timestamp": current_ts,
-                            "message_id": str(msg_id) if msg_id else f"auto_{current_ts}",
-                            "direction": "outgoing",
-                            "source": message_source  # gpt/keyword/always
-                        },
-                        timeout=5
-                    )
-                    logging.info(f"[on_text] Notified backend about {message_source} response")
-                except Exception as e:
-                    logging.error(f"[on_text] Failed to notify auto response: {e}")
-
             except Exception:
                 logging.exception("[on_text] Failed to save outgoing message")
     else:
         logging.warning(f"[on_text] No response generated for uid={uid}, text={text_in[:50]}")
 
-    # === 通知 Backend 有新訊息 (不阻塞主流程) ===
-    # 移除 mid 條件：line_notify.py 會自己根據 line_uid 查詢 member_id
+    # === 通知 Backend 有新訊息 ===
+    # 順序重要：先推 incoming（用戶訊息），再推 outgoing（自動回應）
+    # 這樣前端 SSE append 時順序才正確
     if uid:
-        try:
-            backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8700")
-            resp = requests.post(
-                f"{backend_url}/api/v1/line/message-notify",
-                json={
-                    "line_uid": uid,
-                    "message_text": text_in,
-                    "timestamp": event.timestamp,  # 使用 LINE 官方時間戳 (毫秒)
-                    "message_id": event.message.id
-                },
-                timeout=5
-            )
-            logging.info(f"[on_text] Backend notify response: {resp.status_code} - {resp.text[:200]}")
-        except Exception as e:
-            logging.error(f"[on_text] Failed to notify backend: {e}")
+        _notify_backend(
+            line_uid=uid,
+            message_text=text_in,
+            timestamp=event.timestamp,
+            message_id=event.message.id,
+            handler_name="on_text",
+        )
+
+    if uid and reply_text and thread_id:
+        current_ts = int(time.time() * 1000)
+        _notify_backend(
+            line_uid=uid,
+            message_text=reply_text,
+            timestamp=current_ts,
+            message_id=str(msg_id) if msg_id else f"auto_{current_ts}",
+            direction="outgoing",
+            source=message_source,
+            handler_name="on_text",
+        )
 
 # 處理使用者傳貼圖事件
 def on_sticker(event: MessageEvent):
+    if _is_duplicate_webhook(event.message.id, "on_sticker"):
+        return
 
     # 從事件來源取得使用者 user_id
     uid = getattr(event.source, "user_id", None)
@@ -3565,6 +3597,9 @@ def on_sticker(event: MessageEvent):
 
 # 處理圖片事件
 def on_image(event: MessageEvent):
+    if _is_duplicate_webhook(event.message.id, "on_image"):
+        return
+
     uid = getattr(event.source, "user_id", None)
     thread_id = ensure_thread_for_user(uid)
     line_channel_id = getattr(g, "line_channel_id", None) or getattr(event, "destination", None)
