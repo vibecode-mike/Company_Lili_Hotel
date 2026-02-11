@@ -220,6 +220,8 @@ def utcnow():
 def jdump(x): return json.dumps(x, ensure_ascii=False)
 
 # ===== Multi-channel helpers (新增) =====
+# 兼容：line_channels 表可能是 channel_id 或 line_channel_id
+LINE_CHANNEL_ID_COL = "line_channel_id" if _table_has("line_channels", "line_channel_id") else "channel_id"
 def get_credentials(channel_id: str | None):
     """
     從資料表抓該 channel 的 access_token / secret / liff_id_open。
@@ -257,13 +259,13 @@ def get_messaging_api(channel_id: str | None = None):
 
 # ========= 用 LINE 的 Channel ID（line_channel_id）抓憑證 =========
 def get_credentials_by_line_id(line_channel_id: str) -> dict | None:
-    row = fetchone("""
+    row = fetchone(f"""
         SELECT
             channel_access_token AS token,
             channel_secret       AS secret,
             COALESCE(liff_id_open, '') AS liff_id_open
         FROM line_channels
-        WHERE channel_id = :cid AND is_active = 1
+        WHERE {LINE_CHANNEL_ID_COL} = :cid AND is_active = 1
         LIMIT 1
     """, {"cid": line_channel_id})
     return row  # 可能為 None
@@ -318,10 +320,10 @@ def get_channel_access_token_by_channel_id(line_channel_id: Optional[str]) -> st
 
     # 1️⃣ 指定了 line_channel_id → 從 DB 查
     if line_channel_id:
-        row = fetchone("""
+        row = fetchone(f"""
             SELECT channel_access_token
             FROM line_channels
-            WHERE channel_id = :cid
+            WHERE {LINE_CHANNEL_ID_COL} = :cid AND is_active = 1
             LIMIT 1
         """, {"cid": line_channel_id})
 
@@ -330,8 +332,10 @@ def get_channel_access_token_by_channel_id(line_channel_id: Optional[str]) -> st
             if token:
                 return token
 
-        # 有給 line_channel_id 但查不到 → 明確錯誤
-        raise RuntimeError(f"Invalid line_channel_id or missing token: {line_channel_id}")
+        logging.warning(
+            "[LINE] line_channel_id not found or missing token, fallback to env token: %s",
+            line_channel_id,
+        )
 
     # 2️⃣ 沒指定 line_channel_id → fallback 用 .env（舊行為）
     token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
@@ -365,7 +369,7 @@ def setup_line_liff(line_channel_id: str, channel_secret: str, view_url: str, si
     # 3) 建立成功就把 liff_id_open 寫回 DB（你已經有這個欄位）
     if ok and liff_id:
         execute(
-            "UPDATE line_channels SET liff_id_open=:liff, updated_at=:now WHERE channel_id=:cid",
+            f"UPDATE line_channels SET liff_id_open=:liff, updated_at=:now WHERE {LINE_CHANNEL_ID_COL}=:cid",
             {"liff": liff_id, "cid": line_channel_id, "now": utcnow()},
         )
 
@@ -383,12 +387,19 @@ def setup_line_liff(line_channel_id: str, channel_secret: str, view_url: str, si
 # -------------------------------------------------
 
 # 
-def fetch_line_profile(user_id: str) -> tuple[Optional[str], Optional[str]]:
+def fetch_line_profile(user_id: str, line_channel_id: Optional[str] = None) -> tuple[Optional[str], Optional[str]]:
     """
     透過 LINE 官方 API 取回 displayName / pictureUrl
     回傳 (display_name, picture_url)；失敗時皆回 None
     """
-    token = LINE_CHANNEL_ACCESS_TOKEN
+    token = None
+    if line_channel_id:
+        try:
+            token = get_channel_access_token_by_channel_id(line_channel_id)
+        except Exception as e:
+            logging.warning("[PROFILE] token lookup failed for %s: %s", line_channel_id, e)
+    if not token:
+        token = LINE_CHANNEL_ACCESS_TOKEN
     if not user_id or not token:
         return None, None
     try:
@@ -3020,7 +3031,7 @@ def api_member_form_submit():
 
     # 2) 取最新 LINE profile（名字、頭像）
     try:
-        dn, pu = fetch_line_profile(uid)
+        dn, pu = fetch_line_profile(uid, line_channel_id=line_channel_id)
     except Exception:
         dn = answers.get("line_display_name") or None
         pu = answers.get("line_avatar") or None
@@ -3072,10 +3083,11 @@ def connect_line_channel():
     token = data["access_token"]
 
     # 存入資料庫（若重複 channel_id 則更新）
-    execute("""
-        INSERT INTO line_channels (line_channel_id, channel_secret, channel_access_token, is_active)
+    id_col = LINE_CHANNEL_ID_COL
+    execute(f"""
+        INSERT INTO line_channels ({id_col}, channel_secret, channel_access_token, is_active)
         VALUES (:cid, :sec, :tok, 1)
-        ON CONFLICT(line_channel_id)
+        ON CONFLICT({id_col})
         DO UPDATE SET channel_secret=:sec, channel_access_token=:tok, is_active=1
     """, {"cid": line_channel_id, "sec": secret, "tok": token})
 
@@ -3205,9 +3217,13 @@ def on_follow(event: FollowEvent):
         )
         logging.info("[on_follow] Using default welcome message")
 
+    line_channel_id = getattr(g, "line_channel_id", None) or getattr(event, "destination", None)
+
     # === 2. 發送歡迎訊息 ===
     try:
-        messaging_api.reply_message(ReplyMessageRequest(
+        token = get_channel_access_token_by_channel_id(line_channel_id)
+        api = MessagingApi(ApiClient(Configuration(access_token=token)))
+        api.reply_message(ReplyMessageRequest(
             reply_token=event.reply_token,
             messages=[TextMessage(text=welcome_msg)]
         ))
@@ -3219,7 +3235,7 @@ def on_follow(event: FollowEvent):
     if uid:
         try:
             # 取得 LINE profile
-            dn, pu = fetch_line_profile(uid)
+            dn, pu = fetch_line_profile(uid, line_channel_id=line_channel_id)
 
             # 創建/更新 LINE 好友記錄
             friend_id = upsert_line_friend(
@@ -3288,10 +3304,11 @@ def on_unfollow(event: UnfollowEvent):
 def on_postback(event: PostbackEvent):
     uid = getattr(event.source, "user_id", None)
     data = getattr(event.postback, "data", "") if getattr(event, "postback", None) else ""
+    line_channel_id = getattr(g, "line_channel_id", None) or getattr(event, "destination", None)
     if uid:
         try:
             cur = fetch_member_profile(uid) or {}
-            api_dn, api_pu = fetch_line_profile(uid)
+            api_dn, api_pu = fetch_line_profile(uid, line_channel_id=line_channel_id)
             dn_to_write = api_dn if (api_dn and api_dn != cur.get("line_display_name")) else None
             pu_to_write = api_pu if (api_pu and api_pu != cur.get("line_avatar")) else None
 
@@ -3335,6 +3352,7 @@ def on_text(event: MessageEvent):
     user_key = _source_key(event.source)
     text_in  = event.message.text.strip()
     uid      = getattr(event.source, "user_id", None)
+    line_channel_id = getattr(g, "line_channel_id", None) or getattr(event, "destination", None)
 
     # 確保 uid 去除空白字元
     if uid:
@@ -3370,7 +3388,7 @@ def on_text(event: MessageEvent):
             cur_pu = cur.get("line_avatar")
 
             # 從 LINE API 取得最新 profile
-            api_dn, api_pu = fetch_line_profile(uid)
+            api_dn, api_pu = fetch_line_profile(uid, line_channel_id=line_channel_id)
 
             # 只在有變更時才更新
             dn_to_write = api_dn if (api_dn and api_dn != cur_dn) else None
@@ -3435,17 +3453,26 @@ def on_text(event: MessageEvent):
 
     # === 5. 發送回覆訊息 ===
     if reply_text:
-        # 截斷過長訊息
         reply_text = reply_text[:5000]
 
         try:
-            messaging_api.reply_message(ReplyMessageRequest(
+            # ★ 關鍵修正：依 webhook 事件所屬 channel 取得正確 token
+            token = get_channel_access_token_by_channel_id(line_channel_id)
+
+            api = MessagingApi(ApiClient(Configuration(
+                access_token=token
+            )))
+
+            api.reply_message(ReplyMessageRequest(
                 reply_token=event.reply_token,
                 messages=[TextMessage(text=reply_text)]
             ))
+
             logging.info(f"[on_text] Reply sent successfully, source={message_source}")
+
         except Exception:
             logging.exception(f"[on_text] Failed to send reply via LINE API")
+
 
         # 更新用戶記憶
         user_memory[user_key].append(("user", text_in))
@@ -3540,9 +3567,12 @@ def on_sticker(event: MessageEvent):
 def on_image(event: MessageEvent):
     uid = getattr(event.source, "user_id", None)
     thread_id = ensure_thread_for_user(uid)
+    line_channel_id = getattr(g, "line_channel_id", None) or getattr(event, "destination", None)
 
     message_id = event.message.id
-    content = messaging_api.get_message_content(message_id)
+    token = get_channel_access_token_by_channel_id(line_channel_id)
+    api = MessagingApi(ApiClient(Configuration(access_token=token)))
+    content = api.get_message_content(message_id)
 
     filename = f"{message_id}.jpg"
     filepath = os.path.join(ASSET_LOCAL_DIR, filename)

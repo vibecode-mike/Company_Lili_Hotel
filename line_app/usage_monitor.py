@@ -18,7 +18,7 @@ from flask import Blueprint, request, jsonify
 
 # 使用共用的配置和資料庫模組
 from config import LINE_CHANNEL_ACCESS_TOKEN
-from db import fetchone, fetchall
+from db import fetchone, fetchall, table_has_column
 
 bp = Blueprint("usage_monitor", __name__)
 
@@ -26,6 +26,7 @@ bp = Blueprint("usage_monitor", __name__)
 # LINE Token 解析（多租戶）
 # -------------------------------------------------
 ENV_FALLBACK_TOKEN = LINE_CHANNEL_ACCESS_TOKEN
+LINE_CHANNEL_ID_COL = "line_channel_id" if table_has_column("line_channels", "line_channel_id") else "channel_id"
 
 def resolve_access_token(channel_id: Optional[str]) -> Optional[str]:
     """
@@ -33,10 +34,10 @@ def resolve_access_token(channel_id: Optional[str]) -> Optional[str]:
     查不到時，回退 .env 預設 token（單一頻道情境）。
     """
     if channel_id:
-        row = fetchone("""
+        row = fetchone(f"""
             SELECT channel_access_token AS token
             FROM line_channels
-            WHERE channel_id = :cid AND is_active = 1
+            WHERE {LINE_CHANNEL_ID_COL} = :cid AND is_active = 1
             LIMIT 1
         """, {"cid": channel_id})
         if row and row.get("token"):
