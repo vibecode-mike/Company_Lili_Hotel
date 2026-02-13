@@ -38,7 +38,7 @@ async def get_tags(
     sort_order: Optional[str] = Query("desc", pattern="^(asc|desc)$"),
     page_params: PageParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    # current_user: User = Depends(get_current_user),  # 暫時移除認證，開發階段使用
+    current_user: User = Depends(get_current_user),
 ):
     """
     獲取標籤列表
@@ -138,6 +138,7 @@ async def get_tags(
 @router.get("/available-options", response_model=SuccessResponse)
 async def get_available_tag_options(
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     獲取標籤編輯器的可用標籤選項
@@ -283,7 +284,7 @@ async def delete_tag(
 @router.get("/statistics", response_model=SuccessResponse)
 async def get_tag_statistics(
     db: AsyncSession = Depends(get_db),
-    # current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """獲取標籤統計資訊"""
     # 獲取標籤數量
@@ -360,7 +361,7 @@ async def get_tag_history(
     tag_type: TagType,
     page_params: PageParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    # current_user: User = Depends(get_current_user),  # 暫時移除認證，開發階段使用
+    current_user: User = Depends(get_current_user),
 ):
     """獲取標籤觸發歷史記錄"""
     # 驗證標籤是否存在
@@ -420,7 +421,7 @@ async def get_tag_history(
 async def get_tag_trends(
     days: int = 7,
     db: AsyncSession = Depends(get_db),
-    # current_user: User = Depends(get_current_user),  # 暫時移除認證，開發階段使用
+    current_user: User = Depends(get_current_user),
 ):
     """獲取標籤觸發趨勢資料（用於圖表展示）
 

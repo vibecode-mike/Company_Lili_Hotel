@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import os
+import re
 from urllib.parse import quote_plus
 from pathlib import Path
 
@@ -60,6 +61,8 @@ MYSQL_PASS = os.getenv("MYSQL_PASS", os.getenv("DB_PASS", "123456"))
 MYSQL_HOST = os.getenv("MYSQL_HOST", os.getenv("DB_HOST", "192.168.50.123"))
 MYSQL_PORT = int(os.getenv("MYSQL_PORT", os.getenv("DB_PORT", "3306")))
 MYSQL_DB = os.getenv("MYSQL_DB", os.getenv("DB_NAME", "lili_hotel"))
+if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', MYSQL_DB):
+    raise RuntimeError(f"Invalid database name: {MYSQL_DB!r}")
 
 DATABASE_URL = (
     f"mysql+pymysql://{MYSQL_USER}:{quote_plus(MYSQL_PASS)}@"

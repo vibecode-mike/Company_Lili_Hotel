@@ -73,11 +73,11 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     []
   );
   const fbServiceAccount = useMemo(
-    () => import.meta.env.VITE_FB_FIRM_ACCOUNT?.trim() || 'tycg-admin',
+    () => import.meta.env.VITE_FB_FIRM_ACCOUNT?.trim() || '',
     []
   );
   const fbServicePassword = useMemo(
-    () => import.meta.env.VITE_FB_FIRM_PASSWORD?.trim() || '123456',
+    () => import.meta.env.VITE_FB_FIRM_PASSWORD?.trim() || '',
     []
   );
 

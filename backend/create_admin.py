@@ -2,6 +2,7 @@
 創建初始管理員賬號
 """
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -38,11 +39,11 @@ async def ensure_user(username: str, email: str, password: str):
 
 
 async def main():
-    print("開始創建預設管理員與外部登入帳號...")
-    # 原有預設 admin
-    await ensure_user("admin", "admin@lilihotel.com", "admin123")
-    # 新增外部登入帳號（避免與既有 email 衝突，使用獨立信箱）
-    await ensure_user("tycg-admin", "tycg-admin@lilihotel.com", "123456")
+    admin_pw = os.getenv("INIT_ADMIN_PASSWORD")
+    if not admin_pw:
+        raise RuntimeError("Set INIT_ADMIN_PASSWORD env var before running init script")
+    print("開始創建預設管理員...")
+    await ensure_user("admin", "admin@lilihotel.com", admin_pw)
     print("完成。")
 
 

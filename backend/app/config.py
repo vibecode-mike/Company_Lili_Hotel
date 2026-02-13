@@ -20,11 +20,11 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "力麗飯店 LineOA CRM"
     VERSION: str = "0.1.0"
     API_V1_STR: str = "/api/v1"
-    ENVIRONMENT: str = "development"
-    DEBUG: bool = True
+    ENVIRONMENT: str = "production"
+    DEBUG: bool = False
 
     # 資料庫配置
-    DATABASE_URL: str = "mysql+aiomysql://root:l123456@127.0.0.1:3306/lili_hotel"
+    DATABASE_URL: str = ""  # Required: must be set in .env
     DATABASE_POOL_SIZE: int = 20
     DATABASE_MAX_OVERFLOW: int = 10
 
@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     UPLOAD_ROUTE_PREFIX: str = "/uploads"
 
     # CORS
-    ALLOWED_ORIGINS: str = "*"
+    ALLOWED_ORIGINS: str = ""
 
     @property
     def project_root(self) -> Path:

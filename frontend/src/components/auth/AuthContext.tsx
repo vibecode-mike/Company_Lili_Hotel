@@ -54,8 +54,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // FB API configuration
   const fbApiBaseUrl = (import.meta.env.VITE_FB_API_URL?.trim() || 'https://api-youth-tycg.star-bit.io').replace(/\/+$/, '');
-  const fbFirmAccount = import.meta.env.VITE_FB_FIRM_ACCOUNT?.trim() || 'tycg-admin';
-  const fbFirmPassword = import.meta.env.VITE_FB_FIRM_PASSWORD?.trim() || '123456';
+  const fbFirmAccount = import.meta.env.VITE_FB_FIRM_ACCOUNT?.trim() || '';
+  const fbFirmPassword = import.meta.env.VITE_FB_FIRM_PASSWORD?.trim() || '';
 
   // Logout 函式（先定義，供 apiClient 使用）
   const logout = useCallback(() => {

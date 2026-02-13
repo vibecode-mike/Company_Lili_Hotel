@@ -6,6 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 from app.config import settings
 from app.database import close_db
 from app.api.v1 import api_router
@@ -21,13 +24,26 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response: Response = await call_next(request)
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        if not settings.DEBUG:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
+
+
 # 創建 FastAPI 應用
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    docs_url=f"{settings.API_V1_STR}/docs",
-    openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    redoc_url=f"{settings.API_V1_STR}/redoc",
+    openapi_url=f"{settings.API_V1_STR}/openapi.json" if settings.DEBUG else None,
+    docs_url=f"{settings.API_V1_STR}/docs" if settings.DEBUG else None,
+    redoc_url=f"{settings.API_V1_STR}/redoc" if settings.DEBUG else None,
 )
 
 # CORS 中間件
@@ -35,9 +51,12 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
+
+# 安全標頭中間件
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 # 應用啟動事件
@@ -45,6 +64,22 @@ app.add_middleware(
 async def startup_event():
     """應用啟動時執行"""
     logger.info("🚀 Starting application...")
+
+    # 記錄安全配置
+    security_logger = logging.getLogger("security")
+    security_logger.info("=== Security Configuration ===")
+    security_logger.info(f"Environment: {settings.ENVIRONMENT}")
+    security_logger.info(f"DEBUG mode: {settings.DEBUG}")
+    security_logger.info(f"CORS origins: {settings.allowed_origins_list}")
+    security_logger.info(f"API docs enabled: {settings.DEBUG}")
+
+    # 安全警告
+    if settings.DEBUG:
+        security_logger.warning("WARNING: Running in DEBUG mode - not suitable for production!")
+    if settings.ALLOWED_ORIGINS == "*":
+        security_logger.warning("WARNING: CORS allows all origins!")
+    if "change" in settings.SECRET_KEY.lower() or len(settings.SECRET_KEY) < 32:
+        security_logger.warning("WARNING: SECRET_KEY appears to be a development placeholder!")
 
     # 初始化資料庫（可選，如果需要自動創建表）
     # await init_db()

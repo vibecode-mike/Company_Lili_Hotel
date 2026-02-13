@@ -64,7 +64,7 @@ import usage_monitor #群發餘額量顯示
 from member_liff import bp as member_liff_bp # 載入 LIFF 會員表單的 Blueprint 模組
 from manage_botinfo import bp as manage_botinfo_bp # 顯示透過「客戶自行輸入的 Messaging API Channel Access Token」呼叫 LINE 官方 `/v2/bot/info` 端點，並回傳該官方帳號的基本資料，包含 Basic ID（@xxxxxxx）、displayName、pictureUrl 等。
 from collections import defaultdict, deque
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Iterable
 from urllib.parse import quote_plus, quote
 from linebot.exceptions import InvalidSignatureError
 
@@ -435,6 +435,46 @@ def fetch_member_profile(line_uid: str) -> dict:
         LIMIT 1
     """
     return fetchone(sql, {"u": line_uid}) or {}
+
+
+DISPLAY_NAME_TOKEN = "{好友的顯示名稱}"
+DISPLAY_NAME_TOKEN_SIMPLE = "{好友的显示名称}"
+
+
+def _get_display_name_for_uid(line_uid: str, line_channel_id: Optional[str] = None) -> Optional[str]:
+    # 先用 DB 快取，沒有再向 LINE 取
+    try:
+        row = fetch_member_profile(line_uid) or {}
+        dn = row.get("line_display_name")
+        if dn:
+            return dn
+    except Exception:
+        dn = None
+
+    try:
+        dn, _ = fetch_line_profile(line_uid, line_channel_id=line_channel_id)
+        return dn
+    except Exception:
+        return None
+
+
+def render_template_text(
+    text: Optional[str],
+    *,
+    line_uid: Optional[str] = None,
+    line_channel_id: Optional[str] = None,
+    display_name: Optional[str] = None,
+) -> Optional[str]:
+    if not text:
+        return text
+    if DISPLAY_NAME_TOKEN not in text and DISPLAY_NAME_TOKEN_SIMPLE not in text:
+        return text
+    dn = display_name
+    if not dn and line_uid:
+        dn = _get_display_name_for_uid(line_uid, line_channel_id=line_channel_id)
+    if not dn:
+        return text
+    return text.replace(DISPLAY_NAME_TOKEN, dn).replace(DISPLAY_NAME_TOKEN_SIMPLE, dn)
 
 
 # 補使用者line資料
@@ -1104,7 +1144,134 @@ def _ask_gpt(messages):
 # -------------------------------------------------
 # Auto Response 檢查函數
 # -------------------------------------------------
-def check_keyword_trigger(line_uid: str, text: str):
+# DB schema compatibility for auto_response tables
+AUTO_RESPONSE_MSG_ID_COL = (
+    "response_id" if _table_has("auto_response_messages", "response_id") else "auto_response_id"
+)
+AUTO_RESPONSE_KW_ID_COL = (
+    "auto_response_id" if _table_has("auto_response_keywords", "auto_response_id") else "response_id"
+)
+AUTO_RESPONSE_KW_TEXT_COL = (
+    "keyword" if _table_has("auto_response_keywords", "keyword") else "keyword_text"
+)
+
+# Security: validate all dynamically-determined column names against whitelist
+_VALID_COL_NAMES = frozenset({
+    "line_channel_id", "channel_id",
+    "response_id", "auto_response_id",
+    "keyword", "keyword_text",
+})
+for _col_var_name, _col_val in [
+    ("LINE_CHANNEL_ID_COL", LINE_CHANNEL_ID_COL),
+    ("AUTO_RESPONSE_MSG_ID_COL", AUTO_RESPONSE_MSG_ID_COL),
+    ("AUTO_RESPONSE_KW_ID_COL", AUTO_RESPONSE_KW_ID_COL),
+    ("AUTO_RESPONSE_KW_TEXT_COL", AUTO_RESPONSE_KW_TEXT_COL),
+]:
+    if _col_val not in _VALID_COL_NAMES:
+        raise RuntimeError(f"Invalid column name for {_col_var_name}: {_col_val!r}")
+
+def _get_basic_id_for_line_channel(line_channel_id: Optional[str]) -> Optional[str]:
+    if not line_channel_id:
+        return None
+    try:
+        row = fetchone(
+            f"SELECT basic_id FROM line_channels WHERE {LINE_CHANNEL_ID_COL}=:cid LIMIT 1",
+            {"cid": line_channel_id},
+        )
+        return row.get("basic_id") if row else None
+    except Exception:
+        return None
+
+
+def _parse_json_list(val) -> Optional[list]:
+    if val is None:
+        return None
+    if isinstance(val, list):
+        return val
+    if isinstance(val, (str, bytes)):
+        try:
+            return json.loads(val)
+        except Exception:
+            return None
+    return None
+
+
+def _time_to_seconds(t) -> Optional[int]:
+    if t is None:
+        return None
+    if isinstance(t, datetime.timedelta):
+        return int(t.total_seconds())
+    if isinstance(t, datetime.time):
+        return int(t.hour * 3600 + t.minute * 60 + t.second)
+    if isinstance(t, str):
+        try:
+            parts = [int(p) for p in t.split(":")]
+            while len(parts) < 3:
+                parts.append(0)
+            return parts[0] * 3600 + parts[1] * 60 + parts[2]
+        except Exception:
+            return None
+    return None
+
+
+def _is_within_date_range(start, end, today: datetime.date) -> bool:
+    if start is None and end is None:
+        return True
+    if start is None:
+        return today <= end
+    if end is None:
+        return today >= start
+    return start <= today <= end
+
+
+def _is_within_time_range(start, end, now: datetime.datetime) -> bool:
+    if start is None and end is None:
+        return True
+    now_sec = now.hour * 3600 + now.minute * 60 + now.second
+    start_sec = _time_to_seconds(start)
+    end_sec = _time_to_seconds(end)
+    if start_sec is None and end_sec is None:
+        return True
+    if start_sec is None:
+        return now_sec <= end_sec
+    if end_sec is None:
+        return now_sec >= start_sec
+    if start_sec == end_sec:
+        # Treat equal bounds as "no time restriction"
+        return True
+    if start_sec < end_sec:
+        return start_sec <= now_sec <= end_sec
+    # Crosses midnight
+    return now_sec >= start_sec or now_sec <= end_sec
+
+
+def _auto_response_applicable(row: Dict[str, Any], line_channel_id: Optional[str]) -> bool:
+    # Channel filter
+    ar_channel_id = row.get("channel_id")
+    if ar_channel_id:
+        basic_id = _get_basic_id_for_line_channel(line_channel_id)
+        if line_channel_id and ar_channel_id == line_channel_id:
+            pass
+        elif basic_id and ar_channel_id == basic_id:
+            pass
+        else:
+            return False
+
+    # Channels list filter (if set and doesn't include LINE)
+    channels = _parse_json_list(row.get("channels"))
+    if channels is not None and "LINE" not in channels:
+        return False
+
+    today = datetime.datetime.now().date()
+    now = datetime.datetime.now()
+    if not _is_within_date_range(row.get("date_range_start"), row.get("date_range_end"), today):
+        return False
+    if not _is_within_time_range(row.get("trigger_time_start"), row.get("trigger_time_end"), now):
+        return False
+    return True
+
+
+def check_keyword_trigger(line_uid: str, text: str, line_channel_id: Optional[str] = None):
     """
     檢查是否有匹配的關鍵字自動回應
 
@@ -1112,29 +1279,29 @@ def check_keyword_trigger(line_uid: str, text: str):
         回應內容（如果有匹配且啟用）或 None
     """
     try:
-        result = execute("""
-            SELECT arm.message_content
+        rows = fetchall(f"""
+            SELECT ar.channel_id, ar.channels, ar.trigger_time_start, ar.trigger_time_end,
+                   ar.date_range_start, ar.date_range_end, ar.updated_at, ar.created_at,
+                   arm.message_content
             FROM auto_responses ar
-            JOIN auto_response_keywords ark ON ar.id = ark.auto_response_id
-            JOIN auto_response_messages arm ON ar.id = arm.auto_response_id
+            JOIN auto_response_keywords ark ON ar.id = ark.{AUTO_RESPONSE_KW_ID_COL}
+            JOIN auto_response_messages arm ON ar.id = arm.{AUTO_RESPONSE_MSG_ID_COL}
             WHERE ar.is_active = 1
               AND ar.trigger_type = 'keyword'
               AND ark.is_enabled = 1
-              AND LOWER(:text) = LOWER(ark.keyword)
-            ORDER BY arm.sequence_order
-            LIMIT 1
+              AND LOWER(:text) = LOWER(ark.{AUTO_RESPONSE_KW_TEXT_COL})
+            ORDER BY COALESCE(ar.updated_at, ar.created_at) DESC, arm.sequence_order ASC
         """, {"text": text})
-
-        row = result.fetchone()
-        if row:
-            logging.info(f"Keyword matched for user {line_uid}: {text}")
-            return row[0]
+        for row in rows:
+            if _auto_response_applicable(row, line_channel_id):
+                logging.info(f"Keyword matched for user {line_uid}: {text}")
+                return row.get("message_content") if isinstance(row, dict) else row[0]
         return None
     except Exception as e:
         logging.exception(f"check_keyword_trigger error: {e}")
         return None
 
-def check_always_response():
+def check_always_response(line_channel_id: Optional[str] = None):
     """
     檢查是否有啟用的一律回應
 
@@ -1142,26 +1309,26 @@ def check_always_response():
         回應內容（如果有啟用）或 None
     """
     try:
-        result = execute("""
-            SELECT arm.message_content
+        rows = fetchall(f"""
+            SELECT ar.channel_id, ar.channels, ar.trigger_time_start, ar.trigger_time_end,
+                   ar.date_range_start, ar.date_range_end, ar.updated_at, ar.created_at,
+                   arm.message_content
             FROM auto_responses ar
-            JOIN auto_response_messages arm ON ar.id = arm.auto_response_id
+            JOIN auto_response_messages arm ON ar.id = arm.{AUTO_RESPONSE_MSG_ID_COL}
             WHERE ar.is_active = 1
-              AND ar.trigger_type = 'always'
-            ORDER BY arm.sequence_order
-            LIMIT 1
+              AND ar.trigger_type IN ('always', 'follow')
+            ORDER BY COALESCE(ar.updated_at, ar.created_at) DESC, arm.sequence_order ASC
         """)
-
-        row = result.fetchone()
-        if row:
-            logging.info("Always response is active")
-            return row[0]
+        for row in rows:
+            if _auto_response_applicable(row, line_channel_id):
+                logging.info("Always response is active")
+                return row.get("message_content") if isinstance(row, dict) else row[0]
         return None
     except Exception as e:
         logging.exception(f"check_always_response error: {e}")
         return None
 
-def check_welcome_response():
+def check_welcome_response(line_channel_id: Optional[str] = None):
     """
     檢查是否有啟用的歡迎訊息
 
@@ -1169,20 +1336,20 @@ def check_welcome_response():
         回應內容（如果有啟用）或 None
     """
     try:
-        result = execute("""
-            SELECT arm.message_content
+        rows = fetchall(f"""
+            SELECT ar.channel_id, ar.channels, ar.trigger_time_start, ar.trigger_time_end,
+                   ar.date_range_start, ar.date_range_end, ar.updated_at,
+                   arm.message_content
             FROM auto_responses ar
-            JOIN auto_response_messages arm ON ar.id = arm.auto_response_id
+            JOIN auto_response_messages arm ON ar.id = arm.{AUTO_RESPONSE_MSG_ID_COL}
             WHERE ar.is_active = 1
               AND ar.trigger_type = 'welcome'
-            ORDER BY arm.sequence_order
-            LIMIT 1
+            ORDER BY ar.updated_at DESC, arm.sequence_order ASC
         """)
-
-        row = result.fetchone()
-        if row:
-            logging.info("Welcome response is active")
-            return row[0]
+        for row in rows:
+            if _auto_response_applicable(row, line_channel_id):
+                logging.info("Welcome response is active")
+                return row.get("message_content") if isinstance(row, dict) else row[0]
         return None
     except Exception as e:
         logging.exception(f"check_welcome_response error: {e}")
@@ -2842,6 +3009,7 @@ def api_send_chat_message():
             return jsonify({"ok": False, "error": "text required"}), 400
 
         # 1. 發送訊息
+        text = render_template_text(text, line_uid=line_uid)
         messaging_api.push_message(
             PushMessageRequest(
                 to=line_uid,
@@ -3247,7 +3415,7 @@ def on_follow(event: FollowEvent):
     # === 1. 檢查是否有啟用的歡迎訊息 ===
     welcome_msg = None
     try:
-        welcome_msg = check_welcome_response()
+        welcome_msg = check_welcome_response(line_channel_id)
     except Exception as e:
         logging.exception(f"[on_follow] Failed to check welcome response: {e}")
 
@@ -3263,6 +3431,12 @@ def on_follow(event: FollowEvent):
 
     # === 2. 發送歡迎訊息 ===
     try:
+        welcome_msg = render_template_text(
+            welcome_msg,
+            line_uid=uid,
+            line_channel_id=line_channel_id,
+            display_name=dn,
+        )
         token = get_channel_access_token_by_channel_id(line_channel_id)
         api = MessagingApi(ApiClient(Configuration(access_token=token)))
         api.reply_message(ReplyMessageRequest(
@@ -3426,6 +3600,7 @@ def on_text(event: MessageEvent):
 
     # === 2. 更新會員資訊 ===
     mid = None
+    display_name_for_reply = None
     if uid:
         try:
             # 讀取現有 DB 資料
@@ -3452,54 +3627,62 @@ def on_text(event: MessageEvent):
                 member_id=mid,
                 is_following=True,
 	            )
+            display_name_for_reply = api_dn or cur_dn
         except Exception:
             logging.exception("[on_text] Failed to update member/line_friends")
 
-    # === 4. 自動回應處理（順序：GPT → keyword → always）===
+    # === 4. 自動回應處理（順序：keyword → always → GPT）===
     reply_text = None
     message_source = None
 
     # 檢查是否啟用 GPT
     gpt_enabled = is_gpt_enabled_for_user(uid)
 
-    # 4.1 優先：GPT 回應（僅當 gpt_enabled = TRUE 時）
-    if gpt_enabled:
+    # 4.1 優先：關鍵字觸發
+    if not reply_text:
         try:
-            msgs = _build_messages(user_key, text_in)
-            reply_text = _ask_gpt(msgs)
-            if reply_text:  # 只有成功時才設置 source
-                message_source = "gpt"
-                logging.info(f"[on_text] GPT response generated for uid={uid}")
-            else:
-                logging.warning(f"[on_text] GPT API 失敗，切換到回退機制 for uid={uid}")
-        except Exception as e:
-            logging.exception(f"[on_text] GPT exception: {e}")
-    else:
-        logging.info(f"[on_text] ⏸️ 手動模式：GPT 已停用 for uid={uid}")
-
-    # 4.2 後備：關鍵字觸發（gpt_enabled = TRUE 且 GPT 失敗時，或 gpt_enabled = FALSE 時都不觸發）
-    if gpt_enabled and not reply_text:
-        try:
-            reply_text = check_keyword_trigger(uid, text_in)
+            reply_text = check_keyword_trigger(uid, text_in, line_channel_id=line_channel_id)
             if reply_text:
                 message_source = "keyword"
                 logging.info(f"[on_text] Keyword response triggered for uid={uid}")
         except Exception as e:
             logging.exception(f"[on_text] Keyword check failed: {e}")
 
-    # 4.3 最後後備：一律回應（gpt_enabled = TRUE 且前兩者都失敗時，或 gpt_enabled = FALSE 時都不觸發）
-    if gpt_enabled and not reply_text:
+    # 4.2 次要：一律回應（在有效期/時段內）
+    if not reply_text:
         try:
-            reply_text = check_always_response()
+            reply_text = check_always_response(line_channel_id=line_channel_id)
             if reply_text:
                 message_source = "always"
                 logging.info(f"[on_text] Always response triggered for uid={uid}")
         except Exception as e:
             logging.exception(f"[on_text] Always response check failed: {e}")
 
+    # 4.3 最後：GPT 回應（僅當 gpt_enabled = TRUE 時）
+    if not reply_text:
+        if gpt_enabled:
+            try:
+                msgs = _build_messages(user_key, text_in)
+                reply_text = _ask_gpt(msgs)
+                if reply_text:  # 只有成功時才設置 source
+                    message_source = "gpt"
+                    logging.info(f"[on_text] GPT response generated for uid={uid}")
+                else:
+                    logging.warning(f"[on_text] GPT API 失敗 for uid={uid}")
+            except Exception as e:
+                logging.exception(f"[on_text] GPT exception: {e}")
+        else:
+            logging.info(f"[on_text] ⏸️ 手動模式：GPT 已停用 for uid={uid}")
+
     # === 5. 發送回覆訊息 ===
     if reply_text:
         reply_text = reply_text[:5000]
+        reply_text = render_template_text(
+            reply_text,
+            line_uid=uid,
+            line_channel_id=line_channel_id,
+            display_name=display_name_for_reply,
+        )
 
         try:
             # ★ 關鍵修正：依 webhook 事件所屬 channel 取得正確 token

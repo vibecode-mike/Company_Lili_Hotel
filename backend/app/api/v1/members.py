@@ -47,7 +47,7 @@ async def get_members(
     page_params: PageParams = Depends(),
     channel: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
-    # current_user: User = Depends(get_current_user),  # 暫時移除認證，開發階段使用
+    current_user: User = Depends(get_current_user),
 ):
     """
     獲取會員列表
@@ -250,7 +250,7 @@ async def get_member_count(
     target_audience: str = "all",
     tag_ids: str = None,
     db: AsyncSession = Depends(get_db),
-    # current_user: User = Depends(get_current_user),  # 暫時移除認證，開發階段使用
+    current_user: User = Depends(get_current_user),
 ):
     """獲取符合條件的會員數量"""
     query = select(func.count(Member.id))
@@ -307,6 +307,7 @@ async def get_member(
     member_id: str,
     platform: Optional[str] = Query(None, description="渠道：LINE/Facebook/Webchat"),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """獲取會員詳情"""
     normalized = _validate_platform(platform)
@@ -501,7 +502,7 @@ async def update_member_interaction_tags(
     member_id: int,
     request: UpdateTagsRequest,
     db: AsyncSession = Depends(get_db),
-    # current_user: User = Depends(get_current_user),  # 暫時移除認證
+    current_user: User = Depends(get_current_user),
 ):
     """
     批量更新會員互動標籤（完全取代現有標籤）
@@ -540,7 +541,7 @@ async def batch_update_member_tags(
     member_id: int,
     request: BatchUpdateTagsRequest,
     db: AsyncSession = Depends(get_db),
-    # current_user: User = Depends(get_current_user),  # 暫時移除認證
+    current_user: User = Depends(get_current_user),
 ):
     """
     批量更新會員標籤（原子操作，保留 click_count）
@@ -759,7 +760,7 @@ async def add_member_interaction_tag(
     tag_name: str = Body(..., embed=True),
     message_id: int = Body(None, embed=True),
     db: AsyncSession = Depends(get_db),
-    # current_user: User = Depends(get_current_user),  # 暫時移除認證
+    current_user: User = Depends(get_current_user),
 ):
     """
     新增會員互動標籤（手動標籤，click_count 固定為 1）
