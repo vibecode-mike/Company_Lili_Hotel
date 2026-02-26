@@ -39,9 +39,6 @@ sys.path.insert(0, str(BASE_DIR))
 from config import (
     LINE_CHANNEL_SECRET,
     LINE_CHANNEL_ACCESS_TOKEN,
-    OPENAI_API_KEY,
-    OPENAI_MODEL,
-    MEMORY_TURNS,
     PUBLIC_BASE,
     LIFF_ID,
     LIFF_ID_OPEN,
@@ -63,8 +60,44 @@ from db import (
 import usage_monitor #群發餘額量顯示
 from member_liff import bp as member_liff_bp # 載入 LIFF 會員表單的 Blueprint 模組
 from manage_botinfo import bp as manage_botinfo_bp # 顯示透過「客戶自行輸入的 Messaging API Channel Access Token」呼叫 LINE 官方 `/v2/bot/info` 端點，並回傳該官方帳號的基本資料，包含 Basic ID（@xxxxxxx）、displayName、pictureUrl 等。
-from collections import defaultdict, deque
-from typing import Any, Dict, List, Optional, Tuple
+
+# ===== Service Layer (Phase 1 重構) =====
+from services.line_sdk import (
+    config as _line_config,
+    api_client,
+    default_handler as _default_handler,
+    messaging_api as _messaging_api,
+    LINE_CHANNEL_ID_COL,
+    get_credentials,
+    get_credentials_by_line_id,
+    get_channel_access_token_by_channel_id,
+    get_messaging_api,
+    get_messaging_api_by_line_id,
+    fetch_line_profile,
+    setup_line_webhook,
+    get_login_access_token,
+    setup_line_liff,
+)
+from services.member_service import (
+    upsert_member,
+    upsert_line_friend,
+    fetch_member_profile,
+    maybe_update_member_profile,
+    is_gpt_enabled_for_user,
+    get_all_follower_ids,
+    backfill_line_friends_on_startup,
+    DISPLAY_NAME_TOKEN,
+    DISPLAY_NAME_TOKEN_SIMPLE,
+    _get_display_name_for_uid,
+    render_template_text,
+)
+from services.conversation_service import (
+    ensure_thread_for_user,
+    insert_conversation_message,
+    get_chat_history,
+    get_member_conversations,
+)
+from typing import Any, Dict, List, Optional, Tuple, Iterable
 from urllib.parse import quote_plus, quote
 from linebot.exceptions import InvalidSignatureError
 
@@ -94,8 +127,6 @@ from linebot.v3.webhooks import (
 
 from linebot.v3.messaging.models import FlexContainer
 
-# OpenAI
-from openai import OpenAI
 
 # SQLAlchemy Core
 from sqlalchemy import text
@@ -104,88 +135,10 @@ from sqlalchemy import text
 os.makedirs(ASSET_LOCAL_DIR, exist_ok=True)
 
 # -------------------------------------------------
-# 固定 SYSTEM_PROMPT（**內嵌版**；不讀外部檔案）
-# -------------------------------------------------
-SYSTEM_PROMPT = (
-"""
-你是「水漾月明度假文旅（Hana Mizu Tsuki Hotel）」的智能客服。用親切專業語氣接待使用者，只回答飯店相關的訊息。若使用者需求超出已知資訊或需要館外名單，請婉拒並引導致電櫃檯（037-255-358）。
-
-【回答範圍（必遵守）】
-- 可回：打招呼、房型與價格、訂房、交通與聯絡、優惠專案、館內設施、環保政策、周邊景點（僅提供清單，不提供第三方評價/營業資訊），與飯店相關的內容可回答。
-- 不可回：與本飯店不相關的內容。
-
-【語氣與格式】
-- 以精簡條列回覆；首行給出主題 emoji 與標題（如「🛏 房型定價」）。
-- 能提供官方連結就給官方連結。
-- 若使用者問到日期，務必用西元年或清楚表述（範例已內嵌於優惠專案）。
-
-一、基本資料 / 訂房
-- 飯店：水漾月明度假文旅（Hana Mizu Tsuki Hotel）
-- 地址：362苗栗縣頭屋鄉明德路54號
-- 電話：037-255-358
-- Email：mizutsukihotel@gmail.com
-- Google 地圖：https://www.google.com/maps?ll=24.585596,120.887298&z=17&t=m&hl=zh-TW&gl=US&mapclient=embed&cid=709365327370099103
-- 線上訂房：https://res.windsurfercrs.com/ibe/index.aspx?propertyID=17658&nono=1&lang=zh-tw&adults=2
-
-二、客房資訊（定價 / 晚）
-- 豪華雙人房（床型若需指定請來電洽詢）：$12,000｜日式軟墊・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/3
-- 湖景雙人房（側湖景）：$14,000｜一大床・兩小床｜http://www.younglake.com.tw/Home/ProductsDetail/5
-- 豪華三人房：$15,000｜一大一小床・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/6
-- 湖景四人房（床型若需指定請來電洽詢）：$22,000｜兩大床・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/7
-- 豪華四人房（床型若需指定請來電洽詢）：$18,000｜兩大床・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/9
-- 家庭四人房：$25,000｜兩大床・客廳・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/8
-- 蜜月雙人房：$13,000｜一大床・客廳・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/2
-- 水漾套房（正湖景）：$20,000｜一大床・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/1
-（備註：以上為定價；實際專案或加人加價以現場與官網公告為準。需指定床型請改以電話洽詢。）
-
-三、優惠方案 — 水上腳踏車住房專案
-- 合作：水漾月明 × 海棠島水域遊憩中心
-- 活動日期：114/8/28 ~ 114/10/30
-- 方案：一泊一食（含早餐）
-- 平日價格：豪華雙人 3,980｜湖景雙人 4,980｜豪華三人 5,300｜豪華四人 6,380
-- 週六價格：豪華雙人 4,880｜湖景雙人 7,280｜豪華三人 6,280｜豪華四人 7,380
-- 專案贈送：
-  1) 早餐（依房型人數） 2) 水上自行車兌換券（半小時，$350/張；雙人2張/三人3張/四人4張）
-  3) 7歲以下不佔床不收費（早餐另計） 4) 120cm 以上方可自行騎乘
-- 兌換券注意：
-  - 入住日1個月內使用；逾期/遺失不補發。
-  - 現場至海棠島兌換並遵守安全規範。
-  - 票券使用須先致電海棠島預約（非教練陪同券，如需教練需加價）。
-  - 加購 Span Outdoor（SUP/獨木舟/水上自行車）享9折優惠。
-- 暑假加碼：水漾環湖電動自行車 $250/台/2.5小時（贈飲料一瓶），騎至海棠島約15分鐘。
-- 訂房連結：同「線上訂房」。
-
-四、設施介紹（名稱｜連結｜備註）
-- 環湖電動自行車｜http://www.younglake.com.tw/Home/FacilityDetail/14｜可租借
-- 渡假會議｜http://www.younglake.com.tw/Home/FacilityDetail/4｜適合商務與活動
-- 汗蒸幕體驗｜http://www.younglake.com.tw/Home/FacilityDetail/11｜放鬆身心
-- 西餐廳｜http://www.younglake.com.tw/Home/FacilityDetail/7｜中式桌菜・客家風味・歐式百匯（訂位：037-255358）
-- 視聽室｜http://www.younglake.com.tw/Home/FacilityDetail/6｜影音娛樂空間
-- 水漾小賽車手俱樂部｜http://www.younglake.com.tw/Home/FacilityDetail/10｜兒童遊樂設施
-- 24SHOP 智能販賣機｜http://www.younglake.com.tw/Home/FacilityDetail/8｜無人販售服務
-- 清潔服務機器人｜http://www.younglake.com.tw/Home/FacilityDetail/12｜智能清潔體驗
-
-五、環保政策 — 一次性備品
-- 自 2025/01/01 起，客房不再提供一次性備品。建議旅客自備盥洗用品；如需可洽櫃檯。
-
-六、周邊景點（僅清單）
-【湖畔與水上活動】
-- 日新島（可步行或騎車前往）、海棠島水域遊憩中心（SUP/獨木舟/水上自行車，車程約9分鐘）、明德水庫環湖（部分路段設自行車道）
-【森林與花園】
-- 橙香森林、雅聞玫瑰園、葛瑞絲香草田（距離飯店約2分鐘車程）
-【其他推薦】
-- 皇家高爾夫球場、魯冰花休閒農莊、卓也小屋（藍染/在地料理/綠色旅遊）
-
-若任何資訊未在上表，請回答：「抱歉，我只能提供本館官方已知資訊。若需進一步協助，請洽櫃檯 037-255-358。」
-"""
-)
-# -------------------------------------------------
 # init
 # -------------------------------------------------
 if not LINE_CHANNEL_SECRET or not LINE_CHANNEL_ACCESS_TOKEN:
     raise RuntimeError("請在 .env 設定 LINE_CHANNEL_SECRET / LINE_CHANNEL_ACCESS_TOKEN")
-if not OPENAI_API_KEY:
-    raise RuntimeError("請在 .env 設定 OPENAI_API_KEY")
 if not PUBLIC_BASE:
     raise RuntimeError("請在 .env 設定 PUBLIC_BASE")
 # LIFF 可選：未設定就跳過，僅停用 LIFF 相關功能
@@ -203,14 +156,11 @@ app.register_blueprint(member_liff_bp)
 # 將的 manage_botinfo.py 顯示官方基本資料如ID等 Blueprint 模組該模組註冊進 Flask 主應用，啟用其 API 路由
 app.register_blueprint(manage_botinfo_bp)
 
-# LINE v3
-config = Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN)
-api_client = ApiClient(config)  
-default_handler = WebhookHandler(LINE_CHANNEL_SECRET)   
-messaging_api = MessagingApi(api_client)
-
-# OpenAI
-oai = OpenAI(api_key=OPENAI_API_KEY)
+# LINE v3 — 全域 singleton 由 services.line_sdk 管理
+# 這裡保留別名供 app.py 其餘程式碼使用（向後相容）
+config = _line_config
+default_handler = _default_handler
+messaging_api = _messaging_api
 
 # DB engine 已在 db.py 中建立並匯入
 
@@ -219,269 +169,15 @@ def utcnow():
 
 def jdump(x): return json.dumps(x, ensure_ascii=False)
 
-# ===== Multi-channel helpers (新增) =====
-def get_credentials(channel_id: str | None):
-    """
-    從資料表抓該 channel 的 access_token / secret / liff_id_open。
-    你之後建一張 line_channels 表即可（id, channel_name, channel_secret, channel_access_token, liff_id_open）。
-    若查不到就回 None，代表用預設 .env。
-    """
-    if not channel_id:
-        return None
-    try:
-        row = fetchone("""
-            SELECT channel_access_token AS token,
-                   channel_secret       AS secret,
-                   COALESCE(liff_id_open, '') AS liff_id_open
-              FROM line_channels
-             WHERE id = :cid AND is_active = 1
-             LIMIT 1
-        """, {"cid": channel_id})
-        return row if row else None
-    except Exception:
-        return None
-
-def get_messaging_api(channel_id: str | None = None):
-    """
-    有給 channel_id → 用該 token 建臨時 MessagingApi
-    沒給 → 回傳全域 messaging_api（= .env 預設）
-    """
-    if not channel_id:
-        return messaging_api  # 相容舊行為
-    cred = get_credentials(channel_id)
-    if not cred or not cred.get("token"):
-        # 有指定 channel_id 但找不到 → 明確錯誤，不 fallback
-        raise RuntimeError(f"Invalid channel_id or missing token: {channel_id}")
-    cfg = Configuration(access_token=cred["token"])
-    return MessagingApi(ApiClient(cfg))
-
-# ========= 用 LINE 的 Channel ID（line_channel_id）抓憑證 =========
-def get_credentials_by_line_id(line_channel_id: str) -> dict | None:
-    row = fetchone("""
-        SELECT
-            channel_access_token AS token,
-            channel_secret       AS secret,
-            COALESCE(liff_id_open, '') AS liff_id_open
-        FROM line_channels
-        WHERE channel_id = :cid AND is_active = 1
-        LIMIT 1
-    """, {"cid": line_channel_id})
-    return row  # 可能為 None
-
-# 用 Messaging API 的 Channel Access Token 設定/啟用 Webhook
-def setup_line_webhook(line_channel_id: str, access_token: str):
-    # 你要單一路徑就用 /callback；要每客戶一條就用 /callback/<id>
-    webhook_url = f"https://linebot.star-bit.io/callback/{line_channel_id}"
-    # 如果你目前伺服器沒有 /callback/<id> 路由，請改成：
-    # webhook_url = "https://linebot.star-bit.io/callback"
-
-    headers = {
-        "Authorization": f"Bearer {access_token}",   # ★ 一定是 Messaging API 的長期 token
-        "Content-Type": "application/json"
-    }
-
-    # 1) 設定 Webhook URL
-    r1 = requests.put(
-        "https://api.line.me/v2/bot/channel/webhook/endpoint",
-        headers=headers, json={"endpoint": webhook_url}, timeout=10
-    )
-    # 2) 啟用 Use webhook
-    r2 = requests.put(
-        "https://api.line.me/v2/bot/channel/webhook/enable",
-        headers=headers, timeout=10
-    )
-
-    return {"webhook_url": webhook_url, "set_status": r1.status_code, "enable_status": r2.status_code}
-# 功能：用 Channel ID + Secret 換取可呼叫 LIFF API 的 access_token（client_credentials）
-def get_login_access_token(channel_id: str, channel_secret: str) -> str:
-    resp = requests.post(
-        "https://api.line.me/v2/oauth/accessToken",
-        data={
-            "grant_type": "client_credentials",
-            "client_id": channel_id,
-            "client_secret": channel_secret,
-        },
-        timeout=10,
-    )
-    resp.raise_for_status()
-    return resp.json().get("access_token", "")
-
-
-# 多 LINE 帳號切換（工程最終版）
-def get_channel_access_token_by_channel_id(line_channel_id: Optional[str]) -> str:
-    """
-    多 LINE 專頁支援：
-    - 有 line_channel_id → 從 DB 取對應的 channel_access_token
-    - 沒有 line_channel_id → fallback 使用 .env 的 LINE_CHANNEL_ACCESS_TOKEN
-    - 任何情況下：一定回傳 str，否則直接丟 RuntimeError
-    """
-
-    # 1️⃣ 指定了 line_channel_id → 從 DB 查
-    if line_channel_id:
-        row = fetchone("""
-            SELECT channel_access_token
-            FROM line_channels
-            WHERE channel_id = :cid
-            LIMIT 1
-        """, {"cid": line_channel_id})
-
-        if row:
-            token = row.get("channel_access_token")
-            if token:
-                return token
-
-        # 有給 line_channel_id 但查不到 → 明確錯誤
-        raise RuntimeError(f"Invalid line_channel_id or missing token: {line_channel_id}")
-
-    # 2️⃣ 沒指定 line_channel_id → fallback 用 .env（舊行為）
-    token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
-    if not token:
-        raise RuntimeError("LINE_CHANNEL_ACCESS_TOKEN not set in environment")
-
-    return token
-
-
-# 用 access_token 建立 LIFF App 並回傳 liffId，同時寫回資料庫的 liff_id_open
-def setup_line_liff(line_channel_id: str, channel_secret: str, view_url: str, size: str = "full") -> dict:
-
-    # 1) 先用 Channel ID+Secret 換 LIFF 管理用 access_token
-    access_token = get_login_access_token(line_channel_id, channel_secret)
-    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
-
-    # 2) 建立 LIFF（view_url 是你要在 LIFF 裡面開啟的頁面 URL）
-    payload = {
-        "view": {"type": size, "url": view_url},
-        "description": f"auto-{line_channel_id}",
-    }
-    create = requests.post("https://api.line.me/liff/v1/apps", headers=headers, json=payload, timeout=10)
-    ok = create.status_code // 100 == 2
-    liff_id = ""
-    try:
-        body = create.json()
-        liff_id = body.get("liffId", "")
-    except Exception:
-        pass
-
-    # 3) 建立成功就把 liff_id_open 寫回 DB（你已經有這個欄位）
-    if ok and liff_id:
-        execute(
-            "UPDATE line_channels SET liff_id_open=:liff, updated_at=:now WHERE channel_id=:cid",
-            {"liff": liff_id, "cid": line_channel_id, "now": utcnow()},
-        )
-
-    return {
-        "ok": ok,
-        "status": create.status_code,
-        "liff_id": liff_id,
-        "resp": (create.json() if ok else {"text": create.text[:500]}),
-    }
-
-
-
-# -------------------------------------------------
-# DB helpers
-# -------------------------------------------------
-
-# 
-def fetch_line_profile(user_id: str) -> tuple[Optional[str], Optional[str]]:
-    """
-    透過 LINE 官方 API 取回 displayName / pictureUrl
-    回傳 (display_name, picture_url)；失敗時皆回 None
-    """
-    token = LINE_CHANNEL_ACCESS_TOKEN
-    if not user_id or not token:
-        return None, None
-    try:
-        r = requests.get(
-            f"https://api.line.me/v2/bot/profile/{user_id}",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=5,
-        )
-        if r.ok:
-            j = r.json()
-            return j.get("displayName"), j.get("pictureUrl")
-    except Exception:
-        pass
-    return None, None
-
-
-def fetch_member_profile(line_uid: str) -> dict:
-    """
-    從 members 表抓 LINE 顯示名稱/頭像（已統一欄位：line_display_name / line_avatar）。
-
-    回傳 keys：
-      - line_display_name
-      - line_avatar
-    """
-    line_uid = (line_uid or "").strip()
-    if not line_uid:
-        return {}
-
-    sql = """
-        SELECT line_display_name, line_avatar
-        FROM members
-        WHERE line_uid=:u
-        LIMIT 1
-    """
-    return fetchone(sql, {"u": line_uid}) or {}
-
-
-# 補使用者line資料
-def maybe_update_member_profile(uid: str) -> None:
-    """
-    若 members 裡 display_name / picture_url 有缺，就向 LINE 抓一次並補寫。
-    抓不到（None）時不覆蓋，以避免把舊值清空。
-    """
-    try:
-        row = fetch_member_profile(uid)
-        has_name = bool(row and row.get("line_display_name"))
-        has_pic = bool(row and row.get("line_avatar"))
-        if has_name and has_pic:
-            return  # 都有就不打 API
-
-        # 打 LINE Profile API（你專案已有 fetch_line_profile，就直接用）
-        display_name, picture_url = fetch_line_profile(uid)
-
-        # 有抓到才更新，避免用空值覆蓋
-        if display_name or picture_url:
-            upsert_member(uid,
-                          display_name if display_name else None,
-                          picture_url  if picture_url  else None)
-            logging.info(f"[PROFILE] backfilled member uid={uid} "
-                         f"name={display_name!r} pic={'Y' if picture_url else 'N'}")
-    except Exception as e:
-        logging.warning(f"[PROFILE] maybe_update_member_profile failed uid={uid}: {e}")
-
-
-# 將 DB 題型映成 LIFF 前端支援的題型
-def is_gpt_enabled_for_user(line_uid: str) -> bool:
-    """
-    檢查指定 LINE 使用者是否啟用 GPT 自動回應
-
-    Args:
-        line_uid: LINE 使用者 UID
-
-    Returns:
-        bool: True 表示啟用 GPT，False 表示停用
-
-    Note:
-        - 預設值為 True (啟用)
-        - 若查詢失敗，也回傳 True (安全降級)
-    """
-    try:
-        row = fetchone("SELECT gpt_enabled FROM members WHERE line_uid=:u", {"u": line_uid})
-        if row:
-            # 修正：從 dict 中正確取值
-            gpt_enabled = row.get("gpt_enabled", True)
-            logging.debug(f"[GPT Check] uid={line_uid}, gpt_enabled={gpt_enabled}")
-            return bool(gpt_enabled)
-        # 會員不存在於資料庫
-        logging.debug(f"[GPT Check] uid={line_uid} not found, default=True")
-        return True
-    except Exception as e:
-        # 查詢失敗，記錄錯誤並安全降級
-        logging.error(f"[GPT Check] DB query failed for uid={line_uid}: {e}")
-        return True
+# ===== Multi-channel / DB / Profile helpers =====
+# 已遷移至 services/ 模組：
+#   - services/line_sdk.py: get_credentials, get_messaging_api, get_credentials_by_line_id,
+#     get_channel_access_token_by_channel_id, get_messaging_api_by_line_id,
+#     fetch_line_profile, setup_line_webhook, get_login_access_token, setup_line_liff
+#   - services/member_service.py: upsert_member, upsert_line_friend, fetch_member_profile,
+#     maybe_update_member_profile, is_gpt_enabled_for_user, render_template_text,
+#     DISPLAY_NAME_TOKEN, DISPLAY_NAME_TOKEN_SIMPLE
+# 全部透過頂部 import 提供，向後相容
 
 
 def _map_question_for_liff(q: dict) -> dict:
@@ -533,567 +229,154 @@ def _map_question_for_liff(q: dict) -> dict:
 # DB helpers (_table_has, _col_required, fetchall, fetchone, execute)
 # 已移至共用模組 db.py
 
-# [新增] 依 LINE 使用者建立/取得 thread（用 userId 當 thread_id，簡單且穩定）
-def ensure_thread_for_user(line_uid: str) -> str:
-    """
-    以 LINE userId 直接當作 conversation_threads.id 來使用。
-    若不存在就建立一筆；存在則跳過。
-    """
-    # 去除空白字元
-    line_uid = line_uid.strip() if line_uid else ""
-
-    if not line_uid:
-        logging.warning("line_uid is empty in ensure_thread_for_user")
-        return "anonymous"
-
-    try:
-        execute("""
-            INSERT IGNORE INTO conversation_threads (id, conversation_name, created_at, updated_at)
-            VALUES (:tid, :name, NOW(), NOW())
-        """, {"tid": line_uid, "name": f"LINE:{line_uid}"})
-    except Exception as e:
-        logging.warning(f"Failed to ensure thread: {e}")
-
-    return line_uid
-
-
-# [新增] 寫一筆 conversation_messages（共用的小工具）
-def insert_conversation_message(*, thread_id: str, role: str, direction: str,
-                                message_type: str = "chat",
-                                question: str | None = None,
-                                response: str | None = None,
-                                event_id: str | None = None,
-                                status: str = "received",
-                                message_source: str | None = None,
-                                message_id: str | None = None,
-                                platform: str | None = "LINE"):
-    """
-    儲存對話訊息到 conversation_messages 表
-
-    Args:
-        message_source: 訊息來源 (manual|gpt|keyword|welcome|always)
-    """
-    # 確保 thread_id 去除前後空白字元
-    thread_id = thread_id.strip() if thread_id else ""
-
-    if not thread_id:
-        logging.warning("thread_id is empty, cannot insert message")
-        return None
-
-    # 呼叫端可傳入 message_id（如 LINE reply_token / message.id）；未傳則產生 UUID
-    msg_id = message_id.strip() if isinstance(message_id, str) and message_id.strip() else uuid.uuid4().hex
-
-    try:
-        columns = [
-            "id",
-            "thread_id",
-            "role",
-            "direction",
-            "message_type",
-            "question",
-            "response",
-            "event_id",
-            "status",
-            "message_source",
-        ]
-        values = [
-            ":id",
-            ":tid",
-            ":role",
-            ":dir",
-            ":mt",
-            ":q",
-            ":r",
-            ":eid",
-            ":st",
-            ":src",
-        ]
-        params = {
-            "id": msg_id,
-            "tid": thread_id,
-            "role": role,
-            "dir": direction,
-            "mt": message_type,
-            "q": question,
-            "r": response,
-            "eid": event_id,
-            "st": status,
-            "src": message_source
-        }
-
-        if platform and _table_has("conversation_messages", "platform"):
-            columns.append("platform")
-            values.append(":platform")
-            params["platform"] = platform
-
-        columns.extend(["created_at", "updated_at"])
-        values.extend(["NOW()", "NOW()"])
-
-        execute(
-            f"""
-            INSERT IGNORE INTO conversation_messages
-                ({", ".join(columns)})
-            VALUES
-                ({", ".join(values)})
-            """,
-            params,
-        )
-        logging.info(f"Inserted message: {msg_id}, thread: {thread_id}, source: {message_source}")
-        return msg_id
-
-    except Exception as e:
-        logging.exception(f"Failed to insert conversation message: {e}")
-        raise
+# ensure_thread_for_user, insert_conversation_message
+# 已遷移至 services/conversation_service.py
 
 # -------------------------------------------------
 # Members / Messages
 # -------------------------------------------------
-# --------------------------------------------
-# members：會員基本資料 upsert
-# 會同時處理：
-#   - line_uid
-#   - line_display_name / line_avatar（對應 LINE displayName / pictureUrl）
-#   - join_source（預設 "LINE"）
-#   - 其他問卷欄位（gender / birthday / email / phone ...）
-# --------------------------------------------
-def upsert_member(line_uid: str,
-                  display_name: Optional[str] = None,
-                  picture_url: Optional[str] = None,
-                  gender: Optional[str] = None,
-                  birthday_date: Optional[str] = None,
-                  email: Optional[str] = None,
-                  phone: Optional[str] = None,
-                  join_source: Optional[str] = None,
-                  name: Optional[str] = None,
-                  id_number: Optional[str] = None,
-                  passport_number: Optional[str] = None,
-                  residence: Optional[str] = None,
-                  address_detail: Optional[str] = None,
-                  receive_notification: Optional[int] = None,
-                  line_channel_id: Optional[str] = None) -> int:
+# upsert_member, insert_message (已廢棄) 已遷移至 services/member_service.py
 
-    fields, ph, p = ["line_uid"], [":uid"], {"uid": line_uid}
+# upsert_line_friend, get_all_follower_ids, backfill_line_friends_on_startup
+# 已遷移至 services/member_service.py
 
-    def add(col, key, val):
-        # 空字串自動轉換成 NULL
-        if val == "":
-            val = None
-
-        if _table_has("members", col) and val is not None:
-            fields.append(col)
-            ph.append(f":{key}")
-            p[key] = val
-
-    # display name
-    if display_name is not None:
-        add("line_display_name", "dn", display_name)
-
-    # avatar
-    if picture_url is not None:
-        add("line_avatar", "pu", picture_url)
-
-    # form fields
-    add("gender", "g", gender)
-    add("birthday", "bd", birthday_date or None)
-    add("email", "em", email)
-    add("phone", "phn", phone)
-    add("name", "nm", name)
-    add("id_number", "idn", id_number)
-    add("passport_number", "psn", passport_number)   # ← 新增
-    add("residence", "res", residence)
-    add("address_detail", "addr", address_detail)    # ← 新增
-    add("receive_notification", "rn", receive_notification)
-
-    # line channel id (來自哪個 LINE 官方帳號)
-    add("line_channel_id", "lcid", line_channel_id)
-
-    # join source
-    js_val = join_source or "LINE"
-    if _table_has("members", "join_source"):
-        add("join_source", "js", js_val)
-    elif _table_has("members", "source"):
-        add("source", "js", js_val)
-
-    # timestamps
-    if _col_required("members", "created_at"):
-        fields.append("created_at")
-        ph.append(":cat")
-        p["cat"] = utcnow()
-
-    if _table_has("members", "updated_at"):
-        fields.append("updated_at")
-        ph.append(":uat")
-        p["uat"] = utcnow()
-
-    # 統一使用 UTC 時間存儲 last_interaction_at
-    if _table_has("members", "last_interaction_at"):
-        fields.append("last_interaction_at")
-        ph.append(":liat")
-        p["liat"] = utcnow()
-
-    # UPDATE part
-    set_parts = []
-    for k in (
-        "line_display_name",
-        "line_avatar",
-        "line_channel_id",                         # ← 新增：多帳號支援
-        "gender", "birthday", "email", "phone",
-        "join_source", "source",
-        "name", "id_number", "passport_number",    # ← 新增
-        "residence", "address_detail",             # ← 新增
-        "receive_notification"
-    ):
-        if _table_has("members", k):
-            set_parts.append(f"{k}=VALUES({k})")
-
-    if _table_has("members", "updated_at"):
-        set_parts.append("updated_at=VALUES(updated_at)")
-
-    # 使用 VALUES(last_interaction_at) 保持 UTC 一致性
-    if _table_has("members", "last_interaction_at"):
-        set_parts.append("last_interaction_at=VALUES(last_interaction_at)")
-
-    sql = (
-        f"INSERT INTO members ({', '.join(fields)}) "
-        f"VALUES ({', '.join(ph)}) "
-        f"ON DUPLICATE KEY UPDATE {', '.join(set_parts)}"
-    )
-
-    with engine.begin() as conn:
-        conn.execute(text(sql), p)
-        mid = conn.execute(
-            text("SELECT id FROM members WHERE line_uid=:u"),
-            {"u": line_uid}
-        ).scalar()
-
-    return int(mid)
-
-
-# 註解：insert_message() 已移除
-# 原因：此函數使用錯誤的 schema，試圖將 member_id 寫入 messages 表，但該表無此欄位
-#
-# 正確做法：
-# - 1:1 對話：使用 insert_conversation_message() 寫入 conversation_messages 表
-# - 群發訊息：在 campaign 層級處理，使用 _create_campaign_row() 和 _add_campaign_recipients()
-#
-# def insert_message(member_id: Optional[int], direction: str, message_type: str, content_obj: Any,
-#                    campaign_id: Optional[int] = None, sender_type: Optional[str] = None):
-#     # 注意：為避免 ENUM 撞型，這裡 message_type 儘量使用 "text" 或你既有允許的值
-#     fields = ["member_id","direction","message_type","content"]
-#     ph = [":mid",":dir",":mt",":ct"]
-#     p = {"mid": member_id, "dir": direction, "mt": message_type, "ct": jdump(content_obj)}
-#     if _table_has("messages","campaign_id") and campaign_id is not None:
-#         fields.append("campaign_id"); ph.append(":cid"); p["cid"]=campaign_id
-#     if _table_has("messages","sender_type") and sender_type:
-#         fields.append("sender_type"); ph.append(":st"); p["st"]=sender_type
-#     if _col_required("messages","created_at"):
-#         fields.append("created_at"); ph.append(":cat"); p["cat"]=utcnow()
-#     execute(f"INSERT INTO messages ({', '.join(fields)}) VALUES ({', '.join(ph)})", p)
-
-def upsert_line_friend(line_uid: str,
-                       display_name: Optional[str] = None,
-                       picture_url: Optional[str] = None,
-                       member_id: Optional[int] = None,
-                       is_following: bool = True) -> int:
-    """
-    创建或更新 LINE 好友记录
-
-    Args:
-        line_uid: LINE 用户 UID
-        display_name: LINE 显示名称
-        picture_url: LINE 头像 URL
-        member_id: 关联的 CRM 会员 ID（可选）
-        is_following: 是否为当前好友（默认 True）
-
-    Returns:
-        LINE 好友 ID
-    """
-    # 检查是否已存在
-    existing = fetchone(
-        "SELECT id, is_following FROM line_friends WHERE line_uid = :uid",
-        {"uid": line_uid}
-    )
-
-    now = utcnow()
-
-    if existing:
-        # 更新现有记录
-        update_parts = []
-        params = {"uid": line_uid, "now": now}
-
-        if display_name is not None:
-            update_parts.append("line_display_name = :dn")
-            params["dn"] = display_name
-        if picture_url is not None:
-            update_parts.append("line_picture_url = :pu")
-            params["pu"] = picture_url
-        if member_id is not None:
-            update_parts.append("member_id = :mid")
-            params["mid"] = member_id
-
-        # 处理 is_following 状态变化
-        was_following = existing.get("is_following")
-        if is_following != was_following:
-            update_parts.append("is_following = :following")
-            params["following"] = 1 if is_following else 0
-
-            if is_following and not was_following:
-                # 重新关注
-                update_parts.append("followed_at = :now")
-                update_parts.append("unfollowed_at = NULL")
-            elif not is_following and was_following:
-                # 取消关注
-                update_parts.append("unfollowed_at = :now")
-
-        update_parts.append("last_interaction_at = :now")
-        update_parts.append("updated_at = :now")
-
-        if update_parts:
-            sql = f"UPDATE line_friends SET {', '.join(update_parts)} WHERE line_uid = :uid"
-            execute(sql, params)
-
-        return existing["id"]
-    else:
-        # 创建新记录
-        sql = """
-        INSERT INTO line_friends (
-            line_uid, line_display_name, line_picture_url, member_id,
-            is_following, followed_at, last_interaction_at, created_at, updated_at
-        ) VALUES (
-            :uid, :dn, :pu, :mid, :following, :now, :now, :now, :now
-        )
-        """
-        params = {
-            "uid": line_uid,
-            "dn": display_name,
-            "pu": picture_url,
-            "mid": member_id,
-            "following": 1 if is_following else 0,
-            "now": now
-        }
-        execute(sql, params)
-
-        # 获取新插入的 ID
-        friend_id = fetchone(
-            "SELECT id FROM line_friends WHERE line_uid = :uid",
-            {"uid": line_uid}
-        )
-        return friend_id["id"] if friend_id else None
-    
-def get_all_follower_ids(limit: int = 500) -> list[str]:
-    """
-    用 LINE 官方 followers API 把目前所有好友的 userId 撈出來。
-
-    官方文件：
-      GET https://api.line.me/v2/bot/followers/ids
-
-    回傳格式（簡化）：
-    {
-      "userIds": ["Uxxxx", "Uyyyy", ...],
-      "next": "xxxxxx"  # 若有下一頁就會有 next
-    }
-
-    :param limit: 每次 API 要幾筆（官方上限 1000，這裡保守用 500）
-    :return: 所有好友的 userId list
-    """
-    if not LINE_CHANNEL_ACCESS_TOKEN:
-        raise RuntimeError("缺少 LINE_CHANNEL_ACCESS_TOKEN，請確認 .env 設定")
-
-    headers = {
-        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
-    }
-
-    all_ids: list[str] = []
-    next_cursor: str | None = None
-
-    while True:
-        params = {"limit": limit}
-        if next_cursor:
-            params["start"] = next_cursor
-
-        resp = requests.get(
-            "https://api.line.me/v2/bot/followers/ids",
-            headers=headers,
-            params=params,
-            timeout=10,
-        )
-
-        if not resp.ok:
-            logging.error("[BACKFILL] 取得 followers 失敗：%s %s", resp.status_code, resp.text)
-            break
-
-        data = resp.json()
-        user_ids = data.get("userIds", []) or []
-        all_ids.extend(user_ids)
-
-        logging.info("[BACKFILL] 目前累積好友數：%d", len(all_ids))
-
-        # 有下一頁就接著撈，沒有就結束
-        next_cursor = data.get("next")
-        if not next_cursor:
-            break
-
-        # 避免過快打 API，稍微休息一下
-        time.sleep(0.3)
-
-    return all_ids
-
-# 自動補齊所有 Line 好友的個資
-def backfill_line_friends_on_startup():
-    """
-    啟動時執行資料補齊（只補「LINE 有、但 line_friends 裡沒有」的好友）。
-
-    流程：
-      1. 如果 AUTO_BACKFILL_FRIENDS=0 → 直接略過
-      2. 用 followers API 取得目前所有好友 userId
-      3. 查 DB line_friends 裡已經有的 line_uid
-      4. 找出「LINE 有但 DB 沒有」的那一批 missing_ids
-      5. 對每個 missing_id 呼叫 fetch_line_profile + upsert_line_friend 補上資料
-
-    ⚠ 只動 line_friends，不動 members（會員問卷的那張表）。
-    """
-    try:
-        if not AUTO_BACKFILL_FRIENDS:
-            logging.info("[BACKFILL] AUTO_BACKFILL_FRIENDS=0，略過 backfill")
-            return
-
-        logging.info("[BACKFILL] 開始從 LINE 撈取全部好友 userId ...")
-        follower_ids = get_all_follower_ids()
-        if not follower_ids:
-            logging.warning("[BACKFILL] 未從 LINE 取得任何好友，可能 token 有問題或目前沒有好友")
-            return
-
-        # 取得 DB 已存的好友名單（只看 is_following=1 的）
-        rows = fetchall("SELECT line_uid FROM line_friends WHERE is_following = 1", {})
-        db_existing = {row["line_uid"] for row in rows}
-
-        # 找出 LINE 有但 DB 沒存的 userId
-        missing_ids = [uid for uid in follower_ids if uid not in db_existing]
-
-        if not missing_ids:
-            logging.info("[BACKFILL] line_friends 資料已齊全，不需要補")
-            return
-
-        logging.info("[BACKFILL] 需要補 %d 位好友資料", len(missing_ids))
-
-        success = 0
-        fail = 0
-
-        for idx, uid in enumerate(missing_ids, start=1):
-            try:
-                # 1) 先用現成的 profile API 拿名稱 & 大頭貼
-                display_name, picture_url = fetch_line_profile(uid)
-
-                # 2) 寫入 / 更新 line_friends：
-                #    member_id 先給 None，之後若有 members 再關聯
-                upsert_line_friend(
-                    line_uid=uid,
-                    display_name=display_name,
-                    picture_url=picture_url,
-                    member_id=None,
-                    is_following=True,  # 出現在 followers list 裡就代表目前是好友
-                )
-
-                success += 1
-                logging.info(
-                    "[BACKFILL] (%d/%d) ✅ 已補上 %s name=%r avatar=%s",
-                    idx, len(missing_ids), uid, display_name,
-                    "Y" if picture_url else "N"
-                )
-
-            except Exception as e:
-                fail += 1
-                logging.exception(
-                    "[BACKFILL] (%d/%d) ❌ 補 %s 失敗：%s",
-                    idx, len(missing_ids), uid, e
-                )
-
-            # 防止太密集打 profile API，被 LINE throttle
-            time.sleep(0.2)
-
-        logging.info("[BACKFILL] 補齊完成，成功 %d 筆，失敗 %d 筆", success, fail)
-
-    except Exception as e:
-        logging.exception("[BACKFILL] backfill_line_friends_on_startup 整體失敗：%s", e)
-
-# 啟動時自動補齊 line_friends 的好友資料（只補缺少的） 
+# 啟動時自動補齊 line_friends 的好友資料（只補缺少的）
 backfill_line_friends_on_startup()
 
-# -------------------------------------------------
-# Chatbot（記憶 + GPT）
-# -------------------------------------------------
-user_memory = defaultdict(lambda: deque(maxlen=MEMORY_TURNS * 2))
-
-FAQ = {
-    "聯絡資訊": (
-        "🏨 水漾月明度假文旅（Hana Mizu Tsuki Hotel）\n"
-        "📍 362苗栗縣頭屋鄉明德路54號\n"
-        "📞 037-255-358　✉️ mizutsukihotel@gmail.com\n"
-        "🗺 Google 地圖：https://www.google.com/maps?ll=24.585596,120.887298&z=17&t=m&hl=zh-TW&gl=US&mapclient=embed&cid=709365327370099103"
-    ),
-
-    "住宿": (
-        "🛏 房型與定價（每晚 / 含稅）\n"
-        "• 豪華雙人房（床型若需指定請來電洽詢）：$12,000｜日式軟墊・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/3\n"
-        "• 湖景雙人房（側湖景）：$14,000｜一大床／兩小床｜http://www.younglake.com.tw/Home/ProductsDetail/5\n"
-        "• 豪華三人房：$15,000｜一大一小床・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/6\n"
-        "• 豪華四人房（床型若需指定請來電洽詢）：$18,000｜兩大床・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/9\n"
-        "• 湖景四人房（床型若需指定請來電洽詢）：$22,000｜兩大床・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/7\n"
-        "• 家庭四人房：$25,000｜兩大床・s客廳・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/8\n"
-        "• 蜜月雙人房：$13,000｜一大床・客廳・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/2\n"
-        "• 水漾套房（正湖景）：$20,000｜一大床・浴缸｜http://www.younglake.com.tw/Home/ProductsDetail/1\n"
-        "🔗 立即訂房：https://res.windsurfercrs.com/ibe/index.aspx?propertyID=17658&nono=1&lang=zh-tw&adults=2\n"
-        "♻️ 2025/01/01 起不提供一次性備品，請自行攜帶盥洗用品。"
-    ),
-
-    "餐飲": (
-        "🍽 西餐廳｜中式桌菜・客家風味・歐式百匯\n"
-        "📞 訂位：037-255358\n"
-        "🔗 介紹頁：http://www.younglake.com.tw/Home/FacilityDetail/7"
-    ),
-
-    "停車場": (
-        "🅿️ 現場備有停車空間；如需即時車位與動線協助，建議先電洽櫃檯（037-255-358）。"
-    ),
-}
-
-# --- 房型與價格（做為「房價/價格/每晚」等關鍵字查詢的資料來源） ---
-PRICE_TABLE = {
-    "豪華雙人房（床型若需指定請來電洽詢）": 12000,
-    "湖景雙人房（側湖景）": 14000,
-    "豪華三人房": 15000,
-    "湖景四人房（床型若需指定請來電洽詢）": 22000,
-    "豪華四人房（床型若需指定請來電洽詢）": 18000,
-    "家庭四人房": 25000,
-    "蜜月雙人房": 13000,
-    "水漾套房（正湖景）": 20000,
-}
-PRICE_UNIT = "TWD/晚"
-PRICE_NOTES = "以上為定價；實際專案與加人加價以現場與官網公告為準。"
-BOOK_URL = "https://res.windsurfercrs.com/ibe/index.aspx?propertyID=17658&nono=1&lang=zh-tw&adults=2"
 
 
-def _build_messages(user_key: str, user_text: str):
-    msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
-    for role, content in user_memory[user_key]:
-        msgs.append({"role": role, "content": content})
-    msgs.append({"role": "user", "content": user_text})
-    return msgs
-
-def _ask_gpt(messages):
-    """調用 OpenAI GPT API，失敗時返回 None 讓系統使用回退機制"""
-    try:
-        resp = oai.chat.completions.create(model=OPENAI_MODEL, messages=messages, temperature=0.6, max_tokens=500)
-        return resp.choices[0].message.content.strip()
-    except Exception as e:
-        # 記錄錯誤但返回 None，讓系統自動切換到關鍵字/總是回應
-        logging.error(f"❌ [GPT API] 調用失敗: {e}")
-        return None
 
 # -------------------------------------------------
 # Auto Response 檢查函數
 # -------------------------------------------------
-def check_keyword_trigger(line_uid: str, text: str):
+# DB schema compatibility for auto_response tables
+AUTO_RESPONSE_MSG_ID_COL = (
+    "response_id" if _table_has("auto_response_messages", "response_id") else "auto_response_id"
+)
+AUTO_RESPONSE_KW_ID_COL = (
+    "auto_response_id" if _table_has("auto_response_keywords", "auto_response_id") else "response_id"
+)
+AUTO_RESPONSE_KW_TEXT_COL = (
+    "keyword" if _table_has("auto_response_keywords", "keyword") else "keyword_text"
+)
+
+# Security: validate all dynamically-determined column names against whitelist
+_VALID_COL_NAMES = frozenset({
+    "line_channel_id", "channel_id",
+    "response_id", "auto_response_id",
+    "keyword", "keyword_text",
+})
+for _col_var_name, _col_val in [
+    ("LINE_CHANNEL_ID_COL", LINE_CHANNEL_ID_COL),
+    ("AUTO_RESPONSE_MSG_ID_COL", AUTO_RESPONSE_MSG_ID_COL),
+    ("AUTO_RESPONSE_KW_ID_COL", AUTO_RESPONSE_KW_ID_COL),
+    ("AUTO_RESPONSE_KW_TEXT_COL", AUTO_RESPONSE_KW_TEXT_COL),
+]:
+    if _col_val not in _VALID_COL_NAMES:
+        raise RuntimeError(f"Invalid column name for {_col_var_name}: {_col_val!r}")
+
+def _get_basic_id_for_line_channel(line_channel_id: Optional[str]) -> Optional[str]:
+    if not line_channel_id:
+        return None
+    try:
+        row = fetchone(
+            f"SELECT basic_id FROM line_channels WHERE {LINE_CHANNEL_ID_COL}=:cid LIMIT 1",
+            {"cid": line_channel_id},
+        )
+        return row.get("basic_id") if row else None
+    except Exception:
+        return None
+
+
+def _parse_json_list(val) -> Optional[list]:
+    if val is None:
+        return None
+    if isinstance(val, list):
+        return val
+    if isinstance(val, (str, bytes)):
+        try:
+            return json.loads(val)
+        except Exception:
+            return None
+    return None
+
+
+def _time_to_seconds(t) -> Optional[int]:
+    if t is None:
+        return None
+    if isinstance(t, datetime.timedelta):
+        return int(t.total_seconds())
+    if isinstance(t, datetime.time):
+        return int(t.hour * 3600 + t.minute * 60 + t.second)
+    if isinstance(t, str):
+        try:
+            parts = [int(p) for p in t.split(":")]
+            while len(parts) < 3:
+                parts.append(0)
+            return parts[0] * 3600 + parts[1] * 60 + parts[2]
+        except Exception:
+            return None
+    return None
+
+
+def _is_within_date_range(start, end, today: datetime.date) -> bool:
+    if start is None and end is None:
+        return True
+    if start is None:
+        return today <= end
+    if end is None:
+        return today >= start
+    return start <= today <= end
+
+
+def _is_within_time_range(start, end, now: datetime.datetime) -> bool:
+    if start is None and end is None:
+        return True
+    now_sec = now.hour * 3600 + now.minute * 60 + now.second
+    start_sec = _time_to_seconds(start)
+    end_sec = _time_to_seconds(end)
+    if start_sec is None and end_sec is None:
+        return True
+    if start_sec is None:
+        return now_sec <= end_sec
+    if end_sec is None:
+        return now_sec >= start_sec
+    if start_sec == end_sec:
+        # Treat equal bounds as "no time restriction"
+        return True
+    if start_sec < end_sec:
+        return start_sec <= now_sec <= end_sec
+    # Crosses midnight
+    return now_sec >= start_sec or now_sec <= end_sec
+
+
+def _auto_response_applicable(row: Dict[str, Any], line_channel_id: Optional[str]) -> bool:
+    # Channel filter
+    ar_channel_id = row.get("channel_id")
+    if ar_channel_id:
+        basic_id = _get_basic_id_for_line_channel(line_channel_id)
+        if line_channel_id and ar_channel_id == line_channel_id:
+            pass
+        elif basic_id and ar_channel_id == basic_id:
+            pass
+        else:
+            return False
+
+    # Channels list filter (if set and doesn't include LINE)
+    channels = _parse_json_list(row.get("channels"))
+    if channels is not None and "LINE" not in channels:
+        return False
+
+    today = datetime.datetime.now().date()
+    now = datetime.datetime.now()
+    if not _is_within_date_range(row.get("date_range_start"), row.get("date_range_end"), today):
+        return False
+    if not _is_within_time_range(row.get("trigger_time_start"), row.get("trigger_time_end"), now):
+        return False
+    return True
+
+
+def check_keyword_trigger(line_uid: str, text: str, line_channel_id: Optional[str] = None):
     """
     檢查是否有匹配的關鍵字自動回應
 
@@ -1101,29 +384,29 @@ def check_keyword_trigger(line_uid: str, text: str):
         回應內容（如果有匹配且啟用）或 None
     """
     try:
-        result = execute("""
-            SELECT arm.message_content
+        rows = fetchall(f"""
+            SELECT ar.channel_id, ar.channels, ar.trigger_time_start, ar.trigger_time_end,
+                   ar.date_range_start, ar.date_range_end, ar.updated_at, ar.created_at,
+                   arm.message_content
             FROM auto_responses ar
-            JOIN auto_response_keywords ark ON ar.id = ark.auto_response_id
-            JOIN auto_response_messages arm ON ar.id = arm.auto_response_id
+            JOIN auto_response_keywords ark ON ar.id = ark.{AUTO_RESPONSE_KW_ID_COL}
+            JOIN auto_response_messages arm ON ar.id = arm.{AUTO_RESPONSE_MSG_ID_COL}
             WHERE ar.is_active = 1
               AND ar.trigger_type = 'keyword'
               AND ark.is_enabled = 1
-              AND LOWER(:text) = LOWER(ark.keyword)
-            ORDER BY arm.sequence_order
-            LIMIT 1
+              AND LOWER(:text) = LOWER(ark.{AUTO_RESPONSE_KW_TEXT_COL})
+            ORDER BY COALESCE(ar.updated_at, ar.created_at) DESC, arm.sequence_order ASC
         """, {"text": text})
-
-        row = result.fetchone()
-        if row:
-            logging.info(f"Keyword matched for user {line_uid}: {text}")
-            return row[0]
+        for row in rows:
+            if _auto_response_applicable(row, line_channel_id):
+                logging.info(f"Keyword matched for user {line_uid}: {text}")
+                return row.get("message_content") if isinstance(row, dict) else row[0]
         return None
     except Exception as e:
         logging.exception(f"check_keyword_trigger error: {e}")
         return None
 
-def check_always_response():
+def check_always_response(line_channel_id: Optional[str] = None):
     """
     檢查是否有啟用的一律回應
 
@@ -1131,26 +414,26 @@ def check_always_response():
         回應內容（如果有啟用）或 None
     """
     try:
-        result = execute("""
-            SELECT arm.message_content
+        rows = fetchall(f"""
+            SELECT ar.channel_id, ar.channels, ar.trigger_time_start, ar.trigger_time_end,
+                   ar.date_range_start, ar.date_range_end, ar.updated_at, ar.created_at,
+                   arm.message_content
             FROM auto_responses ar
-            JOIN auto_response_messages arm ON ar.id = arm.auto_response_id
+            JOIN auto_response_messages arm ON ar.id = arm.{AUTO_RESPONSE_MSG_ID_COL}
             WHERE ar.is_active = 1
-              AND ar.trigger_type = 'always'
-            ORDER BY arm.sequence_order
-            LIMIT 1
+              AND ar.trigger_type IN ('always', 'follow')
+            ORDER BY COALESCE(ar.updated_at, ar.created_at) DESC, arm.sequence_order ASC
         """)
-
-        row = result.fetchone()
-        if row:
-            logging.info("Always response is active")
-            return row[0]
+        for row in rows:
+            if _auto_response_applicable(row, line_channel_id):
+                logging.info("Always response is active")
+                return row.get("message_content") if isinstance(row, dict) else row[0]
         return None
     except Exception as e:
         logging.exception(f"check_always_response error: {e}")
         return None
 
-def check_welcome_response():
+def check_welcome_response(line_channel_id: Optional[str] = None):
     """
     檢查是否有啟用的歡迎訊息
 
@@ -1158,20 +441,20 @@ def check_welcome_response():
         回應內容（如果有啟用）或 None
     """
     try:
-        result = execute("""
-            SELECT arm.message_content
+        rows = fetchall(f"""
+            SELECT ar.channel_id, ar.channels, ar.trigger_time_start, ar.trigger_time_end,
+                   ar.date_range_start, ar.date_range_end, ar.updated_at,
+                   arm.message_content
             FROM auto_responses ar
-            JOIN auto_response_messages arm ON ar.id = arm.auto_response_id
+            JOIN auto_response_messages arm ON ar.id = arm.{AUTO_RESPONSE_MSG_ID_COL}
             WHERE ar.is_active = 1
               AND ar.trigger_type = 'welcome'
-            ORDER BY arm.sequence_order
-            LIMIT 1
+            ORDER BY ar.updated_at DESC, arm.sequence_order ASC
         """)
-
-        row = result.fetchone()
-        if row:
-            logging.info("Welcome response is active")
-            return row[0]
+        for row in rows:
+            if _auto_response_applicable(row, line_channel_id):
+                logging.info("Welcome response is active")
+                return row.get("message_content") if isinstance(row, dict) else row[0]
         return None
     except Exception as e:
         logging.exception(f"check_welcome_response error: {e}")
@@ -2477,19 +1760,7 @@ def push_survey_entry(
 
     return sent
 
-# ========= 用 LINE Channel ID 取 MessagingApi =========
-def get_messaging_api_by_line_id(line_channel_id: str | None) -> MessagingApi:
-    # 沒帶就回退到預設（.env）
-    if not line_channel_id:
-        return messaging_api  # 你現有的預設 client
-
-    cred = get_credentials_by_line_id(line_channel_id)
-    if not cred or not cred.get("token"):
-        # 有指定 line_channel_id 但找不到 → 明確錯誤，不 fallback
-        raise RuntimeError(f"Invalid line_channel_id or missing token: {line_channel_id}")
-
-    cfg = Configuration(access_token=cred["token"])
-    return MessagingApi(ApiClient(cfg))
+# get_messaging_api_by_line_id 已遷移至 services/line_sdk.py
 
 
 def send_survey_via_liff(payload: dict) -> dict:
@@ -2831,6 +2102,7 @@ def api_send_chat_message():
             return jsonify({"ok": False, "error": "text required"}), 400
 
         # 1. 發送訊息
+        text = render_template_text(text, line_uid=line_uid)
         messaging_api.push_message(
             PushMessageRequest(
                 to=line_uid,
@@ -3020,7 +2292,7 @@ def api_member_form_submit():
 
     # 2) 取最新 LINE profile（名字、頭像）
     try:
-        dn, pu = fetch_line_profile(uid)
+        dn, pu = fetch_line_profile(uid, line_channel_id=line_channel_id)
     except Exception:
         dn = answers.get("line_display_name") or None
         pu = answers.get("line_avatar") or None
@@ -3072,10 +2344,11 @@ def connect_line_channel():
     token = data["access_token"]
 
     # 存入資料庫（若重複 channel_id 則更新）
-    execute("""
-        INSERT INTO line_channels (line_channel_id, channel_secret, channel_access_token, is_active)
+    id_col = LINE_CHANNEL_ID_COL
+    execute(f"""
+        INSERT INTO line_channels ({id_col}, channel_secret, channel_access_token, is_active)
         VALUES (:cid, :sec, :tok, 1)
-        ON CONFLICT(line_channel_id)
+        ON CONFLICT({id_col})
         DO UPDATE SET channel_secret=:sec, channel_access_token=:tok, is_active=1
     """, {"cid": line_channel_id, "sec": secret, "tok": token})
 
@@ -3166,6 +2439,71 @@ def _source_key(ev_source) -> str:
     return "anonymous"
 
 
+def _is_duplicate_webhook(message_id: str, handler_name: str = "webhook") -> bool:
+    """
+    檢查 webhook 事件是否已處理過（LINE 在未及時收到 200 時會重送）。
+    透過 conversation_messages.id 比對，避免重複處理。
+    """
+    try:
+        if fetchone("SELECT 1 FROM conversation_messages WHERE id = :mid LIMIT 1", {"mid": message_id}):
+            logging.info(f"[{handler_name}] Skipping duplicate webhook: msg_id={message_id}")
+            return True
+    except Exception:
+        pass  # 查詢失敗時不阻擋正常流程
+    return False
+
+
+def _notify_backend(*, line_uid: str, message_text: str, timestamp, message_id: str,
+                    direction: str = "incoming", source: str | None = None,
+                    handler_name: str = "webhook"):
+    """
+    通知 Backend 有新訊息（觸發 SSE 推送給前端）。
+    """
+    backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8700")
+    payload = {
+        "line_uid": line_uid,
+        "message_text": message_text,
+        "timestamp": timestamp,
+        "message_id": message_id,
+    }
+    if direction != "incoming":
+        payload["direction"] = direction
+    if source:
+        payload["source"] = source
+    try:
+        resp = requests.post(
+            f"{backend_url}/api/v1/line/message-notify",
+            json=payload,
+            timeout=5,
+        )
+        logging.info(f"[{handler_name}] Backend notify ({direction}): {resp.status_code} - {resp.text[:200]}")
+    except Exception as e:
+        logging.error(f"[{handler_name}] Failed to notify backend ({direction}): {e}")
+
+
+def _call_backend_ai(line_uid: str, message: str) -> dict | None:
+    """
+    呼叫 Backend AI 聊天 API。
+    Returns: {"reply": str, "token_exhausted": bool, ...} or None on failure
+    """
+    backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8700")
+    try:
+        resp = requests.post(
+            f"{backend_url}/api/v1/ai/chat",
+            json={"message": message, "line_uid": line_uid},
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            data = resp.json().get("data")
+            return data
+        else:
+            logging.error(f"[_call_backend_ai] HTTP {resp.status_code}: {resp.text[:200]}")
+            return None
+    except Exception as e:
+        logging.error(f"[_call_backend_ai] Request failed: {e}")
+        return None
+
+
 def on_follow(event: FollowEvent):
     """
     處理用戶加入好友事件
@@ -3193,7 +2531,7 @@ def on_follow(event: FollowEvent):
     # === 1. 檢查是否有啟用的歡迎訊息 ===
     welcome_msg = None
     try:
-        welcome_msg = check_welcome_response()
+        welcome_msg = check_welcome_response(line_channel_id)
     except Exception as e:
         logging.exception(f"[on_follow] Failed to check welcome response: {e}")
 
@@ -3205,9 +2543,19 @@ def on_follow(event: FollowEvent):
         )
         logging.info("[on_follow] Using default welcome message")
 
+    line_channel_id = getattr(g, "line_channel_id", None) or getattr(event, "destination", None)
+
     # === 2. 發送歡迎訊息 ===
     try:
-        messaging_api.reply_message(ReplyMessageRequest(
+        welcome_msg = render_template_text(
+            welcome_msg,
+            line_uid=uid,
+            line_channel_id=line_channel_id,
+            display_name=dn,
+        )
+        token = get_channel_access_token_by_channel_id(line_channel_id)
+        api = MessagingApi(ApiClient(Configuration(access_token=token)))
+        api.reply_message(ReplyMessageRequest(
             reply_token=event.reply_token,
             messages=[TextMessage(text=welcome_msg)]
         ))
@@ -3219,7 +2567,7 @@ def on_follow(event: FollowEvent):
     if uid:
         try:
             # 取得 LINE profile
-            dn, pu = fetch_line_profile(uid)
+            dn, pu = fetch_line_profile(uid, line_channel_id=line_channel_id)
 
             # 創建/更新 LINE 好友記錄
             friend_id = upsert_line_friend(
@@ -3288,10 +2636,11 @@ def on_unfollow(event: UnfollowEvent):
 def on_postback(event: PostbackEvent):
     uid = getattr(event.source, "user_id", None)
     data = getattr(event.postback, "data", "") if getattr(event, "postback", None) else ""
+    line_channel_id = getattr(g, "line_channel_id", None) or getattr(event, "destination", None)
     if uid:
         try:
             cur = fetch_member_profile(uid) or {}
-            api_dn, api_pu = fetch_line_profile(uid)
+            api_dn, api_pu = fetch_line_profile(uid, line_channel_id=line_channel_id)
             dn_to_write = api_dn if (api_dn and api_dn != cur.get("line_display_name")) else None
             pu_to_write = api_pu if (api_pu and api_pu != cur.get("line_avatar")) else None
 
@@ -3335,12 +2684,17 @@ def on_text(event: MessageEvent):
     user_key = _source_key(event.source)
     text_in  = event.message.text.strip()
     uid      = getattr(event.source, "user_id", None)
+    line_channel_id = getattr(g, "line_channel_id", None) or getattr(event, "destination", None)
 
     # 確保 uid 去除空白字元
     if uid:
         uid = uid.strip()
 
     logging.info(f"[on_text] uid={uid} text={text_in[:80]}")
+
+    # === 0. 防止 webhook 重試造成重複處理 ===
+    if _is_duplicate_webhook(event.message.id, "on_text"):
+        return
 
     # === 1. 建立 thread 並儲存用戶的 incoming message ===
     thread_id = None
@@ -3362,6 +2716,7 @@ def on_text(event: MessageEvent):
 
     # === 2. 更新會員資訊 ===
     mid = None
+    display_name_for_reply = None
     if uid:
         try:
             # 讀取現有 DB 資料
@@ -3370,7 +2725,7 @@ def on_text(event: MessageEvent):
             cur_pu = cur.get("line_avatar")
 
             # 從 LINE API 取得最新 profile
-            api_dn, api_pu = fetch_line_profile(uid)
+            api_dn, api_pu = fetch_line_profile(uid, line_channel_id=line_channel_id)
 
             # 只在有變更時才更新
             dn_to_write = api_dn if (api_dn and api_dn != cur_dn) else None
@@ -3388,45 +2743,47 @@ def on_text(event: MessageEvent):
                 member_id=mid,
                 is_following=True,
 	            )
+            display_name_for_reply = api_dn or cur_dn
         except Exception:
             logging.exception("[on_text] Failed to update member/line_friends")
 
-    # === 4. 自動回應處理（順序：GPT → keyword → always）===
+    # === 4. 自動回應處理（AI 優先 → keyword → always 降級備援）===
     reply_text = None
     message_source = None
 
     # 檢查是否啟用 GPT
     gpt_enabled = is_gpt_enabled_for_user(uid)
 
-    # 4.1 優先：GPT 回應（僅當 gpt_enabled = TRUE 時）
+    # 4.1 優先：Backend AI（需 gpt_enabled）
     if gpt_enabled:
         try:
-            msgs = _build_messages(user_key, text_in)
-            reply_text = _ask_gpt(msgs)
-            if reply_text:  # 只有成功時才設置 source
-                message_source = "gpt"
-                logging.info(f"[on_text] GPT response generated for uid={uid}")
-            else:
-                logging.warning(f"[on_text] GPT API 失敗，切換到回退機制 for uid={uid}")
+            ai_result = _call_backend_ai(uid, text_in)
+            if ai_result:
+                if ai_result.get("token_exhausted"):
+                    logging.info(f"[on_text] Token exhausted, falling back for uid={uid}")
+                elif ai_result.get("reply") and not ai_result["reply"].startswith("AI Token 額度已用完"):
+                    reply_text = ai_result["reply"]
+                    message_source = "gpt"
+                    logging.info(f"[on_text] Backend AI response for uid={uid}")
         except Exception as e:
-            logging.exception(f"[on_text] GPT exception: {e}")
+            logging.exception(f"[on_text] Backend AI failed: {e}")
     else:
-        logging.info(f"[on_text] ⏸️ 手動模式：GPT 已停用 for uid={uid}")
+        logging.info(f"[on_text] AI disabled for uid={uid}, using fallback")
 
-    # 4.2 後備：關鍵字觸發（gpt_enabled = TRUE 且 GPT 失敗時，或 gpt_enabled = FALSE 時都不觸發）
-    if gpt_enabled and not reply_text:
+    # 4.2 降級：關鍵字觸發
+    if not reply_text:
         try:
-            reply_text = check_keyword_trigger(uid, text_in)
+            reply_text = check_keyword_trigger(uid, text_in, line_channel_id=line_channel_id)
             if reply_text:
                 message_source = "keyword"
                 logging.info(f"[on_text] Keyword response triggered for uid={uid}")
         except Exception as e:
             logging.exception(f"[on_text] Keyword check failed: {e}")
 
-    # 4.3 最後後備：一律回應（gpt_enabled = TRUE 且前兩者都失敗時，或 gpt_enabled = FALSE 時都不觸發）
-    if gpt_enabled and not reply_text:
+    # 4.3 降級：一律回應（在有效期/時段內）
+    if not reply_text:
         try:
-            reply_text = check_always_response()
+            reply_text = check_always_response(line_channel_id=line_channel_id)
             if reply_text:
                 message_source = "always"
                 logging.info(f"[on_text] Always response triggered for uid={uid}")
@@ -3435,21 +2792,32 @@ def on_text(event: MessageEvent):
 
     # === 5. 發送回覆訊息 ===
     if reply_text:
-        # 截斷過長訊息
         reply_text = reply_text[:5000]
+        reply_text = render_template_text(
+            reply_text,
+            line_uid=uid,
+            line_channel_id=line_channel_id,
+            display_name=display_name_for_reply,
+        )
 
         try:
-            messaging_api.reply_message(ReplyMessageRequest(
+            # ★ 關鍵修正：依 webhook 事件所屬 channel 取得正確 token
+            token = get_channel_access_token_by_channel_id(line_channel_id)
+
+            api = MessagingApi(ApiClient(Configuration(
+                access_token=token
+            )))
+
+            api.reply_message(ReplyMessageRequest(
                 reply_token=event.reply_token,
                 messages=[TextMessage(text=reply_text)]
             ))
+
             logging.info(f"[on_text] Reply sent successfully, source={message_source}")
+
         except Exception:
             logging.exception(f"[on_text] Failed to send reply via LINE API")
 
-        # 更新用戶記憶
-        user_memory[user_key].append(("user", text_in))
-        user_memory[user_key].append(("assistant", reply_text))
 
         # 儲存 outgoing message 到資料庫
         if thread_id:
@@ -3464,53 +2832,39 @@ def on_text(event: MessageEvent):
                     status="sent"
                 )
 
-                # ✅ 通知後端自動回應（GPT/keyword/always 都要通知）
-                # 這樣前端聊天室可以即時顯示自動回應
-                try:
-                    backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8700")
-                    current_ts = int(time.time() * 1000)  # time.time() 返回 UTC epoch 秒數
-                    requests.post(
-                        f"{backend_url}/api/v1/line/message-notify",
-                        json={
-                            "line_uid": uid,
-                            "message_text": reply_text,
-                            "timestamp": current_ts,
-                            "message_id": str(msg_id) if msg_id else f"auto_{current_ts}",
-                            "direction": "outgoing",
-                            "source": message_source  # gpt/keyword/always
-                        },
-                        timeout=5
-                    )
-                    logging.info(f"[on_text] Notified backend about {message_source} response")
-                except Exception as e:
-                    logging.error(f"[on_text] Failed to notify auto response: {e}")
-
             except Exception:
                 logging.exception("[on_text] Failed to save outgoing message")
     else:
         logging.warning(f"[on_text] No response generated for uid={uid}, text={text_in[:50]}")
 
-    # === 通知 Backend 有新訊息 (不阻塞主流程) ===
-    # 移除 mid 條件：line_notify.py 會自己根據 line_uid 查詢 member_id
+    # === 通知 Backend 有新訊息 ===
+    # 順序重要：先推 incoming（用戶訊息），再推 outgoing（自動回應）
+    # 這樣前端 SSE append 時順序才正確
     if uid:
-        try:
-            backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8700")
-            resp = requests.post(
-                f"{backend_url}/api/v1/line/message-notify",
-                json={
-                    "line_uid": uid,
-                    "message_text": text_in,
-                    "timestamp": event.timestamp,  # 使用 LINE 官方時間戳 (毫秒)
-                    "message_id": event.message.id
-                },
-                timeout=5
-            )
-            logging.info(f"[on_text] Backend notify response: {resp.status_code} - {resp.text[:200]}")
-        except Exception as e:
-            logging.error(f"[on_text] Failed to notify backend: {e}")
+        _notify_backend(
+            line_uid=uid,
+            message_text=text_in,
+            timestamp=event.timestamp,
+            message_id=event.message.id,
+            handler_name="on_text",
+        )
+
+    if uid and reply_text and thread_id:
+        current_ts = int(time.time() * 1000)
+        _notify_backend(
+            line_uid=uid,
+            message_text=reply_text,
+            timestamp=current_ts,
+            message_id=str(msg_id) if msg_id else f"auto_{current_ts}",
+            direction="outgoing",
+            source=message_source,
+            handler_name="on_text",
+        )
 
 # 處理使用者傳貼圖事件
 def on_sticker(event: MessageEvent):
+    if _is_duplicate_webhook(event.message.id, "on_sticker"):
+        return
 
     # 從事件來源取得使用者 user_id
     uid = getattr(event.source, "user_id", None)
@@ -3538,11 +2892,17 @@ def on_sticker(event: MessageEvent):
 
 # 處理圖片事件
 def on_image(event: MessageEvent):
+    if _is_duplicate_webhook(event.message.id, "on_image"):
+        return
+
     uid = getattr(event.source, "user_id", None)
     thread_id = ensure_thread_for_user(uid)
+    line_channel_id = getattr(g, "line_channel_id", None) or getattr(event, "destination", None)
 
     message_id = event.message.id
-    content = messaging_api.get_message_content(message_id)
+    token = get_channel_access_token_by_channel_id(line_channel_id)
+    api = MessagingApi(ApiClient(Configuration(access_token=token)))
+    content = api.get_message_content(message_id)
 
     filename = f"{message_id}.jpg"
     filepath = os.path.join(ASSET_LOCAL_DIR, filename)

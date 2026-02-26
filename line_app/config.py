@@ -46,13 +46,6 @@ DEFAULT_MEMBER_FORM_URL = os.getenv(
 )
 
 # -------------------------------------------------
-# OpenAI 相關配置
-# -------------------------------------------------
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
-MEMORY_TURNS = int(os.getenv("MEMORY_TURNS", "5"))
-
-# -------------------------------------------------
 # 資料庫配置
 # -------------------------------------------------
 MYSQL_USER = os.getenv("MYSQL_USER", os.getenv("DB_USER", "root"))

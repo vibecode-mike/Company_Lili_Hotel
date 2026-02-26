@@ -30,6 +30,9 @@ from app.api.v1 import (
     websocket,
     line_notify,
     chat_session,
+    faq,
+    ai_chat,
+    fb_ws_proxy,
 )
 
 api_router = APIRouter()
@@ -62,3 +65,6 @@ api_router.include_router(
 api_router.include_router(websocket.router, prefix="", tags=["WebSocket 即時通訊"])
 api_router.include_router(line_notify.router, prefix="", tags=["LINE 訊息通知"])
 api_router.include_router(chat_session.router, prefix="", tags=["聊天 Session"])
+api_router.include_router(faq.router, prefix="/faq", tags=["FAQ 知識庫管理"])
+api_router.include_router(ai_chat.router, prefix="/ai", tags=["AI 聊天"])
+api_router.include_router(fb_ws_proxy.router, prefix="", tags=["Facebook WS 代理"])

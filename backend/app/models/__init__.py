@@ -18,6 +18,17 @@ from app.models.admin import Admin, Role, Permission, AdminRole, RolePermission
 from app.models.tracking import ComponentInteractionLog, InteractionType, ClickTrackingDemo
 from app.models.line_channel import LineChannel
 from app.models.conversation import ConversationThread, ConversationMessage
+from app.models.faq import (
+    Industry,
+    FaqCategory,
+    FaqCategoryField,
+    FaqRule,
+    FaqRuleVersion,
+    FaqRuleTag,
+    AiTokenUsage,
+    AiToneConfig,
+    FaqModuleAuth,
+)
 
 __all__ = [
     "Base",
@@ -49,4 +60,13 @@ __all__ = [
     "LineChannel",
     "ConversationThread",
     "ConversationMessage",
+    "Industry",
+    "FaqCategory",
+    "FaqCategoryField",
+    "FaqRule",
+    "FaqRuleVersion",
+    "FaqRuleTag",
+    "AiTokenUsage",
+    "AiToneConfig",
+    "FaqModuleAuth",
 ]

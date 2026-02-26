@@ -1,0 +1,3931 @@
+openapi: 3.0.3
+info:
+  title: 力麗飯店 LINE OA CRM API
+  description: 多渠道會員管理與行銷平台 API，整合 LINE、Facebook Messenger 和 Webchat。
+  version: 0.6.0
+servers:
+  - url: /api/v1
+    description: API v1
+
+# ============================================================================
+# 既有功能 API（根據現有代碼與 Feature 規格）
+# ============================================================================
+
+paths:
+
+  # --------------------------------------------------------------------------
+  # 認證授權 (auth)
+  # Feature: 登入系統, 登出系統
+  # --------------------------------------------------------------------------
+
+  /auth/login:
+    post:
+      summary: 管理員以帳號密碼登入系統
+      operationId: login
+      tags: [認證授權]
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: 登入成功，回傳 JWT Token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          description: 帳號或密碼錯誤
+
+  /auth/refresh:
+    post:
+      summary: 使用 refresh token 換發新的 access token
+      operationId: refreshToken
+      tags: [認證授權]
+      responses:
+        '200':
+          description: 換發成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: Token 無效或過期
+
+  /auth/me:
+    get:
+      summary: 取得當前登入管理員的個人資訊
+      operationId: getCurrentUser
+      tags: [認證授權]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInfo'
+        '401':
+          description: 未登入
+
+  # --------------------------------------------------------------------------
+  # 會員管理 (members)
+  # Feature: member_management, member_search_filter, member_tag_integration
+  # --------------------------------------------------------------------------
+
+  /members:
+    get:
+      summary: 查詢會員清單（支援搜尋、篩選、排序、分頁）
+      operationId: getMembers
+      tags: [會員管理]
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: 關鍵字搜尋（姓名、電話、Email）
+        - name: join_source
+          in: query
+          schema:
+            type: string
+            enum: [LINE, facebook, webchat]
+          description: 加入來源篩選
+        - name: tags
+          in: query
+          schema:
+            type: string
+          description: 標籤篩選（逗號分隔）
+        - name: channel
+          in: query
+          schema:
+            type: string
+          description: 渠道篩選
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+            default: last_interaction_at
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: 會員清單（分頁）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageResponse_MemberListItem'
+    post:
+      summary: 手動建立新會員
+      operationId: createMember
+      tags: [會員管理]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberCreate'
+      responses:
+        '200':
+          description: 建立成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: 資料驗證失敗
+
+  /members/count:
+    get:
+      summary: 取得符合條件的會員人數
+      operationId: getMemberCount
+      tags: [會員管理]
+      parameters:
+        - name: target_audience
+          in: query
+          schema:
+            type: string
+        - name: tag_ids
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 會員人數
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /members/{member_id}:
+    get:
+      summary: 取得單一會員詳細資料
+      operationId: getMember
+      tags: [會員管理]
+      parameters:
+        - name: member_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: platform
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 會員詳細資料
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberDetail'
+        '404':
+          description: 會員不存在
+    put:
+      summary: 編輯會員基本資料
+      operationId: updateMember
+      tags: [會員管理]
+      parameters:
+        - name: member_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: platform
+          in: query
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberUpdate'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: 會員不存在
+    delete:
+      summary: 刪除會員帳號
+      operationId: deleteMember
+      tags: [會員管理]
+      parameters:
+        - name: member_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 刪除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: 會員不存在
+
+  /members/{member_id}/tags:
+    put:
+      summary: 更新會員的標籤（覆蓋）
+      operationId: updateMemberTags
+      tags: [會員管理]
+      parameters:
+        - name: member_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTagsRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /members/{member_id}/tags/add:
+    post:
+      summary: 為會員新增單一標籤
+      operationId: addMemberTag
+      tags: [會員管理]
+      parameters:
+        - name: member_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tag_name]
+              properties:
+                tag_name:
+                  type: string
+                message_id:
+                  type: integer
+      responses:
+        '200':
+          description: 新增成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /members/{member_id}/tags/batch-update:
+    post:
+      summary: 批次更新會員的會員標籤與互動標籤
+      operationId: batchUpdateMemberTags
+      tags: [會員管理]
+      parameters:
+        - name: member_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchUpdateTagsRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /members/{member_id}/interaction-tags:
+    put:
+      summary: 更新會員的互動標籤（覆蓋）
+      operationId: updateMemberInteractionTags
+      tags: [會員管理]
+      parameters:
+        - name: member_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTagsRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /members/{member_id}/interaction-tags/add:
+    post:
+      summary: 為會員新增單一互動標籤
+      operationId: addMemberInteractionTag
+      tags: [會員管理]
+      parameters:
+        - name: member_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tag_name]
+              properties:
+                tag_name:
+                  type: string
+                message_id:
+                  type: integer
+      responses:
+        '200':
+          description: 新增成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /members/{member_id}/notes:
+    put:
+      summary: 更新會員備註
+      operationId: updateMemberNotes
+      tags: [會員管理]
+      parameters:
+        - name: member_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNotesRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /members/{member_id}/chat/send:
+    post:
+      summary: 從 CRM 後台發送聊天訊息給會員
+      operationId: sendMemberChatMessage
+      tags: [聊天室]
+      parameters:
+        - name: member_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text, platform]
+              properties:
+                text:
+                  type: string
+                platform:
+                  type: string
+                  enum: [LINE, facebook, webchat]
+                jwt_token:
+                  type: string
+                page_id:
+                  type: string
+                fb_customer_id:
+                  type: string
+      responses:
+        '200':
+          description: 發送成功
+
+  /members/{member_id}/chat/mark-read:
+    put:
+      summary: 標記會員對話為已讀
+      operationId: markMemberChatRead
+      tags: [聊天室]
+      parameters:
+        - name: member_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 標記成功
+
+  /members/{member_id}/chat-messages:
+    get:
+      summary: 取得會員的聊天訊息歷史
+      operationId: getChatMessages
+      tags: [聊天室]
+      parameters:
+        - name: member_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: platform
+          in: query
+          schema:
+            type: string
+        - name: jwt_token
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: 聊天訊息清單
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /members/{member_id}/chat-session:
+    get:
+      summary: 取得會員的聊天 session 資訊
+      operationId: getChatSession
+      tags: [聊天室]
+      parameters:
+        - name: member_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: platform
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 聊天 session 資訊
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  # --------------------------------------------------------------------------
+  # 群發訊息 (messages)
+  # Feature: create_broadcast, 多渠道推播, message_history, message_analytics
+  # --------------------------------------------------------------------------
+
+  /messages:
+    get:
+      summary: 查詢群發訊息清單（支援篩選、分頁）
+      operationId: listMessages
+      tags: [群發訊息]
+      parameters:
+        - name: send_status
+          in: query
+          schema:
+            type: string
+            enum: [draft, scheduled, sent, failed]
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: 訊息清單（分頁）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageListResponse'
+    post:
+      summary: 建立群發訊息（草稿或排程）
+      operationId: createMessage
+      tags: [群發訊息]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageCreate'
+      responses:
+        '200':
+          description: 建立成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageDetail'
+        '400':
+          description: 資料驗證失敗
+
+  /messages/quota:
+    post:
+      summary: 查詢推播配額狀態（預估發送人數與可用額度）
+      operationId: getQuotaStatus
+      tags: [群發訊息]
+      parameters:
+        - name: channel_id
+          in: query
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuotaStatusRequest'
+      responses:
+        '200':
+          description: 配額狀態
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuotaStatusResponse'
+
+  /messages/{message_id}:
+    get:
+      summary: 取得單一群發訊息詳細資料
+      operationId: getMessage
+      tags: [群發訊息]
+      parameters:
+        - name: message_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 訊息詳細資料
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageDetail'
+        '404':
+          description: 訊息不存在
+    put:
+      summary: 更新群發訊息內容
+      operationId: updateMessage
+      tags: [群發訊息]
+      parameters:
+        - name: message_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageUpdate'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageDetail'
+    delete:
+      summary: 刪除群發訊息
+      operationId: deleteMessage
+      tags: [群發訊息]
+      parameters:
+        - name: message_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 刪除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /messages/{message_id}/send:
+    post:
+      summary: 發送群發訊息（立即或排程觸發）
+      operationId: sendMessage
+      tags: [群發訊息]
+      parameters:
+        - name: message_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageSendRequest'
+      responses:
+        '200':
+          description: 發送結果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageSendResponse'
+        '400':
+          description: 發送失敗（配額不足等）
+
+  /messages/fb/{fb_message_id}:
+    get:
+      summary: 取得 Facebook 群發訊息詳細資料
+      operationId: getFbMessageDetail
+      tags: [群發訊息]
+      parameters:
+        - name: fb_message_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: FB 訊息詳細資料
+
+  # --------------------------------------------------------------------------
+  # 模板庫 (templates)
+  # Feature: message_template, template_library, carousel_auto_recrop
+  # --------------------------------------------------------------------------
+
+  /templates/library:
+    get:
+      summary: 查詢模板庫清單
+      operationId: listLibraryTemplates
+      tags: [模板庫]
+      parameters:
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 模板庫清單
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TemplateLibraryItem'
+
+  /templates/{template_id}/copy:
+    post:
+      summary: 複製模板
+      operationId: copyTemplate
+      tags: [模板庫]
+      parameters:
+        - name: template_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 複製成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateCopyResponse'
+
+  /templates/{template_id}/library:
+    put:
+      summary: 切換模板是否加入模板庫
+      operationId: toggleLibrary
+      tags: [模板庫]
+      parameters:
+        - name: template_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TemplateLibraryToggle'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateLibraryItem'
+
+  # --------------------------------------------------------------------------
+  # 活動管理 (campaigns)
+  # Feature: campaign_management (活動 CRUD), create_broadcast (活動關聯)
+  # --------------------------------------------------------------------------
+
+  /campaigns:
+    post:
+      summary: 建立行銷活動
+      operationId: createCampaign
+      tags: [活動管理]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignCreateNew'
+      responses:
+        '200':
+          description: 建立成功
+    get:
+      summary: 查詢活動清單（支援篩選、分頁）
+      operationId: listCampaigns
+      tags: [活動管理]
+      parameters:
+        - name: campaign_tag
+          in: query
+          schema:
+            type: string
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: 活動清單
+
+  /campaigns/{campaign_id}:
+    get:
+      summary: 取得單一活動詳細資料
+      operationId: getCampaign
+      tags: [活動管理]
+      parameters:
+        - name: campaign_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 活動詳細資料
+        '404':
+          description: 活動不存在
+    put:
+      summary: 更新活動資料
+      operationId: updateCampaign
+      tags: [活動管理]
+      parameters:
+        - name: campaign_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignUpdateNew'
+      responses:
+        '200':
+          description: 更新成功
+    delete:
+      summary: 刪除活動
+      operationId: deleteCampaign
+      tags: [活動管理]
+      parameters:
+        - name: campaign_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 刪除成功
+
+  # --------------------------------------------------------------------------
+  # 標籤管理 (tags)
+  # Feature: member_tag_management, interaction_tag_setup, label_statistics
+  # --------------------------------------------------------------------------
+
+  /tags:
+    get:
+      summary: 查詢標籤清單（支援類型篩選、搜尋、排序、分頁）
+      operationId: getTags
+      tags: [標籤管理]
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [member, interaction]
+        - name: source
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+            default: trigger_count
+        - name: sort_order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: 標籤清單（分頁）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+    post:
+      summary: 建立新標籤
+      operationId: createTag
+      tags: [標籤管理]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagCreate'
+      responses:
+        '200':
+          description: 建立成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: 標籤名稱重複
+
+  /tags/available-options:
+    get:
+      summary: 取得可用的標籤選項（下拉選單用）
+      operationId: getAvailableTagOptions
+      tags: [標籤管理]
+      responses:
+        '200':
+          description: 可用標籤選項
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /tags/statistics:
+    get:
+      summary: 取得標籤統計資料
+      operationId: getTagStatistics
+      tags: [標籤管理]
+      responses:
+        '200':
+          description: 標籤統計
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /tags/trends:
+    get:
+      summary: 取得標籤趨勢資料
+      operationId: getTagTrends
+      tags: [標籤管理]
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 30
+      responses:
+        '200':
+          description: 標籤趨勢
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /tags/{tag_id}:
+    put:
+      summary: 更新標籤名稱
+      operationId: updateTag
+      tags: [標籤管理]
+      parameters:
+        - name: tag_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: tag_type
+          in: query
+          schema:
+            type: string
+            enum: [member, interaction]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagUpdate'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+    delete:
+      summary: 刪除標籤
+      operationId: deleteTag
+      tags: [標籤管理]
+      parameters:
+        - name: tag_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: tag_type
+          in: query
+          schema:
+            type: string
+            enum: [member, interaction]
+      responses:
+        '200':
+          description: 刪除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /tags/{tag_id}/history:
+    get:
+      summary: 取得標籤的觸發歷史
+      operationId: getTagHistory
+      tags: [標籤管理]
+      parameters:
+        - name: tag_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: tag_type
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: 標籤歷史
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  # --------------------------------------------------------------------------
+  # 文件上傳 (upload)
+  # Feature: file_upload
+  # --------------------------------------------------------------------------
+
+  /upload:
+    post:
+      summary: 上傳圖片檔案
+      operationId: uploadImage
+      tags: [文件上傳]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: 上傳成功，回傳檔案 URL
+
+  /upload/{filename}:
+    delete:
+      summary: 刪除已上傳的圖片
+      operationId: deleteImage
+      tags: [文件上傳]
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 刪除成功
+
+  # --------------------------------------------------------------------------
+  # 追蹤統計 (tracking)
+  # Feature: click_tracking, message_analytics
+  # --------------------------------------------------------------------------
+
+  /tracking/interactions:
+    post:
+      summary: 記錄使用者互動事件（點擊、開啟等）
+      operationId: trackInteraction
+      tags: [追蹤統計]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrackInteractionRequest'
+      responses:
+        '200':
+          description: 記錄成功
+
+  /tracking/campaigns/{campaign_id}/statistics:
+    get:
+      summary: 取得活動的追蹤統計資料
+      operationId: getCampaignStatistics
+      tags: [追蹤統計]
+      parameters:
+        - name: campaign_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 活動統計資料
+
+  /tracking/campaigns/{campaign_id}/interactions:
+    get:
+      summary: 取得活動的互動記錄明細
+      operationId: getCampaignInteractions
+      tags: [追蹤統計]
+      parameters:
+        - name: campaign_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: template_id
+          in: query
+          schema:
+            type: integer
+        - name: carousel_item_id
+          in: query
+          schema:
+            type: integer
+        - name: component_slot
+          in: query
+          schema:
+            type: string
+        - name: interaction_type
+          in: query
+          schema:
+            type: string
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 互動記錄明細
+
+  # --------------------------------------------------------------------------
+  # 自動回應 (auto_responses)
+  # Feature: auto_response
+  # --------------------------------------------------------------------------
+
+  /auto_responses:
+    get:
+      summary: 查詢自動回應規則清單
+      operationId: getAutoResponses
+      tags: [自動回應]
+      responses:
+        '200':
+          description: 自動回應規則清單
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+    post:
+      summary: 建立自動回應規則
+      operationId: createAutoResponse
+      tags: [自動回應]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutoResponseCreate'
+      responses:
+        '200':
+          description: 建立成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: 關鍵字衝突
+
+  /auto_responses/fb:
+    get:
+      summary: 查詢 Facebook 自動回應規則清單
+      operationId: getFbAutoResponses
+      tags: [自動回應]
+      responses:
+        '200':
+          description: FB 自動回應規則清單
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /auto_responses/fb/{fb_id}:
+    patch:
+      summary: 更新 Facebook 自動回應規則
+      operationId: updateFbAutoResponse
+      tags: [自動回應]
+      parameters:
+        - name: fb_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FbAutoResponseUpdate'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /auto_responses/{auto_response_id}:
+    get:
+      summary: 取得單一自動回應規則詳細資料
+      operationId: getAutoResponse
+      tags: [自動回應]
+      parameters:
+        - name: auto_response_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 自動回應規則詳細資料
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: 規則不存在
+    put:
+      summary: 更新自動回應規則
+      operationId: updateAutoResponse
+      tags: [自動回應]
+      parameters:
+        - name: auto_response_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutoResponseUpdate'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: 關鍵字衝突
+    delete:
+      summary: 刪除自動回應規則
+      operationId: deleteAutoResponse
+      tags: [自動回應]
+      parameters:
+        - name: auto_response_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 刪除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /auto_responses/{auto_response_id}/toggle:
+    patch:
+      summary: 啟用或停用自動回應規則
+      operationId: toggleAutoResponse
+      tags: [自動回應]
+      parameters:
+        - name: auto_response_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: 切換成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /auto_responses/keywords/{keyword_id}/activate:
+    patch:
+      summary: 啟用關鍵字（停用同組其他關鍵字）
+      operationId: activateKeyword
+      tags: [自動回應]
+      parameters:
+        - name: keyword_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 啟用成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  # --------------------------------------------------------------------------
+  # PMS 整合 (pms_integrations)
+  # Feature: pms_integration
+  # --------------------------------------------------------------------------
+
+  /pms_integrations:
+    post:
+      summary: 匯入 PMS 住宿紀錄
+      operationId: createPmsIntegration
+      tags: [PMS 整合]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PMSIntegrationCreate'
+      responses:
+        '200':
+          description: 匯入成功
+    get:
+      summary: 查詢 PMS 整合紀錄清單
+      operationId: listPmsIntegrations
+      tags: [PMS 整合]
+      parameters:
+        - name: match_status
+          in: query
+          schema:
+            type: string
+            enum: [pending, matched, unmatched]
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: PMS 紀錄清單
+
+  /pms_integrations/match:
+    post:
+      summary: 手動配對 PMS 紀錄與會員
+      operationId: matchPmsToMember
+      tags: [PMS 整合]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PMSMatchRequest'
+      responses:
+        '200':
+          description: 配對成功
+
+  /pms_integrations/{record_id}:
+    get:
+      summary: 取得單一 PMS 紀錄詳細資料
+      operationId: getPmsIntegration
+      tags: [PMS 整合]
+      parameters:
+        - name: record_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: PMS 紀錄詳細資料
+        '404':
+          description: 紀錄不存在
+    put:
+      summary: 更新 PMS 紀錄
+      operationId: updatePmsIntegration
+      tags: [PMS 整合]
+      parameters:
+        - name: record_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PMSIntegrationUpdate'
+      responses:
+        '200':
+          description: 更新成功
+    delete:
+      summary: 刪除 PMS 紀錄
+      operationId: deletePmsIntegration
+      tags: [PMS 整合]
+      parameters:
+        - name: record_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 刪除成功
+
+  # --------------------------------------------------------------------------
+  # 消費紀錄 (consumption_records)
+  # Feature: consumption_records
+  # --------------------------------------------------------------------------
+
+  /consumption_records:
+    post:
+      summary: 建立消費紀錄
+      operationId: createConsumptionRecord
+      tags: [消費紀錄]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsumptionRecordCreate'
+      responses:
+        '200':
+          description: 建立成功
+    get:
+      summary: 查詢消費紀錄清單
+      operationId: listConsumptionRecords
+      tags: [消費紀錄]
+      parameters:
+        - name: member_id
+          in: query
+          schema:
+            type: integer
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: room_type
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: 消費紀錄清單
+
+  /consumption_records/{record_id}:
+    get:
+      summary: 取得單一消費紀錄詳細資料
+      operationId: getConsumptionRecord
+      tags: [消費紀錄]
+      parameters:
+        - name: record_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 消費紀錄詳細資料
+        '404':
+          description: 紀錄不存在
+    put:
+      summary: 更新消費紀錄
+      operationId: updateConsumptionRecord
+      tags: [消費紀錄]
+      parameters:
+        - name: record_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsumptionRecordUpdate'
+      responses:
+        '200':
+          description: 更新成功
+    delete:
+      summary: 刪除消費紀錄
+      operationId: deleteConsumptionRecord
+      tags: [消費紀錄]
+      parameters:
+        - name: record_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 刪除成功
+
+  /consumption_records/member/{member_id}/summary:
+    get:
+      summary: 取得會員消費摘要（總金額、次數等）
+      operationId: getMemberConsumptionSummary
+      tags: [消費紀錄]
+      parameters:
+        - name: member_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 會員消費摘要
+
+  # --------------------------------------------------------------------------
+  # LINE 頻道設定 (line_channels)
+  # Feature: 設定_Login_API, 設定_Messaging_API, 重新設定_LINE_OA
+  # --------------------------------------------------------------------------
+
+  /line_channels:
+    post:
+      summary: 建立 LINE 頻道設定（Messaging API + Login API）
+      operationId: createLineChannel
+      tags: [LINE 頻道設定]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LineChannelCreate'
+      responses:
+        '200':
+          description: 建立成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LineChannelResponse'
+
+  /line_channels/current:
+    get:
+      summary: 取得當前啟用的 LINE 頻道設定
+      operationId: getCurrentLineChannel
+      tags: [LINE 頻道設定]
+      responses:
+        '200':
+          description: 當前頻道設定
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LineChannelResponse'
+
+  /line_channels/status:
+    get:
+      summary: 取得 LINE 頻道的連線狀態
+      operationId: getLineChannelStatus
+      tags: [LINE 頻道設定]
+      responses:
+        '200':
+          description: 頻道狀態
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LineChannelStatusResponse'
+
+  /line_channels/{channel_id}:
+    patch:
+      summary: 更新 LINE 頻道設定
+      operationId: updateLineChannel
+      tags: [LINE 頻道設定]
+      parameters:
+        - name: channel_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LineChannelUpdate'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LineChannelResponse'
+    delete:
+      summary: 刪除 LINE 頻道設定
+      operationId: deleteLineChannel
+      tags: [LINE 頻道設定]
+      parameters:
+        - name: channel_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 刪除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  # --------------------------------------------------------------------------
+  # Facebook 頻道設定 (fb_channels)
+  # Feature: fb_channel_management, fb_auto_reply_template
+  # --------------------------------------------------------------------------
+
+  /fb_channels:
+    get:
+      summary: 查詢 Facebook 頻道清單
+      operationId: listFbChannels
+      tags: [Facebook 頻道設定]
+      responses:
+        '200':
+          description: FB 頻道清單
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FbChannelResponse'
+    post:
+      summary: 建立或更新 Facebook 頻道
+      operationId: createOrUpdateFbChannel
+      tags: [Facebook 頻道設定]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FbChannelCreate'
+      responses:
+        '200':
+          description: 建立/更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FbChannelResponse'
+
+  /fb_channels/status:
+    get:
+      summary: 取得 Facebook 頻道連線狀態
+      operationId: getFbChannelStatus
+      tags: [Facebook 頻道設定]
+      responses:
+        '200':
+          description: FB 頻道狀態
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FbChannelStatusResponse'
+
+  /fb_channels/sdk_config:
+    get:
+      summary: 取得 Facebook SDK 設定（前端初始化用）
+      operationId: getFacebookSdkConfig
+      tags: [Facebook 頻道設定]
+      responses:
+        '200':
+          description: SDK 設定
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FacebookSdkConfigResponse'
+
+  /fb_channels/message-list:
+    get:
+      summary: 取得 Facebook 訊息清單
+      operationId: getFbMessageList
+      tags: [Facebook 頻道設定]
+      parameters:
+        - name: jwt_token
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: FB 訊息清單
+
+  /fb_channels/sync:
+    post:
+      summary: 同步 Facebook 頻道資料
+      operationId: syncFbChannels
+      tags: [Facebook 頻道設定]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FbChannelSyncRequest'
+      responses:
+        '200':
+          description: 同步成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FbChannelResponse'
+
+  /fb_channels/verify:
+    post:
+      summary: 驗證 Facebook 頻道連線
+      operationId: verifyFbChannels
+      tags: [Facebook 頻道設定]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jwt_token]
+              properties:
+                jwt_token:
+                  type: string
+      responses:
+        '200':
+          description: 驗證結果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FbChannelVerifyResponse'
+
+  /fb_channels/sync-members:
+    post:
+      summary: 同步 Facebook 會員資料
+      operationId: syncFacebookMembers
+      tags: [Facebook 頻道設定]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                jwt_token:
+                  type: string
+      responses:
+        '200':
+          description: 同步成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /fb_channels/{channel_id}:
+    patch:
+      summary: 更新 Facebook 頻道設定
+      operationId: updateFbChannel
+      tags: [Facebook 頻道設定]
+      parameters:
+        - name: channel_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FbChannelUpdate'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FbChannelResponse'
+    delete:
+      summary: 停用 Facebook 頻道
+      operationId: deactivateFbChannel
+      tags: [Facebook 頻道設定]
+      parameters:
+        - name: channel_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 停用成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  # --------------------------------------------------------------------------
+  # Facebook 自動回應代理 (admin_meta_page)
+  # Feature: fb_auto_reply_template
+  # --------------------------------------------------------------------------
+
+  /admin/meta_page/message/auto_template/keyword:
+    patch:
+      summary: 更新 Facebook 自動回應關鍵字
+      operationId: updateFbKeyword
+      tags: [Facebook 自動回應]
+      parameters:
+        - name: jwt_token
+          in: query
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KeywordUpdateRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /admin/meta_page/message/auto_template/keyword/{keyword_id}:
+    delete:
+      summary: 刪除 Facebook 自動回應關鍵字
+      operationId: deleteFbKeyword
+      tags: [Facebook 自動回應]
+      parameters:
+        - name: keyword_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: jwt_token
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 刪除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /admin/meta_page/message/auto_template/Reply/{reply_id}:
+    delete:
+      summary: 刪除 Facebook 自動回應回覆
+      operationId: deleteFbReply
+      tags: [Facebook 自動回應]
+      parameters:
+        - name: reply_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: jwt_token
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 刪除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /admin/meta_page/message/auto_template:
+    delete:
+      summary: 刪除 Facebook 自動回應模板
+      operationId: deleteFbAutoTemplate
+      tags: [Facebook 自動回應]
+      parameters:
+        - name: basic_id
+          in: query
+          schema:
+            type: string
+        - name: jwt_token
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 刪除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  # --------------------------------------------------------------------------
+  # Meta 會員 (admin_meta_user)
+  # Feature: meta_user_profile
+  # --------------------------------------------------------------------------
+
+  /admin/meta_user/profile:
+    get:
+      summary: 取得 Meta 平台會員資料
+      operationId: getMetaUserProfile
+      tags: [Meta 會員管理]
+      parameters:
+        - name: customer_id
+          in: query
+          schema:
+            type: string
+        - name: channel
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Meta 會員資料
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  # --------------------------------------------------------------------------
+  # SSE 即時通訊 (websocket/SSE)
+  # Feature: 聊天室多渠道
+  # --------------------------------------------------------------------------
+
+  /sse/chat/{thread_id}:
+    get:
+      summary: 建立 SSE 連線接收即時聊天訊息
+      operationId: sseChatStream
+      tags: [即時通訊]
+      parameters:
+        - name: thread_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: SSE 事件串流
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  # --------------------------------------------------------------------------
+  # LINE 訊息通知 (line_notify)
+  # Feature: line_message_notify
+  # --------------------------------------------------------------------------
+
+  /line/message-notify:
+    post:
+      summary: LINE App 通知後端有新訊息（內部 webhook）
+      operationId: notifyNewMessage
+      tags: [LINE 訊息通知]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageNotification'
+      responses:
+        '200':
+          description: 通知成功
+
+  # ============================================================================
+  # 新功能 API（FAQ 模組 + AI 聊天機器人）
+  # Feature: faq_category_management, faq_rule_management, ai_chatbot_integration
+  # ============================================================================
+
+  # --------------------------------------------------------------------------
+  # FAQ 大分類管理
+  # Feature: faq_category_management
+  # --------------------------------------------------------------------------
+
+  /faq/categories:
+    get:
+      summary: 查詢 FAQ 大分類列表（含啟用狀態、已發布規則數）
+      operationId: listFaqCategories
+      tags: [FAQ 管理]
+      responses:
+        '200':
+          description: 大分類列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FaqCategoryListResponse'
+        '403':
+          description: 未擁有 faq.view 權限
+
+  /faq/categories/{category_id}/toggle:
+    patch:
+      summary: 啟用或關閉 FAQ 大分類
+      operationId: toggleFaqCategory
+      tags: [FAQ 管理]
+      parameters:
+        - name: category_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [is_active]
+              properties:
+                is_active:
+                  type: boolean
+      responses:
+        '200':
+          description: 切換成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: 未擁有 faq.manage 權限
+
+  # --------------------------------------------------------------------------
+  # FAQ 規則管理
+  # Feature: faq_rule_management
+  # --------------------------------------------------------------------------
+
+  /faq/categories/{category_id}/rules:
+    get:
+      summary: 查詢大分類下的規則清單
+      operationId: listFaqRules
+      tags: [FAQ 管理]
+      parameters:
+        - name: category_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 規則清單
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FaqRuleListResponse'
+        '403':
+          description: 未擁有 faq.view 權限
+    post:
+      summary: 在大分類下新增規則（狀態為測試未發佈）
+      operationId: createFaqRule
+      tags: [FAQ 管理]
+      parameters:
+        - name: category_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FaqRuleCreate'
+      responses:
+        '200':
+          description: 建立成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FaqRuleDetail'
+        '400':
+          description: 必填欄位未填 或 已達規則上限（20 筆）
+        '403':
+          description: 未擁有 faq.manage 權限
+
+  /faq/categories/{category_id}/fields:
+    get:
+      summary: 取得大分類的欄位定義（規則編輯表單使用）
+      operationId: getFaqCategoryFields
+      tags: [FAQ 管理]
+      parameters:
+        - name: category_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 欄位定義清單
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FaqCategoryFieldListResponse'
+
+  /faq/rules/{rule_id}:
+    get:
+      summary: 取得單一規則詳細資料（含版本資訊）
+      operationId: getFaqRule
+      tags: [FAQ 管理]
+      parameters:
+        - name: rule_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 規則詳細資料
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FaqRuleDetail'
+        '404':
+          description: 規則不存在
+    put:
+      summary: 編輯規則內容（狀態變為測試未發佈）
+      operationId: updateFaqRule
+      tags: [FAQ 管理]
+      parameters:
+        - name: rule_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FaqRuleUpdate'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FaqRuleDetail'
+        '400':
+          description: 必填欄位未填
+        '403':
+          description: 未擁有 faq.manage 權限
+    delete:
+      summary: 刪除規則
+      operationId: deleteFaqRule
+      tags: [FAQ 管理]
+      parameters:
+        - name: rule_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 刪除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: 未擁有 faq.manage 權限
+
+  /faq/rules/{rule_id}/toggle:
+    patch:
+      summary: 啟用或停用單一規則
+      operationId: toggleFaqRule
+      tags: [FAQ 管理]
+      parameters:
+        - name: rule_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [active, disabled]
+      responses:
+        '200':
+          description: 切換成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: 未擁有 faq.manage 權限
+
+  /faq/rules/{rule_id}/revert:
+    post:
+      summary: 將規則恢復為上一個已啟用版本
+      operationId: revertFaqRule
+      tags: [FAQ 管理]
+      parameters:
+        - name: rule_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 恢復成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FaqRuleDetail'
+        '400':
+          description: 無可回復的版本
+        '403':
+          description: 未擁有 faq.manage 權限
+
+  /faq/publish:
+    post:
+      summary: 發佈所有測試未發佈狀態的規則至正式環境
+      operationId: publishFaqRules
+      tags: [FAQ 管理]
+      responses:
+        '200':
+          description: 發佈成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  published_count:
+                    type: integer
+                    description: 發佈的規則數量
+        '403':
+          description: 未擁有 faq.publish 權限
+
+  # --------------------------------------------------------------------------
+  # FAQ Token 用量
+  # Feature: faq_category_management (Token 用量管理)
+  # --------------------------------------------------------------------------
+
+  /faq/token-usage:
+    get:
+      summary: 查詢 AI Token 用量（已消耗、總額度、可用數量）
+      operationId: getFaqTokenUsage
+      tags: [FAQ 管理]
+      responses:
+        '200':
+          description: Token 用量資訊
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FaqTokenUsageResponse'
+        '403':
+          description: 未擁有 faq.view 權限
+
+  # --------------------------------------------------------------------------
+  # FAQ 語氣設定
+  # Feature: faq_category_management (語氣設定)
+  # --------------------------------------------------------------------------
+
+  /faq/tone:
+    get:
+      summary: 取得當前 AI 語氣設定
+      operationId: getFaqTone
+      tags: [FAQ 管理]
+      responses:
+        '200':
+          description: 語氣設定
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FaqToneResponse'
+    put:
+      summary: 切換 AI 語氣設定
+      operationId: updateFaqTone
+      tags: [FAQ 管理]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tone_type]
+              properties:
+                tone_type:
+                  type: string
+                  enum: [professional, casual]
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: 未擁有 faq.manage 權限
+
+  # --------------------------------------------------------------------------
+  # FAQ 模組授權（系統商後台）
+  # Feature: faq_category_management (FAQ 模組授權)
+  # --------------------------------------------------------------------------
+
+  /faq/module-auth:
+    get:
+      summary: 查詢客戶的 FAQ 模組授權狀態
+      operationId: getFaqModuleAuth
+      tags: [FAQ 管理]
+      responses:
+        '200':
+          description: 模組授權狀態
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FaqModuleAuthResponse'
+
+  # --------------------------------------------------------------------------
+  # 測試聊天
+  # Feature: faq_rule_management (測試聊天視窗)
+  # --------------------------------------------------------------------------
+
+  /faq/test-chat:
+    post:
+      summary: 在測試聊天視窗發送提問並取得 AI 回答
+      operationId: faqTestChat
+      tags: [FAQ 管理]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message, version]
+              properties:
+                message:
+                  type: string
+                  description: 使用者提問內容
+                version:
+                  type: string
+                  enum: [test_and_active, active_only]
+                  description: 版本一（測試+正式）或版本二（僅正式）
+      responses:
+        '200':
+          description: AI 回答
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FaqTestChatResponse'
+        '403':
+          description: 未擁有 faq.manage 權限
+
+  # --------------------------------------------------------------------------
+  # AI 聊天機器人
+  # Feature: ai_chatbot_integration
+  # --------------------------------------------------------------------------
+
+  /ai/chat:
+    post:
+      summary: 渠道 Webhook 呼叫此 API 取得 AI 回答（統一入口）
+      operationId: aiChat
+      tags: [AI 聊天機器人]
+      description: >
+        由 LINE App / FB Webhook / Webchat 呼叫，取代渠道端直接呼叫 OpenAI。
+        Backend 負責：收集已啟用 FAQ 規則 → 組裝 prompt context → 呼叫 LLM →
+        Token 扣減 → 自動貼標 → 轉人工判斷。
+        渠道端僅負責接收訊息與發送回覆。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [member_id, message, channel]
+              properties:
+                member_id:
+                  type: integer
+                  description: 會員 ID
+                message:
+                  type: string
+                  description: 使用者提問內容
+                channel:
+                  type: string
+                  enum: [line, facebook, webchat]
+                  description: 訊息來源渠道
+                conversation_id:
+                  type: integer
+                  description: 對話 ID（用於上下文記憶）
+      responses:
+        '200':
+          description: AI 回答結果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiChatResponse'
+        '400':
+          description: Token 額度不足，渠道端應降級至本地自動回應
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiChatFallbackResponse'
+
+  # --------------------------------------------------------------------------
+  # 產業管理（系統商後台）
+  # Feature: faq_category_management (產業管理)
+  # --------------------------------------------------------------------------
+
+  /admin/industries:
+    get:
+      summary: 查詢產業清單（系統商後台）
+      operationId: listIndustries
+      tags: [系統商管理]
+      responses:
+        '200':
+          description: 產業清單
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IndustryDetail'
+    post:
+      summary: 新增產業（系統商後台）
+      operationId: createIndustry
+      tags: [系統商管理]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IndustryCreate'
+      responses:
+        '200':
+          description: 建立成功
+
+  /admin/clients/{client_id}/faq-auth:
+    post:
+      summary: 為客戶開通 FAQ 模組授權（系統商後台）
+      operationId: grantFaqModuleAuth
+      tags: [系統商管理]
+      parameters:
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [industry_id]
+              properties:
+                industry_id:
+                  type: integer
+      responses:
+        '200':
+          description: 開通成功
+
+  /admin/clients/{client_id}/token-quota:
+    put:
+      summary: 設定客戶 AI Token 額度（系統商後台）
+      operationId: setClientTokenQuota
+      tags: [系統商管理]
+      parameters:
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [total_quota]
+              properties:
+                total_quota:
+                  type: integer
+      responses:
+        '200':
+          description: 設定成功
+
+  # --------------------------------------------------------------------------
+  # 管理員權限管理
+  # Feature: admin_permission_management
+  # --------------------------------------------------------------------------
+
+  /admin/roles:
+    get:
+      summary: 查詢角色清單
+      operationId: listRoles
+      tags: [權限管理]
+      responses:
+        '200':
+          description: 角色清單
+    post:
+      summary: 新增自訂角色
+      operationId: createRole
+      tags: [權限管理]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role_code, role_name]
+              properties:
+                role_code:
+                  type: string
+                role_name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '200':
+          description: 建立成功
+        '403':
+          description: 未擁有 admin.manage 權限
+
+  /admin/roles/{role_code}:
+    delete:
+      summary: 刪除自訂角色
+      operationId: deleteRole
+      tags: [權限管理]
+      parameters:
+        - name: role_code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 刪除成功
+        '400':
+          description: 系統預設角色無法刪除 或 角色目前有管理員使用
+        '403':
+          description: 未擁有 admin.manage 權限
+
+  /admin/roles/{role_code}/permissions:
+    put:
+      summary: 設定角色的權限清單
+      operationId: updateRolePermissions
+      tags: [權限管理]
+      parameters:
+        - name: role_code
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permission_codes]
+              properties:
+                permission_codes:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: 更新成功
+        '403':
+          description: 未擁有 admin.manage 權限
+
+  /admin/users/{admin_id}/roles:
+    put:
+      summary: 為管理員指派角色
+      operationId: updateAdminRoles
+      tags: [權限管理]
+      parameters:
+        - name: admin_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role_codes]
+              properties:
+                role_codes:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: 指派成功
+        '403':
+          description: 未擁有 admin.manage 權限
+
+  /admin/users/{admin_id}/permissions:
+    get:
+      summary: 取得管理員的最終權限清單（多角色聯集）
+      operationId: getAdminPermissions
+      tags: [權限管理]
+      parameters:
+        - name: admin_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 權限清單
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  permissions:
+                    type: array
+                    items:
+                      type: string
+
+# ============================================================================
+# Components
+# ============================================================================
+
+components:
+  schemas:
+
+    # --- 通用 ---
+
+    SuccessResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          default: 200
+        message:
+          type: string
+          default: success
+        data:
+          type: object
+        timestamp:
+          type: string
+          format: date-time
+
+    PageResponse_MemberListItem:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/MemberListItem'
+            total:
+              type: integer
+            page:
+              type: integer
+            page_size:
+              type: integer
+            total_pages:
+              type: integer
+
+    # --- 認證 ---
+
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          default: Bearer
+        expires_in:
+          type: integer
+        user:
+          $ref: '#/components/schemas/UserInfo'
+
+    UserInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+        full_name:
+          type: string
+        role:
+          type: string
+        last_login_at:
+          type: string
+          format: date-time
+
+    # --- 會員 ---
+
+    MemberCreate:
+      type: object
+      properties:
+        name:
+          type: string
+        gender:
+          type: string
+        birthday:
+          type: string
+          format: date
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        id_number:
+          type: string
+        passport_number:
+          type: string
+        residence:
+          type: string
+
+    MemberUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        gender:
+          type: string
+        birthday:
+          type: string
+          format: date
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        id_number:
+          type: string
+        passport_number:
+          type: string
+        residence:
+          type: string
+        internal_note:
+          type: string
+
+    MemberListItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        line_uid:
+          type: string
+        line_display_name:
+          type: string
+        line_avatar:
+          type: string
+        fb_customer_id:
+          type: string
+        fb_customer_name:
+          type: string
+        fb_avatar:
+          type: string
+        webchat_uid:
+          type: string
+        webchat_name:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        join_source:
+          type: string
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/TagInfo'
+        created_at:
+          type: string
+          format: date-time
+        last_interaction_at:
+          type: string
+          format: date-time
+        is_unanswered:
+          type: boolean
+        unanswered_since:
+          type: string
+          format: date-time
+
+    MemberDetail:
+      allOf:
+        - $ref: '#/components/schemas/MemberListItem'
+        - type: object
+          properties:
+            gender:
+              type: string
+            birthday:
+              type: string
+              format: date
+            id_number:
+              type: string
+            passport_number:
+              type: string
+            residence:
+              type: string
+            receive_notification:
+              type: boolean
+            gpt_enabled:
+              type: boolean
+            internal_note:
+              type: string
+
+    TagInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        type:
+          type: string
+
+    UpdateTagsRequest:
+      type: object
+      required: [tag_names]
+      properties:
+        tag_names:
+          type: array
+          items:
+            type: string
+
+    BatchUpdateTagsRequest:
+      type: object
+      properties:
+        member_tags:
+          type: array
+          items:
+            type: string
+        interaction_tags:
+          type: array
+          items:
+            type: string
+
+    UpdateNotesRequest:
+      type: object
+      required: [internal_note]
+      properties:
+        internal_note:
+          type: string
+
+    # --- 群發訊息 ---
+
+    MessageCreate:
+      type: object
+      required: [target_type, schedule_type]
+      properties:
+        draft_id:
+          type: integer
+        template_id:
+          type: integer
+        message_title:
+          type: string
+        thumbnail:
+          type: string
+        image_url:
+          type: string
+        interaction_type:
+          type: string
+        interaction_tags:
+          type: array
+          items:
+            type: string
+        notification_message:
+          type: string
+        template_type:
+          type: string
+        target_type:
+          type: string
+        target_filter:
+          type: object
+        schedule_type:
+          type: string
+        scheduled_at:
+          type: string
+          format: date-time
+        carousel_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CarouselItemCreate'
+        flex_message_json:
+          type: string
+        fb_message_json:
+          type: string
+        platform:
+          type: string
+          default: LINE
+        channel_id:
+          type: string
+        campaign_id:
+          type: integer
+        estimated_send_count:
+          type: integer
+        available_quota:
+          type: integer
+
+    MessageUpdate:
+      type: object
+      properties:
+        template_id:
+          type: integer
+        target_type:
+          type: string
+        message_title:
+          type: string
+        flex_message_json:
+          type: string
+        fb_message_json:
+          type: string
+        scheduled_at:
+          type: string
+          format: date-time
+        channel_id:
+          type: string
+
+    CarouselItemCreate:
+      type: object
+      properties:
+        image_url:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+        action_url:
+          type: string
+        interaction_tag:
+          type: string
+        action_button_enabled:
+          type: boolean
+        action_button_text:
+          type: string
+        action_button_url:
+          type: string
+        sort_order:
+          type: integer
+
+    MessageDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        message_title:
+          type: string
+        notification_message:
+          type: string
+        thumbnail:
+          type: string
+        template:
+          $ref: '#/components/schemas/TemplateInfo'
+        send_status:
+          type: string
+        interaction_tags:
+          type: array
+          items:
+            type: string
+        platform:
+          type: string
+        send_count:
+          type: integer
+        open_count:
+          type: integer
+        click_count:
+          type: integer
+        open_rate:
+          type: number
+        click_rate:
+          type: number
+        scheduled_at:
+          type: string
+          format: date-time
+        send_time:
+          type: string
+          format: date-time
+        template_id:
+          type: integer
+        target_type:
+          type: string
+        target_filter:
+          type: object
+        campaign_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    MessageListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageDetail'
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total_pages:
+          type: integer
+        status_counts:
+          type: object
+          additionalProperties:
+            type: integer
+
+    TemplateInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        name:
+          type: string
+
+    QuotaStatusRequest:
+      type: object
+      required: [target_type]
+      properties:
+        target_type:
+          type: string
+        target_filter:
+          type: object
+
+    QuotaStatusResponse:
+      type: object
+      properties:
+        estimated_send_count:
+          type: integer
+        available_quota:
+          type: integer
+        is_sufficient:
+          type: boolean
+        quota_type:
+          type: string
+        monthly_limit:
+          type: integer
+        used:
+          type: integer
+        quota_consumption:
+          type: integer
+
+    MessageSendRequest:
+      type: object
+      properties:
+        channel_id:
+          type: string
+        jwt_token:
+          type: string
+        page_id:
+          type: string
+
+    MessageSendResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        sent_count:
+          type: integer
+        failed_count:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: string
+
+    # --- 模板庫 ---
+
+    TemplateLibraryItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        template_type:
+          type: string
+        is_in_library:
+          type: boolean
+        usage_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    TemplateCopyResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        source_template_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    TemplateLibraryToggle:
+      type: object
+      required: [add_to_library]
+      properties:
+        add_to_library:
+          type: boolean
+
+    # --- 活動管理 ---
+
+    CampaignCreateNew:
+      type: object
+      required: [campaign_name]
+      properties:
+        campaign_name:
+          type: string
+        campaign_tag:
+          type: string
+        campaign_date:
+          type: string
+          format: date
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+
+    CampaignUpdateNew:
+      type: object
+      properties:
+        campaign_name:
+          type: string
+        campaign_tag:
+          type: string
+        campaign_date:
+          type: string
+          format: date
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+
+    # --- 標籤管理 ---
+
+    TagCreate:
+      type: object
+      required: [tag_name]
+      properties:
+        tag_name:
+          type: string
+        tag_source:
+          type: string
+
+    TagUpdate:
+      type: object
+      properties:
+        tag_name:
+          type: string
+        tag_source:
+          type: string
+
+    # --- 追蹤統計 ---
+
+    TrackInteractionRequest:
+      type: object
+      required: [line_uid, campaign_id, interaction_type]
+      properties:
+        line_uid:
+          type: string
+        campaign_id:
+          type: integer
+        interaction_type:
+          type: string
+        template_id:
+          type: integer
+        carousel_item_id:
+          type: integer
+        component_slot:
+          type: string
+        interaction_tag_id:
+          type: integer
+        interaction_value:
+          type: string
+
+    # --- 自動回應 ---
+
+    AutoResponseCreate:
+      type: object
+      properties:
+        name:
+          type: string
+        keywords:
+          type: array
+          items:
+            type: object
+        messages:
+          type: array
+          items:
+            type: object
+        enabled:
+          type: boolean
+        trigger_type:
+          type: string
+        trigger_time:
+          type: object
+
+    AutoResponseUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        keywords:
+          type: array
+          items:
+            type: object
+        messages:
+          type: array
+          items:
+            type: object
+        enabled:
+          type: boolean
+        trigger_type:
+          type: string
+        trigger_time:
+          type: object
+
+    FbAutoResponseUpdate:
+      type: object
+      properties:
+        keywords:
+          type: array
+          items:
+            type: object
+        text:
+          type: array
+          items:
+            type: object
+        enabled:
+          type: boolean
+
+    # --- PMS 整合 ---
+
+    PMSIntegrationCreate:
+      type: object
+      properties:
+        id_number:
+          type: string
+        phone:
+          type: string
+        stay_records:
+          type: object
+        member_id:
+          type: integer
+        match_status:
+          type: string
+          default: pending
+
+    PMSIntegrationUpdate:
+      type: object
+      properties:
+        member_id:
+          type: integer
+        match_status:
+          type: string
+        stay_records:
+          type: object
+
+    PMSMatchRequest:
+      type: object
+      required: [pms_integration_id, member_id]
+      properties:
+        pms_integration_id:
+          type: integer
+        member_id:
+          type: integer
+
+    # --- 消費紀錄 ---
+
+    ConsumptionRecordCreate:
+      type: object
+      required: [member_id, amount]
+      properties:
+        member_id:
+          type: integer
+        amount:
+          type: number
+        room_type:
+          type: string
+        stay_date:
+          type: string
+          format: date
+        check_in_date:
+          type: string
+          format: date
+        check_out_date:
+          type: string
+          format: date
+        pms_integration_id:
+          type: integer
+
+    ConsumptionRecordUpdate:
+      type: object
+      properties:
+        amount:
+          type: number
+        room_type:
+          type: string
+        stay_date:
+          type: string
+          format: date
+        check_in_date:
+          type: string
+          format: date
+        check_out_date:
+          type: string
+          format: date
+
+    # --- LINE 頻道 ---
+
+    LineChannelCreate:
+      type: object
+      required: [channel_access_token, channel_secret]
+      properties:
+        channel_id:
+          type: string
+        channel_access_token:
+          type: string
+        channel_secret:
+          type: string
+        login_channel_id:
+          type: string
+        login_channel_secret:
+          type: string
+        channel_name:
+          type: string
+        basic_id:
+          type: string
+        is_active:
+          type: boolean
+          default: true
+
+    LineChannelUpdate:
+      type: object
+      properties:
+        channel_id:
+          type: string
+        channel_access_token:
+          type: string
+        channel_secret:
+          type: string
+        login_channel_id:
+          type: string
+        login_channel_secret:
+          type: string
+        channel_name:
+          type: string
+        basic_id:
+          type: string
+        is_active:
+          type: boolean
+
+    LineChannelResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        channel_id:
+          type: string
+        channel_name:
+          type: string
+        basic_id:
+          type: string
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    LineChannelStatusResponse:
+      type: object
+      properties:
+        has_active_channel:
+          type: boolean
+        is_configured:
+          type: boolean
+        missing_fields:
+          type: array
+          items:
+            type: string
+        channel_db_id:
+          type: integer
+
+    # --- Facebook 頻道 ---
+
+    FbChannelCreate:
+      type: object
+      properties:
+        page_id:
+          type: string
+        app_id:
+          type: string
+        channel_name:
+          type: string
+        is_active:
+          type: boolean
+          default: true
+
+    FbChannelUpdate:
+      type: object
+      properties:
+        page_id:
+          type: string
+        channel_name:
+          type: string
+        is_active:
+          type: boolean
+
+    FbChannelResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        page_id:
+          type: string
+        app_id:
+          type: string
+        channel_name:
+          type: string
+        is_active:
+          type: boolean
+        connection_status:
+          type: string
+        last_verified_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    FbChannelStatusResponse:
+      type: object
+      properties:
+        has_active_channel:
+          type: boolean
+        is_configured:
+          type: boolean
+        missing_fields:
+          type: array
+          items:
+            type: string
+        connection_status:
+          type: string
+
+    FacebookSdkConfigResponse:
+      type: object
+      properties:
+        app_id:
+          type: string
+        api_version:
+          type: string
+
+    FbChannelSyncRequest:
+      type: object
+      properties:
+        channels:
+          type: array
+          items:
+            type: object
+            properties:
+              page_id:
+                type: string
+              channel_name:
+                type: string
+
+    FbChannelVerifyResponse:
+      type: object
+      properties:
+        verified_count:
+          type: integer
+        mismatch_count:
+          type: integer
+        deleted_count:
+          type: integer
+        deactivated_count:
+          type: integer
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              page_id:
+                type: string
+              is_valid:
+                type: boolean
+              external_status:
+                type: string
+
+    KeywordUpdateRequest:
+      type: object
+      properties:
+        keyword:
+          type: string
+        match_type:
+          type: string
+
+    # --- LINE 訊息通知 ---
+
+    MessageNotification:
+      type: object
+      properties:
+        member_id:
+          type: integer
+        message_type:
+          type: string
+        content:
+          type: string
+        channel:
+          type: string
+
+    # --- FAQ 管理（新功能）---
+
+    FaqCategoryListResponse:
+      type: object
+      properties:
+        categories:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              category_name:
+                type: string
+              is_active:
+                type: boolean
+              published_rule_count:
+                type: integer
+              sort_order:
+                type: integer
+        last_updated_at:
+          type: string
+          format: date-time
+          description: 全域最後更新時間
+
+    FaqCategoryFieldListResponse:
+      type: object
+      properties:
+        fields:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              field_name:
+                type: string
+              field_type:
+                type: string
+                enum: [text, tag]
+              is_required:
+                type: boolean
+              sort_order:
+                type: integer
+
+    FaqRuleCreate:
+      type: object
+      required: [field_values]
+      properties:
+        field_values:
+          type: object
+          additionalProperties:
+            type: string
+          description: 欄位名稱 → 值的映射（依大分類欄位定義）
+
+    FaqRuleUpdate:
+      type: object
+      required: [field_values]
+      properties:
+        field_values:
+          type: object
+          additionalProperties:
+            type: string
+
+    FaqRuleListResponse:
+      type: object
+      properties:
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/FaqRuleSummary'
+        total:
+          type: integer
+
+    FaqRuleSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+          enum: [draft, active, disabled]
+        field_values:
+          type: object
+          additionalProperties:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    FaqRuleDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        category_id:
+          type: integer
+        status:
+          type: string
+          enum: [draft, active, disabled]
+        field_values:
+          type: object
+          additionalProperties:
+            type: string
+        tags:
+          type: array
+          items:
+            type: string
+          description: 規則關聯的標籤名稱
+        has_previous_version:
+          type: boolean
+        previous_version:
+          type: object
+          additionalProperties:
+            type: string
+          description: 上一已啟用版本的欄位值（若存在）
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    FaqTokenUsageResponse:
+      type: object
+      properties:
+        total_quota:
+          type: integer
+          description: Token 總額度
+        used_amount:
+          type: integer
+          description: 已消耗數量
+        available:
+          type: integer
+          description: 可用數量
+        is_exhausted:
+          type: boolean
+          description: 是否已耗盡
+
+    FaqToneResponse:
+      type: object
+      properties:
+        tone_type:
+          type: string
+          enum: [professional, casual]
+        tone_name:
+          type: string
+          description: 語氣名稱（專業/真人）
+
+    FaqModuleAuthResponse:
+      type: object
+      properties:
+        is_authorized:
+          type: boolean
+          description: 是否已開通 FAQ 模組
+        industry_id:
+          type: integer
+        industry_name:
+          type: string
+
+    FaqTestChatResponse:
+      type: object
+      properties:
+        answer:
+          type: string
+          description: AI 生成的回答
+        referenced_rules:
+          type: array
+          items:
+            type: object
+            properties:
+              rule_id:
+                type: integer
+              rule_name:
+                type: string
+          description: AI 引用的規則清單
+        tokens_used:
+          type: integer
+          description: 本次消耗的 Token 數量
+
+    AiChatResponse:
+      type: object
+      properties:
+        answer:
+          type: string
+          description: AI 生成的回答
+        is_human_needed:
+          type: boolean
+          description: 是否需要轉人工
+        auto_tags:
+          type: array
+          items:
+            type: string
+          description: 自動貼標的標籤名稱
+        referenced_rules:
+          type: array
+          items:
+            type: object
+            properties:
+              rule_id:
+                type: integer
+              rule_name:
+                type: string
+          description: AI 引用的規則清單
+        tokens_used:
+          type: integer
+          description: 本次消耗的 Token 數量
+
+    AiChatFallbackResponse:
+      type: object
+      description: Token 耗盡時的降級回應，渠道端收到後應改走本地自動回應
+      properties:
+        error_code:
+          type: string
+          enum: [TOKEN_EXHAUSTED]
+          description: 錯誤代碼
+        fallback:
+          type: string
+          enum: [auto_response]
+          description: 建議的降級處理方式
+        message:
+          type: string
+          description: 錯誤訊息
+
+    # --- 產業管理（系統商）---
+
+    IndustryCreate:
+      type: object
+      required: [industry_name]
+      properties:
+        industry_name:
+          type: string
+        categories:
+          type: array
+          items:
+            type: object
+            properties:
+              category_name:
+                type: string
+              fields:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    field_name:
+                      type: string
+                    field_type:
+                      type: string
+                    is_required:
+                      type: boolean
+
+    IndustryDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        industry_name:
+          type: string
+        categories:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              category_name:
+                type: string
+              is_system_default:
+                type: boolean
+              field_count:
+                type: integer
