@@ -2,14 +2,14 @@
  * WebSocket Hook
  * 用於建立和管理與 Backend 的 WebSocket 連線,接收即時訊息推送
  */
-import { useEffect, useRef, useState } from 'react';
-import { config } from '@/config';
+import { useEffect, useRef, useState } from "react";
+import { config } from "@/config";
 
 export interface WebSocketMessage {
-  type: 'new_message' | 'pong';
+  type: "new_message" | "pong";
   data?: {
     id: number | string;
-    type: 'user' | 'official';
+    type: "user" | "official";
     text: string;
     time: string;
     isRead: boolean;
@@ -22,7 +22,7 @@ interface UseWebSocketResult {
 
 export function useWebSocket(
   threadId: string | undefined,
-  onMessage: (message: WebSocketMessage) => void
+  onMessage: (message: WebSocketMessage) => void,
 ): UseWebSocketResult {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
@@ -62,7 +62,7 @@ export function useWebSocket(
         // 啟動 ping/pong 保活機制
         pingIntervalRef.current = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) {
-            ws.send('ping');
+            ws.send("ping");
           }
         }, config.heartbeat.interval);
       };
@@ -70,18 +70,18 @@ export function useWebSocket(
       ws.onmessage = (event) => {
         try {
           const message: WebSocketMessage = JSON.parse(event.data);
-          if (message.type === 'pong') {
+          if (message.type === "pong") {
             // 收到 pong 回應,連線正常
             return;
           }
           onMessageRef.current(message);
         } catch (error) {
-          console.error('❌ Failed to parse WebSocket message:', error);
+          console.error("❌ Failed to parse WebSocket message:", error);
         }
       };
 
       ws.onerror = (error) => {
-        console.error('❌ WebSocket error:', error);
+        console.error("❌ WebSocket error:", error);
       };
 
       ws.onclose = (event) => {
@@ -97,8 +97,13 @@ export function useWebSocket(
         // 自動重連（指數退避）
         if (!event.wasClean && reconnectAttempt < maxAttempts) {
           reconnectAttempt++;
-          const delay = Math.min(baseDelay * Math.pow(2, reconnectAttempt), maxDelay);
-          console.log(`🔄 WebSocket 重連中... (${reconnectAttempt}/${maxAttempts})`);
+          const delay = Math.min(
+            baseDelay * Math.pow(2, reconnectAttempt),
+            maxDelay,
+          );
+          console.log(
+            `🔄 WebSocket 重連中... (${reconnectAttempt}/${maxAttempts})`,
+          );
           reconnectTimeoutRef.current = setTimeout(connect, delay);
         }
       };
@@ -121,10 +126,16 @@ export function useWebSocket(
 
       // 關閉 WebSocket 連線
       if (ws && ws.readyState !== WebSocket.CLOSED) {
-        ws.close(1000, 'Component unmounted');
+        ws.close(1000, "Component unmounted");
       }
     };
   }, [threadId]); // 只依賴 threadId，不依賴 onMessage
 
   return { isConnected };
 }
+
+/**
+ * SSE Hook（暫時使用 WebSocket 實作）
+ * TODO: 後端實作 SSE 端點後替換為 EventSource
+ */
+export const useSSE = useWebSocket;
