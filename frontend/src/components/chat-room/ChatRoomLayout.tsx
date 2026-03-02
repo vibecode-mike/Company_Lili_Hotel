@@ -928,39 +928,47 @@ export default function ChatRoomLayout({
     setIsSending(true);
 
     try {
-      // 建立請求 body
-      const requestBody: {
-        text: string;
-        platform: string;
-        jwt_token?: string;
-        fb_customer_id?: string;
-      } = {
-        text: trimmedText,
-        platform,
-      };
+      let response: Response;
 
-      // 對於 Facebook 渠道，從 token utils 取得 jwt_token 和 fb_customer_id
       if (platform === "Facebook") {
-        const jwtToken = getJwtToken();
-        if (!jwtToken) {
-          alert("請先完成 Facebook 授權");
+        // Facebook：透過 WebSocket 代理發送
+        const customerId =
+          (member as any)?.fb_customer_id || (member as any)?.channelUid;
+        if (!customerId || !fbPageId) {
+          alert("缺少 Facebook 會員資訊");
           setIsSending(false);
           return;
         }
-        requestBody.jwt_token = jwtToken;
-        // 傳入 fb_customer_id，後端可直接使用，不依賴本地 member 查詢
-        const fbCustomerId =
-          (member as any)?.fb_customer_id || (member as any)?.channelUid;
-        if (fbCustomerId) {
-          requestBody.fb_customer_id = String(fbCustomerId);
-        }
-      }
 
-      // 使用 apiPost 自動處理 token 和 401 重試
-      const response = await apiPost(
-        `/api/v1/members/${member.id}/chat/send`,
-        requestBody,
-      );
+        response = await apiPost("/api/v1/fb-ws-proxy/send", {
+          fb_customer_id: String(customerId),
+          page_id: fbPageId,
+          text: trimmedText,
+        });
+
+        // WebSocket 代理不可用時，fallback 到 HTTP
+        if (response.status === 503) {
+          console.warn("[FB Send] WS proxy 不可用，fallback 到 HTTP");
+          const jwtToken = getJwtToken();
+          if (!jwtToken) {
+            alert("請先完成 Facebook 授權");
+            setIsSending(false);
+            return;
+          }
+          response = await apiPost(`/api/v1/members/${member.id}/chat/send`, {
+            text: trimmedText,
+            platform: "Facebook",
+            jwt_token: jwtToken,
+            fb_customer_id: String(customerId),
+          });
+        }
+      } else {
+        // LINE / Webchat：原有流程
+        response = await apiPost(`/api/v1/members/${member.id}/chat/send`, {
+          text: trimmedText,
+          platform,
+        });
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
