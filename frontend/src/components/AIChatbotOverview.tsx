@@ -1,0 +1,647 @@
+import ChatFAB from "./ChatFAB";
+import { useState, memo, useCallback, useEffect } from "react";
+import { apiGet, apiPut } from "../utils/apiClient";
+
+interface TokenUsage {
+  total_quota: number;
+  used_amount: number;
+  remaining: number;
+  usage_percent: number;
+}
+
+interface ToneConfig {
+  id: number;
+  tone_type: string;
+  tone_name: string;
+  is_active: boolean;
+}
+import Sidebar from "./Sidebar";
+import { PageHeaderWithBreadcrumb } from "./common/Breadcrumb";
+import svgPaths from "../imports/svg-icons-common";
+import togglePaths from "../imports/svg-wbwsye31ry";
+import ButtonEdit from "../imports/ButtonEdit";
+
+interface AIChatbotOverviewProps {
+  onNavigateToMessages?: () => void;
+  onNavigateToAutoReply?: () => void;
+  onNavigateToMembers?: () => void;
+  onNavigateToSettings?: () => void;
+  onNavigateToPMS?: () => void;
+  onNavigateToFacilities?: () => void;
+}
+
+type CategoryStatus = "normal" | "error";
+type TabType = "categories" | "connection";
+
+interface CategoryRecord {
+  id: string;
+  name: string;
+  pmsStatus: CategoryStatus;
+  pmsLabel: string;
+  pmsErrorCode?: string;
+  faqStatus: "saved";
+  faqLabel: string;
+  lastUpdated: string;
+  enabled: boolean;
+}
+
+interface FaqCategoryApi {
+  id: number;
+  name: string;
+  is_active: boolean;
+  rule_count: number;
+}
+
+// Maps API category names to their correct display names (inner-page titles)
+const CATEGORY_DISPLAY_NAMES: Record<string, string> = {
+  訂房: "訂房和帳務",
+};
+
+function mapApiCategory(cat: FaqCategoryApi): CategoryRecord {
+  return {
+    id: String(cat.id),
+    name: CATEGORY_DISPLAY_NAMES[cat.name] ?? cat.name,
+    pmsStatus: "normal",
+    pmsLabel: "尚未串接",
+    faqStatus: "saved",
+    faqLabel: cat.rule_count > 0 ? "已儲存" : "未設定",
+    lastUpdated: "—",
+    enabled: cat.is_active,
+  };
+}
+
+const Toggle = memo(function Toggle({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className="flex items-center justify-center cursor-pointer border-none bg-transparent p-0"
+    >
+      <div className="relative size-[40px]">
+        <svg className="block size-full" fill="none" viewBox="0 0 40 40">
+          <g clipPath="url(#clip0_toggle_overview)">
+            <g />
+            <path
+              d={checked ? togglePaths.p13e42a00 : togglePaths.p3ed4d200}
+              fill={checked ? "#0F6BEB" : "#E5E7EB"}
+              className="transition-all duration-300 ease-in-out"
+            />
+          </g>
+          <defs>
+            <clipPath id="clip0_toggle_overview">
+              <rect fill="white" height="40" width="40" />
+            </clipPath>
+          </defs>
+        </svg>
+      </div>
+    </button>
+  );
+});
+
+const IconSearch = memo(function IconSearch() {
+  return (
+    <div className="overflow-clip relative shrink-0 size-[32px]">
+      <svg
+        className="block size-full"
+        fill="none"
+        preserveAspectRatio="none"
+        viewBox="0 0 32 32"
+      >
+        <path d={svgPaths.p2bfa9080} fill="#A8A8A8" />
+      </svg>
+    </div>
+  );
+});
+
+const TabButton = memo(function TabButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div className="content-stretch flex gap-[4px] items-center relative shrink-0">
+      {active && (
+        <div
+          aria-hidden="true"
+          className="absolute border-[#0f6beb] border-[0px_0px_2px] border-solid inset-0 pointer-events-none"
+        />
+      )}
+      <div
+        onClick={onClick}
+        className="box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer transition-colors"
+      >
+        <p
+          className={`basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center ${
+            active ? "text-[#383838]" : "text-[#6e6e6e]"
+          }`}
+        >
+          {label}
+        </p>
+      </div>
+    </div>
+  );
+});
+
+const StatusTag = memo(function StatusTag({
+  label,
+  color,
+}: {
+  label: string;
+  color: "green" | "red" | "gray" | "none";
+}) {
+  const bgColor =
+    color === "green"
+      ? "#e4fcea"
+      : color === "red"
+        ? "#ffebee"
+        : color === "gray"
+          ? "#f5f5f5"
+          : "transparent";
+  const textColor =
+    color === "green" ? "#00470c" : color === "gray" ? "#383838" : "#b71c1c";
+  return (
+    <div
+      style={{ backgroundColor: bgColor }}
+      className="inline-flex items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0"
+    >
+      <p
+        style={{ flex: "1 0 0", color: textColor }}
+        className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] min-h-px min-w-px text-[16px] text-center whitespace-nowrap"
+      >
+        {label}
+      </p>
+    </div>
+  );
+});
+
+const TableRow = memo(function TableRow({
+  record,
+  isLast,
+  onToggle,
+  onEdit,
+}: {
+  record: CategoryRecord;
+  isLast: boolean;
+  onToggle: (id: string, v: boolean) => void;
+  onEdit: (id: string) => void;
+}) {
+  return (
+    <tr
+      className={`bg-white transition-colors hover:bg-[#f5f8ff] group ${
+        !isLast ? "[&>td]:border-b [&>td]:border-[#ddd]" : ""
+      }`}
+    >
+      <td className="px-[12px] py-[12px] align-middle">
+        <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[#383838] text-[14px]">
+          {record.name}
+        </p>
+      </td>
+
+      <td className="px-[12px] py-[12px] align-middle">
+        <div className="flex flex-wrap gap-[4px]">
+          <StatusTag
+            label={record.pmsLabel}
+            color={
+              record.pmsLabel === "尚未串接"
+                ? "gray"
+                : record.pmsStatus === "normal"
+                  ? "green"
+                  : "red"
+            }
+          />
+          {record.pmsErrorCode && (
+            <StatusTag label={record.pmsErrorCode} color="none" />
+          )}
+        </div>
+      </td>
+
+      <td className="px-[12px] py-[12px] align-middle">
+        <StatusTag
+          label={record.faqLabel}
+          color={
+            record.faqLabel === "已儲存"
+              ? "green"
+              : record.faqLabel === "未設定"
+                ? "gray"
+                : "none"
+          }
+        />
+      </td>
+
+      <td className="px-[12px] py-[12px] align-middle">
+        <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[#383838] text-[14px] whitespace-nowrap">
+          {record.lastUpdated}
+        </p>
+      </td>
+
+      {/* 凍結欄：啟用狀態 */}
+      <td
+        style={{
+          width: 104,
+          position: "sticky",
+          right: 68,
+          zIndex: 1,
+          boxShadow: "inset 1px 0 0 #ddd",
+        }}
+        className="px-[12px] py-[12px] align-middle bg-white group-hover:bg-[#f5f8ff] transition-colors"
+      >
+        <Toggle
+          checked={record.enabled}
+          onChange={(v) => onToggle(record.id, v)}
+        />
+      </td>
+
+      {/* 凍結欄：動作 */}
+      <td
+        style={{ width: 68, position: "sticky", right: 0, zIndex: 1 }}
+        className="px-[12px] py-[12px] align-middle bg-white group-hover:bg-[#f5f8ff] transition-colors"
+      >
+        <ButtonEdit onClick={() => onEdit(record.id)} />
+      </td>
+    </tr>
+  );
+});
+
+export default function AIChatbotOverview({
+  onNavigateToMessages,
+  onNavigateToAutoReply,
+  onNavigateToMembers,
+  onNavigateToSettings,
+  onNavigateToPMS,
+  onNavigateToFacilities,
+}: AIChatbotOverviewProps) {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState<TabType>("categories");
+  const [search, setSearch] = useState("");
+  const [categories, setCategories] = useState<CategoryRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
+  const [toneConfigs, setToneConfigs] = useState<ToneConfig[]>([]);
+  const [toneLoading, setToneLoading] = useState(false);
+
+  useEffect(() => {
+    apiGet("/api/v1/faq/categories")
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.data) {
+          setCategories((json.data as FaqCategoryApi[]).map(mapApiCategory));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    apiGet("/api/v1/faq/token-usage")
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.data) setTokenUsage(json.data as TokenUsage);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    apiGet("/api/v1/faq/tone-config")
+      .then((res) => res.json())
+      .then((json) => {
+        if (Array.isArray(json.data)) setToneConfigs(json.data as ToneConfig[]);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSwitchTone = useCallback(async (toneId: number) => {
+    setToneLoading(true);
+    try {
+      await apiPut(`/api/v1/faq/tone-config/${toneId}/activate`, {});
+      setToneConfigs((prev) =>
+        prev.map((t) => ({ ...t, is_active: t.id === toneId })),
+      );
+    } catch {
+      // ignore
+    } finally {
+      setToneLoading(false);
+    }
+  }, []);
+
+  const handleToggle = useCallback(async (id: string, v: boolean) => {
+    setCategories((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, enabled: v } : c)),
+    );
+    try {
+      await apiPut(`/api/v1/faq/categories/${id}/toggle`, { is_active: v });
+    } catch {
+      // revert on failure
+      setCategories((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, enabled: !v } : c)),
+      );
+    }
+  }, []);
+
+  // Map display category name → inner-page navigator
+  const CATEGORY_NAVIGATORS: Record<string, (() => void) | undefined> = {
+    訂房和帳務: onNavigateToPMS,
+    設施: onNavigateToFacilities,
+  };
+
+  const handleEdit = useCallback(
+    (id: string) => {
+      const record = categories.find((c) => c.id === id);
+      const nav = record ? CATEGORY_NAVIGATORS[record.name] : undefined;
+      if (nav) nav();
+      else if (onNavigateToPMS) onNavigateToPMS();
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [categories, onNavigateToPMS, onNavigateToFacilities],
+  );
+
+  const handleClearSearch = useCallback(() => setSearch(""), []);
+
+  const filtered = categories.filter((c) =>
+    search.trim() === "" ? true : c.name.includes(search.trim()),
+  );
+
+  const enabledCount = categories.filter((c) => c.enabled).length;
+
+  const marginLeft = sidebarOpen
+    ? "ml-[330px] lg:ml-[280px] md:ml-[250px]"
+    : "ml-[72px]";
+
+  return (
+    <div className="bg-slate-50 min-h-screen flex">
+      <Sidebar
+        currentPage="pms"
+        onNavigateToMessages={onNavigateToMessages}
+        onNavigateToAutoReply={onNavigateToAutoReply}
+        onNavigateToMembers={onNavigateToMembers}
+        onNavigateToSettings={onNavigateToSettings}
+        onNavigateToPMS={() => {}}
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={setSidebarOpen}
+      />
+
+      <main
+        className={`flex-1 bg-slate-50 transition-all duration-300 overflow-x-hidden overflow-y-auto min-h-screen ${marginLeft}`}
+      >
+        <PageHeaderWithBreadcrumb
+          breadcrumbItems={[{ label: "AI Chatbot", active: true }]}
+          title="AI Chatbot"
+          description="統一管理 AI 回覆會使用的分類內容與資料狀態"
+        />
+
+        {/* Token 用量 + 語氣設定 */}
+        <div className="px-[40px] pb-[16px] flex flex-wrap gap-[16px] items-start">
+          {/* Token 用量 */}
+          <div className="bg-white rounded-[16px] ring-1 ring-[#ddd] px-[20px] py-[14px] flex flex-col gap-[8px] min-w-[260px]">
+            <p className="text-[12px] font-medium text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]">
+              AI Token 用量
+            </p>
+            {tokenUsage ? (
+              <>
+                <div className="flex items-baseline gap-[6px]">
+                  <span className="text-[20px] font-semibold text-[#383838] font-['Inter',sans-serif]">
+                    {tokenUsage.remaining.toLocaleString()}
+                  </span>
+                  <span className="text-[13px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]">
+                    / {tokenUsage.total_quota.toLocaleString()} 可用
+                  </span>
+                </div>
+                <div className="w-full h-[6px] bg-[#f0f0f0] rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.min(tokenUsage.usage_percent, 100)}%`,
+                      backgroundColor:
+                        tokenUsage.usage_percent >= 90
+                          ? "#ef4444"
+                          : tokenUsage.usage_percent >= 70
+                            ? "#f59e0b"
+                            : "#0f6beb",
+                    }}
+                  />
+                </div>
+                <p className="text-[12px] text-[#9ca3af] font-['Noto_Sans_TC',sans-serif]">
+                  已消耗 {tokenUsage.used_amount.toLocaleString()}（
+                  {tokenUsage.usage_percent}%）
+                </p>
+              </>
+            ) : (
+              <p className="text-[14px] text-[#9ca3af] font-['Noto_Sans_TC',sans-serif]">
+                載入中…
+              </p>
+            )}
+          </div>
+
+          {/* 語氣設定 */}
+          {toneConfigs.length > 0 && (
+            <div className="bg-white rounded-[16px] ring-1 ring-[#ddd] px-[20px] py-[14px] flex flex-col gap-[8px]">
+              <p className="text-[12px] font-medium text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]">
+                AI 語氣
+              </p>
+              <div className="flex gap-[8px]">
+                {toneConfigs.map((tone) => (
+                  <button
+                    key={tone.id}
+                    type="button"
+                    disabled={toneLoading}
+                    onClick={() => handleSwitchTone(tone.id)}
+                    className={`px-[14px] py-[6px] rounded-[12px] text-[14px] font-['Noto_Sans_TC',sans-serif] font-normal transition-colors ${
+                      tone.is_active
+                        ? "bg-[#0f6beb] text-white"
+                        : "bg-[#f5f5f5] text-[#383838] hover:bg-[#e8f0fe]"
+                    } ${toneLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                  >
+                    {tone.tone_name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="content-stretch flex items-center relative shrink-0 w-full px-[40px]">
+          <TabButton
+            label="分類"
+            active={activeTab === "categories"}
+            onClick={() => setActiveTab("categories")}
+          />
+        </div>
+
+        <div
+          className="px-[40px]"
+          style={{ paddingTop: 16, paddingBottom: 24 }}
+        >
+          {activeTab === "categories" && (
+            <div className="flex flex-col gap-[16px] items-start w-full">
+              <div className="flex items-center gap-[4px] w-full">
+                <div
+                  className="bg-white flex gap-[28px] items-center px-[12px] py-[8px] rounded-[16px] shrink-0"
+                  style={{ width: 292 }}
+                >
+                  <div
+                    className="flex gap-[4px] items-center min-w-0"
+                    style={{ flex: "1 1 0" }}
+                  >
+                    <IconSearch />
+                    <input
+                      type="text"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="輸入搜尋"
+                      className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] flex-1 min-w-0 text-[#383838] text-[20px] bg-transparent border-none outline-none placeholder:text-[#ddd]"
+                    />
+                  </div>
+                  {search && (
+                    <button
+                      onClick={handleClearSearch}
+                      className="overflow-clip relative shrink-0 size-[24px] cursor-pointer hover:opacity-70 transition-opacity"
+                      type="button"
+                    >
+                      <svg
+                        className="block size-full"
+                        fill="none"
+                        preserveAspectRatio="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d={svgPaths.p3cde6900} fill="#DDDDDD" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  onClick={handleClearSearch}
+                  className="flex gap-[2px] items-center justify-center px-[8px] py-[8px] rounded-[12px] shrink-0 cursor-pointer hover:bg-[#f0f6ff] transition-colors"
+                  type="button"
+                >
+                  <span className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[#0f6beb] text-[16px] whitespace-nowrap">
+                    清除全部條件
+                  </span>
+                </button>
+
+                <div className="flex-1" />
+
+                <button
+                  type="button"
+                  className="bg-[#242424] flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] shrink-0 cursor-pointer hover:bg-[#383838] transition-colors duration-150"
+                >
+                  <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-white text-center whitespace-nowrap">
+                    發佈
+                  </span>
+                </button>
+              </div>
+
+              <p className="text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]">
+                共 {categories.length} 類，已啟用 {enabledCount} 類
+              </p>
+
+              <div className="w-full overflow-x-auto rounded-[16px] ring-1 ring-[#ddd]">
+                <table
+                  className="w-full border-separate"
+                  style={{ minWidth: 700, borderSpacing: 0 }}
+                >
+                  <thead className="sticky top-0 z-[3]">
+                    <tr className="bg-white [&>th]:border-b [&>th]:border-[#ddd]">
+                      <th className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]">
+                        分類
+                      </th>
+                      <th className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]">
+                        PMS 串接
+                      </th>
+                      <th className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]">
+                        自訂 FAQ
+                      </th>
+                      <th className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]">
+                        最後更新{" "}
+                        <span className="text-[11px] text-[#9ca3af] select-none font-['PingFang_TC',sans-serif]">
+                          ⇅
+                        </span>
+                      </th>
+                      {/* 凍結欄 header：啟用狀態 */}
+                      <th
+                        style={{
+                          width: 104,
+                          position: "sticky",
+                          right: 68,
+                          zIndex: 2,
+                          boxShadow: "inset 1px 0 0 #ddd",
+                        }}
+                        className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]"
+                      >
+                        啟用狀態
+                      </th>
+                      {/* 凍結欄 header：動作 */}
+                      <th
+                        style={{
+                          width: 68,
+                          position: "sticky",
+                          right: 0,
+                          zIndex: 2,
+                        }}
+                        className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]"
+                      >
+                        動作
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loading ? (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          className="bg-white px-[12px] py-[40px] text-center text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]"
+                        >
+                          載入中…
+                        </td>
+                      </tr>
+                    ) : filtered.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          className="bg-white px-[12px] py-[40px] text-center text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]"
+                        >
+                          無符合條件的資料
+                        </td>
+                      </tr>
+                    ) : (
+                      filtered.map((record, idx) => (
+                        <TableRow
+                          key={record.id}
+                          record={record}
+                          isLast={idx === filtered.length - 1}
+                          onToggle={handleToggle}
+                          onEdit={handleEdit}
+                        />
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "connection" && (
+            <div className="flex items-center justify-center py-[80px]">
+              <p className="text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]">
+                串接設定（待實作）
+              </p>
+            </div>
+          )}
+        </div>
+      </main>
+
+      <ChatFAB />
+    </div>
+  );
+}
