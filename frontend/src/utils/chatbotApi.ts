@@ -9,7 +9,7 @@ export interface RoomCard {
   max_occupancy: number;
   image_url?: string | null;
   features?: string;
-  source: "pms" | "faq_static";
+  source: "pms" | "faq_static" | "faq_kb";
 }
 
 export interface BookingContext {
@@ -27,11 +27,10 @@ export interface ChatbotMessageResponse {
   missing_fields: string[];
   turn_count: number;
   booking_context: BookingContext;
-  booking_url?: string | null;
 }
 
 export interface ChatbotRoomsResponse {
-  source: "pms" | "faq_static";
+  source: "pms" | "faq_static" | "faq_kb";
   rooms: RoomCard[];
 }
 
@@ -51,18 +50,6 @@ export interface ConfirmRoomResponse {
     }>;
     privacy_note: string;
   };
-}
-
-export interface BookingUrlResponse {
-  booking_url: string;
-  booking_record_id: string;
-  crm_member_id: number | null;
-}
-
-export interface ChatbotMemberResponse {
-  member_id: number;
-  is_new_member: boolean;
-  tags_applied: string[];
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {
@@ -115,43 +102,12 @@ export async function confirmChatbotRoom(payload: {
   room_type_code: string;
   room_count: number;
   room_type_name?: string;
-  source?: "pms" | "faq_static";
+  source?: "pms" | "faq_static" | "faq_kb";
 }): Promise<ConfirmRoomResponse> {
   const response = await apiPost("/api/v1/chatbot/confirm-room", payload, {
     skipAuth: true,
   });
   return parseResponse<ConfirmRoomResponse>(response);
-}
-
-export async function createChatbotBookingUrl(payload: {
-  browser_key: string;
-  room_type_code: string;
-  room_count: number;
-  checkin_date: string;
-  checkout_date: string;
-  adults: number;
-  children?: number;
-  guest_name: string;
-  guest_phone: string;
-  guest_email: string;
-}): Promise<BookingUrlResponse> {
-  const response = await apiPost("/api/v1/chatbot/booking-url", payload, {
-    skipAuth: true,
-  });
-  return parseResponse<BookingUrlResponse>(response);
-}
-
-export async function createChatbotMember(payload: {
-  browser_key: string;
-  name: string;
-  phone: string;
-  email: string;
-  booking_record_id: string;
-}): Promise<ChatbotMemberResponse> {
-  const response = await apiPost("/api/v1/chatbot/member", payload, {
-    skipAuth: true,
-  });
-  return parseResponse<ChatbotMemberResponse>(response);
 }
 
 export async function confirmChatbotRooms(payload: {
@@ -160,7 +116,7 @@ export async function confirmChatbotRooms(payload: {
     room_type_code: string;
     room_count: number;
     room_type_name?: string;
-    source?: "pms" | "faq_static";
+    source?: "pms" | "faq_static" | "faq_kb";
   }[];
 }): Promise<ConfirmRoomResponse> {
   const response = await apiPost("/api/v1/chatbot/confirm-room", payload, {

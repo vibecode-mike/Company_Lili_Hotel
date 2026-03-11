@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { InputHTMLAttributes } from "react";
 
 import {
   confirmChatbotRoom,
-  createChatbotBookingUrl,
-  createChatbotMember,
   getChatbotRooms,
+  saveChatbotBooking,
   type RoomCard,
   resetChatbotSession,
   sendChatbotMessage,
@@ -34,7 +33,7 @@ interface SelectedRoomDraft {
   room_type_code: string;
   room_type_name: string;
   room_count: number;
-  source: "pms" | "faq_static";
+  source: "pms" | "faq_static" | "faq_kb";
 }
 
 const BROWSER_KEY_STORAGE = "ai_chatbot_widget_browser_key";
@@ -97,16 +96,12 @@ export default function ChatWidget({ defaultOpen = false }: ChatWidgetProps) {
     guest_phone: "",
     guest_email: "",
   });
-  const [bookingRecordId, setBookingRecordId] = useState("");
+  const [reservationId, setReservationId] = useState("");
   const [bookingUrl, setBookingUrl] = useState("");
-  const [memberResult, setMemberResult] = useState<{
-    member_id: number;
-    is_new_member: boolean;
-    tags_applied: string[];
-  } | null>(null);
   const [missingFields, setMissingFields] = useState<string[]>([]);
   const [loadingAction, setLoadingAction] = useState("");
   const [error, setError] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setBrowserKey(readBrowserKey());
@@ -117,6 +112,14 @@ export default function ChatWidget({ defaultOpen = false }: ChatWidgetProps) {
       setOpen(true);
     }
   }, [defaultOpen]);
+
+  // 自動撐高 textarea，超過 max-height 才顯示 scrollbar
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [messageInput]);
 
   const canQueryRooms = useMemo(() => {
     return Boolean(
@@ -182,9 +185,8 @@ export default function ChatWidget({ defaultOpen = false }: ChatWidgetProps) {
       guest_phone: "",
       guest_email: "",
     });
-    setBookingRecordId("");
+    setReservationId("");
     setBookingUrl("");
-    setMemberResult(null);
     setMissingFields([]);
     setLoadingAction("");
     setError("");
@@ -213,9 +215,6 @@ export default function ChatWidget({ defaultOpen = false }: ChatWidgetProps) {
         }, {}),
       );
       syncBookingContext(response.booking_context);
-      if (response.booking_url) {
-        setBookingUrl(response.booking_url);
-      }
       pushLine("assistant", response.reply);
       setMessageInput("");
     } catch (err) {
@@ -291,46 +290,19 @@ export default function ChatWidget({ defaultOpen = false }: ChatWidgetProps) {
     setError("");
     setLoadingAction("booking");
     try {
-      const response = await createChatbotBookingUrl({
+      const response = await saveChatbotBooking({
         browser_key: browserKey,
-        room_type_code: selectedRoom.room_type_code,
-        room_count: selectedRoom.room_count,
+        member_name: guestDraft.guest_name.trim(),
+        member_phone: guestDraft.guest_phone.trim(),
+        member_email: guestDraft.guest_email.trim(),
         checkin_date: bookingDraft.checkinDate,
         checkout_date: bookingDraft.checkoutDate,
-        adults: Number(bookingDraft.adults),
-        children: Number(bookingDraft.children || "0"),
-        guest_name: guestDraft.guest_name.trim(),
-        guest_phone: guestDraft.guest_phone.trim(),
-        guest_email: guestDraft.guest_email.trim(),
       });
-      setBookingRecordId(response.booking_record_id);
-      setBookingUrl(response.booking_url);
-      pushLine("system", "已建立 booking URL。");
+      setReservationId(response.reservation_id);
+      setBookingUrl(response.cart_url ?? "");
+      pushLine("system", "已完成訂房資料儲存。");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "建立 booking URL 失敗");
-    } finally {
-      setLoadingAction("");
-    }
-  };
-
-  const handleCreateMember = async () => {
-    if (!bookingRecordId || !browserKey) {
-      return;
-    }
-    setError("");
-    setLoadingAction("member");
-    try {
-      const response = await createChatbotMember({
-        browser_key: browserKey,
-        name: guestDraft.guest_name.trim(),
-        phone: guestDraft.guest_phone.trim(),
-        email: guestDraft.guest_email.trim(),
-        booking_record_id: bookingRecordId,
-      });
-      setMemberResult(response);
-      pushLine("system", `會員同步完成，member_id=${response.member_id}。`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "同步會員失敗");
+      setError(err instanceof Error ? err.message : "儲存訂房資料失敗");
     } finally {
       setLoadingAction("");
     }
@@ -398,15 +370,30 @@ export default function ChatWidget({ defaultOpen = false }: ChatWidgetProps) {
                 chatLines.map((line) => (
                   <div
                     key={line.id}
-                    className={`rounded-[16px] px-[12px] py-[10px] text-[13px] leading-[1.7] ${
-                      line.role === "user"
-                        ? "ml-[42px] bg-[#0f6beb] text-white"
-                        : line.role === "assistant"
-                          ? "mr-[42px] border border-[#d9e4f6] bg-white text-[#0f172a]"
-                          : "mr-[20px] border border-[#cfe0fb] bg-[#eef6ff] text-[#1d4ed8]"
-                    }`}
+                    className={`flex w-full gap-[4px] ${line.role === "user" ? "justify-end" : "items-end justify-start"}`}
                   >
-                    {line.content}
+                    {line.role === "assistant" && (
+                      <div className="flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-full bg-[#dbebff]">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M8 1.5C4.41 1.5 1.5 4.136 1.5 7.4c0 1.792.857 3.395 2.207 4.476L3 13.5l2.21-1.033A7.07 7.07 0 0 0 8 13.3c3.59 0 6.5-2.636 6.5-5.9S11.59 1.5 8 1.5Z" fill="#4A90D9"/>
+                        </svg>
+                      </div>
+                    )}
+                    {line.role === "system" ? (
+                      <div className="mx-auto max-w-[80%] rounded-[14px] border border-[#cfe0fb] bg-[#eef6ff] px-[12px] py-[8px] text-[12px] leading-[1.6] text-[#1d4ed8]">
+                        {line.content}
+                      </div>
+                    ) : (
+                      <div
+                        className={`max-w-[70%] break-words px-[14px] py-[10px] text-[14px] leading-[22.4px] text-[#383838] ${
+                          line.role === "user"
+                            ? "rounded-bl-[18px] rounded-br-[4px] rounded-tl-[18px] rounded-tr-[18px] bg-[#dbedff]"
+                            : "rounded-bl-[4px] rounded-br-[18px] rounded-tl-[18px] rounded-tr-[18px] bg-[#f8fafc]"
+                        }`}
+                      >
+                        {line.content}
+                      </div>
+                    )}
                   </div>
                 ))
               )}
@@ -415,10 +402,13 @@ export default function ChatWidget({ defaultOpen = false }: ChatWidgetProps) {
             <div className="mt-[14px] rounded-[18px] border border-[#d9e4f6] bg-white p-[12px]">
               <FieldLabel label="訊息輸入" />
               <textarea
+                ref={textareaRef}
+                rows={1}
                 value={messageInput}
                 onChange={(event) => setMessageInput(event.target.value)}
                 placeholder="輸入聊天內容"
-                className="mt-[6px] min-h-[90px] w-full rounded-[12px] border border-[#d7e0ef] px-[12px] py-[10px] text-[13px] leading-[1.6] text-[#0f172a] outline-none transition focus:border-[#0f6beb] focus:ring-2 focus:ring-[#dbeafe]"
+                className="chat-widget-textarea mt-[6px] w-full resize-none overflow-y-auto rounded-[12px] bg-[#f8fafc] px-[14px] py-[10px] text-[14px] leading-[22.4px] text-[#383838] outline-none transition"
+                style={{ maxHeight: "30vh" }}
               />
               <div className="mt-[10px] flex items-center justify-between gap-[8px]">
                 <div className="text-[12px] leading-[1.5] text-[#64748b]">
@@ -427,10 +417,22 @@ export default function ChatWidget({ defaultOpen = false }: ChatWidgetProps) {
                 <button
                   type="button"
                   onClick={handleSendMessage}
-                  disabled={!messageInput.trim() || loadingAction === "message"}
-                  className="rounded-[12px] bg-[#0f6beb] px-[14px] py-[8px] text-[13px] font-medium text-white transition hover:bg-[#0b5ac7] disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={loadingAction === "message"}
+                  className={`flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-full transition ${
+                    messageInput.trim() && loadingAction !== "message"
+                      ? "bg-[#0f6beb] hover:bg-[#0b5ac7]"
+                      : "cursor-not-allowed bg-[#e5f1ff]"
+                  }`}
                 >
-                  {loadingAction === "message" ? "送出中..." : "送出"}
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path
+                      d="M3.75 9H14.25M14.25 9L9.75 4.5M14.25 9L9.75 13.5"
+                      stroke={messageInput.trim() && loadingAction !== "message" ? "#ffffff" : "#0f6beb"}
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
                 </button>
               </div>
             </div>
@@ -523,7 +525,7 @@ export default function ChatWidget({ defaultOpen = false }: ChatWidgetProps) {
                           {card.room_type_name}
                         </div>
                         <div className="mt-[2px] text-[12px] text-[#64748b]">
-                          {card.room_type_code} · {card.price_label} · 剩 {card.available_count ?? "?"} 間
+                          {card.room_type_code} · {card.price_label} · {card.available_count !== null && card.available_count !== undefined ? `剩 ${card.available_count} 間` : "待確認"}
                         </div>
                       </div>
                       <div className="text-[16px] font-medium text-[#0f6beb]">
@@ -614,22 +616,14 @@ export default function ChatWidget({ defaultOpen = false }: ChatWidgetProps) {
                     disabled={!canCreateBooking || loadingAction === "booking"}
                     className="rounded-[12px] bg-[#0f6beb] px-[14px] py-[8px] text-[13px] font-medium text-white transition hover:bg-[#0b5ac7] disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {loadingAction === "booking" ? "建立中..." : "建立 Booking URL"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCreateMember}
-                    disabled={!bookingRecordId || loadingAction === "member"}
-                    className="rounded-[12px] bg-[#edf4ff] px-[14px] py-[8px] text-[13px] font-medium text-[#0f6beb] transition hover:bg-[#dbeafe] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {loadingAction === "member" ? "同步中..." : "同步 Member"}
+                    {loadingAction === "booking" ? "儲存中..." : "確認並儲存"}
                   </button>
                 </div>
-                {bookingRecordId ? (
+                {reservationId ? (
                   <div className="mt-[10px] rounded-[14px] bg-[#f8fbff] px-[12px] py-[10px] text-[12px] leading-[1.6] text-[#334155]">
-                    <div>booking_record_id: {bookingRecordId}</div>
+                    <div>reservation_id: {reservationId}</div>
                     <div className="break-all">
-                      booking_url:{" "}
+                      cart_url:{" "}
                       {bookingUrl ? (
                         <a
                           href={bookingUrl}
@@ -640,15 +634,9 @@ export default function ChatWidget({ defaultOpen = false }: ChatWidgetProps) {
                           {bookingUrl}
                         </a>
                       ) : (
-                        "尚未建立"
+                        "本次未產生"
                       )}
                     </div>
-                    {memberResult ? (
-                      <div>
-                        member_id: {memberResult.member_id} / is_new_member:{" "}
-                        {memberResult.is_new_member ? "true" : "false"}
-                      </div>
-                    ) : null}
                   </div>
                 ) : null}
               </div>

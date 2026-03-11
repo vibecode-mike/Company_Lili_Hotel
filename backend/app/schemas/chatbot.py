@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, Field
 
 
 class RoomCardSchema(BaseModel):
@@ -18,7 +18,7 @@ class RoomCardSchema(BaseModel):
     max_occupancy: int
     image_url: Optional[str] = None
     features: str = ""
-    source: Literal["pms", "faq_static"]
+    source: Literal["pms", "faq_static", "faq_kb"]
 
 
 class BookingContextSchema(BaseModel):
@@ -43,11 +43,10 @@ class ChatbotMessageOutSchema(BaseModel):
     missing_fields: List[str] = []
     turn_count: int
     booking_context: BookingContextSchema = BookingContextSchema()
-    booking_url: Optional[str] = None
 
 
 class ChatbotRoomsOutSchema(BaseModel):
-    source: Literal["pms", "faq_static"]
+    source: Literal["pms", "faq_static", "faq_kb"]
     rooms: List[RoomCardSchema]
 
 
@@ -55,7 +54,7 @@ class RoomSelectionSchema(BaseModel):
     room_type_code: str
     room_count: int = Field(default=1, ge=0, le=9)  # 0 will be coerced to 1 by service
     room_type_name: Optional[str] = None
-    source: Optional[Literal["pms", "faq_static"]] = None
+    source: Optional[Literal["pms", "faq_static", "faq_kb"]] = None
 
 
 class ConfirmRoomInSchema(BaseModel):
@@ -66,7 +65,7 @@ class ConfirmRoomInSchema(BaseModel):
     room_type_code: Optional[str] = None
     room_count: Optional[int] = Field(default=None, ge=0, le=9)
     room_type_name: Optional[str] = None
-    source: Optional[Literal["pms", "faq_static"]] = None
+    source: Optional[Literal["pms", "faq_static", "faq_kb"]] = None
 
 
 class MemberFormFieldSchema(BaseModel):
@@ -100,55 +99,6 @@ class SessionResetOutSchema(BaseModel):
     session_id: str
 
 
-class BookingUrlInSchema(BaseModel):
-    browser_key: str
-    room_type_code: str
-    room_count: int = Field(..., ge=1, le=9)
-    checkin_date: str
-    checkout_date: str
-    adults: int = Field(..., ge=1, le=20)
-    children: int = Field(default=0, ge=0, le=20)
-    guest_name: str = Field(..., min_length=1, max_length=100)
-    guest_phone: str
-    guest_email: EmailStr
-
-    @field_validator("guest_phone")
-    @classmethod
-    def validate_guest_phone(cls, value: str) -> str:
-        phone = str(value).strip()
-        if not phone.isdigit() or len(phone) != 10:
-            raise ValueError("電話格式錯誤，請輸入 10 位數號碼")
-        return phone
-
-
-class BookingUrlOutSchema(BaseModel):
-    booking_url: str
-    booking_record_id: str
-    crm_member_id: Optional[int] = None
-
-
-class ChatbotMemberInSchema(BaseModel):
-    browser_key: str
-    name: str = Field(..., min_length=1, max_length=100)
-    phone: str
-    email: EmailStr
-    booking_record_id: str
-
-    @field_validator("phone")
-    @classmethod
-    def validate_phone(cls, value: str) -> str:
-        phone = str(value).strip()
-        if not phone.isdigit() or len(phone) != 10:
-            raise ValueError("電話格式錯誤，請輸入 10 位數號碼")
-        return phone
-
-
-class ChatbotMemberOutSchema(BaseModel):
-    member_id: int
-    is_new_member: bool
-    tags_applied: List[str] = []
-
-
 class BookingSaveInSchema(BaseModel):
     browser_key: str
     # Optional overrides (if not provided, values are read from in-memory session)
@@ -171,4 +121,3 @@ class BookingSaveOutSchema(BaseModel):
     reservation_id: str
     cart_url: Optional[str] = None
     saved: BookingSavedDetailSchema
-

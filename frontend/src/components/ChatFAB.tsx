@@ -111,43 +111,6 @@ function TextBubble({ text, isUser }: { text: string; isUser: boolean }) {
   );
 }
 
-function CounterButton({
-  onClick,
-  disabled,
-  label,
-}: {
-  onClick: () => void;
-  disabled: boolean;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        width: 28,
-        height: 28,
-        borderRadius: "50%",
-        border: "1.5px solid",
-        borderColor: disabled ? "#e5e7eb" : "#0f6beb",
-        background: "#fff",
-        color: disabled ? "#9ca3af" : "#0f6beb",
-        fontSize: 16,
-        cursor: disabled ? "default" : "pointer",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontWeight: 700,
-        flexShrink: 0,
-        padding: 0,
-        lineHeight: 1,
-      }}
-    >
-      {label}
-    </button>
-  );
-}
 
 function RoomCardItem({
   card,
@@ -163,136 +126,93 @@ function RoomCardItem({
   disabled: boolean;
 }) {
   const maxCount = card.available_count ?? 9;
+  const isSelected = count > 0;
+
   return (
     <div
       style={{
         background: "#fff",
-        borderRadius: 12,
-        boxShadow: "0 1px 6px rgba(0,0,0,0.10)",
-        overflow: "hidden",
-        border: count > 0 ? "1.5px solid #0f6beb" : "1.5px solid #e5e7eb",
-        transition: "border-color 0.2s",
+        borderRadius: 18,
+        boxShadow: isSelected ? "none" : "0px 1px 4px 0px rgba(56,56,56,0.18)",
+        border: isSelected ? "3.1px solid #242424" : "3.1px solid transparent",
+        padding: 8,
+        // 動態寬度：75% 讓下一張卡片剛好露出 1/3
+        width: "calc(75% - 6px)",
+        minWidth: "calc(75% - 6px)",
+        maxWidth: "calc(75% - 6px)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        flexShrink: 0,
+        boxSizing: "border-box",
+        transition: "border-color 0.2s, box-shadow 0.2s",
       }}
     >
-      {card.image_url && (
-        <img
-          src={card.image_url}
-          alt={card.room_type_name}
-          style={{
-            width: "100%",
-            height: 88,
-            objectFit: "cover",
-            display: "block",
-          }}
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = "none";
-          }}
-        />
-      )}
-      <div style={{ padding: "10px 12px" }}>
-        <div
-          style={{
-            fontFamily: "'Noto Sans TC', sans-serif",
-            fontWeight: 600,
-            fontSize: 13,
-            color: "#383838",
-            marginBottom: 2,
-          }}
-        >
+      {/* Image */}
+      <div
+        style={{
+          height: 116,
+          borderRadius: 10,
+          overflow: "hidden",
+          background: "#f0f0f0",
+          flexShrink: 0,
+        }}
+      >
+        {card.image_url && (
+          <img
+            src={card.image_url}
+            alt={card.room_type_name}
+            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+          />
+        )}
+      </div>
+
+      {/* Info Block — 垂直堆疊 */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 4, width: "100%" }}>
+        {/* 房型名稱 */}
+        <div style={{ fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 500, fontSize: 16, color: "#383838", lineHeight: 1.5, width: "100%" }}>
           {card.room_type_name}
         </div>
-        {card.features && (
-          <div
-            style={{
-              fontFamily: "'Noto Sans TC', sans-serif",
-              fontSize: 11,
-              color: "#6e6e6e",
-              marginBottom: 6,
-            }}
-          >
-            {card.features}
+        {/* 房價 / 剩餘間數 — 同一行 */}
+        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+          <div style={{ fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 500, fontSize: 16, color: "#6e6e6e", lineHeight: 1.5, whiteSpace: "nowrap" }}>
+            {card.price_label}
           </div>
-        )}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <div>
-            <div
-              style={{
-                fontFamily: "'Noto Sans TC', sans-serif",
-                fontSize: 14,
-                fontWeight: 700,
-                color: "#0f6beb",
-              }}
-            >
-              {card.price_label}
-            </div>
-            <div
-              style={{
-                fontSize: 11,
-                color: "#9ca3af",
-                fontFamily: "'Noto Sans TC', sans-serif",
-              }}
-            >
-              {card.source === "faq_static" ? "一般參考房價" : "即時房價"}
-            </div>
-            {card.available_count !== null &&
-              card.available_count !== undefined && (
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: "#6e6e6e",
-                    fontFamily: "'Noto Sans TC', sans-serif",
-                  }}
-                >
-                  剩餘 {card.available_count} 間
-                </div>
-              )}
+          <div style={{ fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 500, fontSize: 16, color: "#6e6e6e", lineHeight: 1.5 }}>/</div>
+          <div style={{ fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 400, fontSize: 16, color: "#6e6e6e", lineHeight: 1.5, whiteSpace: "nowrap" }}>
+            {card.available_count !== null && card.available_count !== undefined
+              ? `剩餘 ${card.available_count} 間`
+              : "待確認"}
           </div>
-          {!disabled ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <CounterButton
-                onClick={onDecrease}
-                disabled={count === 0}
-                label="−"
-              />
-              <span
-                style={{
-                  fontFamily: "'Noto Sans TC', sans-serif",
-                  fontSize: 16,
-                  fontWeight: 700,
-                  color: "#383838",
-                  minWidth: 16,
-                  textAlign: "center",
-                }}
-              >
-                {count}
-              </span>
-              <CounterButton
-                onClick={onIncrease}
-                disabled={count >= maxCount}
-                label="+"
-              />
-            </div>
-          ) : (
-            count > 0 && (
-              <span
-                style={{
-                  fontFamily: "'Noto Sans TC', sans-serif",
-                  fontSize: 13,
-                  color: "#383838",
-                  fontWeight: 600,
-                }}
-              >
-                × {count}
-              </span>
-            )
-          )}
         </div>
+      </div>
+
+      {/* Quantity Stepper */}
+      <div style={{ background: "#f8fafc", borderRadius: 8, padding: 8, display: "flex", alignItems: "center", gap: 4 }}>
+        <button
+          type="button"
+          onClick={onDecrease}
+          disabled={disabled || count === 0}
+          style={{ width: 32, height: 32, background: "none", border: "none", padding: 0, cursor: disabled || count === 0 ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+        >
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+            <path d="M8 16H24" stroke={disabled || count === 0 ? "#d1d5db" : "#383838"} strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </button>
+        <div style={{ flex: 1, textAlign: "center", fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 400, fontSize: 16, color: "#383838", lineHeight: 1.5 }}>
+          {count}
+        </div>
+        <button
+          type="button"
+          onClick={onIncrease}
+          disabled={disabled || count >= maxCount}
+          style={{ width: 32, height: 32, background: "none", border: "none", padding: 0, cursor: disabled || count >= maxCount ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+        >
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+            <path d="M16 8V24M8 16H24" stroke={disabled || count >= maxCount ? "#d1d5db" : "#383838"} strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </button>
       </div>
     </div>
   );
@@ -303,11 +223,13 @@ function RoomCardsMessage({
   browserKey,
   disabled,
   onConfirm,
+  onCancel,
 }: {
   msg: Extract<ChatMessage, { type: "room_cards" }>;
   browserKey: string;
   disabled: boolean;
   onConfirm: (fields: MemberFormField[], privacyNote: string) => void;
+  onCancel: () => void;
 }) {
   const [selections, setSelections] = useState<Record<string, number>>(() =>
     Object.fromEntries(msg.cards.map((c) => [c.room_type_code, 0])),
@@ -327,6 +249,7 @@ function RoomCardsMessage({
   };
 
   const handleConfirm = async () => {
+    if (totalSelected === 0) return;
     const rooms = Object.entries(selections)
       .filter(([, count]) => count > 0)
       .map(([code, count]) => {
@@ -352,47 +275,43 @@ function RoomCardsMessage({
   };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "flex-start",
-        gap: 4,
-        width: "100%",
-        flexShrink: 0,
-      }}
-    >
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 4, width: "100%", flexShrink: 0 }}>
       {BOT_AVATAR}
-      <div
-        style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}
-      >
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+        {/* Bot text bubble */}
         <div
           style={{
-            padding: "10px 14px",
+            padding: "4px 8px",
             borderRadius: "18px 18px 18px 4px",
-            background: "#f8fafc",
+            background: "#fff",
             color: "#383838",
             fontSize: 14,
             fontFamily: "'Noto Sans TC', sans-serif",
+            fontWeight: 500,
             lineHeight: "22.4px",
           }}
         >
           {msg.text}
         </div>
-        {msg.bookingContext.checkin_date &&
-          msg.bookingContext.checkout_date && (
-            <div
-              style={{
-                fontSize: 11,
-                color: "#9ca3af",
-                fontFamily: "'Noto Sans TC', sans-serif",
-                paddingLeft: 2,
-              }}
-            >
-              入住 {msg.bookingContext.checkin_date} → 退房{" "}
-              {msg.bookingContext.checkout_date}
-            </div>
-          )}
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+
+        {/* Date info */}
+        {msg.bookingContext.checkin_date && msg.bookingContext.checkout_date && (
+          <div style={{ fontSize: 11, color: "#9ca3af", fontFamily: "'Noto Sans TC', sans-serif", paddingLeft: 2 }}>
+            入住 {msg.bookingContext.checkin_date} → 退房 {msg.bookingContext.checkout_date}
+          </div>
+        )}
+
+        {/* Cards — horizontal scroll，負 margin 補陰影空間 */}
+        <div style={{ margin: "0 -6px" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            overflowX: "auto",
+            padding: "6px 6px 8px",
+            scrollbarWidth: "none",
+          }}
+        >
           {msg.cards.map((card) => (
             <RoomCardItem
               key={card.room_type_code}
@@ -404,38 +323,59 @@ function RoomCardsMessage({
             />
           ))}
         </div>
+        </div>
+
+        {/* Error */}
         {error && (
-          <div
-            style={{
-              fontSize: 12,
-              color: "#b71c1c",
-              fontFamily: "'Noto Sans TC', sans-serif",
-            }}
-          >
+          <div style={{ fontSize: 12, color: "#b71c1c", fontFamily: "'Noto Sans TC', sans-serif" }}>
             {error}
           </div>
         )}
-        {!disabled && totalSelected > 0 && (
-          <button
-            type="button"
-            onClick={handleConfirm}
-            disabled={loading}
-            style={{
-              background: loading ? "#9ca3af" : "#0f6beb",
-              color: "#fff",
-              border: "none",
-              borderRadius: 12,
-              padding: "10px 0",
-              fontSize: 14,
-              fontFamily: "'Noto Sans TC', sans-serif",
-              cursor: loading ? "default" : "pointer",
-              fontWeight: 600,
-              width: "100%",
-              transition: "background 0.2s",
-            }}
-          >
-            {loading ? "確認中…" : "確認選擇"}
-          </button>
+
+        {/* Footer buttons — hidden when disabled */}
+        {!disabled && (
+          <div style={{ display: "flex", gap: 4 }}>
+            <button
+              type="button"
+              onClick={onCancel}
+              style={{
+                flex: 1,
+                minHeight: 48,
+                background: "#f5f5f5",
+                border: "none",
+                borderRadius: 16,
+                fontFamily: "'Noto Sans TC', sans-serif",
+                fontWeight: 400,
+                fontSize: 16,
+                color: "#383838",
+                cursor: "pointer",
+                lineHeight: 1.5,
+              }}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirm}
+              disabled={totalSelected === 0 || loading}
+              style={{
+                flex: 1,
+                minHeight: 48,
+                background: totalSelected > 0 && !loading ? "#242424" : "#c8c8c8",
+                border: "none",
+                borderRadius: 16,
+                fontFamily: "'Noto Sans TC', sans-serif",
+                fontWeight: 400,
+                fontSize: 16,
+                color: "#fff",
+                cursor: totalSelected > 0 && !loading ? "pointer" : "default",
+                lineHeight: 1.5,
+                transition: "background 0.2s",
+              }}
+            >
+              {loading ? "確認中…" : "確認訂房"}
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -488,9 +428,21 @@ function MemberFormMessage({
     try {
       const res = await saveChatbotBooking({
         browser_key: browserKey,
-        member_name: values["member_name"] ?? values["name"] ?? "",
-        member_phone: values["member_phone"] ?? values["phone"] ?? "",
-        member_email: values["member_email"] ?? values["email"] ?? "",
+        member_name:
+          values["guest_name"] ??
+          values["member_name"] ??
+          values["name"] ??
+          "",
+        member_phone:
+          values["guest_phone"] ??
+          values["member_phone"] ??
+          values["phone"] ??
+          "",
+        member_email:
+          values["guest_email"] ??
+          values["member_email"] ??
+          values["email"] ??
+          "",
       });
       onSubmit(res.reservation_id, res.cart_url);
     } catch (e: unknown) {
@@ -499,6 +451,20 @@ function MemberFormMessage({
       setLoading(false);
     }
   };
+
+  const PLACEHOLDER_MAP: Record<string, string> = {
+    guest_name: "輸入姓名",
+    guest_phone: "輸入聯絡電話",
+    guest_email: "輸入 Email",
+    member_name: "輸入姓名",
+    name: "輸入姓名",
+    member_phone: "輸入聯絡電話",
+    phone: "輸入聯絡電話",
+    member_email: "輸入 Email",
+    email: "輸入 Email",
+  };
+
+  const hasAnyValue = Object.values(values).some((v) => v.trim() !== "");
 
   return (
     <div
@@ -531,77 +497,130 @@ function MemberFormMessage({
           <div
             style={{
               background: "#fff",
-              borderRadius: 12,
-              padding: "14px",
-              boxShadow: "0 1px 6px rgba(0,0,0,0.08)",
+              borderRadius: 18,
+              padding: 12,
+              boxShadow: "0px 1px 4px rgba(56,56,56,0.18)",
               display: "flex",
               flexDirection: "column",
-              gap: 10,
-              border: "1px solid #e5e7eb",
+              gap: 12,
+              alignItems: "center",
+              justifyContent: "center",
+              minWidth: 260,
             }}
           >
-            {msg.fields.map((field) => (
-              <div
-                key={field.field_name}
-                style={{ display: "flex", flexDirection: "column", gap: 4 }}
-              >
-                <label
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+                width: "100%",
+              }}
+            >
+              {msg.fields.map((field) => (
+                <div
+                  key={field.field_name}
                   style={{
-                    fontSize: 12,
-                    fontFamily: "'Noto Sans TC', sans-serif",
-                    color: "#6e6e6e",
-                    fontWeight: 600,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                    width: "100%",
                   }}
                 >
-                  {field.label}
-                  {field.is_required && (
-                    <span style={{ color: "#b71c1c", marginLeft: 2 }}>*</span>
-                  )}
-                </label>
-                <input
-                  type={field.input_type}
-                  value={values[field.field_name] ?? ""}
-                  onChange={(e) =>
-                    setValues((prev) => ({
-                      ...prev,
-                      [field.field_name]: e.target.value,
-                    }))
-                  }
-                  placeholder={field.label}
-                  style={{
-                    border: errors[field.field_name]
-                      ? "1.5px solid #b71c1c"
-                      : "1.5px solid #e5e7eb",
-                    borderRadius: 8,
-                    padding: "8px 12px",
-                    fontSize: 14,
-                    fontFamily: "'Noto Sans TC', sans-serif",
-                    color: "#383838",
-                    outline: "none",
-                    background: "#f8fafc",
-                    width: "100%",
-                    boxSizing: "border-box",
-                  }}
-                />
-                {errors[field.field_name] && (
                   <div
                     style={{
-                      fontSize: 11,
-                      color: "#b71c1c",
-                      fontFamily: "'Noto Sans TC', sans-serif",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 2,
                     }}
                   >
-                    {errors[field.field_name]}
+                    <span
+                      style={{
+                        fontSize: 16,
+                        fontFamily: "'Noto Sans TC', sans-serif",
+                        fontWeight: 400,
+                        color: "#383838",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {field.label}
+                    </span>
+                    {field.is_required && (
+                      <span
+                        style={{
+                          fontSize: 16,
+                          fontFamily: "'Noto Sans TC', sans-serif",
+                          fontWeight: 400,
+                          color: "#f44336",
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        *
+                      </span>
+                    )}
                   </div>
-                )}
-              </div>
-            ))}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 4,
+                      width: "100%",
+                    }}
+                  >
+                    <input
+                      type={field.input_type}
+                      value={values[field.field_name] ?? ""}
+                      onChange={(e) =>
+                        setValues((prev) => ({
+                          ...prev,
+                          [field.field_name]: e.target.value,
+                        }))
+                      }
+                      placeholder={
+                        PLACEHOLDER_MAP[field.field_name] ??
+                        `輸入${field.label}`
+                      }
+                      style={{
+                        border: errors[field.field_name]
+                          ? "1.4px solid #f44336"
+                          : "none",
+                        borderRadius: 8,
+                        padding: 8,
+                        fontSize: 16,
+                        fontFamily: "'Noto Sans TC', sans-serif",
+                        fontWeight: 400,
+                        color: "#383838",
+                        outline: "none",
+                        background: "#f6f9fd",
+                        width: "100%",
+                        boxSizing: "border-box",
+                        minHeight: 48,
+                        lineHeight: 1.5,
+                      }}
+                    />
+                    {errors[field.field_name] && (
+                      <div
+                        style={{
+                          fontSize: 12,
+                          fontFamily: "'Noto Sans TC', sans-serif",
+                          fontWeight: 400,
+                          color: "#f44336",
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {errors[field.field_name]}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
             {submitError && (
               <div
                 style={{
                   fontSize: 12,
-                  color: "#b71c1c",
+                  color: "#f44336",
                   fontFamily: "'Noto Sans TC', sans-serif",
+                  width: "100%",
                 }}
               >
                 {submitError}
@@ -609,10 +628,12 @@ function MemberFormMessage({
             )}
             <div
               style={{
-                fontSize: 11,
-                color: "#9ca3af",
+                fontSize: 14,
+                color: "#6e6e6e",
                 fontFamily: "'Noto Sans TC', sans-serif",
+                fontWeight: 400,
                 lineHeight: 1.5,
+                width: "100%",
               }}
             >
               {msg.privacyNote}
@@ -620,22 +641,28 @@ function MemberFormMessage({
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={loading}
+              disabled={loading || !hasAnyValue}
               style={{
-                background: loading ? "#9ca3af" : "#0f6beb",
+                background: "#242424",
+                opacity: loading || !hasAnyValue ? 0.6 : 1,
                 color: "#fff",
                 border: "none",
-                borderRadius: 12,
-                padding: "10px 0",
-                fontSize: 14,
+                borderRadius: 16,
+                padding: "8px 12px",
+                fontSize: 16,
                 fontFamily: "'Noto Sans TC', sans-serif",
-                cursor: loading ? "default" : "pointer",
-                fontWeight: 600,
+                fontWeight: 400,
+                cursor:
+                  loading || !hasAnyValue ? "default" : "pointer",
                 width: "100%",
-                transition: "background 0.2s",
+                minHeight: 48,
+                minWidth: 72,
+                lineHeight: 1.5,
+                textAlign: "center",
+                transition: "opacity 0.2s",
               }}
             >
-              {loading ? "送出中…" : "確認並儲存"}
+              {loading ? "送出中…" : "確認送出"}
             </button>
           </div>
         )}
@@ -750,6 +777,7 @@ export default function ChatFAB() {
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const lastMsg = messages[messages.length - 1];
   const isInteractivePhase =
@@ -768,6 +796,14 @@ export default function ChatFAB() {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, chatOpen]);
+
+  // 自動撐高 textarea，超過 max-height 才顯示 scrollbar
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [chatInput]);
 
   const addBotMessage = useCallback((msg: Omit<ChatMessage, "id">) => {
     const id = `msg-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -814,6 +850,13 @@ export default function ChatFAB() {
     }
   }, [chatInput, browserKey, inputDisabled, addBotMessage]);
 
+  const handleRoomCancel = useCallback(
+    (msgId: string) => {
+      setCompletedIds((prev) => new Set([...prev, msgId]));
+    },
+    [],
+  );
+
   const handleRoomConfirm = useCallback(
     (msgId: string, fields: MemberFormField[], privacyNote: string) => {
       setCompletedIds((prev) => new Set([...prev, msgId]));
@@ -848,10 +891,11 @@ export default function ChatFAB() {
         <div
           style={{
             position: "fixed",
-            bottom: 112,
-            right: 40,
+            bottom: 92,
+            right: 20,
             width: 360,
-            height: 520,
+            height: "calc(100vh - 92px - 12px)",
+            minHeight: 350,
             zIndex: 50,
             display: "flex",
             flexDirection: "column",
@@ -969,6 +1013,7 @@ export default function ChatFAB() {
                     onConfirm={(fields, privacyNote) =>
                       handleRoomConfirm(msg.id, fields, privacyNote)
                     }
+                    onCancel={() => handleRoomCancel(msg.id)}
                   />
                 );
               }
@@ -1036,19 +1081,24 @@ export default function ChatFAB() {
               background: "#fff",
               display: "flex",
               gap: 8,
-              alignItems: "center",
+              alignItems: "flex-end",
               flexShrink: 0,
             }}
           >
-            <input
-              type="text"
+            <textarea
+              ref={textareaRef}
+              rows={1}
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) =>
-                e.key === "Enter" && !inputDisabled && handleSend()
-              }
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && !inputDisabled && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
               placeholder={isInteractivePhase ? "請先完成上方操作" : "輸入訊息"}
               disabled={inputDisabled}
+              className="chat-widget-textarea"
               style={{
                 flex: 1,
                 border: "none",
@@ -1060,6 +1110,11 @@ export default function ChatFAB() {
                 color: "#383838",
                 background: inputDisabled ? "#f0f0f0" : "#f8fafc",
                 cursor: inputDisabled ? "not-allowed" : "text",
+                resize: "none",
+                overflowY: "auto",
+                maxHeight: 110,
+                lineHeight: "22.4px",
+                display: "block",
               }}
             />
             <button
@@ -1070,22 +1125,26 @@ export default function ChatFAB() {
                 width: 40,
                 height: 40,
                 borderRadius: 20,
-                background: "#e5f1ff",
+                background: chatInput.trim() && !inputDisabled ? "#0f6beb" : "#e5f1ff",
                 border: "none",
-                cursor:
-                  chatInput.trim() && !inputDisabled ? "pointer" : "default",
+                cursor: chatInput.trim() && !inputDisabled ? "pointer" : "default",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 flexShrink: 0,
+                transition: "background 0.2s",
               }}
               aria-label="送出"
             >
-              <img
-                src={chatfabSend}
-                alt="送出"
-                style={{ width: 18, height: 18 }}
-              />
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M2 9H16M16 9L10 3M16 9L10 15"
+                  stroke={chatInput.trim() && !inputDisabled ? "#ffffff" : "#0F6BEB"}
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </button>
           </div>
         </div>
@@ -1097,8 +1156,8 @@ export default function ChatFAB() {
         onClick={() => setChatOpen((v) => !v)}
         style={{
           position: "fixed",
-          bottom: 40,
-          right: 40,
+          bottom: 20,
+          right: 20,
           width: 60,
           height: 60,
           borderRadius: 30,

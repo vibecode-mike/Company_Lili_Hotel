@@ -60,24 +60,78 @@ ROOMTYPE_MAX_OCCUPANCY = {
     "V1": 6, "WS": 2, "GS": 4, "V8": 2,
 }
 
-# FAQ static fallback room data (used when PMS unavailable)
-FAQ_STATIC_ROOMS: List[RoomCardSchema] = [
-    RoomCardSchema(room_type_code="V2", room_type_name="酥金迷霧", price=3000,
-                   price_label="參考房價", available_count=None, max_occupancy=2,
-                   image_url=None, features="", source="faq_static"),
-    RoomCardSchema(room_type_code="V3", room_type_name="竹影清境", price=3500,
-                   price_label="參考房價", available_count=None, max_occupancy=2,
-                   image_url=None, features="", source="faq_static"),
-    RoomCardSchema(room_type_code="V7", room_type_name="琴香古韻", price=4000,
-                   price_label="參考房價", available_count=None, max_occupancy=2,
-                   image_url=None, features="", source="faq_static"),
-    RoomCardSchema(room_type_code="GS", room_type_name="望空間尊親房", price=5500,
-                   price_label="參考房價", available_count=None, max_occupancy=4,
-                   image_url=None, features="", source="faq_static"),
-    RoomCardSchema(room_type_code="V1", room_type_name="特色家庭房玻光幻影", price=7000,
-                   price_label="參考房價", available_count=None, max_occupancy=6,
-                   image_url=None, features="", source="faq_static"),
-]
+# ---------------------------------------------------------------------------
+# FAQ KB fallback — read room data from DB instead of hardcoded list
+# ---------------------------------------------------------------------------
+
+async def _kb_fallback_rooms(db: Optional[AsyncSession], adults: int = 1) -> List[RoomCardSchema]:
+    """Query FAQ KB for room data. Returns RoomCardSchema list (source=faq_kb).
+
+    Spec: 查詢空房型.feature — PMS 未啟用或異常時降級至 FAQ_KB，
+    呼叫 _kb_search("booking_billing", query) 取得靜態房型資料。
+    """
+    if db is None:
+        return []
+    result = await _kb_search(db, "booking_billing", "", top_k=20)
+    items = result.get("items") or []
+    cards: List[RoomCardSchema] = []
+    for item in items:
+        name = str(item.get("房型名稱") or "").strip()
+        if not name:
+            continue
+        # Try to resolve room_type_code from name
+        code = ""
+        for c, n in ROOMTYPE_NAME.items():
+            if n == name:
+                code = c
+                break
+        price_raw = item.get("房價") or item.get("price") or 0
+        price = _to_int(str(price_raw).replace(",", "").replace("元", "").split("~")[0].split("-")[0])
+        max_occ = _to_int(item.get("人數") or item.get("max_occupancy"), ROOMTYPE_MAX_OCCUPANCY.get(code, 2))
+        features = str(item.get("房型特色") or "")
+        image_url = str(item.get("url") or item.get("image_url") or "") or None
+        cards.append(RoomCardSchema(
+            room_type_code=code or name,
+            room_type_name=name,
+            price=price,
+            price_label="參考房價",
+            available_count=None,
+            max_occupancy=max_occ,
+            image_url=image_url,
+            features=features,
+            source="faq_kb",
+        ))
+    # Filter by occupancy
+    filtered = [c for c in cards if c.max_occupancy >= adults]
+    return filtered if filtered else cards
+
+
+async def _enrich_cards_with_kb(
+    cards: List[RoomCardSchema], db: Optional[AsyncSession]
+) -> List[RoomCardSchema]:
+    """Spec: PMS 資料為主，FAQ_KB 資料補充房型圖片與特色描述。"""
+    if db is None or not cards:
+        return cards
+    result = await _kb_search(db, "booking_billing", "", top_k=20)
+    items = result.get("items") or []
+    # Build lookup by room name
+    kb_by_name: Dict[str, dict] = {}
+    for item in items:
+        name = str(item.get("房型名稱") or "").strip()
+        if name:
+            kb_by_name[name] = item
+    enriched: List[RoomCardSchema] = []
+    for card in cards:
+        kb = kb_by_name.get(card.room_type_name)
+        if kb:
+            image = str(kb.get("url") or kb.get("image_url") or "") or None
+            features = str(kb.get("房型特色") or "")
+            card = card.model_copy(update={
+                "image_url": image if image else card.image_url,
+                "features": features if features else card.features,
+            })
+        enriched.append(card)
+    return enriched
 
 # ---------------------------------------------------------------------------
 # Module-level helpers
@@ -431,13 +485,38 @@ _MIXED_AVAIL_TOOL = {
     },
 }
 
-# Compute once at startup — PMS config is fixed for the lifetime of the process
-_PMS_ENABLED: bool = pms_enabled()
-_TOOLS = (
-    [_KB_SEARCH_TOOL, _PMS_TOOL, _MIXED_AVAIL_TOOL, _CONFIRM_ROOM_TOOL, _SAVE_MEMBER_TOOL]
-    if _PMS_ENABLED
-    else [_KB_SEARCH_TOOL, _CONFIRM_ROOM_TOOL, _SAVE_MEMBER_TOOL]
-)
+# PMS config check — env vars must be present to allow enabling
+_PMS_CONFIGURED: bool = pms_enabled()
+# Runtime toggle — loaded from DB on first access, defaults to False (disabled)
+_pms_runtime_enabled: Optional[bool] = None  # None = not yet loaded from DB
+
+_TOOLS_WITH_PMS = [_KB_SEARCH_TOOL, _PMS_TOOL, _MIXED_AVAIL_TOOL, _CONFIRM_ROOM_TOOL, _SAVE_MEMBER_TOOL]
+_TOOLS_WITHOUT_PMS = [_KB_SEARCH_TOOL, _PMS_TOOL, _CONFIRM_ROOM_TOOL, _SAVE_MEMBER_TOOL]
+
+
+def is_pms_enabled() -> bool:
+    """Runtime check: PMS configured AND toggled on."""
+    if _pms_runtime_enabled is None:
+        return False  # not yet loaded from DB
+    return _PMS_CONFIGURED and _pms_runtime_enabled
+
+
+def set_pms_enabled(value: bool) -> None:
+    """Update in-memory flag (caller is responsible for DB persistence)."""
+    global _pms_runtime_enabled
+    _pms_runtime_enabled = value if _PMS_CONFIGURED else False
+    _prompt_cache.clear()
+
+
+def init_pms_from_db(status: str) -> None:
+    """Called once at startup or on first API request to sync from DB."""
+    global _pms_runtime_enabled
+    _pms_runtime_enabled = (status == "enabled") and _PMS_CONFIGURED
+    _prompt_cache.clear()
+
+
+def _get_tools() -> list:
+    return _TOOLS_WITH_PMS if is_pms_enabled() else _TOOLS_WITHOUT_PMS
 
 # System prompt cached by date — regenerated only at midnight
 _prompt_cache: Dict[date, str] = {}
@@ -453,36 +532,43 @@ def _build_system_prompt() -> str:
 
 def _build_system_prompt_for(today: date) -> str:
     today_str = today.strftime("%Y-%m-%d")
-    if _PMS_ENABLED:
+    if is_pms_enabled():
         pms_rule = (
             "- 只要入住日與退房日已明確，立刻呼叫 query_pms_availability，不要再追問日期\n"
-            "- 若月/日未指定年份，以今年為準；若日期已過，改用明年\n"
+            "- 若月/日未指定年份，以今年為準\n"
+            "- 若入住日期早於今天（已過期），不要查詢房況，直接提醒旅客「您提供的日期已過，請重新提供入住日期」\n"
             "- 工具回傳後，簡短列出可用房型、間數、價格\n"
             "- 若查無房型，告知並詢問是否調整日期或人數\n"
             "- PMS 失敗時，改用靜態房型資料告知旅客（標明為「一般參考房價」）"
         )
     else:
         pms_rule = (
-            "- 目前無即時房況系統，以靜態參考資料回覆\n"
-            "- 顯示一般參考房價，說明實際房況請致電確認"
+            "- 目前無即時房況系統，但仍需呼叫 query_pms_availability 取得靜態參考房價\n"
+            "- 只要入住日與退房日已明確，立刻呼叫 query_pms_availability\n"
+            "- 若月/日未指定年份，以今年為準\n"
+            "- 若入住日期早於今天（已過期），不要查詢房況，直接提醒旅客「您提供的日期已過，請重新提供入住日期」\n"
+            "- 工具回傳後，簡短列出可用房型與參考價格，標明為「一般參考房價」"
         )
 
     return f"""今天日期：{today_str}
-你是力麗飯店官網 AI 客服，協助旅客查詢房況與訂房。
-使用繁體中文，簡短清楚，條列優先。
+若客人只提供月/日，請以「今年」為準；若該日期已經過去，親切提醒客人日期已過，請重新提供日期。
+你是力麗飯店親切的客服機器人，個性熱情有趣，協助旅客查詢房況與訂房。
+
+你會收到整段對話紀錄（包含先前訊息），請務必綜合上下文，不要重複追問已提供的資訊。
 
 知識庫查詢規則：
 - 客人詢問設施（游泳池、停車場、餐廳位置、費用、開放時間等）時，先呼叫 kb_search(category="facilities")
 - 客人詢問訂房帳務（房型特色、付款方式、取消規則等）時，先呼叫 kb_search(category="booking_billing")
 - 若 kb_search 回傳 items 為空，誠實說明沒有相關資料
 
-引導語規則（重要）：
-- 問題與住宿體驗相關（設施、交通、餐廳、景點、房型介紹）→ 回答後在末尾加一句訂房引導，例如「請問是否需為您查詢入住期間的房況？」
-- 問題與訂房完全無關（辦公時間、電話號碼、對外投訴、行政問題）→ 直接回答，不加任何訂房引導語
+推銷規則：
+- 回答與訂房無關的問題後，自然帶出一句輕鬆有趣的訂房邀請，例如：「順帶一提，最近房況很熱門，要不要順手訂一晚？」
+- 邀請語句要自然、不生硬，每次措辭略有變化，避免每次都一模一樣
+- 若客人明確表示不需要訂房，則不再主動詢問
 
 訂房引導規則：
-- 詢問間數與人數時，請用「幾間幾人房」格式引導，例：「請問您需要幾間幾人房？（例如：1 間 2 人房）」
-- 已收集到間數與每間人數後，再詢問入住/退房日期
+- 若客人說「今天入住」且沒說退房日，預設住一晚（退房=明天）
+- 需要資訊：入住日、退房日、成人數（至少），房數（沒給就預設1），房型偏好（可選）
 - 不要重複追問已回答過的資訊
 
 房況查詢規則：
@@ -496,15 +582,21 @@ def _build_system_prompt_for(today: date) -> str:
 - 旅客提供姓名、電話後（email 若無可省略），立刻呼叫 save_member_info
 
 回覆風格：
-- 簡短、條列、親切
-- 不編造資訊；不知道就說不知道"""
+- 簡短、清楚、條列優先
+- 語氣親切有溫度，適時加入輕鬆的語氣詞
+- 不要瞎編；不知道就說不知道
+- 房況查詢結果：系統會自動顯示房卡（含房型名稱、價格、間數），你的回覆只需一句話說明結果即可
+- 嚴禁在文字中列出房型名稱清單、價格、間數等資訊，這些房卡已包含
+- 好的回覆範例：「有多種雙人房可選，請看下方房卡！」「目前沒有 10 人房，以下是其他可選房型供您參考。」
+- 壞的回覆範例（禁止）：「以下幾個房型：- 望空間尊親房 - 森森系雙人房 ...」
+- 若對方使用中文，一律使用台灣繁體中文回覆，嚴禁出現簡體中文字"""
 
 
 # ---------------------------------------------------------------------------
 # Session TTL constants
 # ---------------------------------------------------------------------------
 
-_SESSION_TTL = 60 * 60 * 4    # 4 hours
+_SESSION_TTL = 60 * 20        # 20 minutes
 _EVICT_INTERVAL = 60 * 10     # check every 10 minutes
 
 
@@ -670,10 +762,8 @@ class ChatbotService:
         session.history.append({"role": "assistant", "content": reply})
 
         # Determine reply_type based on session state (spec 3.4–3.5)
-        booking_url: Optional[str] = None
         if self._has_selected_room(session) and self._has_member_profile(session):
             reply_type = "booking_confirm"
-            booking_url = self._try_build_booking_url(session)
         elif self._has_selected_room(session):
             reply_type = "member_form"
         elif room_cards:
@@ -691,7 +781,6 @@ class ChatbotService:
             missing_fields=self._compute_missing_fields(session),
             turn_count=session.turn_count,
             booking_context=self._booking_context(session),
-            booking_url=booking_url,
         )
 
     # ------------------------------------------------------------------
@@ -715,7 +804,7 @@ class ChatbotService:
                 model=settings.OPENAI_MODEL,
                 messages=messages,
                 timeout=30,
-                tools=_TOOLS,
+                tools=_get_tools(),
                 tool_choice="auto",
             )
             msg = resp.choices[0].message
@@ -740,7 +829,7 @@ class ChatbotService:
                         result: Any = {"error": "duplicate pms call suppressed"}
                     else:
                         pms_called = True
-                        result, cards = await self._run_pms_tool(args, session)
+                        result, cards = await self._run_pms_tool(args, session, db=db)
                         if cards:
                             room_cards = cards
                 elif fn_name == "query_pms_mixed_availability":
@@ -764,8 +853,14 @@ class ChatbotService:
         self,
         args: Dict[str, Any],
         session: ChatbotSessionState,
+        db: Optional[AsyncSession] = None,
     ) -> tuple[Dict[str, Any], List[RoomCardSchema]]:
-        """Execute PMS availability query. Falls back to FAQ static on error."""
+        """Execute PMS availability query. Falls back to FAQ KB on error.
+
+        Spec: 查詢空房型.feature
+        - PMS 正常 → PMS 資料為主，FAQ_KB 補充圖片與特色
+        - PMS 未啟用/異常 → _kb_search("booking_billing") 降級
+        """
         startdate = str(args.get("startdate", ""))
         enddate = str(args.get("enddate", ""))
         housingcnt = int(args.get("housingcnt") or 2)
@@ -778,15 +873,44 @@ class ChatbotService:
         if housingcnt > 0:
             session.booking_adults = housingcnt
 
+        # PMS disabled → FAQ KB fallback (spec: _kb_search("booking_billing"))
+        if not is_pms_enabled():
+            cards = await _kb_fallback_rooms(db, housingcnt)
+            if not cards:
+                return {
+                    "source": "no_data",
+                    "note": "抱歉，我暫時沒辦法解答這個問題。建議您直接聯繫客服，讓我們的人員為您詳細說明。",
+                    "available": [],
+                }, []
+            return {
+                "source": "faq_kb",
+                "note": "以下為一般參考房價（非即時房況），實際房況請致電確認",
+                "available": [
+                    {
+                        "room_type_code": c.room_type_code,
+                        "room_type_name": c.room_type_name,
+                        "price": c.price,
+                        "available_count": None,
+                        "max_occupancy": c.max_occupancy,
+                        "features": c.features,
+                        "image_url": c.image_url,
+                    }
+                    for c in cards
+                ],
+            }, cards
+
         try:
             raw = await asyncio.to_thread(query_pms, startdate, enddate, roomtype, housingcnt)
             availability = self._extract_availability(raw, startdate, enddate)
             cards = self._availability_to_room_cards(availability)
 
             if not cards:
-                cards = self._filter_faq_static(housingcnt)
-                source_note = "faq_fallback"
+                # PMS returned empty → FAQ KB fallback
+                cards = await _kb_fallback_rooms(db, housingcnt)
+                source_note = "faq_kb"
             else:
+                # Spec: PMS 資料為主，FAQ_KB 資料補充房型圖片與特色描述
+                cards = await _enrich_cards_with_kb(cards, db)
                 source_note = "pms"
 
             return {
@@ -798,15 +922,23 @@ class ChatbotService:
                         "price": c.price,
                         "available_count": c.available_count,
                         "max_occupancy": c.max_occupancy,
+                        "features": c.features,
+                        "image_url": c.image_url,
                     }
                     for c in cards
                 ],
             }, cards
 
         except Exception as exc:
-            cards = self._filter_faq_static(housingcnt)
+            cards = await _kb_fallback_rooms(db, housingcnt)
+            if not cards:
+                return {
+                    "source": "no_data",
+                    "note": "抱歉，我暫時沒辦法解答這個問題。建議您直接聯繫客服，讓我們的人員為您詳細說明。",
+                    "available": [],
+                }, []
             return {
-                "source": "faq_static",
+                "source": "faq_kb",
                 "note": f"PMS 暫時無法連線，以下為參考房價（非即時）：{exc}",
                 "available": [
                     {
@@ -815,6 +947,8 @@ class ChatbotService:
                         "price": c.price,
                         "available_count": None,
                         "max_occupancy": c.max_occupancy,
+                        "features": c.features,
+                        "image_url": c.image_url,
                     }
                     for c in cards
                 ],
@@ -922,8 +1056,7 @@ class ChatbotService:
 
         return {"ok": True, "all_available": all_available, "items": item_results}
 
-    def _filter_faq_static(self, adults: int) -> List[RoomCardSchema]:
-        return [r for r in FAQ_STATIC_ROOMS if r.max_occupancy >= adults] or FAQ_STATIC_ROOMS
+    # _filter_faq_static removed — replaced by _kb_fallback_rooms (reads from DB)
 
     # ------------------------------------------------------------------
     # Shared session mutation helpers
@@ -966,6 +1099,7 @@ class ChatbotService:
         checkout_date: str,
         adults: int,
         children: int = 0,
+        db: Optional[AsyncSession] = None,
     ) -> ChatbotRoomsOutSchema:
         session = self.get_or_create_session(browser_key)
         session.checkin_date = checkin_date
@@ -977,10 +1111,16 @@ class ChatbotService:
             raw = await asyncio.to_thread(query_pms, checkin_date, checkout_date, None, adults)
             availability = self._extract_availability(raw, checkin_date, checkout_date)
             cards = self._availability_to_room_cards(availability)
-            source: str = "pms"
+            if cards:
+                # Spec: PMS 資料為主，FAQ_KB 補充圖片與特色
+                cards = await _enrich_cards_with_kb(cards, db)
+                source: str = "pms"
+            else:
+                cards = await _kb_fallback_rooms(db, adults)
+                source = "faq_kb"
         except Exception:
-            cards = self._filter_faq_static(adults)
-            source = "faq_static"
+            cards = await _kb_fallback_rooms(db, adults)
+            source = "faq_kb"
 
         session.last_room_cards = cards
         return ChatbotRoomsOutSchema(source=source, rooms=cards)
@@ -1115,6 +1255,44 @@ class ChatbotService:
             }]
 
         first_room = selected_rooms[0] if selected_rooms else {}
+        session.member_name = name
+        session.member_phone = phone
+        session.member_email = email
+        session.checkin_date = checkin
+        session.checkout_date = checkout
+        session.selected_rooms = selected_rooms
+        if first_room:
+            self._apply_room_to_session(
+                session,
+                first_room.get("room_type_code", ""),
+                first_room.get("room_type_name"),
+                first_room.get("room_count", 1),
+                source=first_room.get("source", "pms"),
+            )
+
+        cart_url: Optional[str] = None
+        room_codes = {
+            str(room.get("room_type_code") or "").strip()
+            for room in selected_rooms
+            if str(room.get("room_type_code") or "").strip()
+        }
+        if len(room_codes) == 1 and first_room:
+            room_type_code = next(iter(room_codes))
+            room_count = sum(max(1, int(room.get("room_count") or 1)) for room in selected_rooms)
+            try:
+                cart_url = build_booking_url(
+                    checkin=checkin,
+                    checkout=checkout,
+                    rooms=room_count,
+                    adults=session.booking_adults or 1,
+                    children=session.booking_children,
+                    room_type=room_type_code,
+                    guest_name=name,
+                    phone=phone,
+                    email=email,
+                )
+            except ValueError:
+                cart_url = None
 
         # --- Generate reservation_id ---
         reservation_id = str(uuid4())
@@ -1126,7 +1304,6 @@ class ChatbotService:
             from app.config import settings as _s
             if getattr(_s, "ENABLE_DB", True):
                 from sqlalchemy.orm import Session as DbSession
-                from app.models.base import Base
                 from app.database import SessionLocal
                 from app.models.chatbot_booking import BookingRecord, ChatbotSession as ChatbotSessionModel
                 from app.models.member import Member
@@ -1139,6 +1316,10 @@ class ChatbotService:
                         Member.email == email,
                     ).first()
                     if existing_member:
+                        existing_member.name = name
+                        existing_member.phone = phone
+                        existing_member.email = email
+                        existing_member.last_interaction_at = datetime.utcnow()
                         crm_member_id = existing_member.id
                     else:
                         new_member = Member(
@@ -1146,6 +1327,8 @@ class ChatbotService:
                             phone=phone,
                             email=email,
                             join_source="Webchat",
+                            gpt_enabled=True,
+                            last_interaction_at=datetime.utcnow(),
                         )
                         db.add(new_member)
                         db.flush()
@@ -1156,23 +1339,25 @@ class ChatbotService:
                         id=session.session_id
                     ).first()
                     if not chatbot_session_rec:
-                        chatbot_session_rec = ChatbotSessionModel(
-                            id=session.session_id,
-                            browser_key=browser_key,
-                            crm_member_id=crm_member_id,
-                            member_name=name,
-                            member_phone=phone,
-                            member_email=email,
-                            checkin_date=checkin_obj if checkin else None,
-                            checkout_date=checkout_obj if checkout else None,
-                            selected_rooms=selected_rooms,
-                            selected_room_type=first_room.get("room_type_code"),
-                            selected_room_count=first_room.get("room_count", 1),
-                            session_log=list(session.history),
-                        )
+                        chatbot_session_rec = ChatbotSessionModel(id=session.session_id)
                         db.add(chatbot_session_rec)
-                    else:
-                        chatbot_session_rec.crm_member_id = crm_member_id
+                    chatbot_session_rec.browser_key = browser_key
+                    chatbot_session_rec.hotel_id = session.hotel_id
+                    chatbot_session_rec.intent_state = session.intent_state
+                    chatbot_session_rec.turn_count = session.turn_count
+                    chatbot_session_rec.booking_adults = session.booking_adults
+                    chatbot_session_rec.booking_children = session.booking_children
+                    chatbot_session_rec.checkin_date = checkin_obj if checkin else None
+                    chatbot_session_rec.checkout_date = checkout_obj if checkout else None
+                    chatbot_session_rec.room_plan_requests = list(session.room_plan_requests)
+                    chatbot_session_rec.selected_rooms = selected_rooms
+                    chatbot_session_rec.selected_room_type = first_room.get("room_type_code")
+                    chatbot_session_rec.selected_room_count = first_room.get("room_count", 1)
+                    chatbot_session_rec.member_name = name
+                    chatbot_session_rec.member_phone = phone
+                    chatbot_session_rec.member_email = email
+                    chatbot_session_rec.crm_member_id = crm_member_id
+                    chatbot_session_rec.needs_human_followup = session.needs_human_followup
 
                     # Insert booking record
                     booking_rec = BookingRecord(
@@ -1189,7 +1374,7 @@ class ChatbotService:
                         member_name=name,
                         member_phone=phone,
                         member_email=email,
-                        cart_url=None,
+                        cart_url=cart_url,
                         session_log=list(session.history),
                         data_source=first_room.get("source", "pms"),
                         db_saved=True,
@@ -1208,7 +1393,7 @@ class ChatbotService:
         return BookingSaveOutSchema(
             ok=True,
             reservation_id=reservation_id,
-            cart_url=None,
+            cart_url=cart_url,
             saved=BookingSavedDetailSchema(
                 crm_member_id=crm_member_id,
                 selected_rooms=selected_rooms,
@@ -1224,62 +1409,6 @@ class ChatbotService:
     def reset(self, browser_key: str) -> SessionResetOutSchema:
         session = self.reset_session(browser_key)
         return SessionResetOutSchema(ok=True, session_id=session.session_id)
-
-    # ------------------------------------------------------------------
-    # Booking payload helpers
-    # ------------------------------------------------------------------
-
-    def apply_booking_payload(
-        self,
-        *,
-        browser_key: str,
-        room_type_code: str,
-        room_count: int,
-        checkin_date: str,
-        checkout_date: str,
-        adults: int,
-        children: int,
-        guest_name: str,
-        guest_phone: str,
-        guest_email: str,
-    ) -> ChatbotSessionState:
-        session = self.get_or_create_session(browser_key)
-        self._apply_room_to_session(
-            session,
-            room_type_code,
-            session.selected_room_name or _room_display_name(room_type_code),
-            room_count,
-        )
-        session.checkin_date = checkin_date
-        session.checkout_date = checkout_date
-        session.booking_adults = adults
-        session.booking_children = children
-        self._apply_member_to_session(session, guest_name, guest_phone, guest_email)
-        session.ts = time.time()
-        return session
-
-    def apply_member_profile(
-        self,
-        *,
-        browser_key: str,
-        name: str,
-        phone: str,
-        email: str,
-    ) -> ChatbotSessionState:
-        session = self.get_or_create_session(browser_key)
-        self._apply_member_to_session(session, name, phone, email)
-        session.ts = time.time()
-        return session
-
-    def get_session(self, browser_key: str) -> ChatbotSessionState:
-        return self.get_or_create_session(browser_key)
-
-    # ------------------------------------------------------------------
-    # Member form definition (spec 3.5)
-    # ------------------------------------------------------------------
-
-    def member_form_definition(self) -> MemberFormDefinitionSchema:
-        return _MEMBER_FORM
 
     # ------------------------------------------------------------------
     # PMS response parsing helpers
@@ -1392,8 +1521,20 @@ class ChatbotService:
     def _extract_dates(self, message: str) -> Optional[Tuple[str, str]]:
         """Spec: 'M月D號住到M月D號' 或 'M/D到M/D' → (checkin, checkout) ISO strings。"""
         current_year = datetime.now().year
+        from datetime import timedelta
 
-        # Pattern: "M月D號住到M月D號" or "M月D號到M月D號"
+        # Helper: extract night count from message (e.g. "住一晚", "入住兩晚", "3晚")
+        def _extract_nights(msg: str) -> Optional[int]:
+            cn_digits = {"一": 1, "二": 2, "兩": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
+            m_night = re.search(r"(\d+)\s*晚", msg)
+            if m_night:
+                return int(m_night.group(1))
+            m_night_cn = re.search(r"([一二兩三四五六七八九十])\s*晚", msg)
+            if m_night_cn:
+                return cn_digits.get(m_night_cn.group(1), 1)
+            return None
+
+        # Pattern 1: "M月D號住到M月D號" or "M月D號到M月D號"
         m = re.search(
             r"(\d{1,2})月(\d{1,2})[號号日](?:.*?)(?:住到|退房|到|～|~)(?:(\d{1,2})月)?(\d{1,2})[號号日]",
             message,
@@ -1408,30 +1549,48 @@ class ChatbotService:
             checkout = date(current_year, out_month, out_day)
             return checkin.isoformat(), checkout.isoformat()
 
-        # Pattern: "M/D到M/D" or "M-D到M-D"
+        # Pattern 2: "YYYY/M/D" or "YYYY-M-D" (with year)
+        m_full = re.search(r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", message)
+        if m_full:
+            checkin = date(int(m_full.group(1)), int(m_full.group(2)), int(m_full.group(3)))
+            # Check for explicit checkout date after the checkin
+            rest = message[m_full.end():]
+            m_checkout = re.search(r"(?:到|至|～|~|—|-)\s*(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", rest)
+            if m_checkout:
+                checkout = date(int(m_checkout.group(1)), int(m_checkout.group(2)), int(m_checkout.group(3)))
+            else:
+                m_checkout2 = re.search(r"(?:到|至|～|~|—|-)\s*(\d{1,2})[/\-](\d{1,2})", rest)
+                if m_checkout2:
+                    checkout = date(checkin.year, int(m_checkout2.group(1)), int(m_checkout2.group(2)))
+                else:
+                    nights = _extract_nights(message) or 1
+                    checkout = checkin + timedelta(days=nights)
+            return checkin.isoformat(), checkout.isoformat()
+
+        # Pattern 3: "M/D到M/D" or "M-D到M-D" (without year)
         m2 = re.search(r"(\d{1,2})[/\-](\d{1,2}).*?(?:到|至|～).*?(\d{1,2})[/\-](\d{1,2})", message)
         if m2:
             checkin = date(current_year, int(m2.group(1)), int(m2.group(2)))
             checkout = date(current_year, int(m2.group(3)), int(m2.group(4)))
             return checkin.isoformat(), checkout.isoformat()
 
-        return None
+        # Pattern 4: "M/D" alone + "入住N晚" (without year, single date)
+        m3 = re.search(r"(\d{1,2})[/\-](\d{1,2})", message)
+        if m3:
+            checkin = date(current_year, int(m3.group(1)), int(m3.group(2)))
+            nights = _extract_nights(message) or 1
+            checkout = checkin + timedelta(days=nights)
+            return checkin.isoformat(), checkout.isoformat()
 
-    def _try_build_booking_url(self, session: ChatbotSessionState) -> Optional[str]:
-        try:
-            return build_booking_url(
-                checkin=session.checkin_date or "",
-                checkout=session.checkout_date or "",
-                rooms=session.selected_room_count or 1,
-                adults=session.booking_adults or 1,
-                children=session.booking_children,
-                room_type=session.selected_room_type or "",
-                guest_name=session.member_name or "",
-                phone=session.member_phone or "",
-                email=session.member_email or "",
-            )
-        except Exception:
-            return None
+        # Pattern 5: "M月D號" alone + "入住N晚"
+        m4 = re.search(r"(\d{1,2})月(\d{1,2})[號号日]", message)
+        if m4:
+            checkin = date(current_year, int(m4.group(1)), int(m4.group(2)))
+            nights = _extract_nights(message) or 1
+            checkout = checkin + timedelta(days=nights)
+            return checkin.isoformat(), checkout.isoformat()
+
+        return None
 
     def _has_booking_intent(self, message: str) -> bool:
         """Spec: 訊息含明確訂房信號 → intent_state = confirmed.
