@@ -1,10 +1,10 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-This monorepo hosts the FastAPI backend plus the Vite/React console. Backend logic lives in `backend/app` (routers in `api/v1`, services, SQLAlchemy models) with Alembic migrations in `backend/migrations` and helper scripts in `backend/scripts`. Frontend implementation sits in `frontend/src`, with built bundles in `frontend/build`. LINE automation helpers stay in `line_app/` and `linebot_message/`, while Playwright specs live under `tests/e2e`. Consult `backend/PROJECT_SUMMARY.md` or `TAG_SYSTEM_GUIDE.md` before editing.
+This monorepo hosts the FastAPI backend plus the Vite/React console. Backend logic lives in `backend/app` (routers in `api/v1`, services, SQLAlchemy models) with Alembic migrations in `backend/migrations` and helper scripts in `backend/scripts`. Frontend implementation sits in `frontend/src`, with built bundles in `frontend/build`. LINE automation helpers stay in `line_app/`, while Playwright specs live under `tests/e2e`. Consult `backend/PROJECT_SUMMARY.md` or `TAG_SYSTEM_GUIDE.md` before editing.
 
 ## Build, Test, and Development Commands
-Install Python deps via `cd backend && pip install -r requirements.txt`, then launch the API with `uvicorn app.main:app --reload --port 8000`. Apply schema changes using `cd backend && alembic upgrade head`. Frontend setup is `cd frontend && npm install`; start the UI with `npm run dev` and compile production bundles with `npm run build`. Run seeding or LINE sync scripts via `python backend/<script>.py` from the repo root so relative imports resolve.
+Install Python deps via `cd backend && pip install -r requirements.txt`, then launch the API with `uvicorn app.main:app --reload --port 8700`. Apply schema changes using `cd backend && alembic upgrade head`. Frontend setup is `cd frontend && npm install`; start the UI with `npm run dev` and compile production bundles with `npm run build`. Run seeding or LINE sync scripts via `python backend/<script>.py` from the repo root so relative imports resolve.
 
 ## Coding Style & Naming Conventions
 Python code follows Black defaults (4-space indent, 120 columns) plus `isort` and `flake8`; lint `backend/app` before opening a PR. Name Pydantic models `<Entity>Schema` and keep router modules snake_case mirroring their URL segment. React/TypeScript files use PascalCase components, camelCase hooks/utilities, and colocated styles. Favor descriptive folders (`member`, `campaigns`, `analytics`) so paths map cleanly to API resources.

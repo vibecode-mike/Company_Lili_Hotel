@@ -1,8 +1,0 @@
-[2025-09-17T10:37:34] Dony Kuo → bot: 我想知道早餐時間
-[2025-09-17T10:37:35] bot → Dony Kuo: （抱歉，目前服務忙線中，請稍後再試）
-
-Error: Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-jKmtr***************************************wvAT. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
-[2025-09-17T10:40:42] Dony Kuo → bot: 早餐幾點
-[2025-09-17T10:40:43] bot → Dony Kuo: （抱歉，目前服務忙線中，請稍後再試）
-
-Error: Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-jKmtr***************************************wvAT. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}

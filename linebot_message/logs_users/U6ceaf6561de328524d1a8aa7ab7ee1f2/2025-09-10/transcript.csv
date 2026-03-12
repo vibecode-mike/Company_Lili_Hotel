@@ -1,5 +1,0 @@
-﻿time,direction,type,display_name,user_id,text
-2025-09-10T11:33:57,in,text,Dony Kuo,U6ceaf6561de328524d1a8aa7ab7ee1f2,我要住兩個晚上
-2025-09-10T11:33:58,out,text,Dony Kuo,U6ceaf6561de328524d1a8aa7ab7ee1f2,"（抱歉，目前服務忙線中，請稍後再試）
-
-Error: Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-jKmtr***************************************wvAT. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}"

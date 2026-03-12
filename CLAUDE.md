@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 cd backend
 pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8700
 
 # Database migrations
 alembic upgrade head                    # Apply migrations
@@ -89,7 +89,7 @@ lili_hotel/
 - **Chat**: `/api/v1/chat/messages`, WebSocket at `/api/v1/ws/{conversation_id}`
 - **Analytics**: `/api/v1/analytics/overview`
 
-API docs: http://localhost:8000/api/v1/docs
+API docs: http://localhost:8700/api/v1/docs
 
 ## Multi-Channel Architecture
 
