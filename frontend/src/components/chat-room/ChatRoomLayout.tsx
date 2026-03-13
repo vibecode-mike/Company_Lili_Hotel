@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import type { ChatRoomLayoutProps, ChatMessage, ChatPlatform } from "./types";
 import type { Member } from "../../types/member";
-import { useSSE } from "../../hooks/useWebSocket";
+import { useSSE, useWebSocket } from "../../hooks/useWebSocket";
 import MemberAvatar from "./MemberAvatar";
 import MemberInfoPanelComplete from "./MemberInfoPanelComplete";
 import MemberTagEditModal from "../MemberTagEditModal";
@@ -180,6 +180,7 @@ export default function ChatRoomLayout({
     initialPlatform || "LINE",
   );
   const [threadsMap, setThreadsMap] = useState<Record<string, string>>({});
+  const [availablePlatforms, setAvailablePlatforms] = useState<ChatPlatform[]>([]);
 
   // FB 外部 API 設定
   const fbApiBaseUrl = useMemo(
@@ -208,11 +209,12 @@ export default function ChatRoomLayout({
       if (result.code === 200 && result.data) {
         const { available_platforms, default_platform, threads } = result.data;
         const platforms = (
-          Array.isArray(result.data) ? result.data : Object.keys(threads || {})
+          Array.isArray(available_platforms) ? available_platforms : Object.keys(threads || {})
         ) as ChatPlatform[];
         const finalPlatforms = (
           platforms.length ? platforms : ["LINE"]
         ) as ChatPlatform[];
+        setAvailablePlatforms(finalPlatforms);
         setThreadsMap(threads || {});
         const nextPlatform =
           (default_platform as ChatPlatform) || finalPlatforms[0] || "LINE";
@@ -519,6 +521,19 @@ export default function ChatRoomLayout({
       console.log("[SSE] 收到訊息:", JSON.stringify(sseMessage, null, 2));
       console.log("[SSE] currentThreadId:", currentThreadId);
 
+      // 規則發佈通知 — 插入系統提示訊息
+      if (sseMessage.type === "rule_updated" && sseMessage.data) {
+        const systemMsg = {
+          id: `rule-updated-${Date.now()}`,
+          role: "system",
+          content: `📢 ${sseMessage.data.message || "規則已更新"}（${sseMessage.data.published_count || 0} 筆）`,
+          timestamp: new Date().toISOString(),
+          thread_id: currentThreadId,
+        };
+        setMessages((prev) => [...prev, systemMsg]);
+        return;
+      }
+
       if (sseMessage.type === "new_message" && sseMessage.data) {
         const incomingThread =
           sseMessage.data.thread_id || sseMessage.data.threadId;
@@ -664,14 +679,22 @@ export default function ChatRoomLayout({
       ? `fb_${fbCustomerId}`
       : undefined;
 
-  // 建立 SSE 連線（所有平台共用）
-  // LINE/Webchat 用 currentThreadId，Facebook 用 fb_{customer_id}
-  const sseThreadId =
-    currentPlatform === "Facebook" ? fbThreadId : currentThreadId;
-  const { isConnected: isRealtimeConnected } = useSSE(
-    sseThreadId,
+  // LINE 用 SSE（因外部代理 HTTP/2 不支援 WebSocket Upgrade）
+  // Facebook/Webchat 用 WebSocket
+  const lineThreadId = currentPlatform === "LINE" ? currentThreadId : undefined;
+  const wsThreadId =
+    currentPlatform === "Facebook"
+      ? fbThreadId
+      : currentPlatform === "Webchat"
+        ? currentThreadId
+        : undefined;
+
+  const { isConnected: sseConnected } = useSSE(lineThreadId, handleNewMessage);
+  const { isConnected: wsConnected } = useWebSocket(
+    wsThreadId,
     handleNewMessage,
   );
+  const isRealtimeConnected = sseConnected || wsConnected;
 
   // Facebook WebSocket 代理：後端連外部 WS，透過 SSE 推送
   useEffect(() => {
@@ -1305,7 +1328,14 @@ export default function ChatRoomLayout({
             <div className="flex items-center gap-2">
               <PlatformSwitcher
                 value={currentPlatform}
+                availablePlatforms={availablePlatforms}
                 onChange={(platform) => {
+                  if (messageInput.trim()) {
+                    if (!window.confirm("你有未發送的草稿，確定要切換渠道嗎？")) {
+                      return;
+                    }
+                    setMessageInput("");
+                  }
                   setCurrentPlatform(platform);
                 }}
               />

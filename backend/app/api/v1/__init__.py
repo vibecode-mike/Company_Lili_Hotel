@@ -33,6 +33,8 @@ from app.api.v1 import (
     faq,
     ai_chat,
     fb_ws_proxy,
+    chatbot,
+    sse,
 )
 
 api_router = APIRouter()
@@ -67,4 +69,6 @@ api_router.include_router(line_notify.router, prefix="", tags=["LINE 訊息通�
 api_router.include_router(chat_session.router, prefix="", tags=["聊天 Session"])
 api_router.include_router(faq.router, prefix="/faq", tags=["FAQ 知識庫管理"])
 api_router.include_router(ai_chat.router, prefix="/ai", tags=["AI 聊天"])
+api_router.include_router(chatbot.router, prefix="/chatbot", tags=["官網 Chatbot 訂房"])
 api_router.include_router(fb_ws_proxy.router, prefix="", tags=["Facebook WS 代理"])
+api_router.include_router(sse.router, prefix="", tags=["SSE 即時通訊"])

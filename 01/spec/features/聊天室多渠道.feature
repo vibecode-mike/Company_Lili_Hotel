@@ -162,31 +162,6 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
       And 下拉選單中標示各渠道目前狀態（可用/不可用）
       And 不可用的渠道以灰色禁用樣式顯示，但仍可查看該渠道歷史訊息
 
-  Rule: 當回覆渠道無法發送訊息時，系統應提示錯誤並要求手動切換渠道
-
-    Example: LINE 回覆窗口已過期
-      Given 客服正在回覆會員 member_id "M001"
-      And 該會員的 LINE 最後互動時間超過 24 小時（Reply Token 已過期）
-      When 客服嘗試透過 LINE 渠道發送訊息
-      Then 系統顯示錯誤訊息「LINE 回覆窗口已過期，請切換至其他渠道或等待會員主動互動」
-      And 不自動切換渠道，由客服手動選擇
-      And 後端記錄發送失敗日誌
-
-    Example: Facebook 24 小時對話窗口已關閉
-      Given 客服正在回覆會員 member_id "M001"
-      And 該會員的 Facebook 最後互動時間超過 24 小時
-      When 客服嘗試透過 Facebook 渠道發送訊息
-      Then 系統顯示錯誤訊息「Facebook 對話窗口已關閉，請切換至其他渠道」
-      And 不自動切換渠道，由客服手動選擇
-
-    Example: Webchat 用戶已離線
-      Given 客服正在回覆會員 member_id "M001"
-      And 該會員的 Webchat 連線已中斷（WebSocket 斷線或會話逾時）
-      When 客服嘗試透過 Webchat 渠道發送訊息
-      Then 系統顯示錯誤訊息「Webchat 用戶已離線，訊息將於用戶重新上線時送達」
-      And 訊息標記為待發送狀態
-      And 不自動切換渠道，由客服手動選擇
-
   # =============================================================================
   # 多渠道會員合併
   # =============================================================================
@@ -375,20 +350,24 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
   # Webchat 訪客會話狀態管理
   # =============================================================================
 
-  Rule: Webchat 訪客會話結束判定依據 WebSocket 連線狀態，斷線時自動設為已離線
+  Rule: Webchat 訪客會話結束判定依據 SSE 連線狀態，斷線時自動設為已離線
+
+    # 即時推送方式：SSE (Server-Sent Events)
+    # 端點：GET /api/v1/sse/chat/{thread_id}
+    # 原 WebSocket 因外部代理 HTTP/2 SSL 終端不支援 Upgrade 而棄用（2026-02-10）
 
     Example: 訪客關閉瀏覽器時會話自動結束
       Given 訪客 webchat_uid "W123" 正在 Webchat 對話中（is_following = true）
-      And WebSocket 連線維持心跳（每 30 秒 ping/pong）
-      When 訪客關閉瀏覽器，WebSocket 連線中斷
+      And SSE 連線維持中（EventSource 原生心跳）
+      When 訪客關閉瀏覽器，SSE 連線中斷
       And 系統等待 60 秒重連寬限期，訪客未重新連線
       Then 系統自動更新 webchat_friends.is_following = false
       And 系統記錄 unfollowed_at = 當前時間
       And 客服聊天室標示「Webchat 用戶已離線」
 
     Example: 訪客網路中斷後重新連線
-      Given 訪客 webchat_uid "W123" 的 WebSocket 連線因網路問題斷開
-      When 訪客在 60 秒內重新連線
+      Given 訪客 webchat_uid "W123" 的 SSE 連線因網路問題斷開
+      When 訪客在 60 秒內重新連線（EventSource 自動重連）
       Then 系統視為同一會話，不更新 is_following 狀態
       And 聊天可正常繼續
 
@@ -408,21 +387,21 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
 
     Example: 新訪客首次連線時生成 webchat_uid
       Given 訪客首次訪問 Webchat，localStorage 無 webchat_uid
-      When 訪客建立 WebSocket 連線
+      When 訪客建立 SSE 連線
       Then 後端生成 UUID v4 格式的 webchat_uid（如 "550e8400-e29b-41d4-a716-446655440000"）
       And 後端建立 webchat_friends 記錄
       And 前端將 webchat_uid 儲存於 localStorage
 
     Example: 訪客重新訪問時使用既有 webchat_uid
       Given 訪客曾訪問過 Webchat，localStorage 有 webchat_uid "550e8400-e29b-41d4-a716-446655440000"
-      When 訪客重新訪問並建立 WebSocket 連線
+      When 訪客重新訪問並建立 SSE 連線
       Then 前端傳送既有 webchat_uid 給後端
       And 後端識別為同一訪客，更新 webchat_friends 狀態
       And 聊天紀錄延續顯示
 
     Example: localStorage 被清除視為新訪客
       Given 訪客曾訪問過 Webchat 但 localStorage 已被清除
-      When 訪客建立 WebSocket 連線
+      When 訪客建立 SSE 連線
       Then 後端生成新的 UUID v4 webchat_uid
       And 後端建立新的 webchat_friends 記錄
       And 視為新訪客，無法自動關聯舊聊天紀錄

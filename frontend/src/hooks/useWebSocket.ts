@@ -135,7 +135,56 @@ export function useWebSocket(
 }
 
 /**
- * SSE Hook（暫時使用 WebSocket 實作）
- * TODO: 後端實作 SSE 端點後替換為 EventSource
+ * SSE Hook — LINE 渠道專用
+ * 使用 EventSource API，原生兼容 HTTP/2，自帶斷線重連
  */
-export const useSSE = useWebSocket;
+export function useSSE(
+  threadId: string | undefined,
+  onMessage: (message: WebSocketMessage) => void,
+): UseWebSocketResult {
+  const [isConnected, setIsConnected] = useState(false);
+  const onMessageRef = useRef(onMessage);
+  onMessageRef.current = onMessage;
+  const esRef = useRef<EventSource | null>(null);
+
+  useEffect(() => {
+    if (!threadId) {
+      setIsConnected(false);
+      return;
+    }
+
+    // SSE 端點走 HTTP，直接用 apiBaseUrl（經 nginx 代理）
+    const baseUrl = config.apiBaseUrl || "";
+    const url = `${baseUrl}/api/v1/sse/chat/${threadId}`;
+
+    const es = new EventSource(url);
+    esRef.current = es;
+
+    es.onopen = () => {
+      setIsConnected(true);
+      console.log(`✅ SSE connected for thread ${threadId}`);
+    };
+
+    es.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        onMessageRef.current(message);
+      } catch (error) {
+        console.error("❌ Failed to parse SSE message:", error);
+      }
+    };
+
+    es.onerror = () => {
+      setIsConnected(false);
+      // EventSource 自動重連，不需手動處理
+    };
+
+    return () => {
+      es.close();
+      esRef.current = null;
+      setIsConnected(false);
+    };
+  }, [threadId]);
+
+  return { isConnected };
+}

@@ -54,16 +54,17 @@
 | unfollowed_at | 取消追蹤時間 |
 | last_interaction_at | 最後互動時間 |
 
-### Conversation
+### ConversationThread
 > 對話串，跨渠道整合
 
 | 屬性 | 說明 |
 |------|------|
-| id | 對話 ID |
+| id | 對話串 ID（直接使用渠道原始 UID） |
 | member_id | 會員 ID |
-| channel_type | 渠道類型（line/facebook/webchat） |
+| platform | 渠道類型（line/facebook/webchat） |
+| platform_uid | 渠道原始 UID |
+| conversation_name | 對話名稱 |
 | last_message_at | 最後訊息時間 |
-| is_unanswered | 是否待回覆 |
 
 ### ConversationMessage
 > 對話訊息記錄
@@ -71,13 +72,16 @@
 | 屬性 | 說明 |
 |------|------|
 | id | 訊息 ID |
-| conversation_id | 對話 ID |
-| role | 角色（user/assistant/agent） |
+| thread_id | 對話串 ID（FK conversation_threads） |
+| platform | 渠道類型（冗餘欄位，方便查詢） |
+| role | 角色（user/assistant） |
 | direction | 方向（incoming/outgoing） |
 | message_type | 訊息類型（text/image/template） |
 | content | 訊息內容 |
-| message_source | 來源（manual/gpt/keyword/welcome/always/broadcast） |
-| is_read | 是否已讀 |
+| event_id | 事件 ID |
+| status | 狀態（sent/delivered/read/failed） |
+| message_source | 來源（webhook/manual/gpt/keyword/welcome/always/broadcast） |
+| sent_by | 發送人員 ID（僅 manual 訊息有值） |
 | created_at | 建立時間 |
 
 ### MessageTemplate
@@ -150,12 +154,40 @@
 | id | 規則 ID |
 | name | 規則名稱 |
 | trigger_type | 觸發類型（welcome/keyword/scheduled） |
-| is_enabled | 是否啟用 |
-| keywords | 關鍵字清單（JSON） |
-| messages | 回應訊息清單（JSON） |
-| date_range | 有效日期範圍 |
-| trigger_time | 觸發時段 |
+| is_active | 是否啟用 |
+| template_id | 關聯模板 ID |
+| channels | 頻道設定（JSON） |
+| channel_id | 頻道 ID |
+| date_range_start | 有效日期起 |
+| date_range_end | 有效日期迄 |
+| trigger_time_start | 觸發時段起 |
+| trigger_time_end | 觸發時段迄 |
 | trigger_count | 觸發次數 |
+| response_count | 回應次數 |
+| success_rate | 成功率 |
+
+### AutoResponseKeyword
+> 自動回應關鍵字（獨立表，支援個別啟停與統計）
+
+| 屬性 | 說明 |
+|------|------|
+| id | 關鍵字 ID |
+| auto_response_id | 所屬自動回應 ID |
+| keyword | 關鍵字文字 |
+| match_type | 匹配類型 |
+| is_enabled | 是否啟用 |
+| match_count | 匹配次數 |
+| last_triggered_at | 最後觸發時間 |
+
+### AutoResponseMessage
+> 自動回應訊息（獨立表，支援多則排序）
+
+| 屬性 | 說明 |
+|------|------|
+| id | 訊息 ID |
+| response_id | 所屬自動回應 ID |
+| message_content | 訊息內容（JSON） |
+| sequence_order | 排序序號 |
 
 ### LineChannel
 > LINE 頻道設定
@@ -636,7 +668,7 @@
 - **Predecessors**: 登入系統, FAQ 模組授權
 - **參數**: category_id, is_active
 - **Description**:
-  - What: 啟用/關閉 FAQ 大分類，管理 Token 用量與語氣設定
+  - What: 啟用/關閉 FAQ 大分類，管理 Token 用量
   - Why: 控制 AI 聊天機器人引用的知識範圍
   - When: 需要調整 AI 回答範圍或設定時
 
@@ -666,10 +698,11 @@
   - 必填欄位驗證（依大分類欄位定義）
 - 後置（狀態）:
   - 新增/編輯後狀態為「測試(未發佈)」
+  - 停用規則重新啟用後狀態為「測試(未發佈)」，須重新發佈才可上線
   - 前台繼續引用上一已啟用版本
   - 發佈時所有測試規則 → 已啟用，產生版本快照
   - 最多保留 2 個版本（當前 + 上一已啟用）
-  - AI 引用規則時自動為會員貼標
+  - AI 引用規則時自動為會員貼標（等同原系統手動貼標，tag_source = AI_chatbot）
 
 ### AI 聊天回答
 - **Actor**: 會員（透過渠道）/ LINE App / 系統
@@ -834,10 +867,10 @@
 
 ### 查詢 FAQ 資訊
 - **Actor**: 使用者
-- **Aggregates**: FAQCategory, FAQRule, AiTokenUsage, AiToneConfig, FaqModuleAuth
-- **回傳欄位**: categories (name, is_active, published_rule_count), rules (status, field_values), token_usage, tone_setting, module_auth_status
+- **Aggregates**: FAQCategory, FAQRule, AiTokenUsage, FaqModuleAuth
+- **回傳欄位**: categories (name, is_active, published_rule_count), rules (status, field_values), token_usage, module_auth_status
 - **Description**:
-  - What: 查詢 FAQ 大分類列表、規則清單、Token 用量、語氣設定、模組授權狀態
+  - What: 查詢 FAQ 大分類列表、規則清單、Token 用量、模組授權狀態
   - Why: 提供 FAQ 管理頁面所需的所有資料
   - When: 進入 FAQ 管理頁面時
 
@@ -862,7 +895,6 @@
 - 前置（狀態）:
   - 需 faq.manage 權限
 - 前置（參數）:
-  - 版本選擇：測試+正式（引用 draft+active）或僅正式（僅 active）
 - 後置（回應）:
   - AI 回答 + 引用的規則清單 + Token 消耗量
   - 規則儲存後即時更新（顯示提示「當前有新的測試規則」）
@@ -895,8 +927,7 @@
 - 後置（回應）:
   - 最後互動時間 = max(各渠道 last_interaction_at)
   - 預設回覆渠道 = 最新互動渠道
-  - LINE/FB 24 小時回覆窗口
-  - Webchat 離線偵測（60 秒寬限）
+  - 預設回覆渠道依最新互動渠道決定
 
 ### SSE 即時推送
 - **Actor**: 系統
@@ -927,3 +958,236 @@
 - 後置（回應）:
   - 設定不完整 → Toast「請先完成基本設定」
   - 授權過期 → 強制登出
+
+---
+
+# 官網 AI 聊天機器人訂房系統（Chatbot PMS 串接）
+
+> 來源規格：01/spec/chatbot串接pms.md
+
+## Actors（新增）
+
+- **飯店訪客** [人]: 透過飯店官網 AI 聊天機器人查詢房況並完成訂房的終端使用者
+
+## Aggregates（新增）
+
+### ChatbotSession
+> 官網聊天機器人 Session，以瀏覽器為單位追蹤對話狀態
+
+| 屬性 | 說明 |
+|------|------|
+| id | Session ID |
+| browser_key | 瀏覽器唯一識別碼（Web Key） |
+| intent_state | 訂房意圖狀態（detecting/confirmed/none） |
+| turn_count | 對話輪數（上限 5，超過視為新對話） |
+| booking_adults | 入住大人數 |
+| booking_children | 入住小孩數 |
+| checkin_date | 入住日期 |
+| checkout_date | 退房日期 |
+| selected_room_type | 選取的房型代碼 |
+| selected_room_count | 選取的房間數量 |
+| selected_rooms | 已選擇的房型清單（多房型） |
+| member_name | 訪客姓名（暫存） |
+| member_phone | 訪客電話（暫存） |
+| member_email | 訪客 Email（暫存） |
+| crm_member_id | 寫入 CRM 後的會員 ID |
+| needs_human_followup | AI 無法回答時設為 true，會員建立後補打新訊息標記 |
+| created_at | Session 建立時間 |
+| updated_at | 最後更新時間 |
+
+### FAQPMSConnection
+> FAQ 模組大分類的即時 PMS 串接設定（用於即時房況查詢，與會員資料同步的 PMSIntegration 不同）
+
+| 屬性 | 說明 |
+|------|------|
+| id | 設定 ID |
+| faq_category_id | 關聯的 FAQ 大分類 ID（目前僅「訂房」分類） |
+| api_endpoint | PMS API 端點 URL |
+| api_key_encrypted | 加密儲存的 API Key（AES-256） |
+| auth_type | 認證方式（api_key/bearer_token） |
+| status | 串接狀態（enabled/disabled/failed） |
+| last_synced_at | 最後連線成功時間（yyyy-mm-dd hh:mm） |
+| error_message | 最後一次錯誤訊息 |
+| created_at | 建立時間 |
+| updated_at | 更新時間 |
+
+### BookingRecord
+> 官網訂房紀錄（訪客完成「確認並儲存」後的快照）
+
+| 屬性 | 說明 |
+|------|------|
+| id | 紀錄 ID |
+| session_id | 來源 Session ID |
+| crm_member_id | 關聯的 CRM 會員 ID |
+| room_type_code | 房型代碼 |
+| room_type_name | 房型名稱 |
+| room_count | 間數 |
+| checkin_date | 入住日期 |
+| checkout_date | 退房日期 |
+| adults | 大人數 |
+| children | 小孩數 |
+| session_log | 完整對話紀錄（JSON） |
+| source | 來源（Webchat） |
+| created_at | 建立時間 |
+
+---
+
+## Commands（新增）
+
+### 模組一：官網 AI 聊天機器人
+
+#### 識別訂房意圖
+- **Actor**: 飯店訪客
+- **Aggregates**: ChatbotSession
+- **Description**:
+  - What: AI 分析訪客訊息，判斷是否有訂房意圖（含入住人數、日期、房型詢問等關鍵字）
+  - Why: 啟動完整的訂房資訊搜集流程
+  - When: 訪客每次發送訊息至官網聊天機器人時
+
+#### Rules
+- 前置（狀態）:
+  - Session 輪數 ≤ 5，超過則重置 Session
+  - 關閉分頁或重新整理則清除暫存訂房資訊與會員資訊
+- 後置（回應）:
+  - 有訂房意圖 → 更新 intent_state 為 `confirmed`，進行訂房資訊搜集
+  - 無訂房意圖 → AI 回覆後主動詢問「是否需要查詢入住期間的房況？」
+  - 若系統有串接 PMS → 優先以 PMS 資料作為主要回覆來源，FAQ 為輔
+  - 若系統無串接 PMS → 啟用 FAQ 大分類「訂房」靜態規則作為回覆來源
+
+#### 搜集訂房資訊
+- **Actor**: 飯店訪客
+- **Aggregates**: ChatbotSession
+- **Description**:
+  - What: 漸進式問出入住人數（幾大幾小）、入住日期、退房日期
+  - Why: 取得完整訂房條件，才能查詢符合的房型
+  - When: intent_state 確認為 `confirmed` 後
+
+#### Rules
+- 前置（狀態）:
+  - intent_state = `confirmed`
+- 後置（回應）:
+  - 每輪僅詢問 1-2 個參數（漸進式）
+  - 所有條件（人數 + 入住日期 + 退房日期）皆滿足後，進行下一步查詢 API
+  - 記憶訂房資訊至 Session，關閉分頁或重整後清除
+
+#### 查詢即時房況
+- **Actor**: 系統
+- **Aggregates**: ChatbotSession, FAQPMSConnection
+- **Description**:
+  - What: 以訂房條件（人數、日期）呼叫 PMS API，取得符合條件的即時房型清單（含剩餘間數、即時房價）
+  - Why: 提供訪客即時準確的房型選擇
+  - When: ChatbotSession 的訂房資訊搜集完畢後
+
+#### Rules
+- 前置（狀態）:
+  - checkin_date、checkout_date、booking_adults 皆不為空
+  - FAQPMSConnection.status = `enabled` 且 API 可連通
+- 後置（回應）:
+  - PMS 有符合條件的房型 → 回傳房型清單（房型名稱、剩餘間數、即時房價、房型圖片 url）
+  - PMS 無符合條件房型 → AI 詢問是否給予其他房型推薦（組合房型或調整日期）
+  - PMS API 異常 → 自動降級至 FAQ 靜態資料（顯示參考房價與靜態可售數量）
+  - 無串接 PMS → 直接使用 FAQ 靜態資料
+
+#### 推薦房型
+- **Actor**: 系統
+- **Aggregates**: ChatbotSession
+- **Description**:
+  - What: 在聊天視窗輸出房型推薦卡片，供訪客選取間數
+  - Why: 以結構化卡片呈現房型，協助訪客做選擇
+  - When: 查詢即時房況完成後
+
+#### Rules
+- 後置（回應）:
+  - 有串接 PMS → 卡片顯示：房型名稱*、剩餘間數*、即時房價*、房型圖片 url
+  - 無串接 PMS 或 PMS 降級 → 卡片顯示：房型名稱*、一般參考房價*、房型圖片 url、靜態可售數量
+  - 排序：依現行實作，以可住人數降序、剩餘間數降序、價格升序
+  - 間數選取上限：依 PMS 或 FAQ 設定的上限，由前端控制
+  - 訪客可一次選取多個房型與各自間數，確認後進入會員資料搜集流程
+
+#### 搜集訪客會員資料
+- **Actor**: 飯店訪客
+- **Aggregates**: ChatbotSession
+- **Description**:
+  - What: 顯示表單欄位引導訪客輸入姓名、聯絡電話、Email
+  - Why: 搜集必要個資以建立 CRM 會員並產生 PMS 訂單
+  - When: 訪客選取房型後
+
+#### Rules
+- 前置（狀態）:
+  - selected_room_type 不為空
+- 後置（回應）:
+  - 電話格式錯誤（非 10 位數）→ 提示「電話格式似乎不太對，請確認是 10 位數號碼喔！」
+  - Email 格式錯誤（不含 @）→ 提示修正
+  - 欄位格式驗證由前端控制
+  - 表單下方顯示小字：「您的個資僅用於本次訂房聯繫與 CRM 會員服務，請安心填寫。」
+  - 三欄位皆填寫完畢 → 進入訂單確認流程
+
+#### 確認並儲存訂房資訊
+- **Actor**: 系統
+- **Aggregates**: ChatbotSession, BookingRecord
+- **Description**:
+  - What: 驗證 Session 內已收斂的訂房資訊與會員資料，並將資料寫入 BookingRecord 與 CRM 會員資料
+  - Why: 先完成訂房資料保存，供後續前台顯示確認結果與主專案後續串接
+  - When: 訪客點擊「確認並儲存」按鈕後
+
+#### Rules
+- 前置（狀態）:
+  - member_name、member_phone、member_email 皆不為空且格式正確
+  - selected_room_type、checkin_date、checkout_date 不為空
+- 後置（回應）:
+  - 系統直接保存 BookingRecord 快照
+  - 系統同步寫入或更新 CRM 會員
+  - 回傳 reservation_id 與房型明細摘要供前端顯示
+  - DB 不可用時，可降級為本地 reservation 檔案保存
+
+---
+
+### 模組二：FAQ 後台串接 PMS 即時房況
+
+#### 設定FAQ模組PMS串接
+- **Actor**: 管理員
+- **Aggregates**: FAQPMSConnection
+- **Predecessors**: 登入系統, FAQ 模組後台管理
+- **Description**:
+  - What: 後台管理員在 FAQ 大分類「訂房」頁面，輸入 PMS 串接參數（API endpoint、API Key、認證方式），系統即時進行連線測試後儲存
+  - Why: 啟用即時 PMS 房況查詢，讓 AI 能引用即時房價與剩餘間數
+  - When: 飯店要啟用 AI 訂房功能時
+
+#### Rules
+- 前置（狀態）:
+  - 需後台管理員權限（faq.manage）
+  - 僅「訂房」大分類具備此入口
+- 後置（狀態）:
+  - 儲存前必須即時進行連線測試
+  - 連線測試失敗 → 禁止儲存，Toast 顯示具體錯誤原因（如：API Key 無效、IP 未白名單）
+  - 連線測試成功 → 儲存設定，status 更新為 `enabled`，last_synced_at 更新
+  - API Key 以 AES-256 加密儲存
+  - 後台介面顯示「最後更新時間 yyyy-mm-dd hh:mm」（手動保存成功時更新）
+  - 「訂房」大分類規則中，即時房價、剩餘間數、可入住人數、跳轉 url 欄位由 API 自動帶入，禁止手動編輯，介面顯示「引用來源：PMS」
+  - 管理員修改房型圖片 URL 或房型特色後點擊保存，系統須檢核對應 PMS 房型代碼是否仍有效，無效則彈出提示
+
+---
+
+### 模組三：訪客資料寫入 CRM
+
+#### 寫入CRM訪客會員
+- **Actor**: 系統
+- **Aggregates**: ChatbotSession, BookingRecord, Member
+- **Description**:
+  - What: 訪客點擊「確認並儲存」後，將姓名/電話/Email 與完整 Session 對話紀錄寫入 CRM 會員管理模組，並打上互動標籤
+  - Why: 將高意圖訂房訪客轉為 CRM 會員，供後續人工客服追蹤
+  - When: 訪客點擊「確認並儲存」按鈕且三欄位格式驗證通過後
+
+#### Rules
+- 前置（狀態）:
+  - member_name、member_phone、member_email 皆不為空且格式正確
+  - 訪客點擊「確認並儲存」按鈕（未點擊或關閉視窗則不寫入）
+- 後置（狀態）:
+  - 以 phone + email 查找現有會員；找到則更新，找不到則新建
+  - 新建會員 join_source = `Webchat`，join_time = 當前時間（yyyy-mm-dd hh:mm）
+  - 同步儲存完整 Session 對話紀錄至 BookingRecord.session_log（供人工客服接手時掌握上下文）
+  - 依訪客在本次 Session 詢問的主題，引用現有 TagRule，寫入 MemberTag（tag_source = `AI_chatbot`），效果等同管理員手動貼標，在 CRM 會員詳情頁標籤區可見
+  - 同一 Session × 同一 TagRule → 只寫入一筆 MemberTag：Service 層於寫入前查詢本 Session 已貼的 tag_rule_id 清單，已存在者跳過（不修改 MemberTag 表結構，無 DB constraint）
+  - AI 無法回答的問題 → 設定 ChatbotSession.needs_human_followup = true（訪客尚無 CRM 身份時暫存）
+  - 訪客點擊「確認並儲存」寫入 CRM 時，若 needs_human_followup = true → 同步在 CRM「會員管理」列表打上「新訊息」標記
+  - 訪客離開但未完成訂房 → Session 自然過期，不建立任何 CRM 紀錄（匿名訪客無法跟進，標記無意義）
