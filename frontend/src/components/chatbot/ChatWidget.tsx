@@ -519,13 +519,29 @@ export default function ChatWidget({ defaultOpen = false }: ChatWidgetProps) {
                         : "border-[#d9e4f6] bg-white"
                     }`}
                   >
+                    {card.image_url ? (
+                      <img
+                        src={card.image_url}
+                        alt={card.room_type_name}
+                        className="w-full h-[160px] object-cover rounded-t-[8px] mb-[10px]"
+                        onError={(e) => {
+                          const target = e.currentTarget as HTMLImageElement;
+                          if (!target.dataset.fallback) {
+                            target.dataset.fallback = "true";
+                            target.src = "/uploads/default_room.jpg";
+                          } else {
+                            target.style.display = "none";
+                          }
+                        }}
+                      />
+                    ) : null}
                     <div className="flex items-start justify-between gap-[8px]">
                       <div>
                         <div className="text-[14px] font-medium text-[#0f172a]">
                           {card.room_type_name}
                         </div>
                         <div className="mt-[2px] text-[12px] text-[#64748b]">
-                          {card.room_type_code} · {card.price_label} · {card.available_count !== null && card.available_count !== undefined ? `剩 ${card.available_count} 間` : "待確認"}
+                          {card.room_type_code} · {card.source === "pms" ? card.price_label : `NT$${card.price.toLocaleString()}`} · {card.available_count !== null && card.available_count !== undefined ? `剩 ${card.available_count} 間` : "待確認"}
                         </div>
                       </div>
                       <div className="text-[16px] font-medium text-[#0f6beb]">
