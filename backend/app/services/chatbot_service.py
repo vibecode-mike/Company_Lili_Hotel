@@ -12,6 +12,7 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from threading import Lock
 from typing import Any, Dict, List, Literal, Optional, Tuple
 from uuid import uuid4
@@ -89,7 +90,8 @@ async def _kb_fallback_rooms(db: Optional[AsyncSession], adults: int = 1) -> Lis
         price = _to_int(str(price_raw).replace(",", "").replace("元", "").split("~")[0].split("-")[0])
         max_occ = _to_int(item.get("人數") or item.get("max_occupancy"), ROOMTYPE_MAX_OCCUPANCY.get(code, 2))
         features = str(item.get("房型特色") or "")
-        image_url = str(item.get("url") or item.get("image_url") or "") or None
+        raw_image = str(item.get("image_url") or item.get("url") or "").strip()
+        image_url = raw_image if raw_image else (settings.DEFAULT_ROOM_IMAGE_URL or None)
         cards.append(RoomCardSchema(
             room_type_code=code or name,
             room_type_name=name,
@@ -124,7 +126,8 @@ async def _enrich_cards_with_kb(
     for card in cards:
         kb = kb_by_name.get(card.room_type_name)
         if kb:
-            image = str(kb.get("url") or kb.get("image_url") or "") or None
+            raw_image = str(kb.get("image_url") or kb.get("url") or "").strip()
+            image = raw_image if raw_image else (settings.DEFAULT_ROOM_IMAGE_URL or None)
             features = str(kb.get("房型特色") or "")
             card = card.model_copy(update={
                 "image_url": image if image else card.image_url,
@@ -365,7 +368,7 @@ _PMS_TOOL = {
         "name": "query_pms_availability",
         "description": (
             "查詢 PMS 即時房況。需要入住日、退房日、每間人數。"
-            "只要入住日與退房日已明確，立刻呼叫此工具，不要再追問日期。"
+            "入住日、退房日、幾間幾人房都確認後才呼叫此工具。"
         ),
         "parameters": {
             "type": "object",
@@ -374,7 +377,7 @@ _PMS_TOOL = {
                 "enddate": {"type": "string", "description": "退房日期 YYYY-MM-DD"},
                 "housingcnt": {
                     "type": "integer",
-                    "description": "每間房入住人數（大人），預設 2",
+                    "description": "每間房入住人數（大人）",
                 },
                 "roomtype": {
                     "type": "string",
@@ -523,7 +526,7 @@ _prompt_cache: Dict[date, str] = {}
 
 
 def _build_system_prompt() -> str:
-    today = date.today()
+    today = datetime.now(ZoneInfo("Asia/Taipei")).date()
     if today not in _prompt_cache:
         _prompt_cache.clear()  # at most 1 entry
         _prompt_cache[today] = _build_system_prompt_for(today)
@@ -534,9 +537,10 @@ def _build_system_prompt_for(today: date) -> str:
     today_str = today.strftime("%Y-%m-%d")
     if is_pms_enabled():
         pms_rule = (
-            "- 只要入住日與退房日已明確，立刻呼叫 query_pms_availability，不要再追問日期\n"
+            "- 入住日、退房日、幾間幾人房都已明確時，才呼叫 query_pms_availability\n"
+            "- 若只有日期但缺少幾間幾人房，先詢問旅客再查詢\n"
             "- 若月/日未指定年份，以今年為準\n"
-            "- 若入住日期早於今天（已過期），不要查詢房況，直接提醒旅客「您提供的日期已過，請重新提供入住日期」\n"
+            "- 若入住日期嚴格早於今天（不含今天），不要查詢房況，直接提醒旅客「您提供的日期已過，請重新提供入住日期」；今天當天是有效入住日\n"
             "- 工具回傳後，簡短列出可用房型、間數、價格\n"
             "- 若查無房型，告知並詢問是否調整日期或人數\n"
             "- PMS 失敗時，改用靜態房型資料告知旅客（標明為「一般參考房價」）"
@@ -544,14 +548,15 @@ def _build_system_prompt_for(today: date) -> str:
     else:
         pms_rule = (
             "- 目前無即時房況系統，但仍需呼叫 query_pms_availability 取得靜態參考房價\n"
-            "- 只要入住日與退房日已明確，立刻呼叫 query_pms_availability\n"
+            "- 入住日、退房日、幾間幾人房都已明確時，才呼叫 query_pms_availability\n"
+            "- 若只有日期但缺少幾間幾人房，先詢問旅客再查詢\n"
             "- 若月/日未指定年份，以今年為準\n"
-            "- 若入住日期早於今天（已過期），不要查詢房況，直接提醒旅客「您提供的日期已過，請重新提供入住日期」\n"
+            "- 若入住日期嚴格早於今天（不含今天），不要查詢房況，直接提醒旅客「您提供的日期已過，請重新提供入住日期」；今天當天是有效入住日\n"
             "- 工具回傳後，簡短列出可用房型與參考價格，標明為「一般參考房價」"
         )
 
     return f"""今天日期：{today_str}
-若客人只提供月/日，請以「今年」為準；若該日期已經過去，親切提醒客人日期已過，請重新提供日期。
+若客人只提供月/日，請以「今年」為準。日期判斷：今天（含）及未來日期都是有效入住日，只有嚴格早於今天的日期才算「已過期」。
 你是力麗飯店親切的客服機器人，個性熱情有趣，協助旅客查詢房況與訂房。
 
 你會收到整段對話紀錄（包含先前訊息），請務必綜合上下文，不要重複追問已提供的資訊。
@@ -568,7 +573,9 @@ def _build_system_prompt_for(today: date) -> str:
 
 訂房引導規則：
 - 若客人說「今天入住」且沒說退房日，預設住一晚（退房=明天）
-- 需要資訊：入住日、退房日、成人數（至少），房數（沒給就預設1），房型偏好（可選）
+- 需要資訊：入住日、退房日、幾間幾人房（例如「1間2人房」「2間4人房」）
+- 若客人只給日期沒說幾間幾人房，務必先詢問「請問您想訂幾間幾人房呢？」再查房況
+- 若客人只說人數（例如「2位」）但沒說幾間，回問「請問是1間2人房嗎？」以確認
 - 不要重複追問已回答過的資訊
 
 房況查詢規則：
@@ -741,7 +748,7 @@ class ChatbotService:
             if dates:
                 checkin_str, checkout_str = dates
                 checkin_obj = date.fromisoformat(checkin_str)
-                today = date.today()
+                today = datetime.now(ZoneInfo("Asia/Taipei")).date()
                 if checkin_obj < today:
                     # Spec: 過去日期 → 回覆警告，不更新 booking_context
                     past_date_warning = "您輸入的日期已過，請重新提供入住與退房日期。"

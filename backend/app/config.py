@@ -4,6 +4,7 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List, Optional
 from pathlib import Path
+from urllib.parse import quote_plus
 import os
 
 
@@ -23,8 +24,12 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
-    # 資料庫配置
-    DATABASE_URL: str = "mysql+aiomysql://root:l123456@127.0.0.1:3306/lili_hotel"
+    # 資料庫配置（與 line_app 共用 DB_* 變數）
+    DB_HOST: str
+    DB_PORT: int
+    DB_NAME: str
+    DB_USER: str
+    DB_PASS: str
     DATABASE_POOL_SIZE: int = 20
     DATABASE_MAX_OVERFLOW: int = 10
 
@@ -38,9 +43,17 @@ class Settings(BaseSettings):
     LINE_CHANNEL_SECRET: str
 
     # OpenAI 配置
-    OPENAI_API_KEY: str
+    OPENAI_API_KEY: str =''
     OPENAI_MODEL: str = "gpt-4"
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+
+    # PMS 串接（官網訂房聊天機器人）
+    PMS_API_URL: str = ""
+    PMS_ACCOUNT: str = ""
+    PMS_SECRET: str = ""
+    PMS_HOTELCODE: str = ""
+    PMS_BOOKING_BASE_URL: str = ""
+    BOOKING_SOURCE: str = "AI_bot"
 
     # 文件存儲配置
     UPLOAD_DIR: str = "uploads"
@@ -60,11 +73,22 @@ class Settings(BaseSettings):
     # Facebook Graph API / Frontend SDK config (no app secret stored here)
     FACEBOOK_GRAPH_API_VERSION: str = "v24.0"
     VITE_FACEBOOK_APP_ID: Optional[str] = "851348804294287"
+    # 預設房型圖片 URL（KB 無圖時 fallback）
+    DEFAULT_ROOM_IMAGE_URL: str = ""
+
     # 路由配置
     UPLOAD_ROUTE_PREFIX: str = "/uploads"
 
     # CORS
     ALLOWED_ORIGINS: str = "*"
+
+    @property
+    def DATABASE_URL(self) -> str:
+        """由共享的 DB_* 組合 backend 使用的連線字串。"""
+        return (
+            f"mysql+aiomysql://{self.DB_USER}:{quote_plus(self.DB_PASS)}@"
+            f"{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        )
 
     @property
     def project_root(self) -> Path:
