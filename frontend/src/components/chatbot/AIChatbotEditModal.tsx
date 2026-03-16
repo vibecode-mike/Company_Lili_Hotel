@@ -5,6 +5,8 @@
  */
 import React, { useState, useCallback, memo } from "react";
 import { createPortal } from "react-dom";
+import { apiPost } from "../../utils/apiClient";
+import ImageUploadField from "../common/ImageUploadField";
 
 // ─── Icons (inline SVG) ───────────────────────────────────────────────────────
 
@@ -71,7 +73,7 @@ export interface RoomPmsData {
   imageUrl?: string;
 }
 
-type SubDialog = "none" | "saveSuccess" | "pmsInvalid" | "confirmDelete";
+type SubDialog = "none" | "saveSuccess" | "saveFailed" | "pmsInvalid" | "confirmDelete" | "confirmLeave";
 
 // ─── Sub-components: Section Field ───────────────────────────────────────────
 
@@ -274,31 +276,13 @@ const ImageSection = memo(function ImageSection({
   return (
     <div className="flex flex-col gap-[12px] w-full">
       <FieldLabel label="房型圖片" />
-      <div className="flex flex-col gap-[12px] w-full">
-        {imageUrl && (
-          <div className="aspect-[3/2] rounded-[4px] overflow-hidden w-full">
-            <img
-              src={imageUrl}
-              alt="房型圖片"
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = "none";
-              }}
-            />
-          </div>
-        )}
-        <div className="flex flex-col w-full">
-          <FaqInput
-            value={inputValue}
-            placeholder="輸入 URL"
-            onChange={onChange}
-            disabled={disabled}
-          />
-          <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[12px] leading-[1.5] text-[#6e6e6e] px-[8px] py-[4px]">
-            輸入圖片 URL；第三方平台沿用封面圖片
-          </p>
-        </div>
-      </div>
+      <ImageUploadField
+        value={imageUrl || inputValue}
+        onChange={onChange}
+        disabled={disabled}
+        label="房型圖片"
+        aspectRatio="3/2"
+      />
     </div>
   );
 });
@@ -398,6 +382,77 @@ const SaveSuccessDialog = memo(function SaveSuccessDialog({
         >
           <span className="flex-1 font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-white text-center">
             立即測試
+          </span>
+        </button>
+      </div>
+    </SmallDialog>
+  );
+});
+
+const SaveFailedDialog = memo(function SaveFailedDialog({
+  onClose,
+}: {
+  onClose: () => void;
+}) {
+  return (
+    <SmallDialog>
+      <div className="flex flex-col gap-[32px]">
+        <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[32px] leading-[1.5] text-[#383838]">
+          儲存失敗
+        </p>
+        <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#383838]">
+          請稍後再試
+        </p>
+      </div>
+      <div className="flex gap-[8px] items-center justify-end h-[48px]">
+        <button
+          type="button"
+          onClick={onClose}
+          className="bg-[#242424] flex items-center justify-center min-h-[48px] min-w-[72px] w-[114px] px-[12px] py-[8px] rounded-[16px] cursor-pointer border-none hover:bg-[#383838] transition-colors"
+        >
+          <span className="flex-1 font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-white text-center">
+            關閉
+          </span>
+        </button>
+      </div>
+    </SmallDialog>
+  );
+});
+
+const ConfirmLeaveDialog = memo(function ConfirmLeaveDialog({
+  onSave,
+  onLeave,
+}: {
+  onSave: () => void;
+  onLeave: () => void;
+}) {
+  return (
+    <SmallDialog>
+      <div className="flex flex-col gap-[32px]">
+        <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[32px] leading-[1.5] text-[#383838]">
+          尚未儲存，確認離開？
+        </p>
+        <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#383838]">
+          關閉此彈窗，<span className="text-[#f44336]">不會儲存此次編輯</span>
+        </p>
+      </div>
+      <div className="flex gap-[8px] items-center justify-end h-[48px]">
+        <button
+          type="button"
+          onClick={onSave}
+          className="bg-[#242424] flex items-center justify-center min-h-[48px] min-w-[72px] w-[114px] px-[12px] py-[8px] rounded-[16px] cursor-pointer border-none hover:bg-[#383838] transition-colors"
+        >
+          <span className="flex-1 font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-white text-center">
+            儲存
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={onLeave}
+          className="bg-[#ffebee] flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] cursor-pointer border-none hover:bg-[#ffcdd2] transition-colors"
+        >
+          <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#f44336] text-center whitespace-nowrap">
+            確認離開
           </span>
         </button>
       </div>
@@ -552,20 +607,34 @@ export const RoomEditModal = memo(function RoomEditModal({
 
   const handleSave = async () => {
     setSaving(true);
-    // Simulate PMS code validation
-    await new Promise((r) => setTimeout(r, 600));
-    const isInvalid = isPmsConnected && pmsRoomCode === "DEMO_INVALID";
+    let isInvalid = false;
+    if (isPmsConnected && pmsRoomCode) {
+      try {
+        const res = (await apiPost("/api/v1/chatbot/pms-validate-room", {
+          room_code: pmsRoomCode,
+        })) as any;
+        isInvalid = res?.valid === false;
+      } catch {
+        // API 失敗不擋儲存
+      }
+    }
     setSaving(false);
     if (isInvalid) {
       setSubDialog("pmsInvalid");
     } else {
-      onSave(draft);
-      setSubDialog("saveSuccess");
+      try {
+        onSave(draft);
+        setSubDialog("saveSuccess");
+      } catch {
+        setSubDialog("saveFailed");
+      }
     }
   };
 
+  const handleRequestClose = () => setSubDialog("confirmLeave");
+
   const handleBackdrop = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) onClose();
+    if (e.target === e.currentTarget) handleRequestClose();
   };
 
   // Determine displayed image: PMS image takes priority when connected
@@ -623,7 +692,7 @@ export const RoomEditModal = memo(function RoomEditModal({
             {/* Close */}
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleRequestClose}
               className="cursor-pointer bg-transparent border-none p-0 flex items-center justify-center hover:opacity-70 transition-opacity shrink-0"
             >
               <IconClose />
@@ -646,35 +715,13 @@ export const RoomEditModal = memo(function RoomEditModal({
             {/* 房型圖片 */}
             <div className="flex flex-col gap-[12px] w-full">
               <FieldLabel label="房型圖片" />
-              <div className="flex flex-col gap-[12px] w-full">
-                {displayImage && (
-                  <div
-                    className="relative rounded-[4px] overflow-hidden w-full shrink-0"
-                    style={{ aspectRatio: "1264/848" }}
-                  >
-                    <img
-                      src={displayImage}
-                      alt="房型圖片"
-                      className="absolute inset-0 w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).style.display =
-                          "none";
-                      }}
-                    />
-                  </div>
-                )}
-                <div className="flex flex-col w-full">
-                  <FaqInput
-                    value={draft.customImageUrl}
-                    placeholder="輸入 URL"
-                    onChange={field("customImageUrl")}
-                    disabled={saving}
-                  />
-                  <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[12px] leading-[1.5] text-[#6e6e6e] px-[8px] py-[4px]">
-                    輸入圖片 URL；第三方平台沿用封面圖片
-                  </p>
-                </div>
-              </div>
+              <ImageUploadField
+                value={displayImage || ""}
+                onChange={field("customImageUrl")}
+                disabled={saving}
+                label="房型圖片"
+                aspectRatio="3/2"
+              />
             </div>
 
             {/* 房價 */}
@@ -803,6 +850,9 @@ export const RoomEditModal = memo(function RoomEditModal({
           }}
         />
       )}
+      {subDialog === "saveFailed" && (
+        <SaveFailedDialog onClose={() => setSubDialog("none")} />
+      )}
       {subDialog === "pmsInvalid" && (
         <PmsInvalidDialog
           onCancel={() => setSubDialog("none")}
@@ -815,6 +865,18 @@ export const RoomEditModal = memo(function RoomEditModal({
           onConfirm={() => {
             setSubDialog("none");
             onDelete();
+            onClose();
+          }}
+        />
+      )}
+      {subDialog === "confirmLeave" && (
+        <ConfirmLeaveDialog
+          onSave={() => {
+            setSubDialog("none");
+            handleSave();
+          }}
+          onLeave={() => {
+            setSubDialog("none");
             onClose();
           }}
         />
@@ -859,12 +921,18 @@ export const FacilityEditModal = memo(function FacilityEditModal({
     setSaving(true);
     await new Promise((r) => setTimeout(r, 400));
     setSaving(false);
-    onSave(draft);
-    setSubDialog("saveSuccess");
+    try {
+      onSave(draft);
+      setSubDialog("saveSuccess");
+    } catch {
+      setSubDialog("saveFailed");
+    }
   };
 
+  const handleRequestClose = () => setSubDialog("confirmLeave");
+
   const handleBackdrop = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) onClose();
+    if (e.target === e.currentTarget) handleRequestClose();
   };
 
   return createPortal(
@@ -885,7 +953,7 @@ export const FacilityEditModal = memo(function FacilityEditModal({
             </p>
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleRequestClose}
               className="cursor-pointer bg-transparent border-none p-0 flex items-center justify-center hover:opacity-70 transition-opacity shrink-0"
             >
               <IconClose />
@@ -908,35 +976,13 @@ export const FacilityEditModal = memo(function FacilityEditModal({
             {/* 設施圖片 */}
             <div className="flex flex-col gap-[12px] w-full">
               <FieldLabel label="設施圖片" />
-              <div className="flex flex-col gap-[12px] w-full">
-                {draft.imageUrl && (
-                  <div
-                    className="relative rounded-[4px] overflow-hidden w-full shrink-0"
-                    style={{ aspectRatio: "1264/848" }}
-                  >
-                    <img
-                      src={draft.imageUrl}
-                      alt="設施圖片"
-                      className="absolute inset-0 w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).style.display =
-                          "none";
-                      }}
-                    />
-                  </div>
-                )}
-                <div className="flex flex-col w-full">
-                  <FaqInput
-                    value={draft.imageUrl}
-                    placeholder="輸入 URL"
-                    onChange={field("imageUrl")}
-                    disabled={saving}
-                  />
-                  <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[12px] leading-[1.5] text-[#6e6e6e] px-[8px] py-[4px]">
-                    輸入圖片 URL；第三方平台沿用封面圖片
-                  </p>
-                </div>
-              </div>
+              <ImageUploadField
+                value={draft.imageUrl}
+                onChange={field("imageUrl")}
+                disabled={saving}
+                label="設施圖片"
+                aspectRatio="1264/848"
+              />
             </div>
 
             {/* 開放時間 */}
@@ -1029,12 +1075,27 @@ export const FacilityEditModal = memo(function FacilityEditModal({
           }}
         />
       )}
+      {subDialog === "saveFailed" && (
+        <SaveFailedDialog onClose={() => setSubDialog("none")} />
+      )}
       {subDialog === "confirmDelete" && (
         <ConfirmDeleteDialog
           onCancel={() => setSubDialog("none")}
           onConfirm={() => {
             setSubDialog("none");
             onDelete();
+            onClose();
+          }}
+        />
+      )}
+      {subDialog === "confirmLeave" && (
+        <ConfirmLeaveDialog
+          onSave={() => {
+            setSubDialog("none");
+            handleSave();
+          }}
+          onLeave={() => {
+            setSubDialog("none");
             onClose();
           }}
         />
