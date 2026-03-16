@@ -1,0 +1,81 @@
+[ACTIVITY] 網站聊天機器人訂房流程
+[ACTOR] 民眾       -> {specs/actors/民眾.md}
+[ACTOR] AI_Chatbot -> {specs/actors/AI_Chatbot.md}
+[ACTOR] PMS        -> {specs/actors/PMS.md}
+[ACTOR] FAQ_KB     -> {specs/actors/FAQ_KB.md}
+[ACTOR] CRM        -> {specs/actors/CRM.md}
+
+; ── STEP 1：意圖確認 ─────────────────────────────────────────────────────────
+[STEP:1] @AI_Chatbot {features/chatbot/意圖確認.feature}
+; AI 分析民眾訊息，判斷是否有訂房意圖；若無，主動引導
+
+[DECISION:1a] 是否偵測到訂房意圖？
+  [BRANCH:1a:有訂房意圖]   -> 2
+  [BRANCH:1a:無訂房意圖]   @AI_Chatbot {features/chatbot/意圖確認.feature} -> 1
+  ; 無次數上限；是否附引導語由 AI 依問題相關性判斷（非每輪必附）
+  ; 條件：(A) 問題高精確與住宿/訂房相關，或 (B) 無法排除訂房意圖 → 附引導語
+  ; 若能明確判斷問題與訂房完全無關 → 回答但不附引導語
+
+; ── STEP 2：訂房資訊收集 ──────────────────────────────────────────────────────
+[STEP:2] @AI_Chatbot {features/chatbot/訂房資訊收集.feature}
+; 漸進式提問：幾間幾人房（rooms[]）+ checkin_date + checkout_date
+; Session 以 browser_key 識別，滿 5 輪自動 rotate（清除 booking_context）
+
+[DECISION:2a] 幾間幾人房與日期是否齊全？
+  ; ✓ rotate 時全清（選項 A）：_new_chatbot_session() 初始化全新 booking_context，含日期與 rooms[] 一併清除
+  [BRANCH:2a:資訊齊全]   -> 3
+  [BRANCH:2a:資訊不足]   @AI_Chatbot {features/chatbot/訂房資訊收集.feature} -> 2
+
+; ── STEP 3：查詢空房型 ────────────────────────────────────────────────────────
+[STEP:3] @AI_Chatbot {features/chatbot/查詢空房型.feature}
+; 呼叫 GET /chatbot/rooms 觸發後端 PMS 或 KB 查詢
+
+[DECISION:3a] PMS 是否啟用且 API 連線正常？
+  ; ✓ 靜默降級（選項 A）：前台不顯示資料來源，PMS/KB 切換對民眾無感
+  [BRANCH:3a:PMS_啟用且正常]    @PMS    {features/chatbot/查詢空房型.feature}
+  [BRANCH:3a:PMS_未啟用或異常]  @FAQ_KB {features/chatbot/查詢空房型.feature}
+[MERGE:3a]
+
+[DECISION:3b] 查詢結果是否有可推薦房型？
+  [BRANCH:3b:有符合單一房型]          -> 4
+  [BRANCH:3b:單房型不足但混搭可滿足]  -> 4
+  [BRANCH:3b:完全無可用房型]          @AI_Chatbot {features/chatbot/查詢空房型.feature} -> 2
+  ; ✓ 後端自動計算（選項 A）：_auto_split_options 自動組合，直接進入 STEP:4 顯示混搭卡片，無需插入確認步驟
+
+; ── STEP 4：房型推薦卡片展示 ──────────────────────────────────────────────────
+[STEP:4] @AI_Chatbot {features/chatbot/房型推薦卡片.feature}
+; 輸出 reply_type=room_cards，前台渲染房型卡片（含圖、價、剩餘間數）
+; PMS 來源顯示即時房價+剩餘間數；FAQ_KB 來源顯示「參考房價」且不顯示剩餘間數
+
+; ── STEP 5：民眾選取房型 ──────────────────────────────────────────────────────
+[STEP:5] @民眾 {features/chatbot/房型選取確認.feature}
+; 民眾在前台卡片介面點選房型 + 間數，組成 rooms[]
+; 前端呼叫 POST /chatbot/confirm-room，body: { browser_key, rooms[] }
+; 回傳 reply_type=member_form
+
+; ── STEP 6：會員資訊收集 ──────────────────────────────────────────────────────
+[STEP:6] @AI_Chatbot {features/chatbot/會員資訊收集.feature}
+; 收集 guest_name、phone（10位）、email（含@）
+; 前台制式欄位 [姓名*][聯絡電話*][Email*]
+
+[DECISION:6a] 三個必填欄位是否齊全且格式正確？
+  [BRANCH:6a:齊全且格式正確]      -> 7
+  [BRANCH:6a:缺填或格式錯誤]      @AI_Chatbot {features/chatbot/會員資訊收集.feature} -> 6
+
+; ── STEP 7：訂單確認儲存 ──────────────────────────────────────────────────────
+[STEP:7] @AI_Chatbot {features/chatbot/訂單確認儲存.feature}
+; 前台顯示確認摘要（房型+間數+會員資料）→ 民眾點擊「立即預訂」
+; 呼叫 POST /chatbot/booking-save
+; booking-save 執行：(1) CRM 寫入  (2) 取得 PMS cart URL
+
+[DECISION:7a] 執行模式為何？
+  [BRANCH:7a:正式發布模式_ENABLE_DB=true]   @CRM {features/chatbot/訂單確認儲存.feature}
+  [BRANCH:7a:測試模式_ENABLE_DB=false]      @AI_Chatbot {features/chatbot/訂單確認儲存.feature}
+[MERGE:7a]
+; 兩條分支皆繼續至 STEP:8（測試模式以 JSON 降級儲存，正式模式寫 DB）
+
+; ── STEP 8：跳轉結帳 ──────────────────────────────────────────────────────────
+[STEP:8] @民眾 {specs/ui/訂單確認頁.md}
+; 前台顯示「立即預訂」按鈕，民眾點擊後跳轉至 PMS cart URL
+; ✓ booking-save 擴充（選項 A）：booking-save 同時呼叫 PMS 建立購物車，response 新增 cart_url 欄位
+; booking-url endpoint 廢棄（legacy）

@@ -1913,6 +1913,109 @@ paths:
                 $ref: '#/components/schemas/SuccessResponse'
 
   # --------------------------------------------------------------------------
+  # Facebook WebSocket 代理 (fb_ws_proxy)
+  # 前端透過後端代理與外部 FB API 建立 WebSocket 連線
+  # --------------------------------------------------------------------------
+
+  /fb-ws-proxy/start:
+    post:
+      summary: 啟動 FB WebSocket 代理連線
+      operationId: startFbWsProxy
+      tags: [Facebook WS Proxy]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fb_customer_id, page_id, jwt_token, thread_id]
+              properties:
+                fb_customer_id:
+                  type: string
+                page_id:
+                  type: string
+                jwt_token:
+                  type: string
+                thread_id:
+                  type: string
+      responses:
+        '200':
+          description: 代理連線已啟動
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  message:
+                    type: string
+
+  /fb-ws-proxy/stop:
+    post:
+      summary: 停止 FB WebSocket 代理連線
+      operationId: stopFbWsProxy
+      tags: [Facebook WS Proxy]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fb_customer_id, page_id]
+              properties:
+                fb_customer_id:
+                  type: string
+                page_id:
+                  type: string
+      responses:
+        '200':
+          description: 代理連線已停止
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  stopped:
+                    type: boolean
+
+  /fb-ws-proxy/send:
+    post:
+      summary: 透過 WebSocket 代理發送 Facebook 訊息
+      operationId: sendFbWsProxyMessage
+      tags: [Facebook WS Proxy]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fb_customer_id, page_id, text]
+              properties:
+                fb_customer_id:
+                  type: string
+                page_id:
+                  type: string
+                text:
+                  type: string
+      responses:
+        '200':
+          description: 訊息發送成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        '503':
+          description: WebSocket 代理發送失敗
+
+  # --------------------------------------------------------------------------
   # Facebook 自動回應代理 (admin_meta_page)
   # Feature: fb_auto_reply_template
   # --------------------------------------------------------------------------
@@ -2043,15 +2146,19 @@ paths:
 
   /sse/chat/{thread_id}:
     get:
-      summary: 建立 SSE 連線接收即時聊天訊息
+      summary: 建立 SSE 連線接收即時聊天訊息（LINE 渠道）
       operationId: sseChatStream
       tags: [即時通訊]
+      description: |
+        LINE 渠道使用 SSE（因外部代理 HTTP/2 不支援 WebSocket Upgrade）。
+        Facebook / Webchat 渠道使用下方的 WebSocket 端點。
       parameters:
         - name: thread_id
           in: path
           required: true
           schema:
             type: string
+            description: 對話 Thread ID（格式：{platform}:{uid}）
       responses:
         '200':
           description: SSE 事件串流
@@ -2059,6 +2166,26 @@ paths:
             text/event-stream:
               schema:
                 type: string
+
+  /ws/chat/{thread_id}:
+    get:
+      summary: WebSocket 即時聊天連線（Facebook / Webchat 渠道）
+      operationId: wsChatStream
+      tags: [即時通訊]
+      description: |
+        Facebook 與 Webchat 渠道使用 WebSocket 進行即時訊息推送。
+        連線後前端可發送 "ping" 保活，後端回覆 {"type": "pong"}。
+        當對應 thread 有新訊息時，後端推送 {"type": "new_message", "data": {...}}。
+      parameters:
+        - name: thread_id
+          in: path
+          required: true
+          schema:
+            type: string
+            description: 對話 Thread ID（格式：{platform}:{uid}）
+      responses:
+        '101':
+          description: WebSocket Upgrade 成功
 
   # --------------------------------------------------------------------------
   # LINE 訊息通知 (line_notify)
@@ -2189,10 +2316,12 @@ paths:
         '403':
           description: 未擁有 faq.manage 權限
 
-  /faq/categories/{category_id}/fields:
+  # /faq/categories/{category_id}/fields: REMOVED — fields 已內嵌在 category 回應中
+
+  /faq/categories/{category_id}/rules/export:
     get:
-      summary: 取得大分類的欄位定義（規則編輯表單使用）
-      operationId: getFaqCategoryFields
+      summary: 匯出大分類下所有規則
+      operationId: exportFaqRules
       tags: [FAQ 管理]
       parameters:
         - name: category_id
@@ -2202,11 +2331,66 @@ paths:
             type: integer
       responses:
         '200':
-          description: 欄位定義清單
+          description: 匯出檔案下載
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '403':
+          description: 未擁有 faq.manage 權限
+
+  /faq/categories/{category_id}/rules/import:
+    post:
+      summary: 匯入規則（完全覆蓋該大分類下所有現有規則）
+      operationId: importFaqRules
+      tags: [FAQ 管理]
+      description: |
+        匯入後「完全覆蓋」並「刪除」目前該分類下的所有規則，此動作無法還原。
+        前端須在呼叫前彈出二次確認視窗。
+        支援格式：.csv, .xls, .xlsx。
+        匯入成功後前端應自動重新整理（Reload）並顯示「規則匯入成功」。
+      parameters:
+        - name: category_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 規則檔案（僅接受 .csv, .xls, .xlsx）
+      responses:
+        '200':
+          description: 匯入成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FaqCategoryFieldListResponse'
+                type: object
+                properties:
+                  imported_count:
+                    type: integer
+                    description: 匯入的規則數量
+        '400':
+          description: 檔案格式不符或資料驗證失敗
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "檔案格式不符，僅支援 .csv, .xls, .xlsx"
+        '403':
+          description: 未擁有 faq.manage 權限
 
   /faq/rules/{rule_id}:
     get:
@@ -2278,6 +2462,10 @@ paths:
   /faq/rules/{rule_id}/toggle:
     patch:
       summary: 啟用或停用單一規則
+      description: |
+        停用規則（action=disable）→ status 變為 disabled。
+        重新啟用（action=enable）→ status 變為 draft（測試未發佈），
+        須透過 POST /faq/publish 發佈後才生效於前台。
       operationId: toggleFaqRule
       tags: [FAQ 管理]
       parameters:
@@ -2292,20 +2480,75 @@ paths:
           application/json:
             schema:
               type: object
-              required: [status]
+              required: [action]
               properties:
-                status:
+                action:
                   type: string
-                  enum: [active, disabled]
+                  enum: [enable, disable]
+                  description: enable → draft；disable → disabled
       responses:
         '200':
           description: 切換成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
+                type: object
+                properties:
+                  rule_id:
+                    type: integer
+                  status:
+                    type: string
+                    enum: [draft, disabled]
+                    description: enable 後為 draft，disable 後為 disabled
         '403':
           description: 未擁有 faq.manage 權限
+
+  /faq/rules/{rule_id}/publish:
+    post:
+      summary: 發佈單一規則
+      operationId: publishFaqRule
+      tags: [FAQ 管理]
+      parameters:
+        - name: rule_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 發佈成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FaqRuleDetail'
+        '404':
+          description: 規則不存在
+
+  /faq/rules/{rule_id}/versions:
+    get:
+      summary: 取得規則版本歷史
+      operationId: getFaqRuleVersions
+      tags: [FAQ 管理]
+      parameters:
+        - name: rule_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 版本清單
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
 
   /faq/rules/{rule_id}/revert:
     post:
@@ -2332,9 +2575,14 @@ paths:
 
   /faq/publish:
     post:
-      summary: 發佈所有測試未發佈狀態的規則至正式環境
+      summary: 發佈所有測試未發佈狀態的規則至正式環境（即時生效，含會員聊天室熱更新）
       operationId: publishFaqRules
       tags: [FAQ 管理]
+      description: |
+        發佈後規則立即同步至前台聊天機器人及系統內部 AI Chatbot 會員聊天室。
+        會員聊天室若有進行中對話，AI 下一次回覆即引用最新規則，
+        並在聊天室顯示「規則已更新」提示。
+        前端收到 200 後顯示 Toast「發佈成功」。
       responses:
         '200':
           description: 發佈成功
@@ -2368,27 +2616,9 @@ paths:
                 $ref: '#/components/schemas/FaqTokenUsageResponse'
         '403':
           description: 未擁有 faq.view 權限
-
-  # --------------------------------------------------------------------------
-  # FAQ 語氣設定
-  # Feature: faq_category_management (語氣設定)
-  # --------------------------------------------------------------------------
-
-  /faq/tone:
-    get:
-      summary: 取得當前 AI 語氣設定
-      operationId: getFaqTone
-      tags: [FAQ 管理]
-      responses:
-        '200':
-          description: 語氣設定
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FaqToneResponse'
     put:
-      summary: 切換 AI 語氣設定
-      operationId: updateFaqTone
+      summary: 設定 Token 額度
+      operationId: updateFaqTokenQuota
       tags: [FAQ 管理]
       requestBody:
         required: true
@@ -2396,11 +2626,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [tone_type]
+              required: [total_quota]
               properties:
-                tone_type:
-                  type: string
-                  enum: [professional, casual]
+                total_quota:
+                  type: integer
+                  description: Token 總額度
       responses:
         '200':
           description: 更新成功
@@ -2408,8 +2638,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
-        '403':
-          description: 未擁有 faq.manage 權限
+
+  # --------------------------------------------------------------------------
+  # FAQ 語氣設定
+  # Feature: faq_category_management (語氣設定)
+  # --------------------------------------------------------------------------
+
+  # /faq/tone: REMOVED — 語氣設定為內部實作細節，不納入 API 規格
 
   # --------------------------------------------------------------------------
   # FAQ 模組授權（系統商後台）
@@ -2428,6 +2663,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FaqModuleAuthResponse'
+    put:
+      summary: 設定模組授權
+      operationId: updateFaqModuleAuth
+      tags: [FAQ 管理]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_id, is_authorized]
+              properties:
+                client_id:
+                  type: string
+                is_authorized:
+                  type: boolean
+      responses:
+        '200':
+          description: 授權更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
 
   # --------------------------------------------------------------------------
   # 測試聊天
@@ -2445,15 +2703,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [message, version]
+              required: [message]
               properties:
                 message:
                   type: string
                   description: 使用者提問內容
-                version:
-                  type: string
-                  enum: [test_and_active, active_only]
-                  description: 版本一（測試+正式）或版本二（僅正式）
       responses:
         '200':
           description: AI 回答
@@ -2497,9 +2751,9 @@ paths:
                   type: string
                   enum: [line, facebook, webchat]
                   description: 訊息來源渠道
-                conversation_id:
-                  type: integer
-                  description: 對話 ID（用於上下文記憶）
+                thread_id:
+                  type: string
+                  description: 對話串 ID（用於上下文記憶）
       responses:
         '200':
           description: AI 回答結果
@@ -2736,11 +2990,708 @@ paths:
                       type: string
 
 # ============================================================================
+# 官網 AI 聊天機器人訂房系統 API（Chatbot PMS 串接）
+# Feature: website_chatbot_booking, faq_pms_realtime_connection, chatbot_crm_member_creation
+# ============================================================================
+
+  # --------------------------------------------------------------------------
+  # 聊天機器人對話 (chatbot)
+  # --------------------------------------------------------------------------
+
+  /chatbot/message:
+    post:
+      summary: 官網聊天機器人發送訊息（含意圖分析、FAQ 引用、PMS 即時查詢）
+      operationId: chatbotSendMessage
+      tags: [官網聊天機器人]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [browser_key, message]
+              properties:
+                browser_key:
+                  type: string
+                  description: 瀏覽器唯一識別碼（Web Key）
+                message:
+                  type: string
+                  description: 訪客訊息內容
+                hotel_id:
+                  type: integer
+                  description: 飯店 ID（多租戶場景）
+      responses:
+        '200':
+          description: AI 回覆成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_id:
+                    type: string
+                  intent_state:
+                    type: string
+                    enum: [detecting, confirmed, none]
+                  reply:
+                    type: string
+                    description: AI 回覆文字
+                  reply_type:
+                    type: string
+                    enum: [text, room_cards, member_form, booking_confirm]
+                    description: 回覆類型，前端依此渲染對應 UI
+                  room_cards:
+                    type: array
+                    description: 房型推薦卡片（reply_type = room_cards 時）
+                    items:
+                      $ref: '#/components/schemas/RoomCard'
+                  missing_fields:
+                    type: array
+                    description: 尚缺的訂房資訊欄位
+                    items:
+                      type: string
+                  turn_count:
+                    type: integer
+                  booking_context:
+                    type: object
+                    description: 目前已解析出的訂房上下文
+                    properties:
+                      checkin_date:
+                        type: string
+                        format: date
+                        nullable: true
+                      checkout_date:
+                        type: string
+                        format: date
+                        nullable: true
+                      adults:
+                        type: integer
+                        nullable: true
+                      rooms:
+                        type: array
+                        description: 已解析的幾間幾人房請求（room_plan_requests）
+                        nullable: true
+                        items:
+                          type: object
+                          properties:
+                            room_count:
+                              type: integer
+                              example: 1
+                            adults_per_room:
+                              type: integer
+                              example: 2
+
+  /chatbot/rooms:
+    get:
+      summary: 即時查詢符合條件的空房型（呼叫 PMS API）
+      operationId: chatbotGetRooms
+      tags: [官網聊天機器人]
+      parameters:
+        - name: browser_key
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: checkin_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+            example: "2026-03-07"
+        - name: checkout_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+            example: "2026-03-09"
+        - name: adults
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: children
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: 房型清單
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  source:
+                    type: string
+                    enum: [pms, faq_static]
+                    description: 資料來源（pms=即時 / faq_static=靜態降級；靜默切換，前台不顯示來源）
+                  rooms:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RoomCard'
+                  auto_split_options:
+                    type: array
+                    nullable: true
+                    description: 混搭推薦方案（_auto_split_options，單一房型不足時由後端自動計算）
+                    items:
+                      type: object
+                      properties:
+                        label:
+                          type: string
+                          example: "建議 2 間雙人房"
+                        rooms:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/SelectedRoomItem'
+        # <!-- ?1[缺漏] 查詢空房型.feature ?1：無任何房型時是否提供「留資料待客服聯繫」入口？目前回傳 rooms=[] 並由 /chatbot/message 引導重填，尚未決定是否開啟備用收單路徑 -->
+        '422':
+          description: booking_context 不完整（missing checkin_date / checkout_date / room_plan_requests）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatbotError'
+
+  /chatbot/confirm-room:
+    post:
+      summary: 訪客確認房型間數選取，系統更新 Session 並回傳會員資料表單欄位定義
+      operationId: chatbotConfirmRoom
+      tags: [官網聊天機器人]
+      description: |
+        房型卡片的間數選取為純前端狀態。
+        訪客按「確認選擇」後，前端呼叫此 endpoint 寫入 Session，
+        並取得 member_form 的欄位結構定義（跳過 AI 對話，直接進入會員資料搜集步驟）。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [browser_key, rooms]
+              properties:
+                browser_key:
+                  type: string
+                rooms:
+                  type: array
+                  description: 已選擇的房型與間數清單，僅提交 room_count > 0 的房型
+                  items:
+                    $ref: '#/components/schemas/SelectedRoomItem'
+      responses:
+        '200':
+          description: Session 更新成功，回傳會員表單欄位定義
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reply_type:
+                    type: string
+                    enum: [member_form]
+                  session_id:
+                    type: string
+                  selected_room_type:
+                    type: string
+                    description: 向下相容欄位（selected_rooms[0].room_type_code）
+                  selected_room_count:
+                    type: integer
+                    description: 向下相容欄位（selected_rooms[0].room_count）
+                  selected_rooms:
+                    type: array
+                    description: 完整多房型記錄
+                    items:
+                      $ref: '#/components/schemas/SelectedRoomItem'
+                  member_form:
+                    $ref: '#/components/schemas/MemberFormDefinition'
+        '422':
+          description: 未選任何房型（rooms 為空陣列）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatbotError'
+              example:
+                error_code: NO_ROOMS_SELECTED
+                message: 請至少選擇一個房型與間數
+
+  /chatbot/session/reset:
+    post:
+      summary: 重置官網聊天機器人的當前 Session
+      operationId: chatbotResetSession
+      tags: [官網聊天機器人]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [browser_key]
+              properties:
+                browser_key:
+                  type: string
+      responses:
+        '200':
+          description: Session 已重置
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  session_id:
+                    type: string
+
+  /chatbot/booking-save:
+    post:
+      summary: 確認並儲存官網訪客的訂房資料
+      operationId: chatbotSaveBooking
+      tags: [官網聊天機器人]
+      description: |
+        以現行聊天機器人流程為準：
+        前端在訪客完成房型選擇與會員資料填寫後，直接呼叫此 endpoint。
+        後端會驗證 Session 中的訂房上下文，並寫入 members / chatbot_sessions / booking_records；
+        若資料庫不可用，則降級寫入本地 reservation 檔案。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [browser_key, name, phone, email]
+              properties:
+                browser_key:
+                  type: string
+                name:
+                  type: string
+                phone:
+                  type: string
+                  pattern: '^\\d{10}$'
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: 訂房資料保存成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  reservation_id:
+                    type: string
+                  saved:
+                    type: object
+                    properties:
+                      reservation_id:
+                        type: string
+                      browser_key:
+                        type: string
+                      session_id:
+                        type: string
+                      checkin_date:
+                        type: string
+                        format: date
+                      checkout_date:
+                        type: string
+                        format: date
+                      adults:
+                        type: integer
+                      children:
+                        type: integer
+                      selected_rooms:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/SelectedRoomItem'
+                      room_type_code:
+                        type: string
+                        nullable: true
+                      room_type_name:
+                        type: string
+                        nullable: true
+                      room_source:
+                        type: string
+                        enum: [pms, faq_static]
+                      room_count:
+                        type: integer
+                      member_name:
+                        type: string
+                      member_phone:
+                        type: string
+                      member_email:
+                        type: string
+                      crm_member_id:
+                        type: integer
+                        nullable: true
+                      db_saved:
+                        type: boolean
+                      created_at:
+                        type: string
+                        format: date-time
+                  cart_url:
+                    type: string
+                    nullable: true
+                    description: PMS 購物車 URL（booking-save 同時呼叫 PMS 建立購物車並回傳；測試模式 ENABLE_DB=false 時為 null）
+                    example: "https://pms.example.com/cart?reservation_id=xxx"
+        '422':
+          description: 訂房上下文不完整或會員資料格式錯誤
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatbotError'
+              examples:
+                incomplete_context:
+                  value:
+                    error_code: INCOMPLETE_BOOKING_CONTEXT
+                    message: "缺少必要欄位：checkin_date"
+                invalid_phone:
+                  value:
+                    error_code: INVALID_PHONE
+                    message: "電話格式錯誤，需為 10 位數字"
+                invalid_date_range:
+                  value:
+                    error_code: INVALID_DATE_RANGE
+                    message: "退房日期須晚於入住日期"
+        '500':
+          description: 資料庫寫入失敗
+
+  # --------------------------------------------------------------------------
+  # Chatbot PMS 串接管理
+  # Feature: chatbot 串接 PMS
+  # --------------------------------------------------------------------------
+
+  /chatbot/pms-status:
+    get:
+      summary: 取得 PMS 串接啟用狀態
+      operationId: getChatbotPmsStatus
+      tags: [官網聊天機器人]
+      responses:
+        '200':
+          description: PMS 狀態
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                    description: 是否啟用 PMS 串接
+                  configured:
+                    type: boolean
+                    description: PMS 環境變數是否已設定
+                  last_synced_at:
+                    type: string
+                    nullable: true
+                    description: 最近同步時間（格式 YYYY-MM-DD HH:MM）
+    put:
+      summary: 切換 PMS 串接啟用狀態
+      operationId: updateChatbotPmsStatus
+      tags: [官網聊天機器人]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+        '422':
+          description: 缺少 enabled 欄位
+
+  /chatbot/pms-validate-room:
+    post:
+      summary: 檢核房型代碼在 PMS 中是否仍有效
+      operationId: validateChatbotPmsRoom
+      tags: [官網聊天機器人]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [room_code]
+              properties:
+                room_code:
+                  type: string
+      responses:
+        '200':
+          description: 檢核結果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  message:
+                    type: string
+                  available_codes:
+                    type: array
+                    items:
+                      type: string
+                    description: 當 valid=false 時回傳 PMS 中可用的房型代碼
+        '422':
+          description: 缺少 room_code
+
+  # --------------------------------------------------------------------------
+  # FAQ 後台 PMS 串接設定 (faq pms connection)
+  # --------------------------------------------------------------------------
+
+  /faq/categories/{category_id}/pms-connection:
+    get:
+      summary: 查詢 FAQ 大分類的 PMS 串接設定
+      operationId: getFaqPmsConnection
+      tags: [FAQ 後台管理]
+      parameters:
+        - name: category_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: PMS 串接設定
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FAQPMSConnectionDetail'
+        '404':
+          description: 尚未設定 PMS 串接
+
+    post:
+      summary: 設定（或更新）FAQ 大分類的 PMS 串接參數，並即時測試連線
+      operationId: upsertFaqPmsConnection
+      tags: [FAQ 後台管理]
+      parameters:
+        - name: category_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [api_endpoint, api_key, auth_type]
+              properties:
+                api_endpoint:
+                  type: string
+                  format: uri
+                api_key:
+                  type: string
+                  description: 明文 API Key，後端加密後儲存
+                auth_type:
+                  type: string
+                  enum: [api_key, bearer_token]
+      responses:
+        '200':
+          description: 連線測試成功，設定已儲存
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FAQPMSConnectionDetail'
+        '422':
+          description: 連線測試失敗，設定未儲存
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error_code:
+                    type: string
+                    example: PMS_CONNECTION_FAILED
+                  message:
+                    type: string
+                    example: "連線失敗：API Key 無效（401 Unauthorized）"
+
+    # DELETE: REMOVED — 使用 PUT toggle 停用即可，不需要真的刪除
+
+# ============================================================================
 # Components
 # ============================================================================
 
 components:
   schemas:
+
+    # --- 官網聊天機器人 ---
+
+    ChatbotError:
+      type: object
+      description: 聊天機器人 API 錯誤回應
+      required: [error_code, message]
+      properties:
+        error_code:
+          type: string
+          enum:
+            - INCOMPLETE_BOOKING_CONTEXT
+            - INVALID_PHONE
+            - INVALID_DATE_RANGE
+            - NO_ROOMS_SELECTED
+          description: 機器可讀的錯誤代碼
+        message:
+          type: string
+          description: 人類可讀的錯誤說明（可含缺少欄位列表）
+          example: "缺少必要欄位：checkin_date"
+
+    RoomCard:
+      type: object
+      description: 房型推薦卡片（用於聊天機器人 UI）
+      properties:
+        room_type_code:
+          type: string
+        room_type_name:
+          type: string
+        price:
+          type: number
+          description: 房價（PMS 即時價 / FAQ 參考價）
+        price_label:
+          type: string
+          description: 顯示標籤，如「即時房價」或「一般參考房價」
+        available_count:
+          type: integer
+          nullable: true
+          description: 剩餘間數（PMS 有值；FAQ 靜態資料時為 null）
+        max_occupancy:
+          type: integer
+          description: 最多可入住人數
+        image_url:
+          type: string
+          nullable: true
+        features:
+          type: string
+          description: 房型特色文字（來自 FAQ 規則）
+        source:
+          type: string
+          enum: [pms, faq_static]
+
+    SelectedRoomItem:
+      type: object
+      description: 前端確認送出的房型與間數資料
+      properties:
+        room_type_code:
+          type: string
+        room_count:
+          type: integer
+          minimum: 1
+        room_type_name:
+          type: string
+          nullable: true
+        source:
+          type: string
+          nullable: true
+          enum: [pms, faq_static]
+
+    FAQPMSConnectionDetail:
+      type: object
+      description: FAQ 大分類的 PMS 串接設定詳情（不回傳明文 api_key）
+      properties:
+        id:
+          type: integer
+        faq_category_id:
+          type: integer
+        api_endpoint:
+          type: string
+        auth_type:
+          type: string
+          enum: [api_key, bearer_token]
+        status:
+          type: string
+          enum: [enabled, disabled, failed]
+        snapshot_completed:
+          type: boolean
+          description: 是否已完成首次 PMS 快照（首次串接時自動帶入自訂 FAQ 欄位，完成後設為 true，後續重新串接不再觸發）
+        last_synced_at:
+          type: string
+          format: date-time
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+
+    MemberFormDefinition:
+      type: object
+      description: 會員資料表單的欄位定義（由 /chatbot/confirm-room 回傳，前端依此渲染表單）
+      properties:
+        fields:
+          type: array
+          items:
+            type: object
+            properties:
+              field_name:
+                type: string
+                enum: [guest_name, guest_phone, guest_email]
+              label:
+                type: string
+                example: 姓名
+              is_required:
+                type: boolean
+              input_type:
+                type: string
+                enum: [text, tel, email]
+              validation_pattern:
+                type: string
+                description: 前端格式驗證正則，如電話 ^\d{10}$
+              error_message:
+                type: string
+                description: 格式錯誤時顯示的提示文字
+        privacy_note:
+          type: string
+          description: 表單下方小字提示
+          example: "您的個資僅用於本次訂房聯繫與 CRM 會員服務，請安心填寫。"
+
+    ChatbotSessionState:
+      type: object
+      description: 官網聊天 Session 狀態快照
+      properties:
+        session_id:
+          type: string
+        browser_key:
+          type: string
+        intent_state:
+          type: string
+          enum: [detecting, confirmed, none]
+        turn_count:
+          type: integer
+        booking_adults:
+          type: integer
+          nullable: true
+        booking_children:
+          type: integer
+          nullable: true
+        checkin_date:
+          type: string
+          format: date
+          nullable: true
+        checkout_date:
+          type: string
+          format: date
+          nullable: true
+        selected_room_type:
+          type: string
+          nullable: true
+        selected_room_count:
+          type: integer
+          nullable: true
+        selected_rooms:
+          type: array
+          items:
+            $ref: '#/components/schemas/SelectedRoomItem'
 
     # --- 通用 ---
 
@@ -3671,14 +4622,33 @@ components:
                 type: string
               is_active:
                 type: boolean
+              data_source_type:
+                type: string
+                enum: [pms, custom_faq]
+                description: 資料來源類型（PMS 串接 / 自訂 FAQ）
+              source_status:
+                type: string
+                enum: [not_connected, enabled, disabled]
+                description: |
+                  來源狀態。PMS 串接有 3 種：未串接(not_connected)、已啟用(enabled)、已停用(disabled)。
+                  自訂 FAQ 有 2 種：已啟用(enabled)、已停用(disabled)。
               published_rule_count:
                 type: integer
+              total_rule_count:
+                type: integer
+                description: 該大分類下所有規則（含已啟用、已停用、測試未發佈）的總數
               sort_order:
                 type: integer
+        total_count:
+          type: integer
+          description: 大分類總數（顯示為「共 N 類」）
+        active_count:
+          type: integer
+          description: 已啟用大分類數（顯示為「已啟用 N 類」）
         last_updated_at:
           type: string
           format: date-time
-          description: 全域最後更新時間
+          description: 全域最後更新時間（觸發條件：新增/編輯/刪除規則、啟停大分類/規則、串接/取消串接 PMS）
 
     FaqCategoryFieldListResponse:
       type: object
@@ -3728,6 +4698,11 @@ components:
             $ref: '#/components/schemas/FaqRuleSummary'
         total:
           type: integer
+          description: 規則總數（顯示為「共 N 筆」）
+        data_source_type:
+          type: string
+          enum: [pms, custom_faq]
+          description: 當前大分類引用的資料來源類型（顯示為「引用 {來源} 內容」）
 
     FaqRuleSummary:
       type: object
@@ -3741,6 +4716,11 @@ components:
           type: object
           additionalProperties:
             type: string
+        tags:
+          type: array
+          items:
+            type: string
+          description: 規則關聯的標籤名稱（會員標籤欄，AI 引用時自動貼標）
         created_at:
           type: string
           format: date-time

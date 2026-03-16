@@ -862,32 +862,34 @@ Feature: 自動回應系統
       And sequence_order 保持為 3
       And 其他訊息順序不變
 
-  Rule: 支援訊息順序調整（拖曳排序）
+  Rule: 支援訊息順序調整（上移/下移按鈕）
 
-    Example: 調整訊息順序
+    Example: 將訊息上移
       Given 使用者已新增 3 筆訊息
         | sequence_order | message_content |
         | 1              | 訊息 A          |
         | 2              | 訊息 B          |
         | 3              | 訊息 C          |
-      When 使用者將「訊息 C」拖曳至第 1 位
+      When 使用者點擊「訊息 C」的「上移」按鈕
       Then 系統更新所有訊息的 sequence_order
         | message_content | new_sequence_order |
-        | 訊息 C          | 1                  |
-        | 訊息 A          | 2                  |
+        | 訊息 A          | 1                  |
+        | 訊息 C          | 2                  |
         | 訊息 B          | 3                  |
 
-    Example: 拖曳第一筆訊息至最後
-      Given 使用者已新增 4 筆訊息（順序: A, B, C, D）
-      When 使用者將「訊息 A」拖曳至第 4 位
-      Then 系統更新 sequence_order 為（順序: B, C, D, A）
-      And 新順序為 1=B, 2=C, 3=D, 4=A
+    Example: 將訊息下移
+      Given 使用者已新增 3 筆訊息（順序: A, B, C）
+      When 使用者點擊「訊息 A」的「下移」按鈕
+      Then 系統更新 sequence_order 為（順序: B, A, C）
+      And 新順序為 1=B, 2=A, 3=C
 
-    Example: 拖曳中間訊息至中間位置
-      Given 使用者已新增 5 筆訊息（順序: A, B, C, D, E）
-      When 使用者將「訊息 C」拖曳至第 2 位
-      Then 系統更新 sequence_order 為（順序: A, C, B, D, E）
-      And 新順序為 1=A, 2=C, 3=B, 4=D, 5=E
+    Example: 第一筆訊息無法上移
+      Given 使用者已新增 3 筆訊息（順序: A, B, C）
+      Then 「訊息 A」的「上移」按鈕為禁用狀態
+
+    Example: 最後一筆訊息無法下移
+      Given 使用者已新增 3 筆訊息（順序: A, B, C）
+      Then 「訊息 C」的「下移」按鈕為禁用狀態
 
   Rule: 觸發時依序發送所有訊息
 
@@ -1139,25 +1141,24 @@ Feature: 自動回應系統
   # 第十六部分：即時預覽
   # ============================================================================
 
-  Rule: 支援發送前的效果即時預覽
+  Rule: 側邊面板即時預覽（Always-on）
 
-    Example: 前端模擬即時預覽自動回應訊息
+    Example: 輸入訊息時即時顯示預覽
       Given 使用者正在建立自動回應訊息
       When 使用者輸入訊息文字「歡迎加入，{好友的顯示名稱}！」
-      Then 系統使用 LINE Simulator 在網頁上即時渲染預覽
-      And 預覽區顯示訊息內容，變數標籤以特殊格式突出顯示
+      Then 右側預覽面板即時渲染 LINE 風格訊息氣泡
+      And 變數標籤以特殊格式突出顯示
 
-    Example: 即時預覽多筆訊息
+    Example: 多筆訊息即時預覽
       Given 使用者正在建立自動回應訊息
       And 使用者已新增 3 筆訊息
-      When 使用者點擊「預覽」按鈕
-      Then 系統依序顯示 3 筆訊息的預覽效果
-      And 模擬訊息發送的時間間隔（1-2 秒）
+      Then 右側預覽面板同時顯示 3 筆訊息的 LINE 風格氣泡
+      And 每筆訊息內容隨編輯即時更新
 
-    Example: 即時預覽顯示實際效果
+    Example: 即時預覽顯示換行效果
       Given 使用者正在建立自動回應訊息
       When 使用者輸入訊息「感謝您的詢問！\n\n營業時間：09:00-18:00」
-      Then 系統預覽區顯示包含換行的訊息效果
+      Then 預覽面板顯示包含換行的訊息效果
       And 預覽樣式與 LINE 實際顯示一致
 
   # ============================================================================

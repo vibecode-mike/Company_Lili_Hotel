@@ -38,27 +38,39 @@ router = APIRouter()
 
 # ---- PMS helpers ----
 
-_BOOKING_FAQ_CATEGORY_ID = 1  # FAQ 大分類「訂房」
+_BOOKING_FAQ_CATEGORY_NAME = "訂房"  # FAQ 大分類名稱
+
 
 async def _get_or_create_pms_conn(db: AsyncSession) -> FaqPmsConnection:
     """取得唯一的 PMS 連線設定記錄，不存在則建立。"""
-    result = await db.execute(
-        select(FaqPmsConnection).where(
-            FaqPmsConnection.faq_category_id == _BOOKING_FAQ_CATEGORY_ID
-        )
-    )
+    # 先查詢是否已有 pms_connection 記錄
+    result = await db.execute(select(FaqPmsConnection).limit(1))
     conn = result.scalar_one_or_none()
-    if conn is None:
-        conn = FaqPmsConnection(
-            faq_category_id=_BOOKING_FAQ_CATEGORY_ID,
-            api_endpoint="",
-            api_key_encrypted="",
-            auth_type="api_key",
-            status="disabled",
+    if conn is not None:
+        return conn
+
+    # 動態查找「訂房」分類 ID，避免寫死
+    from app.models.faq import FaqCategory
+    cat_result = await db.execute(
+        select(FaqCategory).where(FaqCategory.name == _BOOKING_FAQ_CATEGORY_NAME)
+    )
+    category = cat_result.scalar_one_or_none()
+    if category is None:
+        raise HTTPException(
+            status_code=500,
+            detail=f"找不到 FAQ 分類「{_BOOKING_FAQ_CATEGORY_NAME}」，請先建立",
         )
-        db.add(conn)
-        await db.commit()
-        await db.refresh(conn)
+
+    conn = FaqPmsConnection(
+        faq_category_id=category.id,
+        api_endpoint="",
+        api_key_encrypted="",
+        auth_type="api_key",
+        status="disabled",
+    )
+    db.add(conn)
+    await db.commit()
+    await db.refresh(conn)
     return conn
 
 
@@ -88,39 +100,6 @@ async def update_pms_status(body: dict, db: AsyncSession = Depends(get_db)):
 
     set_pms_enabled(bool(enabled))
     return {"enabled": conn.status == "enabled"}
-
-
-@router.post("/pms-test")
-async def test_pms_connection(db: AsyncSession = Depends(get_db)):
-    """測試 PMS 連線 — 呼叫 query_pms 確認 API 可達"""
-    if not pms_configured():
-        raise HTTPException(status_code=400, detail="PMS 環境變數未設定（PMS_API_URL / PMS_ACCOUNT / PMS_SECRET / PMS_HOTELCODE）")
-    try:
-        result = await asyncio.get_event_loop().run_in_executor(
-            None, lambda: query_pms("2026-01-01", "2026-01-02")
-        )
-        # 連線成功 → 更新 last_synced_at
-        conn = await _get_or_create_pms_conn(db)
-        conn.last_synced_at = datetime.utcnow()
-        conn.error_message = None
-        await db.commit()
-
-        if "room" in result:
-            return {"success": True, "message": f"連線成功，取得 {len(result['room'])} 種房型資料"}
-        return {"success": True, "message": "連線成功", "raw": result}
-    except Exception as e:
-        logger.warning(f"PMS connection test failed: {e}")
-        # 記錄錯誤到 DB
-        conn = await _get_or_create_pms_conn(db)
-        conn.error_message = str(e)[:500]
-        await db.commit()
-
-        msg = str(e)
-        if "401" in msg or "Unauthorized" in msg:
-            raise HTTPException(status_code=400, detail="連線失敗：API Key 無效（401 Unauthorized）")
-        if "timeout" in msg.lower() or "timed out" in msg.lower():
-            raise HTTPException(status_code=400, detail="連線失敗：連線逾時，請確認 PMS 端點是否正確")
-        raise HTTPException(status_code=400, detail=f"連線失敗：{msg}")
 
 
 @router.post("/pms-validate-room")
@@ -172,6 +151,7 @@ async def chatbot_message(
             message=payload.message,
             hotel_id=payload.hotel_id,
             db=db,
+            test_mode=payload.test_mode,
         )
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

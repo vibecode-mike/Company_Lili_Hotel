@@ -8,11 +8,15 @@ import asyncio
 import sys
 import logging
 import importlib.util
+from threading import Lock
 
 logger = logging.getLogger(__name__)
 
 # 线程池（用于运行同步函数）
 _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="line_app_")
+_import_lock = Lock()
+usage_monitor = None
+_sync_push_campaign = None
 
 # 从配置导入路径
 from app.config import settings
@@ -22,6 +26,9 @@ LINE_APP_PATH = str(settings.line_app_path)
 def _import_line_app_modules():
     """动态导入 line_app 模块，避免命名冲突"""
     global usage_monitor, _sync_push_campaign
+
+    if usage_monitor is not None and _sync_push_campaign is not None:
+        return
 
     # 临时将 line_app 目录添加到 sys.path
     original_sys_path = sys.path.copy()
@@ -58,11 +65,15 @@ def _import_line_app_modules():
         pass
 
 
-# 执行导入
-try:
-    _import_line_app_modules()
-except Exception as e:
-    logger.warning(f"line_app 模块导入失败，某些功能可能不可用: {e}")
+def _ensure_line_app_modules():
+    """按需加载 line_app，避免模块导入阶段触发副作用。"""
+    if usage_monitor is not None and _sync_push_campaign is not None:
+        return
+
+    with _import_lock:
+        if usage_monitor is not None and _sync_push_campaign is not None:
+            return
+        _import_line_app_modules()
 
 
 class LineAppAdapter:
@@ -92,6 +103,7 @@ class LineAppAdapter:
         loop = asyncio.get_event_loop()
 
         try:
+            _ensure_line_app_modules()
             logger.info(f"查询 LINE 配额，channel_id: {channel_id}")
             result = await loop.run_in_executor(
                 _executor,
@@ -158,6 +170,7 @@ class LineAppAdapter:
         loop = asyncio.get_event_loop()
 
         try:
+            _ensure_line_app_modules()
             logger.info(f"执行群发预检，payload: {payload}")
             result = await loop.run_in_executor(
                 _executor,
@@ -199,6 +212,7 @@ class LineAppAdapter:
         loop = asyncio.get_event_loop()
 
         try:
+            _ensure_line_app_modules()
             logger.info(f"开始发送群发消息，campaign_id: {payload.get('campaign_id')}")
             logger.debug(f"发送 payload: {payload}")
 

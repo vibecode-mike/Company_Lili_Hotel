@@ -34,7 +34,7 @@ class Message(Base):
         nullable=False,
         comment="訊息模板ID",
     )
-    message_title = Column(Text, comment="訊息標題（用於列表顯示）")
+    message_title = Column(String(500), comment="訊息標題（用於列表顯示）")
     notification_message = Column(String(200), comment="通知推播訊息（顯示在手機通知欄）")
     thumbnail = Column(String(500), comment="縮圖 URL")
     send_time = Column(DateTime, index=True, comment="傳送時間")
@@ -43,8 +43,8 @@ class Message(Base):
     send_status = Column(
         String(20),
         nullable=False,
-        default="草稿",
-        comment="發送狀態：已排程/已發送/草稿/發送失敗",
+        default="draft",
+        comment="發送狀態：draft/scheduled/sending/sent/failed",
         index=True,
     )
     failure_reason = Column(Text, comment="發送失敗原因")

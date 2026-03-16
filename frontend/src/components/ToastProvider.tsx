@@ -1,17 +1,17 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import svgPathsSuccess from '../imports/svg-zsmss3rzwc';
 import svgPathsError from '../imports/svg-zvk2z161dz';
 
 type ToastType = 'success' | 'error';
 
 interface ToastMessage {
-  message: string;
+  message: React.ReactNode;
   type: ToastType;
   id: number;
 }
 
 interface ToastContextType {
-  showToast: (message: string, type: ToastType) => void;
+  showToast: (message: React.ReactNode, type: ToastType) => void;
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
@@ -58,8 +58,9 @@ function CancelCircleIcon() {
   );
 }
 
-function Toast({ message, type, onClose }: { message: string; type: ToastType; onClose: () => void }) {
+function Toast({ message, type, index, onClose }: { message: React.ReactNode; type: ToastType; index: number; onClose: () => void }) {
   const [isVisible, setIsVisible] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Fade in
@@ -81,12 +82,14 @@ function Toast({ message, type, onClose }: { message: string; type: ToastType; o
 
   return (
     <div
+      ref={ref}
       onClick={handleClick}
-      className={`fixed top-[80px] left-1/2 -translate-x-1/2 bg-[#383838] rounded-[8px] cursor-pointer z-[9999] transition-opacity duration-300 ${
+      className={`bg-[#383838] rounded-[8px] cursor-pointer z-[9999] transition-all duration-300 ${
         isVisible ? 'opacity-100' : 'opacity-0'
       }`}
       style={{
         boxShadow: '0px 0px 4px 0px rgba(168,168,168,0.25), 0px 1px 4px 0px rgba(221,221,221,0.25)',
+        marginTop: index > 0 ? '12px' : undefined,
       }}
       data-name="Toast"
     >
@@ -105,43 +108,33 @@ function Toast({ message, type, onClose }: { message: string; type: ToastType; o
 }
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
-  const [toast, setToast] = useState<ToastMessage | null>(null);
-  const [toastQueue, setToastQueue] = useState<ToastMessage[]>([]);
-  const [nextId, setNextId] = useState(0);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const nextIdRef = useRef(0);
 
-  const showToast = useCallback((message: string, type: ToastType) => {
-    const newToast: ToastMessage = { message, type, id: nextId };
-    setNextId(prev => prev + 1);
-    
-    // If there's already a toast, add to queue
-    if (toast) {
-      setToastQueue(prev => [...prev, newToast]);
-    } else {
-      setToast(newToast);
-    }
-  }, [toast, nextId]);
+  const showToast = useCallback((message: React.ReactNode, type: ToastType) => {
+    const id = nextIdRef.current++;
+    setToasts(prev => [...prev, { message, type, id }]);
+  }, []);
 
-  const handleClose = useCallback(() => {
-    setToast(null);
-    // Show next toast in queue if any
-    setTimeout(() => {
-      if (toastQueue.length > 0) {
-        setToast(toastQueue[0]);
-        setToastQueue(prev => prev.slice(1));
-      }
-    }, 100);
-  }, [toastQueue]);
+  const handleClose = useCallback((id: number) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
 
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      {toast && (
-        <Toast
-          key={toast.id}
-          message={toast.message}
-          type={toast.type}
-          onClose={handleClose}
-        />
+      {toasts.length > 0 && (
+        <div className="fixed top-[80px] left-1/2 -translate-x-1/2 z-[9999] flex flex-col items-center">
+          {toasts.map((t, i) => (
+            <Toast
+              key={t.id}
+              message={t.message}
+              type={t.type}
+              index={i}
+              onClose={() => handleClose(t.id)}
+            />
+          ))}
+        </div>
       )}
     </ToastContext.Provider>
   );

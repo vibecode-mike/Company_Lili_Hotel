@@ -1,6 +1,7 @@
 """
 資料庫模型模組
 """
+
 from app.models.base import Base
 from app.models.user import User
 from app.models.member import Member
@@ -15,9 +16,15 @@ from app.models.pms_integration import PMSIntegration
 from app.models.tag_trigger_log import TagTriggerLog
 from app.models.tag_rule import TagRule
 from app.models.admin import Admin, Role, Permission, AdminRole, RolePermission
-from app.models.tracking import ComponentInteractionLog, InteractionType, ClickTrackingDemo
+from app.models.tracking import (
+    ComponentInteractionLog,
+    InteractionType,
+    ClickTrackingDemo,
+)
 from app.models.line_channel import LineChannel
+from app.models.fb_channel import FbChannel
 from app.models.conversation import ConversationThread, ConversationMessage
+from app.models.chatbot_booking import ChatbotSession, FaqPmsConnection, BookingRecord
 from app.models.faq import (
     Industry,
     FaqCategory,
@@ -26,7 +33,6 @@ from app.models.faq import (
     FaqRuleVersion,
     FaqRuleTag,
     AiTokenUsage,
-    AiToneConfig,
     FaqModuleAuth,
 )
 
@@ -58,8 +64,12 @@ __all__ = [
     "InteractionType",
     "ClickTrackingDemo",
     "LineChannel",
+    "FbChannel",
     "ConversationThread",
     "ConversationMessage",
+    "ChatbotSession",
+    "FaqPmsConnection",
+    "BookingRecord",
     "Industry",
     "FaqCategory",
     "FaqCategoryField",
@@ -67,6 +77,5 @@ __all__ = [
     "FaqRuleVersion",
     "FaqRuleTag",
     "AiTokenUsage",
-    "AiToneConfig",
     "FaqModuleAuth",
 ]

@@ -1,6 +1,8 @@
-import ChatFAB from "./ChatFAB";
-import { useState, memo, useCallback, useEffect } from "react";
-import { apiGet, apiPut } from "../utils/apiClient";
+
+import { useState, useRef, memo, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { apiGet, apiPut, apiPatch } from "../utils/apiClient";
+import { useToast } from "./ToastProvider";
 
 interface TokenUsage {
   total_quota: number;
@@ -9,12 +11,7 @@ interface TokenUsage {
   usage_percent: number;
 }
 
-interface ToneConfig {
-  id: number;
-  tone_type: string;
-  tone_name: string;
-  is_active: boolean;
-}
+
 import Sidebar from "./Sidebar";
 import { PageHeaderWithBreadcrumb } from "./common/Breadcrumb";
 import svgPaths from "../imports/svg-icons-common";
@@ -50,22 +47,41 @@ interface FaqCategoryApi {
   name: string;
   is_active: boolean;
   rule_count: number;
+  data_source_type?: string;
+  updated_at?: string | null;
+  pms_connection?: { status: string; last_synced_at: string | null } | null;
 }
 
 // Maps API category names to their correct display names (inner-page titles)
 const CATEGORY_DISPLAY_NAMES: Record<string, string> = {
-  訂房: "訂房和帳務",
+  訂房: "訂房",
 };
 
 function mapApiCategory(cat: FaqCategoryApi): CategoryRecord {
+  // Determine PMS status from API pms_connection field
+  let pmsStatus: "normal" | "error" = "normal";
+  let pmsLabel = "未串接";
+  if (cat.data_source_type === "pms" && cat.pms_connection) {
+    pmsLabel = cat.pms_connection.status === "enabled" ? "已串接" : "已停用";
+    pmsStatus = cat.pms_connection.status === "enabled" ? "normal" : "error";
+  }
+
+  // Format last updated time from category updated_at
+  let lastUpdated = "—";
+  const ts = cat.updated_at;
+  if (ts) {
+    const d = new Date(ts);
+    lastUpdated = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  }
+
   return {
     id: String(cat.id),
     name: CATEGORY_DISPLAY_NAMES[cat.name] ?? cat.name,
-    pmsStatus: "normal",
-    pmsLabel: "尚未串接",
+    pmsStatus,
+    pmsLabel,
     faqStatus: "saved",
     faqLabel: cat.rule_count > 0 ? "已儲存" : "未設定",
-    lastUpdated: "—",
+    lastUpdated,
     enabled: cat.is_active,
   };
 }
@@ -186,6 +202,28 @@ const StatusTag = memo(function StatusTag({
   );
 });
 
+function ViewDetailTooltip({ anchorRef, visible }: { anchorRef: React.RefObject<HTMLElement | null>; visible: boolean }) {
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    if (visible && anchorRef.current) {
+      const rect = anchorRef.current.getBoundingClientRect();
+      setPos({ top: rect.bottom + 4, left: rect.right - 4 });
+    }
+  }, [visible, anchorRef]);
+
+  if (!visible) return null;
+  return createPortal(
+    <div
+      className="fixed bg-[#383838] text-white text-[12px] leading-[1.5] font-['Noto_Sans_TC',sans-serif] font-normal rounded-[8px] p-[8px] whitespace-nowrap pointer-events-none"
+      style={{ zIndex: 9999, top: pos.top, left: pos.left }}
+    >
+      查看詳細
+    </div>,
+    document.body,
+  );
+}
+
 const TableRow = memo(function TableRow({
   record,
   isLast,
@@ -197,53 +235,57 @@ const TableRow = memo(function TableRow({
   onToggle: (id: string, v: boolean) => void;
   onEdit: (id: string) => void;
 }) {
+  const [nameHover, setNameHover] = useState(false);
+  const [editHover, setEditHover] = useState(false);
+  const nameRef = useRef<HTMLDivElement>(null);
+  const editRef = useRef<HTMLDivElement>(null);
   return (
     <tr
       className={`bg-white transition-colors hover:bg-[#f5f8ff] group ${
-        !isLast ? "[&>td]:border-b [&>td]:border-[#ddd]" : ""
+        !isLast ? "row-divider" : ""
       }`}
     >
       <td className="px-[12px] py-[12px] align-middle">
-        <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[#383838] text-[14px]">
-          {record.name}
-        </p>
-      </td>
-
-      <td className="px-[12px] py-[12px] align-middle">
-        <div className="flex flex-wrap gap-[4px]">
-          <StatusTag
-            label={record.pmsLabel}
-            color={
-              record.pmsLabel === "尚未串接"
-                ? "gray"
-                : record.pmsStatus === "normal"
-                  ? "green"
-                  : "red"
-            }
-          />
-          {record.pmsErrorCode && (
-            <StatusTag label={record.pmsErrorCode} color="none" />
-          )}
+        <div
+          ref={nameRef}
+          className="relative inline-block cursor-pointer"
+          onMouseEnter={() => setNameHover(true)}
+          onMouseLeave={() => setNameHover(false)}
+          onClick={() => onEdit(record.id)}
+        >
+          <p
+            className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[14px] transition-colors"
+            style={{ color: nameHover ? "#0F6BEB" : "#383838" }}
+          >
+            {record.name}
+          </p>
         </div>
+        <ViewDetailTooltip anchorRef={nameRef} visible={nameHover} />
       </td>
 
       <td className="px-[12px] py-[12px] align-middle">
-        <StatusTag
-          label={record.faqLabel}
-          color={
-            record.faqLabel === "已儲存"
-              ? "green"
-              : record.faqLabel === "未設定"
-                ? "gray"
-                : "none"
-          }
-        />
-      </td>
-
-      <td className="px-[12px] py-[12px] align-middle">
-        <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[#383838] text-[14px] whitespace-nowrap">
-          {record.lastUpdated}
-        </p>
+        <div className="flex items-center flex-wrap" style={{ gap: 12 }}>
+          <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[#383838] text-[14px] whitespace-nowrap">
+            {record.lastUpdated}
+          </p>
+          {(() => {
+            // Derive source type label + status
+            if (record.pmsLabel !== "未串接") {
+              // PMS is connected
+              const active = record.pmsStatus === "normal";
+              return (
+                <StatusTag
+                  label={`PMS ${active ? "已啟用" : "已停用"}`}
+                  color={active ? "green" : "red"}
+                />
+              );
+            }
+            if (record.faqLabel === "已儲存") {
+              return <StatusTag label="自訂 FAQ 已啟用" color="green" />;
+            }
+            return <StatusTag label="未串接" color="gray" />;
+          })()}
+        </div>
       </td>
 
       {/* 凍結欄：啟用狀態 */}
@@ -268,7 +310,15 @@ const TableRow = memo(function TableRow({
         style={{ width: 68, position: "sticky", right: 0, zIndex: 1 }}
         className="px-[12px] py-[12px] align-middle bg-white group-hover:bg-[#f5f8ff] transition-colors"
       >
-        <ButtonEdit onClick={() => onEdit(record.id)} />
+        <div
+          ref={editRef}
+          className="relative inline-block"
+          onMouseEnter={() => setEditHover(true)}
+          onMouseLeave={() => setEditHover(false)}
+        >
+          <ButtonEdit onClick={() => onEdit(record.id)} />
+        </div>
+        <ViewDetailTooltip anchorRef={editRef} visible={editHover} />
       </td>
     </tr>
   );
@@ -288,8 +338,7 @@ export default function AIChatbotOverview({
   const [categories, setCategories] = useState<CategoryRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
-  const [toneConfigs, setToneConfigs] = useState<ToneConfig[]>([]);
-  const [toneLoading, setToneLoading] = useState(false);
+  const { showToast } = useToast();
 
   useEffect(() => {
     apiGet("/api/v1/faq/categories")
@@ -312,46 +361,53 @@ export default function AIChatbotOverview({
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    apiGet("/api/v1/faq/tone-config")
-      .then((res) => res.json())
-      .then((json) => {
-        if (Array.isArray(json.data)) setToneConfigs(json.data as ToneConfig[]);
-      })
-      .catch(() => {});
-  }, []);
-
-  const handleSwitchTone = useCallback(async (toneId: number) => {
-    setToneLoading(true);
-    try {
-      await apiPut(`/api/v1/faq/tone-config/${toneId}/activate`, {});
-      setToneConfigs((prev) =>
-        prev.map((t) => ({ ...t, is_active: t.id === toneId })),
-      );
-    } catch {
-      // ignore
-    } finally {
-      setToneLoading(false);
-    }
-  }, []);
-
   const handleToggle = useCallback(async (id: string, v: boolean) => {
+    const cat = categories.find((c) => c.id === id);
+    const name = cat?.name ?? "";
     setCategories((prev) =>
       prev.map((c) => (c.id === id ? { ...c, enabled: v } : c)),
     );
     try {
-      await apiPut(`/api/v1/faq/categories/${id}/toggle`, { is_active: v });
+      await apiPatch(`/api/v1/faq/categories/${id}/toggle`, { is_active: v });
+      showToast(
+        v ? (
+          <>
+            {name} 已啟用{" "}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                window.dispatchEvent(new CustomEvent("open-chatfab"));
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#DBEDFF",
+                cursor: "pointer",
+                padding: 0,
+                fontFamily: "'Noto Sans TC', sans-serif",
+                fontSize: 16,
+                lineHeight: 1.5,
+                textDecoration: "underline",
+              }}
+            >
+              測試
+            </button>
+          </>
+        ) : `${name} 已停用`,
+        "success",
+      );
     } catch {
       // revert on failure
       setCategories((prev) =>
         prev.map((c) => (c.id === id ? { ...c, enabled: !v } : c)),
       );
     }
-  }, []);
+  }, [categories, showToast]);
 
   // Map display category name → inner-page navigator
   const CATEGORY_NAVIGATORS: Record<string, (() => void) | undefined> = {
-    訂房和帳務: onNavigateToPMS,
+    訂房: onNavigateToPMS,
     設施: onNavigateToFacilities,
   };
 
@@ -400,74 +456,86 @@ export default function AIChatbotOverview({
           description="統一管理 AI 回覆會使用的分類內容與資料狀態"
         />
 
-        {/* Token 用量 + 語氣設定 */}
-        <div className="px-[40px] pb-[16px] flex flex-wrap gap-[16px] items-start">
-          {/* Token 用量 */}
-          <div className="bg-white rounded-[16px] ring-1 ring-[#ddd] px-[20px] py-[14px] flex flex-col gap-[8px] min-w-[260px]">
-            <p className="text-[12px] font-medium text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]">
-              AI Token 用量
-            </p>
-            {tokenUsage ? (
-              <>
-                <div className="flex items-baseline gap-[6px]">
-                  <span className="text-[20px] font-semibold text-[#383838] font-['Inter',sans-serif]">
-                    {tokenUsage.remaining.toLocaleString()}
-                  </span>
-                  <span className="text-[13px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]">
-                    / {tokenUsage.total_quota.toLocaleString()} 可用
-                  </span>
-                </div>
-                <div className="w-full h-[6px] bg-[#f0f0f0] rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${Math.min(tokenUsage.usage_percent, 100)}%`,
-                      backgroundColor:
-                        tokenUsage.usage_percent >= 90
-                          ? "#ef4444"
-                          : tokenUsage.usage_percent >= 70
-                            ? "#f59e0b"
-                            : "#0f6beb",
-                    }}
-                  />
-                </div>
-                <p className="text-[12px] text-[#9ca3af] font-['Noto_Sans_TC',sans-serif]">
-                  已消耗 {tokenUsage.used_amount.toLocaleString()}（
-                  {tokenUsage.usage_percent}%）
-                </p>
-              </>
-            ) : (
-              <p className="text-[14px] text-[#9ca3af] font-['Noto_Sans_TC',sans-serif]">
-                載入中…
-              </p>
-            )}
-          </div>
-
-          {/* 語氣設定 */}
-          {toneConfigs.length > 0 && (
-            <div className="bg-white rounded-[16px] ring-1 ring-[#ddd] px-[20px] py-[14px] flex flex-col gap-[8px]">
-              <p className="text-[12px] font-medium text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]">
-                AI 語氣
-              </p>
-              <div className="flex gap-[8px]">
-                {toneConfigs.map((tone) => (
-                  <button
-                    key={tone.id}
-                    type="button"
-                    disabled={toneLoading}
-                    onClick={() => handleSwitchTone(tone.id)}
-                    className={`px-[14px] py-[6px] rounded-[12px] text-[14px] font-['Noto_Sans_TC',sans-serif] font-normal transition-colors ${
-                      tone.is_active
-                        ? "bg-[#0f6beb] text-white"
-                        : "bg-[#f5f5f5] text-[#383838] hover:bg-[#e8f0fe]"
-                    } ${toneLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-                  >
-                    {tone.tone_name}
-                  </button>
-                ))}
+        {/* Token 用量 */}
+        <div className="px-[40px] pb-[20px] w-full">
+          <div
+            className="bg-[rgba(255,255,255,0.3)] relative rounded-[16px] w-full"
+            data-name="Description Container"
+          >
+            <div
+              aria-hidden="true"
+              className="absolute border border-[#f0f6ff] border-solid inset-0 pointer-events-none rounded-[16px]"
+            />
+            <div className="flex flex-col justify-center w-full">
+              <div className="box-border content-stretch flex flex-col gap-[8px] items-start justify-center p-[24px] relative w-full">
+                {tokenUsage ? (
+                  <>
+                    <div
+                      className="content-stretch flex gap-[8px] items-center relative shrink-0 w-full"
+                      data-name="Description Wrapper"
+                    >
+                      <div
+                        className="content-stretch flex gap-[10px] items-center justify-center relative shrink-0"
+                        data-name="Description Text Container"
+                      >
+                        <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[16px] text-center text-nowrap whitespace-pre">
+                          AI Token 用量
+                        </p>
+                      </div>
+                      <div
+                        className="content-stretch flex gap-[10px] items-center justify-center relative shrink-0"
+                        data-name="Description Text Container"
+                      >
+                        <p className="font-['Noto_Sans_TC:Medium',sans-serif] font-medium leading-[1.5] relative shrink-0 text-[#0f6beb] text-[16px] text-center text-nowrap whitespace-pre">
+                          {tokenUsage.remaining.toLocaleString()} / {tokenUsage.total_quota.toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                    <div
+                      className="bg-[#f0f6ff] h-[8px] overflow-clip relative rounded-[80px] shrink-0 w-full"
+                      data-name="usage status"
+                    >
+                      <div
+                        className="absolute bg-[#3a87f2] h-[8px] left-0 rounded-[80px] top-0 transition-all duration-300"
+                        style={{
+                          width: `${Math.min(tokenUsage.usage_percent, 100)}%`,
+                        }}
+                        data-name="usage"
+                      />
+                    </div>
+                    <div
+                      className="relative shrink-0 w-full"
+                      data-name="Description Wrapper"
+                    >
+                      <div className="flex flex-row items-center size-full">
+                        <div className="box-border content-stretch flex items-center pl-[4px] pr-0 py-0 relative w-full">
+                          <div
+                            className="content-stretch flex gap-[10px] items-center relative shrink-0 w-full"
+                            data-name="Description Text Container"
+                          >
+                            <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#a8a8a8] text-[12px] whitespace-nowrap">
+                              已消耗 {tokenUsage.used_amount.toLocaleString()}（{tokenUsage.usage_percent}%） 耗盡 AI Token ，則啟用關鍵字回應模組
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    {tokenUsage.remaining <= 0 && (
+                      <div className="mt-[4px] px-[10px] py-[6px] bg-[#fef2f2] border border-[#fecaca] rounded-[8px]">
+                        <p className="text-[12px] text-[#dc2626] font-medium font-['Noto_Sans_TC',sans-serif]">
+                          Token 額度已用完，AI 回覆已停用。當前客服已啟用自動回應模組，須加值請聯繫系統商。
+                        </p>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#a8a8a8] text-[14px]">
+                    載入中…
+                  </p>
+                )}
               </div>
             </div>
-          )}
+          </div>
         </div>
 
         <div className="content-stretch flex items-center relative shrink-0 w-full px-[40px]">
@@ -484,7 +552,7 @@ export default function AIChatbotOverview({
         >
           {activeTab === "categories" && (
             <div className="flex flex-col gap-[16px] items-start w-full">
-              <div className="flex items-center gap-[4px] w-full">
+              <div className="flex items-stretch gap-[4px] w-full">
                 <div
                   className="bg-white flex gap-[28px] items-center px-[12px] py-[8px] rounded-[16px] shrink-0"
                   style={{ width: 292 }}
@@ -522,7 +590,7 @@ export default function AIChatbotOverview({
 
                 <button
                   onClick={handleClearSearch}
-                  className="flex gap-[2px] items-center justify-center px-[8px] py-[8px] rounded-[12px] shrink-0 cursor-pointer hover:bg-[#f0f6ff] transition-colors"
+                  className="flex gap-[2px] items-center justify-center px-[8px] py-[8px] rounded-[12px] shrink-0 self-stretch cursor-pointer hover:bg-[#f0f6ff] active:bg-[#dce8fc] transition-colors"
                   type="button"
                 >
                   <span className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[#0f6beb] text-[16px] whitespace-nowrap">
@@ -531,15 +599,6 @@ export default function AIChatbotOverview({
                 </button>
 
                 <div className="flex-1" />
-
-                <button
-                  type="button"
-                  className="bg-[#242424] flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] shrink-0 cursor-pointer hover:bg-[#383838] transition-colors duration-150"
-                >
-                  <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-white text-center whitespace-nowrap">
-                    發佈
-                  </span>
-                </button>
               </div>
 
               <p className="text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]">
@@ -555,12 +614,6 @@ export default function AIChatbotOverview({
                     <tr className="bg-white [&>th]:border-b [&>th]:border-[#ddd]">
                       <th className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]">
                         分類
-                      </th>
-                      <th className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]">
-                        PMS 串接
-                      </th>
-                      <th className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]">
-                        自訂 FAQ
                       </th>
                       <th className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]">
                         最後更新{" "}
@@ -599,7 +652,7 @@ export default function AIChatbotOverview({
                     {loading ? (
                       <tr>
                         <td
-                          colSpan={6}
+                          colSpan={4}
                           className="bg-white px-[12px] py-[40px] text-center text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]"
                         >
                           載入中…
@@ -608,7 +661,7 @@ export default function AIChatbotOverview({
                     ) : filtered.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={6}
+                          colSpan={4}
                           className="bg-white px-[12px] py-[40px] text-center text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]"
                         >
                           無符合條件的資料
@@ -641,7 +694,6 @@ export default function AIChatbotOverview({
         </div>
       </main>
 
-      <ChatFAB />
     </div>
   );
 }

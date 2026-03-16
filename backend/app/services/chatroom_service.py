@@ -57,7 +57,7 @@ class ChatroomService:
     """
     多渠道聊天室服務
     - 使用 conversation_threads / conversation_messages 表
-    - thread_id 格式：{platform}:{platform_uid}
+    - thread_id 直接使用 platform_uid（無前綴），透過 platform 欄位區分渠道
     """
 
     def __init__(self, db: AsyncSession):
@@ -106,8 +106,7 @@ class ChatroomService:
             thread_id=thread.id,
             platform=platform,
             direction=direction,
-            question=content if direction == "incoming" else None,
-            response=content if direction == "outgoing" else None,
+            content=content,
             message_source=message_source,
             sent_by=sender_id,
             created_at=datetime.now(timezone.utc),
@@ -189,7 +188,7 @@ class ChatroomService:
                 {
                     "id": record.id,
                     "type": msg_type,
-                    "text": record.question if record.direction == "incoming" else record.response,
+                    "text": record.content,
                     "time": format_chat_time(record.created_at),  # 格式化為 "下午 03:30"
                     "timestamp": timestamp_str,
                     "isRead": record.status == "read" if hasattr(record, "status") else False,

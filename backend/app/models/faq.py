@@ -44,6 +44,12 @@ class FaqCategory(Base):
     )
     name = Column(String(50), nullable=False, comment="大分類名稱")
     is_active = Column(Boolean, nullable=False, default=True, comment="是否啟用")
+    data_source_type = Column(
+        String(20),
+        nullable=False,
+        default="custom_faq",
+        comment="資料來源類型：pms（PMS 串接）、custom_faq（自訂 FAQ）",
+    )
     is_system_default = Column(
         Boolean,
         nullable=False,

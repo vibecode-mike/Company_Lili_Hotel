@@ -29,6 +29,8 @@ export interface PlatformSwitcherProps {
   value: ChatPlatform;
   /** 平台變更回調 */
   onChange: (platform: ChatPlatform) => void;
+  /** 會員已綁定的渠道列表（未綁定的渠道會灰色禁用） */
+  availablePlatforms?: ChatPlatform[];
   /** 自定義 CSS 類名 */
   className?: string;
 }
@@ -94,6 +96,7 @@ function CheckIcon() {
 export function PlatformSwitcher({
   value,
   onChange,
+  availablePlatforms,
   className = ''
 }: PlatformSwitcherProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -146,20 +149,29 @@ export function PlatformSwitcher({
           <div className="flex flex-col gap-[8px] py-[8px]">
             {PLATFORMS.map((platform) => {
               const isSelected = platform.value === value;
+              const isDisabled = availablePlatforms && availablePlatforms.length > 0
+                && !availablePlatforms.includes(platform.value);
               return (
                 <button
                   key={platform.value}
                   type="button"
+                  disabled={isDisabled}
                   onClick={() => {
+                    if (isDisabled) return;
                     onChange(platform.value);
                     setIsOpen(false);
                   }}
-                  className={`flex items-center gap-[8px] w-full px-[8px] py-[4px] transition-colors hover:bg-[#f6f9fd] ${
-                    isSelected ? 'bg-[#f6f9fd]' : ''
-                  }`}
+                  className={`flex items-center gap-[8px] w-full px-[8px] py-[4px] transition-colors ${
+                    isDisabled
+                      ? 'opacity-40 cursor-not-allowed'
+                      : 'hover:bg-[#f6f9fd]'
+                  } ${isSelected ? 'bg-[#f6f9fd]' : ''}`}
+                  title={isDisabled ? '此會員尚未綁定此渠道' : undefined}
                 >
                   <PlatformIcon platform={platform.value} size={20} />
-                  <span className="font-['Noto_Sans_TC:Regular',sans-serif] text-[14px] text-[#383838] flex-1 text-left">
+                  <span className={`font-['Noto_Sans_TC:Regular',sans-serif] text-[14px] flex-1 text-left ${
+                    isDisabled ? 'text-[#b0b0b0]' : 'text-[#383838]'
+                  }`}>
                     {platform.label}
                   </span>
                   {isSelected && <CheckIcon />}

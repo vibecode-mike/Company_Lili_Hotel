@@ -6,30 +6,27 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
   Background:
     說明:
       - Webchat 聊天紀錄獨立存在，不會覆蓋 LINE 或 Facebook 的訊息。
-      - 當用戶在 Webchat 上登入 LINE 或 Facebook OAuth 時，系統會取得該渠道會員資訊（line_uid / fb_uid、email），並與 members 表進行關聯。
-      - LINE / Facebook 的好友資料仍然存在各自表中（line_friends / fb_friends）。
+      - 當用戶在 Webchat 上登入 LINE 或 Facebook OAuth 時，系統會取得該渠道會員資訊（line_uid / fb_customer_id、email），並與 members 表進行關聯。
+      - 會員資料統一存放於 members 單表，透過 line_uid / fb_customer_id / webchat_uid 欄位識別各渠道身份。
       - 聊天紀錄統一存放於 conversation_threads（對話線程）和 conversation_messages（對話訊息）表。
-      - 客服在系統介面看到的訊息流，是依 member_id 整合的三個渠道訊息，好友資料保留在各自 friends 表。
+      - 客服在系統介面看到的訊息流，是依 member_id 整合的三個渠道訊息。
 
     Given Webchat 為互動入口，使用者在 Webchat 互動時，需要透過 LINE 或 Facebook OAuth 登入
-    And 三個渠道各自有自己的好友追蹤表：
-      | 表名               | 主要欄位                                                   |
-      | line_friends       | line_uid, member_id, line_display_name, line_picture_url, email, is_following, last_interaction_at |
-      | fb_friends         | fb_uid, member_id, fb_display_name, fb_picture_url, email, is_following, last_interaction_at |
-      | webchat_friends    | webchat_uid, member_id, webchat_display_name, webchat_picture_url, email, is_following, last_interaction_at |
-    And members 表用來存放整合後的會員資料，主要欄位包括：
+    And members 表用來存放整合後的會員資料，各渠道身份欄位如下：
       | 欄位               | 說明                                                |
       | member_id          | 會員唯一識別碼                                      |
-      | line_uid           | LINE User ID（可透過 line_friends 表關聯）          |
+      | line_uid           | LINE User ID                                        |
+      | fb_customer_id     | Facebook User ID                                    |
+      | webchat_uid        | Webchat 訪客 ID                                     |
       | email              | 會員 email（用於跨渠道比對）                        |
       | join_source        | 加入來源 (LINE / Facebook / Webchat / CRM / PMS)    |
       | last_interaction_at| 最後互動時間                                        |
-    And 跨渠道關聯透過各 friends 表的 member_id 欄位建立
-    And 上次互動渠道依據 member_id 下所有渠道 friends 表的 last_interaction_at 最晚者
+    And 跨渠道關聯透過 members 表的 line_uid / fb_customer_id / webchat_uid 欄位建立
+    And 上次互動渠道依據 conversation_threads 表中該 member_id 下各 platform 的 last_message_at 最晚者
     And 聊天紀錄表結構如下：
       | 表名                  | 主要欄位                                                                         |
       | conversation_threads  | id (thread_id), member_id, platform, platform_uid, last_message_at              |
-      | conversation_messages | id, thread_id, platform, direction, question, response, message_source, created_at |
+      | conversation_messages | id, thread_id, platform, role, direction, message_type, content, message_source, event_id, status, created_at |
     And conversation_threads 的 id (thread_id) 格式為 platform_uid（如 "U66da9a54ad9341376212e673d7fd7228"）
     And 渠道識別透過 platform 欄位區分（"LINE" / "Facebook" / "Webchat"）
     And 查詢訊息時使用 thread_id + platform 兩個條件
@@ -42,7 +39,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
 
     Example: Webchat 使用 LINE OAuth 登入，已有 LINE 紀錄
       Given members 表中已存在該會員 email "user@example.com"
-      And line_friends 表有 line_uid "U123" 的好友紀錄
+      And members 表有 line_uid "U123" 的紀錄
       When 使用者在 Webchat 登入 LINE OAuth，line_uid 為 "U123"，email 為 "user@example.com"
       Then 系統將 LINE 訊息整合到該會員的客服聊天室
       And Webchat 聊天紀錄仍獨立保存
@@ -57,7 +54,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
 
     Example: Webchat 使用 Facebook OAuth 登入，已有 FB 紀錄
       Given members 表中已存在該會員 email "user@example.com"
-      And fb_friends 表有 fb_uid "F321" 的好友紀錄
+      And members 表有 fb_customer_id "F321" 的紀錄
       When 使用者在 Webchat 登入 Facebook OAuth，fb_uid 為 "F321"，email 為 "user@example.com"
       Then 系統將 FB 訊息整合到該會員的客服聊天室視圖
       And Webchat 聊天紀錄仍獨立保存
@@ -73,7 +70,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
     Example: 新 LINE 使用者
       Given members 表中無該 line_uid 的紀錄
       When 使用者 Webchat 登入 LINE OAuth，line_uid 為 "U999"，email 為 "newuser@example.com"
-      Then 系統建立新的 member_id，並在 line_friends 及 webchat_friends 表建立對應紀錄
+      Then 系統建立新的 member_id，設定 line_uid 及 webchat_uid 欄位
       And 客服聊天室僅顯示 Webchat 訊息
       And 加入來源顯示「Webchat」
       And 登入方式顯示 LINE ICON + channel_name + line_uid
@@ -115,7 +112,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
     Example: Google OAuth 新使用者
       Given members 表中無該 email 的紀錄
       When 使用者 Webchat 使用 Google OAuth 登入，email 為 "guser@example.com"
-      Then 系統建立新的 member_id，並在 webchat_friends 表建立對應紀錄
+      Then 系統建立新的 member_id，設定 webchat_uid 欄位
       And 客服聊天室僅顯示 Webchat 訊息
       And 加入來源顯示「Webchat」
       And 登入方式顯示 Google ICON + Email
@@ -123,7 +120,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
       And 未綁定的渠道以灰色禁用樣式顯示並提示「尚未綁定」
 
     Example: Google OAuth 已有 email 的會員
-      Given members 表中已有 email "guser@example.com" 的會員，並關聯 line_friends 表中 line_uid "U123"
+      Given members 表中已有 email "guser@example.com" 的會員，line_uid 為 "U123"
       And 該會員在 Webchat 有聊天紀錄
       When 使用者 Webchat 使用 Google OAuth 登入，email 為 "guser@example.com"
       Then 系統整合 Webchat 聊天紀錄到該會員客服聊天室視圖
@@ -145,7 +142,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
         | Webchat  | Webchat 灰色圖示 | Webchat | [Webchat 圖示] Webchat ▼   |
 
     Example: 整合多渠道訊息顯示
-      Given 某會員已關聯 line_friends、fb_friends 及 webchat_friends 三個渠道
+      Given 某會員已綁定 LINE、Facebook 及 Webchat 三個渠道
       Then 客服聊天室依時間排序顯示所有訊息
       And 每則訊息旁標示渠道圖示與文字標籤（如 [LINE 圖示] LINE）
       And 加入來源欄位顯示所有已綁定渠道
@@ -154,10 +151,10 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
   Rule: 開啟聊天室時預設回覆渠道 = 最近互動渠道
 
     Example: 預設回覆渠道為最近互動渠道
-      Given 會員 member_id "M001" 已關聯 line_friends、fb_friends、webchat_friends 三個渠道
+      Given 會員 member_id "M001" 已綁定 LINE、Facebook、Webchat 三個渠道
       And 最近一次互動發生在 Webchat
       When 客服開啟該會員的客服聊天室準備回覆
-      Then 系統預設回覆渠道為 Webchat（依 last_interaction_at 最晚者）
+      Then 系統預設回覆渠道為 Webchat（依 conversation_threads.last_message_at 最晚者）
       And 下拉選單仍可切換到 LINE 或 Facebook
       And 下拉選單中標示各渠道目前狀態（可用/不可用）
       And 不可用的渠道以灰色禁用樣式顯示，但仍可查看該渠道歷史訊息
@@ -170,7 +167,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
 
     Example: 有 email 時用 email 合併（LINE → 既有會員）
       Given members 表中已有 email "user@example.com" 的會員 member_id "M001"
-      And 該會員原本僅關聯 fb_friends（fb_uid "F321"）
+      And 該會員原本僅綁定 Facebook（fb_customer_id "F321"）
       When 使用者在 Webchat 登入 LINE OAuth，取得 email "user@example.com"，line_uid "U123"
       Then 系統依合併優先順序：
         | 順序 | 條件 | 動作 |
@@ -178,23 +175,22 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
         | 2 | 同渠道 UID 已存在 | 使用既有 member_id |
         | 3 | 以上都不符合 | 建立新 member_id |
       And 系統查詢到 email "user@example.com" 已存在
-      And 系統將 line_friends 記錄的 member_id 設為 "M001"
-      And 系統更新 webchat_friends 記錄的 member_id 為 "M001"
+      And 系統將該會員的 line_uid 設為 "U123"
+      And 系統將該會員的 webchat_uid 設為對應值
       And 客服聊天室立即顯示整合後的跨渠道訊息
 
     Example: 無 email 但渠道 UID 已存在（同一用戶重複登入）
-      Given line_friends 表中已有 line_uid "U123" 的記錄，關聯 member_id "M001"
+      Given members 表中已有 line_uid "U123" 的會員，member_id "M001"
       When 使用者在 Webchat 登入 LINE OAuth，取得 line_uid "U123"，但用戶未授權 email
-      Then 系統查詢 line_friends 表發現 line_uid "U123" 已存在
+      Then 系統查詢 members 表發現 line_uid "U123" 已存在
       And 系統使用既有 member_id "M001"
-      And 系統更新 webchat_friends 記錄的 member_id 為 "M001"
+      And 系統將該會員的 webchat_uid 設為對應值
 
     Example: 無 email 且渠道 UID 不存在（全新用戶）
-      Given members 表和 line_friends 表都沒有相關記錄
+      Given members 表中無 line_uid "U888" 的紀錄
       When 使用者在 Webchat 登入 LINE OAuth，取得 line_uid "U888"，但用戶未授權 email
-      Then 系統建立新的 member_id "M003"
-      And 系統建立 line_friends 記錄（line_uid "U888", member_id "M003"）
-      And 系統更新 webchat_friends 記錄的 member_id 為 "M003"
+      Then 系統建立新的 member_id "M003"，設定 line_uid "U888"
+      And 系統將該會員的 webchat_uid 設為對應值
       And 日後若取得 email 且與既有會員相同，再觸發合併
 
     Example: 日後取得 email 觸發延遲合併
@@ -203,14 +199,14 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
       When 用戶更新個人資料填入 email "user@example.com"
       Then 系統偵測到 email 與 member_id "M001" 相同
       And 系統觸發會員合併，將 "M003" 的資料合併至 "M001"
-      And 原 "M003" 的 friends 記錄更新 member_id 為 "M001"
+      And 原 "M003" 的渠道 UID 欄位合併至 "M001"
 
     Example: 多渠道會員合併至同一 member_id
       Given members 表中已有 email "user@example.com" 的會員
       When 使用者在 Webchat 登入 LINE OAuth，email 為 "user@example.com"，line_uid "U123"
       And 使用者在 Webchat 登入 Facebook OAuth，email "user@example.com"，fb_uid "F321"
       And 使用者在 Webchat 互動，webchat_uid "W555"
-      Then 系統透過各 friends 表的 member_id 將三個渠道關聯至同一會員
+      Then 系統透過 members 表的 line_uid / fb_customer_id / webchat_uid 將三個渠道關聯至同一會員
       And 會員列表顯示統一 member_id "M001"
       And 加入來源顯示「LINE / Facebook / Webchat」
 
@@ -245,7 +241,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
   Rule: 客服可透過下拉選單切換同一 member_id 的不同渠道聊天紀錄
 
     Example: 客服切換渠道查看訊息
-      Given 某會員 member_id "M001" 同時關聯 line_friends (line_uid "U123")、fb_friends (fb_uid "F321") 及 webchat_friends
+      Given 會員 member_id "M001" 已綁定 line_uid "U123"、fb_customer_id "F321" 及 webchat_uid
       When 客服打開該會員的客服聊天室
       Then 系統顯示下拉選單，列出可切換的渠道：
         | 渠道     |
@@ -253,10 +249,9 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
         | LINE     |
         | Facebook |
       And 聊天室訊息依選擇渠道顯示對應紀錄（從 conversation_messages 表依 thread_id + platform 篩選）
-      And 好友資料保留在各自 friends 表中
 
     Example: 僅綁定單一渠道時隱藏下拉選單
-      Given 某會員 member_id "M002" 僅關聯 line_friends (line_uid "U999")
+      Given 會員 member_id "M002" 僅綁定 line_uid "U999"
       When 客服打開該會員的客服聊天室
       Then 系統不顯示渠道切換下拉選單
       And 僅顯示當前渠道圖示（LINE 圖示）
@@ -361,7 +356,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
       And SSE 連線維持中（EventSource 原生心跳）
       When 訪客關閉瀏覽器，SSE 連線中斷
       And 系統等待 60 秒重連寬限期，訪客未重新連線
-      Then 系統自動更新 webchat_friends.is_following = false
+      Then 系統標記該 Webchat 會話為離線狀態
       And 系統記錄 unfollowed_at = 當前時間
       And 客服聊天室標示「Webchat 用戶已離線」
 
@@ -374,9 +369,8 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
     Example: 訪客重新訪問網站
       Given 訪客 webchat_uid "W123" 曾結束會話（is_following = false）
       When 訪客重新訪問 Webchat 並建立連線
-      Then 系統更新 webchat_friends.is_following = true
-      And 系統更新 followed_at = 當前時間
-      And 系統清除 unfollowed_at = NULL
+      Then 系統標記該 Webchat 會話為上線狀態
+      And 系統更新 conversation_threads.last_message_at
       And 客服可繼續與該訪客對話
 
   # =============================================================================
@@ -389,21 +383,21 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
       Given 訪客首次訪問 Webchat，localStorage 無 webchat_uid
       When 訪客建立 SSE 連線
       Then 後端生成 UUID v4 格式的 webchat_uid（如 "550e8400-e29b-41d4-a716-446655440000"）
-      And 後端建立 webchat_friends 記錄
+      And 後端建立 members 記錄（設定 webchat_uid）及 conversation_threads 記錄
       And 前端將 webchat_uid 儲存於 localStorage
 
     Example: 訪客重新訪問時使用既有 webchat_uid
       Given 訪客曾訪問過 Webchat，localStorage 有 webchat_uid "550e8400-e29b-41d4-a716-446655440000"
       When 訪客重新訪問並建立 SSE 連線
       Then 前端傳送既有 webchat_uid 給後端
-      And 後端識別為同一訪客，更新 webchat_friends 狀態
+      And 後端識別為同一訪客，更新 conversation_threads 狀態
       And 聊天紀錄延續顯示
 
     Example: localStorage 被清除視為新訪客
       Given 訪客曾訪問過 Webchat 但 localStorage 已被清除
       When 訪客建立 SSE 連線
       Then 後端生成新的 UUID v4 webchat_uid
-      And 後端建立新的 webchat_friends 記錄
+      And 後端建立新的 members 記錄（設定 webchat_uid）及 conversation_threads 記錄
       And 視為新訪客，無法自動關聯舊聊天紀錄
 
   # =============================================================================
@@ -416,7 +410,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
       Given members 表中無 email "newuser@example.com"
       When 使用者 Webchat 登入 LINE OAuth，email "newuser@example.com"，line_uid "U999"
       And 使用者 Webchat 互動，webchat_uid "550e8400-e29b-41d4-a716-446655440000"
-      Then 系統建立新的 member_id "M002"，並在 line_friends 及 webchat_friends 表建立對應紀錄
+      Then 系統建立新的 member_id "M002"，設定 line_uid 及 webchat_uid 欄位
       And 聊天室僅顯示 Webchat 訊息
       And 加入來源顯示「Webchat」
       And 登入方式顯示 LINE ICON + channel_name + line_uid
@@ -428,7 +422,7 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
   Rule: 客服聊天室應顯示整合後訊息，並標示來源及可切換渠道
 
     Example: 客服聊天室顯示整合訊息
-      Given 會員 member_id "M001" 已關聯 line_friends (line_uid "U123")、fb_friends (fb_uid "F321") 及 webchat_friends (webchat_uid "W555")
+      Given 會員 member_id "M001" 已綁定 line_uid "U123"、fb_customer_id "F321" 及 webchat_uid "W555"
       Then 客服聊天室依時間排序顯示訊息
       And 每則訊息標示來源 (LINE / FB / Webchat)
       And 下拉選單可切換查看不同渠道訊息
@@ -437,22 +431,22 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
   # 會員列表顯示上次互動渠道
   # =============================================================================
 
-  Rule: 從會員列表點擊聊天按鈕進入客服聊天室時，初始顯示訊息流依各 friends 表 last_interaction_at 最晚者
+  Rule: 從會員列表點擊聊天按鈕進入客服聊天室時，初始顯示訊息流依 conversation_threads.last_message_at 最晚者
 
     Example: 上次互動為 Webchat
-      Given 會員 member_id "M001" 的 webchat_friends.last_interaction_at 為最晚
+      Given 會員 member_id "M001" 的 Webchat conversation_threads.last_message_at 為最晚
       When 客服從會員列表點擊該會員聊天按鈕
       Then 客服聊天室初始顯示 Webchat 訊息流
       And 下拉選單仍可切換到 LINE 或 FB
 
     Example: 上次互動為 Facebook
-      Given 會員 member_id "M001" 的 fb_friends.last_interaction_at 為最晚
+      Given 會員 member_id "M001" 的 Facebook conversation_threads.last_message_at 為最晚
       When 客服從會員列表點擊該會員聊天按鈕
       Then 客服聊天室初始顯示 Facebook 訊息流
       And 下拉選單仍可切換到 LINE 或 Webchat 訊息
 
     Example: 上次互動為 LINE
-      Given 會員 member_id "M002" 的 line_friends.last_interaction_at 為最晚
+      Given 會員 member_id "M002" 的 LINE conversation_threads.last_message_at 為最晚
       When 客服點擊聊天按鈕
       Then 客服聊天室初始顯示 LINE 訊息流
       And 下拉選單可切換至 FB 或 Webchat 訊息
@@ -461,26 +455,26 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
   # 多渠道會員合併後會員列表最近互動顯示
   # =============================================================================
 
-  Rule: 多渠道會員合併後，會員列表「最近互動」欄位應顯示 last_interaction_at 最晚的渠道，並使用該 friends 表的頭像與姓名
+  Rule: 多渠道會員合併後，會員列表「最近互動」欄位應顯示 conversation_threads.last_message_at 最晚的渠道，並使用 members 表對應渠道的頭像與姓名
 
     Example: 最近互動為 Facebook
-      Given 會員 member_id "M001" 同時關聯 fb_friends (fb_uid "F123") 與 line_friends (line_uid "L456")
-      And fb_friends.last_interaction_at 為 2025-12-01 10:00（最晚）
+      Given 會員 member_id "M001" 已綁定 fb_customer_id "F123" 與 line_uid "L456"
+      And Facebook 的 conversation_threads.last_message_at 為 2025-12-01 10:00（最晚）
       When 客服查看會員列表
-      Then 最近互動欄位顯示 Facebook ICON + fb_friends.fb_picture_url + fb_friends.fb_display_name
+      Then 最近互動欄位顯示 Facebook ICON + members.fb_avatar + members.fb_customer_name
 
     Example: 最近互動為 LINE
-      Given 會員 member_id "M001" 同時關聯 fb_friends (fb_uid "F123") 與 line_friends (line_uid "L456")
-      And line_friends.last_interaction_at 為 2025-12-01 12:00（最晚）
+      Given 會員 member_id "M001" 已綁定 fb_customer_id "F123" 與 line_uid "L456"
+      And LINE 的 conversation_threads.last_message_at 為 2025-12-01 12:00（最晚）
       When 客服查看會員列表
-      Then 最近互動欄位顯示 LINE ICON + line_friends.line_picture_url + line_friends.line_display_name
-      And 切換至 FB 渠道時顯示 fb_friends.fb_picture_url + fb_friends.fb_display_name
+      Then 最近互動欄位顯示 LINE ICON + members.line_avatar + members.line_display_name
+      And 切換至 FB 渠道時顯示 members.fb_avatar + members.fb_customer_name
 
     Example: 最近互動為 Webchat
-      Given 會員 member_id "M002" 關聯 webchat_friends (webchat_uid "W789")
-      And webchat_friends.last_interaction_at 為最晚
+      Given 會員 member_id "M002" 已綁定 webchat_uid "W789"
+      And Webchat 的 conversation_threads.last_message_at 為最晚
       When 客服查看會員列表
-      Then 最近互動欄位顯示 Webchat ICON + webchat_friends.webchat_picture_url + webchat_friends.webchat_display_name
+      Then 最近互動欄位顯示 Webchat ICON + members.webchat_avatar + members.webchat_name
 
   # =============================================================================
   # 會員列表加入來源欄位顯示格式
@@ -491,15 +485,15 @@ Feature: 聊天室跨渠道紀錄整併與身份識別
     說明:
       - 每個渠道顯示格式：[渠道圖示] + 帳號名稱 + UID
       - 複數渠道時全部顯示，不折疊
-      - 排序依據各 friends 表的 followed_at（加入時間），由舊到新
+      - 排序依據各渠道 conversation_threads 的 created_at（建立時間），由舊到新
       - 首次加入的渠道優先顯示（最上方/最左方）
 
     Example: 單一渠道會員
-      Given 會員 member_id "M001" 僅關聯 line_friends
+      Given 會員 member_id "M001" 僅綁定 LINE
         | 欄位              | 值                    |
         | line_uid          | U123456789            |
         | line_display_name | 王小明                |
-        | followed_at       | 2025-01-01 10:00:00   |
+        | created_at        | 2025-01-01 10:00:00   |
       When 客服查看會員列表的「加入來源」欄位
       Then 顯示為：[LINE 圖示] 王小明 (U123456789)
 

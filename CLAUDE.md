@@ -52,14 +52,14 @@ npx playwright test tests/e2e
 
 ```
 lili_hotel/
-├── backend/                 # FastAPI backend (port 8000)
+├── backend/                 # FastAPI backend (port 8700)
 │   ├── app/
 │   │   ├── api/v1/         # REST endpoints (auth, members, campaigns, tags, etc.)
 │   │   ├── models/         # SQLAlchemy models
 │   │   ├── schemas/        # Pydantic schemas (<Entity>Schema naming)
 │   │   ├── services/       # Business logic layer
 │   │   ├── adapters/       # External service adapters (PMS, etc.)
-│   │   └── websocket_manager.py  # Real-time chat WebSocket
+│   │   └── websocket_manager.py  # Real-time chat SSE (replaced WebSocket)
 │   └── migrations/         # Alembic migrations
 │
 ├── frontend/               # Vite + React + TypeScript
@@ -86,7 +86,7 @@ lili_hotel/
 - **Campaigns**: `/api/v1/campaigns` (create, send, schedule)
 - **Tags**: `/api/v1/tags` (member tags, interaction tags)
 - **Auto-responses**: `/api/v1/auto-responses`
-- **Chat**: `/api/v1/chat/messages`, WebSocket at `/api/v1/ws/{conversation_id}`
+- **Chat**: `/api/v1/chat/messages`, SSE at `/api/v1/sse/chat/{thread_id}`
 - **Analytics**: `/api/v1/analytics/overview`
 
 API docs: http://localhost:8700/api/v1/docs
@@ -94,8 +94,8 @@ API docs: http://localhost:8700/api/v1/docs
 ## Multi-Channel Architecture
 
 The system supports LINE, Facebook, and Webchat through:
-- `Member` model has `line_user_id`, `fb_user_id`, `webchat_uid` fields
-- `Conversation` model tracks `channel_type` (line/facebook/webchat)
+- `Member` model has `line_uid`, `fb_customer_id`, `webchat_uid` fields
+- `ConversationThread` model tracks `platform` (line/facebook/webchat)
 - `message_service.py` handles routing messages to appropriate channel APIs
 - Facebook Messenger uses external API (`FB_API_URL`) for message sending and member sync
 
@@ -122,8 +122,12 @@ Frontend:
 ## Database
 
 MySQL 8.0 with SQLAlchemy 2.0 async. Key models:
-- `Member`, `LineFriend`, `FacebookFriend`, `WebchatFriend`
-- `Conversation`, `ConversationMessage`
-- `Campaign`, `MessageDelivery`
-- `Tag`, `MemberTag`, `InteractionTag`
-- `AutoResponse`
+- `Member` (unified multi-channel: line_uid, fb_customer_id, webchat_uid)
+- `ConversationThread`, `ConversationMessage`
+- `Campaign`, `Message`, `MessageDelivery`
+- `MemberTag`, `InteractionTag`, `MemberInteractionTag`, `TagTriggerLog`
+- `AutoResponse`, `AutoResponseKeyword`, `AutoResponseMessage`
+- `FaqCategory`, `FaqRule`, `FaqRuleVersion`, `AiTokenUsage`
+- `LineChannel`, `FbChannel`
+- `MessageTemplate`
+- `ChatbotSession`, `FaqPmsConnection`

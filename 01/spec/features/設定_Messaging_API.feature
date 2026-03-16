@@ -6,36 +6,36 @@
 
   Rule: Channel ID 欄位必須填寫且格式正確
 
-    Example: Channel ID 格式錯誤時顯示錯誤訊息
+    Example: Channel ID 為空時顯示錯誤訊息
       Given 管理員進入 Messaging API 設定頁面
       When 管理員輸入 Channel ID「」
       And 管理員輸入 Channel Secret「valid_secret」
       And 管理員輸入 Channel Access Token「valid_token」
       And 管理員點擊「建立攔截」
       Then 操作失敗
-      And Channel ID 欄位顯示錯誤訊息「格式錯誤，請重新確認」
+      And Channel ID 欄位顯示錯誤訊息「此欄位為必填」
 
   Rule: Channel Secret 欄位必須填寫且格式正確
 
-    Example: Channel Secret 格式錯誤時顯示錯誤訊息
+    Example: Channel Secret 為空時顯示錯誤訊息
       Given 管理員進入 Messaging API 設定頁面
       When 管理員輸入 Channel ID「valid_channel_id」
       And 管理員輸入 Channel Secret「」
       And 管理員輸入 Channel Access Token「valid_token」
       And 管理員點擊「建立攔截」
       Then 操作失敗
-      And Channel Secret 欄位顯示錯誤訊息「格式錯誤，請重新確認」
+      And Channel Secret 欄位顯示錯誤訊息「此欄位為必填」
 
   Rule: Channel Access Token 欄位必須填寫且格式正確
 
-    Example: Channel Access Token 格式錯誤時顯示錯誤訊息
+    Example: Channel Access Token 為空時顯示錯誤訊息
       Given 管理員進入 Messaging API 設定頁面
       When 管理員輸入 Channel ID「valid_channel_id」
       And 管理員輸入 Channel Secret「valid_secret」
       And 管理員輸入 Channel Access Token「」
       And 管理員點擊「建立攔截」
       Then 操作失敗
-      And Channel Access Token 欄位顯示錯誤訊息「格式錯誤，請重新確認」
+      And Channel Access Token 欄位顯示錯誤訊息「此欄位為必填」
 
 
     Example: 所有憑證格式正確

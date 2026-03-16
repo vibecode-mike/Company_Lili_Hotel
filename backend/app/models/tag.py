@@ -12,6 +12,7 @@ from sqlalchemy import (
     BigInteger,
     DateTime,
     ForeignKey,
+    Index,
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
@@ -76,6 +77,7 @@ class MemberTag(Base):
             "message_id",
             name="uq_member_tag_message",
         ),
+        Index("ix_member_tags_tag_name", "tag_name"),
     )
 
 

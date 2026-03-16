@@ -1,4 +1,10 @@
+@deprecated
 Feature: LINE 好友管理
+  ⚠ DEPRECATED：本 feature 描述的 line_friends 表已在 erm.dbml 中標記為 DEPRECATED。
+  目前 backend 無 SQLAlchemy ORM Model，僅 line_app 以 raw SQL 操作。
+  v1.0 架構已改為 members 單表設計（line_uid / line_avatar / line_display_name）。
+  待 line_app 遷移至 members 單表後，本 feature 應重寫或移除。
+
   作為一位系統管理員
   我希望系統能夠自動追蹤所有加入 LINE 官方帳號的用戶
   並且儲存他們的最新 Profile 資訊（displayName, pictureUrl）
@@ -99,41 +105,6 @@ Feature: LINE 好友管理
         | U1111222233334444555566667777888    | NULL              | NULL             |
       And 系統不中斷歡迎訊息發送流程
       And 系統在下次互動時會補抓取 Profile
-
-  Rule: 智能更新 Profile 策略（避免頻繁呼叫 API）
-
-    Example: Profile 資料為空時補抓取
-      Given line_friends 表中存在以下記錄
-        | line_uid                              | line_display_name | line_picture_url | last_interaction_at |
-        | U1234567890abcdef1234567890abcdef    | NULL              | NULL             | 2025-11-10 10:00:00 |
-      When 用戶發送文字訊息「你好」
-      And 系統接收到 MessageEvent
-      Then 系統檢查 line_display_name 為空
-      And 系統立即呼叫 LINE Profile API 補抓取
-      And 系統更新 line_display_name 和 line_picture_url
-      And 系統更新 last_interaction_at 為當前時間
-
-    Example: Profile 資料完整且最近更新過，不重複呼叫 API
-      Given line_friends 表中存在以下記錄
-        | line_uid                              | line_display_name | line_picture_url                           | last_interaction_at |
-        | U1234567890abcdef1234567890abcdef    | 王小明            | https://profile.line-scdn.net/0h1a2b3c4d5e | 2025-11-16 10:00:00 |
-      And 距離上次更新未超過 7 天
-      When 用戶發送文字訊息「早安」
-      And 系統接收到 MessageEvent
-      Then 系統不呼叫 LINE Profile API
-      And 系統只更新 last_interaction_at 為當前時間
-      And 系統不更新 line_display_name 和 line_picture_url
-
-    Example: Profile 資料超過 7 天未更新，智能同步
-      Given line_friends 表中存在以下記錄
-        | line_uid                              | line_display_name | line_picture_url                           | last_interaction_at |
-        | U1234567890abcdef1234567890abcdef    | 王小明            | https://profile.line-scdn.net/0h1a2b3c4d5e | 2025-11-01 10:00:00 |
-      And 距離上次互動超過 7 天
-      When 用戶發送 Postback 事件
-      And 系統接收到 PostbackEvent
-      Then 系統呼叫 LINE Profile API 取得最新 Profile
-      And 若 displayName 或 pictureUrl 有變更，則更新資料
-      And 系統更新 last_interaction_at 為當前時間
 
   Rule: 所有互動事件都更新 last_interaction_at
 
@@ -379,60 +350,6 @@ Feature: LINE 好友管理
       Then 系統使用 idempotency 機制防止重複處理
       And 系統只處理第一次請求
       And 系統對第二次請求回傳 HTTP 200（視為成功處理）
-
-  Rule: Webhook 簽名驗證失敗處理機制（方案 A：HTTP 403 + 記錄 + 閾值告警）
-
-    安全驗證邏輯：
-      - 所有 Webhook 請求必須驗證 X-Line-Signature header
-      - 使用 Channel Secret 計算 HMAC-SHA256 簽名並比對
-      - 驗證失敗回傳 HTTP 403 Forbidden（語義最準確）
-      - 記錄可疑請求（IP、timestamp、請求內容）
-      - 超過 10 次/小時發送告警（平衡誤報與真實攻擊）
-
-    Example: Webhook 簽名驗證失敗 - 回傳 403
-      Given 系統接收到 Webhook 請求
-      And 請求 Header 包含「X-Line-Signature: invalid_signature_123」
-      When 系統使用 Channel Secret 計算 HMAC-SHA256 簽名
-      And 計算結果與 X-Line-Signature 不匹配
-      Then 系統回傳 HTTP 403 Forbidden
-      And 系統回傳錯誤訊息「{"error": "Invalid signature"}」
-      And 系統不處理請求內容（不建立 line_friends 記錄）
-
-    Example: 記錄可疑請求詳情
-      Given Webhook 簽名驗證失敗
-      When 系統回傳 HTTP 403
-      Then 系統記錄以下資訊到日誌
-        | 欄位           | 值                                  |
-        | timestamp      | 2025-11-17 10:30:15 (UTC)           |
-        | ip_address     | 203.0.113.45                        |
-        | signature      | invalid_signature_123               |
-        | request_body   | {"events": [...]}（前 200 字元）    |
-        | error_type     | signature_verification_failed       |
-      And 日誌等級為 WARNING
-
-    Example: 超過告警閾值 - 發送告警
-      Given 過去 1 小時內累積 10 次簽名驗證失敗
-      And 來源 IP 為「203.0.113.45」
-      When 第 11 次驗證失敗發生
-      Then 系統發送告警郵件給管理員
-      And 郵件標題為「⚠️ LINE Webhook 可疑請求告警」
-      And 郵件內容包含
-        """
-        偵測到異常 Webhook 請求：
-        - 來源 IP: 203.0.113.45
-        - 失敗次數: 11 次（過去 1 小時）
-        - 首次失敗: 2025-11-17 09:35:00 (UTC)
-        - 最近失敗: 2025-11-17 10:30:15 (UTC)
-        - 建議動作: 檢查 Channel Secret 設定，或考慮封鎖該 IP
-        """
-      And 系統記錄告警事件到監控系統
-
-    Example: 未達閾值 - 僅記錄不告警
-      Given 過去 1 小時內有 3 次簽名驗證失敗
-      When 第 4 次驗證失敗發生
-      Then 系統記錄日誌（WARNING 等級）
-      And 系統不發送告警郵件
-      And 系統繼續監控失敗次數
 
     Example: 正常 Webhook 請求處理
       Given 系統接收到 Webhook 請求

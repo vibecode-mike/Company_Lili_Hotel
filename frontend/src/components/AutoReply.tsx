@@ -256,9 +256,9 @@ export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNav
       <div className="bg-slate-50 content-stretch flex flex-col items-start relative w-full" data-name="Main Container">
         <PageHeaderWithBreadcrumb
           breadcrumbItems={[
-            { label: '自動回應', active: true }
+            { label: '關鍵字回應', active: true }
           ]}
-          title="自動回應"
+          title="關鍵字回應"
           description="設定自動回應訊息，讓顧客獲得即時的回覆"
         />
 

@@ -1,0 +1,70 @@
+  建議做法：嵌入式 Widget + 安全機制
+
+  1. 給每個客戶一組 Widget Key
+
+  客戶 A → widget_key: "wk_abc123"，允許網域: ["hotel-a.com", "www.hotel-a.com"]
+  客戶 B → widget_key: "wk_xyz789"，允許網域: ["hotel-b.com.tw"]
+
+  - 後台新增一張 widget_config 表，存 widget_key、allowed_domains、hotel_id、is_active
+  - 客戶把 widget key 放在嵌入碼裡，不是密鑰，只是識別用
+
+  2. 客戶網頁嵌入方式
+
+  只要貼一段 script tag：
+
+  <script src="https://crmpoc.star-bit.io/widget/chatbot.js"
+          data-widget-key="wk_abc123"></script>
+
+  這段 JS 會自動在頁面右下角長出聊天按鈕（就像現在的 ChatFAB），邏輯打包成獨立的 JS bundle，不依賴客戶的 React。
+
+  3. 後端安全驗證（三層防護）
+
+  第一層：Domain 白名單
+  - 每次 API 請求，後端檢查 Origin / Referer header 是否在該 widget_key 的 allowed_domains 裡
+  - 不符合就拒絕（403）
+
+  第二層：CORS 動態回應
+  - 不再用 *，改成根據 widget_key 查到的 allowed_domains 動態回傳 Access-Control-Allow-Origin
+  - 瀏覽器層級就會擋掉非授權網域的請求
+
+  第三層：Rate Limiting
+  - 每個 widget_key 限制每分鐘請求數（比如 60 次/分鐘）
+  - 每個 browser_key 限制每分鐘訊息數（比如 10 則/分鐘）
+  - 防止被大量灌請求白嫖 token
+
+  4. 請求流程
+
+  客戶網頁 → widget.js 帶 widget_key 發請求
+      ↓
+  後端收到請求：
+    1. 用 widget_key 查 widget_config → 找到 hotel_id + allowed_domains
+    2. 比對 Origin header ∈ allowed_domains？ → 不符合就 403
+    3. 檢查 rate limit → 超過就 429
+    4. 通過 → 轉交現有 chatbot_service 處理（帶入 hotel_id）
+      ↓
+  回應 → 跟現在一樣的 JSON 格式
+
+  5. 需要新增的東西（不動現有架構）
+
+  ┌─────────────────────┬──────────────────────────────────────────────────────────────┐
+  │        項目         │                             說明                             │
+  ├─────────────────────┼──────────────────────────────────────────────────────────────┤
+  │ widget_config DB 表 │ widget_key, hotel_id, allowed_domains, is_active, rate_limit │
+  ├─────────────────────┼──────────────────────────────────────────────────────────────┤
+  │ 一個 middleware     │ 攔截 /api/v1/chatbot/* 請求，做 domain 驗證 + rate limit     │
+  ├─────────────────────┼──────────────────────────────────────────────────────────────┤
+  │ CORS 改動態         │ 從 * 改成根據 widget_key 回傳對應 domain                     │
+  ├─────────────────────┼──────────────────────────────────────────────────────────────┤
+  │ widget/chatbot.js   │ 把 ChatFAB 打包成獨立 JS（不依賴客戶的框架）                 │
+  ├─────────────────────┼──────────────────────────────────────────────────────────────┤
+  │ 後台管理頁          │ 讓你可以新增/管理客戶的 widget_key 和允許網域                │
+  └─────────────────────┴──────────────────────────────────────────────────────────────┘
+
+  6. 防不了的情況（要知道的限制）
+
+  - 伺服器端直接呼叫 API（不經過瀏覽器）→ 沒有 Origin header，domain 檢查擋不住
+  - 應對方式：rate limit + 監控異常用量 + 必要時封鎖 IP
+  - 如果未來要更嚴格，可以加「後端對後端」的 API Secret 機制，但目前階段不需要
+
+  ---
+  總結：核心概念就是 widget_key 綁定網域，後端每次請求都驗 Origin 是否合法。現有的 chatbot_service、session 管理、API 回傳格式完全不用動，只是在外面包一層驗證。

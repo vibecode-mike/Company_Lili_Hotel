@@ -175,6 +175,12 @@ class FaqModuleAuthSchema(BaseModel):
         from_attributes = True
 
 
+class FaqRuleToggleSchema(BaseModel):
+    """切換規則狀態"""
+
+    status: str = Field(..., pattern="^(active|disabled|draft)$")
+
+
 class FaqModuleAuthUpdateSchema(BaseModel):
     """設定模組授權"""
 

@@ -109,10 +109,7 @@ async def notify_new_message(
             msg.role = role
             msg.direction = direction
             msg.message_source = notification.source or msg.message_source
-            if direction == "outgoing":
-                msg.response = notification.message_text
-            else:
-                msg.question = notification.message_text
+            msg.content = notification.message_text
         else:
             # 直接使用本地時間（不做 UTC 假設）
             created_at_local = datetime.fromtimestamp(notification.timestamp / 1000)
@@ -122,8 +119,7 @@ async def notify_new_message(
                 platform="LINE",
                 role=role,
                 direction=direction,
-                question=notification.message_text if direction == "incoming" else None,
-                response=notification.message_text if direction == "outgoing" else None,
+                content=notification.message_text,
                 message_source=notification.source,
                 created_at=created_at_local,
             )

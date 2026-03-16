@@ -242,6 +242,25 @@ html {
   scrollbar-width: none;  /* Firefox */
 }
 
+/* Chat widget 輸入框 - 細灰 scrollbar（4px，符合 Figma 設計稿） */
+.chat-widget-textarea::-webkit-scrollbar {
+  width: 4px;
+}
+
+.chat-widget-textarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-widget-textarea::-webkit-scrollbar-thumb {
+  background: #dddddd;
+  border-radius: 4px;
+}
+
+.chat-widget-textarea {
+  scrollbar-width: thin;
+  scrollbar-color: #dddddd transparent;
+}
+
 /* 透明 scrollbar - 適用於會員備註區域 */
 .scrollbar-transparent::-webkit-scrollbar {
   width: 8px;
@@ -328,3 +347,96 @@ html {
 .btn-reauthorize {
   color: #b71c1c;
 }
+/* 訂房 URL 按鈕 */
+.booking-url-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  padding: 4px;
+  cursor: pointer;
+  max-width: 100%;
+  transition: background-color 150ms;
+  text-decoration: none;
+}
+
+.booking-url-btn:hover,
+.booking-url-btn:active {
+  background-color: #dbdbdb;
+}
+
+.booking-url-btn:hover .booking-url-text,
+.booking-url-btn:active .booking-url-text {
+  text-decoration: underline;
+  text-decoration-style: solid;
+  text-decoration-skip-ink: none;
+}
+
+.booking-url-text {
+  font-size: 12px;
+  color: #565656;
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+/* ── PMS 串接設定表單 RWD ── */
+.pms-field-row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+  flex-shrink: 0;
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .pms-field-row {
+    flex-direction: row;
+    gap: 20px;
+  }
+}
+
+/* 左側 label 欄 */
+.pms-label-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .pms-label-col {
+    width: 400px;
+  }
+}
+
+/* label 欄內的文字列 */
+.pms-label-inner {
+  width: 100%;
+  white-space: normal;
+  word-break: break-word;
+}
+
+@media (min-width: 768px) {
+  .pms-label-inner {
+    white-space: nowrap;
+    min-width: 400px;
+  }
+}
+
+/* 右側 input 欄 */
+.pms-input-col {
+  width: 100%;
+  min-width: 0;
+  flex: 1 0 0;
+}
+

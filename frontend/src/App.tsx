@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from "./components/auth/AuthContext";
 import Login from "./components/auth/Login";
 import { Toaster } from "./components/ui/sonner";
 import { useLineChannelStatus } from "./contexts/LineChannelStatusContext";
+import ChatFAB from "./components/ChatFAB";
 
 // 頁面組件懶加載導入 - 優化首屏加載性能
 const MessageListPage = lazy(() => import("./pages/MessageListPage"));
@@ -14,19 +15,25 @@ const MemberManagementPage = lazy(() => import("./pages/MemberManagementPage"));
 const MemberDetailPage = lazy(() => import("./pages/MemberDetailPage"));
 const ChatRoomPage = lazy(() => import("./pages/ChatRoomPage"));
 const LineApiSettingsPage = lazy(() => import("./pages/LineApiSettingsPage"));
+const PMSPage = lazy(() => import("./pages/PMSPage"));
+const FacilitiesPage = lazy(() => import("./pages/FacilitiesPage"));
+const AIChatbotPage = lazy(() => import("./pages/AIChatbotPage"));
 
 /**
  * 路由配置對象
  * 將頁面名稱映射到對應的組件
  */
 const routes: Record<Page, React.ComponentType> = {
-  'message-list': MessageListPage,
-  'flex-editor': FlexEditorPage,
-  'auto-reply': AutoReplyPage,
-  'member-management': MemberManagementPage,
-  'member-detail': MemberDetailPage,
-  'chat-room': ChatRoomPage,
-  'line-api-settings': LineApiSettingsPage,
+  "message-list": MessageListPage,
+  "flex-editor": FlexEditorPage,
+  "auto-reply": AutoReplyPage,
+  "member-management": MemberManagementPage,
+  "member-detail": MemberDetailPage,
+  "chat-room": ChatRoomPage,
+  "line-api-settings": LineApiSettingsPage,
+  pms: PMSPage,
+  facilities: FacilitiesPage,
+  "ai-chatbot": AIChatbotPage,
 };
 
 /**
@@ -34,13 +41,16 @@ const routes: Record<Page, React.ComponentType> = {
  * 用於動態更新瀏覽器標籤標題
  */
 const pageTitles: Record<Page, string> = {
-  'message-list': '活動與訊息推播',
-  'flex-editor': 'Flex Message 編輯器',
-  'auto-reply': '自動回應',
-  'member-management': '會員管理',
-  'member-detail': '會員詳情',
-  'chat-room': '聊天室',
-  'line-api-settings': 'LINE API 設定',
+  "message-list": "活動與訊息推播",
+  "flex-editor": "Flex Message 編輯器",
+  "auto-reply": "關鍵字回應",
+  "member-management": "會員管理",
+  "member-detail": "會員詳情",
+  "chat-room": "聊天室",
+  "line-api-settings": "LINE API 設定",
+  pms: "AI Chatbot",
+  facilities: "AI Chatbot",
+  "ai-chatbot": "AI Chatbot",
 };
 
 /**
@@ -50,7 +60,11 @@ const pageTitles: Record<Page, string> = {
 function AppContent() {
   const { currentPage, navigate } = useNavigation();
   const { isAuthenticated } = useAuth();
-  const { isLoading: isStatusLoading, isConfigured, hasFetchedOnce } = useLineChannelStatus();
+  const {
+    isLoading: isStatusLoading,
+    isConfigured,
+    hasFetchedOnce,
+  } = useLineChannelStatus();
   const hasRoutedAfterUnlockRef = useRef(false);
   const hasLockedStateRef = useRef(true);
 
@@ -68,8 +82,8 @@ function AppContent() {
     if (!isConfigured) {
       hasRoutedAfterUnlockRef.current = false;
       hasLockedStateRef.current = true;
-      if (currentPage !== 'line-api-settings') {
-        navigate('line-api-settings');
+      if (currentPage !== "line-api-settings") {
+        navigate("line-api-settings");
       }
       return;
     }
@@ -81,11 +95,18 @@ function AppContent() {
       hasLockedStateRef.current = false;
       hasRoutedAfterUnlockRef.current = true;
     }
-  }, [isAuthenticated, isStatusLoading, hasFetchedOnce, isConfigured, currentPage, navigate]);
+  }, [
+    isAuthenticated,
+    isStatusLoading,
+    hasFetchedOnce,
+    isConfigured,
+    currentPage,
+    navigate,
+  ]);
 
   // 動態更新頁面標題
   useEffect(() => {
-    const pageTitle = pageTitles[currentPage] || '會員管理';
+    const pageTitle = pageTitles[currentPage] || "會員管理";
     document.title = `${pageTitle} | Lili Hotel`;
   }, [currentPage]);
 
@@ -99,26 +120,36 @@ function AppContent() {
       <div className="flex items-center justify-center min-h-screen bg-slate-50">
         <div className="text-center">
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em]" />
-          <p className="mt-4 text-sm text-muted-foreground">檢查 LINE 基本設定...</p>
+          <p className="mt-4 text-sm text-muted-foreground">
+            檢查 LINE 基本設定...
+          </p>
         </div>
       </div>
     );
   }
 
   // 根據當前頁面渲染對應的組件
-  const PageComponent = routes[currentPage] || routes['member-management'];
+  const PageComponent = routes[currentPage] || routes["member-management"];
+
+  const chatFabPages: Page[] = ["ai-chatbot", "pms", "facilities"];
+  const showChatFab = chatFabPages.includes(currentPage);
 
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" />
-          <p className="mt-4 text-sm text-muted-foreground">載入中...</p>
-        </div>
-      </div>
-    }>
-      <PageComponent />
-    </Suspense>
+    <>
+      <Suspense
+        fallback={
+          <div className="flex items-center justify-center min-h-screen">
+            <div className="text-center">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" />
+              <p className="mt-4 text-sm text-muted-foreground">載入中...</p>
+            </div>
+          </div>
+        }
+      >
+        <PageComponent />
+      </Suspense>
+      {showChatFab && <ChatFAB />}
+    </>
   );
 }
 

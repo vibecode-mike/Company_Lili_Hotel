@@ -70,6 +70,7 @@ export async function sendChatbotMessage(payload: {
   browser_key: string;
   message: string;
   hotel_id?: number | null;
+  test_mode?: boolean;
 }): Promise<ChatbotMessageResponse> {
   const response = await apiPost("/api/v1/chatbot/message", payload, {
     skipAuth: true,

@@ -11,7 +11,7 @@ Feature: 訊息配置與編輯
   # 詳見：../implementation_decisions.md
   # ============================================
 
-  Rule: 在配置區填寫欄位後，前端自動生成 LINE Flex Message JSON（v0 版不支援手動編輯 JSON，僅透過配置區欄位修改，簡化操作並避免格式錯誤）
+  Rule: 在配置區填寫欄位後，前端自動生成 LINE Flex Message JSON
 
     Example: 配置區填寫欄位自動生成 JSON
       Given 內容管理者在配置區填寫以下欄位
@@ -21,7 +21,7 @@ Feature: 訊息配置與編輯
       When 系統處理欄位資料
       Then 前端自動生成對應的 LINE Flex Message JSON
       And 將 JSON 儲存至 flex_message_json 欄位
-      And 前端不顯示 JSON 編輯介面（使用者僅透過配置區欄位修改）
+      And 所有訊息修改皆透過配置區欄位完成
 
     Example: 使用者無法直接編輯 flex_message_json
       Given 內容管理者正在編輯訊息模板
@@ -220,7 +220,7 @@ Feature: 訊息配置與編輯
         | 2    | third.jpg   |
       And carousel_count 更新為 2
 
-  Rule: 前端自動生成 LINE Flex Message JSON（v0 版不支援手動編輯 JSON，僅透過配置區修改）
+  Rule: 前端自動生成 LINE Flex Message JSON
 
     Example: 填寫完成後前端自動生成 JSON
       Given 內容管理者已填寫以下欄位
@@ -239,7 +239,7 @@ Feature: 訊息配置與編輯
       When 系統處理訊息
       Then 前端負責欄位輸入、即時預覽與 JSON 生成
       And 後端負責 JSON 格式驗證與儲存
-      And v0 版不提供 JSON 手動編輯功能（使用者僅透過配置區修改）
+      And 所有訊息修改皆透過配置區欄位完成
 
   Rule: 儲存訊息模板
 

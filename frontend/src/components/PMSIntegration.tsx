@@ -1,13 +1,15 @@
 import React, { useState, memo, useCallback, useMemo, useEffect } from "react";
 import { apiGet, apiPost, apiPut, apiDelete } from "../utils/apiClient";
+import { useToast } from "./ToastProvider";
 import Sidebar from "./Sidebar";
 import {
   RoomEditModal,
   RoomFaqDraft,
   RoomPmsData,
 } from "./chatbot/AIChatbotEditModal";
-import ChatFAB from "./ChatFAB";
+
 import { PageHeaderWithBreadcrumb } from "./common/Breadcrumb";
+import CategoryTitleDropdown from "./common/CategoryTitleDropdown";
 import svgPaths from "../imports/svg-icons-common";
 import togglePaths from "../imports/svg-wbwsye31ry";
 import ButtonEdit from "../imports/ButtonEdit";
@@ -321,17 +323,19 @@ const TableRow = memo(function TableRow({
   isLast,
   onToggle,
   onEdit,
+  pmsEnabled,
 }: {
   record: RoomRecord;
   idx: number;
   isLast: boolean;
   onToggle: (id: string, v: boolean) => void;
   onEdit: (id: string) => void;
+  pmsEnabled: boolean;
 }) {
   return (
     <tr
       className={`bg-white transition-colors duration-150 hover:bg-[#f5f8ff] group ${
-        !isLast ? "[&>td]:border-b [&>td]:border-[#ddd]" : ""
+        !isLast ? "row-divider" : ""
       }`}
     >
       {/* 房型名稱 — thumbnail + name */}
@@ -351,19 +355,19 @@ const TableRow = memo(function TableRow({
         </div>
       </td>
 
-      {/* 房價 — right-aligned */}
-      <td className="px-[12px] py-[12px] w-[160px] text-right text-[14px] text-[#383838] font-['Inter',sans-serif] font-normal tracking-[0.22px] leading-[24px] whitespace-nowrap">
-        NT${record.pricePerNight.toLocaleString()}
+      {/* 房價 — left-aligned */}
+      <td className="px-[12px] py-[12px] w-[160px] text-[14px] text-[#383838] font-['Inter',sans-serif] font-normal tracking-[0.22px] leading-[24px] whitespace-nowrap">
+        {pmsEnabled ? "即時房價" : `NT$${record.pricePerNight.toLocaleString()}`}
       </td>
 
-      {/* 可入住人數 — right-aligned */}
-      <td className="px-[12px] py-[12px] w-[140px] text-right text-[14px] text-[#383838] font-['Inter',sans-serif] font-normal tracking-[0.22px] leading-[24px]">
-        {record.maxGuests}
+      {/* 可入住人數 — left-aligned */}
+      <td className="px-[12px] py-[12px] w-[140px] text-[14px] text-[#383838] font-['Inter',sans-serif] font-normal tracking-[0.22px] leading-[24px]">
+        {pmsEnabled ? "即時資料" : record.maxGuests}
       </td>
 
-      {/* 剩餘間數 — right-aligned */}
-      <td className="px-[12px] py-[12px] w-[140px] text-right text-[14px] text-[#383838] font-['Inter',sans-serif] font-normal tracking-[0.22px] leading-[24px]">
-        {record.remainingRooms}
+      {/* 剩餘間數 — left-aligned */}
+      <td className="px-[12px] py-[12px] w-[140px] text-[14px] text-[#383838] font-['Inter',sans-serif] font-normal tracking-[0.22px] leading-[24px]">
+        {pmsEnabled ? "即時資料" : record.remainingRooms}
       </td>
 
       {/* 房型特色 */}
@@ -397,14 +401,29 @@ const TableRow = memo(function TableRow({
       </td>
 
       {/* 最後更新 */}
-      <td className="px-[12px] py-[12px] whitespace-nowrap text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5]">
-        {record.lastUpdated}
+      <td className="px-[12px] py-[12px] w-[220px] whitespace-nowrap text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5]">
+        <div className="flex items-center gap-[12px]">
+          <span>{record.lastUpdated}</span>
+          <div
+            className="inline-flex items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0"
+            style={{ backgroundColor: record.published ? "#e4fcea" : "#f5f5f5" }}
+          >
+            <span
+              className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[16px] text-center whitespace-nowrap"
+              style={{ color: record.published ? "#00470c" : "#383838" }}
+            >
+              {record.published ? "已發佈" : "未發佈"}
+            </span>
+          </div>
+        </div>
       </td>
 
       {/* 啟用狀態 — 凍結欄 */}
       <td
         style={{
           width: 104,
+          minWidth: 104,
+          maxWidth: 104,
           position: "sticky",
           right: 68,
           zIndex: 1,
@@ -420,7 +439,7 @@ const TableRow = memo(function TableRow({
 
       {/* 動作 — 凍結欄 */}
       <td
-        style={{ width: 68, position: "sticky", right: 0, zIndex: 1 }}
+        style={{ width: 68, minWidth: 68, maxWidth: 68, position: "sticky", right: 0, zIndex: 1 }}
         className="px-[12px] py-[12px] align-middle text-center bg-white"
       >
         <ButtonEdit onClick={() => onEdit(record.id)} />
@@ -439,11 +458,18 @@ const PMSDataTable = memo(function PMSDataTable({
   onNavigateToSettings: () => void;
   sourceName: string;
 }) {
+  const { showToast } = useToast();
   const [rooms, setRooms] = useState<RoomRecord[]>([]);
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [loadingRooms, setLoadingRooms] = useState(true);
-  const [filterType, setFilterType] = useState("全部");
-  const [filterLimit, setFilterLimit] = useState("不限");
+  const [pmsEnabled, setPmsEnabled] = useState(false);
+
+  // Fetch PMS enabled status
+  useEffect(() => {
+    apiGet("/api/v1/chatbot/pms-status")
+      .then((res: any) => setPmsEnabled(!!res?.enabled))
+      .catch(() => {});
+  }, []);
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -484,6 +510,8 @@ const PMSDataTable = memo(function PMSDataTable({
 
   const handleToggle = useCallback(
     async (id: string, value: boolean) => {
+      const room = rooms.find((r) => r.id === id);
+      const name = room?.roomType ?? "";
       setRooms((prev) =>
         prev.map((r) => (r.id === id ? { ...r, published: value } : r)),
       );
@@ -492,7 +520,6 @@ const PMSDataTable = memo(function PMSDataTable({
           await apiPost(`/api/v1/faq/rules/${id}/publish`, {});
         } else {
           // Revert to draft (unpublish) by updating with current content
-          const room = rooms.find((r) => r.id === id);
           if (room) {
             const content_json: Record<string, string> = {
               房型名稱: room.roomType,
@@ -509,6 +536,34 @@ const PMSDataTable = memo(function PMSDataTable({
             });
           }
         }
+        showToast(
+          value ? (
+            <>
+              {name} 已啟用{" "}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.dispatchEvent(new CustomEvent("open-chatfab"));
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#DBEDFF",
+                  cursor: "pointer",
+                  padding: 0,
+                  fontFamily: "'Noto Sans TC', sans-serif",
+                  fontSize: 16,
+                  lineHeight: 1.5,
+                  textDecoration: "underline",
+                }}
+              >
+                測試
+              </button>
+            </>
+          ) : `${name} 已停用`,
+          "success",
+        );
       } catch {
         // Revert on error
         setRooms((prev) =>
@@ -516,7 +571,7 @@ const PMSDataTable = memo(function PMSDataTable({
         );
       }
     },
-    [rooms],
+    [rooms, showToast],
   );
 
   const handleEdit = useCallback(
@@ -601,17 +656,11 @@ const PMSDataTable = memo(function PMSDataTable({
   );
 
   const handleClearFilters = useCallback(() => {
-    setFilterType("全部");
-    setFilterLimit("不限");
     setSearch("");
   }, []);
 
   const filtered = useMemo(() => {
     let list = rooms.filter((r) => {
-      if (filterType === "已發佈" && !r.published) return false;
-      if (filterType === "未發佈" && r.published) return false;
-      if (filterLimit !== "不限" && !r.memberTags.includes(filterLimit))
-        return false;
       if (
         search &&
         !r.roomType.includes(search) &&
@@ -657,130 +706,111 @@ const PMSDataTable = memo(function PMSDataTable({
       });
     }
     return list;
-  }, [rooms, filterType, filterLimit, search, sortField, sortDir]);
+  }, [rooms, search, sortField, sortDir]);
 
   const thProps = { sortField, sortDir, onSort: handleSort };
 
   return (
     <div className="flex flex-col gap-[16px] w-full">
       {/* Filter row */}
-      <div className="flex flex-wrap gap-x-[8px] gap-y-[8px] items-center w-full">
-        {/* 篩選 label */}
-        <div className="flex flex-col items-start pb-[2px] pt-px shrink-0">
-          <p className="font-['Noto_Sans_TC',sans-serif] font-medium leading-[1.5] text-[#6e6e6e] text-[12px] whitespace-nowrap">
-            篩選
-          </p>
-        </div>
-
-        {/* 全部 dropdown */}
-        <FilterOption
-          value={filterType}
-          options={["全部", "已發佈", "未發佈"]}
-          onChange={setFilterType}
-        />
-
-        {/* 不限 dropdown */}
-        <FilterOption
-          value={filterLimit}
-          options={["不限", "限量", "VIP", "蜜月", "家庭", "頂級"]}
-          onChange={setFilterLimit}
-        />
-
-        {/* Search bar */}
-        <div className="bg-white flex gap-[28px] items-center px-[12px] py-[8px] rounded-[16px] shrink-0 w-[292px]">
-          <div className="flex flex-[1_0_0] gap-[4px] items-center min-w-0">
-            <IconSearch />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="輸入搜尋"
-              className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] flex-1 min-w-0 text-[#383838] text-[20px] bg-transparent border-none outline-none placeholder:text-[#ddd]"
-            />
-          </div>
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              className="overflow-clip relative shrink-0 size-[24px] cursor-pointer hover:opacity-70 transition-opacity"
-              type="button"
-            >
-              <svg
-                className="block size-full"
-                fill="none"
-                preserveAspectRatio="none"
-                viewBox="0 0 24 24"
+      <div className="flex flex-wrap gap-y-[8px] items-stretch w-full">
+        {/* Search bar + 清除全部條件 */}
+        <div className="flex gap-[4px] self-stretch shrink-0">
+          <div className="bg-white flex gap-[28px] items-center px-[12px] py-[8px] rounded-[16px] shrink-0 w-[292px]">
+            <div className="flex flex-[1_0_0] gap-[4px] items-center min-w-0">
+              <IconSearch />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="輸入搜尋"
+                className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] flex-1 min-w-0 text-[#383838] text-[20px] bg-transparent border-none outline-none placeholder:text-[#ddd]"
+              />
+            </div>
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="overflow-clip relative shrink-0 size-[24px] cursor-pointer hover:opacity-70 transition-opacity"
+                type="button"
               >
-                <path d={svgPaths.p3cde6900} fill="#DDDDDD" />
-              </svg>
-            </button>
-          )}
-        </div>
+                <svg
+                  className="block size-full"
+                  fill="none"
+                  preserveAspectRatio="none"
+                  viewBox="0 0 24 24"
+                >
+                  <path d={svgPaths.p3cde6900} fill="#DDDDDD" />
+                </svg>
+              </button>
+            )}
+          </div>
 
-        {/* 清除全部條件 */}
-        <button
-          onClick={handleClearFilters}
-          className="flex gap-[2px] items-center justify-center px-[8px] py-[8px] rounded-[12px] shrink-0 cursor-pointer hover:bg-[#f0f6ff] transition-colors"
-          type="button"
-        >
-          <span className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[#0f6beb] text-[16px] whitespace-nowrap">
-            清除全部條件
-          </span>
-        </button>
+          <button
+            onClick={handleClearFilters}
+            className="flex gap-[2px] items-center justify-center px-[8px] py-[8px] rounded-[12px] shrink-0 self-stretch cursor-pointer hover:bg-[#f0f6ff] active:bg-[#dce8fc] transition-colors"
+            type="button"
+          >
+            <span className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[#0f6beb] text-[16px] whitespace-nowrap">
+              清除全部條件
+            </span>
+          </button>
+        </div>
 
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* 新增規則 */}
-        <button
-          type="button"
-          onClick={() => {
-            if (!categoryId) return;
-            const newId = `new-${Date.now()}`;
-            const newRoom: RoomRecord = {
-              id: newId,
-              roomType: "",
-              image: "",
-              pricePerNight: 0,
-              maxGuests: 0,
-              remainingRooms: "",
-              features: "",
-              memberTags: [],
-              url: "",
-              lastUpdated: "—",
-              published: false,
-              pmsRoomCode: "",
-              customImageUrl: "",
-            };
-            setRooms((prev) => [newRoom, ...prev]);
-            setEditingRoom(newRoom);
-            setEditDraft({
-              customRoomName: "",
-              customImageUrl: "",
-              customPrice: "",
-              customGuests: "",
-              customRemaining: "",
-              features: "",
-              memberTags: [],
-              bookingUrl: "",
-            });
-          }}
-          className="bg-[#0f6beb] flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] shrink-0 cursor-pointer hover:bg-[#0c5bc7] transition-colors duration-150"
-        >
-          <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-white text-center whitespace-nowrap">
-            新增規則
-          </span>
-        </button>
+        {/* 新增規則 + 測試 */}
+        <div className="flex gap-[4px] self-stretch shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              if (!categoryId) return;
+              const newId = `new-${Date.now()}`;
+              const newRoom: RoomRecord = {
+                id: newId,
+                roomType: "",
+                image: "",
+                pricePerNight: 0,
+                maxGuests: 0,
+                remainingRooms: "",
+                features: "",
+                memberTags: [],
+                url: "",
+                lastUpdated: "—",
+                published: false,
+                pmsRoomCode: "",
+                customImageUrl: "",
+              };
+              setRooms((prev) => [newRoom, ...prev]);
+              setEditingRoom(newRoom);
+              setEditDraft({
+                customRoomName: "",
+                customImageUrl: "",
+                customPrice: "",
+                customGuests: "",
+                customRemaining: "",
+                features: "",
+                memberTags: [],
+                bookingUrl: "",
+              });
+            }}
+            className="flex items-center justify-center px-[12px] py-[8px] rounded-[16px] shrink-0 self-stretch cursor-pointer hover:bg-[#f0f6ff] active:bg-[#dce8fc] transition-colors duration-150"
+          >
+            <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#0f6beb] text-center whitespace-nowrap">
+              新增規則
+            </span>
+          </button>
 
-        {/* 測試 */}
-        <button
-          type="button"
-          onClick={() => window.dispatchEvent(new CustomEvent("open-chatfab"))}
-          className="bg-[#242424] flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] shrink-0 cursor-pointer hover:bg-[#383838] transition-colors duration-150"
-        >
-          <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-white text-center whitespace-nowrap">
-            測試
-          </span>
-        </button>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent("open-chatfab"))}
+            className="bg-[#242424] flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] shrink-0 self-stretch cursor-pointer hover:bg-[#383838] transition-colors duration-150"
+          >
+            <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-white text-center whitespace-nowrap">
+              測試
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* Record count + 變更 */}
@@ -815,7 +845,6 @@ const PMSDataTable = memo(function PMSDataTable({
 
               <Th
                 width={160}
-                align="right"
                 sortable
                 field="pricePerNight"
                 {...thProps}
@@ -825,7 +854,6 @@ const PMSDataTable = memo(function PMSDataTable({
 
               <Th
                 width={140}
-                align="right"
                 sortable
                 field="maxGuests"
                 {...thProps}
@@ -835,7 +863,6 @@ const PMSDataTable = memo(function PMSDataTable({
 
               <Th
                 width={140}
-                align="right"
                 sortable
                 field="remainingRooms"
                 {...thProps}
@@ -857,7 +884,7 @@ const PMSDataTable = memo(function PMSDataTable({
                 訂房 URL
               </th>
 
-              <Th width={134} sortable field="lastUpdated" {...thProps}>
+              <Th width={220} sortable field="lastUpdated" {...thProps}>
                 最後更新
               </Th>
 
@@ -866,6 +893,8 @@ const PMSDataTable = memo(function PMSDataTable({
                 onClick={() => handleSort("published")}
                 style={{
                   width: 104,
+                  minWidth: 104,
+                  maxWidth: 104,
                   position: "sticky",
                   right: 68,
                   zIndex: 2,
@@ -883,7 +912,7 @@ const PMSDataTable = memo(function PMSDataTable({
 
               {/* 動作 — 凍結欄 */}
               <th
-                style={{ width: 68, position: "sticky", right: 0, zIndex: 2 }}
+                style={{ width: 68, minWidth: 68, maxWidth: 68, position: "sticky", right: 0, zIndex: 2 }}
                 className="px-[12px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd]"
               >
                 動作
@@ -918,6 +947,7 @@ const PMSDataTable = memo(function PMSDataTable({
                   isLast={idx === filtered.length - 1}
                   onToggle={handleToggle}
                   onEdit={handleEdit}
+                  pmsEnabled={pmsEnabled}
                 />
               ))
             )}
@@ -928,13 +958,17 @@ const PMSDataTable = memo(function PMSDataTable({
       {/* 編輯房型彈窗 */}
       {editingRoom && editDraft && (
         <RoomEditModal
-          pmsData={{
-            roomType: editingRoom.roomType,
-            priceLabel: "即時房價",
-            guestsLabel: "即時資料",
-            remainingLabel: "即時資料",
-            imageUrl: editingRoom.image,
-          }}
+          pmsData={
+            pmsEnabled
+              ? {
+                  roomType: editingRoom.roomType,
+                  priceLabel: "即時房價",
+                  guestsLabel: "即時資料",
+                  remainingLabel: "即時資料",
+                  imageUrl: editingRoom.image,
+                }
+              : null
+          }
           draft={editDraft}
           hasFaq={Boolean(
             editDraft.customImageUrl ||
@@ -1052,6 +1086,41 @@ const PMSConnectionSettings = memo(function PMSConnectionSettings() {
   const [webhookUrl, setWebhookUrl] = useState(
     "https://starbit.io/webhook/pms/abc123",
   );
+  const [testing, setTesting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const { showToast } = useToast();
+
+  const runTest = useCallback(async () => {
+    setTesting(true);
+    try {
+      // 使用 FAQ PMS connection test endpoint (訂房 category)
+      const res = await apiPost("/api/v1/faq/categories/697/pms-connection/test", {});
+      const data = res as any;
+      showToast(data?.message || "連線測試成功", "success");
+      return true;
+    } catch (e: any) {
+      const detail = e?.detail || e?.message || "連線測試失敗";
+      showToast(String(detail), "error");
+      return false;
+    } finally {
+      setTesting(false);
+    }
+  }, [showToast]);
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    // 規格：先執行連線測試，成功才儲存
+    const ok = await runTest();
+    if (ok) {
+      try {
+        await apiPut("/api/v1/faq/categories/697/pms-connection/toggle", { status: "enabled" });
+        showToast("連線測試成功，PMS 已啟用", "success");
+      } catch {
+        showToast("PMS 啟用失敗", "error");
+      }
+    }
+    setSaving(false);
+  }, [runTest, showToast]);
 
   const helperStyle: React.CSSProperties = { color: "#9E9E9E" };
 
@@ -1201,19 +1270,23 @@ const PMSConnectionSettings = memo(function PMSConnectionSettings() {
           <div className="flex flex-row items-center self-stretch">
             <button
               type="button"
-              className="flex gap-[2px] h-full items-center justify-center min-w-[72px] p-[8px] rounded-[12px] shrink-0 cursor-pointer hover:bg-[#f0f6ff] transition-colors"
+              disabled={testing}
+              onClick={runTest}
+              className="flex gap-[2px] h-full items-center justify-center min-w-[72px] p-[8px] rounded-[12px] shrink-0 cursor-pointer hover:bg-[#f0f6ff] transition-colors disabled:opacity-50"
             >
               <span className="flex-[1_0_0] font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#0f6beb] text-center">
-                測試
+                {testing ? "測試中…" : "測試"}
               </span>
             </button>
           </div>
           <button
             type="button"
-            className="bg-[#242424] flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] shrink-0 w-[88px] cursor-pointer hover:bg-[#383838] transition-colors"
+            disabled={saving}
+            onClick={handleSave}
+            className="bg-[#242424] flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] shrink-0 w-[88px] cursor-pointer hover:bg-[#383838] transition-colors disabled:opacity-50"
           >
             <span className="flex-[1_0_0] font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-white text-center">
-              儲存設定
+              {saving ? "儲存中…" : "儲存設定"}
             </span>
           </button>
         </div>
@@ -1226,26 +1299,25 @@ const PMSConnectionSettings = memo(function PMSConnectionSettings() {
 type DataSourceRow = {
   type: string;
   statusLabel: string;
-  statusColor: "green" | "gray";
+  statusColor: "green" | "gray" | "red";
   lastUpdated: string;
   lastPublished: string;
   enabled: boolean;
   enabledDisabled?: boolean;
 };
 
-const DATA_SOURCES_PMS: DataSourceRow[] = [
+const DATA_SOURCES_PMS_INIT: DataSourceRow[] = [
   {
     type: "PMS",
-    statusLabel: "尚未串接",
+    statusLabel: "未串接",
     statusColor: "gray",
     lastUpdated: "—",
     lastPublished: "—",
     enabled: false,
-    enabledDisabled: true,
   },
   {
     type: "自訂 FAQ",
-    statusLabel: "已儲存",
+    statusLabel: "已啟用",
     statusColor: "green",
     lastUpdated: "2026-03-02 22:47",
     lastPublished: "2026-03-02 22:47",
@@ -1265,7 +1337,7 @@ const DataSourceTableRow = memo(function DataSourceTableRow({
   return (
     <tr
       className={`bg-white transition-colors hover:bg-[#f5f8ff] group ${
-        !isLast ? "[&>td]:border-b [&>td]:border-[#ddd]" : ""
+        !isLast ? "row-divider" : ""
       }`}
     >
       <td
@@ -1278,13 +1350,22 @@ const DataSourceTableRow = memo(function DataSourceTableRow({
         <div
           style={{
             backgroundColor:
-              row.statusColor === "green" ? "#e4fcea" : "#f5f5f5",
+              row.statusColor === "green"
+                ? "#e4fcea"
+                : row.statusColor === "red"
+                  ? "#ffebee"
+                  : "#f5f5f5",
           }}
           className="inline-flex items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0"
         >
           <p
             style={{
-              color: row.statusColor === "green" ? "#00470c" : "#383838",
+              color:
+                row.statusColor === "green"
+                  ? "#00470c"
+                  : row.statusColor === "red"
+                    ? "#b71c1c"
+                    : "#383838",
             }}
             className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[16px] text-center whitespace-nowrap"
           >
@@ -1330,6 +1411,31 @@ const DataSourcesTable = memo(function DataSourcesTable({
   rows: DataSourceRow[];
 }) {
   const [sources, setSources] = useState(rows);
+
+  // Fetch PMS enabled status on mount
+  useEffect(() => {
+    apiGet("/api/v1/chatbot/pms-status")
+      .then((res: any) => {
+        const enabled = !!res?.enabled;
+        const lastSync = res?.last_synced_at || "—";
+        setSources((prev) =>
+          prev.map((s) =>
+            s.type === "PMS"
+              ? {
+                  ...s,
+                  enabled,
+                  statusLabel: enabled ? "已串接" : "未串接",
+                  statusColor: enabled ? "green" : "gray",
+                  lastUpdated: lastSync,
+                  lastPublished: enabled ? lastSync : "—",
+                }
+              : s,
+          ),
+        );
+      })
+      .catch(() => {});
+  }, []);
+
   return (
     <div className="flex flex-col gap-[16px] items-start w-full">
       {/* 測試 button — own row, right-aligned */}
@@ -1408,13 +1514,51 @@ const DataSourcesTable = memo(function DataSourcesTable({
                 key={row.type}
                 row={row}
                 isLast={idx === sources.length - 1}
-                onToggle={(type, v) =>
-                  setSources((prev) =>
-                    prev.map((s) =>
-                      s.type === type ? { ...s, enabled: v } : s,
-                    ),
-                  )
-                }
+                onToggle={(type, v) => {
+                  if (type === "PMS") {
+                    // Optimistic update
+                    setSources((prev) =>
+                      prev.map((s) =>
+                        s.type === "PMS"
+                          ? {
+                              ...s,
+                              enabled: v,
+                              statusLabel: v ? "已串接" : "未串接",
+                              statusColor: v ? "green" : "gray",
+                            }
+                          : s,
+                      ),
+                    );
+                    apiPut("/api/v1/chatbot/pms-status", { enabled: v }).catch(() => {
+                      // Revert on failure
+                      setSources((prev) =>
+                        prev.map((s) =>
+                          s.type === "PMS"
+                            ? {
+                                ...s,
+                                enabled: !v,
+                                statusLabel: !v ? "已串接" : "未串接",
+                                statusColor: !v ? "green" : "gray",
+                              }
+                            : s,
+                        ),
+                      );
+                    });
+                  } else {
+                    setSources((prev) =>
+                      prev.map((s) =>
+                        s.type === type
+                          ? {
+                              ...s,
+                              enabled: v,
+                              statusLabel: v ? "已啟用" : "已停用",
+                              statusColor: v ? "green" : "red",
+                            }
+                          : s,
+                      ),
+                    );
+                  }
+                }}
               />
             ))}
           </tbody>
@@ -1436,7 +1580,6 @@ export default function PMSIntegration({
   const [activeTab, setActiveTab] = useState<"data" | "sources" | "settings">(
     "data",
   );
-
   return (
     <div className="min-h-screen bg-slate-50 flex">
       {/* Sidebar */}
@@ -1461,10 +1604,11 @@ export default function PMSIntegration({
         <PageHeaderWithBreadcrumb
           breadcrumbItems={[
             { label: "AI Chatbot", onClick: onNavigateToAIChatbot },
-            { label: "訂房和帳務", active: true },
+            { label: "訂房", active: true },
           ]}
-          title="訂房和帳務"
+          title="訂房"
           description="啟用後，AI 回覆將引用此內容"
+          titleSuffix={<CategoryTitleDropdown />}
         />
 
         {/* Tab bar */}
@@ -1499,12 +1643,11 @@ export default function PMSIntegration({
             />
           )}
           {activeTab === "sources" && (
-            <DataSourcesTable rows={DATA_SOURCES_PMS} />
+            <DataSourcesTable rows={DATA_SOURCES_PMS_INIT} />
           )}
           {activeTab === "settings" && <PMSConnectionSettings />}
         </div>
       </main>
-      <ChatFAB />
     </div>
   );
 }

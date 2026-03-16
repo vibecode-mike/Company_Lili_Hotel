@@ -9,23 +9,23 @@ Feature: 會員管理
       Given 會員「張小明」透過 LINE 官方帳號加入
       And LINE API 回傳該會員的頭像 URL 為「https://profile.line-scdn.net/xxxxx」
       When 系統建立會員資料
-      Then 系統儲存頭像 URL「https://profile.line-scdn.net/xxxxx」至 line_picture_url 欄位
+      Then 系統儲存頭像 URL「https://profile.line-scdn.net/xxxxx」至 line_avatar 欄位
       And 前端顯示時直接載入該 CDN URL
 
     Example: 會員已有頭像 URL 則不重複呼叫 LINE API
-      Given 會員「張小明」的 line_picture_url 為「https://profile.line-scdn.net/xxxxx」
+      Given 會員「張小明」的 line_avatar 為「https://profile.line-scdn.net/xxxxx」
       When 系統檢查會員資料
       Then 系統不呼叫 LINE API
       And 直接使用資料庫中的頭像 URL
 
     Example: 會員頭像 URL 為空時補抓取
-      Given 會員「張小明」的 line_picture_url 為空值
+      Given 會員「張小明」的 line_avatar 為空值
       When 系統檢查會員資料
       Then 系統呼叫 LINE Profile API 取得頭像 URL
-      And 更新 line_picture_url 欄位
+      And 更新 line_avatar 欄位
 
     Example: 前端顯示會員頭像時載入 LINE CDN URL
-      Given 會員「張小明」的 line_picture_url 為「https://profile.line-scdn.net/xxxxx」
+      Given 會員「張小明」的 line_avatar 為「https://profile.line-scdn.net/xxxxx」
       When 前端顯示會員清單或會員詳細資料
       Then 前端使用 <img src="https://profile.line-scdn.net/xxxxx"> 載入頭像
       And 若 URL 失效則顯示預設頭像
@@ -34,23 +34,23 @@ Feature: 會員管理
 
     Example: 查看會員清單顯示 LINE 會員頭像與名稱
       Given 系統中存在以下會員
-        | member_id | line_avatar                              | line_name |
+        | member_id | line_avatar                              | line_display_name |
         | M001      | https://profile.line-scdn.net/xxxxx      | 張小明    |
         | M002      | https://profile.line-scdn.net/yyyyy      | 李小華    |
       When 行銷人員查看會員清單
       Then 系統顯示以下會員資料
-        | member_id | line_avatar                              | line_name |
+        | member_id | line_avatar                              | line_display_name |
         | M001      | https://profile.line-scdn.net/xxxxx      | 張小明    |
         | M002      | https://profile.line-scdn.net/yyyyy      | 李小華    |
 
     Example: 會員清單顯示無頭像的會員
-      Given 系統中存在會員「王小明」，line_picture_url 為空值
+      Given 系統中存在會員「王小明」，line_avatar 為空值
       When 行銷人員查看會員清單
       Then 系統顯示該會員使用預設頭像
       And 系統顯示會員 LINE 名稱「王小明」
 
     Example: 會員清單頭像 CDN 載入失敗顯示預設頭像
-      Given 系統中存在會員「李四」，line_picture_url 為「https://profile.line-scdn.net/zzzzz」
+      Given 系統中存在會員「李四」，line_avatar 為「https://profile.line-scdn.net/zzzzz」
       And LINE CDN 頭像 URL 已失效
       When 行銷人員查看會員清單
       Then 系統嘗試載入頭像失敗後顯示預設頭像
@@ -65,7 +65,7 @@ Feature: 會員管理
 
     Example: 會員清單顯示多位會員姓名
       Given 系統中存在以下會員
-        | member_id | line_name | name   |
+        | member_id | line_display_name | name   |
         | M001      | 張小明    | 張三   |
         | M002      | 李小華    | 李四   |
         | M003      | 王大寶    | 王小明 |
@@ -186,7 +186,7 @@ Feature: 會員管理
 
     Example: 會員清單按最後回覆日期排序
       Given 系統中存在以下會員
-        | name   | last_reply_date  |
+        | name   | last_interaction_at  |
         | 張三   | 2025/01/20 15:30 |
         | 李四   | 2025/01/22 10:15 |
         | 王小明 | 2025/01/18 09:45 |
@@ -254,7 +254,7 @@ Feature: 會員管理
       And 系統顯示「未提供 LINE 名稱」
 
     Example: 查看會員詳細資料 LINE 頭像載入失敗
-      Given 系統中存在會員「王小明」，line_picture_url 為「https://profile.line-scdn.net/invalid」
+      Given 系統中存在會員「王小明」，line_avatar 為「https://profile.line-scdn.net/invalid」
       And LINE CDN 頭像 URL 已失效
       When 行銷人員點擊「查看」動作
       Then 系統顯示預設頭像
@@ -410,10 +410,10 @@ Feature: 會員管理
       When 行銷人員點擊「查看」動作
       Then 系統顯示會員加入來源「LINE」
 
-    Example: 查看會員詳細資料顯示其他加入來源
-      Given 系統中存在會員「李四」，加入來源為「官網註冊」
+    Example: 查看會員詳細資料顯示 Webchat 加入來源
+      Given 系統中存在會員「李四」，加入來源為「Webchat」
       When 行銷人員點擊「查看」動作
-      Then 系統顯示會員加入來源「官網註冊」
+      Then 系統顯示會員加入來源「Webchat」
 
     Example: 查看會員詳細資料顯示批次匯入來源
       Given 系統中存在會員「王小明」，加入來源為「批次匯入」
@@ -456,7 +456,7 @@ Feature: 會員管理
     Example: 查看會員詳細資料顯示從未回覆的會員
       Given 系統中存在會員「李四」，從未回覆訊息
       When 行銷人員點擊「查看」動作
-      Then 系統顯示會員最後回覆日期「未知」
+      Then 系統顯示會員最後回覆日期「未回覆」
 
     Example: 查看會員詳細資料顯示最後回覆距今天數
       Given 系統中存在會員「王小明」，最後回覆日期為「2025-01-10 14:30」
@@ -738,7 +738,7 @@ Feature: 會員管理
       Given 系統中存在會員「李五」，從未回覆訊息
       When 行銷人員查看會員資料
       Then 系統顯示該會員最後回覆訊息日期為空白
-      And 系統顯示「從未回覆」
+      And 系統顯示「未回覆」
 
   Rule: 內部人員可新增備註，註記該會員的消費習慣與喜好
 

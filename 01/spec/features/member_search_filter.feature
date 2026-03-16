@@ -7,26 +7,26 @@ Feature: 會員搜尋與篩選
 
     Example: 以 LINE 名稱模糊搜尋會員
       Given 系統中存在以下會員
-        | member_id | line_name |
+        | member_id | line_display_name |
         | M001      | 張小明    |
         | M002      | 李小華    |
         | M003      | 王大明    |
       When 使用者搜尋 LINE 名稱「小明」
       Then 系統使用模糊搜尋（LIKE %小明%）
       And 系統顯示以下會員
-        | member_id | line_name |
+        | member_id | line_display_name |
         | M001      | 張小明    |
         | M003      | 王大明    |
 
     Example: LINE 名稱模糊搜尋支援部分匹配
       Given 系統中存在以下會員
-        | member_id | line_name      |
+        | member_id | line_display_name      |
         | M001      | 星巴克愛好者   |
         | M002      | 咖啡控         |
         | M003      | 星巴克常客     |
       When 使用者搜尋 LINE 名稱「星巴克」
       Then 系統顯示以下會員
-        | member_id | line_name      |
+        | member_id | line_display_name      |
         | M001      | 星巴克愛好者   |
         | M003      | 星巴克常客     |
 
@@ -221,7 +221,7 @@ Feature: 會員搜尋與篩選
         | M003      | 王五 | 男     | 黑名單      | 高雄  |
       When 使用者同時設定性別「女」且標籤「VIP」且城市「高雄」
       Then 系統找不到任何會員
-      And 系統提示「找不到符合條件的會員，請放寬篩選條件」
+      And 系統提示「尚無會員資料」
 
   Rule: 支援排序方式：按最近回覆日期排序
 

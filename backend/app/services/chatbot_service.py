@@ -167,7 +167,7 @@ _FACILITY_FIELDS = ["設施名稱", "位置", "費用", "開放時間", "說明"
 _ROOM_FIELDS = ["房型名稱", "房型特色", "房價", "人數", "間數", "url"]
 
 
-async def _kb_search(db: AsyncSession, category: str, query: str, top_k: int = 6) -> dict:
+async def _kb_search(db: AsyncSession, category: str, query: str, top_k: int = 6, test_mode: bool = False) -> dict:
     from app.models.faq import FaqCategory, FaqRule
 
     cat_name = _CATEGORY_NAME_MAP.get(category)
@@ -182,10 +182,16 @@ async def _kb_search(db: AsyncSession, category: str, query: str, top_k: int = 6
     if not cat:
         return {"ok": True, "category": category, "query": query, "items": []}
 
-    # 查詢 active 規則
+    # 測試模式引用 draft + active（spec 第七部分：啟用但未發佈的規則可在測試聊天引用）
+    # 正式模式只引用 active（已發佈）
+    if test_mode:
+        allowed_statuses = ["draft", "active"]
+    else:
+        allowed_statuses = ["active"]
+
     rule_result = await db.execute(
         select(FaqRule)
-        .where(FaqRule.category_id == cat.id, FaqRule.status == "active")
+        .where(FaqRule.category_id == cat.id, FaqRule.status.in_(allowed_statuses))
         .options(selectinload(FaqRule.tags))
         .order_by(FaqRule.created_at)
     )
@@ -718,6 +724,7 @@ class ChatbotService:
         message: str,
         hotel_id: Optional[int] = None,
         db: Optional[AsyncSession] = None,
+        test_mode: bool = False,
     ) -> ChatbotMessageOutSchema:
         session = self.get_or_create_session(browser_key, hotel_id)
 
@@ -761,7 +768,7 @@ class ChatbotService:
             reply = past_date_warning
             room_cards = []
         else:
-            reply, room_cards = await self._llm_reply(session, db=db)
+            reply, room_cards = await self._llm_reply(session, db=db, test_mode=test_mode)
 
         if room_cards:
             session.last_room_cards = room_cards
@@ -795,7 +802,7 @@ class ChatbotService:
     # ------------------------------------------------------------------
 
     async def _llm_reply(
-        self, session: ChatbotSessionState, db: Optional[AsyncSession] = None
+        self, session: ChatbotSessionState, db: Optional[AsyncSession] = None, test_mode: bool = False
     ) -> tuple[str, List[RoomCardSchema]]:
         client = self._get_openai()
         messages: List[Dict[str, Any]] = [
@@ -827,7 +834,7 @@ class ChatbotService:
 
                 if fn_name == "kb_search":
                     if db is not None:
-                        result = await _kb_search(db, args.get("category", ""), args.get("query", ""))
+                        result = await _kb_search(db, args.get("category", ""), args.get("query", ""), test_mode=test_mode)
                     else:
                         result = {"ok": False, "error": "database session not available", "items": []}
                 elif fn_name == "query_pms_availability":

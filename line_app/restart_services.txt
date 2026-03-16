@@ -1,0 +1,12 @@
+# Lili Hotel services restart
+# Backend (LINE app)
+systemctl restart mike_app.service
+systemctl status --no-pager mike_app.service
+
+# Frontend (Vite dev)
+systemctl restart lili_frontend.service
+systemctl status --no-pager lili_frontend.service
+
+# Check ports
+ss -ltnp 'sport = :3001'
+ss -ltnp 'sport = :5173'

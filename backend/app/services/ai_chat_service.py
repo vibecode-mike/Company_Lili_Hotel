@@ -1,6 +1,7 @@
 """
 AI 聊天服務層
 """
+import asyncio
 import json
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
@@ -18,10 +19,15 @@ from app.models.faq import (
     FaqModuleAuth,
     Industry,
 )
+from app.models.chatbot_booking import FaqPmsConnection
 from app.models.conversation import ConversationMessage
 from app.models.tag import MemberTag
 from app.models.member import Member
 from app.integrations.openai_service import openai_service
+from app.services.pms_chatbot_client import (
+    pms_enabled as pms_configured,
+    query_pms,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -84,8 +90,14 @@ class AiChatService:
         rules_result = await db.execute(rules_stmt)
         active_rules = rules_result.scalars().all()
 
+        # 3b. PMS 優先：訂房分類若 PMS 啟用，用即時房況取代 FAQ 靜態規則
+        pms_context = await self._get_pms_booking_context(db)
+        booking_cat_id = await self._get_booking_category_id(db)
+
         # 組裝知識庫 context
-        knowledge_context = self._build_knowledge_context(active_rules)
+        knowledge_context = self._build_knowledge_context(
+            active_rules, pms_context=pms_context, booking_category_id=booking_cat_id
+        )
 
         # 4. 取得語氣 prompt
         tone_stmt = select(AiToneConfig).where(AiToneConfig.is_active == True)
@@ -153,6 +165,7 @@ class AiChatService:
     ) -> Dict[str, Any]:
         """
         測試聊天（不計 token、不貼 tag）
+        引用 draft + active 規則（含未發佈），PMS 優先順序與正式聊天一致。
         """
         # 取得指定規則
         if rule_ids:
@@ -177,7 +190,13 @@ class AiChatService:
         rules_result = await db.execute(rules_stmt)
         rules = rules_result.scalars().all()
 
-        knowledge_context = self._build_knowledge_context(rules)
+        # PMS 優先：與正式聊天相同邏輯
+        pms_context = await self._get_pms_booking_context(db)
+        booking_cat_id = await self._get_booking_category_id(db)
+
+        knowledge_context = self._build_knowledge_context(
+            rules, pms_context=pms_context, booking_category_id=booking_cat_id
+        )
 
         # 取得語氣
         tone_stmt = select(AiToneConfig).where(AiToneConfig.is_active == True)
@@ -230,27 +249,87 @@ class AiChatService:
         # 反轉為時間正序
         history = []
         for msg in reversed(messages):
-            if msg.role == "user" and msg.question:
-                history.append({"role": "user", "content": msg.question})
-            elif msg.role == "assistant" and msg.response:
-                history.append({"role": "assistant", "content": msg.response})
+            if msg.content:
+                history.append({"role": msg.role, "content": msg.content})
 
         return history
 
-    def _build_knowledge_context(self, rules: List[FaqRule]) -> str:
-        """組裝知識庫 context 文本"""
-        if not rules:
+    async def _get_pms_booking_context(self, db: AsyncSession) -> Optional[str]:
+        """檢查訂房分類的 PMS 串接狀態，若啟用則查詢即時房況作為知識庫。
+
+        Returns:
+            PMS 即時房況文本（若 PMS 啟用且查詢成功），否則 None。
+        """
+        # 找到「訂房」分類的 PMS 連線設定
+        stmt = (
+            select(FaqPmsConnection)
+            .join(FaqCategory, FaqPmsConnection.faq_category_id == FaqCategory.id)
+            .where(FaqCategory.name == "訂房", FaqPmsConnection.status == "enabled")
+        )
+        result = await db.execute(stmt)
+        conn = result.scalar_one_or_none()
+
+        if not conn or not pms_configured():
+            return None
+
+        try:
+            raw = await asyncio.to_thread(query_pms, "", "", None, 2)
+            rooms = raw.get("room", []) if isinstance(raw, dict) else []
+            if not rooms:
+                return None
+
+            lines = ["【即時房況（PMS）】"]
+            for room in rooms:
+                code = room.get("roomtype", "")
+                data_rows = room.get("data", []) or []
+                if not data_rows:
+                    continue
+                price = data_rows[0].get("price", "—")
+                remain = min((d.get("remain", 0) for d in data_rows), default=0)
+                lines.append(f"- 房型代碼: {code}，即時房價: {price}，剩餘間數: {remain}")
+            return "\n".join(lines)
+        except Exception as exc:
+            logger.warning(f"PMS 即時房況查詢失敗，降級至 FAQ：{exc}")
+            return None
+
+    def _build_knowledge_context(
+        self,
+        rules: List[FaqRule],
+        pms_context: Optional[str] = None,
+        booking_category_id: Optional[int] = None,
+    ) -> str:
+        """組裝知識庫 context 文本。
+
+        若 pms_context 有值，訂房分類的 FAQ 規則會被 PMS 即時資料取代；
+        其他分類的 FAQ 規則維持不變。
+        """
+        if not rules and not pms_context:
             return "目前尚無知識庫資料。"
 
         lines = []
+
+        # PMS 即時房況優先（取代訂房分類的 FAQ 規則）
+        if pms_context:
+            lines.append(pms_context)
+
         for rule in rules:
+            # 若 PMS 已提供訂房資料，跳過訂房分類的 FAQ 規則
+            if pms_context and booking_category_id and rule.category_id == booking_category_id:
+                continue
             content = self._parse_json(rule.content_json)
             if isinstance(content, dict):
                 parts = [f"{k}: {v}" for k, v in content.items() if v]
                 lines.append("- " + "，".join(parts))
             else:
                 lines.append(f"- {content}")
-        return "\n".join(lines)
+        return "\n".join(lines) if lines else "目前尚無知識庫資料。"
+
+    async def _get_booking_category_id(self, db: AsyncSession) -> Optional[int]:
+        """取得「訂房」大分類的 ID"""
+        stmt = select(FaqCategory.id).where(FaqCategory.name == "訂房").limit(1)
+        result = await db.execute(stmt)
+        row = result.scalar_one_or_none()
+        return row
 
     def _parse_json(self, raw: Any) -> Any:
         """安全解析 JSON"""

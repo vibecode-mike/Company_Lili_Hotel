@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { useToast } from "./ToastProvider";
+import { useUser } from "../contexts/AppStateContext";
 import {
   sendChatbotMessage,
   confirmChatbotRooms,
@@ -177,7 +179,7 @@ function RoomCardItem({
         {/* 房價 / 剩餘間數 — 同一行 */}
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
           <div style={{ fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 500, fontSize: 16, color: "#6e6e6e", lineHeight: 1.5, whiteSpace: "nowrap" }}>
-            {card.price_label}
+            {card.source === "pms" ? card.price_label : `NT$${card.price.toLocaleString()}`}
           </div>
           <div style={{ fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 500, fontSize: 16, color: "#6e6e6e", lineHeight: 1.5 }}>/</div>
           <div style={{ fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 400, fontSize: 16, color: "#6e6e6e", lineHeight: 1.5, whiteSpace: "nowrap" }}>
@@ -758,11 +760,76 @@ function BookingResultMessage({
 }
 
 // ---------------------------------------------------------------------------
+// Tooltip that clamps to viewport with 8px edge margin
+// ---------------------------------------------------------------------------
+
+function PublishTooltip({ btnRef, label }: { btnRef: React.RefObject<HTMLButtonElement | null>; label: string }) {
+  const tipRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+
+  useEffect(() => {
+    const btn = btnRef.current;
+    const tip = tipRef.current;
+    if (!btn || !tip) return;
+    const btnRect = btn.getBoundingClientRect();
+    const tipRect = tip.getBoundingClientRect();
+    const MARGIN = 8;
+
+    // Ideal: centered below the button
+    let left = btnRect.left + btnRect.width / 2 - tipRect.width / 2;
+    let top = btnRect.bottom + 4;
+
+    // Clamp horizontal
+    if (left < MARGIN) left = MARGIN;
+    if (left + tipRect.width > window.innerWidth - MARGIN) left = window.innerWidth - MARGIN - tipRect.width;
+
+    // Clamp vertical — if it overflows bottom, flip above the button
+    if (top + tipRect.height > window.innerHeight - MARGIN) {
+      top = btnRect.top - tipRect.height - 4;
+    }
+    if (top < MARGIN) top = MARGIN;
+
+    setPos({ left, top });
+  });
+
+  return (
+    <div
+      ref={tipRef}
+      style={{
+        position: "fixed",
+        left: pos?.left ?? -9999,
+        top: pos?.top ?? -9999,
+        background: "#383838",
+        color: "#fff",
+        fontSize: 12,
+        fontFamily: "'Noto Sans TC', sans-serif",
+        fontWeight: 400,
+        lineHeight: 1.5,
+        borderRadius: 8,
+        padding: "4px 8px",
+        whiteSpace: "nowrap",
+        pointerEvents: "none",
+        zIndex: 9999,
+        opacity: pos ? 1 : 0,
+      }}
+    >
+      {label}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main ChatFAB
 // ---------------------------------------------------------------------------
 
 export default function ChatFAB() {
-  const [chatOpen, setChatOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(() => sessionStorage.getItem("chatfab-open") === "1");
+  const { showToast } = useToast();
+  const { user } = useUser();
+  const isAdmin = user?.role === "admin";
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [publishTooltipVisible, setPublishTooltipVisible] = useState(false);
+  const publishBtnRef = useRef<HTMLButtonElement>(null);
   const [chatInput, setChatInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -790,6 +857,10 @@ export default function ChatFAB() {
     window.addEventListener("open-chatfab", handler);
     return () => window.removeEventListener("open-chatfab", handler);
   }, []);
+
+  useEffect(() => {
+    sessionStorage.setItem("chatfab-open", chatOpen ? "1" : "0");
+  }, [chatOpen]);
 
   useEffect(() => {
     if (chatOpen && messagesEndRef.current) {
@@ -826,6 +897,7 @@ export default function ChatFAB() {
       const res = await sendChatbotMessage({
         browser_key: browserKey,
         message: text,
+        test_mode: true,
       });
 
       if (res.reply_type === "room_cards" && res.room_cards.length > 0) {
@@ -979,7 +1051,144 @@ export default function ChatFAB() {
                 </span>
               </div>
             </div>
+
+            {/* 重新對話 button */}
+            <div style={{ position: "relative", flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setMessages([{ id: "init", role: "bot", type: "text", text: "您好！有什麼可以幫助您的嗎？" }]);
+                  setChatInput("");
+                  setCompletedIds(new Set());
+                  setBannerDismissed(false);
+                }}
+                onMouseEnter={(e) => { (e.currentTarget.nextElementSibling as HTMLElement).style.opacity = "1"; e.currentTarget.style.background = "#f5f5f5"; }}
+                onMouseLeave={(e) => { (e.currentTarget.nextElementSibling as HTMLElement).style.opacity = "0"; e.currentTarget.style.background = "transparent"; }}
+                style={{
+                  width: 28, height: 28, borderRadius: 8, border: "none", background: "transparent",
+                  cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                  padding: 0, transition: "background 0.15s",
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" style={{ flexShrink: 0 }}>
+                  <path d="M7.5 15C5.40625 15 3.63281 14.2734 2.17969 12.8203C0.726562 11.3672 0 9.59375 0 7.5C0 5.40625 0.726562 3.63281 2.17969 2.17969C3.63281 0.726562 5.40625 0 7.5 0C8.57812 0 9.60938 0.222812 10.5938 0.668437C11.5781 1.11344 12.4219 1.75 13.125 2.57812V0.9375C13.125 0.671875 13.215 0.449063 13.395 0.269063C13.5744 0.0896877 13.7969 0 14.0625 0C14.3281 0 14.5506 0.0896877 14.73 0.269063C14.91 0.449063 15 0.671875 15 0.9375V5.625C15 5.89062 14.91 6.11312 14.73 6.2925C14.5506 6.4725 14.3281 6.5625 14.0625 6.5625H9.375C9.10938 6.5625 8.88688 6.4725 8.7075 6.2925C8.5275 6.11312 8.4375 5.89062 8.4375 5.625C8.4375 5.35938 8.5275 5.13656 8.7075 4.95656C8.88688 4.77719 9.10938 4.6875 9.375 4.6875H12.375C11.875 3.8125 11.1916 3.125 10.3247 2.625C9.45719 2.125 8.51563 1.875 7.5 1.875C5.9375 1.875 4.60937 2.42188 3.51562 3.51562C2.42188 4.60937 1.875 5.9375 1.875 7.5C1.875 9.0625 2.42188 10.3906 3.51562 11.4844C4.60937 12.5781 5.9375 13.125 7.5 13.125C8.57812 13.125 9.57437 12.8397 10.4887 12.2691C11.4025 11.6991 12.0859 10.9375 12.5391 9.98437C12.6172 9.8125 12.7463 9.66812 12.9263 9.55125C13.1056 9.43375 13.2891 9.375 13.4766 9.375C13.8359 9.375 14.1056 9.5 14.2856 9.75C14.465 10 14.4844 10.2813 14.3437 10.5938C13.75 11.9219 12.8359 12.9881 11.6016 13.7925C10.3672 14.5975 9 15 7.5 15Z" fill="#6E6E6E" />
+                </svg>
+              </button>
+              <div style={{
+                position: "absolute", left: "50%", transform: "translateX(-50%)", top: "calc(100% + 4px)",
+                background: "#383838", color: "#fff", fontSize: 12, fontFamily: "'Noto Sans TC', sans-serif",
+                fontWeight: 400, lineHeight: 1.5, borderRadius: 8, padding: "4px 8px",
+                whiteSpace: "nowrap", pointerEvents: "none", opacity: 0, transition: "opacity 0.15s", zIndex: 10,
+              }}>
+                重新對話
+              </div>
+            </div>
+
+            {/* 發佈 button */}
+            <div style={{ position: "relative", flexShrink: 0 }}>
+              <button
+                ref={publishBtnRef}
+                type="button"
+                onClick={isAdmin ? async () => {
+                  try {
+                    const res = await fetch("/api/v1/faq/publish", { method: "POST", headers: { "Content-Type": "application/json" } });
+                    if (!res.ok) throw new Error();
+                    showToast("發佈成功", "success");
+                  } catch {
+                    showToast("發佈失敗", "error");
+                  }
+                } : undefined}
+                onMouseEnter={() => { setPublishTooltipVisible(true); }}
+                onMouseLeave={() => { setPublishTooltipVisible(false); }}
+                style={{
+                  width: 28, height: 28, borderRadius: 8, border: "none",
+                  background: "transparent",
+                  cursor: isAdmin ? "pointer" : "default",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  padding: 0, transition: "background 0.15s",
+                  opacity: isAdmin ? 1 : 0.5,
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16.0083" fill="none" style={{ flexShrink: 0 }}>
+                  <path d="M5.77959 3.21118C4.08742 5.11072 2.92613 7.83976 2.81829 8.0969L0.943637 7.29229C0.404465 7.06003 0.271746 6.35496 0.686493 5.94022L3.18327 3.44344C3.57314 3.05357 4.13719 2.87938 4.68466 2.98721L5.77959 3.21118ZM7.01554 11.6388C7.26439 11.8877 7.62937 11.9541 7.94457 11.8047C8.90679 11.3568 10.9722 10.3034 12.3077 8.96787C16.1151 5.16049 16.1483 2.05818 15.9243 0.730988C15.8662 0.39919 15.6008 0.133752 15.269 0.0756876C13.9418 -0.148276 10.8395 -0.115096 7.03213 3.69228C5.69664 5.02777 4.65148 7.09321 4.19526 8.05543C4.04595 8.37063 4.1206 8.74391 4.36116 8.98446L7.01554 11.6388ZM12.7971 10.2287C10.8976 11.9209 8.16854 13.0822 7.91139 13.19L8.716 15.0647C8.94826 15.6038 9.65333 15.7366 10.0681 15.3218L12.5649 12.825C12.9547 12.4352 13.1289 11.8711 13.0211 11.3236L12.7971 10.2287ZM5.57222 12.3854C5.73812 13.2647 5.44779 14.0776 4.89203 14.6333C4.25332 15.272 2.27083 15.7448 0.985112 15.9937C0.41276 16.1015 -0.0932317 15.5955 0.0146026 15.0232C0.263451 13.7375 0.727968 11.755 1.37497 11.1163C1.93074 10.5605 2.74364 10.2702 3.62291 10.4361C4.59341 10.6186 5.38973 11.4149 5.57222 12.3854ZM8.93997 5.40934C8.93997 4.49689 9.68651 3.75035 10.599 3.75035C11.5114 3.75035 12.2579 4.49689 12.2579 5.40934C12.2579 6.32178 11.5114 7.06833 10.599 7.06833C9.68651 7.06833 8.93997 6.32178 8.93997 5.40934Z" fill="#0F6BEB" />
+                </svg>
+              </button>
+            </div>
           </div>
+
+          {/* Permission banner (non-admin only) */}
+          {!isAdmin && !bannerDismissed && (
+            <div
+              style={{
+                background: "#dbedff",
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                alignContent: "center",
+                gap: 4,
+                padding: "2px 8px",
+                flexShrink: 0,
+                width: "100%",
+                boxSizing: "border-box",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 2,
+                  flex: 1,
+                  minWidth: 0,
+                  minHeight: 1,
+                }}
+              >
+                {/* Lock outlined icon — Google Material Symbols "lock" outlined, scaled to Figma 20×20 node 1472:3752 */}
+                <svg width="20" height="20" viewBox="-227 -1177 1414 1414" style={{ flexShrink: 0 }}>
+                  <path
+                    d="M240-80q-33 0-56.5-23.5T160-160v-400q0-33 23.5-56.5T240-640h40v-80q0-83 58.5-141.5T480-920q83 0 141.5 58.5T680-720v80h40q33 0 56.5 23.5T800-560v400q0 33-23.5 56.5T720-80H240Zm0-80h480v-400H240v400Zm240-120q33 0 56.5-23.5T560-360q0-33-23.5-56.5T480-440q-33 0-56.5 23.5T400-360q0 33 23.5 56.5T480-280ZM360-640h240v-80q0-50-35-85t-85-35q-50 0-85 35t-35 85v80ZM240-160v-400 400Z"
+                    fill="#0F6BEB"
+                  />
+                </svg>
+                <span
+                  style={{
+                    color: "#0f6beb",
+                    fontSize: 12,
+                    fontFamily: "'Noto Sans TC', sans-serif",
+                    fontWeight: 400,
+                    lineHeight: "22.4px",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  完成測試後，發佈需由系統管理員執行
+                </span>
+              </div>
+              {/* Close button */}
+              <button
+                type="button"
+                onClick={() => setBannerDismissed(true)}
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: 5.714,
+                  border: "none",
+                  background: "transparent",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: 0,
+                  flexShrink: 0,
+                  overflow: "hidden",
+                }}
+              >
+                <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                  <path d="M9.625 1.375L1.375 9.625" stroke="#0F6BEB" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M1.375 1.375L9.625 9.625" stroke="#0F6BEB" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
+          )}
 
           {/* Messages */}
           <div
@@ -1150,10 +1359,26 @@ export default function ChatFAB() {
         </div>
       )}
 
+      {/* Publish tooltip — rendered via portal to escape overflow:hidden */}
+      {publishTooltipVisible && publishBtnRef.current && (
+        <PublishTooltip btnRef={publishBtnRef} label={isAdmin ? "發佈" : "僅系統管理員可發佈"} />
+      )}
+
       {/* FAB */}
       <button
         type="button"
-        onClick={() => setChatOpen((v) => !v)}
+        onClick={() => {
+          setChatOpen((v) => {
+            if (v) {
+              // 關閉時結束對話：清除聊天紀錄
+              setMessages([{ id: "init", role: "bot", type: "text", text: "您好！有什麼可以幫助您的嗎？" }]);
+              setChatInput("");
+              setCompletedIds(new Set());
+              setBannerDismissed(false);
+            }
+            return !v;
+          });
+        }}
         style={{
           position: "fixed",
           bottom: 20,

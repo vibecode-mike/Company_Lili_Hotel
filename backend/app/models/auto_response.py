@@ -15,6 +15,7 @@ from sqlalchemy import (
     Text,
     Numeric,
     JSON,
+    Index,
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
@@ -84,6 +85,8 @@ class AutoResponse(Base):
     trigger_time_end = Column(Time, comment="指定時間區間結束")
     date_range_start = Column(Date, comment="指定日期區間起始")
     date_range_end = Column(Date, comment="指定日期區間結束")
+    weekdays = Column(String(20), comment="週期性星期設定，逗號分隔：1=週一...7=週日，如 1,2,3,4,5")
+    scheduled_mode = Column(String(20), default="passive", comment="指定時間觸發模式：passive（被動回應）")
 
     # 狀態設定
     is_active = Column(Boolean, default=True, comment="啟用狀態")
@@ -95,6 +98,10 @@ class AutoResponse(Base):
 
     created_at = Column(DateTime, server_default=func.now(), comment="建立時間")
     updated_at = Column(DateTime, onupdate=func.now(), comment="更新時間")
+
+    __table_args__ = (
+        Index("ix_auto_responses_trigger_active_created", "trigger_type", "is_active", "created_at"),
+    )
 
     # 關聯關係
     template = relationship("MessageTemplate")

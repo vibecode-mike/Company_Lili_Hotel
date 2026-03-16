@@ -48,15 +48,27 @@ DEFAULT_MEMBER_FORM_URL = os.getenv(
 # -------------------------------------------------
 # 資料庫配置
 # -------------------------------------------------
-MYSQL_USER = os.getenv("MYSQL_USER", os.getenv("DB_USER", "root"))
-MYSQL_PASS = os.getenv("MYSQL_PASS", os.getenv("DB_PASS", "123456"))
-MYSQL_HOST = os.getenv("MYSQL_HOST", os.getenv("DB_HOST", "192.168.50.123"))
-MYSQL_PORT = int(os.getenv("MYSQL_PORT", os.getenv("DB_PORT", "3306")))
-MYSQL_DB = os.getenv("MYSQL_DB", os.getenv("DB_NAME", "lili_hotel"))
+def _require_env(name: str) -> str:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return value
+
+DB_USER = _require_env("DB_USER")
+DB_PASS = _require_env("DB_PASS")
+DB_HOST = _require_env("DB_HOST")
+DB_NAME = _require_env("DB_NAME")
+try:
+    DB_PORT = int(_require_env("DB_PORT"))
+except ValueError as exc:
+    raise RuntimeError("DB_PORT must be an integer") from exc
+
+# 向後相容：其他模組仍匯入 MYSQL_DB
+MYSQL_DB = DB_NAME
 
 DATABASE_URL = (
-    f"mysql+pymysql://{MYSQL_USER}:{quote_plus(MYSQL_PASS)}@"
-    f"{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DB}?charset=utf8mb4"
+    f"mysql+pymysql://{DB_USER}:{quote_plus(DB_PASS)}@"
+    f"{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
 )
 
 # -------------------------------------------------

@@ -32,6 +32,7 @@ class ChatbotMessageInSchema(BaseModel):
     browser_key: str = Field(..., min_length=1, max_length=100)
     message: str = Field(..., min_length=1, max_length=2000)
     hotel_id: Optional[int] = None
+    test_mode: bool = False
 
 
 class ChatbotMessageOutSchema(BaseModel):

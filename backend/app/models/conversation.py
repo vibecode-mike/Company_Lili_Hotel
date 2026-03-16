@@ -33,7 +33,7 @@ class ConversationThread(Base):
     __table_args__ = (
         Index("ix_conversation_threads_member_platform", "member_id", "platform"),
         Index("ix_conversation_threads_platform_uid", "platform", "platform_uid"),
-        Index("ix_conversation_threads_last_message_at", "last_message_at"),
+        Index("ix_conversation_threads_member_last_msg", "member_id", "last_message_at"),
     )
 
     id = Column(
@@ -46,10 +46,10 @@ class ConversationThread(Base):
         comment="關聯會員ID（跨渠道整合用）",
     )
     platform = Column(
-        String(20), nullable=True, comment="渠道類型：LINE / Facebook / Webchat"
+        String(20), nullable=False, comment="渠道類型：LINE / Facebook / Webchat"
     )
     platform_uid = Column(
-        String(100), nullable=True, comment="渠道原始 UID"
+        String(100), nullable=False, comment="渠道原始 UID"
     )
     conversation_name = Column(String(200), nullable=True, comment="對話名稱")
     last_message_at = Column(
@@ -96,15 +96,14 @@ class ConversationMessage(Base):
         comment="所屬對話串",
     )
     platform = Column(
-        String(20), nullable=True, comment="渠道類型（冗餘欄位，方便查詢）"
+        String(20), nullable=False, comment="渠道類型（冗餘欄位，方便查詢）"
     )
     role = Column(String(20), nullable=True, comment="角色：user / assistant")
     direction = Column(
-        String(20), nullable=True, comment="方向：incoming/outgoing"
+        String(20), nullable=False, comment="方向：incoming/outgoing"
     )
     message_type = Column(String(50), nullable=True, comment="訊息類型")
-    question = Column(Text, nullable=True, comment="問題內容")
-    response = Column(Text, nullable=True, comment="回應內容")
+    content = Column(Text, nullable=True, comment="訊息內容")
     event_id = Column(String(100), nullable=True, comment="事件ID")
     status = Column(String(20), nullable=True, comment="狀態")
     message_source = Column(

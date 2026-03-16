@@ -32,20 +32,21 @@ class Member(Base):
 
     # 基本資訊
     name = Column(String(32), comment="會員姓名（統一單欄位）")
-    gender = Column(String(1), comment="性別：0=不透漏/1=男/2=女")
+    gender = Column(String(1), nullable=False, default="0", server_default="0", comment="性別：0=不透漏/1=男/2=女")
     birthday = Column(Date, comment="生日")
     email = Column(String(255), unique=True, index=True, comment="電子信箱")
     phone = Column(String(20), index=True, comment="手機號碼")
     id_number = Column(String(20), unique=True, index=True, comment="身分證字號")
     passport_number = Column(String(50), comment="護照號碼")
     residence = Column(String(100), comment="居住地")
+    address_detail = Column(String(255), comment="詳細地址")
 
     # 系統資訊
     join_source = Column(
         String(20),
         nullable=False,
         default="LINE",
-        comment="加入來源：LINE/CRM/PMS/ERP/系統",
+        comment="加入來源：LINE/CRM/PMS/ERP/系統/Webchat",
         index=True,
     )
     receive_notification = Column(Boolean, default=True, comment="是否接收優惠通知")

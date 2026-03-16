@@ -5,54 +5,59 @@ Feature: AI 聊天機器人整合
 
   Background:
     說明:
-      AI 聊天機器人將所有已啟用的 FAQ 規則（結構化知識資料）作為 prompt context
+      AI 聊天機器人將所有已發佈的 FAQ 規則（結構化知識資料）作為 prompt context
       直接提供給 LLM，由 AI 根據上下文生成自然語言回答。
       不使用 RAG 向量檢索，規則內容直接作為上下文。
       支援 Web/LINE/FB 多渠道。
+      「已發佈」指經後台「發佈」操作同步至前台的規則版本。
 
   # ============================================================================
   # 第一部分：AI 回答流程
   # ============================================================================
 
-  Rule: AI 收集已啟用規則作為 prompt context 生成回答
+  Rule: AI 收集已發佈規則作為 prompt context 生成回答
+
+    說明:
+      前台 AI 僅引用「已發佈」的規則快照版本。
+      未發佈（新增、編輯後、或停用但尚未發佈）的規則不會被前台 AI 引用。
 
     @not-implemented
-    Example: AI 根據訂房規則回答房型問題
-      Given 系統已啟用以下大分類與規則
-        | category | rule_name  | status | 房型名稱   | 房型特色             | 房價 | 人數 | 間數 |
-        | 訂房     | 豪華雙人房 | 已啟用 | 豪華雙人房 | 海景、獨立陽台       | 3500 | 2    | 15   |
-        | 訂房     | 標準單人房 | 已啟用 | 標準單人房 | 市景、基本配備       | 2000 | 1    | 20   |
+    Example: AI 根據已發佈的訂房規則回答房型問題
+      Given 系統已發佈以下大分類與規則
+        | category | rule_name  | 發佈狀態 | 房型名稱   | 房型特色             | 房價 | 人數 | 間數 |
+        | 訂房     | 豪華雙人房 | 已發佈   | 豪華雙人房 | 海景、獨立陽台       | 3500 | 2    | 15   |
+        | 訂房     | 標準單人房 | 已發佈   | 標準單人房 | 市景、基本配備       | 2000 | 1    | 20   |
       And 語氣設定為「專業」
       When 會員透過 LINE 提問「請問有什麼房型可以選擇？」
-      Then AI 將已啟用的規則內容組裝為 prompt context
+      Then AI 將已發佈的規則內容組裝為 prompt context
       And AI 根據上下文生成包含「豪華雙人房」和「標準單人房」資訊的回答
       And 回答風格符合「專業」語氣設定
 
     @not-implemented
-    Example: AI 根據設施規則回答設施問題
-      Given 系統已啟用以下大分類與規則
-        | category | rule_name | status | 設施名稱 | 位置 | 費用 | 開放時間 |
-        | 設施     | 停車場    | 已啟用 | 停車場   | B1   | 免費 | 24小時   |
-        | 設施     | 游泳池    | 已啟用 | 游泳池   | 3F   | 免費 | 06:00-22:00 |
+    Example: AI 根據已發佈的設施規則回答設施問題
+      Given 系統已發佈以下大分類與規則
+        | category | rule_name | 發佈狀態 | 設施名稱 | 位置 | 費用 | 開放時間    |
+        | 設施     | 停車場    | 已發佈   | 停車場   | B1   | 免費 | 24小時      |
+        | 設施     | 游泳池    | 已發佈   | 游泳池   | 3F   | 免費 | 06:00-22:00 |
       When 會員提問「有停車場嗎？」
       Then AI 意圖分析判斷關聯至大分類「設施」
       And AI 根據「停車場」規則內容生成回答
 
     @not-implemented
-    Example: 已停用的規則不被 AI 引用
+    Example: 未發佈的規則不被前台 AI 引用
       Given 大分類「訂房」下有以下規則
-        | rule_name  | status       |
-        | 豪華雙人房 | 已啟用       |
-        | 經濟雙人房 | 已停用       |
-        | 標準單人房 | 測試(未發佈) |
+        | rule_name  | 啟用狀態 | 發佈狀態 |
+        | 豪華雙人房 | 已啟用   | 已發佈   |
+        | 經濟雙人房 | 已停用   | 已發佈（停用尚未發佈） |
+        | 標準單人房 | 已啟用   | 未發佈   |
       When 會員提問「有什麼房型？」
-      Then AI 僅引用「豪華雙人房」的規則內容
-      And 不引用「經濟雙人房」和「標準單人房」
+      Then AI 引用「豪華雙人房」和「經濟雙人房」的規則內容（兩者皆為已發佈）
+      And 不引用「標準單人房」（未發佈，僅可在測試聊天視窗引用）
 
     @not-implemented
     Example: 已關閉的大分類下規則不被 AI 引用
       Given 大分類「訂房」狀態為關閉
-      And 大分類「訂房」下有 5 筆已啟用的規則
+      And 大分類「訂房」下有 5 筆已發佈的規則
       When 會員提問「有什麼房型？」
       Then AI 不引用「訂房」大分類下的任何規則
 
@@ -91,7 +96,7 @@ Feature: AI 聊天機器人整合
 
     @not-implemented
     Example: AI 引用帶標籤的規則時自動貼標
-      Given 已啟用規則「豪華雙人房」設有標籤「豪華房型」
+      Given 已發佈規則「豪華雙人房」設有標籤「豪華房型」
       And 會員「M001」目前無標籤「豪華房型」
       When 會員「M001」提問「海景房多少錢？」
       And AI 引用「豪華雙人房」規則生成回答
@@ -101,8 +106,8 @@ Feature: AI 聊天機器人整合
 
     @not-implemented
     Example: AI 一次引用多條帶標籤的規則
-      Given 已啟用規則「豪華雙人房」設有標籤「豪華房型」
-      And 已啟用規則「標準單人房」設有標籤「標準房型」
+      Given 已發佈規則「豪華雙人房」設有標籤「豪華房型」
+      And 已發佈規則「標準單人房」設有標籤「標準房型」
       And 會員「M002」目前無上述標籤
       When 會員「M002」提問「有哪些房型可以選？」
       And AI 同時引用「豪華雙人房」和「標準單人房」規則生成回答
@@ -110,7 +115,7 @@ Feature: AI 聊天機器人整合
 
     @not-implemented
     Example: 會員已有相同標籤時不重複貼標
-      Given 已啟用規則「豪華雙人房」設有標籤「豪華房型」
+      Given 已發佈規則「豪華雙人房」設有標籤「豪華房型」
       And 會員「M001」已有標籤「豪華房型」
       When 會員「M001」再次提問關於豪華雙人房的問題
       And AI 引用「豪華雙人房」規則生成回答
@@ -146,7 +151,7 @@ Feature: AI 聊天機器人整合
     @not-implemented
     Example: AI 無法回答時標記為人工處理
       Given AI 聊天機器人處於啟用狀態
-      And 系統已啟用的規則不包含會員詢問的內容
+      And 系統已發佈的規則不包含會員詢問的內容
       When 會員提問「我上次入住遺失了一件外套，可以幫我找嗎？」
       And AI 判斷無法從現有規則中回答此問題
       Then 系統將此問題歸類為「人工處理」
@@ -172,8 +177,11 @@ Feature: AI 聊天機器人整合
       Given 客戶的 AI Token 已耗盡（used_amount >= total_quota）
       When 會員透過 LINE 發送訊息「有停車場嗎？」
       Then 系統不呼叫 AI 回覆
-      And 系統改由現有自動回應系統（auto_response）處理
-      And 若訊息匹配關鍵字規則，則回覆對應的自動回應內容
+      And 系統改由現有自動回應系統（auto_response）依優先順序處理
+        | 優先順序 | 類型         | 說明                             |
+        | 1        | 關鍵字觸發   | 訊息包含關鍵字則回覆對應內容     |
+        | 2        | 一律回應     | 關鍵字未命中時檢查時間區間       |
+        | 3        | 歡迎訊息     | 新好友加入時觸發（獨立，不衝突） |
 
     @not-implemented
     Example: Token 補充後恢復 AI 回覆
@@ -207,8 +215,8 @@ Feature: AI 聊天機器人整合
         | member_id       | M001 的會員 ID     |
         | message         | 使用者的提問內容   |
         | channel         | line               |
-        | conversation_id | 當前對話 ID        |
-      Then Backend 收集已啟用 FAQ 規則、組裝 prompt、呼叫 OpenAI
+        | thread_id       | 當前對話串 ID      |
+      Then Backend 收集已發佈 FAQ 規則、組裝 prompt、呼叫 OpenAI
       And Backend 回傳 AI 回答、自動貼標結果、Token 消耗量
       And LINE App 將回答透過 LINE Messaging API 發送給使用者
 
@@ -251,12 +259,15 @@ Feature: AI 聊天機器人整合
       其中步驟 2 由 Backend AI API 處理，步驟 3-4 保留在渠道端作為回退。
 
     @not-implemented
-    Example: 手動模式下跳過 AI 與自動回應
-      Given 會員「M001」的 gpt_enabled 設為 false（手動模式）
-      When 會員「M001」透過 LINE 發送訊息
+    Example: LINE / FB 渠道 gpt_enabled=false 時跳過 AI，自動回應照常
+      Given 會員「M001」的 gpt_enabled 設為 false
+      And 會員「M001」透過 LINE 發送訊息「訂房」
+      And 系統中存在關鍵字觸發規則「訂房」→「請撥打訂房專線 02-12345678」
+      When 系統處理訊息
       Then 系統不呼叫 Backend AI API
-      And 系統不執行自動回應
-      And 訊息標記為「待人工回覆」等待客服處理
+      And 系統仍依自動回應優先順序執行（關鍵字 > 一律回應 > 歡迎訊息）
+      And 系統回覆關鍵字觸發訊息「請撥打訂房專線 02-12345678」
+      And 訊息不標記為「待人工回覆」
 
     @not-implemented
     Example: AI 回答成功時不再執行自動回應

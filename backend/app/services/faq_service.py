@@ -20,15 +20,27 @@ from app.models.faq import (
     AiToneConfig,
     FaqModuleAuth,
 )
+from app.models.chatbot_booking import FaqPmsConnection
 
 logger = logging.getLogger(__name__)
 
 MAX_RULES_PER_CATEGORY = 20
 MAX_VERSIONS_PER_RULE = 2
 
+# PMS 串接啟用時，這些欄位由 PMS 自動帶入，後台不可手動修改
+PMS_READONLY_FIELDS = {"房價", "間數", "人數", "url"}
+
 
 class FaqService:
     """FAQ 知識庫管理服務"""
+
+    async def _touch_category(self, db: AsyncSession, category_id: int):
+        """更新大分類的 updated_at 時間戳（觸發最後更新時間刷新）"""
+        stmt = select(FaqCategory).where(FaqCategory.id == category_id)
+        result = await db.execute(stmt)
+        cat = result.scalar_one_or_none()
+        if cat:
+            cat.updated_at = datetime.now(timezone.utc)
 
     # === 大分類 ===
 
@@ -68,6 +80,7 @@ class FaqService:
             return None
 
         category.is_active = is_active
+        category.updated_at = datetime.now(timezone.utc)
         await db.flush()
         return category
 
@@ -159,7 +172,7 @@ class FaqService:
         count_result = await db.execute(count_stmt)
         current_count = count_result.scalar() or 0
         if current_count >= MAX_RULES_PER_CATEGORY:
-            raise ValueError(f"每個大分類最多 {MAX_RULES_PER_CATEGORY} 筆規則")
+            raise ValueError(f"已達規則數量上限（{MAX_RULES_PER_CATEGORY} 筆），無法新增")
 
         rule = FaqRule(
             category_id=category_id,
@@ -176,6 +189,7 @@ class FaqService:
             tag = FaqRuleTag(rule_id=rule.id, tag_name=tag_name)
             db.add(tag)
 
+        await self._touch_category(db, category_id)
         await db.flush()
         return rule
 
@@ -193,6 +207,13 @@ class FaqService:
             return None
 
         if content_json is not None:
+            # PMS 串接啟用時，剔除 PMS 唯讀欄位的變更
+            pms_conn = await self.get_pms_connection(db, rule.category_id)
+            if pms_conn and pms_conn.status == "enabled":
+                old_content = json.loads(rule.content_json) if rule.content_json else {}
+                for field in PMS_READONLY_FIELDS:
+                    if field in old_content:
+                        content_json[field] = old_content[field]
             rule.content_json = json.dumps(content_json, ensure_ascii=False)
 
         rule.status = "draft"
@@ -207,6 +228,7 @@ class FaqService:
                 tag = FaqRuleTag(rule_id=rule.id, tag_name=tag_name)
                 db.add(tag)
 
+        await self._touch_category(db, rule.category_id)
         await db.flush()
         return rule
 
@@ -218,7 +240,9 @@ class FaqService:
         if not rule:
             return False
 
+        category_id = rule.category_id
         await db.delete(rule)
+        await self._touch_category(db, category_id)
         await db.flush()
         return True
 
@@ -408,6 +432,180 @@ class FaqService:
         return auth
 
     # === 取得產業 ===
+
+    async def validate_required_fields(
+        self, db: AsyncSession, category_id: int, content_json: Dict[str, Any]
+    ) -> Optional[str]:
+        """驗證必填欄位，回傳第一個缺少的欄位名稱，全部通過回傳 None"""
+        stmt = (
+            select(FaqCategoryField)
+            .where(
+                FaqCategoryField.category_id == category_id,
+                FaqCategoryField.is_required == True,
+            )
+            .order_by(FaqCategoryField.sort_order)
+        )
+        result = await db.execute(stmt)
+        required_fields = result.scalars().all()
+
+        for field in required_fields:
+            if field.field_name not in content_json or not content_json[field.field_name]:
+                return field.field_name
+        return None
+
+    async def toggle_rule(
+        self, db: AsyncSession, rule_id: int, status: str
+    ) -> Optional[FaqRule]:
+        """切換規則狀態（disabled/draft/active）"""
+        rule = await self.get_rule(db, rule_id)
+        if not rule:
+            return None
+
+        # 重新啟用時狀態改為 draft
+        if status == "active" and rule.status == "disabled":
+            rule.status = "draft"
+        else:
+            rule.status = status
+        await self._touch_category(db, rule.category_id)
+        await db.flush()
+        return rule
+
+    async def publish_all_draft(
+        self, db: AsyncSession, user_id: int
+    ) -> int:
+        """發佈所有 draft 規則（批次建立 FaqRuleVersion 快照），回傳發佈數量"""
+        from datetime import datetime, timezone
+
+        stmt = select(FaqRule).where(FaqRule.status == "draft")
+        result = await db.execute(stmt)
+        rules = result.scalars().all()
+
+        now = datetime.now(timezone.utc)
+        count = 0
+        for rule in rules:
+            # 取得目前最大版本號
+            ver_stmt = (
+                select(func.max(FaqRuleVersion.version_number))
+                .where(FaqRuleVersion.rule_id == rule.id)
+            )
+            ver_result = await db.execute(ver_stmt)
+            max_ver = ver_result.scalar() or 0
+
+            # 建立版本快照（spec 第九部分）
+            version = FaqRuleVersion(
+                rule_id=rule.id,
+                content_json=rule.content_json,
+                status="active",
+                version_number=max_ver + 1,
+                snapshot_at=now,
+            )
+            db.add(version)
+
+            # 保留最多 MAX_VERSIONS_PER_RULE 版本
+            all_ver_stmt = (
+                select(FaqRuleVersion)
+                .where(FaqRuleVersion.rule_id == rule.id)
+                .order_by(FaqRuleVersion.version_number.desc())
+            )
+            all_ver_result = await db.execute(all_ver_stmt)
+            all_versions = all_ver_result.scalars().all()
+            if len(all_versions) >= MAX_VERSIONS_PER_RULE:
+                for old_ver in all_versions[MAX_VERSIONS_PER_RULE - 1:]:
+                    await db.delete(old_ver)
+
+            rule.status = "active"
+            rule.published_at = now
+            rule.published_by = user_id
+            count += 1
+
+        await db.flush()
+        return count
+
+    async def export_rules(
+        self, db: AsyncSession, category_id: int
+    ) -> List[FaqRule]:
+        """匯出分類下所有規則"""
+        stmt = (
+            select(FaqRule)
+            .where(FaqRule.category_id == category_id)
+            .order_by(FaqRule.id)
+        )
+        result = await db.execute(stmt)
+        return list(result.scalars().all())
+
+    async def import_rules(
+        self, db: AsyncSession, category_id: int, rows: List[Dict[str, Any]], user_id: int
+    ) -> int:
+        """匯入規則（完全覆蓋現有規則），回傳匯入數量"""
+        # 刪除現有規則
+        await db.execute(
+            delete(FaqRule).where(FaqRule.category_id == category_id)
+        )
+
+        count = 0
+        for row in rows:
+            rule = FaqRule(
+                category_id=category_id,
+                content_json=json.dumps(row, ensure_ascii=False),
+                status="draft",
+                created_by=user_id,
+                updated_by=user_id,
+            )
+            db.add(rule)
+            count += 1
+
+        await db.flush()
+        return count
+
+    # === PMS 串接 ===
+
+    async def get_pms_connection(
+        self, db: AsyncSession, category_id: int
+    ) -> Optional[FaqPmsConnection]:
+        """取得 PMS 串接設定"""
+        stmt = select(FaqPmsConnection).where(
+            FaqPmsConnection.faq_category_id == category_id
+        )
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def create_pms_connection(
+        self,
+        db: AsyncSession,
+        category_id: int,
+        api_endpoint: str,
+        api_key: str,
+        auth_type: str,
+    ) -> FaqPmsConnection:
+        """建立 PMS 串接設定"""
+        now = datetime.now(timezone.utc)
+        conn = FaqPmsConnection(
+            faq_category_id=category_id,
+            api_endpoint=api_endpoint,
+            api_key_encrypted=api_key,  # 簡化：暫不加密
+            auth_type=auth_type,
+            status="enabled",
+            last_synced_at=now,
+            snapshot_completed=True,
+        )
+        db.add(conn)
+        await self._touch_category(db, category_id)
+        await db.flush()
+        return conn
+
+    async def toggle_pms_connection(
+        self, db: AsyncSession, category_id: int, status: str
+    ) -> Optional[FaqPmsConnection]:
+        """切換 PMS 串接狀態"""
+        conn = await self.get_pms_connection(db, category_id)
+        if not conn:
+            return None
+        conn.status = status
+        if status == "enabled":
+            conn.last_synced_at = datetime.now(timezone.utc)
+        await self._touch_category(db, category_id)
+        await db.flush()
+        return conn
 
     async def get_default_industry(self, db: AsyncSession) -> Optional[Industry]:
         """取得預設產業（旅宿業）"""

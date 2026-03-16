@@ -642,8 +642,8 @@ export default function CreateAutoReplyInteractive({
               <div className="box-border content-stretch flex gap-[4px] items-center pb-0 pt-[48px] px-[40px] relative w-full">
                 <SimpleBreadcrumb
                   items={[
-                    { label: '自動回應', onClick: onBack },
-                    { label: isEditing ? '編輯自動回應' : '建立自動回應', active: true },
+                    { label: '關鍵字回應', onClick: onBack },
+                    { label: isEditing ? '編輯關鍵字回應' : '建立關鍵字回應', active: true },
                   ]}
                 />
               </div>
@@ -657,7 +657,7 @@ export default function CreateAutoReplyInteractive({
                 <div className="content-stretch flex items-start relative shrink-0 w-full">
                   <div className="basis-0 content-stretch flex gap-[4px] grow items-center min-h-px min-w-px relative shrink-0">
                     <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[32px] text-nowrap">
-                      <p className="leading-[1.5] whitespace-pre">{isEditing ? '編輯自動回應' : '建立自動回應'}</p>
+                      <p className="leading-[1.5] whitespace-pre">{isEditing ? '編輯關鍵字回應' : '建立關鍵字回應'}</p>
                     </div>
                   </div>
                   <div className="content-stretch flex gap-[4px] items-center justify-end relative shrink-0">

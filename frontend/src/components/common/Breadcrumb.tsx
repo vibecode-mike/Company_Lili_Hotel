@@ -212,25 +212,28 @@ export function PageHeaderWithBreadcrumb({
   breadcrumbItems,
   title,
   description,
-  hideTitleAndDescription = false
+  hideTitleAndDescription = false,
+  titleSuffix,
 }: {
   breadcrumbItems: BreadcrumbItem[];
   title: string;
   description?: string;
   hideTitleAndDescription?: boolean;
+  titleSuffix?: React.ReactNode;
 }) {
   return (
     <div className="px-[40px] pt-[48px] pb-0">
       {/* Breadcrumb */}
       <BreadcrumbContainer items={breadcrumbItems} />
-      
+
       {!hideTitleAndDescription && (
         <>
           {/* Title */}
-          <div className="mb-[12px]">
+          <div className="mb-[12px] flex items-center gap-[4px]">
             <p className="text-[32px] text-[#383838]">{title}</p>
+            {titleSuffix}
           </div>
-          
+
           {/* Description */}
           {description && (
             <div className="mb-[24px]">

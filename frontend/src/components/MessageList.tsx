@@ -1,14 +1,24 @@
-import { useState, useMemo, memo, useCallback, useEffect } from 'react';
+import { useState, useMemo, memo, useCallback, useEffect } from "react";
 import svgPaths from "../imports/svg-icons-common";
-import { imgGroup, imgGroup1, imgGroup2, imgGroup3, imgGroup4, imgGroup5, imgGroup6 } from "../imports/StarbitLogoAssets";
-import InteractiveMessageTable, { type Message } from "./InteractiveMessageTable";
+import {
+  imgGroup,
+  imgGroup1,
+  imgGroup2,
+  imgGroup3,
+  imgGroup4,
+  imgGroup5,
+  imgGroup6,
+} from "../imports/StarbitLogoAssets";
+import InteractiveMessageTable, {
+  type Message,
+} from "./InteractiveMessageTable";
 import MemberMainContainer from "../imports/MemberListContainer";
 import AddMemberContainer from "../imports/MemberDetailContainer";
 import ChatRoom from "./ChatRoom";
-import Sidebar from './Sidebar';
-import { PageHeaderWithBreadcrumb } from './common/Breadcrumb';
-import { MessageDetailDrawer } from './MessageDetailDrawer';
-import { useMessages } from '../contexts/MessagesContext';
+import Sidebar from "./Sidebar";
+import { PageHeaderWithBreadcrumb } from "./common/Breadcrumb";
+import { MessageDetailDrawer } from "./MessageDetailDrawer";
+import { useMessages } from "../contexts/MessagesContext";
 
 interface MessageListProps {
   onCreateMessage: () => void;
@@ -19,9 +29,16 @@ interface MessageListProps {
 }
 
 // Local Description Container Component
-const DescriptionContainerLocal = memo(function DescriptionContainerLocal({ children }: { children: React.ReactNode }) {
+const DescriptionContainerLocal = memo(function DescriptionContainerLocal({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <div className="content-stretch flex gap-[4px] items-center relative shrink-0 w-full" data-name="Description Container">
+    <div
+      className="content-stretch flex gap-[4px] items-center relative shrink-0 w-full"
+      data-name="Description Container"
+    >
       {children}
     </div>
   );
@@ -32,18 +49,38 @@ const DescriptionContainerLocal = memo(function DescriptionContainerLocal({ chil
 const IconSearch = memo(function IconSearch() {
   return (
     <div className="relative shrink-0 size-[32px]" data-name="Icon/Search">
-      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
+      <svg
+        className="block size-full"
+        fill="none"
+        preserveAspectRatio="none"
+        viewBox="0 0 32 32"
+      >
         <g id="Icon/Search">
-          <path d={svgPaths.p2bfa9080} fill="var(--fill-0, #A8A8A8)" id="Vector" />
+          <path
+            d={svgPaths.p2bfa9080}
+            fill="var(--fill-0, #A8A8A8)"
+            id="Vector"
+          />
         </g>
       </svg>
     </div>
   );
 });
 
-const SearchBar = memo(function SearchBar({ value, onChange, onClear }: { value: string; onChange: (value: string) => void; onClear: () => void }) {
+const SearchBar = memo(function SearchBar({
+  value,
+  onChange,
+  onClear,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onClear: () => void;
+}) {
   return (
-    <div className="bg-white box-border content-stretch flex gap-[28px] items-center min-w-[292px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 w-[292px]" data-name="Search Bar">
+    <div
+      className="bg-white box-border content-stretch flex gap-[28px] items-center min-w-[292px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 w-[292px]"
+      data-name="Search Bar"
+    >
       <div className="basis-0 content-stretch flex gap-[4px] grow items-center min-h-px min-w-px relative shrink-0">
         <IconSearch />
         <input
@@ -55,15 +92,24 @@ const SearchBar = memo(function SearchBar({ value, onChange, onClear }: { value:
         />
       </div>
       {value && (
-        <div 
+        <div
           onClick={onClear}
-          className="relative shrink-0 size-[24px] cursor-pointer hover:opacity-70 transition-opacity" 
+          className="relative shrink-0 size-[24px] cursor-pointer hover:opacity-70 transition-opacity"
           data-name="Cancel circle"
         >
-          <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
+          <svg
+            className="block size-full"
+            fill="none"
+            preserveAspectRatio="none"
+            viewBox="0 0 24 24"
+          >
             <g clipPath="url(#clip0_2001_2718)" id="Cancel circle">
               <g id="Vector" opacity="0.87"></g>
-              <path d={svgPaths.p3cde6900} fill="var(--fill-0, #DDDDDD)" id="Vector_2" />
+              <path
+                d={svgPaths.p3cde6900}
+                fill="var(--fill-0, #DDDDDD)"
+                id="Vector_2"
+              />
             </g>
             <defs>
               <clipPath id="clip0_2001_2718">
@@ -77,40 +123,68 @@ const SearchBar = memo(function SearchBar({ value, onChange, onClear }: { value:
   );
 });
 
-const ButtonReanalyze = memo(function ButtonReanalyze({ onClick }: { onClick: () => void }) {
+const ButtonReanalyze = memo(function ButtonReanalyze({
+  onClick,
+}: {
+  onClick: () => void;
+}) {
   return (
-    <div 
+    <div
       onClick={onClick}
-      className="box-border content-stretch flex gap-[2px] items-center justify-center min-w-[72px] px-[8px] py-[12px] relative rounded-[12px] shrink-0 cursor-pointer hover:bg-[#f0f6ff] transition-colors h-[48px]" 
+      className="box-border content-stretch flex gap-[2px] items-center justify-center min-w-[72px] px-[8px] py-[12px] relative rounded-[12px] shrink-0 cursor-pointer hover:bg-[#f0f6ff] transition-colors h-[48px]"
       data-name="Button/Reanalyze"
     >
-      <p className="basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">清除全部條件</p>
+      <p className="basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">
+        清除全部條件
+      </p>
     </div>
   );
 });
 
-const Frame11 = memo(function Frame11({ searchValue, onSearchChange, onClearAll }: { searchValue: string; onSearchChange: (value: string) => void; onClearAll: () => void }) {
+const Frame11 = memo(function Frame11({
+  searchValue,
+  onSearchChange,
+  onClearAll,
+}: {
+  searchValue: string;
+  onSearchChange: (value: string) => void;
+  onClearAll: () => void;
+}) {
   return (
     <div className="content-stretch flex gap-[4px] items-center relative shrink-0">
-      <SearchBar value={searchValue} onChange={onSearchChange} onClear={() => onSearchChange('')} />
+      <SearchBar
+        value={searchValue}
+        onChange={onSearchChange}
+        onClear={() => onSearchChange("")}
+      />
       <ButtonReanalyze onClick={onClearAll} />
     </div>
   );
 });
 
-const ButtonFilledButton = memo(function ButtonFilledButton({ onClick }: { onClick: () => void }) {
+const ButtonFilledButton = memo(function ButtonFilledButton({
+  onClick,
+}: {
+  onClick: () => void;
+}) {
   return (
-    <div 
+    <div
       onClick={onClick}
-      className="bg-[#242424] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer hover:bg-[#383838] transition-colors" 
+      className="bg-[#242424] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer hover:bg-[#383838] transition-colors"
       data-name="Button/Filled Button"
     >
-      <p className="basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center text-white">建立訊息</p>
+      <p className="basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center text-white">
+        建立訊息
+      </p>
     </div>
   );
 });
 
-const Frame9 = memo(function Frame9({ onCreateMessage }: { onCreateMessage: () => void }) {
+const Frame9 = memo(function Frame9({
+  onCreateMessage,
+}: {
+  onCreateMessage: () => void;
+}) {
   return (
     <div className="content-stretch flex gap-[12px] items-center justify-end relative shrink-0">
       <ButtonFilledButton onClick={onCreateMessage} />
@@ -118,92 +192,187 @@ const Frame9 = memo(function Frame9({ onCreateMessage }: { onCreateMessage: () =
   );
 });
 
-const Frame = memo(function Frame({ onCreateMessage, searchValue, onSearchChange, onClearAll }: { onCreateMessage: () => void; searchValue: string; onSearchChange: (value: string) => void; onClearAll: () => void }) {
+const Frame = memo(function Frame({
+  onCreateMessage,
+  searchValue,
+  onSearchChange,
+  onClearAll,
+}: {
+  onCreateMessage: () => void;
+  searchValue: string;
+  onSearchChange: (value: string) => void;
+  onClearAll: () => void;
+}) {
   return (
     <div className="content-stretch flex gap-[12px] items-center relative shrink-0 w-full">
-      <Frame11 searchValue={searchValue} onSearchChange={onSearchChange} onClearAll={onClearAll} />
+      <Frame11
+        searchValue={searchValue}
+        onSearchChange={onSearchChange}
+        onClearAll={onClearAll}
+      />
       <div className="flex-1"></div>
       <Frame9 onCreateMessage={onCreateMessage} />
     </div>
   );
 });
 
-const ButtonFilledButton1 = memo(function ButtonFilledButton1({ count, isActive, onClick }: { count: number; isActive: boolean; onClick: () => void }) {
+const ButtonFilledButton1 = memo(function ButtonFilledButton1({
+  count,
+  isActive,
+  onClick,
+}: {
+  count: number;
+  isActive: boolean;
+  onClick: () => void;
+}) {
   return (
-    <div 
+    <div
       onClick={onClick}
-      className="box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer transition-colors" 
+      className="box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer transition-colors"
       data-name="Button/Filled Button"
     >
-      <p className={`basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center ${isActive ? 'text-[#383838]' : 'text-[#6e6e6e]'}`}>
+      <p
+        className={`basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center ${isActive ? "text-[#383838]" : "text-[#6e6e6e]"}`}
+      >
         已發送 ({count})
       </p>
     </div>
   );
 });
 
-const Frame14 = memo(function Frame14({ count, isActive, onClick }: { count: number; isActive: boolean; onClick: () => void }) {
+const Frame14 = memo(function Frame14({
+  count,
+  isActive,
+  onClick,
+}: {
+  count: number;
+  isActive: boolean;
+  onClick: () => void;
+}) {
   return (
     <div className="content-stretch flex gap-[4px] items-center relative shrink-0">
-      {isActive && <div aria-hidden="true" className="absolute border-[#0f6beb] border-[0px_0px_2px] border-solid inset-0 pointer-events-none" />}
-      <ButtonFilledButton1 count={count} isActive={isActive} onClick={onClick} />
+      {isActive && (
+        <div
+          aria-hidden="true"
+          className="absolute border-[#0f6beb] border-[0px_0px_2px] border-solid inset-0 pointer-events-none"
+        />
+      )}
+      <ButtonFilledButton1
+        count={count}
+        isActive={isActive}
+        onClick={onClick}
+      />
     </div>
   );
 });
 
-const ButtonFilledButton2 = memo(function ButtonFilledButton2({ count, isActive, onClick }: { count: number; isActive: boolean; onClick: () => void }) {
+const ButtonFilledButton2 = memo(function ButtonFilledButton2({
+  count,
+  isActive,
+  onClick,
+}: {
+  count: number;
+  isActive: boolean;
+  onClick: () => void;
+}) {
   return (
-    <div 
+    <div
       onClick={onClick}
-      className="box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer transition-colors" 
+      className="box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer transition-colors"
       data-name="Button/Filled Button"
     >
-      <p className={`basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center ${isActive ? 'text-[#383838]' : 'text-[#6e6e6e]'}`}>
+      <p
+        className={`basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center ${isActive ? "text-[#383838]" : "text-[#6e6e6e]"}`}
+      >
         已排程 ({count})
       </p>
     </div>
   );
 });
 
-const Frame13 = memo(function Frame13({ count, isActive, onClick }: { count: number; isActive: boolean; onClick: () => void }) {
+const Frame13 = memo(function Frame13({
+  count,
+  isActive,
+  onClick,
+}: {
+  count: number;
+  isActive: boolean;
+  onClick: () => void;
+}) {
   return (
     <div className="content-stretch flex gap-[4px] items-center relative shrink-0">
-      {isActive && <div aria-hidden="true" className="absolute border-[#0f6beb] border-[0px_0px_2px] border-solid inset-0 pointer-events-none" />}
-      <ButtonFilledButton2 count={count} isActive={isActive} onClick={onClick} />
+      {isActive && (
+        <div
+          aria-hidden="true"
+          className="absolute border-[#0f6beb] border-[0px_0px_2px] border-solid inset-0 pointer-events-none"
+        />
+      )}
+      <ButtonFilledButton2
+        count={count}
+        isActive={isActive}
+        onClick={onClick}
+      />
     </div>
   );
 });
 
-const ButtonFilledButton3 = memo(function ButtonFilledButton3({ count, isActive, onClick }: { count: number; isActive: boolean; onClick: () => void }) {
+const ButtonFilledButton3 = memo(function ButtonFilledButton3({
+  count,
+  isActive,
+  onClick,
+}: {
+  count: number;
+  isActive: boolean;
+  onClick: () => void;
+}) {
   return (
-    <div 
+    <div
       onClick={onClick}
-      className="box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer transition-colors" 
+      className="box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer transition-colors"
       data-name="Button/Filled Button"
     >
-      <p className={`basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center ${isActive ? 'text-[#383838]' : 'text-[#6e6e6e]'}`}>
+      <p
+        className={`basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center ${isActive ? "text-[#383838]" : "text-[#6e6e6e]"}`}
+      >
         草稿 ({count})
       </p>
     </div>
   );
 });
 
-const Frame12 = memo(function Frame12({ count, isActive, onClick }: { count: number; isActive: boolean; onClick: () => void }) {
+const Frame12 = memo(function Frame12({
+  count,
+  isActive,
+  onClick,
+}: {
+  count: number;
+  isActive: boolean;
+  onClick: () => void;
+}) {
   return (
     <div className="content-stretch flex gap-[4px] items-center relative shrink-0">
-      {isActive && <div aria-hidden="true" className="absolute border-[#0f6beb] border-[0px_0px_2px] border-solid inset-0 pointer-events-none" />}
-      <ButtonFilledButton3 count={count} isActive={isActive} onClick={onClick} />
+      {isActive && (
+        <div
+          aria-hidden="true"
+          className="absolute border-[#0f6beb] border-[0px_0px_2px] border-solid inset-0 pointer-events-none"
+        />
+      )}
+      <ButtonFilledButton3
+        count={count}
+        isActive={isActive}
+        onClick={onClick}
+      />
     </div>
   );
 });
 
-const Frame1 = memo(function Frame1({ 
-  statusFilter, 
-  onStatusFilterChange, 
-  sentCount, 
-  scheduledCount, 
-  draftCount 
-}: { 
+const Frame1 = memo(function Frame1({
+  statusFilter,
+  onStatusFilterChange,
+  sentCount,
+  scheduledCount,
+  draftCount,
+}: {
   statusFilter: string;
   onStatusFilterChange: (status: string) => void;
   sentCount: number;
@@ -212,21 +381,20 @@ const Frame1 = memo(function Frame1({
 }) {
   return (
     <div className="content-stretch flex items-center relative shrink-0 w-full">
-      <div aria-hidden="true" className="absolute border-[#e1ebf9] border-[0px_0px_1px] border-solid inset-0 pointer-events-none" />
-      <Frame14 
-        count={sentCount} 
-        isActive={statusFilter === '已發送'} 
-        onClick={() => onStatusFilterChange('已發送')} 
+      <Frame14
+        count={sentCount}
+        isActive={statusFilter === "已發送"}
+        onClick={() => onStatusFilterChange("已發送")}
       />
-      <Frame13 
-        count={scheduledCount} 
-        isActive={statusFilter === '已排程'} 
-        onClick={() => onStatusFilterChange('已排程')} 
+      <Frame13
+        count={scheduledCount}
+        isActive={statusFilter === "已排程"}
+        onClick={() => onStatusFilterChange("已排程")}
       />
-      <Frame12 
-        count={draftCount} 
-        isActive={statusFilter === '草稿'} 
-        onClick={() => onStatusFilterChange('草稿')} 
+      <Frame12
+        count={draftCount}
+        isActive={statusFilter === "草稿"}
+        onClick={() => onStatusFilterChange("草稿")}
       />
     </div>
   );
@@ -247,7 +415,7 @@ const MainContent = memo(function MainContent({
   draftCount,
   quotaStatus,
   quotaLoading,
-  quotaError
+  quotaError,
 }: {
   onCreateMessage: () => void;
   searchValue: string;
@@ -261,14 +429,19 @@ const MainContent = memo(function MainContent({
   sentCount: number;
   scheduledCount: number;
   draftCount: number;
-  quotaStatus: { used: number; monthlyLimit: number; availableQuota: number; quotaType: string } | null;
+  quotaStatus: {
+    used: number;
+    monthlyLimit: number;
+    availableQuota: number;
+    quotaType: string;
+  } | null;
   quotaLoading: boolean;
   quotaError: string | null;
 }) {
   const quotaText = useMemo(() => {
-    if (quotaLoading) return '載入中...';
-    if (quotaError) return quotaError === '請先登入' ? '請先登入' : '無法取得';
-    if (!quotaStatus) return '—';
+    if (quotaLoading) return "載入中...";
+    if (quotaError) return quotaError === "請先登入" ? "請先登入" : "無法取得";
+    if (!quotaStatus) return "—";
     const usedText = quotaStatus.used.toLocaleString();
     if (!quotaStatus.monthlyLimit) return `${usedText}/—`;
     return `${usedText}/${quotaStatus.monthlyLimit.toLocaleString()}`;
@@ -280,42 +453,78 @@ const MainContent = memo(function MainContent({
   }, [quotaStatus]);
 
   return (
-    <div className="basis-0 content-stretch flex flex-col grow items-start min-h-px min-w-px relative shrink-0 w-full" data-name="Main Content">
+    <div
+      className="basis-0 content-stretch flex flex-col grow items-start min-h-px min-w-px relative shrink-0 w-full"
+      data-name="Main Content"
+    >
       {/* Search and Create Button */}
       <div className="px-[40px] pb-[16px] w-full">
-        <Frame onCreateMessage={onCreateMessage} searchValue={searchValue} onSearchChange={onSearchChange} onClearAll={onClearAll} />
+        <Frame
+          onCreateMessage={onCreateMessage}
+          searchValue={searchValue}
+          onSearchChange={onSearchChange}
+          onClearAll={onClearAll}
+        />
       </div>
-      
+
       {/* Description Container - Message Usage */}
       <div className="px-[40px] pb-[20px] w-full">
-        <div className="bg-[rgba(255,255,255,0.3)] relative rounded-[16px] w-full" data-name="Description Container">
-          <div aria-hidden="true" className="absolute border border-[#f0f6ff] border-solid inset-0 pointer-events-none rounded-[16px]" />
+        <div
+          className="bg-[rgba(255,255,255,0.3)] relative rounded-[16px] w-full"
+          data-name="Description Container"
+        >
+          <div
+            aria-hidden="true"
+            className="absolute border border-[#f0f6ff] border-solid inset-0 pointer-events-none rounded-[16px]"
+          />
           <div className="flex flex-col justify-center w-full">
             <div className="box-border content-stretch flex flex-col gap-[8px] items-start justify-center p-[24px] relative w-full">
-              <div className="content-stretch flex gap-[8px] items-center relative shrink-0 w-full" data-name="Description Wrapper">
-                <div className="content-stretch flex gap-[10px] items-center justify-center relative shrink-0" data-name="Description Text Container">
-                  <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[16px] text-center text-nowrap whitespace-pre">LINE 本月的訊息用量</p>
+              <div
+                className="content-stretch flex gap-[8px] items-center relative shrink-0 w-full"
+                data-name="Description Wrapper"
+              >
+                <div
+                  className="content-stretch flex gap-[10px] items-center justify-center relative shrink-0"
+                  data-name="Description Text Container"
+                >
+                  <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[16px] text-center text-nowrap whitespace-pre">
+                    LINE 本月的訊息用量
+                  </p>
                 </div>
-                <div className="content-stretch flex gap-[10px] items-center justify-center relative shrink-0" data-name="Description Text Container">
+                <div
+                  className="content-stretch flex gap-[10px] items-center justify-center relative shrink-0"
+                  data-name="Description Text Container"
+                >
                   <p className="font-['Noto_Sans_TC:Medium',sans-serif] font-medium leading-[1.5] relative shrink-0 text-[#0f6beb] text-[16px] text-center text-nowrap whitespace-pre">
                     {quotaText}
                   </p>
                 </div>
               </div>
-              <div className="bg-[#f0f6ff] h-[8px] overflow-clip relative rounded-[80px] shrink-0 w-full" data-name="usage status">
+              <div
+                className="bg-[#f0f6ff] h-[8px] overflow-clip relative rounded-[80px] shrink-0 w-full"
+                data-name="usage status"
+              >
                 <div
                   className="absolute bg-[#3a87f2] h-[8px] left-0 rounded-[80px] top-0 transition-all duration-300"
                   style={{
-                    width: `${quotaPercent}%`
+                    width: `${quotaPercent}%`,
                   }}
                   data-name="usage"
                 />
               </div>
-              <div className="relative shrink-0 w-full" data-name="Description Wrapper">
+              <div
+                className="relative shrink-0 w-full"
+                data-name="Description Wrapper"
+              >
                 <div className="flex flex-row items-center size-full">
                   <div className="box-border content-stretch flex items-center pl-[4px] pr-0 py-0 relative w-full">
-                    <div className="content-stretch flex gap-[10px] items-center justify-center relative shrink-0 w-full max-w-[340px]" data-name="Description Text Container">
-                      <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#a8a8a8] text-[12px]">已傳送的訊息則數資訊通常於每天上午更新。</p>
+                    <div
+                      className="content-stretch flex gap-[10px] items-center justify-center relative shrink-0 w-full max-w-[340px]"
+                      data-name="Description Text Container"
+                    >
+                      <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#a8a8a8] text-[12px]">
+                        已傳送的訊息則數資訊通常於每天上午更新。
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -324,10 +533,10 @@ const MainContent = memo(function MainContent({
           </div>
         </div>
       </div>
-      
+
       {/* Filter Buttons */}
       <div className="px-[40px] pb-[12px] w-full">
-        <Frame1 
+        <Frame1
           statusFilter={statusFilter}
           onStatusFilterChange={onStatusFilterChange}
           sentCount={sentCount}
@@ -335,13 +544,13 @@ const MainContent = memo(function MainContent({
           draftCount={draftCount}
         />
       </div>
-      
+
       {/* Table */}
       <div className="px-[40px] pb-[40px] w-full">
-        <InteractiveMessageTable 
-          messages={filteredMessages} 
-          onEdit={onEditMessage} 
-          onViewDetails={onViewDetails} 
+        <InteractiveMessageTable
+          messages={filteredMessages}
+          onEdit={onEditMessage}
+          onViewDetails={onViewDetails}
           statusFilter={statusFilter}
         />
       </div>
@@ -349,15 +558,27 @@ const MainContent = memo(function MainContent({
   );
 });
 
-export default function MessageList({ onCreateMessage, onEditMessage, onNavigateToAutoReply, onNavigateToMembers, onNavigateToSettings }: MessageListProps) {
+export default function MessageList({
+  onCreateMessage,
+  onEditMessage,
+  onNavigateToAutoReply,
+  onNavigateToMembers,
+  onNavigateToSettings,
+}: MessageListProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [searchValue, setSearchValue] = useState('');
-  const [currentPage, setCurrentPage] = useState<'messages' | 'members'>('messages');
-  const [memberView, setMemberView] = useState<'list' | 'add' | 'detail' | 'chat'>('list');
+  const [searchValue, setSearchValue] = useState("");
+  const [currentPage, setCurrentPage] = useState<"messages" | "members">(
+    "messages",
+  );
+  const [memberView, setMemberView] = useState<
+    "list" | "add" | "detail" | "chat"
+  >("list");
   const [selectedMember, setSelectedMember] = useState<any>(null);
-  const [statusFilter, setStatusFilter] = useState('已發送');
+  const [statusFilter, setStatusFilter] = useState("已發送");
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(
+    null,
+  );
 
   // Get messages from context
   const {
@@ -368,11 +589,11 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
     quotaLoading,
     quotaError,
     fetchMessages,
-    fetchQuota
+    fetchQuota,
   } = useMessages();
 
   useEffect(() => {
-    if (currentPage === 'messages') {
+    if (currentPage === "messages") {
       fetchMessages();
       fetchQuota();
     }
@@ -380,27 +601,29 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
 
   // Transform context messages to match InteractiveMessageTable format
   const formatDateTime = (value?: string | null) => {
-    if (!value || value === '-') return '-';
+    if (!value || value === "-") return "-";
     const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return '-';
-    return date.toLocaleString('zh-TW', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    }).replace(/\//g, '-');
+    if (Number.isNaN(date.getTime())) return "-";
+    return date
+      .toLocaleString("zh-TW", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      })
+      .replace(/\//g, "-");
   };
 
   const transformedMessages = useMemo(() => {
-    const determineTimeSource = (msg: typeof contextMessages[number]) => {
-      if (msg.status === '草稿') return msg.updatedAt || msg.createdAt || null;
-      if (msg.sendTime && msg.sendTime !== '-') return msg.sendTime;
+    const determineTimeSource = (msg: (typeof contextMessages)[number]) => {
+      if (msg.status === "草稿") return msg.updatedAt || msg.createdAt || null;
+      if (msg.sendTime && msg.sendTime !== "-") return msg.sendTime;
       return msg.updatedAt || msg.createdAt || null;
     };
 
-    return contextMessages.map(msg => {
+    return contextMessages.map((msg) => {
       const timeSource = determineTimeSource(msg);
       return {
         id: msg.id,
@@ -409,11 +632,12 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
         platform: msg.platform,
         channelName: msg.channelName,
         status: msg.status,
-        sentCount: msg.recipientCount > 0 ? msg.recipientCount.toString() : '-',
-        sender: msg.sender || '-',
-        clickCount: msg.status === '已發送' ? (msg.clickCount ?? 0).toString() : '-',
+        sentCount: msg.recipientCount > 0 ? msg.recipientCount.toString() : "-",
+        sender: msg.sender || "-",
+        clickCount:
+          msg.status === "已發送" ? (msg.clickCount ?? 0).toString() : "-",
         sendTime: formatDateTime(timeSource),
-        timeValue: timeSource
+        timeValue: timeSource,
       };
     });
   }, [contextMessages]);
@@ -423,7 +647,7 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
     let messages = transformedMessages;
 
     // Filter by status
-    messages = messages.filter(message => message.status === statusFilter);
+    messages = messages.filter((message) => message.status === statusFilter);
 
     // Filter by search value
     if (searchValue.trim()) {
@@ -431,7 +655,7 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
       messages = messages.filter((message) => {
         return (
           message.title.toLowerCase().includes(searchLower) ||
-          message.tags.some(tag => tag.toLowerCase().includes(searchLower)) ||
+          message.tags.some((tag) => tag.toLowerCase().includes(searchLower)) ||
           message.platform.toLowerCase().includes(searchLower) ||
           message.status.toLowerCase().includes(searchLower)
         );
@@ -440,50 +664,50 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
 
     return messages;
   }, [transformedMessages, searchValue, statusFilter]);
-  
+
   const handleClearAll = () => {
-    setSearchValue('');
+    setSearchValue("");
   };
-  
+
   const handleEditMessage = (id: string) => {
     if (onEditMessage) {
       onEditMessage(id);
     }
   };
-  
+
   const handleViewDetails = (id: string) => {
     setSelectedMessageId(id);
     setDrawerOpen(true);
   };
 
   const handleAddMember = () => {
-    setMemberView('add');
+    setMemberView("add");
   };
 
   const handleBackToMemberList = () => {
-    setMemberView('list');
+    setMemberView("list");
     setSelectedMember(null);
   };
 
   const handleOpenChat = (member: any) => {
     setSelectedMember(member);
-    setMemberView('chat');
+    setMemberView("chat");
   };
 
   const handleViewDetail = (member: any) => {
     setSelectedMember(member);
-    setMemberView('detail');
+    setMemberView("detail");
   };
 
   const handleNavigateFromDetail = (page: string) => {
-    if (page === 'member-chat' || page === 'chat-room') {
-      setMemberView('chat');
+    if (page === "member-chat" || page === "chat-room") {
+      setMemberView("chat");
     }
   };
 
   const handleNavigateMemberDetailFromChat = (memberId: string) => {
     if (!memberId) return;
-    setMemberView('detail');
+    setMemberView("detail");
   };
 
   return (
@@ -491,7 +715,7 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
       {/* Sidebar */}
       <Sidebar
         currentPage={currentPage}
-        onNavigateToMessages={() => setCurrentPage('messages')}
+        onNavigateToMessages={() => setCurrentPage("messages")}
         onNavigateToAutoReply={onNavigateToAutoReply}
         onNavigateToMembers={onNavigateToMembers}
         onNavigateToSettings={onNavigateToSettings}
@@ -500,14 +724,17 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
       />
 
       {/* Main Content */}
-      <main className={`flex-1 bg-slate-50 transition-all duration-300 overflow-x-hidden overflow-y-auto ${sidebarOpen ? 'ml-[330px] lg:ml-[280px] md:ml-[250px]' : 'ml-[72px]'}`}>
-        {currentPage === 'messages' ? (
-          <div className="bg-slate-50 content-stretch flex flex-col items-start relative w-full" data-name="Main Container">
+      <main
+        className={`flex-1 bg-slate-50 transition-all duration-300 overflow-x-hidden overflow-y-auto ${sidebarOpen ? "ml-[330px] lg:ml-[280px] md:ml-[250px]" : "ml-[72px]"}`}
+      >
+        {currentPage === "messages" ? (
+          <div
+            className="bg-slate-50 content-stretch flex flex-col items-start relative w-full"
+            data-name="Main Container"
+          >
             {/* Breadcrumb, Title and Description */}
             <PageHeaderWithBreadcrumb
-              breadcrumbItems={[
-                { label: '活動與訊息推播', active: true }
-              ]}
+              breadcrumbItems={[{ label: "活動與訊息推播", active: true }]}
               title="活動與訊息推播"
               description="建立單一圖文或多頁輪播內容，打造引人注目的品牌訊息"
             />
@@ -530,30 +757,32 @@ export default function MessageList({ onCreateMessage, onEditMessage, onNavigate
               quotaError={quotaError}
             />
           </div>
+        ) : memberView === "list" ? (
+          <MemberMainContainer
+            onAddMember={handleAddMember}
+            onOpenChat={handleOpenChat}
+            onViewDetail={handleViewDetail}
+          />
+        ) : memberView === "add" ? (
+          <AddMemberContainer onBack={handleBackToMemberList} />
+        ) : memberView === "detail" ? (
+          <AddMemberContainer
+            onBack={handleBackToMemberList}
+            member={selectedMember}
+            onNavigate={handleNavigateFromDetail}
+            fallbackMemberName={
+              selectedMember?.username || selectedMember?.realName
+            }
+          />
         ) : (
-          memberView === 'list' ? (
-            <MemberMainContainer
-              onAddMember={handleAddMember}
-              onOpenChat={handleOpenChat}
-              onViewDetail={handleViewDetail}
-            />
-          ) : memberView === 'add' ? (
-            <AddMemberContainer onBack={handleBackToMemberList} />
-          ) : memberView === 'detail' ? (
-            <AddMemberContainer
-              onBack={handleBackToMemberList}
-              member={selectedMember}
-              onNavigate={handleNavigateFromDetail}
-              fallbackMemberName={selectedMember?.username || selectedMember?.realName}
-            />
-          ) : (
-            <ChatRoom 
-              member={selectedMember} 
-              onNavigateMembers={handleBackToMemberList} 
-              onNavigateMemberDetail={handleNavigateMemberDetailFromChat}
-              fallbackMemberName={selectedMember?.username || selectedMember?.realName}
-            />
-          )
+          <ChatRoom
+            member={selectedMember}
+            onNavigateMembers={handleBackToMemberList}
+            onNavigateMemberDetail={handleNavigateMemberDetailFromChat}
+            fallbackMemberName={
+              selectedMember?.username || selectedMember?.realName
+            }
+          />
         )}
       </main>
       <MessageDetailDrawer

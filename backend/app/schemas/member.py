@@ -65,7 +65,7 @@ class MemberListItem(BaseModel):
     name: Optional[str] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
-    join_source: str = "LINE"  # 加入來源：LINE/CRM/PMS/ERP/系統/Facebook
+    join_source: str = "LINE"  # 加入來源：LINE/CRM/PMS/ERP/系統/Facebook/Webchat
     tags: List[TagInfo] = []
     created_at: datetime
     last_interaction_at: Optional[datetime] = None
@@ -110,7 +110,7 @@ class MemberSearchParams(BaseModel):
     )
     join_source: Optional[str] = Field(
         None,
-        pattern="^(LINE|CRM|PMS|ERP|系統)$",
+        pattern="^(LINE|CRM|PMS|ERP|系統|Webchat)$",
         description="加入來源篩選"
     )
     sort_by: str = Field(

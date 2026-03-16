@@ -79,9 +79,10 @@ export default defineConfig({
     server: {
       host: DEV_HOST,
       port: 5173,
-      open: true,
+      open: false,
       allowedHosts: true,
-      hmr: {
+      origin: process.env.VITE_ORIGIN || undefined,
+      hmr: process.env.VITE_HMR_DISABLE ? false : {
         host: HMR_HOST,
         port: HMR_PORT,
         protocol: HMR_PROTOCOL as 'ws' | 'wss',

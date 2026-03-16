@@ -5,8 +5,8 @@ from sqlalchemy import (
     Column,
     String,
     Text,
-    Integer,
     BigInteger,
+    Date,
     DateTime,
     Numeric,
     ForeignKey,
@@ -35,10 +35,11 @@ class ConsumptionRecord(Base):
         nullable=True,
         comment="PMS整合資料ID",
     )
-    consumption_time = Column(DateTime, comment="消費時間")
     amount = Column(Numeric(10, 2), comment="消費金額")
     room_type = Column(String(50), comment="房型或套餐")
-    stay_duration = Column(Integer, comment="住宿天數")
+    stay_date = Column(Date, comment="入住日期")
+    check_in_date = Column(Date, comment="入住日期（精確）")
+    check_out_date = Column(Date, comment="退房日期")
     notes = Column(Text, comment="備註")
     created_at = Column(DateTime, server_default=func.now(), comment="建立時間")
     updated_at = Column(DateTime, onupdate=func.now(), comment="更新時間")

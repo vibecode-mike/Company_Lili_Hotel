@@ -41,7 +41,11 @@ cp .env.example .env
 
 編輯 `.env` 文件，設置以下變量：
 
-- `DATABASE_URL`: MySQL 連接字符串
+- `DB_HOST`: MySQL 主機
+- `DB_PORT`: MySQL 端口
+- `DB_NAME`: MySQL 資料庫名稱
+- `DB_USER`: MySQL 帳號
+- `DB_PASS`: MySQL 密碼
 - `SECRET_KEY`: JWT 加密密鑰
 - `LINE_CHANNEL_ACCESS_TOKEN`: LINE 頻道訪問令牌
 - `LINE_CHANNEL_SECRET`: LINE 頻道密鑰
@@ -220,7 +224,11 @@ docker run -d -p 8000:8000 --env-file .env lili-hotel-backend
 
 | 變量名 | 說明 | 示例 |
 |--------|------|------|
-| DATABASE_URL | MySQL 連接 URL | mysql+aiomysql://user:pass@host:3306/db |
+| DB_HOST | MySQL 主機 | 127.0.0.1 |
+| DB_PORT | MySQL 端口 | 3306 |
+| DB_NAME | MySQL 資料庫名稱 | lili_hotel |
+| DB_USER | MySQL 帳號 | root |
+| DB_PASS | MySQL 密碼 | change-me |
 | SECRET_KEY | JWT 密鑰 | your-secret-key-here |
 | LINE_CHANNEL_ACCESS_TOKEN | LINE 頻道令牌 | your-line-token |
 | LINE_CHANNEL_SECRET | LINE 頻道密鑰 | your-line-secret |
@@ -233,7 +241,7 @@ docker run -d -p 8000:8000 --env-file .env lili-hotel-backend
 
 1. **資料庫連接失敗**
    - 檢查 MySQL 服務是否運行
-   - 確認資料庫連接字符串正確
+   - 確認 `DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASS` 配置正確
    - 檢查防火牆設置
 
 2. **LINE API 調用失敗**

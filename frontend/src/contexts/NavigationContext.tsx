@@ -1,35 +1,52 @@
-import React, { createContext, useContext, useState, useCallback, useMemo, useEffect, ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+  useEffect,
+  ReactNode,
+} from "react";
 
 // 路由页面类型
 export type Page =
-  | 'message-list'        // 活動與訊息推播
-  | 'auto-reply'          // 自動回應
-  | 'member-management'   // 會員管理
-  | 'member-detail'       // 會員詳情
-  | 'chat-room'           // 聊天室
-  | 'flex-editor'         // LINE Flex Message 編輯器
-  | 'line-api-settings';  // LINE API 基本設定
+  | "message-list" // 活動與訊息推播
+  | "auto-reply" // 自動回應
+  | "member-management" // 會員管理
+  | "member-detail" // 會員詳情
+  | "chat-room" // 聊天室
+  | "flex-editor" // LINE Flex Message 編輯器
+  | "line-api-settings" // LINE API 基本設定
+  | "pms" // PMS 串接 (訂房)
+  | "facilities" // 設施 內頁
+  | "ai-chatbot"; // AI Chatbot 總覽
 
 // URL 路徑映射
 const pageToPath: Record<Page, string> = {
-  'message-list': '/messages',
-  'auto-reply': '/auto-reply',
-  'member-management': '/members',
-  'member-detail': '/members/detail',
-  'chat-room': '/members/chat',
-  'flex-editor': '/flex-editor',
-  'line-api-settings': '/settings',
+  "message-list": "/messages",
+  "auto-reply": "/auto-reply",
+  "member-management": "/members",
+  "member-detail": "/members/detail",
+  "chat-room": "/members/chat",
+  "flex-editor": "/flex-editor",
+  "line-api-settings": "/settings",
+  pms: "/pms",
+  facilities: "/facilities",
+  "ai-chatbot": "/ai-chatbot",
 };
 
 // 路徑到頁面的反向映射
 const pathToPage: Record<string, Page> = {
-  '/messages': 'message-list',
-  '/auto-reply': 'auto-reply',
-  '/members': 'member-management',
-  '/members/detail': 'member-detail',
-  '/members/chat': 'chat-room',
-  '/flex-editor': 'flex-editor',
-  '/settings': 'line-api-settings',
+  "/messages": "message-list",
+  "/auto-reply": "auto-reply",
+  "/members": "member-management",
+  "/members/detail": "member-detail",
+  "/members/chat": "chat-room",
+  "/flex-editor": "flex-editor",
+  "/settings": "line-api-settings",
+  "/pms": "pms",
+  "/facilities": "facilities",
+  "/ai-chatbot": "ai-chatbot",
 };
 
 // 导航参数类型
@@ -56,7 +73,9 @@ interface NavigationContextType {
 }
 
 // 创建 Context
-const NavigationContext = createContext<NavigationContextType | undefined>(undefined);
+const NavigationContext = createContext<NavigationContextType | undefined>(
+  undefined,
+);
 
 // Provider Props
 interface NavigationProviderProps {
@@ -94,7 +113,7 @@ const getPageFromUrl = (): { page: Page; params: NavigationParams } | null => {
       return { page: matchedPage, params };
     }
   } catch (error) {
-    console.error('Failed to parse URL:', error);
+    console.error("Failed to parse URL:", error);
   }
   return null;
 };
@@ -109,19 +128,19 @@ const getInitialNavigationState = () => {
 
   // 備用：從 localStorage 恢復
   try {
-    const saved = localStorage.getItem('navigation_state');
+    const saved = localStorage.getItem("navigation_state");
     if (saved) {
       const state = JSON.parse(saved);
       // 驗證資料格式
       if (state.page && state.params !== undefined) {
         return {
           page: state.page as Page,
-          params: state.params as NavigationParams
+          params: state.params as NavigationParams,
         };
       }
     }
   } catch (error) {
-    console.error('Failed to restore navigation state:', error);
+    console.error("Failed to restore navigation state:", error);
   }
   // 返回預設值
   return null;
@@ -130,8 +149,8 @@ const getInitialNavigationState = () => {
 // Provider 组件
 export function NavigationProvider({
   children,
-  initialPage = 'member-management',
-  initialParams = {}
+  initialPage = "member-management",
+  initialParams = {},
 }: NavigationProviderProps) {
   // 嘗試從 localStorage 恢復狀態
   const savedState = getInitialNavigationState();
@@ -141,25 +160,28 @@ export function NavigationProvider({
   const [currentPage, setCurrentPage] = useState<Page>(startPage);
   const [params, setParams] = useState<NavigationParams>(startParams);
 
-  const navigate = useCallback((page: Page, newParams: NavigationParams = {}) => {
-    // 直接更新當前頁面和參數（不觸發整頁刷新）
-    setCurrentPage(page);
-    setParams(newParams);
+  const navigate = useCallback(
+    (page: Page, newParams: NavigationParams = {}) => {
+      // 直接更新當前頁面和參數（不觸發整頁刷新）
+      setCurrentPage(page);
+      setParams(newParams);
 
-    // 同步更新 URL（不觸發整頁刷新）
-    const path = pageToPath[page];
-    const searchParams = new URLSearchParams();
-    Object.entries(newParams).forEach(([key, value]) => {
-      if (value !== undefined) {
-        searchParams.set(key, value);
-      }
-    });
-    const queryString = searchParams.toString();
-    const newUrl = queryString ? `${path}?${queryString}` : path;
-    window.history.pushState({ page, params: newParams }, '', newUrl);
+      // 同步更新 URL（不觸發整頁刷新）
+      const path = pageToPath[page];
+      const searchParams = new URLSearchParams();
+      Object.entries(newParams).forEach(([key, value]) => {
+        if (value !== undefined) {
+          searchParams.set(key, value);
+        }
+      });
+      const queryString = searchParams.toString();
+      const newUrl = queryString ? `${path}?${queryString}` : path;
+      window.history.pushState({ page, params: newParams }, "", newUrl);
 
-    // localStorage 的儲存由 useEffect 統一處理，避免重複儲存
-  }, []);
+      // localStorage 的儲存由 useEffect 統一處理，避免重複儲存
+    },
+    [],
+  );
 
   const reset = useCallback(() => {
     setCurrentPage(initialPage);
@@ -171,11 +193,11 @@ export function NavigationProvider({
     try {
       const stateToSave = {
         page: currentPage,
-        params
+        params,
       };
-      localStorage.setItem('navigation_state', JSON.stringify(stateToSave));
+      localStorage.setItem("navigation_state", JSON.stringify(stateToSave));
     } catch (error) {
-      console.error('Failed to save navigation state:', error);
+      console.error("Failed to save navigation state:", error);
     }
   }, [currentPage, params]);
 
@@ -195,8 +217,8 @@ export function NavigationProvider({
       }
     };
 
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
   // 初始化時同步 URL（如果 URL 與當前狀態不符）
@@ -211,18 +233,23 @@ export function NavigationProvider({
         }
       });
       const queryString = searchParams.toString();
-      const newUrl = queryString ? `${expectedPath}?${queryString}` : expectedPath;
-      window.history.replaceState({ page: currentPage, params }, '', newUrl);
+      const newUrl = queryString
+        ? `${expectedPath}?${queryString}`
+        : expectedPath;
+      window.history.replaceState({ page: currentPage, params }, "", newUrl);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 只在初始化時執行一次
 
-  const value: NavigationContextType = useMemo(() => ({
-    currentPage,
-    params,
-    navigate,
-    reset,
-  }), [currentPage, params, navigate, reset]);
+  const value: NavigationContextType = useMemo(
+    () => ({
+      currentPage,
+      params,
+      navigate,
+      reset,
+    }),
+    [currentPage, params, navigate, reset],
+  );
 
   return (
     <NavigationContext.Provider value={value}>
@@ -235,7 +262,7 @@ export function NavigationProvider({
 export function useNavigation() {
   const context = useContext(NavigationContext);
   if (context === undefined) {
-    throw new Error('useNavigation must be used within a NavigationProvider');
+    throw new Error("useNavigation must be used within a NavigationProvider");
   }
   return context;
 }
@@ -250,4 +277,3 @@ export function useNavigate() {
   const { navigate } = useNavigation();
   return navigate;
 }
-

@@ -25,7 +25,7 @@ async def sse_endpoint(thread_id: str):
     前端使用 EventSource 連線後，當對應 thread 有訊息時會即時收到推送
 
     Args:
-        thread_id: 對話 Thread ID（格式：line:{uid}）
+        thread_id: 對話 Thread ID（直接使用 platform_uid，如 U123xxx）
     """
     queue: asyncio.Queue = asyncio.Queue()
     manager.connect_sse(queue, thread_id)

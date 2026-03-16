@@ -66,7 +66,7 @@ class MessageTemplate(Base):
     action_image = Column(String(500), comment="觸發的圖片檔案")
 
     # 通知設定
-    notification_message = Column(String(100), comment="通知推播訊息")
+    notification_message = Column(String(500), comment="通知推播訊息（顯示在手機通知欄）")
 
     # 輪播設定
     carousel_count = Column(Integer, comment="輪播圖卡數量（2-9張）")

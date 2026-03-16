@@ -119,6 +119,10 @@ class FaqPmsConnection(Base):
     )
     last_synced_at = Column(DateTime, nullable=True, comment="最後連線成功時間")
     error_message = Column(String(500), nullable=True, comment="最後一次錯誤訊息")
+    snapshot_completed = Column(
+        Boolean, nullable=False, default=False, server_default="0",
+        comment="PMS 快照是否已完成"
+    )
 
     # 關聯關係
     faq_category = relationship("FaqCategory")

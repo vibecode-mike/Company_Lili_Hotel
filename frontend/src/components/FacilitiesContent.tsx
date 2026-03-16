@@ -1,7 +1,8 @@
-import React, { useState, memo, useCallback, useMemo } from "react";
+import React, { useState, memo, useCallback, useMemo, useEffect } from "react";
 import Sidebar from "./Sidebar";
-import ChatFAB from "./ChatFAB";
+import { useToast } from "./ToastProvider";
 import { PageHeaderWithBreadcrumb } from "./common/Breadcrumb";
+import CategoryTitleDropdown from "./common/CategoryTitleDropdown";
 import svgPaths from "../imports/svg-icons-common";
 import togglePaths from "../imports/svg-wbwsye31ry";
 import ButtonEdit from "../imports/ButtonEdit";
@@ -9,6 +10,7 @@ import {
   FacilityEditModal,
   FacilityFaqDraft,
 } from "./chatbot/AIChatbotEditModal";
+import { apiGet, apiPost, apiPut, apiDelete } from "../utils/apiClient";
 
 // Facility-matched placeholder images via picsum (seed = stable, unique per facility)
 const img = (seed: string) => `https://picsum.photos/seed/${seed}/110/74`;
@@ -37,97 +39,31 @@ interface FacilityRecord {
 type SortField = "hours" | "fee" | "memberTags" | "lastUpdated" | "published";
 type SortDir = "asc" | "desc";
 
-// ------- Mock Data -------
-const MOCK_FACILITIES: FacilityRecord[] = [
-  {
-    id: "1",
-    name: "無邊際泳池",
-    image: img("infinity-pool"),
-    hours: "06:00 – 22:00",
-    fee: "免費",
-    description: "270° 環湖景觀，全年開放加熱恆溫水池",
-    memberTags: ["景觀首選", "VIP"],
-    lastUpdated: "2026-10-02 22:47",
-    published: true,
-  },
-  {
-    id: "2",
-    name: "SPA 水療中心",
-    image: img("spa-therapy"),
-    hours: "10:00 – 21:00",
-    fee: "NT$1,800 / 次",
-    description: "提供芳療、熱石、深層舒壓等多款療程",
-    memberTags: ["蜜月", "頂級", "送禮"],
-    lastUpdated: "2026-09-11 00:47",
-    published: true,
-  },
-  {
-    id: "3",
-    name: "全方位健身房",
-    image: img("gym-fitness"),
-    hours: "05:30 – 23:00",
-    fee: "免費",
-    description: "設備齊全，配備跑步機、重訓區、瑜珈空間",
-    memberTags: ["商務房", "長住客"],
-    lastUpdated: "2026-09-11 20:47",
-    published: true,
-  },
-  {
-    id: "4",
-    name: "湖畔餐廳",
-    image: img("lake-restaurant"),
-    hours: "07:00 – 22:00",
-    fee: "依點餐計費",
-    description: "供應在地食材早午餐及精緻晚餐，含素食選項",
-    memberTags: ["家庭", "浪漫約會", "商務房"],
-    lastUpdated: "2026-07-31 22:47",
-    published: true,
-  },
-  {
-    id: "5",
-    name: "兒童探索樂園",
-    image: img("kids-playground"),
-    hours: "09:00 – 20:00",
-    fee: "免費",
-    description: "室內外遊樂設施，含安全看護服務",
-    memberTags: ["家庭", "親子遊"],
-    lastUpdated: "2026-06-02 22:47",
-    published: true,
-  },
-  {
-    id: "6",
-    name: "商務貴賓室",
-    image: img("business-lounge"),
-    hours: "08:00 – 20:00",
-    fee: "免費（商務房型）",
-    description: "高速 Wi-Fi、投影設備、私人會議室可預約",
-    memberTags: ["商務房", "KOL"],
-    lastUpdated: "2026-05-13 22:47",
-    published: false,
-  },
-  {
-    id: "7",
-    name: "溫泉湯屋",
-    image: img("onsen-hotspring"),
-    hours: "07:00 – 23:00",
-    fee: "NT$600 / 小時",
-    description: "碳酸氫鈉泉質，附私人湯屋及備品組",
-    memberTags: ["蜜月", "溫泉房", "頂級"],
-    lastUpdated: "2026-04-02 22:47",
-    published: true,
-  },
-  {
-    id: "8",
-    name: "戶外停車場",
-    image: img("parking-lot"),
-    hours: "24 小時",
-    fee: "免費",
-    description: "提供 200 個車位，含無障礙及電動車充電樁",
-    memberTags: ["自駕遊"],
-    lastUpdated: "2026-03-02 22:47",
-    published: true,
-  },
-];
+// ------- API types & mapping -------
+type FaqRuleRaw = {
+  id: number;
+  content_json: Record<string, string>;
+  status: string;
+  tags: Array<{ tag_name: string }>;
+  updated_at: string | null;
+};
+
+function mapRuleToFacility(rule: FaqRuleRaw): FacilityRecord {
+  const c = rule.content_json ?? {};
+  return {
+    id: String(rule.id),
+    name: c["設施名稱"] ?? "",
+    image: c["image_url"] || img("facility-" + rule.id),
+    hours: c["開放時間"] ?? "",
+    fee: c["費用"] ?? "",
+    description: c["說明"] ?? "",
+    memberTags: (rule.tags ?? []).map((t) => t.tag_name),
+    lastUpdated: rule.updated_at
+      ? rule.updated_at.slice(0, 16).replace("T", " ")
+      : "—",
+    published: rule.status === "active",
+  };
+}
 
 // ------- Sub-components -------
 
@@ -359,7 +295,7 @@ const TableRow = memo(function TableRow({
   return (
     <tr
       className={`bg-white transition-colors duration-150 hover:bg-[#f5f8ff] group ${
-        !isLast ? "[&>td]:border-b [&>td]:border-[#ddd]" : ""
+        !isLast ? "row-divider" : ""
       }`}
     >
       {/* 設施名稱 — thumbnail + name */}
@@ -408,13 +344,28 @@ const TableRow = memo(function TableRow({
 
       {/* 最後更新 */}
       <td className="px-[12px] py-[12px] whitespace-nowrap text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5]">
-        {record.lastUpdated}
+        <div className="flex items-center gap-[12px]">
+          <span>{record.lastUpdated}</span>
+          <div
+            className="inline-flex items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0"
+            style={{ backgroundColor: record.published ? "#e4fcea" : "#f5f5f5" }}
+          >
+            <span
+              className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[16px] text-center whitespace-nowrap"
+              style={{ color: record.published ? "#00470c" : "#383838" }}
+            >
+              {record.published ? "已發佈" : "未發佈"}
+            </span>
+          </div>
+        </div>
       </td>
 
       {/* 啟用狀態 — 凍結欄 */}
       <td
         style={{
           width: 104,
+          minWidth: 104,
+          maxWidth: 104,
           position: "sticky",
           right: 68,
           zIndex: 1,
@@ -430,7 +381,7 @@ const TableRow = memo(function TableRow({
 
       {/* 動作 — 凍結欄 */}
       <td
-        style={{ width: 68, position: "sticky", right: 0, zIndex: 1 }}
+        style={{ width: 68, minWidth: 68, maxWidth: 68, position: "sticky", right: 0, zIndex: 1 }}
         className="px-[12px] py-[12px] align-middle text-center bg-white"
       >
         <ButtonEdit onClick={() => onEdit(record.id)} />
@@ -447,9 +398,10 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
   onChangeSource: () => void;
   sourceName: string;
 }) {
-  const [facilities, setFacilities] =
-    useState<FacilityRecord[]>(MOCK_FACILITIES);
-  const [filterType, setFilterType] = useState("全部");
+  const { showToast } = useToast();
+  const [facilities, setFacilities] = useState<FacilityRecord[]>([]);
+  const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [loadingFacilities, setLoadingFacilities] = useState(true);
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -457,6 +409,27 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
     null,
   );
   const [editDraft, setEditDraft] = useState<FacilityFaqDraft | null>(null);
+
+  // Load FAQ rules from API
+  useEffect(() => {
+    setLoadingFacilities(true);
+    apiGet("/api/v1/faq/categories")
+      .then((res) => res.json())
+      .then(async (json) => {
+        const cats: Array<{ id: number; name: string }> = json.data ?? [];
+        const facilityCat = cats.find((c) => c.name === "設施");
+        if (!facilityCat) return;
+        setCategoryId(facilityCat.id);
+        const rulesRes = await apiGet(
+          `/api/v1/faq/categories/${facilityCat.id}/rules?page_size=50`,
+        );
+        const rulesJson = await rulesRes.json();
+        const items: FaqRuleRaw[] = rulesJson.data?.items ?? [];
+        setFacilities(items.map(mapRuleToFacility));
+      })
+      .catch(() => {})
+      .finally(() => setLoadingFacilities(false));
+  }, []);
 
   const handleSort = useCallback((field: SortField) => {
     setSortField((prev) => {
@@ -469,11 +442,67 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
     });
   }, []);
 
-  const handleToggle = useCallback((id: string, value: boolean) => {
-    setFacilities((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, published: value } : r)),
-    );
-  }, []);
+  const handleToggle = useCallback(
+    async (id: string, value: boolean) => {
+      const facility = facilities.find((r) => r.id === id);
+      const name = facility?.name ?? "";
+      setFacilities((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, published: value } : r)),
+      );
+      try {
+        if (value) {
+          await apiPost(`/api/v1/faq/rules/${id}/publish`, {});
+        } else if (facility) {
+          const content_json: Record<string, string> = {
+            設施名稱: facility.name,
+            開放時間: facility.hours,
+            費用: facility.fee,
+            說明: facility.description,
+            url: "",
+          };
+          await apiPut(`/api/v1/faq/rules/${id}`, {
+            content_json,
+            tag_names: facility.memberTags,
+          });
+        }
+        showToast(
+          value ? (
+            <>
+              {name} 已啟用{" "}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.dispatchEvent(new CustomEvent("open-chatfab"));
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#DBEDFF",
+                  cursor: "pointer",
+                  padding: 0,
+                  fontFamily: "'Noto Sans TC', sans-serif",
+                  fontSize: 16,
+                  lineHeight: 1.5,
+                  textDecoration: "underline",
+                }}
+              >
+                測試
+              </button>
+            </>
+          ) : `${name} 已停用`,
+          "success",
+        );
+      } catch {
+        // revert on failure
+        setFacilities((prev) =>
+          prev.map((r) => (r.id === id ? { ...r, published: !value } : r)),
+        );
+        showToast("操作失敗", "error");
+      }
+    },
+    [facilities, showToast],
+  );
 
   const handleEdit = useCallback(
     (id: string) => {
@@ -494,14 +523,11 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
   );
 
   const handleClearFilters = useCallback(() => {
-    setFilterType("全部");
     setSearch("");
   }, []);
 
   const filtered = useMemo(() => {
     let list = facilities.filter((r) => {
-      if (filterType === "已發佈" && !r.published) return false;
-      if (filterType === "未發佈" && r.published) return false;
       if (
         search &&
         !r.name.includes(search) &&
@@ -543,27 +569,16 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
       });
     }
     return list;
-  }, [facilities, filterType, search, sortField, sortDir]);
+  }, [facilities, search, sortField, sortDir]);
 
   const thProps = { sortField, sortDir, onSort: handleSort };
 
   return (
     <div className="flex flex-col gap-[16px] w-full">
       {/* Filter row */}
-      <div className="flex flex-wrap gap-x-[8px] gap-y-[8px] items-center w-full">
-        <div className="flex flex-col items-start pb-[2px] pt-px shrink-0">
-          <p className="font-['Noto_Sans_TC',sans-serif] font-medium leading-[1.5] text-[#6e6e6e] text-[12px] whitespace-nowrap">
-            篩選
-          </p>
-        </div>
-
-        <FilterOption
-          value={filterType}
-          options={["全部", "已發佈", "未發佈"]}
-          onChange={setFilterType}
-        />
-
-        {/* Search bar */}
+      <div className="flex flex-wrap gap-y-[8px] items-stretch w-full">
+        {/* Search bar + 清除全部條件 */}
+        <div className="flex gap-[4px] self-stretch shrink-0">
         <div className="bg-white flex gap-[28px] items-center px-[12px] py-[8px] rounded-[16px] shrink-0 w-[292px]">
           <div className="flex flex-[1_0_0] gap-[4px] items-center min-w-0">
             <IconSearch />
@@ -594,27 +609,65 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
         </div>
 
         <button
-          onClick={handleClearFilters}
-          className="flex gap-[2px] items-center justify-center px-[8px] py-[8px] rounded-[12px] shrink-0 cursor-pointer hover:bg-[#f0f6ff] transition-colors"
-          type="button"
-        >
-          <span className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[#0f6beb] text-[16px] whitespace-nowrap">
-            清除全部條件
-          </span>
-        </button>
+            onClick={handleClearFilters}
+            className="flex gap-[2px] items-center justify-center px-[8px] py-[8px] rounded-[12px] shrink-0 self-stretch cursor-pointer hover:bg-[#f0f6ff] active:bg-[#dce8fc] transition-colors"
+            type="button"
+          >
+            <span className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[#0f6beb] text-[16px] whitespace-nowrap">
+              清除全部條件
+            </span>
+          </button>
+        </div>
 
         <div className="flex-1" />
 
-        {/* 測試 */}
-        <button
-          type="button"
-          onClick={() => window.dispatchEvent(new CustomEvent("open-chatfab"))}
-          className="bg-[#242424] flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] shrink-0 cursor-pointer hover:bg-[#383838] transition-colors duration-150"
-        >
-          <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-white text-center whitespace-nowrap">
-            測試
-          </span>
-        </button>
+        {/* 新增規則 + 測試 */}
+        <div className="flex gap-[4px] self-stretch shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              if (!categoryId) {
+                showToast("尚未載入分類資料", "error");
+                return;
+              }
+              const newFacility: FacilityRecord = {
+                id: `new-${Date.now()}`,
+                name: "",
+                image: "",
+                hours: "",
+                fee: "",
+                description: "",
+                memberTags: [],
+                lastUpdated: "—",
+                published: false,
+              };
+              setEditingFacility(newFacility);
+              setEditDraft({
+                name: "",
+                imageUrl: "",
+                hours: "",
+                fee: "",
+                description: "",
+                memberTags: [],
+              });
+            }}
+            className="flex items-center justify-center px-[12px] py-[8px] rounded-[16px] shrink-0 self-stretch cursor-pointer hover:bg-[#f0f6ff] active:bg-[#dce8fc] transition-colors duration-150"
+          >
+            <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#0f6beb] text-center whitespace-nowrap">
+              新增規則
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent("open-chatfab"))}
+            className="bg-[#242424] flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] shrink-0 self-stretch cursor-pointer hover:bg-[#383838] transition-colors duration-150"
+          >
+            <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-white text-center whitespace-nowrap">
+              測試
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* Record count + 變更 */}
@@ -671,6 +724,8 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
                 onClick={() => handleSort("published")}
                 style={{
                   width: 104,
+                  minWidth: 104,
+                  maxWidth: 104,
                   position: "sticky",
                   right: 68,
                   zIndex: 2,
@@ -688,7 +743,7 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
 
               {/* 動作 — 凍結欄 */}
               <th
-                style={{ width: 68, position: "sticky", right: 0, zIndex: 2 }}
+                style={{ width: 68, minWidth: 68, maxWidth: 68, position: "sticky", right: 0, zIndex: 2 }}
                 className="px-[12px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd]"
               >
                 動作
@@ -734,35 +789,83 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
             setEditDraft(null);
           }}
           onChange={setEditDraft}
-          onSave={(draft) => {
-            // 只存資料；modal 由 SaveSuccessDialog 的按鈕關閉
-            setFacilities((prev) =>
-              prev.map((r) =>
-                r.id === editingFacility.id
-                  ? {
-                      ...r,
-                      name: draft.name,
-                      image: draft.imageUrl,
-                      hours: draft.hours,
-                      fee: draft.fee,
-                      description: draft.description,
-                      memberTags: draft.memberTags,
-                      lastUpdated: new Date()
-                        .toISOString()
-                        .slice(0, 16)
-                        .replace("T", " "),
-                    }
-                  : r,
-              ),
-            );
+          onSave={async (draft) => {
+            const content_json: Record<string, string> = {
+              設施名稱: draft.name,
+              開放時間: draft.hours,
+              費用: draft.fee,
+              說明: draft.description,
+              url: "",
+              image_url: draft.imageUrl,
+            };
+            try {
+              const isNew = editingFacility.id.startsWith("new-");
+              if (isNew && categoryId) {
+                const res = await apiPost(
+                  `/api/v1/faq/categories/${categoryId}/rules`,
+                  { content_json, tag_names: draft.memberTags },
+                );
+                const json = await res.json();
+                const newId = String(json.data?.id ?? editingFacility.id);
+                const now = new Date().toISOString().slice(0, 16).replace("T", " ");
+                setFacilities((prev) => [
+                  {
+                    id: newId,
+                    name: draft.name,
+                    image: draft.imageUrl || img("facility-" + newId),
+                    hours: draft.hours,
+                    fee: draft.fee,
+                    description: draft.description,
+                    memberTags: draft.memberTags,
+                    lastUpdated: now,
+                    published: false,
+                  },
+                  ...prev,
+                ]);
+              } else {
+                await apiPut(`/api/v1/faq/rules/${editingFacility.id}`, {
+                  content_json,
+                  tag_names: draft.memberTags,
+                });
+                const now = new Date().toISOString().slice(0, 16).replace("T", " ");
+                setFacilities((prev) =>
+                  prev.map((r) =>
+                    r.id === editingFacility.id
+                      ? {
+                          ...r,
+                          name: draft.name,
+                          image: draft.imageUrl || r.image,
+                          hours: draft.hours,
+                          fee: draft.fee,
+                          description: draft.description,
+                          memberTags: draft.memberTags,
+                          lastUpdated: now,
+                          published: false,
+                        }
+                      : r,
+                  ),
+                );
+              }
+              showToast("儲存成功", "success");
+            } catch {
+              showToast("儲存失敗", "error");
+            }
           }}
-          onDelete={() => {
-            // 無 PMS → 整筆刪除
-            setFacilities((prev) =>
-              prev.filter((r) => r.id !== editingFacility.id),
-            );
-            setEditingFacility(null);
-            setEditDraft(null);
+          onDelete={async () => {
+            const isNew = editingFacility.id.startsWith("new-");
+            try {
+              if (!isNew) {
+                await apiDelete(`/api/v1/faq/rules/${editingFacility.id}`);
+              }
+              setFacilities((prev) =>
+                prev.filter((r) => r.id !== editingFacility.id),
+              );
+              setEditingFacility(null);
+              setEditDraft(null);
+              showToast("已刪除", "success");
+            } catch {
+              showToast("刪除失敗", "error");
+            }
           }}
         />
       )}
@@ -774,7 +877,7 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
 type DataSourceRow = {
   type: string;
   statusLabel: string;
-  statusColor: "green" | "gray";
+  statusColor: "green" | "gray" | "red";
   lastUpdated: string;
   lastPublished: string;
   enabled: boolean;
@@ -784,7 +887,7 @@ type DataSourceRow = {
 const DATA_SOURCES_FACILITIES: DataSourceRow[] = [
   {
     type: "自訂 FAQ",
-    statusLabel: "已儲存",
+    statusLabel: "已啟用",
     statusColor: "green",
     lastUpdated: "2026-03-02 22:47",
     lastPublished: "2026-03-02 22:47",
@@ -804,7 +907,7 @@ const DataSourceTableRow = memo(function DataSourceTableRow({
   return (
     <tr
       className={`bg-white transition-colors hover:bg-[#f5f8ff] group ${
-        !isLast ? "[&>td]:border-b [&>td]:border-[#ddd]" : ""
+        !isLast ? "row-divider" : ""
       }`}
     >
       <td
@@ -817,13 +920,22 @@ const DataSourceTableRow = memo(function DataSourceTableRow({
         <div
           style={{
             backgroundColor:
-              row.statusColor === "green" ? "#e4fcea" : "#f5f5f5",
+              row.statusColor === "green"
+                ? "#e4fcea"
+                : row.statusColor === "red"
+                  ? "#ffebee"
+                  : "#f5f5f5",
           }}
           className="inline-flex items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0"
         >
           <p
             style={{
-              color: row.statusColor === "green" ? "#00470c" : "#383838",
+              color:
+                row.statusColor === "green"
+                  ? "#00470c"
+                  : row.statusColor === "red"
+                    ? "#b71c1c"
+                    : "#383838",
             }}
             className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[16px] text-center whitespace-nowrap"
           >
@@ -950,7 +1062,14 @@ const DataSourcesTable = memo(function DataSourcesTable({
                 onToggle={(type, v) =>
                   setSources((prev) =>
                     prev.map((s) =>
-                      s.type === type ? { ...s, enabled: v } : s,
+                      s.type === type
+                        ? {
+                            ...s,
+                            enabled: v,
+                            statusLabel: v ? "已啟用" : "已停用",
+                            statusColor: v ? "green" : "red",
+                          }
+                        : s,
                     ),
                   )
                 }
@@ -999,6 +1118,7 @@ export default function FacilitiesContent({
           ]}
           title="設施"
           description="啟用後，AI 回覆將引用此內容"
+          titleSuffix={<CategoryTitleDropdown />}
         />
 
         {/* Tab bar */}
@@ -1031,7 +1151,6 @@ export default function FacilitiesContent({
         </div>
       </main>
 
-      <ChatFAB />
     </div>
   );
 }
