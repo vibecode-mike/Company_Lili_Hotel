@@ -5,42 +5,43 @@ Feature: AI 聊天機器人整合
 
   Background:
     說明:
-      AI 聊天機器人將所有已發佈的 FAQ 規則（結構化知識資料）作為 prompt context
-      直接提供給 LLM，由 AI 根據上下文生成自然語言回答。
-      不使用 RAG 向量檢索，規則內容直接作為上下文。
+      AI 聊天機器人使用 Tool Calling 模式：LLM 透過 kb_search 工具按需查詢知識庫，
+      透過 query_pms_availability 工具按需查詢即時房況，而非一次性載入所有規則。
+      不使用 RAG 向量檢索。
       支援 Web/LINE/FB 多渠道。
-      「已發佈」指經後台「發佈」操作同步至前台的規則版本。
+      「已發佈」指經後台「發佈」操作建立的 FaqRuleVersion 快照版本。
+      正式模式（會員聊天室）讀取發佈快照；測試模式（ChatFAB）讀取 FaqRule 即時狀態。
+      測試模式與正式模式使用相同的 Tool Calling 引擎與 system prompt。
 
   # ============================================================================
   # 第一部分：AI 回答流程
   # ============================================================================
 
-  Rule: AI 收集已發佈規則作為 prompt context 生成回答
+  Rule: AI 透過 Tool Calling 按需查詢已發佈規則快照生成回答
 
     說明:
-      前台 AI 僅引用「已發佈」的規則快照版本。
-      未發佈（新增、編輯後、或停用但尚未發佈）的規則不會被前台 AI 引用。
+      前台 AI 僅引用「已發佈」的 FaqRuleVersion 快照。
+      LLM 透過 kb_search 工具按需查詢相關分類的規則，而非一次載入全部。
+      編輯中的規則（回到 draft 狀態）不影響前台，前台持續使用上一版快照。
 
     @not-implemented
-    Example: AI 根據已發佈的訂房規則回答房型問題
+    Example: AI 透過 kb_search 工具查詢已發佈的訂房規則回答
       Given 系統已發佈以下大分類與規則
         | category | rule_name  | 發佈狀態 | 房型名稱   | 房型特色             | 房價 | 人數 | 間數 |
         | 訂房     | 豪華雙人房 | 已發佈   | 豪華雙人房 | 海景、獨立陽台       | 3500 | 2    | 15   |
         | 訂房     | 標準單人房 | 已發佈   | 標準單人房 | 市景、基本配備       | 2000 | 1    | 20   |
-      And 語氣設定為「專業」
       When 會員透過 LINE 提問「請問有什麼房型可以選擇？」
-      Then AI 將已發佈的規則內容組裝為 prompt context
-      And AI 根據上下文生成包含「豪華雙人房」和「標準單人房」資訊的回答
-      And 回答風格符合「專業」語氣設定
+      Then AI 呼叫 kb_search(category="booking_billing") 查詢已發佈的規則快照
+      And AI 根據查詢結果生成包含「豪華雙人房」和「標準單人房」資訊的回答
 
     @not-implemented
-    Example: AI 根據已發佈的設施規則回答設施問題
+    Example: AI 透過 kb_search 工具查詢設施規則回答
       Given 系統已發佈以下大分類與規則
         | category | rule_name | 發佈狀態 | 設施名稱 | 位置 | 費用 | 開放時間    |
         | 設施     | 停車場    | 已發佈   | 停車場   | B1   | 免費 | 24小時      |
         | 設施     | 游泳池    | 已發佈   | 游泳池   | 3F   | 免費 | 06:00-22:00 |
       When 會員提問「有停車場嗎？」
-      Then AI 意圖分析判斷關聯至大分類「設施」
+      Then AI 呼叫 kb_search(category="facilities") 查詢設施規則
       And AI 根據「停車場」規則內容生成回答
 
     @not-implemented
@@ -216,8 +217,8 @@ Feature: AI 聊天機器人整合
         | message         | 使用者的提問內容   |
         | channel         | line               |
         | thread_id       | 當前對話串 ID      |
-      Then Backend 收集已發佈 FAQ 規則、組裝 prompt、呼叫 OpenAI
-      And Backend 回傳 AI 回答、自動貼標結果、Token 消耗量
+      Then Backend 透過 Tool Calling 按需查詢已發佈規則快照與 PMS 資料
+      And Backend 回傳 AI 回答、自動貼標結果、Token 消耗量（OpenAI usage 實際值）
       And LINE App 將回答透過 LINE Messaging API 發送給使用者
 
     @not-implemented
