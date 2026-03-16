@@ -78,6 +78,10 @@ export type {
 export { default as Tag } from './Tag';
 export type { TagProps } from './Tag';
 
+// ========== 圖片上傳組件 ==========
+export { default as ImageUploadField } from './ImageUploadField';
+export type { ImageUploadFieldProps } from './ImageUploadField';
+
 // ========== 样式工具 ==========
 export {
   COLORS,
