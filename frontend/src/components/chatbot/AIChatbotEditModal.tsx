@@ -261,31 +261,6 @@ const SplitSection = memo(function SplitSection({
   );
 });
 
-// Image section (full width)
-const ImageSection = memo(function ImageSection({
-  imageUrl,
-  inputValue,
-  onChange,
-  disabled,
-}: {
-  imageUrl?: string;
-  inputValue: string;
-  onChange: (v: string) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div className="flex flex-col gap-[12px] w-full">
-      <FieldLabel label="房型圖片" />
-      <ImageUploadField
-        value={imageUrl || inputValue}
-        onChange={onChange}
-        disabled={disabled}
-        label="房型圖片"
-        aspectRatio="3/2"
-      />
-    </div>
-  );
-});
 
 // Textarea FAQ section
 const TextareaSection = memo(function TextareaSection({
