@@ -88,6 +88,13 @@ async def upload_image(file: UploadFile = File(...)):
             if img.mode != 'RGB':
                 img = img.convert('RGB')
 
+            # 等比縮放至寬度上限 1200px
+            MAX_WIDTH = 1200
+            if img.width > MAX_WIDTH:
+                ratio = MAX_WIDTH / img.width
+                new_height = int(img.height * ratio)
+                img = img.resize((MAX_WIDTH, new_height), Image.LANCZOS)
+
             # 保存為 JPEG（前端已裁切，不需要再裁切）
             output = BytesIO()
             img.save(output, format='JPEG', quality=95, optimize=True)
@@ -134,7 +141,7 @@ async def upload_image(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"上传失败: {str(e)}")
 
 
-@router.delete("/upload/{filename}", summary="删除图片", description="删除已上传的图片")
+@router.delete("/{filename}", summary="删除图片", description="删除已上传的图片")
 async def delete_image(filename: str):
     """
     删除图片接口（可选）
