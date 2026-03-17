@@ -107,7 +107,7 @@ class AiChatService:
         total_tokens_used = 0
         max_loops = 5
         reply = ""
-        referenced_rule_ids: List[int] = []
+        _referenced_rule_id_set: set = set()
 
         for _ in range(max_loops):
             resp = await client.chat.completions.create(
@@ -131,13 +131,21 @@ class AiChatService:
                 fn_name = tc.function.name
                 args = json.loads(tc.function.arguments)
                 result = await self._execute_tool(db, fn_name, args)
-                # 收集 kb_search 實際引用的規則 IDs
+                # 收集 kb_search 實際引用的規則 IDs，並清理內部欄位避免浪費 LLM token
                 if fn_name == "kb_search" and isinstance(result, dict):
-                    referenced_rule_ids.extend(result.get("rule_ids", []))
+                    _referenced_rule_id_set.update(result.get("rule_ids", []))
+                    # 移除內部欄位，不傳給 LLM
+                    llm_result = {k: v for k, v in result.items() if k != "rule_ids"}
+                    llm_result["items"] = [
+                        {k: v for k, v in item.items() if k != "_rule_id"}
+                        for item in llm_result.get("items", [])
+                    ]
+                else:
+                    llm_result = result
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc.id,
-                    "content": json.dumps(result, ensure_ascii=False),
+                    "content": json.dumps(llm_result, ensure_ascii=False),
                 })
         else:
             reply = "很抱歉，系統暫時無法回應，請稍後再試。"
@@ -148,6 +156,7 @@ class AiChatService:
             await db.flush()
 
         # 6. 自動貼標籤（只貼 AI 當次引用的規則標籤）
+        referenced_rule_ids = list(_referenced_rule_id_set)
         auto_tags = []
         if line_uid and referenced_rule_ids:
             auto_tags = await self._auto_tag_member(db, line_uid, referenced_rule_ids)
@@ -389,25 +398,25 @@ class AiChatService:
         if not tag_names:
             return []
 
-        # 為會員建立 MemberTag（如果不存在）
-        tagged = []
-        for tag_name in tag_names:
-            existing_stmt = select(MemberTag).where(
-                MemberTag.member_id == member.id,
-                MemberTag.tag_name == tag_name,
-                MemberTag.message_id == None,  # noqa: E711
-            )
-            existing_result = await db.execute(existing_stmt)
-            existing = existing_result.scalar_one_or_none()
+        # 批次查詢已存在的標籤（避免 N+1）
+        existing_stmt = select(MemberTag.tag_name).where(
+            MemberTag.member_id == member.id,
+            MemberTag.tag_name.in_(tag_names),
+            MemberTag.message_id == None,  # noqa: E711
+        )
+        existing_result = await db.execute(existing_stmt)
+        existing_tags = {t for (t,) in existing_result.all()}
 
-            if not existing:
-                new_tag = MemberTag(
-                    member_id=member.id,
-                    tag_name=tag_name,
-                    tag_source="AI",
-                )
-                db.add(new_tag)
-                tagged.append(tag_name)
+        # 只建立不存在的標籤
+        tagged = []
+        for tag_name in tag_names - existing_tags:
+            new_tag = MemberTag(
+                member_id=member.id,
+                tag_name=tag_name,
+                tag_source="AI",
+            )
+            db.add(new_tag)
+            tagged.append(tag_name)
 
         if tagged:
             await db.flush()
