@@ -3,11 +3,18 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
   DropdownMenuItem,
 } from "../ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "../ui/alert-dialog";
 
 interface CategoryTitleDropdownProps {
   onImport?: (file: File) => void;
@@ -20,7 +27,7 @@ const ChevronDown = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
     <path
       d="M6.59 8.59L12 14.17l5.41-5.58L19 10l-7 7-7-7z"
-      fill="#383838"
+      fill="#0f6beb"
     />
   </svg>
 );
@@ -29,7 +36,7 @@ const ChevronUp = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
     <path
       d="M6.59 15.41L12 9.83l5.41 5.58L19 14l-7-7-7 7z"
-      fill="#383838"
+      fill="#0f6beb"
     />
   </svg>
 );
@@ -45,21 +52,40 @@ export default function CategoryTitleDropdown({
   onExport,
 }: CategoryTitleDropdownProps) {
   const [open, setOpen] = React.useState(false);
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const [pendingFile, setPendingFile] = React.useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImportClick = () => {
-    setOpen(false);
-    // Small delay so the dropdown closes before the file dialog opens
-    setTimeout(() => fileInputRef.current?.click(), 100);
+    fileInputRef.current?.click();
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      onImport?.(file);
+      setPendingFile(file);
+      setConfirmOpen(true);
     }
     e.target.value = "";
   };
+
+  const handleConfirmImport = () => {
+    if (pendingFile) {
+      onImport?.(pendingFile);
+    }
+    setPendingFile(null);
+    setConfirmOpen(false);
+  };
+
+  const handleCancelImport = () => {
+    setPendingFile(null);
+    setConfirmOpen(false);
+  };
+
+  const btnClass =
+    "flex items-center justify-center px-[12px] py-[8px] rounded-[16px] shrink-0 self-stretch cursor-pointer hover:bg-[#f0f6ff] active:bg-[#dce8fc] transition-colors duration-150";
+  const btnTextClass =
+    "font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#0f6beb] text-center whitespace-nowrap";
 
   return (
     <>
@@ -70,51 +96,56 @@ export default function CategoryTitleDropdown({
         className="hidden"
         onChange={handleFileChange}
       />
+
+      {/* 匯入 button */}
+      <button type="button" onClick={handleImportClick} className={btnClass}>
+        <span className={btnTextClass}>匯入</span>
+      </button>
+
+      {/* 匯出 button + dropdown for format */}
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            className="flex items-center justify-center cursor-pointer bg-transparent border-none p-0 outline-none"
-            aria-label="匯入匯出選單"
-          >
+          <button type="button" className={`${btnClass} gap-[2px]`}>
+            <span className={btnTextClass}>匯出</span>
             {open ? <ChevronUp /> : <ChevronDown />}
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          align="start"
+          align="end"
           sideOffset={4}
-          className="min-w-[120px] bg-white rounded-[8px] border border-[#ddd] shadow-[0px_4px_12px_rgba(0,0,0,0.08)] p-[4px] z-50"
+          className="min-w-[200px] bg-white rounded-[8px] border border-[#ddd] shadow-[0px_4px_12px_rgba(0,0,0,0.08)] p-[4px] z-50"
         >
-          {/* 匯入 — directly opens file picker, no sub-menu */}
-          <DropdownMenuItem
-            onClick={handleImportClick}
-            className="flex items-center justify-between w-full px-[12px] py-[8px] text-[14px] font-['Noto_Sans_TC',sans-serif] font-normal text-[#383838] leading-[1.5] rounded-[4px] cursor-pointer hover:bg-[#f5f5f5] outline-none"
-          >
-            匯入
-          </DropdownMenuItem>
-
-          {/* 匯出 — sub-menu with format options */}
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger className="flex items-center justify-between w-full px-[12px] py-[8px] text-[14px] font-['Noto_Sans_TC',sans-serif] font-normal text-[#383838] leading-[1.5] rounded-[4px] cursor-pointer hover:bg-[#f5f5f5] outline-none data-[state=open]:bg-[#f5f5f5]">
-              匯出
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent
-              sideOffset={4}
-              className="min-w-[200px] bg-white rounded-[8px] border border-[#ddd] shadow-[0px_4px_12px_rgba(0,0,0,0.08)] p-[4px] z-50"
+          {EXPORT_OPTIONS.map((opt) => (
+            <DropdownMenuItem
+              key={`export-${opt.value}`}
+              onClick={() => onExport?.(opt.value)}
+              className="px-[12px] py-[8px] text-[14px] font-['Noto_Sans_TC',sans-serif] font-normal text-[#383838] leading-[1.5] rounded-[4px] cursor-pointer hover:bg-[#f5f5f5] outline-none"
             >
-              {EXPORT_OPTIONS.map((opt) => (
-                <DropdownMenuItem
-                  key={`export-${opt.value}`}
-                  onClick={() => onExport?.(opt.value)}
-                  className="px-[12px] py-[8px] text-[14px] font-['Noto_Sans_TC',sans-serif] font-normal text-[#383838] leading-[1.5] rounded-[4px] cursor-pointer hover:bg-[#f5f5f5] outline-none"
-                >
-                  {opt.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
+              {opt.label}
+            </DropdownMenuItem>
+          ))}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {/* 匯入確認彈窗 */}
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確定要匯入嗎？</AlertDialogTitle>
+            <AlertDialogDescription>
+              匯入將會覆蓋原有的資料內容，此操作無法復原。確定要繼續執行嗎？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelImport}>
+              取消
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmImport}>
+              確定匯入
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

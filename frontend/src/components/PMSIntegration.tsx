@@ -759,8 +759,9 @@ const PMSDataTable = memo(function PMSDataTable({
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* 新增規則 + 測試 */}
-        <div className="flex gap-[4px] self-stretch shrink-0">
+        {/* 匯出/匯入 + 新增規則 + 測試 */}
+        <div className="flex gap-[4px] self-stretch shrink-0 items-center">
+          <CategoryTitleDropdown />
           <button
             type="button"
             onClick={() => {
@@ -1608,7 +1609,6 @@ export default function PMSIntegration({
           ]}
           title="訂房"
           description="啟用後，AI 回覆將引用此內容"
-          titleSuffix={<CategoryTitleDropdown />}
         />
 
         {/* Tab bar */}

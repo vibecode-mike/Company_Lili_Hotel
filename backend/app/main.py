@@ -160,6 +160,12 @@ UPLOAD_DIR = settings.upload_dir_path
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
+# Chatbot widget 靜態檔（供外部網頁嵌入）
+from pathlib import Path as _Path
+WIDGET_DIR = _Path(__file__).resolve().parent.parent.parent / "widget"
+if WIDGET_DIR.is_dir():
+    app.mount("/api/v1/widget", StaticFiles(directory=str(WIDGET_DIR)), name="widget")
+
 
 if __name__ == "__main__":
     import uvicorn

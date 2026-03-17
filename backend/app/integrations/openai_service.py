@@ -24,8 +24,13 @@ class OpenAIService:
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
-    ) -> Optional[str]:
-        """聊天補全"""
+        include_usage: bool = False,
+    ):
+        """聊天補全
+
+        Args:
+            include_usage: 若為 True，回傳 (content, total_tokens) 元組
+        """
         try:
             response = await self.client.chat.completions.create(
                 model=self.model,
@@ -33,9 +38,15 @@ class OpenAIService:
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
-            return response.choices[0].message.content
+            content = response.choices[0].message.content
+            if include_usage:
+                total_tokens = response.usage.total_tokens if response.usage else 0
+                return content, total_tokens
+            return content
         except Exception as e:
             logger.error(f"OpenAI chat completion failed: {str(e)}")
+            if include_usage:
+                return None, 0
             return None
 
     async def generate_auto_response(
