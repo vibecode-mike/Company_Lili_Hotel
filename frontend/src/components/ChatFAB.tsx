@@ -446,7 +446,10 @@ function MemberFormMessage({
           values["email"] ??
           "",
       });
-      onSubmit(res.reservation_id, res.cart_url);
+      onSubmit(
+        String(res.reservation_id ?? ""),
+        typeof res.cart_url === "string" ? res.cart_url : null,
+      );
     } catch (e: unknown) {
       setSubmitError(e instanceof Error ? e.message : "送出失敗，請重試");
     } finally {

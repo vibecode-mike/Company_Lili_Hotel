@@ -856,7 +856,8 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
             const isNew = editingFacility.id.startsWith("new-");
             try {
               if (!isNew) {
-                await apiDelete(`/api/v1/faq/rules/${editingFacility.id}`);
+                const res = await apiDelete(`/api/v1/faq/rules/${editingFacility.id}`);
+                if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
               }
               setFacilities((prev) =>
                 prev.filter((r) => r.id !== editingFacility.id),

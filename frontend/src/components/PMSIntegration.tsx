@@ -55,7 +55,7 @@ function mapRuleToRoom(rule: FaqRuleRaw): RoomRecord {
     id: String(rule.id),
     roomType: c["房型名稱"] ?? "",
     image: c["image_url"] || "",
-    pricePerNight: Number(c["房價"]) || 0,
+    pricePerNight: Number(String(c["房價"] ?? "0").replace(/,/g, "")) || 0,
     maxGuests: Number(c["人數"]) || 0,
     remainingRooms: c["間數"] ?? "",
     features: c["房型特色"] ?? "",
@@ -998,7 +998,8 @@ const PMSDataTable = memo(function PMSDataTable({
             setEditDraft(null);
             setRooms((prev) => prev.filter((r) => r.id !== id));
             try {
-              await apiDelete(`/api/v1/faq/rules/${id}`);
+              const res = await apiDelete(`/api/v1/faq/rules/${id}`);
+              if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
             } catch {
               // Restore the deleted room on failure
               setRooms((prev) => [...prev, snapshot]);
