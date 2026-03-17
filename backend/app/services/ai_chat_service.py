@@ -13,8 +13,6 @@ from openai import AsyncOpenAI
 import logging
 
 from app.models.faq import (
-    FaqCategory,
-    FaqRule,
     FaqRuleTag,
     AiTokenUsage,
     Industry,
@@ -109,6 +107,7 @@ class AiChatService:
         total_tokens_used = 0
         max_loops = 5
         reply = ""
+        referenced_rule_ids: List[int] = []
 
         for _ in range(max_loops):
             resp = await client.chat.completions.create(
@@ -132,6 +131,9 @@ class AiChatService:
                 fn_name = tc.function.name
                 args = json.loads(tc.function.arguments)
                 result = await self._execute_tool(db, fn_name, args)
+                # 收集 kb_search 實際引用的規則 IDs
+                if fn_name == "kb_search" and isinstance(result, dict):
+                    referenced_rule_ids.extend(result.get("rule_ids", []))
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc.id,
@@ -145,15 +147,15 @@ class AiChatService:
             token_usage.used_amount += total_tokens_used
             await db.flush()
 
-        # 6. 自動貼標籤
+        # 6. 自動貼標籤（只貼 AI 當次引用的規則標籤）
         auto_tags = []
-        if line_uid:
-            auto_tags = await self._auto_tag_member(db, line_uid)
+        if line_uid and referenced_rule_ids:
+            auto_tags = await self._auto_tag_member(db, line_uid, referenced_rule_ids)
 
         return {
             "reply": reply,
             "tokens_used": total_tokens_used,
-            "referenced_rules": [],
+            "referenced_rules": [{"rule_id": rid} for rid in referenced_rule_ids],
             "auto_tags": auto_tags,
             "token_exhausted": False,
         }
@@ -364,8 +366,12 @@ class AiChatService:
         self,
         db: AsyncSession,
         line_uid: str,
+        referenced_rule_ids: List[int],
     ) -> List[str]:
-        """自動為會員貼標籤（從發佈快照的 tags）"""
+        """自動為會員貼標籤（只貼 AI 當次引用的規則標籤）"""
+        if not referenced_rule_ids:
+            return []
+
         # 找到會員
         member_stmt = select(Member).where(Member.line_uid == line_uid)
         member_result = await db.execute(member_stmt)
@@ -373,42 +379,19 @@ class AiChatService:
         if not member:
             return []
 
-        # 從所有啟用分類的已發佈規則收集 tags
-        from app.models.faq import FaqRuleVersion
-        from sqlalchemy import func
-
-        # 取得啟用分類 IDs
-        cat_stmt = select(FaqCategory.id).where(FaqCategory.is_active == True)  # noqa: E712
-        cat_result = await db.execute(cat_stmt)
-        active_cat_ids = [cid for (cid,) in cat_result.all()]
-        if not active_cat_ids:
-            return []
-
-        # 取得有發佈快照的規則 IDs
-        latest_ver_sub = (
-            select(FaqRuleVersion.rule_id)
-            .join(FaqRule, FaqRuleVersion.rule_id == FaqRule.id)
-            .where(FaqRule.category_id.in_(active_cat_ids))
-            .distinct()
-        )
-        latest_result = await db.execute(latest_ver_sub)
-        published_rule_ids = [rid for (rid,) in latest_result.all()]
-        if not published_rule_ids:
-            return []
-
-        # 收集這些規則的 tag_names
+        # 只從當次引用的規則收集 tag_names
         tag_stmt = select(FaqRuleTag.tag_name).where(
-            FaqRuleTag.rule_id.in_(published_rule_ids)
+            FaqRuleTag.rule_id.in_(referenced_rule_ids)
         ).distinct()
         tag_result = await db.execute(tag_stmt)
-        all_tag_names = {t for (t,) in tag_result.all()}
+        tag_names = {t for (t,) in tag_result.all()}
 
-        if not all_tag_names:
+        if not tag_names:
             return []
 
         # 為會員建立 MemberTag（如果不存在）
         tagged = []
-        for tag_name in all_tag_names:
+        for tag_name in tag_names:
             existing_stmt = select(MemberTag).where(
                 MemberTag.member_id == member.id,
                 MemberTag.tag_name == tag_name,

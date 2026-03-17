@@ -219,6 +219,7 @@ async def _kb_search(
                     c = {}
             row = dict(c or {})
             row["tags"] = [t.tag_name for t in (rule.tags or [])]
+            row["_rule_id"] = rule.id
             rows.append(row)
     else:
         # 測試模式：讀 FaqRule（draft + active），僅啟用的規則
@@ -233,7 +234,7 @@ async def _kb_search(
             .where(
                 FaqRule.category_id == cat.id,
                 FaqRule.status.in_(allowed_statuses),
-                FaqRule.is_enabled == True,  # noqa: E712
+                FaqRule.is_enabled_filter(),
             )
             .options(selectinload(FaqRule.tags))
             .order_by(FaqRule.created_at)
@@ -249,13 +250,18 @@ async def _kb_search(
                     c = {}
             row = dict(c or {})
             row["tags"] = [t.tag_name for t in (rule.tags or [])]
+            row["_rule_id"] = rule.id
             rows.append(row)
 
     fields = _FACILITY_FIELDS if category == "facilities" else _ROOM_FIELDS
     q = (query or "").strip().lower()
 
+    def _result(items):
+        rule_ids = [r["_rule_id"] for r in items if "_rule_id" in r]
+        return {"ok": True, "category": category, "query": query, "items": items, "rule_ids": rule_ids}
+
     if not q:
-        return {"ok": True, "category": category, "query": query, "items": rows[:top_k]}
+        return _result(rows[:top_k])
 
     tokens = [t for t in re.split(r"\s+", q) if t]
     scored = []
@@ -266,7 +272,7 @@ async def _kb_search(
             scored.append((score, row))
     scored.sort(key=lambda x: x[0], reverse=True)
     result_items = [r for _, r in scored[:top_k]] if scored else rows[:top_k]
-    return {"ok": True, "category": category, "query": query, "items": result_items}
+    return _result(result_items)
 
 
 # ---------------------------------------------------------------------------
