@@ -6,6 +6,7 @@
 const AUTH_TOKEN_KEY = 'auth_token';
 const JWT_TOKEN_KEY = 'jwt_token'; // FB 外部 API token
 const USER_EMAIL_KEY = 'user_email';
+const USER_ROLE_KEY = 'user_role';
 const LOGIN_METHOD_KEY = 'login_method';
 
 interface JwtPayload {
@@ -31,6 +32,10 @@ export const getUserEmail = () => getItem(USER_EMAIL_KEY);
 export const setUserEmail = (email: string) => setItem(USER_EMAIL_KEY, email);
 export const removeUserEmail = () => removeItem(USER_EMAIL_KEY);
 
+export const getUserRole = () => getItem(USER_ROLE_KEY);
+export const setUserRole = (role: string) => setItem(USER_ROLE_KEY, role);
+export const removeUserRole = () => removeItem(USER_ROLE_KEY);
+
 export const getLoginMethod = () => getItem(LOGIN_METHOD_KEY);
 export const setLoginMethod = (method: string) => setItem(LOGIN_METHOD_KEY, method);
 export const removeLoginMethod = () => removeItem(LOGIN_METHOD_KEY);
@@ -42,6 +47,7 @@ export function clearAllAuthData(): void {
   removeAuthToken();
   removeJwtToken();
   removeUserEmail();
+  removeUserRole();
   removeLoginMethod();
 }
 

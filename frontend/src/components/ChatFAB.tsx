@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useToast } from "./ToastProvider";
-import { useUser } from "../contexts/AppStateContext";
+import { useAuth } from "./auth/AuthContext";
 import {
   sendChatbotMessage,
   confirmChatbotRooms,
@@ -825,7 +825,7 @@ function PublishTooltip({ btnRef, label }: { btnRef: React.RefObject<HTMLButtonE
 export default function ChatFAB() {
   const [chatOpen, setChatOpen] = useState(() => sessionStorage.getItem("chatfab-open") === "1");
   const { showToast } = useToast();
-  const { user } = useUser();
+  const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [publishTooltipVisible, setPublishTooltipVisible] = useState(false);
@@ -1091,7 +1091,14 @@ export default function ChatFAB() {
                 type="button"
                 onClick={isAdmin ? async () => {
                   try {
-                    const res = await fetch("/api/v1/faq/publish", { method: "POST", headers: { "Content-Type": "application/json" } });
+                    const token = localStorage.getItem("auth_token");
+                    const res = await fetch("/api/v1/faq/publish", {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                      },
+                    });
                     if (!res.ok) throw new Error();
                     showToast("發佈成功", "success");
                   } catch {

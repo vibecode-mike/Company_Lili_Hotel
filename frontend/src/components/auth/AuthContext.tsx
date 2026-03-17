@@ -12,6 +12,8 @@ import {
   setAuthToken,
   getUserEmail,
   setUserEmail,
+  getUserRole,
+  setUserRole,
   setLoginMethod,
   clearAllAuthData,
 } from "../../utils/token";
@@ -20,6 +22,7 @@ import { setLogoutCallback } from "../../utils/apiClient";
 interface User {
   email: string;
   name: string;
+  role?: string;
 }
 
 interface AuthContextType {
@@ -42,6 +45,7 @@ const getInitialAuthState = () => {
       user: {
         email: userEmail,
         name: userEmail.split("@")[0],
+        role: getUserRole() || undefined,
       },
     };
   }
@@ -98,13 +102,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // 儲存 token 和用戶信息
         setAuthToken(data.access_token);
+        const role = (data.user.role || "").toLowerCase();
         setUserEmail(data.user.email);
+        setUserRole(role);
         setLoginMethod("email");
 
         setIsAuthenticated(true);
         setUser({
           email: data.user.email,
           name: data.user.username || data.user.email.split("@")[0],
+          role,
         });
 
         toast.success("登入成功！");
