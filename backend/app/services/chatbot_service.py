@@ -208,6 +208,7 @@ async def _kb_search(
                 & (FaqRuleVersion.version_number == latest_ver_sub.c.max_ver),
             )
             .where(FaqRule.category_id == cat.id, FaqRule.is_enabled == True)  # noqa: E712
+            .options(selectinload(FaqRule.tags))
         )
         for ver, rule in ver_result.all():
             c = ver.content_json
@@ -217,11 +218,7 @@ async def _kb_search(
                 except Exception:
                     c = {}
             row = dict(c or {})
-            # 取得 tags（from FaqRule 的 tags 關聯）
-            tag_result = await db.execute(
-                select(FaqRuleTag.tag_name).where(FaqRuleTag.rule_id == rule.id)
-            )
-            row["tags"] = [t for (t,) in tag_result.all()]
+            row["tags"] = [t.tag_name for t in (rule.tags or [])]
             rows.append(row)
     else:
         # 測試模式：讀 FaqRule（draft + active），僅啟用的規則

@@ -484,8 +484,8 @@ class FaqService:
         """發佈所有 draft 規則（批次建立 FaqRuleVersion 快照），回傳發佈數量"""
         from datetime import datetime, timezone
 
-        # 發佈所有 draft 規則（包含啟用和停用的）
-        stmt = select(FaqRule).where(FaqRule.status == "draft")
+        # 發佈所有啟用的 draft 規則（停用規則不建立快照）
+        stmt = select(FaqRule).where(FaqRule.status == "draft", FaqRule.is_enabled == True)  # noqa: E712
         result = await db.execute(stmt)
         rules = result.scalars().all()
 

@@ -14,6 +14,8 @@ import {
   setUserEmail,
   getUserRole,
   setUserRole,
+  getFaqPerms,
+  setFaqPerms,
   setLoginMethod,
   clearAllAuthData,
 } from "../../utils/token";
@@ -43,12 +45,16 @@ const getInitialAuthState = () => {
   const userEmail = getUserEmail();
 
   if (token && userEmail) {
+    const perms = getFaqPerms();
     return {
       isAuthenticated: true,
       user: {
         email: userEmail,
         name: userEmail.split("@")[0],
         role: getUserRole() || undefined,
+        faq_can_view: perms.view ?? true,
+        faq_can_manage: perms.manage ?? true,
+        faq_can_publish: perms.publish ?? false,
       },
     };
   }
@@ -108,6 +114,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const role = (data.user.role || "").toLowerCase();
         setUserEmail(data.user.email);
         setUserRole(role);
+        setFaqPerms({
+          view: data.user.faq_can_view ?? true,
+          manage: data.user.faq_can_manage ?? true,
+          publish: data.user.faq_can_publish ?? false,
+        });
         setLoginMethod("email");
 
         setIsAuthenticated(true);

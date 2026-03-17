@@ -373,6 +373,10 @@ async def publish_all(
     if not current_user:
         raise HTTPException(status_code=403, detail="無發佈權限")
 
+    # 檢查 faq_can_publish 權限（admin 或明確授權的用戶）
+    if not getattr(current_user, "faq_can_publish", False) and current_user.role.value != "admin":
+        raise HTTPException(status_code=403, detail="無發佈權限")
+
     count = await faq_service.publish_all_draft(db, current_user.id)
 
     # 廣播「規則已更新」通知至所有聊天室

@@ -1,7 +1,7 @@
 """
 FAQ 知識庫管理與 AI 聊天相關 Schema
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -178,10 +178,16 @@ class FaqModuleAuthSchema(BaseModel):
 
 
 class FaqRuleToggleSchema(BaseModel):
-    """切換規則啟用狀態（兩維度模型）"""
+    """切換規則啟用狀態（兩維度模型），至少需提供一個欄位"""
 
     is_enabled: Optional[bool] = None
     status: Optional[str] = Field(None, pattern="^(active|draft)$")
+
+    @model_validator(mode="after")
+    def at_least_one_field(self):
+        if self.is_enabled is None and self.status is None:
+            raise ValueError("至少需提供 is_enabled 或 status 其中一個欄位")
+        return self
 
 
 class FaqModuleAuthUpdateSchema(BaseModel):

@@ -36,6 +36,14 @@ export const getUserRole = () => getItem(USER_ROLE_KEY);
 export const setUserRole = (role: string) => setItem(USER_ROLE_KEY, role);
 export const removeUserRole = () => removeItem(USER_ROLE_KEY);
 
+const FAQ_PERMS_KEY = 'faq_perms';
+export const getFaqPerms = (): { view: boolean; manage: boolean; publish: boolean } => {
+  try { return JSON.parse(getItem(FAQ_PERMS_KEY) || '{}'); } catch { return {} as never; }
+};
+export const setFaqPerms = (p: { view: boolean; manage: boolean; publish: boolean }) =>
+  setItem(FAQ_PERMS_KEY, JSON.stringify(p));
+export const removeFaqPerms = () => removeItem(FAQ_PERMS_KEY);
+
 export const getLoginMethod = () => getItem(LOGIN_METHOD_KEY);
 export const setLoginMethod = (method: string) => setItem(LOGIN_METHOD_KEY, method);
 export const removeLoginMethod = () => removeItem(LOGIN_METHOD_KEY);
@@ -48,6 +56,7 @@ export function clearAllAuthData(): void {
   removeJwtToken();
   removeUserEmail();
   removeUserRole();
+  removeFaqPerms();
   removeLoginMethod();
 }
 
