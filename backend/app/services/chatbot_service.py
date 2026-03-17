@@ -207,7 +207,7 @@ async def _kb_search(
                 (FaqRuleVersion.rule_id == latest_ver_sub.c.rule_id)
                 & (FaqRuleVersion.version_number == latest_ver_sub.c.max_ver),
             )
-            .where(FaqRule.category_id == cat.id, FaqRule.is_enabled == True)  # noqa: E712
+            .where(FaqRule.category_id == cat.id, FaqRule.is_enabled_filter())
             .options(selectinload(FaqRule.tags))
         )
         for ver, rule in ver_result.all():

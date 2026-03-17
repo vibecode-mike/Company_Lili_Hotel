@@ -485,7 +485,7 @@ class FaqService:
         from datetime import datetime, timezone
 
         # 發佈所有啟用的 draft 規則（停用規則不建立快照）
-        stmt = select(FaqRule).where(FaqRule.status == "draft", FaqRule.is_enabled == True)  # noqa: E712
+        stmt = select(FaqRule).where(FaqRule.status == "draft", FaqRule.is_enabled_filter())
         result = await db.execute(stmt)
         rules = result.scalars().all()
 

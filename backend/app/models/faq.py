@@ -103,6 +103,11 @@ class FaqRule(Base):
 
     __tablename__ = "faq_rules"
 
+    @classmethod
+    def is_enabled_filter(cls):
+        """啟用規則的標準篩選條件，集中管理「啟用」的定義"""
+        return cls.is_enabled == True  # noqa: E712
+
     category_id = Column(
         BigInteger,
         ForeignKey("faq_categories.id", ondelete="CASCADE"),
