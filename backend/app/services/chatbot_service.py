@@ -65,7 +65,7 @@ ROOMTYPE_MAX_OCCUPANCY = {
 # FAQ KB fallback — read room data from DB instead of hardcoded list
 # ---------------------------------------------------------------------------
 
-async def _kb_fallback_rooms(db: Optional[AsyncSession], adults: int = 1) -> List[RoomCardSchema]:
+async def _kb_fallback_rooms(db: Optional[AsyncSession], adults: int = 1, use_snapshot: bool = True) -> List[RoomCardSchema]:
     """Query FAQ KB for room data. Returns RoomCardSchema list (source=faq_kb).
 
     Spec: 查詢空房型.feature — PMS 未啟用或異常時降級至 FAQ_KB，
@@ -73,7 +73,7 @@ async def _kb_fallback_rooms(db: Optional[AsyncSession], adults: int = 1) -> Lis
     """
     if db is None:
         return []
-    result = await _kb_search(db, "booking_billing", "", top_k=20)
+    result = await _kb_search(db, "booking_billing", "", top_k=20, use_snapshot=use_snapshot)
     items = result.get("items") or []
     cards: List[RoomCardSchema] = []
     for item in items:
@@ -114,7 +114,7 @@ async def _enrich_cards_with_kb(
     """Spec: PMS 資料為主，FAQ_KB 資料補充房型圖片與特色描述。"""
     if db is None or not cards:
         return cards
-    result = await _kb_search(db, "booking_billing", "", top_k=20)
+    result = await _kb_search(db, "booking_billing", "", top_k=20, use_snapshot=True)
     items = result.get("items") or []
     # Build lookup by room name
     kb_by_name: Dict[str, dict] = {}
@@ -880,7 +880,7 @@ class ChatbotService:
 
                 if fn_name == "kb_search":
                     if db is not None:
-                        result = await _kb_search(db, args.get("category", ""), args.get("query", ""), test_mode=test_mode)
+                        result = await _kb_search(db, args.get("category", ""), args.get("query", ""), test_mode=test_mode, use_snapshot=not test_mode)
                     else:
                         result = {"ok": False, "error": "database session not available", "items": []}
                 elif fn_name == "query_pms_availability":
