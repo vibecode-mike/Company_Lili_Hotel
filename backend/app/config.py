@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     LINE_CHANNEL_SECRET: str
 
     # OpenAI 配置
-    OPENAI_API_KEY: str =''
+    OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4"
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
 

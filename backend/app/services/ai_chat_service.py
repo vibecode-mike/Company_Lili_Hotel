@@ -1,13 +1,15 @@
 """
-AI 聊天服務層
+AI 聊天服務層 — Tool Calling 模式（統一引擎）
+
+正式模式：讀 FaqRuleVersion 快照（發佈凍結版本）
+測試模式：讀 FaqRule（draft + active）
 """
-import asyncio
 import json
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
+from openai import AsyncOpenAI
 import logging
 
 from app.models.faq import (
@@ -15,15 +17,17 @@ from app.models.faq import (
     FaqRule,
     FaqRuleTag,
     AiTokenUsage,
-    AiToneConfig,
-    FaqModuleAuth,
     Industry,
 )
-from app.models.chatbot_booking import FaqPmsConnection
 from app.models.conversation import ConversationMessage
 from app.models.tag import MemberTag
 from app.models.member import Member
-from app.integrations.openai_service import openai_service
+from app.config import settings
+from app.services.chatbot_service import (
+    _build_system_prompt,
+    _get_tools,
+    _kb_search,
+)
 from app.services.pms_chatbot_client import (
     pms_enabled as pms_configured,
     query_pms,
@@ -33,7 +37,18 @@ logger = logging.getLogger(__name__)
 
 
 class AiChatService:
-    """AI 聊天服務"""
+    """AI 聊天服務 — Tool Calling 模式"""
+
+    def __init__(self):
+        self._openai: Optional[AsyncOpenAI] = None
+
+    def _get_openai(self) -> AsyncOpenAI:
+        if self._openai is None:
+            self._openai = AsyncOpenAI(
+                api_key=settings.OPENAI_API_KEY,
+                base_url=settings.OPENAI_BASE_URL,
+            )
+        return self._openai
 
     async def chat(
         self,
@@ -43,7 +58,7 @@ class AiChatService:
         industry_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
-        統一 AI 聊天入口
+        統一 AI 聊天入口（Tool Calling + 發佈快照）
 
         Returns:
             {
@@ -55,7 +70,7 @@ class AiChatService:
         """
         # 1. 取得產業
         if not industry_id:
-            ind_stmt = select(Industry).where(Industry.is_active == True).limit(1)
+            ind_stmt = select(Industry).where(Industry.is_active == True).limit(1)  # noqa: E712
             ind_result = await db.execute(ind_stmt)
             industry = ind_result.scalar_one_or_none()
             if not industry:
@@ -76,82 +91,69 @@ class AiChatService:
                     token_exhausted=True,
                 )
 
-        # 3. 取得啟用的大分類下 active 規則作為知識庫
-        rules_stmt = (
-            select(FaqRule)
-            .join(FaqCategory, FaqRule.category_id == FaqCategory.id)
-            .options(selectinload(FaqRule.tags))
-            .where(
-                FaqCategory.industry_id == industry_id,
-                FaqCategory.is_active == True,
-                FaqRule.status == "active",
-            )
-        )
-        rules_result = await db.execute(rules_stmt)
-        active_rules = rules_result.scalars().all()
+        # 3. 組裝 messages — 使用 chatbot_service 共用的 system prompt
+        system_prompt = _build_system_prompt()
+        messages: List[Dict[str, Any]] = [
+            {"role": "system", "content": system_prompt}
+        ]
 
-        # 3b. PMS 優先：訂房分類若 PMS 啟用，用即時房況取代 FAQ 靜態規則
-        pms_context = await self._get_pms_booking_context(db)
-        booking_cat_id = await self._get_booking_category_id(db)
-
-        # 組裝知識庫 context
-        knowledge_context = self._build_knowledge_context(
-            active_rules, pms_context=pms_context, booking_category_id=booking_cat_id
-        )
-
-        # 4. 取得語氣 prompt
-        tone_stmt = select(AiToneConfig).where(AiToneConfig.is_active == True)
-        tone_result = await db.execute(tone_stmt)
-        tone = tone_result.scalar_one_or_none()
-        tone_prompt = tone.prompt_text if tone else "你是力麗飯店的客服人員，請用專業友善的語氣回答。"
-
-        # 5. 組裝 messages 呼叫 OpenAI（含對話記憶）
-        system_prompt = f"{tone_prompt}\n\n以下是你的知識庫，回答時請優先參考這些資訊：\n{knowledge_context}"
-
-        messages = [{"role": "system", "content": system_prompt}]
-
-        # 加入對話歷史（排除當前訊息）
+        # 加入對話歷史（from DB，聊天室獨有）
         if line_uid:
             history = await self._get_conversation_history(db, line_uid, limit=10)
             messages.extend(history)
 
         messages.append({"role": "user", "content": message})
 
-        reply = await openai_service.chat_completion(
-            messages=messages,
-            temperature=0.5,
-            max_tokens=800,
-        )
+        # 4. Tool Calling 迴圈（復用 chatbot_service 工具定義）
+        client = self._get_openai()
+        total_tokens_used = 0
+        max_loops = 5
+        reply = ""
 
-        if not reply:
-            return self._error_response("AI 回覆失敗，請稍後再試。")
+        for _ in range(max_loops):
+            resp = await client.chat.completions.create(
+                model=settings.OPENAI_MODEL,
+                messages=messages,
+                tools=_get_tools(),
+                tool_choice="auto",
+                timeout=30,
+            )
+            if resp.usage:
+                total_tokens_used += resp.usage.total_tokens
 
-        # 6. 估算 token 消耗（簡易估算）
-        tokens_used = self._estimate_tokens(system_prompt + message + reply)
+            msg = resp.choices[0].message
 
-        # 7. 更新 token 用量
-        if token_usage:
-            token_usage.used_amount += tokens_used
+            if not msg.tool_calls:
+                reply = msg.content or ""
+                break
+
+            messages.append(msg)
+            for tc in msg.tool_calls:
+                fn_name = tc.function.name
+                args = json.loads(tc.function.arguments)
+                result = await self._execute_tool(db, fn_name, args)
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": json.dumps(result, ensure_ascii=False),
+                })
+        else:
+            reply = "很抱歉，系統暫時無法回應，請稍後再試。"
+
+        # 5. 扣除 token（用 OpenAI 實際回報的 usage）
+        if token_usage and total_tokens_used > 0:
+            token_usage.used_amount += total_tokens_used
             await db.flush()
 
-        # 8. 自動貼標籤
+        # 6. 自動貼標籤
         auto_tags = []
-        if line_uid and active_rules:
-            auto_tags = await self._auto_tag_member(
-                db, line_uid, message, reply, active_rules
-            )
+        if line_uid:
+            auto_tags = await self._auto_tag_member(db, line_uid)
 
         return {
             "reply": reply,
-            "tokens_used": tokens_used,
-            "referenced_rules": [
-                {
-                    "id": r.id,
-                    "category_id": r.category_id,
-                    "content_json": self._parse_json(r.content_json),
-                }
-                for r in active_rules[:5]  # 最多回傳 5 筆參考規則
-            ],
+            "tokens_used": total_tokens_used,
+            "referenced_rules": [],
             "auto_tags": auto_tags,
             "token_exhausted": False,
         }
@@ -164,65 +166,169 @@ class AiChatService:
         category_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
-        測試聊天（不計 token、不貼 tag）
-        引用 draft + active 規則（含未發佈），PMS 優先順序與正式聊天一致。
+        測試聊天（Tool Calling 模式，扣 token，不貼 tag）
+        引用 draft + active 規則（含未發佈）。
         """
-        # 取得指定規則
-        if rule_ids:
-            rules_stmt = (
-                select(FaqRule)
-                .options(selectinload(FaqRule.tags))
-                .where(FaqRule.id.in_(rule_ids))
+        # Token 額度檢查 + 扣除
+        ind_stmt = select(Industry).where(Industry.is_active == True).limit(1)  # noqa: E712
+        ind_result = await db.execute(ind_stmt)
+        industry = ind_result.scalar_one_or_none()
+        token_usage = None
+        if industry:
+            usage_result = await db.execute(
+                select(AiTokenUsage).where(AiTokenUsage.industry_id == industry.id)
             )
-        elif category_id:
-            rules_stmt = (
-                select(FaqRule)
-                .options(selectinload(FaqRule.tags))
-                .where(FaqRule.category_id == category_id)
-            )
-        else:
-            rules_stmt = (
-                select(FaqRule)
-                .options(selectinload(FaqRule.tags))
-                .where(FaqRule.status.in_(["draft", "active"]))
-            )
+            token_usage = usage_result.scalar_one_or_none()
 
-        rules_result = await db.execute(rules_stmt)
-        rules = rules_result.scalars().all()
-
-        # PMS 優先：與正式聊天相同邏輯
-        pms_context = await self._get_pms_booking_context(db)
-        booking_cat_id = await self._get_booking_category_id(db)
-
-        knowledge_context = self._build_knowledge_context(
-            rules, pms_context=pms_context, booking_category_id=booking_cat_id
-        )
-
-        # 取得語氣
-        tone_stmt = select(AiToneConfig).where(AiToneConfig.is_active == True)
-        tone_result = await db.execute(tone_stmt)
-        tone = tone_result.scalar_one_or_none()
-        tone_prompt = tone.prompt_text if tone else "你是力麗飯店的客服人員。"
-
-        system_prompt = f"{tone_prompt}\n\n知識庫：\n{knowledge_context}"
-
-        messages = [
+        system_prompt = _build_system_prompt()
+        messages: List[Dict[str, Any]] = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": message},
         ]
 
-        reply = await openai_service.chat_completion(
-            messages=messages,
-            temperature=0.5,
-            max_tokens=800,
-        )
+        client = self._get_openai()
+        total_tokens_used = 0
+        max_loops = 5
+        reply = ""
+
+        for _ in range(max_loops):
+            resp = await client.chat.completions.create(
+                model=settings.OPENAI_MODEL,
+                messages=messages,
+                tools=_get_tools(),
+                tool_choice="auto",
+                timeout=30,
+            )
+            if resp.usage:
+                total_tokens_used += resp.usage.total_tokens
+
+            msg = resp.choices[0].message
+
+            if not msg.tool_calls:
+                reply = msg.content or ""
+                break
+
+            messages.append(msg)
+            for tc in msg.tool_calls:
+                fn_name = tc.function.name
+                args = json.loads(tc.function.arguments)
+                # 測試模式：讀 FaqRule（draft+active），不用快照
+                result = await self._execute_tool(
+                    db, fn_name, args, test_mode=True, use_snapshot=False
+                )
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": json.dumps(result, ensure_ascii=False),
+                })
+        else:
+            reply = "AI 回覆失敗"
+
+        # 扣除 token
+        if token_usage and total_tokens_used > 0:
+            token_usage.used_amount += total_tokens_used
+            await db.flush()
 
         return {
-            "reply": reply or "AI 回覆失敗",
-            "tokens_used": 0,
+            "reply": reply,
+            "tokens_used": total_tokens_used,
             "referenced_rules": [],
             "auto_tags": [],
         }
+
+    # === Tool execution ===
+
+    async def _execute_tool(
+        self,
+        db: AsyncSession,
+        fn_name: str,
+        args: Dict[str, Any],
+        test_mode: bool = False,
+        use_snapshot: bool = True,
+    ) -> Any:
+        """執行 LLM 呼叫的工具"""
+        if fn_name == "kb_search":
+            return await _kb_search(
+                db,
+                args.get("category", ""),
+                args.get("query", ""),
+                test_mode=test_mode,
+                use_snapshot=use_snapshot,
+            )
+        elif fn_name == "query_pms_availability":
+            return await self._run_pms_tool(args)
+        elif fn_name == "query_pms_mixed_availability":
+            return await self._run_pms_mixed_tool(args)
+        else:
+            # confirm_room_selection, save_member_info 在聊天室不適用
+            return {"info": "此功能僅在網站訂房時可用"}
+
+    async def _run_pms_tool(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """PMS 查詢（簡化版，不需 session 狀態）"""
+        import asyncio
+        startdate = args.get("startdate", "")
+        enddate = args.get("enddate", "")
+        housingcnt = args.get("housingcnt", 2)
+
+        if not pms_configured():
+            return {"error": "PMS 未串接", "rooms": []}
+
+        try:
+            raw = await asyncio.to_thread(query_pms, startdate, enddate, None, housingcnt)
+            rooms = raw.get("room", []) if isinstance(raw, dict) else []
+            result_rooms = []
+            for room in rooms:
+                code = room.get("roomtype", "")
+                data_rows = room.get("data", []) or []
+                if not data_rows:
+                    continue
+                price = data_rows[0].get("price", 0)
+                remain = min((d.get("remain", 0) for d in data_rows), default=0)
+                result_rooms.append({
+                    "room_type_code": code,
+                    "price": price,
+                    "available_count": remain,
+                })
+            return {"ok": True, "rooms": result_rooms}
+        except Exception as exc:
+            logger.warning(f"PMS 查詢失敗：{exc}")
+            return {"error": f"PMS 查詢失敗：{exc}", "rooms": []}
+
+    async def _run_pms_mixed_tool(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """混合房型查詢"""
+        import asyncio
+        startdate = args.get("startdate", "")
+        enddate = args.get("enddate", "")
+        requests = args.get("requests", [])
+
+        if not pms_configured():
+            return {"error": "PMS 未串接", "all_available": False, "items": []}
+
+        try:
+            raw = await asyncio.to_thread(query_pms, startdate, enddate, None, 2)
+            rooms = raw.get("room", []) if isinstance(raw, dict) else []
+            avail_map = {}
+            for room in rooms:
+                code = room.get("roomtype", "")
+                data_rows = room.get("data", []) or []
+                if data_rows:
+                    avail_map[code] = min((d.get("remain", 0) for d in data_rows), default=0)
+
+            items = []
+            all_ok = True
+            for req in requests:
+                code = req.get("room_type_code", "")
+                need = req.get("room_count", 1)
+                have = avail_map.get(code, 0)
+                ok = have >= need
+                if not ok:
+                    all_ok = False
+                items.append({"room_type_code": code, "needed": need, "available": have, "ok": ok})
+
+            return {"ok": True, "all_available": all_ok, "items": items}
+        except Exception as exc:
+            logger.warning(f"PMS mixed 查詢失敗：{exc}")
+            return {"error": str(exc), "all_available": False, "items": []}
 
     # === Private helpers ===
 
@@ -234,7 +340,7 @@ class AiChatService:
             select(ConversationMessage)
             .where(ConversationMessage.thread_id == line_uid)
             .order_by(ConversationMessage.created_at.desc())
-            .limit(limit * 2 + 1)  # user+assistant pairs, +1 for current message to exclude
+            .limit(limit * 2 + 1)
         )
         result = await db.execute(stmt)
         messages = result.scalars().all()
@@ -254,115 +360,12 @@ class AiChatService:
 
         return history
 
-    async def _get_pms_booking_context(self, db: AsyncSession) -> Optional[str]:
-        """檢查訂房分類的 PMS 串接狀態，若啟用則查詢即時房況作為知識庫。
-
-        Returns:
-            PMS 即時房況文本（若 PMS 啟用且查詢成功），否則 None。
-        """
-        # 找到「訂房」分類的 PMS 連線設定
-        stmt = (
-            select(FaqPmsConnection)
-            .join(FaqCategory, FaqPmsConnection.faq_category_id == FaqCategory.id)
-            .where(FaqCategory.name == "訂房", FaqPmsConnection.status == "enabled")
-        )
-        result = await db.execute(stmt)
-        conn = result.scalar_one_or_none()
-
-        if not conn or not pms_configured():
-            return None
-
-        try:
-            raw = await asyncio.to_thread(query_pms, "", "", None, 2)
-            rooms = raw.get("room", []) if isinstance(raw, dict) else []
-            if not rooms:
-                return None
-
-            lines = ["【即時房況（PMS）】"]
-            for room in rooms:
-                code = room.get("roomtype", "")
-                data_rows = room.get("data", []) or []
-                if not data_rows:
-                    continue
-                price = data_rows[0].get("price", "—")
-                remain = min((d.get("remain", 0) for d in data_rows), default=0)
-                lines.append(f"- 房型代碼: {code}，即時房價: {price}，剩餘間數: {remain}")
-            return "\n".join(lines)
-        except Exception as exc:
-            logger.warning(f"PMS 即時房況查詢失敗，降級至 FAQ：{exc}")
-            return None
-
-    def _build_knowledge_context(
-        self,
-        rules: List[FaqRule],
-        pms_context: Optional[str] = None,
-        booking_category_id: Optional[int] = None,
-    ) -> str:
-        """組裝知識庫 context 文本。
-
-        若 pms_context 有值，訂房分類的 FAQ 規則會被 PMS 即時資料取代；
-        其他分類的 FAQ 規則維持不變。
-        """
-        if not rules and not pms_context:
-            return "目前尚無知識庫資料。"
-
-        lines = []
-
-        # PMS 即時房況優先（取代訂房分類的 FAQ 規則）
-        if pms_context:
-            lines.append(pms_context)
-
-        for rule in rules:
-            # 若 PMS 已提供訂房資料，跳過訂房分類的 FAQ 規則
-            if pms_context and booking_category_id and rule.category_id == booking_category_id:
-                continue
-            content = self._parse_json(rule.content_json)
-            if isinstance(content, dict):
-                parts = [f"{k}: {v}" for k, v in content.items() if v]
-                lines.append("- " + "，".join(parts))
-            else:
-                lines.append(f"- {content}")
-        return "\n".join(lines) if lines else "目前尚無知識庫資料。"
-
-    async def _get_booking_category_id(self, db: AsyncSession) -> Optional[int]:
-        """取得「訂房」大分類的 ID"""
-        stmt = select(FaqCategory.id).where(FaqCategory.name == "訂房").limit(1)
-        result = await db.execute(stmt)
-        row = result.scalar_one_or_none()
-        return row
-
-    def _parse_json(self, raw: Any) -> Any:
-        """安全解析 JSON"""
-        if isinstance(raw, str):
-            try:
-                return json.loads(raw)
-            except (json.JSONDecodeError, TypeError):
-                return raw
-        return raw
-
-    def _estimate_tokens(self, text: str) -> int:
-        """簡易 token 估算（中文約 1.5 token/字，英文約 0.75 token/word）"""
-        return max(1, int(len(text) * 0.75))
-
-    def _error_response(self, message: str, token_exhausted: bool = False) -> Dict[str, Any]:
-        """錯誤回應格式"""
-        return {
-            "reply": message,
-            "tokens_used": 0,
-            "referenced_rules": [],
-            "auto_tags": [],
-            "token_exhausted": token_exhausted,
-        }
-
     async def _auto_tag_member(
         self,
         db: AsyncSession,
         line_uid: str,
-        user_message: str,
-        reply: str,
-        rules: List[FaqRule],
     ) -> List[str]:
-        """自動為會員貼標籤"""
+        """自動為會員貼標籤（從發佈快照的 tags）"""
         # 找到會員
         member_stmt = select(Member).where(Member.line_uid == line_uid)
         member_result = await db.execute(member_stmt)
@@ -370,11 +373,35 @@ class AiChatService:
         if not member:
             return []
 
-        # 收集所有規則的 tag_names
-        all_tag_names = set()
-        for rule in rules:
-            for tag in (rule.tags or []):
-                all_tag_names.add(tag.tag_name)
+        # 從所有啟用分類的已發佈規則收集 tags
+        from app.models.faq import FaqRuleVersion
+        from sqlalchemy import func
+
+        # 取得啟用分類 IDs
+        cat_stmt = select(FaqCategory.id).where(FaqCategory.is_active == True)  # noqa: E712
+        cat_result = await db.execute(cat_stmt)
+        active_cat_ids = [cid for (cid,) in cat_result.all()]
+        if not active_cat_ids:
+            return []
+
+        # 取得有發佈快照的規則 IDs
+        latest_ver_sub = (
+            select(FaqRuleVersion.rule_id)
+            .join(FaqRule, FaqRuleVersion.rule_id == FaqRule.id)
+            .where(FaqRule.category_id.in_(active_cat_ids))
+            .distinct()
+        )
+        latest_result = await db.execute(latest_ver_sub)
+        published_rule_ids = [rid for (rid,) in latest_result.all()]
+        if not published_rule_ids:
+            return []
+
+        # 收集這些規則的 tag_names
+        tag_stmt = select(FaqRuleTag.tag_name).where(
+            FaqRuleTag.rule_id.in_(published_rule_ids)
+        ).distinct()
+        tag_result = await db.execute(tag_stmt)
+        all_tag_names = {t for (t,) in tag_result.all()}
 
         if not all_tag_names:
             return []
@@ -382,11 +409,10 @@ class AiChatService:
         # 為會員建立 MemberTag（如果不存在）
         tagged = []
         for tag_name in all_tag_names:
-            # 檢查是否已存在
             existing_stmt = select(MemberTag).where(
                 MemberTag.member_id == member.id,
                 MemberTag.tag_name == tag_name,
-                MemberTag.message_id == None,
+                MemberTag.message_id == None,  # noqa: E711
             )
             existing_result = await db.execute(existing_stmt)
             existing = existing_result.scalar_one_or_none()
@@ -404,3 +430,13 @@ class AiChatService:
             await db.flush()
 
         return tagged
+
+    def _error_response(self, message: str, token_exhausted: bool = False) -> Dict[str, Any]:
+        """錯誤回應格式"""
+        return {
+            "reply": message,
+            "tokens_used": 0,
+            "referenced_rules": [],
+            "auto_tags": [],
+            "token_exhausted": token_exhausted,
+        }

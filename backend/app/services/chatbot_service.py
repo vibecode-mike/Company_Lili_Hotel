@@ -167,8 +167,11 @@ _FACILITY_FIELDS = ["設施名稱", "位置", "費用", "開放時間", "說明"
 _ROOM_FIELDS = ["房型名稱", "房型特色", "房價", "人數", "間數", "url"]
 
 
-async def _kb_search(db: AsyncSession, category: str, query: str, top_k: int = 6, test_mode: bool = False) -> dict:
-    from app.models.faq import FaqCategory, FaqRule
+async def _kb_search(
+    db: AsyncSession, category: str, query: str, top_k: int = 6,
+    test_mode: bool = False, use_snapshot: bool = False,
+) -> dict:
+    from app.models.faq import FaqCategory, FaqRule, FaqRuleVersion, FaqRuleTag
 
     cat_name = _CATEGORY_NAME_MAP.get(category)
     if not cat_name:
@@ -182,32 +185,70 @@ async def _kb_search(db: AsyncSession, category: str, query: str, top_k: int = 6
     if not cat:
         return {"ok": True, "category": category, "query": query, "items": []}
 
-    # 測試模式引用 draft + active（spec 第七部分：啟用但未發佈的規則可在測試聊天引用）
-    # 正式模式只引用 active（已發佈）
-    if test_mode:
-        allowed_statuses = ["draft", "active"]
-    else:
-        allowed_statuses = ["active"]
-
-    rule_result = await db.execute(
-        select(FaqRule)
-        .where(FaqRule.category_id == cat.id, FaqRule.status.in_(allowed_statuses))
-        .options(selectinload(FaqRule.tags))
-        .order_by(FaqRule.created_at)
-    )
-    rules = rule_result.scalars().all()
-
     rows = []
-    for rule in rules:
-        c = rule.content_json
-        if isinstance(c, str):
-            try:
-                c = json.loads(c)
-            except Exception:
-                c = {}
-        row = dict(c or {})
-        row["tags"] = [t.tag_name for t in (rule.tags or [])]
-        rows.append(row)
+
+    if use_snapshot:
+        # 正式模式：讀 FaqRuleVersion 最新快照（發佈凍結版本）
+        from sqlalchemy import func
+        # 每條規則取最大 version_number 的快照
+        latest_ver_sub = (
+            select(
+                FaqRuleVersion.rule_id,
+                func.max(FaqRuleVersion.version_number).label("max_ver"),
+            )
+            .group_by(FaqRuleVersion.rule_id)
+            .subquery()
+        )
+        ver_result = await db.execute(
+            select(FaqRuleVersion, FaqRule)
+            .join(FaqRule, FaqRuleVersion.rule_id == FaqRule.id)
+            .join(
+                latest_ver_sub,
+                (FaqRuleVersion.rule_id == latest_ver_sub.c.rule_id)
+                & (FaqRuleVersion.version_number == latest_ver_sub.c.max_ver),
+            )
+            .where(FaqRule.category_id == cat.id)
+        )
+        for ver, rule in ver_result.all():
+            c = ver.content_json
+            if isinstance(c, str):
+                try:
+                    c = json.loads(c)
+                except Exception:
+                    c = {}
+            row = dict(c or {})
+            # 取得 tags（from FaqRule 的 tags 關聯）
+            tag_result = await db.execute(
+                select(FaqRuleTag.tag_name).where(FaqRuleTag.rule_id == rule.id)
+            )
+            row["tags"] = [t for (t,) in tag_result.all()]
+            rows.append(row)
+    else:
+        # 測試模式：讀 FaqRule（draft + active）
+        # 正式非快照模式：只讀 active
+        if test_mode:
+            allowed_statuses = ["draft", "active"]
+        else:
+            allowed_statuses = ["active"]
+
+        rule_result = await db.execute(
+            select(FaqRule)
+            .where(FaqRule.category_id == cat.id, FaqRule.status.in_(allowed_statuses))
+            .options(selectinload(FaqRule.tags))
+            .order_by(FaqRule.created_at)
+        )
+        rules = rule_result.scalars().all()
+
+        for rule in rules:
+            c = rule.content_json
+            if isinstance(c, str):
+                try:
+                    c = json.loads(c)
+                except Exception:
+                    c = {}
+            row = dict(c or {})
+            row["tags"] = [t.tag_name for t in (rule.tags or [])]
+            rows.append(row)
 
     fields = _FACILITY_FIELDS if category == "facilities" else _ROOM_FIELDS
     q = (query or "").strip().lower()
@@ -812,6 +853,7 @@ class ChatbotService:
 
         room_cards: List[RoomCardSchema] = []
         max_loops = 5
+        total_tokens_used = 0
 
         for _ in range(max_loops):
             resp = await client.chat.completions.create(
@@ -821,9 +863,13 @@ class ChatbotService:
                 tools=_get_tools(),
                 tool_choice="auto",
             )
+            if resp.usage:
+                total_tokens_used += resp.usage.total_tokens
             msg = resp.choices[0].message
 
             if not msg.tool_calls:
+                if db is not None and total_tokens_used > 0:
+                    await self._deduct_tokens(db, total_tokens_used)
                 return msg.content or "", room_cards
 
             messages.append(msg)
@@ -861,7 +907,28 @@ class ChatbotService:
                     "content": json.dumps(result, ensure_ascii=False),
                 })
 
+        if db is not None and total_tokens_used > 0:
+            await self._deduct_tokens(db, total_tokens_used)
         return "很抱歉，系統暫時無法回應，請稍後再試。", room_cards
+
+    async def _deduct_tokens(self, db: AsyncSession, tokens_used: int) -> None:
+        """扣除 AiTokenUsage 額度"""
+        from app.models.faq import AiTokenUsage, Industry
+
+        ind_result = await db.execute(
+            select(Industry).where(Industry.is_active == True).limit(1)  # noqa: E712
+        )
+        industry = ind_result.scalar_one_or_none()
+        if not industry:
+            return
+
+        usage_result = await db.execute(
+            select(AiTokenUsage).where(AiTokenUsage.industry_id == industry.id)
+        )
+        token_usage = usage_result.scalar_one_or_none()
+        if token_usage:
+            token_usage.used_amount += tokens_used
+            await db.flush()
 
     async def _run_pms_tool(
         self,
