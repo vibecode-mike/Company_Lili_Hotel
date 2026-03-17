@@ -19,10 +19,13 @@ import {
 } from "../../utils/token";
 import { setLogoutCallback } from "../../utils/apiClient";
 
-interface User {
+export interface User {
   email: string;
   name: string;
   role?: string;
+  faq_can_view?: boolean;
+  faq_can_manage?: boolean;
+  faq_can_publish?: boolean;
 }
 
 interface AuthContextType {
@@ -112,6 +115,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email: data.user.email,
           name: data.user.username || data.user.email.split("@")[0],
           role,
+          faq_can_view: data.user.faq_can_view ?? true,
+          faq_can_manage: data.user.faq_can_manage ?? true,
+          faq_can_publish: data.user.faq_can_publish ?? false,
         });
 
         toast.success("登入成功！");

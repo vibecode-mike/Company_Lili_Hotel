@@ -454,17 +454,25 @@ class FaqService:
         return None
 
     async def toggle_rule(
-        self, db: AsyncSession, rule_id: int, status: str
+        self, db: AsyncSession, rule_id: int, is_enabled: bool = None, status: str = None
     ) -> Optional[FaqRule]:
-        """切換規則狀態（disabled/draft/active）"""
+        """切換規則啟用狀態（is_enabled）或發佈狀態（status）。
+
+        兩維度獨立：
+        - is_enabled: 啟用/停用（控制測試環境能否引用）
+        - status: draft/active（控制前台聊天機器人是否引用快照）
+        停用規則不影響前台已發佈快照，直到下次發佈。
+        """
         rule = await self.get_rule(db, rule_id)
         if not rule:
             return None
 
-        # 重新啟用時狀態改為 draft
-        if status == "active" and rule.status == "disabled":
-            rule.status = "draft"
-        else:
+        if is_enabled is not None:
+            rule.is_enabled = is_enabled
+            # 啟停變更 → 發佈狀態回到 draft，等下次發佈才同步前台
+            if rule.status == "active":
+                rule.status = "draft"
+        if status is not None:
             rule.status = status
         await self._touch_category(db, rule.category_id)
         await db.flush()
@@ -476,6 +484,7 @@ class FaqService:
         """發佈所有 draft 規則（批次建立 FaqRuleVersion 快照），回傳發佈數量"""
         from datetime import datetime, timezone
 
+        # 發佈所有 draft 規則（包含啟用和停用的）
         stmt = select(FaqRule).where(FaqRule.status == "draft")
         result = await db.execute(stmt)
         rules = result.scalars().all()

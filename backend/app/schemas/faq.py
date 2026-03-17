@@ -80,6 +80,7 @@ class FaqRuleSchema(BaseModel):
     category_id: int
     content_json: Dict[str, Any]
     status: str
+    is_enabled: bool = True
     created_by: Optional[int] = None
     updated_by: Optional[int] = None
     published_at: Optional[datetime] = None
@@ -99,6 +100,7 @@ class FaqRuleListSchema(BaseModel):
     category_id: int
     content_json: Dict[str, Any]
     status: str
+    is_enabled: bool = True
     tags: List[FaqRuleTagSchema] = []
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -176,9 +178,10 @@ class FaqModuleAuthSchema(BaseModel):
 
 
 class FaqRuleToggleSchema(BaseModel):
-    """切換規則狀態"""
+    """切換規則啟用狀態（兩維度模型）"""
 
-    status: str = Field(..., pattern="^(active|disabled|draft)$")
+    is_enabled: Optional[bool] = None
+    status: Optional[str] = Field(None, pattern="^(active|draft)$")
 
 
 class FaqModuleAuthUpdateSchema(BaseModel):

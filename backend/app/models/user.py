@@ -31,3 +31,8 @@ class User(Base):
     )
     is_active = Column(Boolean, default=True, comment="是否啟用")
     last_login_at = Column(DateTime, comment="最後登入時間")
+
+    # FAQ 模組細粒度權限
+    faq_can_view = Column(Boolean, nullable=False, default=True, comment="FAQ 模組查看權限")
+    faq_can_manage = Column(Boolean, nullable=False, default=True, comment="FAQ 模組編輯權限")
+    faq_can_publish = Column(Boolean, nullable=False, default=False, comment="FAQ 模組發佈權限")

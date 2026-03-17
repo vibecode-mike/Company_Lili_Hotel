@@ -10,7 +10,7 @@ import {
   FacilityEditModal,
   FacilityFaqDraft,
 } from "./chatbot/AIChatbotEditModal";
-import { apiGet, apiPost, apiPut, apiDelete } from "../utils/apiClient";
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from "../utils/apiClient";
 
 // Facility-matched placeholder images via picsum (seed = stable, unique per facility)
 const img = (seed: string) => `https://picsum.photos/seed/${seed}/110/74`;
@@ -61,7 +61,7 @@ function mapRuleToFacility(rule: FaqRuleRaw): FacilityRecord {
     lastUpdated: rule.updated_at
       ? rule.updated_at.slice(0, 16).replace("T", " ")
       : "—",
-    published: rule.status === "active",
+    published: rule.is_enabled !== false,
   };
 }
 
@@ -450,21 +450,7 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
         prev.map((r) => (r.id === id ? { ...r, published: value } : r)),
       );
       try {
-        if (value) {
-          await apiPost(`/api/v1/faq/rules/${id}/publish`, {});
-        } else if (facility) {
-          const content_json: Record<string, string> = {
-            設施名稱: facility.name,
-            開放時間: facility.hours,
-            費用: facility.fee,
-            說明: facility.description,
-            url: "",
-          };
-          await apiPut(`/api/v1/faq/rules/${id}`, {
-            content_json,
-            tag_names: facility.memberTags,
-          });
-        }
+        await apiPatch(`/api/v1/faq/rules/${id}/toggle`, { is_enabled: value });
         showToast(
           value ? (
             <>

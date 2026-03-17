@@ -1,5 +1,5 @@
 import React, { useState, memo, useCallback, useMemo, useEffect } from "react";
-import { apiGet, apiPost, apiPut, apiDelete } from "../utils/apiClient";
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from "../utils/apiClient";
 import { useToast } from "./ToastProvider";
 import Sidebar from "./Sidebar";
 import {
@@ -64,7 +64,7 @@ function mapRuleToRoom(rule: FaqRuleRaw): RoomRecord {
     lastUpdated: rule.updated_at
       ? rule.updated_at.slice(0, 16).replace("T", " ")
       : "—",
-    published: rule.status === "active",
+    published: rule.is_enabled !== false,
     pmsRoomCode: "",
     customImageUrl: c["image_url"] ?? "",
   };
@@ -516,26 +516,7 @@ const PMSDataTable = memo(function PMSDataTable({
         prev.map((r) => (r.id === id ? { ...r, published: value } : r)),
       );
       try {
-        if (value) {
-          await apiPost(`/api/v1/faq/rules/${id}/publish`, {});
-        } else {
-          // Revert to draft (unpublish) by updating with current content
-          if (room) {
-            const content_json: Record<string, string> = {
-              房型名稱: room.roomType,
-              房型特色: room.features,
-              房價: String(room.pricePerNight),
-              人數: String(room.maxGuests),
-              間數: room.remainingRooms,
-              url: room.url,
-              image_url: room.customImageUrl,
-            };
-            await apiPut(`/api/v1/faq/rules/${id}`, {
-              content_json,
-              tag_names: room.memberTags,
-            });
-          }
-        }
+        await apiPatch(`/api/v1/faq/rules/${id}/toggle`, { is_enabled: value });
         showToast(
           value ? (
             <>

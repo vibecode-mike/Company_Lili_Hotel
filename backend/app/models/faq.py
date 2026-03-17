@@ -115,7 +115,13 @@ class FaqRule(Base):
         String(20),
         nullable=False,
         default="draft",
-        comment="狀態：draft / active / disabled",
+        comment="發佈狀態：draft（未發佈）/ active（已發佈）",
+    )
+    is_enabled = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+        comment="啟用狀態（獨立於發佈狀態）",
     )
     created_by = Column(
         BigInteger,

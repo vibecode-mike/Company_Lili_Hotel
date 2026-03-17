@@ -207,7 +207,7 @@ async def _kb_search(
                 (FaqRuleVersion.rule_id == latest_ver_sub.c.rule_id)
                 & (FaqRuleVersion.version_number == latest_ver_sub.c.max_ver),
             )
-            .where(FaqRule.category_id == cat.id)
+            .where(FaqRule.category_id == cat.id, FaqRule.is_enabled == True)  # noqa: E712
         )
         for ver, rule in ver_result.all():
             c = ver.content_json
@@ -224,8 +224,8 @@ async def _kb_search(
             row["tags"] = [t for (t,) in tag_result.all()]
             rows.append(row)
     else:
-        # 測試模式：讀 FaqRule（draft + active）
-        # 正式非快照模式：只讀 active
+        # 測試模式：讀 FaqRule（draft + active），僅啟用的規則
+        # 正式非快照模式：只讀 active 且啟用的
         if test_mode:
             allowed_statuses = ["draft", "active"]
         else:
@@ -233,7 +233,11 @@ async def _kb_search(
 
         rule_result = await db.execute(
             select(FaqRule)
-            .where(FaqRule.category_id == cat.id, FaqRule.status.in_(allowed_statuses))
+            .where(
+                FaqRule.category_id == cat.id,
+                FaqRule.status.in_(allowed_statuses),
+                FaqRule.is_enabled == True,  # noqa: E712
+            )
             .options(selectinload(FaqRule.tags))
             .order_by(FaqRule.created_at)
         )

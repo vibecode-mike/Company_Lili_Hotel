@@ -23,6 +23,9 @@ class UserInfo(BaseModel):
     full_name: Optional[str] = None
     role: UserRole
     last_login_at: Optional[datetime] = None
+    faq_can_view: bool = True
+    faq_can_manage: bool = True
+    faq_can_publish: bool = False
 
     class Config:
         from_attributes = True

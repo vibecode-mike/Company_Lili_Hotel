@@ -829,7 +829,7 @@ export default function ChatFAB() {
   const [chatOpen, setChatOpen] = useState(() => sessionStorage.getItem("chatfab-open") === "1");
   const { showToast } = useToast();
   const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const canPublish = user?.faq_can_publish === true || user?.role === "admin";
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [publishTooltipVisible, setPublishTooltipVisible] = useState(false);
   const publishBtnRef = useRef<HTMLButtonElement>(null);
@@ -1092,7 +1092,7 @@ export default function ChatFAB() {
               <button
                 ref={publishBtnRef}
                 type="button"
-                onClick={isAdmin ? async () => {
+                onClick={canPublish ? async () => {
                   try {
                     const token = localStorage.getItem("auth_token");
                     const res = await fetch("/api/v1/faq/publish", {
@@ -1113,10 +1113,10 @@ export default function ChatFAB() {
                 style={{
                   width: 28, height: 28, borderRadius: 8, border: "none",
                   background: "transparent",
-                  cursor: isAdmin ? "pointer" : "default",
+                  cursor: canPublish ? "pointer" : "default",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   padding: 0, transition: "background 0.15s",
-                  opacity: isAdmin ? 1 : 0.5,
+                  opacity: canPublish ? 1 : 0.5,
                 }}
               >
                 <svg width="16" height="16" viewBox="0 0 16 16.0083" fill="none" style={{ flexShrink: 0 }}>
@@ -1127,7 +1127,7 @@ export default function ChatFAB() {
           </div>
 
           {/* Permission banner (non-admin only) */}
-          {!isAdmin && !bannerDismissed && (
+          {!canPublish && !bannerDismissed && (
             <div
               style={{
                 background: "#dbedff",
@@ -1371,7 +1371,7 @@ export default function ChatFAB() {
 
       {/* Publish tooltip — rendered via portal to escape overflow:hidden */}
       {publishTooltipVisible && publishBtnRef.current && (
-        <PublishTooltip btnRef={publishBtnRef} label={isAdmin ? "發佈" : "僅系統管理員可發佈"} />
+        <PublishTooltip btnRef={publishBtnRef} label={canPublish ? "發佈" : "僅系統管理員可發佈"} />
       )}
 
       {/* FAB */}

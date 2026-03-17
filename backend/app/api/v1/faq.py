@@ -337,15 +337,17 @@ async def toggle_rule(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """切換規則狀態（disabled/active/draft）"""
-    rule = await faq_service.toggle_rule(db, rule_id, data.status)
+    """切換規則啟用狀態（兩維度：is_enabled + status）"""
+    rule = await faq_service.toggle_rule(
+        db, rule_id, is_enabled=data.is_enabled, status=data.status
+    )
     if not rule:
         raise HTTPException(status_code=404, detail="規則不存在")
 
     return {
         "code": 200,
-        "message": f"規則已{'停用' if rule.status == 'disabled' else '啟用'}",
-        "data": {"id": rule.id, "status": rule.status},
+        "message": f"規則已{'啟用' if rule.is_enabled else '停用'}",
+        "data": {"id": rule.id, "status": rule.status, "is_enabled": rule.is_enabled},
     }
 
 
