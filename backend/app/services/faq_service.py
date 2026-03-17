@@ -587,20 +587,112 @@ class FaqService:
         auth_type: str,
     ) -> FaqPmsConnection:
         """建立 PMS 串接設定"""
+        # 檢查是否已有連線（重新串接）
+        existing = await self.get_pms_connection(db, category_id)
+        if existing:
+            existing.api_endpoint = api_endpoint
+            existing.api_key_encrypted = api_key
+            existing.auth_type = auth_type
+            existing.status = "enabled"
+            existing.last_synced_at = datetime.now(timezone.utc)
+            existing.error_message = None
+            await self._touch_category(db, category_id)
+            await db.flush()
+            # 重新串接：snapshot_completed=True → 不再觸發快照（spec）
+            if not existing.snapshot_completed:
+                await self._snapshot_pms_to_faq(db, category_id, existing)
+            return existing
+
         now = datetime.now(timezone.utc)
         conn = FaqPmsConnection(
             faq_category_id=category_id,
             api_endpoint=api_endpoint,
-            api_key_encrypted=api_key,  # 簡化：暫不加密
+            api_key_encrypted=api_key,
             auth_type=auth_type,
             status="enabled",
             last_synced_at=now,
-            snapshot_completed=True,
+            snapshot_completed=False,
         )
         db.add(conn)
         await self._touch_category(db, category_id)
         await db.flush()
+
+        # 首次串接：自動將 PMS 房型資料帶入 FAQ 規則
+        await self._snapshot_pms_to_faq(db, category_id, conn)
         return conn
+
+    async def _snapshot_pms_to_faq(
+        self,
+        db: AsyncSession,
+        category_id: int,
+        conn: FaqPmsConnection,
+    ) -> None:
+        """首次串接 PMS 時，將 PMS 房型資料自動帶入 FAQ 規則。
+
+        Spec: faq_pms_realtime_connection.feature — 首次快照機制
+        """
+        import asyncio
+        from app.services.pms_chatbot_client import pms_enabled, query_pms
+
+        if not pms_enabled():
+            conn.snapshot_completed = True
+            await db.flush()
+            return
+
+        try:
+            # 查詢 PMS 取得所有房型（用明天~後天做為查詢區間）
+            from datetime import timedelta
+            tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%d")
+            day_after = (datetime.now(timezone.utc) + timedelta(days=2)).strftime("%Y-%m-%d")
+            raw = await asyncio.to_thread(query_pms, tomorrow, day_after, None, 2)
+
+            rooms = raw.get("room", []) if isinstance(raw, dict) else []
+            if not rooms:
+                conn.snapshot_completed = True
+                await db.flush()
+                return
+
+            # 載入房型名稱對照表
+            from app.services.chatbot_service import ROOMTYPE_NAME, ROOMTYPE_MAX_OCCUPANCY
+
+            for room in rooms:
+                code = room.get("roomtype", "")
+                data_rows = room.get("data", []) or []
+                if not code or not data_rows:
+                    continue
+
+                name = ROOMTYPE_NAME.get(code, code)
+                price = data_rows[0].get("price", 0)
+                remain = min((d.get("remain", 0) for d in data_rows), default=0)
+                max_occ = ROOMTYPE_MAX_OCCUPANCY.get(code, 2)
+
+                content_json = json.dumps({
+                    "房型名稱": name,
+                    "房型特色": "",
+                    "房價": str(price),
+                    "人數": str(max_occ),
+                    "間數": str(remain),
+                    "url": "",
+                    "image_url": "",
+                }, ensure_ascii=False)
+
+                rule = FaqRule(
+                    category_id=category_id,
+                    content_json=content_json,
+                    status="draft",
+                    is_enabled=True,
+                )
+                db.add(rule)
+
+            conn.snapshot_completed = True
+            await db.flush()
+            logger.info(f"PMS snapshot: created {len(rooms)} FAQ rules for category {category_id}")
+
+        except Exception as exc:
+            logger.warning(f"PMS snapshot failed: {exc}")
+            # 快照失敗不阻擋串接，標記為未完成，下次串接可重試
+            conn.snapshot_completed = False
+            await db.flush()
 
     async def toggle_pms_connection(
         self, db: AsyncSession, category_id: int, status: str
