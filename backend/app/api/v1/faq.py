@@ -11,7 +11,7 @@ from app.api.v1.auth import get_current_user, oauth2_scheme
 from app.core.security import decode_access_token
 from app.models.user import User
 from app.services.faq_service import FaqService
-from app.services.ai_chat_service import AiChatService
+from app.services.chatbot_service import chatbot_service as ai_chatbot
 from app.schemas.faq import (
     FaqCategoryToggleSchema,
     FaqRuleCreateSchema,
@@ -31,7 +31,6 @@ import logging
 router = APIRouter()
 logger = logging.getLogger(__name__)
 faq_service = FaqService()
-ai_chat_service = AiChatService()
 
 
 # === 大分類 ===
@@ -279,52 +278,6 @@ async def publish_rule(
         "data": {"id": rule.id, "status": rule.status},
     }
 
-
-@router.post("/rules/{rule_id}/revert", response_model=dict)
-async def revert_rule(
-    rule_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """回復至上一版本"""
-    try:
-        rule = await faq_service.revert_rule(db, rule_id)
-        if not rule:
-            raise HTTPException(status_code=404, detail="規則不存在")
-
-        return {
-            "code": 200,
-            "message": "已回復至上一版本",
-            "data": {"id": rule.id, "status": rule.status},
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.get("/rules/{rule_id}/versions", response_model=dict)
-async def get_rule_versions(
-    rule_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """取得版本歷史"""
-    versions = await faq_service.get_rule_versions(db, rule_id)
-
-    return {
-        "code": 200,
-        "message": "查詢成功",
-        "data": [
-            {
-                "id": v.id,
-                "rule_id": v.rule_id,
-                "content_json": json.loads(v.content_json) if isinstance(v.content_json, str) else v.content_json,
-                "status": v.status,
-                "version_number": v.version_number,
-                "snapshot_at": v.snapshot_at.isoformat() if v.snapshot_at else None,
-            }
-            for v in versions
-        ],
-    }
 
 
 # === 規則狀態切換 ===
@@ -605,9 +558,7 @@ async def test_chat(
     current_user: User = Depends(get_current_user),
 ):
     """測試聊天（不計 token、不貼 tag）"""
-    result = await ai_chat_service.test_chat(
-        db, data.message, data.rule_ids, data.category_id
-    )
+    result = await ai_chatbot.test_chat(db, data.message)
     return {
         "code": 200,
         "message": "測試完成",

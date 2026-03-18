@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { useToast } from "./ToastProvider";
 import { useAuth } from "./auth/AuthContext";
@@ -52,6 +52,42 @@ type ChatMessage =
       reservationId: string;
       cartUrl?: string | null;
     };
+
+// ---------------------------------------------------------------------------
+// Drag-to-scroll hook for horizontal card lists
+// ---------------------------------------------------------------------------
+
+function useDragScroll() {
+  const ref = useRef<HTMLDivElement>(null);
+  const state = useRef({ isDown: false, startX: 0, scrollLeft: 0 });
+
+  const onMouseDown = useCallback((e: ReactMouseEvent) => {
+    const el = ref.current;
+    if (!el) return;
+    state.current = { isDown: true, startX: e.pageX - el.offsetLeft, scrollLeft: el.scrollLeft };
+    el.style.cursor = "grabbing";
+    el.style.userSelect = "none";
+  }, []);
+
+  const onMouseUp = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    state.current.isDown = false;
+    el.style.cursor = "grab";
+    el.style.removeProperty("user-select");
+  }, []);
+
+  const onMouseMove = useCallback((e: ReactMouseEvent) => {
+    if (!state.current.isDown) return;
+    const el = ref.current;
+    if (!el) return;
+    e.preventDefault();
+    const x = e.pageX - el.offsetLeft;
+    el.scrollLeft = state.current.scrollLeft - (x - state.current.startX);
+  }, []);
+
+  return { ref, onMouseDown, onMouseUp, onMouseLeave: onMouseUp, onMouseMove };
+}
 
 // ---------------------------------------------------------------------------
 // Shared style constants
@@ -238,6 +274,7 @@ function RoomCardsMessage({
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dragScroll = useDragScroll();
 
   const totalSelected = Object.values(selections).reduce((s, v) => s + v, 0);
 
@@ -277,10 +314,12 @@ function RoomCardsMessage({
   };
 
   return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: 4, width: "100%", flexShrink: 0 }}>
-      {BOT_AVATAR}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-        {/* Bot text bubble */}
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%", flexShrink: 0 }}>
+      {/* Top row: avatar + text bubble */}
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 4 }}>
+        {BOT_AVATAR}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+          {/* Bot text bubble */}
         <div
           style={{
             padding: "4px 8px",
@@ -302,84 +341,92 @@ function RoomCardsMessage({
             入住 {msg.bookingContext.checkin_date} → 退房 {msg.bookingContext.checkout_date}
           </div>
         )}
-
-        {/* Cards — horizontal scroll，負 margin 補陰影空間 */}
-        <div style={{ margin: "0 -6px" }}>
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            overflowX: "auto",
-            padding: "6px 6px 8px",
-            scrollbarWidth: "none",
-          }}
-        >
-          {msg.cards.map((card) => (
-            <RoomCardItem
-              key={card.room_type_code}
-              card={card}
-              count={selections[card.room_type_code] ?? 0}
-              onIncrease={() => changeCount(card.room_type_code, 1)}
-              onDecrease={() => changeCount(card.room_type_code, -1)}
-              disabled={disabled}
-            />
-          ))}
         </div>
-        </div>
-
-        {/* Error */}
-        {error && (
-          <div style={{ fontSize: 12, color: "#b71c1c", fontFamily: "'Noto Sans TC', sans-serif" }}>
-            {error}
-          </div>
-        )}
-
-        {/* Footer buttons — hidden when disabled */}
-        {!disabled && (
-          <div style={{ display: "flex", gap: 4 }}>
-            <button
-              type="button"
-              onClick={onCancel}
-              style={{
-                flex: 1,
-                minHeight: 48,
-                background: "#f5f5f5",
-                border: "none",
-                borderRadius: 16,
-                fontFamily: "'Noto Sans TC', sans-serif",
-                fontWeight: 400,
-                fontSize: 16,
-                color: "#383838",
-                cursor: "pointer",
-                lineHeight: 1.5,
-              }}
-            >
-              取消
-            </button>
-            <button
-              type="button"
-              onClick={handleConfirm}
-              disabled={totalSelected === 0 || loading}
-              style={{
-                flex: 1,
-                minHeight: 48,
-                background: totalSelected > 0 && !loading ? "#242424" : "#c8c8c8",
-                border: "none",
-                borderRadius: 16,
-                fontFamily: "'Noto Sans TC', sans-serif",
-                fontWeight: 400,
-                fontSize: 16,
-                color: "#fff",
-                cursor: totalSelected > 0 && !loading ? "pointer" : "default",
-                lineHeight: 1.5,
-                transition: "background 0.2s",
-              }}
-            >
-              {loading ? "確認中…" : "確認訂房"}
-            </button>
-          </div>
-        )}
       </div>
+
+      {/* Cards — horizontal scroll, placed OUTSIDE the text row to avoid vertical scroll interference */}
+      <div
+        ref={dragScroll.ref}
+        onMouseDown={dragScroll.onMouseDown}
+        onMouseUp={dragScroll.onMouseUp}
+        onMouseLeave={dragScroll.onMouseLeave}
+        onMouseMove={dragScroll.onMouseMove}
+        style={{
+          display: "flex",
+          gap: 8,
+          overflowX: "auto",
+          overscrollBehaviorX: "contain",
+          padding: "6px 0 8px",
+          scrollbarWidth: "thin",
+          WebkitOverflowScrolling: "touch",
+          cursor: "grab",
+          width: "100%",
+        }}
+      >
+        {msg.cards.map((card) => (
+          <RoomCardItem
+            key={card.room_type_code}
+            card={card}
+            count={selections[card.room_type_code] ?? 0}
+            onIncrease={() => changeCount(card.room_type_code, 1)}
+            onDecrease={() => changeCount(card.room_type_code, -1)}
+            disabled={disabled}
+          />
+        ))}
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div style={{ fontSize: 12, color: "#b71c1c", fontFamily: "'Noto Sans TC', sans-serif" }}>
+          {error}
+        </div>
+      )}
+
+      {/* Footer buttons — hidden when disabled */}
+      {!disabled && (
+        <div style={{ display: "flex", gap: 4 }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            style={{
+              flex: 1,
+              minHeight: 48,
+              background: "#f5f5f5",
+              border: "none",
+              borderRadius: 16,
+              fontFamily: "'Noto Sans TC', sans-serif",
+              fontWeight: 400,
+              fontSize: 16,
+              color: "#383838",
+              cursor: "pointer",
+              lineHeight: 1.5,
+            }}
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={totalSelected === 0 || loading}
+            style={{
+              flex: 1,
+              minHeight: 48,
+              background: totalSelected > 0 && !loading ? "#242424" : "#c8c8c8",
+              border: "none",
+              borderRadius: 16,
+              fontFamily: "'Noto Sans TC', sans-serif",
+              fontWeight: 400,
+              fontSize: 16,
+              color: "#fff",
+              cursor: totalSelected > 0 && !loading ? "pointer" : "default",
+              lineHeight: 1.5,
+              transition: "background 0.2s",
+            }}
+          >
+            {loading ? "確認中…" : "確認訂房"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

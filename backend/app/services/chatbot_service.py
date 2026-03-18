@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 import time
 from collections import deque
@@ -23,6 +24,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
+from app.models.conversation import ConversationMessage
+from app.models.faq import AiTokenUsage, FaqRuleTag, Industry
+from app.models.member import Member
+from app.models.tag import MemberTag
 from app.schemas.chatbot import (
     BookingContextSchema,
     ChatbotMessageOutSchema,
@@ -38,6 +43,8 @@ from app.services.pms_chatbot_client import (
     pms_enabled,
     query_pms,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -65,7 +72,7 @@ ROOMTYPE_MAX_OCCUPANCY = {
 # FAQ KB fallback — read room data from DB instead of hardcoded list
 # ---------------------------------------------------------------------------
 
-async def _kb_fallback_rooms(db: Optional[AsyncSession], adults: int = 1, use_snapshot: bool = True) -> List[RoomCardSchema]:
+async def _kb_fallback_rooms(db: Optional[AsyncSession], adults: int = 1) -> List[RoomCardSchema]:
     """Query FAQ KB for room data. Returns RoomCardSchema list (source=faq_kb).
 
     Spec: 查詢空房型.feature — PMS 未啟用或異常時降級至 FAQ_KB，
@@ -73,7 +80,7 @@ async def _kb_fallback_rooms(db: Optional[AsyncSession], adults: int = 1, use_sn
     """
     if db is None:
         return []
-    result = await _kb_search(db, "booking_billing", "", top_k=20, use_snapshot=use_snapshot)
+    result = await _kb_search(db, "booking_billing", "", top_k=20)
     items = result.get("items") or []
     cards: List[RoomCardSchema] = []
     for item in items:
@@ -114,7 +121,7 @@ async def _enrich_cards_with_kb(
     """Spec: PMS 資料為主，FAQ_KB 資料補充房型圖片與特色描述。"""
     if db is None or not cards:
         return cards
-    result = await _kb_search(db, "booking_billing", "", top_k=20, use_snapshot=True)
+    result = await _kb_search(db, "booking_billing", "", top_k=20)
     items = result.get("items") or []
     # Build lookup by room name
     kb_by_name: Dict[str, dict] = {}
@@ -169,9 +176,9 @@ _ROOM_FIELDS = ["房型名稱", "房型特色", "房價", "人數", "間數", "u
 
 async def _kb_search(
     db: AsyncSession, category: str, query: str, top_k: int = 6,
-    test_mode: bool = False, use_snapshot: bool = False,
+    test_mode: bool = False,
 ) -> dict:
-    from app.models.faq import FaqCategory, FaqRule, FaqRuleVersion, FaqRuleTag
+    from app.models.faq import FaqCategory, FaqRule
 
     cat_name = _CATEGORY_NAME_MAP.get(category)
     if not cat_name:
@@ -185,63 +192,23 @@ async def _kb_search(
     if not cat:
         return {"ok": True, "category": category, "query": query, "items": []}
 
+    # 測試模式：讀 draft + active；正式模式：只讀 active
+    allowed_statuses = ["draft", "active"] if test_mode else ["active"]
+
+    rule_result = await db.execute(
+        select(FaqRule)
+        .where(
+            FaqRule.category_id == cat.id,
+            FaqRule.status.in_(allowed_statuses),
+            FaqRule.is_enabled_filter(),
+        )
+        .options(selectinload(FaqRule.tags))
+        .order_by(FaqRule.created_at)
+    )
+    rules = rule_result.scalars().all()
+
     rows = []
-
-    if use_snapshot:
-        # 正式模式：讀 FaqRuleVersion 最新快照（發佈凍結版本）
-        from sqlalchemy import func
-        # 每條規則取最大 version_number 的快照
-        latest_ver_sub = (
-            select(
-                FaqRuleVersion.rule_id,
-                func.max(FaqRuleVersion.version_number).label("max_ver"),
-            )
-            .group_by(FaqRuleVersion.rule_id)
-            .subquery()
-        )
-        ver_result = await db.execute(
-            select(FaqRuleVersion, FaqRule)
-            .join(FaqRule, FaqRuleVersion.rule_id == FaqRule.id)
-            .join(
-                latest_ver_sub,
-                (FaqRuleVersion.rule_id == latest_ver_sub.c.rule_id)
-                & (FaqRuleVersion.version_number == latest_ver_sub.c.max_ver),
-            )
-            .where(FaqRule.category_id == cat.id, FaqRule.is_enabled_filter())
-            .options(selectinload(FaqRule.tags))
-        )
-        for ver, rule in ver_result.all():
-            c = ver.content_json
-            if isinstance(c, str):
-                try:
-                    c = json.loads(c)
-                except Exception:
-                    c = {}
-            row = dict(c or {})
-            row["tags"] = [t.tag_name for t in (rule.tags or [])]
-            row["_rule_id"] = rule.id
-            rows.append(row)
-    else:
-        # 測試模式：讀 FaqRule（draft + active），僅啟用的規則
-        # 正式非快照模式：只讀 active 且啟用的
-        if test_mode:
-            allowed_statuses = ["draft", "active"]
-        else:
-            allowed_statuses = ["active"]
-
-        rule_result = await db.execute(
-            select(FaqRule)
-            .where(
-                FaqRule.category_id == cat.id,
-                FaqRule.status.in_(allowed_statuses),
-                FaqRule.is_enabled_filter(),
-            )
-            .options(selectinload(FaqRule.tags))
-            .order_by(FaqRule.created_at)
-        )
-        rules = rule_result.scalars().all()
-
-        for rule in rules:
+    for rule in rules:
             c = rule.content_json
             if isinstance(c, str):
                 try:
@@ -611,7 +578,7 @@ def _build_system_prompt_for(today: date) -> str:
 
     return f"""今天日期：{today_str}
 若客人只提供月/日，請以「今年」為準。日期判斷：今天（含）及未來日期都是有效入住日，只有嚴格早於今天的日期才算「已過期」。
-你是力麗飯店親切的客服機器人，個性熱情有趣，協助旅客查詢房況與訂房。
+你是飯店親切的客服機器人，個性熱情有趣，協助旅客查詢房況與訂房。
 
 你會收到整段對話紀錄（包含先前訊息），請務必綜合上下文，不要重複追問已提供的資訊。
 
@@ -634,6 +601,7 @@ def _build_system_prompt_for(today: date) -> str:
 
 房況查詢規則：
 {pms_rule}
+- 呼叫 query_pms_availability 時，roomtype 參數只在客人指定了「確切房型名稱」（例如「森森系雙人房」「琴香古韻」）時才傳；若客人只說「雙人房」「四人房」等通稱，不要傳 roomtype，讓系統回傳所有適合的房型供客人選擇
 - 客人指定多種房型組合（例如「四人房 1 間、雙人房 3 間」）時，呼叫 query_pms_mixed_availability
 - 依 all_available 與 items 回答是否可行；可行時回覆每種房型間數
 
@@ -887,7 +855,7 @@ class ChatbotService:
 
                 if fn_name == "kb_search":
                     if db is not None:
-                        result = await _kb_search(db, args.get("category", ""), args.get("query", ""), test_mode=test_mode, use_snapshot=not test_mode)
+                        result = await _kb_search(db, args.get("category", ""), args.get("query", ""), test_mode=test_mode)
                     else:
                         result = {"ok": False, "error": "database session not available", "items": []}
                 elif fn_name == "query_pms_availability":
@@ -920,8 +888,6 @@ class ChatbotService:
 
     async def _deduct_tokens(self, db: AsyncSession, tokens_used: int) -> None:
         """扣除 AiTokenUsage 額度"""
-        from app.models.faq import AiTokenUsage, Industry
-
         ind_result = await db.execute(
             select(Industry).where(Industry.is_active == True).limit(1)  # noqa: E712
         )
@@ -1707,6 +1673,305 @@ class ChatbotService:
 
     def _has_member_profile(self, session: ChatbotSessionState) -> bool:
         return bool(session.member_name and session.member_phone)
+
+
+    # ------------------------------------------------------------------
+    # LINE / 會員聊天室 AI 回覆
+    # ------------------------------------------------------------------
+
+    async def chat(
+        self,
+        db: AsyncSession,
+        message: str,
+        line_uid: Optional[str] = None,
+        industry_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        會員聊天室 AI 入口（LINE / Facebook / Webchat）
+
+        與 handle_message() 共用同一套 LLM + tools，差異：
+        - 對話歷史從 DB 讀取（非記憶體 session）
+        - 自動貼標籤（根據 AI 引用的規則）
+        - 不走訂房流程（confirm_room / save_member 回「不適用」）
+        """
+        # 1. Token 額度檢查
+        token_usage = await self._get_token_usage(db, industry_id)
+        if token_usage is None:
+            return self._chat_error("系統尚未設定產業資料")
+        if isinstance(token_usage, dict):
+            return token_usage  # exhausted error
+
+        # 2. 組裝 messages
+        messages: List[Dict[str, Any]] = [
+            {"role": "system", "content": _build_system_prompt()}
+        ]
+        if line_uid:
+            history = await self._get_conversation_history(db, line_uid, limit=10)
+            messages.extend(history)
+        messages.append({"role": "user", "content": message})
+
+        # 3. Tool Calling 迴圈
+        total_tokens_used, reply, referenced_rule_ids = await self._tool_calling_loop(
+            messages, db=db, test_mode=False, collect_rule_ids=True,
+        )
+
+        # 4. 扣除 token + 自動貼標籤
+        if token_usage and total_tokens_used > 0:
+            token_usage.used_amount += total_tokens_used
+            await db.flush()
+
+        auto_tags = await self._auto_tag_member(db, line_uid, referenced_rule_ids)
+
+        return {
+            "reply": reply,
+            "tokens_used": total_tokens_used,
+            "referenced_rules": [{"rule_id": rid} for rid in referenced_rule_ids],
+            "auto_tags": auto_tags,
+            "token_exhausted": False,
+        }
+
+    async def test_chat(
+        self,
+        db: AsyncSession,
+        message: str,
+    ) -> Dict[str, Any]:
+        """測試聊天（讀 draft + active，扣 token，不貼 tag）"""
+        token_usage = await self._get_token_usage(db, check_exhausted=False)
+
+        messages: List[Dict[str, Any]] = [
+            {"role": "system", "content": _build_system_prompt()},
+            {"role": "user", "content": message},
+        ]
+
+        total_tokens_used, reply, _ = await self._tool_calling_loop(
+            messages, db=db, test_mode=True, collect_rule_ids=False,
+        )
+
+        if token_usage and not isinstance(token_usage, dict) and total_tokens_used > 0:
+            token_usage.used_amount += total_tokens_used
+            await db.flush()
+
+        return {
+            "reply": reply,
+            "tokens_used": total_tokens_used,
+            "referenced_rules": [],
+            "auto_tags": [],
+        }
+
+    # ------------------------------------------------------------------
+    # Shared helpers for chat / test_chat
+    # ------------------------------------------------------------------
+
+    async def _tool_calling_loop(
+        self,
+        messages: List[Dict[str, Any]],
+        *,
+        db: AsyncSession,
+        test_mode: bool = False,
+        collect_rule_ids: bool = False,
+    ) -> Tuple[int, str, List[int]]:
+        """共用 Tool Calling 迴圈，回傳 (total_tokens, reply, referenced_rule_ids)"""
+        client = self._get_openai()
+        total_tokens_used = 0
+        max_loops = 5
+        reply = ""
+        rule_id_set: set = set()
+
+        for _ in range(max_loops):
+            resp = await client.chat.completions.create(
+                model=settings.OPENAI_MODEL,
+                messages=messages,
+                tools=_get_tools(),
+                tool_choice="auto",
+                timeout=30,
+            )
+            if resp.usage:
+                total_tokens_used += resp.usage.total_tokens
+
+            msg = resp.choices[0].message
+
+            if not msg.tool_calls:
+                reply = msg.content or ""
+                break
+
+            messages.append(msg)
+            for tc in msg.tool_calls:
+                fn_name = tc.function.name
+                args = json.loads(tc.function.arguments)
+                result = await self._execute_chat_tool(db, fn_name, args, test_mode=test_mode)
+
+                # 收集 kb_search 引用的規則 IDs，清理內部欄位
+                if collect_rule_ids and fn_name == "kb_search" and isinstance(result, dict):
+                    rule_id_set.update(result.get("rule_ids", []))
+                    llm_result = {k: v for k, v in result.items() if k != "rule_ids"}
+                    llm_result["items"] = [
+                        {k: v for k, v in item.items() if k != "_rule_id"}
+                        for item in llm_result.get("items", [])
+                    ]
+                else:
+                    llm_result = result
+
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": json.dumps(llm_result, ensure_ascii=False),
+                })
+        else:
+            reply = "很抱歉，系統暫時無法回應，請稍後再試。"
+
+        return total_tokens_used, reply, list(rule_id_set)
+
+    async def _execute_chat_tool(
+        self,
+        db: AsyncSession,
+        fn_name: str,
+        args: Dict[str, Any],
+        test_mode: bool = False,
+    ) -> Any:
+        """會員聊天室用的 tool executor（無 session 狀態）"""
+        if fn_name == "kb_search":
+            return await _kb_search(
+                db, args.get("category", ""), args.get("query", ""),
+                test_mode=test_mode,
+            )
+        elif fn_name == "query_pms_availability":
+            return await self._run_pms_tool_simple(args)
+        elif fn_name == "query_pms_mixed_availability":
+            return await self._run_mixed_avail_tool(args)
+        else:
+            return {"info": "此功能僅在網站訂房時可用"}
+
+    async def _run_pms_tool_simple(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """PMS 查詢（簡化版，不操作 session 狀態）"""
+        startdate = str(args.get("startdate", ""))
+        enddate = str(args.get("enddate", ""))
+        housingcnt = int(args.get("housingcnt") or 2)
+
+        if not is_pms_enabled():
+            return {"error": "PMS 未串接", "rooms": []}
+
+        try:
+            raw = await asyncio.to_thread(query_pms, startdate, enddate, None, housingcnt)
+            rooms = raw.get("room", []) if isinstance(raw, dict) else []
+            result_rooms = []
+            for room in rooms:
+                code = room.get("roomtype", "")
+                data_rows = room.get("data", []) or []
+                if not data_rows:
+                    continue
+                price = data_rows[0].get("price", 0)
+                remain = min((d.get("remain", 0) for d in data_rows), default=0)
+                result_rooms.append({
+                    "room_type_code": code,
+                    "price": price,
+                    "available_count": remain,
+                })
+            return {"ok": True, "rooms": result_rooms}
+        except Exception as exc:
+            logger.warning(f"PMS 查詢失敗：{exc}")
+            return {"error": f"PMS 查詢失敗：{exc}", "rooms": []}
+
+    async def _get_token_usage(
+        self, db: AsyncSession, industry_id: Optional[int] = None, check_exhausted: bool = True,
+    ) -> Any:
+        """取得 token 額度。回傳 AiTokenUsage | None（無產業）| dict（額度用完 error）"""
+        if not industry_id:
+            ind_result = await db.execute(
+                select(Industry).where(Industry.is_active == True).limit(1)  # noqa: E712
+            )
+            industry = ind_result.scalar_one_or_none()
+            if not industry:
+                return None
+            industry_id = industry.id
+
+        usage_result = await db.execute(
+            select(AiTokenUsage).where(AiTokenUsage.industry_id == industry_id)
+        )
+        token_usage = usage_result.scalar_one_or_none()
+
+        if check_exhausted and token_usage and token_usage.total_quota > 0:
+            if token_usage.used_amount >= token_usage.total_quota:
+                return self._chat_error(
+                    "AI Token 額度已用完，系統已降級至關鍵字回覆模式。",
+                    token_exhausted=True,
+                )
+
+        return token_usage
+
+    async def _get_conversation_history(
+        self, db: AsyncSession, line_uid: str, limit: int = 10
+    ) -> List[Dict[str, str]]:
+        """從 conversation_messages 取得近 N 輪對話歷史"""
+        stmt = (
+            select(ConversationMessage)
+            .where(ConversationMessage.thread_id == line_uid)
+            .order_by(ConversationMessage.created_at.desc())
+            .limit(limit * 2 + 1)
+        )
+        result = await db.execute(stmt)
+        msgs = result.scalars().all()
+
+        if not msgs:
+            return []
+
+        # 排除最新一筆 incoming（LINE App 在呼叫 AI 前已存入 DB）
+        if msgs[0].role == "user":
+            msgs = msgs[1:]
+
+        return [
+            {"role": m.role, "content": m.content}
+            for m in reversed(msgs) if m.content
+        ]
+
+    async def _auto_tag_member(
+        self, db: AsyncSession, line_uid: Optional[str], referenced_rule_ids: List[int],
+    ) -> List[str]:
+        """自動為會員貼標籤（只貼 AI 當次引用的規則標籤）"""
+        if not line_uid or not referenced_rule_ids:
+            return []
+
+        member_result = await db.execute(
+            select(Member).where(Member.line_uid == line_uid)
+        )
+        member = member_result.scalar_one_or_none()
+        if not member:
+            return []
+
+        tag_result = await db.execute(
+            select(FaqRuleTag.tag_name)
+            .where(FaqRuleTag.rule_id.in_(referenced_rule_ids))
+            .distinct()
+        )
+        tag_names = {t for (t,) in tag_result.all()}
+        if not tag_names:
+            return []
+
+        existing_result = await db.execute(
+            select(MemberTag.tag_name).where(
+                MemberTag.member_id == member.id,
+                MemberTag.tag_name.in_(tag_names),
+                MemberTag.message_id == None,  # noqa: E711
+            )
+        )
+        existing_tags = {t for (t,) in existing_result.all()}
+
+        tagged: List[str] = []
+        for tag_name in tag_names - existing_tags:
+            db.add(MemberTag(member_id=member.id, tag_name=tag_name, tag_source="AI"))
+            tagged.append(tag_name)
+        if tagged:
+            await db.flush()
+        return tagged
+
+    @staticmethod
+    def _chat_error(message: str, token_exhausted: bool = False) -> Dict[str, Any]:
+        return {
+            "reply": message,
+            "tokens_used": 0,
+            "referenced_rules": [],
+            "auto_tags": [],
+            "token_exhausted": token_exhausted,
+        }
 
 
 chatbot_service = ChatbotService()

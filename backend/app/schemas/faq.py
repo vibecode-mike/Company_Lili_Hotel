@@ -109,21 +109,6 @@ class FaqRuleListSchema(BaseModel):
         from_attributes = True
 
 
-# === FaqRuleVersion ===
-
-class FaqRuleVersionSchema(BaseModel):
-    """規則版本"""
-
-    id: int
-    rule_id: int
-    content_json: Dict[str, Any]
-    status: str
-    version_number: int
-    snapshot_at: datetime
-
-    class Config:
-        from_attributes = True
-
 
 # === AiTokenUsage ===
 

@@ -1,16 +1,15 @@
 """
-AI 聊天 API
+AI 聊天 API — 會員聊天室用（LINE / Facebook / Webchat）
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.schemas.faq import AiChatRequestSchema
-from app.services.ai_chat_service import AiChatService
+from app.services.chatbot_service import chatbot_service
 import logging
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-ai_chat_service = AiChatService()
 
 
 @router.post("/chat", response_model=dict)
@@ -25,7 +24,7 @@ async def ai_chat(
     不需要 CRM 後台登入，但需要提供 line_uid。
     """
     try:
-        result = await ai_chat_service.chat(
+        result = await chatbot_service.chat(
             db=db,
             message=data.message,
             line_uid=data.line_uid,

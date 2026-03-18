@@ -158,45 +158,12 @@ class FaqRule(Base):
     creator = relationship("User", foreign_keys=[created_by])
     updater = relationship("User", foreign_keys=[updated_by])
     publisher = relationship("User", foreign_keys=[published_by])
-    versions = relationship(
-        "FaqRuleVersion",
-        back_populates="rule",
-        cascade="all, delete-orphan",
-    )
     tags = relationship(
         "FaqRuleTag",
         back_populates="rule",
         cascade="all, delete-orphan",
     )
 
-
-class FaqRuleVersion(Base):
-    """FAQ 規則版本快照表"""
-
-    __tablename__ = "faq_rule_versions"
-
-    rule_id = Column(
-        BigInteger,
-        ForeignKey("faq_rules.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-        comment="所屬規則 ID",
-    )
-    content_json = Column(Text, nullable=False, comment="版本內容快照 JSON")
-    status = Column(
-        String(20), nullable=False, comment="快照時的規則狀態"
-    )
-    version_number = Column(
-        Integer, nullable=False, default=1, comment="版本號"
-    )
-    snapshot_at = Column(DateTime, nullable=False, comment="快照建立時間")
-
-    __table_args__ = (
-        Index("ix_faq_rule_versions_rule_version", "rule_id", "version_number"),
-    )
-
-    # 關聯關係
-    rule = relationship("FaqRule", back_populates="versions")
 
 
 class FaqRuleTag(Base):

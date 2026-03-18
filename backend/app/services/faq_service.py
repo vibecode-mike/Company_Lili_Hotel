@@ -14,7 +14,6 @@ from app.models.faq import (
     FaqCategory,
     FaqCategoryField,
     FaqRule,
-    FaqRuleVersion,
     FaqRuleTag,
     AiTokenUsage,
     AiToneConfig,
@@ -25,7 +24,6 @@ from app.models.chatbot_booking import FaqPmsConnection
 logger = logging.getLogger(__name__)
 
 MAX_RULES_PER_CATEGORY = 20
-MAX_VERSIONS_PER_RULE = 2
 
 # PMS 串接啟用時，這些欄位由 PMS 自動帶入，後台不可手動修改
 PMS_READONLY_FIELDS = {"房價", "間數", "人數", "url"}
@@ -246,96 +244,23 @@ class FaqService:
         await db.flush()
         return True
 
-    # === 發佈與版本 ===
+    # === 發佈 ===
 
     async def publish_rule(
         self, db: AsyncSession, rule_id: int, user_id: int
     ) -> Optional[FaqRule]:
-        """發佈規則（建立版本快照）"""
+        """發佈規則（將 status 設為 active）"""
         rule = await self.get_rule(db, rule_id)
         if not rule:
             return None
 
         now = datetime.now(timezone.utc)
-
-        # 取得目前最大版本號
-        ver_stmt = (
-            select(func.max(FaqRuleVersion.version_number))
-            .where(FaqRuleVersion.rule_id == rule_id)
-        )
-        ver_result = await db.execute(ver_stmt)
-        max_ver = ver_result.scalar() or 0
-
-        # 建立新版本快照
-        version = FaqRuleVersion(
-            rule_id=rule_id,
-            content_json=rule.content_json,
-            status="active",
-            version_number=max_ver + 1,
-            snapshot_at=now,
-        )
-        db.add(version)
-
-        # 保留最多 MAX_VERSIONS_PER_RULE 版本（刪除舊版）
-        all_ver_stmt = (
-            select(FaqRuleVersion)
-            .where(FaqRuleVersion.rule_id == rule_id)
-            .order_by(FaqRuleVersion.version_number.desc())
-        )
-        all_ver_result = await db.execute(all_ver_stmt)
-        all_versions = all_ver_result.scalars().all()
-
-        if len(all_versions) >= MAX_VERSIONS_PER_RULE:
-            for old_ver in all_versions[MAX_VERSIONS_PER_RULE - 1:]:
-                await db.delete(old_ver)
-
-        # 更新規則狀態
         rule.status = "active"
         rule.published_at = now
         rule.published_by = user_id
 
         await db.flush()
         return rule
-
-    async def revert_rule(
-        self, db: AsyncSession, rule_id: int
-    ) -> Optional[FaqRule]:
-        """回復至上一版本"""
-        rule = await self.get_rule(db, rule_id)
-        if not rule:
-            return None
-
-        # 取得上一個版本
-        ver_stmt = (
-            select(FaqRuleVersion)
-            .where(FaqRuleVersion.rule_id == rule_id)
-            .order_by(FaqRuleVersion.version_number.desc())
-            .offset(0)
-            .limit(1)
-        )
-        ver_result = await db.execute(ver_stmt)
-        prev_version = ver_result.scalar_one_or_none()
-
-        if not prev_version:
-            raise ValueError("沒有可回復的版本")
-
-        rule.content_json = prev_version.content_json
-        rule.status = "draft"
-
-        await db.flush()
-        return rule
-
-    async def get_rule_versions(
-        self, db: AsyncSession, rule_id: int
-    ) -> List[FaqRuleVersion]:
-        """取得版本歷史"""
-        stmt = (
-            select(FaqRuleVersion)
-            .where(FaqRuleVersion.rule_id == rule_id)
-            .order_by(FaqRuleVersion.version_number.desc())
-        )
-        result = await db.execute(stmt)
-        return list(result.scalars().all())
 
     # === Token 用量 ===
 
@@ -481,7 +406,7 @@ class FaqService:
     async def publish_all_draft(
         self, db: AsyncSession, user_id: int
     ) -> int:
-        """發佈所有 draft 規則（批次建立 FaqRuleVersion 快照），回傳發佈數量"""
+        """發佈所有 draft 規則，回傳發佈數量"""
         from datetime import datetime, timezone
 
         # 發佈所有啟用的 draft 規則（停用規則不建立快照）
@@ -492,36 +417,6 @@ class FaqService:
         now = datetime.now(timezone.utc)
         count = 0
         for rule in rules:
-            # 取得目前最大版本號
-            ver_stmt = (
-                select(func.max(FaqRuleVersion.version_number))
-                .where(FaqRuleVersion.rule_id == rule.id)
-            )
-            ver_result = await db.execute(ver_stmt)
-            max_ver = ver_result.scalar() or 0
-
-            # 建立版本快照（spec 第九部分）
-            version = FaqRuleVersion(
-                rule_id=rule.id,
-                content_json=rule.content_json,
-                status="active",
-                version_number=max_ver + 1,
-                snapshot_at=now,
-            )
-            db.add(version)
-
-            # 保留最多 MAX_VERSIONS_PER_RULE 版本
-            all_ver_stmt = (
-                select(FaqRuleVersion)
-                .where(FaqRuleVersion.rule_id == rule.id)
-                .order_by(FaqRuleVersion.version_number.desc())
-            )
-            all_ver_result = await db.execute(all_ver_stmt)
-            all_versions = all_ver_result.scalars().all()
-            if len(all_versions) >= MAX_VERSIONS_PER_RULE:
-                for old_ver in all_versions[MAX_VERSIONS_PER_RULE - 1:]:
-                    await db.delete(old_ver)
-
             rule.status = "active"
             rule.published_at = now
             rule.published_by = user_id
