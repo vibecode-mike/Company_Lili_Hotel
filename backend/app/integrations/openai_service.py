@@ -56,7 +56,7 @@ class OpenAIService:
         messages = [
             {
                 "role": "system",
-                "content": "你是力麗飯店的客服助手。請用專業、友善的語氣回答顧客的問題。",
+                "content": "你是飯店的客服助手。請用專業、友善的語氣回答顧客的問題。",
             }
         ]
 
@@ -75,7 +75,7 @@ class OpenAIService:
     ) -> Optional[str]:
         """生成行銷內容"""
         prompt = f"""
-        請為力麗飯店生成一則行銷訊息：
+        請為飯店生成一則行銷訊息：
         - 主題：{topic}
         - 目標受眾：{target_audience}
         - 風格：{style}

@@ -186,8 +186,8 @@ def upgrade() -> None:
     # AiToneConfig: 專業 (active), 真人
     op.execute(
         f"INSERT INTO ai_tone_configs (tone_type, tone_name, prompt_text, is_active, created_at) VALUES "
-        f"('professional', '專業', '你是力麗飯店的專業客服人員。請使用正式、專業的語氣回答顧客的問題。回答應簡潔明瞭，提供準確的資訊。', 1, '{now}'), "
-        f"('casual', '真人', '你是力麗飯店的親切客服人員。請使用輕鬆、友善的口吻回答顧客的問題，就像跟朋友聊天一樣自然。適當使用口語化表達。', 0, '{now}')"
+        f"('professional', '專業', '你是飯店的專業客服人員。請使用正式、專業的語氣回答顧客的問題。回答應簡潔明瞭，提供準確的資訊。', 1, '{now}'), "
+        f"('casual', '真人', '你是飯店的親切客服人員。請使用輕鬆、友善的口吻回答顧客的問題，就像跟朋友聊天一樣自然。適當使用口語化表達。', 0, '{now}')"
     )
 
     # AiTokenUsage: 旅宿業初始額度

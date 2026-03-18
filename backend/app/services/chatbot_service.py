@@ -12,7 +12,7 @@ import re
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 from threading import Lock
 from typing import Any, Dict, List, Literal, Optional, Tuple
@@ -388,17 +388,17 @@ _PMS_TOOL = {
     "function": {
         "name": "query_pms_availability",
         "description": (
-            "查詢 PMS 即時房況。需要入住日、退房日、每間人數。"
-            "入住日、退房日、幾間幾人房都確認後才呼叫此工具。"
+            "查詢即時房況。只要知道入住日就立刻呼叫，不要追問客人確認。"
+            "客人沒說退房日就填入住日+1天；沒說人數就從房型推斷（雙人房填2、四人房填4）或預設填2。"
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "startdate": {"type": "string", "description": "入住日期 YYYY-MM-DD"},
-                "enddate": {"type": "string", "description": "退房日期 YYYY-MM-DD"},
+                "enddate": {"type": "string", "description": "退房日期 YYYY-MM-DD（未提供則填入住日+1天）"},
                 "housingcnt": {
                     "type": "integer",
-                    "description": "每間房入住人數（大人）",
+                    "description": "每間房入住人數，雙人房=2、四人房=4、未知預設2",
                 },
                 "roomtype": {
                     "type": "string",
@@ -558,9 +558,7 @@ def _build_system_prompt_for(today: date) -> str:
     today_str = today.strftime("%Y-%m-%d")
     if is_pms_enabled():
         pms_rule = (
-            "- 入住日、退房日、幾間幾人房都已明確時，才呼叫 query_pms_availability\n"
-            "- 若只有日期但缺少幾間幾人房，先詢問旅客再查詢\n"
-            "- 若月/日未指定年份，以今年為準\n"
+            "- 能推斷出入住日就可以呼叫 query_pms_availability（退房日預設入住日+1天，間數預設1間，人數從房型推斷）\n"
             "- 若入住日期嚴格早於今天（不含今天），不要查詢房況，直接提醒旅客「您提供的日期已過，請重新提供入住日期」；今天當天是有效入住日\n"
             "- 工具回傳後，簡短列出可用房型、間數、價格\n"
             "- 若查無房型，告知並詢問是否調整日期或人數\n"
@@ -569,18 +567,23 @@ def _build_system_prompt_for(today: date) -> str:
     else:
         pms_rule = (
             "- 目前無即時房況系統，但仍需呼叫 query_pms_availability 取得靜態參考房價\n"
-            "- 入住日、退房日、幾間幾人房都已明確時，才呼叫 query_pms_availability\n"
-            "- 若只有日期但缺少幾間幾人房，先詢問旅客再查詢\n"
-            "- 若月/日未指定年份，以今年為準\n"
+            "- 能推斷出入住日就可以呼叫 query_pms_availability（退房日預設入住日+1天，間數預設1間，人數從房型推斷）\n"
             "- 若入住日期嚴格早於今天（不含今天），不要查詢房況，直接提醒旅客「您提供的日期已過，請重新提供入住日期」；今天當天是有效入住日\n"
             "- 工具回傳後，簡短列出可用房型與參考價格，標明為「一般參考房價」"
         )
 
     return f"""今天日期：{today_str}
-若客人只提供月/日，請以「今年」為準。日期判斷：今天（含）及未來日期都是有效入住日，只有嚴格早於今天的日期才算「已過期」。
 你是飯店親切的客服機器人，個性熱情有趣，協助旅客查詢房況與訂房。
 
 你會收到整段對話紀錄（包含先前訊息），請務必綜合上下文，不要重複追問已提供的資訊。
+
+核心行為規則（最高優先，嚴格遵守）：
+- 只要能推斷出入住日，就立刻呼叫 query_pms_availability，不要追問任何確認
+- 預設值：退房日 = 入住日 + 1 天（住一晚）、間數 = 1 間、人數從房型推斷（雙人房=2、四人房=4）
+- 客人只提供月/日時，直接當作今年，不要反問年份
+- 「今天入住」→ startdate={today_str}、enddate 自動算明天
+- 「還有X房嗎」「有沒有X房」→ 查詢房況，直接呼叫 query_pms_availability
+- 今天（含）及未來日期都是有效入住日，只有嚴格早於今天的日期才算「已過期」
 
 知識庫查詢規則：
 - 客人詢問設施（游泳池、停車場、餐廳位置、費用、開放時間等）時，先呼叫 kb_search(category="facilities")
@@ -594,10 +597,13 @@ def _build_system_prompt_for(today: date) -> str:
 
 訂房引導規則：
 - 若客人說「今天入住」且沒說退房日，預設住一晚（退房=明天）
-- 需要資訊：入住日、退房日、幾間幾人房（例如「1間2人房」「2間4人房」）
-- 若客人只給日期沒說幾間幾人房，務必先詢問「請問您想訂幾間幾人房呢？」再查房況
-- 若客人只說人數（例如「2位」）但沒說幾間，回問「請問是1間2人房嗎？」以確認
-- 不要重複追問已回答過的資訊
+- 若客人沒說幾間，預設 1 間
+- 「雙人房」=2人房、「四人房」=4人房、「家庭房」=4人房、「單人房」=1人房，不需要再確認人數
+- 「還有X房嗎」「有沒有X房」= 查詢房況，預設 1 間，直接查詢不要追問
+- 資訊齊全時，立刻呼叫 query_pms_availability，嚴禁再追問確認
+- 範例：「3/18入住一晚 一間雙人房」→ startdate=今年3/18, enddate=今年3/19, housingcnt=2 → 直接查
+- 範例：「今天入住 還有雙人房嗎」→ startdate=今天, enddate=明天, housingcnt=2 → 直接查
+- 只有在完全無法推斷入住日期時才追問
 
 房況查詢規則：
 {pms_rule}
@@ -614,10 +620,9 @@ def _build_system_prompt_for(today: date) -> str:
 - 簡短、清楚、條列優先
 - 語氣親切有溫度，適時加入輕鬆的語氣詞
 - 不要瞎編；不知道就說不知道
-- 房況查詢結果：系統會自動顯示房卡（含房型名稱、價格、間數），你的回覆只需一句話說明結果即可
+- 嚴禁提及「房卡」「下方房卡」「下方的房型」，除非你在本次回覆中確實呼叫了 query_pms_availability 並取得結果
+- 若你有呼叫 query_pms_availability 且成功取得房型資料，只需簡短回覆一句（例如「有多種雙人房可選，請參考以下房型！」），系統會自動顯示房卡
 - 嚴禁在文字中列出房型名稱清單、價格、間數等資訊，這些房卡已包含
-- 好的回覆範例：「有多種雙人房可選，請看下方房卡！」「目前沒有 10 人房，以下是其他可選房型供您參考。」
-- 壞的回覆範例（禁止）：「以下幾個房型：- 望空間尊親房 - 森森系雙人房 ...」
 - 若對方使用中文，一律使用台灣繁體中文回覆，嚴禁出現簡體中文字"""
 
 
@@ -670,6 +675,29 @@ class ChatbotSessionState:
         if not self.checkout_date:
             return None
         return datetime.strptime(self.checkout_date, "%Y-%m-%d").date()
+
+
+# ---------------------------------------------------------------------------
+# Tool calling context (shared between website chatbot & member chat)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ToolCallingContext:
+    """Tool calling 共用上下文，與 session 儲存方式解耦"""
+    db: Optional[AsyncSession] = None
+    test_mode: bool = False
+    collect_rule_ids: bool = False
+    # 訂房狀態（PMS tool 會修改）
+    checkin_date: Optional[str] = None
+    checkout_date: Optional[str] = None
+    booking_adults: Optional[int] = None
+    # 輸出
+    room_cards: List[RoomCardSchema] = field(default_factory=list)
+    referenced_rule_ids: set = field(default_factory=set)
+    total_tokens_used: int = 0
+    pms_called: bool = False
+    # 官網 session 參照（僅官網 chatbot 使用）
+    _session: Optional[ChatbotSessionState] = field(default=None, repr=False)
 
 
 # ---------------------------------------------------------------------------
@@ -766,25 +794,70 @@ class ChatbotService:
 
         # Deterministic extraction: dates (with past-date guard)
         past_date_warning: Optional[str] = None
-        if not room_plan:  # only parse dates when not parsing room plan
+        try:
             dates = self._extract_dates(message)
-            if dates:
-                checkin_str, checkout_str = dates
-                checkin_obj = date.fromisoformat(checkin_str)
-                today = datetime.now(ZoneInfo("Asia/Taipei")).date()
-                if checkin_obj < today:
-                    # Spec: 過去日期 → 回覆警告，不更新 booking_context
-                    past_date_warning = "您輸入的日期已過，請重新提供入住與退房日期。"
-                else:
-                    session.checkin_date = checkin_str
-                    session.checkout_date = checkout_str
+        except Exception as e:
+            logger.warning(f"Date extraction failed: {e}")
+            dates = None
+        if dates:
+            checkin_str, checkout_str = dates
+            checkin_obj = date.fromisoformat(checkin_str)
+            today = datetime.now(ZoneInfo("Asia/Taipei")).date()
+            if checkin_obj < today:
+                past_date_warning = "您輸入的日期已過，請重新提供入住與退房日期。"
+            else:
+                session.checkin_date = checkin_str
+                session.checkout_date = checkout_str
+
+        # Build unified tool calling context
+        ctx = ToolCallingContext(
+            db=db, test_mode=test_mode,
+            checkin_date=session.checkin_date,
+            checkout_date=session.checkout_date,
+            booking_adults=session.booking_adults,
+            _session=session,
+        )
 
         # Call LLM with tool calling (if no deterministic reply needed)
         if past_date_warning:
             reply = past_date_warning
-            room_cards = []
+            room_cards: List[RoomCardSchema] = []
         else:
-            reply, room_cards = await self._llm_reply(session, db=db, test_mode=test_mode)
+            messages: List[Dict[str, Any]] = [
+                {"role": "system", "content": _build_system_prompt()},
+                *session.history,
+            ]
+            reply = await self._unified_tool_loop(messages, ctx)
+            room_cards = ctx.room_cards
+            # 同步 ctx 狀態回 session
+            if ctx.checkin_date is not None:
+                session.checkin_date = ctx.checkin_date
+            if ctx.checkout_date is not None:
+                session.checkout_date = ctx.checkout_date
+            if ctx.booking_adults is not None:
+                session.booking_adults = ctx.booking_adults
+            # token 扣除
+            if db is not None and ctx.total_tokens_used > 0:
+                await self._deduct_tokens(db, ctx.total_tokens_used)
+
+        # Fallback: LLM didn't call PMS tool but we have enough info → query PMS ourselves
+        if not room_cards and not ctx.pms_called and session.checkin_date and session.checkout_date:
+            adults = 2
+            if session.room_plan_requests:
+                adults = session.room_plan_requests[0].get("adults_per_room", 2)
+            try:
+                ctx.checkin_date = session.checkin_date
+                ctx.checkout_date = session.checkout_date
+                ctx.booking_adults = adults
+                _, fallback_cards = await self._run_pms_tool(
+                    {"startdate": session.checkin_date, "enddate": session.checkout_date, "housingcnt": adults},
+                    ctx,
+                )
+                logger.info(f"[Fallback] PMS returned {len(fallback_cards)} cards")
+                if fallback_cards:
+                    room_cards = fallback_cards
+            except Exception as e:
+                logger.warning(f"[Fallback] PMS query error: {e}")
 
         if room_cards:
             session.last_room_cards = room_cards
@@ -813,79 +886,6 @@ class ChatbotService:
             booking_context=self._booking_context(session),
         )
 
-    # ------------------------------------------------------------------
-    # LLM reply with tool calling
-    # ------------------------------------------------------------------
-
-    async def _llm_reply(
-        self, session: ChatbotSessionState, db: Optional[AsyncSession] = None, test_mode: bool = False
-    ) -> tuple[str, List[RoomCardSchema]]:
-        client = self._get_openai()
-        messages: List[Dict[str, Any]] = [
-            {"role": "system", "content": _build_system_prompt()},
-            *session.history,
-        ]
-
-        room_cards: List[RoomCardSchema] = []
-        max_loops = 5
-        total_tokens_used = 0
-
-        for _ in range(max_loops):
-            resp = await client.chat.completions.create(
-                model=settings.OPENAI_MODEL,
-                messages=messages,
-                timeout=30,
-                tools=_get_tools(),
-                tool_choice="auto",
-            )
-            if resp.usage:
-                total_tokens_used += resp.usage.total_tokens
-            msg = resp.choices[0].message
-
-            if not msg.tool_calls:
-                if db is not None and total_tokens_used > 0:
-                    await self._deduct_tokens(db, total_tokens_used)
-                return msg.content or "", room_cards
-
-            messages.append(msg)
-            pms_called = False
-            for tc in msg.tool_calls:
-                fn_name = tc.function.name
-                args = json.loads(tc.function.arguments)
-
-                if fn_name == "kb_search":
-                    if db is not None:
-                        result = await _kb_search(db, args.get("category", ""), args.get("query", ""), test_mode=test_mode)
-                    else:
-                        result = {"ok": False, "error": "database session not available", "items": []}
-                elif fn_name == "query_pms_availability":
-                    if pms_called:
-                        # Guard against the LLM issuing duplicate PMS calls in one turn
-                        result: Any = {"error": "duplicate pms call suppressed"}
-                    else:
-                        pms_called = True
-                        result, cards = await self._run_pms_tool(args, session, db=db)
-                        if cards:
-                            room_cards = cards
-                elif fn_name == "query_pms_mixed_availability":
-                    result = await self._run_mixed_avail_tool(args)
-                elif fn_name == "confirm_room_selection":
-                    result = self._run_confirm_room_tool(args, session)
-                elif fn_name == "save_member_info":
-                    result = self._run_save_member_tool(args, session)
-                else:
-                    result = {"error": f"unknown tool {fn_name}"}
-
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": json.dumps(result, ensure_ascii=False),
-                })
-
-        if db is not None and total_tokens_used > 0:
-            await self._deduct_tokens(db, total_tokens_used)
-        return "很抱歉，系統暫時無法回應，請稍後再試。", room_cards
-
     async def _deduct_tokens(self, db: AsyncSession, tokens_used: int) -> None:
         """扣除 AiTokenUsage 額度"""
         ind_result = await db.execute(
@@ -903,11 +903,108 @@ class ChatbotService:
             token_usage.used_amount += tokens_used
             await db.flush()
 
+    # ------------------------------------------------------------------
+    # Unified tool calling (shared by website chatbot & member chat)
+    # ------------------------------------------------------------------
+
+    async def _unified_tool_loop(
+        self, messages: List[Dict[str, Any]], ctx: ToolCallingContext
+    ) -> str:
+        """單一 tool calling 迴圈，官網 & 會員聊天室共用"""
+        client = self._get_openai()
+
+        for _ in range(5):
+            pms_called = False
+            resp = await client.chat.completions.create(
+                model=settings.OPENAI_MODEL,
+                messages=messages,
+                tools=_get_tools(),
+                tool_choice="auto",
+                timeout=30,
+            )
+            if resp.usage:
+                ctx.total_tokens_used += resp.usage.total_tokens
+            msg = resp.choices[0].message
+
+            if not msg.tool_calls:
+                return msg.content or ""
+
+            messages.append(msg)
+            for tc in msg.tool_calls:
+                fn_name = tc.function.name
+                args = json.loads(tc.function.arguments)
+
+                if fn_name == "query_pms_availability" and pms_called:
+                    result: Any = {"error": "duplicate pms call suppressed"}
+                else:
+                    if fn_name == "query_pms_availability":
+                        pms_called = True
+                    result = await self._execute_tool(ctx, fn_name, args)
+
+                llm_result = self._clean_for_llm(result, fn_name, ctx.collect_rule_ids)
+
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": json.dumps(llm_result, ensure_ascii=False),
+                })
+
+        return "很抱歉，系統暫時無法回應，請稍後再試。"
+
+    async def _execute_tool(
+        self, ctx: ToolCallingContext, fn_name: str, args: Dict[str, Any]
+    ) -> Any:
+        """統一 tool executor，官網 & 會員聊天室共用"""
+        if fn_name == "kb_search":
+            if ctx.db is not None:
+                result = await _kb_search(
+                    ctx.db, args.get("category", ""), args.get("query", ""),
+                    test_mode=ctx.test_mode,
+                )
+            else:
+                result = {"ok": False, "error": "database session not available", "items": []}
+            if ctx.collect_rule_ids and isinstance(result, dict):
+                ctx.referenced_rule_ids.update(result.get("rule_ids", []))
+            return result
+        elif fn_name == "query_pms_availability":
+            ctx.pms_called = True
+            result, cards = await self._run_pms_tool(args, ctx)
+            if cards:
+                ctx.room_cards = cards
+            return result
+        elif fn_name == "query_pms_mixed_availability":
+            return await self._run_mixed_avail_tool(args)
+        elif fn_name == "confirm_room_selection":
+            if ctx._session is not None:
+                return self._run_confirm_room_tool(args, ctx._session)
+            return {"info": "此功能僅在網站訂房時可用，請前往官網完成訂房。"}
+        elif fn_name == "save_member_info":
+            if ctx._session is not None:
+                return self._run_save_member_tool(args, ctx._session)
+            return {"info": "此功能僅在網站訂房時可用，請前往官網完成訂房。"}
+        else:
+            return {"error": f"unknown tool {fn_name}"}
+
+    @staticmethod
+    def _clean_for_llm(result: Any, fn_name: str, collect_rule_ids: bool) -> Any:
+        """清理內部欄位（rule_ids, _rule_id）不讓 LLM 看到"""
+        if not (collect_rule_ids and fn_name == "kb_search" and isinstance(result, dict)):
+            return result
+        cleaned = {k: v for k, v in result.items() if k != "rule_ids"}
+        cleaned["items"] = [
+            {k: v for k, v in item.items() if k != "_rule_id"}
+            for item in cleaned.get("items", [])
+        ]
+        return cleaned
+
+    # ------------------------------------------------------------------
+    # PMS tool
+    # ------------------------------------------------------------------
+
     async def _run_pms_tool(
         self,
         args: Dict[str, Any],
-        session: ChatbotSessionState,
-        db: Optional[AsyncSession] = None,
+        ctx: ToolCallingContext,
     ) -> tuple[Dict[str, Any], List[RoomCardSchema]]:
         """Execute PMS availability query. Falls back to FAQ KB on error.
 
@@ -920,12 +1017,21 @@ class ChatbotService:
         housingcnt = int(args.get("housingcnt") or 2)
         roomtype = args.get("roomtype") or None
 
+        # Auto-fill enddate if missing (default: checkin + 1 night)
+        if startdate and not enddate:
+            try:
+                enddate = (date.fromisoformat(startdate) + timedelta(days=1)).isoformat()
+            except ValueError:
+                pass
+
         if startdate:
-            session.checkin_date = startdate
+            ctx.checkin_date = startdate
         if enddate:
-            session.checkout_date = enddate
+            ctx.checkout_date = enddate
         if housingcnt > 0:
-            session.booking_adults = housingcnt
+            ctx.booking_adults = housingcnt
+
+        db = ctx.db
 
         # PMS disabled → FAQ KB fallback (spec: _kb_search("booking_billing"))
         if not is_pms_enabled():
@@ -1573,76 +1679,113 @@ class ChatbotService:
         return None
 
     def _extract_dates(self, message: str) -> Optional[Tuple[str, str]]:
-        """Spec: 'M月D號住到M月D號' 或 'M/D到M/D' → (checkin, checkout) ISO strings。"""
-        current_year = datetime.now().year
-        from datetime import timedelta
+        """從使用者訊息中提取入住/退房日期，支援多種常見格式。"""
+        today = datetime.now(ZoneInfo("Asia/Taipei")).date()
+        current_year = today.year
 
-        # Helper: extract night count from message (e.g. "住一晚", "入住兩晚", "3晚")
+        cn_digits = {"一": 1, "二": 2, "兩": 2, "三": 3, "四": 4, "五": 5,
+                     "六": 6, "七": 7, "八": 8, "九": 9, "十": 10,
+                     "〇": 0, "零": 0}
+
+        def _cn_to_int(s: str) -> Optional[int]:
+            """中文數字轉 int：十八→18, 二十→20, 三→3"""
+            s = s.strip()
+            if not s:
+                return None
+            # 純阿拉伯數字
+            if s.isdigit():
+                return int(s)
+            result = 0
+            current = 0
+            for ch in s:
+                if ch == "十":
+                    result += (current or 1) * 10
+                    current = 0
+                elif ch in cn_digits:
+                    current = cn_digits[ch]
+                else:
+                    return None
+            return result + current if (result + current) > 0 else None
+
         def _extract_nights(msg: str) -> Optional[int]:
-            cn_digits = {"一": 1, "二": 2, "兩": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
             m_night = re.search(r"(\d+)\s*晚", msg)
             if m_night:
                 return int(m_night.group(1))
-            m_night_cn = re.search(r"([一二兩三四五六七八九十])\s*晚", msg)
+            m_night_cn = re.search(r"([一二兩三四五六七八九十]+)\s*晚", msg)
             if m_night_cn:
-                return cn_digits.get(m_night_cn.group(1), 1)
+                return _cn_to_int(m_night_cn.group(1)) or 1
             return None
 
-        # Pattern 1: "M月D號住到M月D號" or "M月D號到M月D號"
+        nights = _extract_nights(message) or 1
+
+        # --- 相對日期：今天、明天、後天、大後天 ---
+        relative_map = {"今天": 0, "今晚": 0, "今日": 0,
+                        "明天": 1, "明日": 1,
+                        "後天": 2, "后天": 2,
+                        "大後天": 3, "大后天": 3}
+        for keyword, delta in relative_map.items():
+            if keyword in message:
+                checkin = today + timedelta(days=delta)
+                checkout = checkin + timedelta(days=nights)
+                return checkin.isoformat(), checkout.isoformat()
+
+        # --- Pattern: M月D號到M月D號 ---
         m = re.search(
-            r"(\d{1,2})月(\d{1,2})[號号日](?:.*?)(?:住到|退房|到|～|~)(?:(\d{1,2})月)?(\d{1,2})[號号日]",
+            r"(\d{1,2})月(\d{1,2})[號号日](?:.*?)(?:住到|退房|到|至|～|~)(?:(\d{1,2})月)?(\d{1,2})[號号日]",
             message,
         )
         if m:
-            in_month, in_day, out_month_raw, out_day = (
-                int(m.group(1)), int(m.group(2)),
-                m.group(3), int(m.group(4)),
-            )
-            out_month = int(out_month_raw) if out_month_raw else in_month
-            checkin = date(current_year, in_month, in_day)
-            checkout = date(current_year, out_month, out_day)
+            out_month = int(m.group(3)) if m.group(3) else int(m.group(1))
+            checkin = date(current_year, int(m.group(1)), int(m.group(2)))
+            checkout = date(current_year, out_month, int(m.group(4)))
             return checkin.isoformat(), checkout.isoformat()
 
-        # Pattern 2: "YYYY/M/D" or "YYYY-M-D" (with year)
-        m_full = re.search(r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", message)
+        # --- Pattern: YYYY/M/D or YYYY-M-D or YYYY.M.D ---
+        m_full = re.search(r"(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})", message)
         if m_full:
             checkin = date(int(m_full.group(1)), int(m_full.group(2)), int(m_full.group(3)))
-            # Check for explicit checkout date after the checkin
             rest = message[m_full.end():]
-            m_checkout = re.search(r"(?:到|至|～|~|—|-)\s*(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", rest)
-            if m_checkout:
-                checkout = date(int(m_checkout.group(1)), int(m_checkout.group(2)), int(m_checkout.group(3)))
+            m_co = re.search(r"(?:到|至|～|~|—|-)\s*(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})", rest)
+            if m_co:
+                checkout = date(int(m_co.group(1)), int(m_co.group(2)), int(m_co.group(3)))
             else:
-                m_checkout2 = re.search(r"(?:到|至|～|~|—|-)\s*(\d{1,2})[/\-](\d{1,2})", rest)
-                if m_checkout2:
-                    checkout = date(checkin.year, int(m_checkout2.group(1)), int(m_checkout2.group(2)))
+                m_co2 = re.search(r"(?:到|至|～|~|—|-)\s*(\d{1,2})[/\-.](\d{1,2})", rest)
+                if m_co2:
+                    checkout = date(current_year, int(m_co2.group(1)), int(m_co2.group(2)))
                 else:
-                    nights = _extract_nights(message) or 1
                     checkout = checkin + timedelta(days=nights)
             return checkin.isoformat(), checkout.isoformat()
 
-        # Pattern 3: "M/D到M/D" or "M-D到M-D" (without year)
-        m2 = re.search(r"(\d{1,2})[/\-](\d{1,2}).*?(?:到|至|～).*?(\d{1,2})[/\-](\d{1,2})", message)
+        # --- Pattern: M/D到M/D or M.D到M.D ---
+        m2 = re.search(r"(\d{1,2})[/\-.](\d{1,2}).*?(?:到|至|～|~).*?(\d{1,2})[/\-.](\d{1,2})", message)
         if m2:
             checkin = date(current_year, int(m2.group(1)), int(m2.group(2)))
             checkout = date(current_year, int(m2.group(3)), int(m2.group(4)))
             return checkin.isoformat(), checkout.isoformat()
 
-        # Pattern 4: "M/D" alone + "入住N晚" (without year, single date)
-        m3 = re.search(r"(\d{1,2})[/\-](\d{1,2})", message)
+        # --- Pattern: M/D or M.D or M-D（單一日期）---
+        m3 = re.search(r"(\d{1,2})[/\-.](\d{1,2})", message)
         if m3:
             checkin = date(current_year, int(m3.group(1)), int(m3.group(2)))
-            nights = _extract_nights(message) or 1
             checkout = checkin + timedelta(days=nights)
             return checkin.isoformat(), checkout.isoformat()
 
-        # Pattern 5: "M月D號" alone + "入住N晚"
-        m4 = re.search(r"(\d{1,2})月(\d{1,2})[號号日]", message)
+        # --- Pattern: M月D號 or M月D日（單一日期）---
+        m4 = re.search(r"(\d{1,2})月(\d{1,2})[號号日]?", message)
         if m4:
             checkin = date(current_year, int(m4.group(1)), int(m4.group(2)))
-            nights = _extract_nights(message) or 1
             checkout = checkin + timedelta(days=nights)
             return checkin.isoformat(), checkout.isoformat()
+
+        # --- Pattern: 中文數字「三月十八」「三月十八號」---
+        m5 = re.search(r"([一二三四五六七八九十]+)月([一二三四五六七八九十零〇]+)[號号日]?", message)
+        if m5:
+            month = _cn_to_int(m5.group(1))
+            day = _cn_to_int(m5.group(2))
+            if month and day:
+                checkin = date(current_year, month, day)
+                checkout = checkin + timedelta(days=nights)
+                return checkin.isoformat(), checkout.isoformat()
 
         return None
 
@@ -1689,10 +1832,10 @@ class ChatbotService:
         """
         會員聊天室 AI 入口（LINE / Facebook / Webchat）
 
-        與 handle_message() 共用同一套 LLM + tools，差異：
+        與 handle_message() 共用 _unified_tool_loop + _execute_tool，差異：
         - 對話歷史從 DB 讀取（非記憶體 session）
         - 自動貼標籤（根據 AI 引用的規則）
-        - 不走訂房流程（confirm_room / save_member 回「不適用」）
+        - Token 耗盡時降級為自動回應
         """
         # 1. Token 額度檢查
         token_usage = await self._get_token_usage(db, industry_id)
@@ -1710,21 +1853,54 @@ class ChatbotService:
             messages.extend(history)
         messages.append({"role": "user", "content": message})
 
-        # 3. Tool Calling 迴圈
-        total_tokens_used, reply, referenced_rule_ids = await self._tool_calling_loop(
-            messages, db=db, test_mode=False, collect_rule_ids=True,
-        )
+        # 3. 建 ToolCallingContext（與官網一致的 tool 行為）
+        ctx = ToolCallingContext(db=db, collect_rule_ids=True)
 
-        # 4. 扣除 token + 自動貼標籤
-        if token_usage and total_tokens_used > 0:
-            token_usage.used_amount += total_tokens_used
+        # 確定性日期/房型提取（與官網一致）
+        past_date_warning: Optional[str] = None
+        try:
+            dates = self._extract_dates(message)
+            if dates:
+                checkin_obj = date.fromisoformat(dates[0])
+                today = datetime.now(ZoneInfo("Asia/Taipei")).date()
+                if checkin_obj < today:
+                    past_date_warning = "您輸入的日期已過，請重新提供入住與退房日期。"
+                else:
+                    ctx.checkin_date, ctx.checkout_date = dates
+        except Exception:
+            pass
+        room_plan = self._extract_room_plan(message)
+        if room_plan:
+            ctx.booking_adults = room_plan["room_count"] * room_plan["adults_per_room"]
+
+        # 4. 統一 Tool Calling 迴圈
+        if past_date_warning:
+            reply = past_date_warning
+        else:
+            reply = await self._unified_tool_loop(messages, ctx)
+
+        # PMS fallback（與官網一致）— 只在 LLM 未呼叫 PMS 時才補查
+        if not ctx.room_cards and not ctx.pms_called and ctx.checkin_date and ctx.checkout_date:
+            try:
+                await self._run_pms_tool(
+                    {"startdate": ctx.checkin_date, "enddate": ctx.checkout_date,
+                     "housingcnt": ctx.booking_adults or 2},
+                    ctx,
+                )
+            except Exception as e:
+                logger.warning(f"[Member chat] PMS fallback error: {e}")
+
+        # 5. 扣除 token + 自動貼標籤
+        if token_usage and ctx.total_tokens_used > 0:
+            token_usage.used_amount += ctx.total_tokens_used
             await db.flush()
 
+        referenced_rule_ids = list(ctx.referenced_rule_ids)
         auto_tags = await self._auto_tag_member(db, line_uid, referenced_rule_ids)
 
         return {
             "reply": reply,
-            "tokens_used": total_tokens_used,
+            "tokens_used": ctx.total_tokens_used,
             "referenced_rules": [{"rule_id": rid} for rid in referenced_rule_ids],
             "auto_tags": auto_tags,
             "token_exhausted": False,
@@ -1743,133 +1919,19 @@ class ChatbotService:
             {"role": "user", "content": message},
         ]
 
-        total_tokens_used, reply, _ = await self._tool_calling_loop(
-            messages, db=db, test_mode=True, collect_rule_ids=False,
-        )
+        ctx = ToolCallingContext(db=db, test_mode=True)
+        reply = await self._unified_tool_loop(messages, ctx)
 
-        if token_usage and not isinstance(token_usage, dict) and total_tokens_used > 0:
-            token_usage.used_amount += total_tokens_used
+        if token_usage and not isinstance(token_usage, dict) and ctx.total_tokens_used > 0:
+            token_usage.used_amount += ctx.total_tokens_used
             await db.flush()
 
         return {
             "reply": reply,
-            "tokens_used": total_tokens_used,
+            "tokens_used": ctx.total_tokens_used,
             "referenced_rules": [],
             "auto_tags": [],
         }
-
-    # ------------------------------------------------------------------
-    # Shared helpers for chat / test_chat
-    # ------------------------------------------------------------------
-
-    async def _tool_calling_loop(
-        self,
-        messages: List[Dict[str, Any]],
-        *,
-        db: AsyncSession,
-        test_mode: bool = False,
-        collect_rule_ids: bool = False,
-    ) -> Tuple[int, str, List[int]]:
-        """共用 Tool Calling 迴圈，回傳 (total_tokens, reply, referenced_rule_ids)"""
-        client = self._get_openai()
-        total_tokens_used = 0
-        max_loops = 5
-        reply = ""
-        rule_id_set: set = set()
-
-        for _ in range(max_loops):
-            resp = await client.chat.completions.create(
-                model=settings.OPENAI_MODEL,
-                messages=messages,
-                tools=_get_tools(),
-                tool_choice="auto",
-                timeout=30,
-            )
-            if resp.usage:
-                total_tokens_used += resp.usage.total_tokens
-
-            msg = resp.choices[0].message
-
-            if not msg.tool_calls:
-                reply = msg.content or ""
-                break
-
-            messages.append(msg)
-            for tc in msg.tool_calls:
-                fn_name = tc.function.name
-                args = json.loads(tc.function.arguments)
-                result = await self._execute_chat_tool(db, fn_name, args, test_mode=test_mode)
-
-                # 收集 kb_search 引用的規則 IDs，清理內部欄位
-                if collect_rule_ids and fn_name == "kb_search" and isinstance(result, dict):
-                    rule_id_set.update(result.get("rule_ids", []))
-                    llm_result = {k: v for k, v in result.items() if k != "rule_ids"}
-                    llm_result["items"] = [
-                        {k: v for k, v in item.items() if k != "_rule_id"}
-                        for item in llm_result.get("items", [])
-                    ]
-                else:
-                    llm_result = result
-
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": json.dumps(llm_result, ensure_ascii=False),
-                })
-        else:
-            reply = "很抱歉，系統暫時無法回應，請稍後再試。"
-
-        return total_tokens_used, reply, list(rule_id_set)
-
-    async def _execute_chat_tool(
-        self,
-        db: AsyncSession,
-        fn_name: str,
-        args: Dict[str, Any],
-        test_mode: bool = False,
-    ) -> Any:
-        """會員聊天室用的 tool executor（無 session 狀態）"""
-        if fn_name == "kb_search":
-            return await _kb_search(
-                db, args.get("category", ""), args.get("query", ""),
-                test_mode=test_mode,
-            )
-        elif fn_name == "query_pms_availability":
-            return await self._run_pms_tool_simple(args)
-        elif fn_name == "query_pms_mixed_availability":
-            return await self._run_mixed_avail_tool(args)
-        else:
-            return {"info": "此功能僅在網站訂房時可用"}
-
-    async def _run_pms_tool_simple(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        """PMS 查詢（簡化版，不操作 session 狀態）"""
-        startdate = str(args.get("startdate", ""))
-        enddate = str(args.get("enddate", ""))
-        housingcnt = int(args.get("housingcnt") or 2)
-
-        if not is_pms_enabled():
-            return {"error": "PMS 未串接", "rooms": []}
-
-        try:
-            raw = await asyncio.to_thread(query_pms, startdate, enddate, None, housingcnt)
-            rooms = raw.get("room", []) if isinstance(raw, dict) else []
-            result_rooms = []
-            for room in rooms:
-                code = room.get("roomtype", "")
-                data_rows = room.get("data", []) or []
-                if not data_rows:
-                    continue
-                price = data_rows[0].get("price", 0)
-                remain = min((d.get("remain", 0) for d in data_rows), default=0)
-                result_rooms.append({
-                    "room_type_code": code,
-                    "price": price,
-                    "available_count": remain,
-                })
-            return {"ok": True, "rooms": result_rooms}
-        except Exception as exc:
-            logger.warning(f"PMS 查詢失敗：{exc}")
-            return {"error": f"PMS 查詢失敗：{exc}", "rooms": []}
 
     async def _get_token_usage(
         self, db: AsyncSession, industry_id: Optional[int] = None, check_exhausted: bool = True,

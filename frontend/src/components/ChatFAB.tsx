@@ -436,11 +436,13 @@ function MemberFormMessage({
   browserKey,
   disabled,
   onSubmit,
+  onCancel,
 }: {
   msg: Extract<ChatMessage, { type: "member_form" }>;
   browserKey: string;
   disabled: boolean;
   onSubmit: (reservationId: string, cartUrl?: string | null) => void;
+  onCancel: () => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(msg.fields.map((f) => [f.field_name, ""])),
@@ -690,32 +692,48 @@ function MemberFormMessage({
             >
               {msg.privacyNote}
             </div>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={loading || !hasAnyValue}
-              style={{
-                background: "#242424",
-                opacity: loading || !hasAnyValue ? 0.6 : 1,
-                color: "#fff",
-                border: "none",
-                borderRadius: 16,
-                padding: "8px 12px",
-                fontSize: 16,
-                fontFamily: "'Noto Sans TC', sans-serif",
-                fontWeight: 400,
-                cursor:
-                  loading || !hasAnyValue ? "default" : "pointer",
-                width: "100%",
-                minHeight: 48,
-                minWidth: 72,
-                lineHeight: 1.5,
-                textAlign: "center",
-                transition: "opacity 0.2s",
-              }}
-            >
-              {loading ? "送出中…" : "確認送出"}
-            </button>
+            <div style={{ display: "flex", gap: 4, width: "100%" }}>
+              <button
+                type="button"
+                onClick={onCancel}
+                style={{
+                  flex: 1,
+                  minHeight: 48,
+                  background: "#f5f5f5",
+                  border: "none",
+                  borderRadius: 16,
+                  fontFamily: "'Noto Sans TC', sans-serif",
+                  fontWeight: 400,
+                  fontSize: 16,
+                  color: "#383838",
+                  cursor: "pointer",
+                  lineHeight: 1.5,
+                }}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={loading || !hasAnyValue}
+                style={{
+                  flex: 1,
+                  minHeight: 48,
+                  background: loading || !hasAnyValue ? "#c8c8c8" : "#242424",
+                  border: "none",
+                  borderRadius: 16,
+                  fontFamily: "'Noto Sans TC', sans-serif",
+                  fontWeight: 400,
+                  fontSize: 16,
+                  color: "#fff",
+                  cursor: loading || !hasAnyValue ? "default" : "pointer",
+                  lineHeight: 1.5,
+                  transition: "background 0.2s",
+                }}
+              >
+                {loading ? "送出中…" : "確認送出"}
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -974,9 +992,25 @@ export default function ChatFAB() {
 
   const handleRoomCancel = useCallback(
     (msgId: string) => {
-      setCompletedIds((prev) => new Set([...prev, msgId]));
+      setMessages((prev) => prev.filter((m) => m.id !== msgId));
+      addBotMessage({ role: "bot", type: "text", text: "已取消訂房，如需重新查詢請隨時告訴我！" });
     },
-    [],
+    [addBotMessage],
+  );
+
+  const handleFormCancel = useCallback(
+    (msgId: string) => {
+      setMessages((prev) =>
+        prev.filter((m) => {
+          if (m.id === msgId) return false;
+          if (m.type === "room_cards" && completedIds.has(m.id)) return false;
+          return true;
+        }),
+      );
+      setCompletedIds(new Set());
+      addBotMessage({ role: "bot", type: "text", text: "已取消訂房，如需重新查詢請隨時告訴我！" });
+    },
+    [completedIds, addBotMessage],
   );
 
   const handleRoomConfirm = useCallback(
@@ -1293,6 +1327,7 @@ export default function ChatFAB() {
                     onSubmit={(reservationId, cartUrl) =>
                       handleFormSubmit(msg.id, reservationId, cartUrl)
                     }
+                    onCancel={() => handleFormCancel(msg.id)}
                   />
                 );
               }
