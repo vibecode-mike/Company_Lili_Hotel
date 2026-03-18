@@ -36,14 +36,19 @@ Feature: 房型推薦卡片
       And 房價不加「參考：」前綴，卡片外觀與 PMS 來源一致
       ; 採用實作行為：兩種來源卡片外觀統一，available_count=null → 顯示「待確認」
 
-  Rule: 混搭推薦時顯示組合說明
+  Rule: 混搭推薦由 LLM 在回覆文字中建議
 
-    Example: 系統建議拆房組合
-      Given _auto_split_options 含建議方案
-      And 單一房型無法滿足民眾人數
-      When 前台渲染
-      Then 卡片上方顯示「以下組合可滿足您的需求」說明文字
-      And 每個選項顯示建議間數（recommended_room_count）
+    說明:
+      不使用程式碼 _auto_split_options 欄位。
+      LLM 透過 system prompt 指引，在回覆文字中建議拆房組合（如「4人可選2間雙人房」）。
+      房型卡片仍按 occupancy match 排序顯示，LLM 回覆文字補充組合建議。
+
+    Example: LLM 建議拆房組合
+      Given 民眾需求 4 人，PMS 無 4 人房
+      And PMS 回傳雙人房有空房
+      When AI 生成回覆
+      Then LLM 回覆文字包含組合建議（如「建議預訂2間雙人房」）
+      And 卡片按 occupancy match 排序顯示可用房型
 
   Rule: 圖片 URL 解析規則
 

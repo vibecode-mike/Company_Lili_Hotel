@@ -41,12 +41,9 @@ Feature: 查詢空房型
 
   Rule: 多房型混搭查詢（mixed availability）
 
-    Example: 民眾要 4 人，但無 4 人房，可拆為 2 間雙人房
-      Given 民眾需求 room_plan_requests = [{ room_count:1, adults_per_room:4 }]
-      And PMS 無 4 人房剩餘
-      When 系統執行 _get_room_cards 並判斷 _auto_split_options
-      Then response 包含 _auto_split_options，建議 2 間雙人房
-      And 前台顯示混搭推薦卡片
+    說明:
+      混搭推薦由 LLM 透過 system prompt 指引自行判斷，不使用程式碼 _auto_split_options。
+      LLM 可根據 PMS 回傳的房型清單，在回覆中建議拆房組合（如「4人可選2間雙人房」）。
 
     Example: 民眾明確要求不同房型組合
       Given 民眾傳送「我要1間雙人房和1間四人房」
@@ -54,14 +51,15 @@ Feature: 查詢空房型
       Then room_plan_requests = [{ room_count:1, adults_per_room:2 }, { room_count:1, adults_per_room:4 }]
       And 系統分別查詢兩種房型可用性
 
-  Rule: 完全無可用房型時引導民眾調整  <!-- ?1[缺漏] 「無任何房型」時是否提供「留資料待客服聯繫」的入口？
-    選項 A：純文字回覆「建議調整日期或人數」，引導民眾重新輸入 → STEP 3 loop-back 至 STEP 2。
-    選項 B：額外提供「留下聯絡資料，有空房主動通知」的收單流程 → 需追加 STEP:3.5 與獨立 .feature。
-    影響：決定無房時是否開啟備用收單路徑（增加約 2 個 STEP + 1 個 .feature）。 -->
+  Rule: 完全無可用房型時由 LLM 引導民眾調整
+
+    說明:
+      採用選項 A：LLM 透過 system prompt 引導民眾調整日期或人數。
+      不額外開啟「留資料待客服聯繫」的收單流程。
 
     Example: PMS 與 FAQ_KB 均無符合房型
       Given PMS 回傳空房型
       And FAQ_KB 亦無符合條件的靜態房型
       When AI 生成回覆
-      Then reply = "哎呀，找不到完全符合條件的房型！目前根據您輸入的人數與日期，暫時沒有對應的選項。建議您可以調整入住日期，或是留下您的資訊，如有空房以利客服專員主動聯繫您！"
-      And missing_fields 重新包含 room_plan 與日期，引導民眾重新輸入
+      Then LLM 根據 system prompt 引導民眾調整日期或人數
+      And reply 包含建議（如「建議調整入住日期或人數」）
