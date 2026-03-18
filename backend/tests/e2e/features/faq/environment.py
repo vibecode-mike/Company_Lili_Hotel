@@ -96,7 +96,6 @@ def _clean_faq_data(session):
     """Remove all FAQ test data to ensure isolation."""
     try:
         session.execute(text("DELETE FROM faq_rule_tags"))
-        session.execute(text("DELETE FROM faq_rule_versions"))
         session.execute(text("DELETE FROM faq_rules"))
         session.execute(text("DELETE FROM faq_category_fields"))
         session.execute(text("DELETE FROM faq_pms_connections"))

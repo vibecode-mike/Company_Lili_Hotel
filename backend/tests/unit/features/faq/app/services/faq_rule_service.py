@@ -1,7 +1,5 @@
 from app.models.faq_rule import FaqRule
-from app.models.faq_rule_version import FaqRuleVersion
 from app.repositories.faq_rule_repository import FaqRuleRepository
-from app.repositories.faq_rule_version_repository import FaqRuleVersionRepository
 from app.repositories.faq_category_repository import FaqCategoryRepository
 from app.repositories.faq_category_field_repository import FaqCategoryFieldRepository
 from app.exceptions import FaqValidationError, FaqRuleLimitError, FaqPublishError
@@ -15,12 +13,10 @@ class FaqRuleService:
     def __init__(
         self,
         faq_rule_repository: FaqRuleRepository,
-        faq_rule_version_repository: FaqRuleVersionRepository,
         faq_category_repository: FaqCategoryRepository,
         faq_category_field_repository: FaqCategoryFieldRepository,
     ):
         self.faq_rule_repository = faq_rule_repository
-        self.faq_rule_version_repository = faq_rule_version_repository
         self.faq_category_repository = faq_category_repository
         self.faq_category_field_repository = faq_category_field_repository
 
@@ -46,15 +42,6 @@ class FaqRuleService:
         if rule is None:
             return
 
-        # If currently published, create a version snapshot before editing
-        if rule.is_published:
-            version = FaqRuleVersion(
-                rule_id=rule.id,
-                content_json=rule.content_json.copy() if rule.content_json else {},
-                is_enabled=rule.is_enabled,
-            )
-            self.faq_rule_version_repository.save(version)
-
         rule.content_json = content
         rule.is_published = False
         self.faq_rule_repository.save(rule)
@@ -74,13 +61,6 @@ class FaqRuleService:
         rules = self.faq_rule_repository.find_all()
         for rule in rules:
             if not rule.is_published:
-                # Create version snapshot
-                version = FaqRuleVersion(
-                    rule_id=rule.id,
-                    content_json=rule.content_json.copy() if rule.content_json else {},
-                    is_enabled=rule.is_enabled,
-                )
-                self.faq_rule_version_repository.save(version)
                 rule.is_published = True
                 self.faq_rule_repository.save(rule)
 

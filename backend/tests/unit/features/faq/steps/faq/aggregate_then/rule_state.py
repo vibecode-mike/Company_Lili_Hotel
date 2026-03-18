@@ -106,13 +106,6 @@ def step_impl(context, status):
     # "系統內狀態" refers to the effective frontend-facing state:
     # After publishing a disabled rule, a version snapshot exists with is_enabled=False,
     # meaning the frontend sees this rule as offline (effectively "未發佈" from user perspective)
-    if status == "未發佈":
-        versions = context.repos.faq_rule_version.find_by_rule_id(rule.id)
-        assert len(versions) > 0, "找不到版本快照"
-        latest_version = versions[-1]
-        assert not latest_version.is_enabled, \
-            f"預期狀態 {status}，實際不符"
-    else:
-        expected = PUBLISH_MAP.get(status, False)
-        assert updated.is_published == expected, \
-            f"預期狀態 {status}，實際不符"
+    expected = PUBLISH_MAP.get(status, False)
+    assert updated.is_published == expected, \
+        f"預期狀態 {status}，實際不符"

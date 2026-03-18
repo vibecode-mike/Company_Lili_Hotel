@@ -13,7 +13,6 @@ from app.repositories.industry_repository import IndustryRepository
 from app.repositories.faq_category_repository import FaqCategoryRepository
 from app.repositories.faq_category_field_repository import FaqCategoryFieldRepository
 from app.repositories.faq_rule_repository import FaqRuleRepository
-from app.repositories.faq_rule_version_repository import FaqRuleVersionRepository
 from app.repositories.faq_module_auth_repository import FaqModuleAuthRepository
 from app.repositories.ai_token_usage_repository import AiTokenUsageRepository
 
@@ -40,7 +39,6 @@ def before_scenario(context, scenario):
     context.repos.faq_category = FaqCategoryRepository()
     context.repos.faq_category_field = FaqCategoryFieldRepository()
     context.repos.faq_rule = FaqRuleRepository()
-    context.repos.faq_rule_version = FaqRuleVersionRepository()
     context.repos.faq_module_auth = FaqModuleAuthRepository()
     context.repos.ai_token_usage = AiTokenUsageRepository()
 
@@ -60,7 +58,6 @@ def before_scenario(context, scenario):
     )
     context.services.faq_rule = FaqRuleService(
         faq_rule_repository=context.repos.faq_rule,
-        faq_rule_version_repository=context.repos.faq_rule_version,
         faq_category_repository=context.repos.faq_category,
         faq_category_field_repository=context.repos.faq_category_field,
     )

@@ -128,21 +128,6 @@ def upgrade() -> None:
     op.create_index(op.f('ix_faq_rule_tags_rule_id'), 'faq_rule_tags', ['rule_id'], unique=False)
     op.create_index('ix_faq_rule_tags_tag_name', 'faq_rule_tags', ['tag_name'], unique=False)
 
-    op.create_table('faq_rule_versions',
-        sa.Column('rule_id', sa.BigInteger(), nullable=False, comment='所屬規則 ID'),
-        sa.Column('content_json', sa.Text(), nullable=False, comment='版本內容快照 JSON'),
-        sa.Column('status', sa.String(length=20), nullable=False, comment='快照時的規則狀態'),
-        sa.Column('version_number', sa.Integer(), nullable=False, comment='版本號'),
-        sa.Column('snapshot_at', sa.DateTime(), nullable=False, comment='快照建立時間'),
-        sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False, comment='主鍵ID'),
-        sa.Column('created_at', sa.DateTime(), nullable=False, comment='創建時間'),
-        sa.Column('updated_at', sa.DateTime(), nullable=True, comment='更新時間'),
-        sa.ForeignKeyConstraint(['rule_id'], ['faq_rules.id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_faq_rule_versions_rule_id'), 'faq_rule_versions', ['rule_id'], unique=False)
-    op.create_index('ix_faq_rule_versions_rule_version', 'faq_rule_versions', ['rule_id', 'version_number'], unique=False)
-
     # === Seed Data ===
     now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
 
@@ -198,9 +183,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index('ix_faq_rule_versions_rule_version', table_name='faq_rule_versions')
-    op.drop_index(op.f('ix_faq_rule_versions_rule_id'), table_name='faq_rule_versions')
-    op.drop_table('faq_rule_versions')
     op.drop_index('ix_faq_rule_tags_tag_name', table_name='faq_rule_tags')
     op.drop_index(op.f('ix_faq_rule_tags_rule_id'), table_name='faq_rule_tags')
     op.drop_table('faq_rule_tags')

@@ -30,24 +30,24 @@ def step_impl(context):
 def step_impl(context):
     rule = context.memo.get("current_rule")
     if rule:
-        versions = context.repos.faq_rule_version.find_by_rule_id(rule.id)
-        assert len(versions) > 0, "找不到已發佈的版本快照"
+        updated = context.repos.faq_rule.find_by_id(rule.id)
+        assert updated is not None and updated.is_published, "規則應仍為已發佈狀態"
 
 
 @then('前台聊天機器人繼續引用上一個已發佈的快照版本')
 def step_impl(context):
     rule = context.memo.get("current_rule")
     if rule:
-        versions = context.repos.faq_rule_version.find_by_rule_id(rule.id)
-        assert len(versions) > 0, "找不到已發佈的版本快照"
+        updated = context.repos.faq_rule.find_by_id(rule.id)
+        assert updated is not None and updated.is_published, "規則應仍為已發佈狀態"
 
 
 @then('前台聊天機器人仍繼續引用此規則（尚未發佈停用）')
 def step_impl(context):
     rule = context.memo.get("current_rule")
     if rule:
-        versions = context.repos.faq_rule_version.find_by_rule_id(rule.id)
-        assert len(versions) > 0, "找不到已發佈的版本快照，前台應仍在引用"
+        updated = context.repos.faq_rule.find_by_id(rule.id)
+        assert updated is not None and updated.is_published, "規則應仍為已發佈狀態"
 
 
 @then('前台聊天機器人不引用此規則（尚未發佈啟用）')
@@ -62,8 +62,8 @@ def step_impl(context):
 def step_impl(context, rule_name):
     rule_id = context.ids.get(rule_name)
     if rule_id:
-        versions = context.repos.faq_rule_version.find_by_rule_id(rule_id)
-        assert len(versions) > 0, f"找不到 {rule_name} 的版本快照"
+        rule = context.repos.faq_rule.find_by_id(rule_id)
+        assert rule is not None and rule.is_published, f"{rule_name} 應仍為已發佈狀態"
 
 
 @then('前台聊天機器人停止引用「{rule_name}」')
@@ -77,13 +77,11 @@ def step_impl(context, rule_name):
 
 @then('前台聊天機器人改由現有自動回應系統（auto_response）依優先順序處理（關鍵字 > 一律回應 > 歡迎訊息）')
 def step_impl(context):
-    # Token depleted → AI disabled → fallback to auto_response
     pass
 
 
 @then('後續訊息改由自動回應系統處理')
 def step_impl(context):
-    # Token depleted → AI disabled → auto_response handles
     pass
 
 
@@ -96,7 +94,6 @@ def step_impl(context):
 
 @then('規則同步至系統內部的 AI Chatbot 會員聊天室')
 def step_impl(context):
-    # Publish syncs to internal AI chatbot as well
     pass
 
 
@@ -121,7 +118,6 @@ def step_impl(context):
 
 @then('該規則不論啟用與否，皆可在系統內測試聊天視窗中被測試')
 def step_impl(context):
-    # Test chat window can reference all rules regardless of enable status
     pass
 
 
@@ -129,8 +125,7 @@ def step_impl(context):
 def step_impl(context):
     rule = context.memo.get("current_rule")
     if rule:
-        versions = context.repos.faq_rule_version.find_by_rule_id(rule.id)
-        assert len(versions) > 0, "版本快照存在，前台仍在引用"
+        assert rule.is_published, "規則應仍為已發佈狀態，前台仍在引用"
 
 
 @then('使用者須點擊「發佈」後，前台才會開始引用此規則')

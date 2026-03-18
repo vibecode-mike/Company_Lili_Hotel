@@ -127,7 +127,7 @@ MySQL 8.0 with SQLAlchemy 2.0 async. Key models:
 - `Campaign`, `Message`, `MessageDelivery`
 - `MemberTag`, `InteractionTag`, `MemberInteractionTag`, `TagTriggerLog`
 - `AutoResponse`, `AutoResponseKeyword`, `AutoResponseMessage`
-- `FaqCategory`, `FaqRule`, `FaqRuleVersion`, `AiTokenUsage`
+- `FaqCategory`, `FaqRule`, `AiTokenUsage`
 - `LineChannel`, `FbChannel`
 - `MessageTemplate`
 - `ChatbotSession`, `FaqPmsConnection`

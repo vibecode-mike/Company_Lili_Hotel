@@ -1064,6 +1064,16 @@ class ChatbotService:
             availability = self._extract_availability(raw, startdate, enddate)
             cards = self._availability_to_room_cards(availability)
 
+            # Spec: housingcnt=1 查無房時自動以 housingcnt=2 重查
+            fallback_housingcnt = None
+            if not cards and housingcnt == 1:
+                logger.info("[PMS] housingcnt=1 returned empty, retrying with housingcnt=2")
+                raw2 = await asyncio.to_thread(query_pms, startdate, enddate, roomtype, 2)
+                availability = self._extract_availability(raw2, startdate, enddate)
+                cards = self._availability_to_room_cards(availability)
+                if cards:
+                    fallback_housingcnt = 1
+
             if not cards:
                 # PMS returned empty → FAQ KB fallback
                 cards = await _kb_fallback_rooms(db, housingcnt)
@@ -1073,7 +1083,7 @@ class ChatbotService:
                 cards = await _enrich_cards_with_kb(cards, db)
                 source_note = "pms"
 
-            return {
+            result_dict: Dict[str, Any] = {
                 "source": source_note,
                 "available": [
                     {
@@ -1087,7 +1097,10 @@ class ChatbotService:
                     }
                     for c in cards
                 ],
-            }, cards
+            }
+            if fallback_housingcnt is not None:
+                result_dict["_fallback_housingcnt_from"] = fallback_housingcnt
+            return result_dict, cards
 
         except Exception as exc:
             cards = await _kb_fallback_rooms(db, housingcnt)

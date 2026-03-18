@@ -1,6 +1,5 @@
 from behave import given
 from app.models.faq_rule import FaqRule
-from app.models.faq_rule_version import FaqRuleVersion
 from app.models.faq_category import FaqCategory
 
 
@@ -35,13 +34,6 @@ def step_impl(context, category_name):
         )
         context.repos.faq_rule.save(rule)
         context.ids[row["rule_name"]] = rule.id
-        if is_published:
-            version = FaqRuleVersion(
-                rule_id=rule.id,
-                content_json=rule.content_json.copy(),
-                is_enabled=rule.is_enabled,
-            )
-            context.repos.faq_rule_version.save(version)
 
 
 @given('大分類「{category_name}」下有 {count:d} 筆已發佈的規則')
@@ -55,12 +47,6 @@ def step_impl(context, category_name, count):
             is_published=True,
         )
         context.repos.faq_rule.save(rule)
-        version = FaqRuleVersion(
-            rule_id=rule.id,
-            content_json=rule.content_json.copy(),
-            is_enabled=True,
-        )
-        context.repos.faq_rule_version.save(version)
 
 
 @given('大分類「{category_name}」目前有 {count:d} 筆規則')
@@ -101,13 +87,6 @@ def step_impl(context, category_name, rule_name):
     context.repos.faq_rule.save(rule)
     context.ids[rule_name] = rule.id
     context.memo["current_rule"] = rule
-    version = FaqRuleVersion(
-        rule_id=rule.id,
-        content_json=rule.content_json.copy(),
-        is_enabled=True,
-        version_number=1,
-    )
-    context.repos.faq_rule_version.save(version)
 
 
 @given('大分類「{category_name}」下有一筆「{publish_status}」狀態的規則')
@@ -122,15 +101,7 @@ def step_impl(context, category_name, publish_status):
     )
     context.repos.faq_rule.save(rule)
     context.memo["current_rule"] = rule
-    # Store original count for deletion assertions
     context.memo["original_rule_count"] = context.repos.faq_rule.count_by_category_id(category.id)
-    if is_published:
-        version = FaqRuleVersion(
-            rule_id=rule.id,
-            content_json=rule.content_json.copy(),
-            is_enabled=True,
-        )
-        context.repos.faq_rule_version.save(version)
 
 
 @given('大分類「{category_name}」下有一筆「{publish_status}」狀態的規則「{rule_name}」')
@@ -147,13 +118,6 @@ def step_impl(context, category_name, publish_status, rule_name):
     context.ids[rule_name] = rule.id
     context.memo["current_rule"] = rule
     context.memo["original_rule_count"] = context.repos.faq_rule.count_by_category_id(category.id)
-    if is_published:
-        version = FaqRuleVersion(
-            rule_id=rule.id,
-            content_json=rule.content_json.copy(),
-            is_enabled=True,
-        )
-        context.repos.faq_rule_version.save(version)
 
 
 @given('一筆規則目前發佈狀態為「{publish_status}」')
@@ -167,13 +131,6 @@ def step_impl(context, publish_status):
     )
     context.repos.faq_rule.save(rule)
     context.memo["current_rule"] = rule
-    if is_published:
-        version = FaqRuleVersion(
-            rule_id=rule.id,
-            content_json=rule.content_json.copy(),
-            is_enabled=True,
-        )
-        context.repos.faq_rule_version.save(version)
 
 
 @given('一筆規則目前狀態為「{status}」且前台聊天機器人正在引用')
@@ -186,12 +143,6 @@ def step_impl(context, status):
     )
     context.repos.faq_rule.save(rule)
     context.memo["current_rule"] = rule
-    version = FaqRuleVersion(
-        rule_id=rule.id,
-        content_json=rule.content_json.copy(),
-        is_enabled=True,
-    )
-    context.repos.faq_rule_version.save(version)
 
 
 @given('一筆規則目前狀態為「{status}」')
@@ -253,15 +204,5 @@ def step_impl(context):
         context.repos.faq_rule.save(rule)
         context.ids[row["rule_name"]] = rule.id
         last_rule = rule
-        # If front-end is still referencing (尚未發佈停用), create a version
-        front_ref = row.get("前台引用", "")
-        if is_published or "是" in front_ref:
-            version = FaqRuleVersion(
-                rule_id=rule.id,
-                content_json=rule.content_json.copy(),
-                is_enabled=True,
-            )
-            context.repos.faq_rule_version.save(version)
-    # Set current_rule to the last rule for single-rule scenarios
     if last_rule:
         context.memo["current_rule"] = last_rule
