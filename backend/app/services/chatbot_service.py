@@ -110,9 +110,11 @@ async def _kb_fallback_rooms(db: Optional[AsyncSession], adults: int = 1) -> Lis
             features=features,
             source="faq_kb",
         ))
-    # Filter by occupancy
+    # Filter by occupancy, sort by match (closest first), then price
     filtered = [c for c in cards if c.max_occupancy >= adults]
-    return filtered if filtered else cards
+    result = filtered if filtered else cards
+    result.sort(key=lambda c: (abs((c.max_occupancy or 2) - adults), c.price if c.price > 0 else 10**12))
+    return result
 
 
 async def _enrich_cards_with_kb(
@@ -1062,7 +1064,7 @@ class ChatbotService:
         try:
             raw = await asyncio.to_thread(query_pms, startdate, enddate, roomtype, housingcnt)
             availability = self._extract_availability(raw, startdate, enddate)
-            cards = self._availability_to_room_cards(availability)
+            cards = self._availability_to_room_cards(availability, housingcnt)
 
             # Spec: housingcnt=1 查無房時自動以 housingcnt=2 重查
             fallback_housingcnt = None
@@ -1070,7 +1072,7 @@ class ChatbotService:
                 logger.info("[PMS] housingcnt=1 returned empty, retrying with housingcnt=2")
                 raw2 = await asyncio.to_thread(query_pms, startdate, enddate, roomtype, 2)
                 availability = self._extract_availability(raw2, startdate, enddate)
-                cards = self._availability_to_room_cards(availability)
+                cards = self._availability_to_room_cards(availability, 2)
                 if cards:
                     fallback_housingcnt = 1
 
@@ -1112,7 +1114,7 @@ class ChatbotService:
                 }, []
             return {
                 "source": "faq_kb",
-                "note": f"PMS 暫時無法連線，以下為參考房價（非即時）：{exc}",
+                "note": "PMS 暫時無法連線，以下為參考房價（非即時房況）",
                 "available": [
                     {
                         "room_type_code": c.room_type_code,
@@ -1283,7 +1285,7 @@ class ChatbotService:
         try:
             raw = await asyncio.to_thread(query_pms, checkin_date, checkout_date, None, adults)
             availability = self._extract_availability(raw, checkin_date, checkout_date)
-            cards = self._availability_to_room_cards(availability)
+            cards = self._availability_to_room_cards(availability, adults)
             if cards:
                 # Spec: PMS 資料為主，FAQ_KB 補充圖片與特色
                 cards = await _enrich_cards_with_kb(cards, db)
@@ -1626,11 +1628,11 @@ class ChatbotService:
                 "min_remain": min_remain,
             })
 
-        available.sort(key=lambda item: item["nightly_price"] if item["nightly_price"] > 0 else 10**12)
         return {"ok": True, "available": available}
 
-    def _availability_to_room_cards(self, availability: dict) -> List[RoomCardSchema]:
-        return [
+    def _availability_to_room_cards(self, availability: dict, housingcnt: int = 2) -> List[RoomCardSchema]:
+        """Convert PMS availability to room cards, sorted by occupancy match then price."""
+        cards = [
             RoomCardSchema(
                 room_type_code=item["roomtype"],
                 room_type_name=item["name"],
@@ -1644,6 +1646,9 @@ class ChatbotService:
             )
             for item in availability.get("available", [])
         ]
+        # Spec: 依入住人數匹配度排序（差距小的優先），同匹配度按價格
+        cards.sort(key=lambda c: (abs((c.max_occupancy or 2) - housingcnt), c.price if c.price > 0 else 10**12))
+        return cards
 
     # ------------------------------------------------------------------
     # Helpers
