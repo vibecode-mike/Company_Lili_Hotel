@@ -12,12 +12,12 @@ Feature: FAQ 知識庫管理
       規則是大分類下的具體知識條目，以結構化欄位呈現（非問答對）。
       每個大分類底下可支援多個規則，規則至多 20 個。
       每條規則具備兩個狀態維度：
-        - 啟用狀態：啟用 / 停用（控制是否可在測試環境引用）
-        - 發佈狀態：已發佈 / 未發佈（控制是否已同步至前台聊天機器人）
-      新增或編輯後預設為「未發佈」，需經「發佈」操作才會同步至前台。
-      發佈時建立 FaqRuleVersion 快照，前台（會員聊天室）讀取快照版本。
-      停用規則後前台仍引用舊版快照，直到下一次「發佈」才會停止引用。
-      測試模式（ChatFAB）直接讀取 FaqRule（draft+active），即時反映編輯內容。
+        - 啟用狀態（is_enabled）：啟用 / 停用（控制是否可被 AI 引用）
+        - 發佈狀態（status）：active（已發佈）/ draft（未發佈）
+      新增或編輯後預設為 draft，需經「發佈」操作切換為 active 才會同步至前台。
+      發佈操作直接更新 FaqRule.status = active，不使用快照版本表。
+      前台（會員聊天室）僅讀取 status=active 且 is_enabled=true 的規則。
+      測試模式（ChatFAB）讀取 draft+active 的規則，即時反映編輯內容。
       測試模式與正式模式均扣除 AiTokenUsage 額度（依 OpenAI usage 實際值）。
 
   # ============================================================================
@@ -360,8 +360,8 @@ Feature: FAQ 知識庫管理
       And 修改「房價」欄位從「3500」改為「3800」
       And 點擊儲存
       Then 該規則發佈狀態自動切換為「未發佈」
-      And 前台聊天機器人繼續引用該規則的上一個已發佈版本
-      And 測試聊天視窗引用修改後的內容
+      And 前台聊天機器人不再引用此規則（status 已回到 draft）
+      And 測試聊天視窗引用修改後的內容（draft+active 均可讀）
 
   Rule: 使用者可刪除規則
 
@@ -379,7 +379,7 @@ Feature: FAQ 知識庫管理
       When 使用者點擊該規則的刪除按鈕
       And 確認刪除
       Then 系統刪除該筆規則
-      And 前台聊天機器人仍引用「標準單人房」直到下次「發佈」
+      And 前台聊天機器人立即停止引用「標準單人房」（規則已刪除）
 
   # ============================================================================
   # 第七部分：規則狀態管理
@@ -388,11 +388,11 @@ Feature: FAQ 知識庫管理
   Rule: 規則具備啟用狀態與發佈狀態兩個維度
 
     說明:
-      啟用狀態：啟用 / 停用（控制規則是否可被測試環境引用）
-      發佈狀態：已發佈 / 未發佈（控制是否已同步至前台聊天機器人）
-      新增或編輯規則後，發佈狀態自動切換為「未發佈」。
-      前台聊天機器人僅引用「已發佈」的 FaqRuleVersion 快照版本（非 FaqRule 即時狀態）。
-      編輯已發佈規則不影響前台服務，前台持續使用上一版快照。
+      啟用狀態（is_enabled）：啟用 / 停用（控制規則是否可被 AI 引用）
+      發佈狀態（status）：active / draft（控制是否已同步至前台聊天機器人）
+      新增或編輯規則後，status 自動切換為 draft。
+      前台聊天機器人僅引用 status=active 且 is_enabled=true 的 FaqRule。
+      編輯已發佈規則後 status 回到 draft，前台不再引用直到再次發佈。
 
     @not-implemented
     Example: 新增規則後預設為未發佈
@@ -406,8 +406,8 @@ Feature: FAQ 知識庫管理
       Given 一筆規則目前發佈狀態為「已發佈」
       When 使用者編輯該規則內容並儲存
       Then 該規則發佈狀態自動切換為「未發佈」
-      And 前台聊天機器人繼續引用上一個已發佈的快照版本
-      And 測試聊天視窗引用修改後的最新內容
+      And 前台聊天機器人不再引用此規則（status 已回到 draft）
+      And 測試聊天視窗引用修改後的最新內容（draft+active 均可讀）
 
   Rule: 支援規則個別的啟用與停用（發佈閘門模型）
 
@@ -442,8 +442,8 @@ Feature: FAQ 知識庫管理
   Rule: 大分類列表頁與內頁底部嵌入測試聊天懸浮按鈕（ChatFAB）
 
     說明:
-      測試聊天使用與正式模式相同的 Tool Calling 引擎與 system prompt。
-      差異僅在：知識庫來源為 FaqRule（draft+active），而非 FaqRuleVersion 快照。
+      測試聊天使用與正式模式相同的 Tool Calling 引擎（_unified_tool_loop）與 system prompt。
+      差異僅在：知識庫來源為 FaqRule（draft+active），正式模式僅讀取 active。
       測試模式同樣扣除 AiTokenUsage 額度。
 
     @not-implemented
@@ -480,9 +480,9 @@ Feature: FAQ 知識庫管理
   Rule: 發佈需 faq.publish 權限
 
     說明:
-      「發佈」是批次同步動作，將所有規則的當前啟用/停用狀態一次性同步至前台聊天機器人。
-      發佈時為每條 draft 規則建立 FaqRuleVersion 快照，前台（會員聊天室）讀取快照版本。
-      編輯已發佈規則（回到 draft）不影響前台，前台持續使用上一版快照，直到再次發佈。
+      「發佈」是批次同步動作，將所有 is_enabled=true 的 draft 規則 status 切換為 active。
+      不使用快照版本表，直接更新 FaqRule.status。
+      發佈後前台（會員聊天室）即時讀取 status=active 的規則。
       發佈按鈕位於 AI Chatbot 測試聊天視窗（ChatFAB）右上角火箭圖示。
 
     @not-implemented

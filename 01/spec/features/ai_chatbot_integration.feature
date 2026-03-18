@@ -9,20 +9,23 @@ Feature: AI 聊天機器人整合
       透過 query_pms_availability 工具按需查詢即時房況，而非一次性載入所有規則。
       不使用 RAG 向量檢索。
       支援 Web/LINE/FB 多渠道。
-      「已發佈」指經後台「發佈」操作建立的 FaqRuleVersion 快照版本。
-      正式模式（會員聊天室）讀取發佈快照；測試模式（ChatFAB）讀取 FaqRule 即時狀態。
-      測試模式與正式模式使用相同的 Tool Calling 引擎與 system prompt。
+      「已發佈」指經後台「發佈」操作將 FaqRule.status 從 draft 切換為 active。
+      正式模式（會員聊天室）僅讀取 status=active 的規則；測試模式（ChatFAB）讀取 draft+active。
+      測試模式與正式模式使用相同的 Tool Calling 引擎（_unified_tool_loop）與 system prompt。
+      兩個 API 端點共用統一流程：
+        - 官網 Chatbot：POST /api/v1/chatbot/message → handle_message()（記憶體 session）
+        - 會員聊天室 AI：POST /api/v1/ai/chat → chat()（DB 對話歷史 + 自動貼標 + Token 耗盡降級）
 
   # ============================================================================
   # 第一部分：AI 回答流程
   # ============================================================================
 
-  Rule: AI 透過 Tool Calling 按需查詢已發佈規則快照生成回答
+  Rule: AI 透過 Tool Calling 按需查詢已發佈規則生成回答
 
     說明:
-      前台 AI 僅引用「已發佈」的 FaqRuleVersion 快照。
+      前台 AI 僅引用 status=active 且 is_enabled=true 的 FaqRule。
       LLM 透過 kb_search 工具按需查詢相關分類的規則，而非一次載入全部。
-      編輯中的規則（回到 draft 狀態）不影響前台，前台持續使用上一版快照。
+      「發佈」操作將 draft 規則切換為 active，前台即時生效。
 
     @not-implemented
     Example: AI 透過 kb_search 工具查詢已發佈的訂房規則回答
@@ -31,7 +34,7 @@ Feature: AI 聊天機器人整合
         | 訂房     | 豪華雙人房 | 已發佈   | 豪華雙人房 | 海景、獨立陽台       | 3500 | 2    | 15   |
         | 訂房     | 標準單人房 | 已發佈   | 標準單人房 | 市景、基本配備       | 2000 | 1    | 20   |
       When 會員透過 LINE 提問「請問有什麼房型可以選擇？」
-      Then AI 呼叫 kb_search(category="booking_billing") 查詢已發佈的規則快照
+      Then AI 呼叫 kb_search(category="booking_billing") 查詢已發佈的規則
       And AI 根據查詢結果生成包含「豪華雙人房」和「標準單人房」資訊的回答
 
     @not-implemented
@@ -200,10 +203,13 @@ Feature: AI 聊天機器人整合
 
     說明:
       所有 AI 回答邏輯（規則收集、prompt 組裝、OpenAI 呼叫、Token 扣減、自動貼標、轉人工判斷）
-      集中於 Backend（FastAPI）的 POST /api/v1/ai/chat 端點。
+      集中於 Backend（FastAPI），共用 _unified_tool_loop 與 _execute_tool。
+      兩個 API 端點共用相同的 AI 流程：
+        - POST /api/v1/chatbot/message — 官網 Chatbot（記憶體 session、room_cards UI）
+        - POST /api/v1/ai/chat — 會員聊天室 AI（DB 對話歷史、自動貼標、Token 耗盡降級）
       各渠道 Webhook（LINE App、FB Webhook、Webchat）僅負責：
         1. 接收使用者訊息
-        2. 呼叫 Backend AI API
+        2. 呼叫 Backend AI API（POST /api/v1/ai/chat）
         3. 將 Backend 回傳的回答發送回渠道
       不再於渠道端直接實例化 OpenAI client 或維護本地知識庫。
 
@@ -217,7 +223,7 @@ Feature: AI 聊天機器人整合
         | message         | 使用者的提問內容   |
         | channel         | line               |
         | thread_id       | 當前對話串 ID      |
-      Then Backend 透過 Tool Calling 按需查詢已發佈規則快照與 PMS 資料
+      Then Backend 透過 Tool Calling 按需查詢已發佈規則（status=active）與 PMS 資料
       And Backend 回傳 AI 回答、自動貼標結果、Token 消耗量（OpenAI usage 實際值）
       And LINE App 將回答透過 LINE Messaging API 發送給使用者
 
