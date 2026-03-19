@@ -65,8 +65,8 @@ def insert_conversation_message(*, thread_id: str, role: str, direction: str,
         role: 角色 (user / assistant / system)
         direction: 方向 (inbound / outbound)
         message_type: 訊息類型 (chat / auto_response / broadcast)
-        question: 使用者問題文字
-        response: 回應文字
+        question: 使用者問題文字 (寫入 content 欄位)
+        response: 回應文字 (寫入 content 欄位)
         event_id: LINE event ID
         status: 訊息狀態
         message_source: 訊息來源 (manual|gpt|keyword|welcome|always)
@@ -83,6 +83,9 @@ def insert_conversation_message(*, thread_id: str, role: str, direction: str,
     # 呼叫端可傳入 message_id；未傳則產生 UUID
     msg_id = message_id.strip() if isinstance(message_id, str) and message_id.strip() else uuid.uuid4().hex
 
+    # question / response 統一寫入 content 欄位
+    content = question or response or ""
+
     try:
         columns = [
             "id",
@@ -90,8 +93,7 @@ def insert_conversation_message(*, thread_id: str, role: str, direction: str,
             "role",
             "direction",
             "message_type",
-            "question",
-            "response",
+            "content",
             "event_id",
             "status",
             "message_source",
@@ -102,8 +104,7 @@ def insert_conversation_message(*, thread_id: str, role: str, direction: str,
             ":role",
             ":dir",
             ":mt",
-            ":q",
-            ":r",
+            ":content",
             ":eid",
             ":st",
             ":src",
@@ -114,8 +115,7 @@ def insert_conversation_message(*, thread_id: str, role: str, direction: str,
             "role": role,
             "dir": direction,
             "mt": message_type,
-            "q": question,
-            "r": response,
+            "content": content,
             "eid": event_id,
             "st": status,
             "src": message_source
@@ -167,7 +167,7 @@ def get_chat_history(thread_id: str, limit: int = 50, offset: int = 0) -> list[d
 
     sql = """
         SELECT id, thread_id, role, direction, message_type,
-               question, response, event_id, status, message_source,
+               content, event_id, status, message_source,
                created_at, updated_at
         FROM conversation_messages
         WHERE thread_id = :tid

@@ -2538,7 +2538,7 @@ def on_follow(event: FollowEvent):
     # 如果沒有啟用的歡迎訊息，使用預設訊息
     if not welcome_msg:
         welcome_msg = (
-            "Hi~ 歡迎加入水漾月明度假文旅（Hana Mizu Tsuki Hotel）！\n"
+            "Hi~ 歡迎加入！\n"
             "需要我協助什麼樣的服務呢?\n"
         )
         logging.info("[on_follow] Using default welcome message")
