@@ -27,6 +27,7 @@ from typing import Optional
 import csv
 import io
 import logging
+import time
 import openpyxl
 import xlrd
 import xlwt
@@ -142,8 +143,8 @@ async def get_rules(
             "category_id": rule.category_id,
             "content_json": content,
             "status": rule.status,
-            "is_enabled": rule.is_enabled if hasattr(rule, "is_enabled") else True,
-            "published_at": rule.published_at.isoformat() if hasattr(rule, "published_at") and rule.published_at else None,
+            "is_enabled": rule.is_enabled,
+            "published_at": rule.published_at.isoformat() if rule.published_at else None,
             "tags": [{"id": t.id, "tag_name": t.tag_name} for t in (rule.tags or [])],
             "created_at": rule.created_at.isoformat() if rule.created_at else None,
             "updated_at": rule.updated_at.isoformat() if rule.updated_at else None,
@@ -363,7 +364,6 @@ _last_rule_modified: float = 0.0  # in-memory epoch timestamp
 def _bump_rule_modified():
     """更新規則修改時間戳（供 ChatFAB polling 偵測）"""
     global _last_rule_modified
-    import time
     _last_rule_modified = time.time()
 
 @router.get("/last-modified")

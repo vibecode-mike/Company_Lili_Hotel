@@ -55,28 +55,26 @@ class FaqService:
         result = await db.execute(stmt)
         categories = result.scalars().all()
 
-        # 取得每個分類的規則數量
-        for cat in categories:
-            count_stmt = (
-                select(func.count())
-                .select_from(FaqRule)
-                .where(FaqRule.category_id == cat.id)
+        # 一次查詢取得所有分類的規則數量與已發佈數量
+        from sqlalchemy import case
+        counts_stmt = (
+            select(
+                FaqRule.category_id,
+                func.count().label("rule_count"),
+                func.count(case((
+                    (FaqRule.status == "active") & (FaqRule.is_enabled == True), 1  # noqa: E712
+                ))).label("published_count"),
             )
-            count_result = await db.execute(count_stmt)
-            cat.rule_count = count_result.scalar() or 0
+            .select_from(FaqRule)
+            .group_by(FaqRule.category_id)
+        )
+        counts_result = await db.execute(counts_stmt)
+        counts_map = {row.category_id: (row.rule_count, row.published_count) for row in counts_result}
 
-            # 已發佈規則數量（status=active 且 is_enabled=1）
-            pub_stmt = (
-                select(func.count())
-                .select_from(FaqRule)
-                .where(
-                    FaqRule.category_id == cat.id,
-                    FaqRule.status == "active",
-                    FaqRule.is_enabled == True,  # noqa: E712
-                )
-            )
-            pub_result = await db.execute(pub_stmt)
-            cat.published_count = pub_result.scalar() or 0
+        for cat in categories:
+            rc, pc = counts_map.get(cat.id, (0, 0))
+            cat.rule_count = rc
+            cat.published_count = pc
 
         return list(categories)
 

@@ -9,7 +9,6 @@ import {
   type RoomCard,
   type BookingContext,
 } from "../utils/chatbotApi";
-import { apiGet } from "../utils/apiClient";
 import chatfabLogo from "../assets/chatfab-logo.svg";
 import chatfabOaIcon from "../assets/chatfab-oa-icon.svg";
 import chatfabSend from "../assets/chatfab-send.svg";
@@ -950,19 +949,11 @@ export default function ChatFAB() {
   const lastKnownTs = useRef<number>(0);
 
   useEffect(() => {
-    if (!chatOpen) return;
+    if (!chatOpen || ruleUpdateNotice) return;
     let cancelled = false;
 
-    // 初始化：取得當前 ts 作為 baseline
-    apiGet("/api/v1/faq/last-modified")
-      .then((r) => r.json())
-      .then((d: any) => {
-        if (!cancelled) lastKnownTs.current = d.ts ?? 0;
-      })
-      .catch(() => {});
-
-    const timer = setInterval(() => {
-      apiGet("/api/v1/faq/last-modified")
+    const poll = () =>
+      fetch("/api/v1/faq/last-modified")
         .then((r) => r.json())
         .then((d: any) => {
           if (cancelled) return;
@@ -973,13 +964,15 @@ export default function ChatFAB() {
           lastKnownTs.current = ts;
         })
         .catch(() => {});
-    }, 5000);
+
+    poll(); // baseline
+    const timer = setInterval(poll, 5000);
 
     return () => {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [chatOpen]);
+  }, [chatOpen, ruleUpdateNotice]);
 
   const addBotMessage = useCallback((msg: Omit<ChatMessage, "id">) => {
     const id = `msg-${Date.now()}-${Math.random().toString(36).slice(2)}`;
