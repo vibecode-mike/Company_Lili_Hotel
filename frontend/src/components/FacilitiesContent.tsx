@@ -1,4 +1,4 @@
-import React, { useState, memo, useCallback, useMemo, useEffect } from "react";
+import React, { useState, useRef, memo, useCallback, useMemo, useEffect } from "react";
 import Sidebar from "./Sidebar";
 import { useToast } from "./ToastProvider";
 import { PageHeaderWithBreadcrumb } from "./common/Breadcrumb";
@@ -33,7 +33,8 @@ interface FacilityRecord {
   description: string;
   memberTags: string[];
   lastUpdated: string;
-  published: boolean;
+  enabled: boolean;    // 加入測試環境
+  published: boolean;  // 發佈狀態
 }
 
 type SortField = "hours" | "fee" | "memberTags" | "lastUpdated" | "published";
@@ -44,6 +45,8 @@ type FaqRuleRaw = {
   id: number;
   content_json: Record<string, string>;
   status: string;
+  is_enabled?: boolean;
+  published_at?: string | null;
   tags: Array<{ tag_name: string }>;
   updated_at: string | null;
 };
@@ -61,7 +64,8 @@ function mapRuleToFacility(rule: FaqRuleRaw): FacilityRecord {
     lastUpdated: rule.updated_at
       ? rule.updated_at.slice(0, 16).replace("T", " ")
       : "—",
-    published: rule.is_enabled !== false,
+    enabled: rule.is_enabled !== false,
+    published: !!rule.published_at,
   };
 }
 
@@ -72,6 +76,31 @@ const TagChip = memo(function TagChip({ label }: { label: string }) {
     <span className="inline-flex items-center px-[4px] py-[4px] rounded-[8px] bg-[#f0f6ff] text-[#0f6beb] text-[16px] leading-[1.5] whitespace-nowrap font-['Noto_Sans_TC',sans-serif] font-normal">
       {label}
     </span>
+  );
+});
+
+const TestEnvHeaderLabel = memo(function TestEnvHeaderLabel() {
+  const [show, setShow] = useState(false);
+  return (
+    <div
+      className="relative inline-flex items-center gap-[2px] cursor-default"
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+    >
+      <span className="whitespace-nowrap">加入測試環境</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" className="shrink-0">
+        <circle cx="12" cy="12" r="10" fill="#9ca3af" />
+        <path d="M11 7h2v2h-2zm0 4h2v6h-2z" fill="white" />
+      </svg>
+      {show && (
+        <div
+          className="absolute right-0 top-full mt-[6px] bg-[#383838] text-white text-[12px] leading-[1.5] font-['Noto_Sans_TC',sans-serif] font-normal rounded-[8px] p-[8px] w-[260px] whitespace-normal pointer-events-none"
+          style={{ zIndex: 100 }}
+        >
+          開啟後同步至測試環境。請進行 AI Chatbot 對話測試，確認回覆正確後，再點擊「發佈」按鈕，將同步發佈至前台。
+        </div>
+      )}
+    </div>
   );
 });
 
@@ -344,47 +373,63 @@ const TableRow = memo(function TableRow({
 
       {/* 最後更新 */}
       <td className="px-[12px] py-[12px] whitespace-nowrap text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5]">
-        <div className="flex items-center gap-[12px]">
-          <span>{record.lastUpdated}</span>
-          <div
-            className="inline-flex items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0"
-            style={{ backgroundColor: record.published ? "#e4fcea" : "#f5f5f5" }}
-          >
-            <span
-              className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[16px] text-center whitespace-nowrap"
-              style={{ color: record.published ? "#00470c" : "#383838" }}
-            >
-              {record.published ? "已發佈" : "未發佈"}
-            </span>
-          </div>
-        </div>
+        {record.lastUpdated}
       </td>
 
-      {/* 啟用狀態 — 凍結欄 */}
+      {/* 發佈狀態 — 凍結欄 */}
       <td
         style={{
-          width: 104,
-          minWidth: 104,
-          maxWidth: 104,
+          width: 90,
+          minWidth: 90,
+          maxWidth: 90,
           position: "sticky",
-          right: 68,
+          right: 188,
           zIndex: 1,
           boxShadow: "inset 1px 0 0 #ddd",
         }}
         className="px-[12px] py-[12px] align-middle text-center bg-white"
       >
-        <Toggle
-          checked={record.published}
-          onChange={(v) => onToggle(record.id, v)}
-        />
+        <div
+          className="inline-flex items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0"
+          style={{ backgroundColor: record.published ? "#e4fcea" : "#f5f5f5" }}
+        >
+          <span
+            className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[14px] text-center whitespace-nowrap"
+            style={{ color: record.published ? "#00470c" : "#383838" }}
+          >
+            {record.published ? "已發佈" : "未發佈"}
+          </span>
+        </div>
+      </td>
+
+      {/* 加入測試環境 — 凍結欄 */}
+      <td
+        style={{
+          width: 120,
+          minWidth: 120,
+          maxWidth: 120,
+          position: "sticky",
+          right: 68,
+          zIndex: 1,
+        }}
+        className="py-[12px] bg-white"
+      >
+        <div className="flex items-center justify-center w-full">
+          <Toggle
+            checked={record.enabled}
+            onChange={(v) => onToggle(record.id, v)}
+          />
+        </div>
       </td>
 
       {/* 動作 — 凍結欄 */}
       <td
         style={{ width: 68, minWidth: 68, maxWidth: 68, position: "sticky", right: 0, zIndex: 1 }}
-        className="px-[12px] py-[12px] align-middle text-center bg-white"
+        className="py-[12px] bg-white"
       >
-        <ButtonEdit onClick={() => onEdit(record.id)} />
+        <div className="flex items-center justify-center w-full">
+          <ButtonEdit onClick={() => onEdit(record.id)} />
+        </div>
       </td>
     </tr>
   );
@@ -409,6 +454,7 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
     null,
   );
   const [editDraft, setEditDraft] = useState<FacilityFaqDraft | null>(null);
+  const savedRuleIdRef = useRef<string | null>(null);
 
   // Load FAQ rules from API
   useEffect(() => {
@@ -431,6 +477,17 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
       .finally(() => setLoadingFacilities(false));
   }, []);
 
+  // 監聽發佈事件，即時更新發佈狀態
+  useEffect(() => {
+    const handler = () => {
+      setFacilities((prev) =>
+        prev.map((r) => (r.enabled ? { ...r, published: true } : { ...r, published: false })),
+      );
+    };
+    window.addEventListener("faq-published", handler);
+    return () => window.removeEventListener("faq-published", handler);
+  }, []);
+
   const handleSort = useCallback((field: SortField) => {
     setSortField((prev) => {
       if (prev === field) {
@@ -447,14 +504,14 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
       const facility = facilities.find((r) => r.id === id);
       const name = facility?.name ?? "";
       setFacilities((prev) =>
-        prev.map((r) => (r.id === id ? { ...r, published: value } : r)),
+        prev.map((r) => (r.id === id ? { ...r, enabled: value } : r)),
       );
       try {
         await apiPatch(`/api/v1/faq/rules/${id}/toggle`, { is_enabled: value });
         showToast(
           value ? (
             <>
-              {name} 已啟用{" "}
+              {name} 同步至測試環境，請先進行對話測試以確保回覆品質{" "}
               <button
                 type="button"
                 onClick={(e) => {
@@ -482,7 +539,7 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
       } catch {
         // revert on failure
         setFacilities((prev) =>
-          prev.map((r) => (r.id === id ? { ...r, published: !value } : r)),
+          prev.map((r) => (r.id === id ? { ...r, enabled: !value } : r)),
         );
         showToast("操作失敗", "error");
       }
@@ -626,6 +683,7 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
                 description: "",
                 memberTags: [],
                 lastUpdated: "—",
+                enabled: false,
                 published: false,
               };
               setEditingFacility(newFacility);
@@ -660,7 +718,7 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
       {/* Record count + 變更 */}
       <div className="flex items-center pt-px w-full">
         <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[14px] text-[#6e6e6e] whitespace-nowrap leading-[1.5]">
-          共 {filtered.length} 筆，引用{" "}
+          共 {filtered.length} 筆，AI 引用{" "}
           <span className="text-[#383838]">{sourceName}</span> 內容
         </p>
         <button
@@ -706,26 +764,41 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
                 最後更新
               </Th>
 
-              {/* 啟用狀態 — 凍結欄 */}
+              {/* 發佈狀態 — 凍結欄 */}
               <th
                 onClick={() => handleSort("published")}
                 style={{
-                  width: 104,
-                  minWidth: 104,
-                  maxWidth: 104,
+                  width: 90,
+                  minWidth: 90,
+                  maxWidth: 90,
                   position: "sticky",
-                  right: 68,
+                  right: 188,
                   zIndex: 2,
                   boxShadow: "inset 1px 0 0 #ddd",
                 }}
                 className="px-[12px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap select-none bg-white border-b border-[#ddd] cursor-pointer hover:bg-[#f5f8ff] transition-colors duration-150"
               >
-                啟用狀態
+                發佈狀態
                 <SortIcon
                   field="published"
                   sortField={sortField}
                   sortDir={sortDir}
                 />
+              </th>
+
+              {/* 加入測試環境 — 凍結欄 */}
+              <th
+                style={{
+                  width: 120,
+                  minWidth: 120,
+                  maxWidth: 120,
+                  position: "sticky",
+                  right: 68,
+                  zIndex: 2,
+                }}
+                className="px-[8px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] bg-white border-b border-[#ddd]"
+              >
+                <TestEnvHeaderLabel />
               </th>
 
               {/* 動作 — 凍結欄 */}
@@ -794,6 +867,7 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
                 );
                 const json = await res.json();
                 const newId = String(json.data?.id ?? editingFacility.id);
+                savedRuleIdRef.current = newId;
                 const now = new Date().toISOString().slice(0, 16).replace("T", " ");
                 setFacilities((prev) => [
                   {
@@ -805,11 +879,13 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
                     description: draft.description,
                     memberTags: draft.memberTags,
                     lastUpdated: now,
+                    enabled: false,
                     published: false,
                   },
                   ...prev,
                 ]);
               } else {
+                savedRuleIdRef.current = editingFacility.id;
                 await apiPut(`/api/v1/faq/rules/${editingFacility.id}`, {
                   content_json,
                   tag_names: draft.memberTags,
@@ -837,6 +913,14 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
             } catch {
               showToast("儲存失敗", "error");
             }
+          }}
+          onEnableTest={() => {
+            const id = savedRuleIdRef.current ?? editingFacility.id;
+            if (!id || id.startsWith("new-")) return;
+            setFacilities((prev) =>
+              prev.map((r) => (r.id === id ? { ...r, enabled: true } : r)),
+            );
+            apiPatch(`/api/v1/faq/rules/${id}/toggle`, { is_enabled: true }).catch(() => {});
           }}
           onDelete={async () => {
             const isNew = editingFacility.id.startsWith("new-");
@@ -937,10 +1021,10 @@ const DataSourceTableRow = memo(function DataSourceTableRow({
       <td className="px-[12px] py-[12px] align-middle text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] whitespace-nowrap">
         {row.lastPublished}
       </td>
-      {/* 啟用狀態 — 凍結欄 */}
+      {/* 加入測試環境 — 凍結欄 */}
       <td
         style={{
-          width: 104,
+          width: 120,
           position: "sticky",
           right: 0,
           zIndex: 1,
@@ -969,6 +1053,7 @@ const DataSourcesTable = memo(function DataSourcesTable({
   rows: DataSourceRow[];
 }) {
   const [sources, setSources] = useState(rows);
+  const { showToast } = useToast();
   return (
     <div className="flex flex-col gap-[16px] items-start w-full">
       {/* 測試 button — own row, right-aligned */}
@@ -1026,18 +1111,18 @@ const DataSourcesTable = memo(function DataSourcesTable({
                   ⇅
                 </span>
               </th>
-              {/* 凍結欄 header：啟用狀態 */}
+              {/* 凍結欄 header：加入測試環境 */}
               <th
                 style={{
-                  width: 104,
+                  width: 120,
                   position: "sticky",
                   right: 0,
                   zIndex: 2,
                   boxShadow: "inset 1px 0 0 #ddd",
                 }}
-                className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]"
+                className="px-[8px] py-[16px] text-center font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] bg-white border-b border-[#ddd]"
               >
-                啟用狀態
+                <TestEnvHeaderLabel />
               </th>
             </tr>
           </thead>
@@ -1047,7 +1132,7 @@ const DataSourcesTable = memo(function DataSourcesTable({
                 key={row.type}
                 row={row}
                 isLast={idx === sources.length - 1}
-                onToggle={(type, v) =>
+                onToggle={(type, v) => {
                   setSources((prev) =>
                     prev.map((s) =>
                       s.type === type
@@ -1059,8 +1144,36 @@ const DataSourcesTable = memo(function DataSourcesTable({
                           }
                         : s,
                     ),
-                  )
-                }
+                  );
+                  showToast(
+                    v ? (
+                      <>
+                        {type} 同步至測試環境，請先進行對話測試以確保回覆品質{" "}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.dispatchEvent(new CustomEvent("open-chatfab"));
+                          }}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "#DBEDFF",
+                            cursor: "pointer",
+                            padding: 0,
+                            fontFamily: "'Noto Sans TC', sans-serif",
+                            fontSize: 16,
+                            lineHeight: 1.5,
+                            textDecoration: "underline",
+                          }}
+                        >
+                          測試
+                        </button>
+                      </>
+                    ) : `${type} 已停用`,
+                    "success",
+                  );
+                }}
               />
             ))}
           </tbody>

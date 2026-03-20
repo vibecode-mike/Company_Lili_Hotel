@@ -40,6 +40,7 @@ interface CategoryRecord {
   faqLabel: string;
   lastUpdated: string;
   enabled: boolean;
+  published: boolean;
 }
 
 interface FaqCategoryApi {
@@ -47,6 +48,7 @@ interface FaqCategoryApi {
   name: string;
   is_active: boolean;
   rule_count: number;
+  published_count?: number;
   data_source_type?: string;
   updated_at?: string | null;
   pms_connection?: { status: string; last_synced_at: string | null } | null;
@@ -83,8 +85,34 @@ function mapApiCategory(cat: FaqCategoryApi): CategoryRecord {
     faqLabel: cat.rule_count > 0 ? "已儲存" : "未設定",
     lastUpdated,
     enabled: cat.is_active,
+    published: (cat.published_count ?? 0) > 0,
   };
 }
+
+const TestEnvHeaderLabel = memo(function TestEnvHeaderLabel() {
+  const [show, setShow] = useState(false);
+  return (
+    <div
+      className="relative inline-flex items-center gap-[2px] cursor-default"
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+    >
+      <span className="whitespace-nowrap">加入測試環境</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" className="shrink-0">
+        <circle cx="12" cy="12" r="10" fill="#9ca3af" />
+        <path d="M11 7h2v2h-2zm0 4h2v6h-2z" fill="white" />
+      </svg>
+      {show && (
+        <div
+          className="absolute right-0 top-full mt-[6px] bg-[#383838] text-white text-[12px] leading-[1.5] font-['Noto_Sans_TC',sans-serif] font-normal rounded-[8px] p-[8px] w-[260px] whitespace-normal pointer-events-none"
+          style={{ zIndex: 100 }}
+        >
+          開啟後同步至測試環境。請進行 AI Chatbot 對話測試，確認回覆正確後，再點擊「發佈」按鈕，將同步發佈至前台。
+        </div>
+      )}
+    </div>
+  );
+});
 
 const Toggle = memo(function Toggle({
   checked,
@@ -264,45 +292,53 @@ const TableRow = memo(function TableRow({
       </td>
 
       <td className="px-[12px] py-[12px] align-middle">
-        <div className="flex items-center flex-wrap" style={{ gap: 12 }}>
-          <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[#383838] text-[14px] whitespace-nowrap">
-            {record.lastUpdated}
-          </p>
-          {(() => {
-            // Derive source type label + status
-            if (record.pmsLabel !== "未串接") {
-              // PMS is connected
-              const active = record.pmsStatus === "normal";
-              return (
-                <StatusTag
-                  label={`PMS ${active ? "已啟用" : "已停用"}`}
-                  color={active ? "green" : "red"}
-                />
-              );
-            }
-            if (record.faqLabel === "已儲存") {
-              return <StatusTag label="自訂 FAQ 已啟用" color="green" />;
-            }
-            return <StatusTag label="未串接" color="gray" />;
-          })()}
-        </div>
+        <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[#383838] text-[14px] whitespace-nowrap">
+          {record.lastUpdated}
+        </p>
       </td>
 
-      {/* 凍結欄：啟用狀態 */}
+      {/* 凍結欄：發佈狀態 */}
       <td
         style={{
-          width: 104,
+          width: 90,
+          minWidth: 90,
+          maxWidth: 90,
           position: "sticky",
-          right: 68,
+          right: 188,
           zIndex: 1,
           boxShadow: "inset 1px 0 0 #ddd",
         }}
-        className="px-[12px] py-[12px] align-middle bg-white group-hover:bg-[#f5f8ff] transition-colors"
+        className="px-[12px] py-[12px] align-middle text-center bg-white group-hover:bg-[#f5f8ff] transition-colors"
       >
-        <Toggle
-          checked={record.enabled}
-          onChange={(v) => onToggle(record.id, v)}
-        />
+        <div
+          className="inline-flex items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0"
+          style={{ backgroundColor: record.published ? "#e4fcea" : "#f5f5f5" }}
+        >
+          <span
+            className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[14px] text-center whitespace-nowrap"
+            style={{ color: record.published ? "#00470c" : "#383838" }}
+          >
+            {record.published ? "已發佈" : "未發佈"}
+          </span>
+        </div>
+      </td>
+
+      {/* 凍結欄：加入測試環境 */}
+      <td
+        style={{
+          width: 120,
+          position: "sticky",
+          right: 68,
+          zIndex: 1,
+        }}
+        className="py-[12px] bg-white group-hover:bg-[#f5f8ff] transition-colors"
+      >
+        <div className="flex items-center justify-center w-full">
+          <Toggle
+            checked={record.enabled}
+            onChange={(v) => onToggle(record.id, v)}
+          />
+        </div>
       </td>
 
       {/* 凍結欄：動作 */}
@@ -361,6 +397,17 @@ export default function AIChatbotOverview({
       .catch(() => {});
   }, []);
 
+  // 監聽發佈事件，即時更新發佈狀態
+  useEffect(() => {
+    const handler = () => {
+      setCategories((prev) =>
+        prev.map((c) => (c.enabled ? { ...c, published: true } : { ...c, published: false })),
+      );
+    };
+    window.addEventListener("faq-published", handler);
+    return () => window.removeEventListener("faq-published", handler);
+  }, []);
+
   const handleToggle = useCallback(async (id: string, v: boolean) => {
     const cat = categories.find((c) => c.id === id);
     const name = cat?.name ?? "";
@@ -372,7 +419,7 @@ export default function AIChatbotOverview({
       showToast(
         v ? (
           <>
-            {name} 已啟用{" "}
+            {name} 同步至測試環境，請先進行對話測試以確保回覆品質{" "}
             <button
               type="button"
               onClick={(e) => {
@@ -621,18 +668,32 @@ export default function AIChatbotOverview({
                           ⇅
                         </span>
                       </th>
-                      {/* 凍結欄 header：啟用狀態 */}
+                      {/* 凍結欄 header：發佈狀態 */}
                       <th
                         style={{
-                          width: 104,
+                          width: 90,
+                          minWidth: 90,
+                          maxWidth: 90,
                           position: "sticky",
-                          right: 68,
+                          right: 188,
                           zIndex: 2,
                           boxShadow: "inset 1px 0 0 #ddd",
                         }}
-                        className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]"
+                        className="px-[12px] py-[16px] text-center font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd]"
                       >
-                        啟用狀態
+                        發佈狀態
+                      </th>
+                      {/* 凍結欄 header：加入測試環境 */}
+                      <th
+                        style={{
+                          width: 120,
+                          position: "sticky",
+                          right: 68,
+                          zIndex: 2,
+                        }}
+                        className="px-[8px] py-[16px] text-center font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] bg-white border-b border-[#ddd]"
+                      >
+                        <TestEnvHeaderLabel />
                       </th>
                       {/* 凍結欄 header：動作 */}
                       <th

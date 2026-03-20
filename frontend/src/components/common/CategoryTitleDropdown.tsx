@@ -131,9 +131,9 @@ export default function CategoryTitleDropdown({
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>確定要匯入嗎？</AlertDialogTitle>
+            <AlertDialogTitle>確認匯入規則？</AlertDialogTitle>
             <AlertDialogDescription>
-              匯入將會覆蓋原有的資料內容，此操作無法復原。確定要繼續執行嗎？
+              匯入後將完全覆蓋並刪除目前該分類下的所有規則。此動作無法還原，請確認是否繼續？
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -141,7 +141,7 @@ export default function CategoryTitleDropdown({
               取消
             </AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmImport}>
-              確定匯入
+              確認匯入
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

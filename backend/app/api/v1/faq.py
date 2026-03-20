@@ -27,6 +27,9 @@ from typing import Optional
 import csv
 import io
 import logging
+import openpyxl
+import xlrd
+import xlwt
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -70,6 +73,7 @@ async def get_categories(
                 for f in sorted(cat.fields, key=lambda x: x.sort_order)
             ],
             "rule_count": getattr(cat, "rule_count", 0),
+            "published_count": getattr(cat, "published_count", 0),
             "updated_at": cat.updated_at.isoformat() if cat.updated_at else None,
             "pms_connection": None,
         }
@@ -102,6 +106,7 @@ async def toggle_category(
     if not category:
         raise HTTPException(status_code=404, detail="大分類不存在")
 
+    _bump_rule_modified()
     return {
         "code": 200,
         "message": f"大分類已{'啟用' if data.is_active else '停用'}",
@@ -137,6 +142,8 @@ async def get_rules(
             "category_id": rule.category_id,
             "content_json": content,
             "status": rule.status,
+            "is_enabled": rule.is_enabled if hasattr(rule, "is_enabled") else True,
+            "published_at": rule.published_at.isoformat() if hasattr(rule, "published_at") and rule.published_at else None,
             "tags": [{"id": t.id, "tag_name": t.tag_name} for t in (rule.tags or [])],
             "created_at": rule.created_at.isoformat() if rule.created_at else None,
             "updated_at": rule.updated_at.isoformat() if rule.updated_at else None,
@@ -297,6 +304,7 @@ async def toggle_rule(
     if not rule:
         raise HTTPException(status_code=404, detail="規則不存在")
 
+    _bump_rule_modified()
     return {
         "code": 200,
         "message": f"規則已{'啟用' if rule.is_enabled else '停用'}",
@@ -340,6 +348,7 @@ async def publish_all(
             "published_count": count,
         })
 
+    _bump_rule_modified()
     return {
         "code": 200,
         "message": f"已發佈 {count} 筆規則",
@@ -347,24 +356,32 @@ async def publish_all(
     }
 
 
+# === 規則最後更新時間（供前端 polling） ===
+
+_last_rule_modified: float = 0.0  # in-memory epoch timestamp
+
+def _bump_rule_modified():
+    """更新規則修改時間戳（供 ChatFAB polling 偵測）"""
+    global _last_rule_modified
+    import time
+    _last_rule_modified = time.time()
+
+@router.get("/last-modified")
+async def get_rules_last_modified():
+    """回傳最後一次規則異動的 epoch timestamp"""
+    return {"ts": _last_rule_modified}
+
+
 # === 匯入 / 匯出 ===
 
 
-@router.get("/categories/{category_id}/rules/export")
-async def export_rules(
-    category_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """匯出分類下所有規則為 CSV"""
-    rules = await faq_service.export_rules(db, category_id)
+EXPORT_HEADERS = ["房型圖片", "房型名稱", "房價", "可入住人數", "剩餘間數", "房型特色", "會員標籤", "訂房 URL"]
+EXPORT_DB_KEYS = ["image_url", "房型名稱", "房價", "人數", "間數", "房型特色", None, "url"]
 
-    output = io.StringIO()
-    writer = csv.writer(output)
 
-    # 收集所有欄位名
-    all_keys = set()
-    parsed_rules = []
+def _build_export_rows(rules) -> list[list[str]]:
+    """從 rules 建立匯出用的二維列表（不含標題列）"""
+    rows = []
     for rule in rules:
         content = rule.content_json
         if isinstance(content, str):
@@ -372,20 +389,167 @@ async def export_rules(
                 content = json.loads(content)
             except (json.JSONDecodeError, TypeError):
                 content = {}
-        parsed_rules.append(content)
-        all_keys.update(content.keys())
+        tag_str = ",".join(t.tag_name for t in (rule.tags or []))
+        row = []
+        for i, db_key in enumerate(EXPORT_DB_KEYS):
+            if db_key is None:
+                row.append(tag_str)
+            else:
+                row.append(str(content.get(db_key, "")))
+        rows.append(row)
+    return rows
 
-    headers = sorted(all_keys)
-    writer.writerow(headers)
-    for content in parsed_rules:
-        writer.writerow([content.get(k, "") for k in headers])
 
-    csv_bytes = output.getvalue().encode("utf-8-sig")
+@router.get("/categories/{category_id}/rules/export")
+async def export_rules(
+    category_id: int,
+    format: str = Query("csv", regex="^(csv|xls|xlsx)$"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """匯出分類下所有規則（支援 csv/xls/xlsx）"""
+    rules = await faq_service.export_rules(db, category_id)
+    rows = _build_export_rows(rules)
+
+    if format == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(EXPORT_HEADERS)
+        for row in rows:
+            writer.writerow(row)
+        file_bytes = output.getvalue().encode("utf-8-sig")
+        media_type = "text/csv"
+        filename = "rules_export.csv"
+
+    elif format == "xlsx":
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(EXPORT_HEADERS)
+        for row in rows:
+            ws.append(row)
+        buf = io.BytesIO()
+        wb.save(buf)
+        file_bytes = buf.getvalue()
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        filename = "rules_export.xlsx"
+
+    else:  # xls
+        wb = xlwt.Workbook(encoding="utf-8")
+        ws = wb.add_sheet("rules")
+        for c, header in enumerate(EXPORT_HEADERS):
+            ws.write(0, c, header)
+        for r, row in enumerate(rows):
+            for c, val in enumerate(row):
+                ws.write(r + 1, c, val)
+        buf = io.BytesIO()
+        wb.save(buf)
+        file_bytes = buf.getvalue()
+        media_type = "application/vnd.ms-excel"
+        filename = "rules_export.xls"
+
     return StreamingResponse(
-        io.BytesIO(csv_bytes),
-        media_type="application/octet-stream",
-        headers={"Content-Disposition": "attachment; filename=rules_export.csv"},
+        io.BytesIO(file_bytes),
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+FIELD_MAPPING = [
+    "image_url", "房型名稱", "房價", "人數",
+    "間數", "房型特色", "會員標籤", "url",
+]
+REQUIRED_FIELD_INDICES = {0, 1, 2, 3, 4, 5, 7}  # index 6（會員標籤）允許空值
+EXPECTED_FIELD_COUNT = len(FIELD_MAPPING)  # 8
+
+
+def _clean_excel_value(val) -> str:
+    """清理 Excel 讀出的值：None→空字串，浮點整數去小數點"""
+    if val is None:
+        return ""
+    if isinstance(val, float) and val == int(val):
+        return str(int(val))
+    return str(val)
+
+
+def _validate_and_build_rows(raw_rows: list[list[str]]) -> list[dict[str, str]]:
+    """共用校驗：長度檢查、全空列跳過、必填檢查，依固定索引組裝 dict"""
+    rows = []
+    data_index = 0  # 有效資料的計數（用於錯誤提示）
+
+    for raw in raw_rows:
+        # 取前 8 欄（多的忽略）
+        values = raw[:EXPECTED_FIELD_COUNT]
+
+        # 全空列 → 靜默跳過
+        if not any(v.strip() for v in values):
+            continue
+
+        data_index += 1
+
+        # 長度校驗
+        if len(values) < EXPECTED_FIELD_COUNT:
+            raise ValueError("格式數量不符，請重新匯入")
+
+        # 必填檢查
+        for idx in REQUIRED_FIELD_INDICES:
+            if not values[idx].strip():
+                raise ValueError(
+                    f"第 {data_index} 筆資料的「{FIELD_MAPPING[idx]}」為必填欄位"
+                )
+
+        # 依固定索引組裝 dict
+        row_dict = {FIELD_MAPPING[i]: values[i] for i in range(EXPECTED_FIELD_COUNT)}
+        rows.append(row_dict)
+
+    return rows
+
+
+def _parse_csv(content: bytes) -> list[dict[str, str]]:
+    """解析 CSV 檔案"""
+    text_content = content.decode("utf-8-sig")
+    reader = csv.reader(io.StringIO(text_content))
+
+    # 跳過標題列
+    next(reader, None)
+
+    raw_rows = []
+    for row in reader:
+        raw_rows.append([v.strip() for v in row])
+
+    return _validate_and_build_rows(raw_rows)
+
+
+def _parse_xlsx(content: bytes) -> list[dict[str, str]]:
+    """解析 .xlsx 檔案"""
+    wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True)
+    ws = wb.active
+    rows_iter = ws.iter_rows(values_only=True)
+
+    # 跳過標題列
+    next(rows_iter, None)
+
+    raw_rows = []
+    for row_values in rows_iter:
+        raw_rows.append([_clean_excel_value(v) for v in row_values])
+
+    wb.close()
+    return _validate_and_build_rows(raw_rows)
+
+
+def _parse_xls(content: bytes) -> list[dict[str, str]]:
+    """解析 .xls 檔案"""
+    wb = xlrd.open_workbook(file_contents=content)
+    ws = wb.sheet_by_index(0)
+
+    if ws.nrows < 2:
+        return []
+
+    # 跳過標題列（row 0），從 row 1 開始
+    raw_rows = []
+    for r in range(1, ws.nrows):
+        raw_rows.append([_clean_excel_value(ws.cell_value(r, c)) for c in range(ws.ncols)])
+
+    return _validate_and_build_rows(raw_rows)
 
 
 @router.post("/categories/{category_id}/rules/import", response_model=dict)
@@ -395,23 +559,36 @@ async def import_rules(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """匯入規則（完全覆蓋現有規則）"""
+    """匯入規則（以房型名稱為 key，Upsert + 刪除多餘規則）"""
     # 檢查檔案格式
     filename = file.filename or ""
-    allowed_exts = (".csv", ".xls", ".xlsx")
-    if not any(filename.lower().endswith(ext) for ext in allowed_exts):
+    ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+    if ext not in ("csv", "xls", "xlsx"):
         raise HTTPException(
             status_code=400,
             detail="檔案格式不符，僅支援 .csv, .xls, .xlsx",
         )
 
-    # 讀取 CSV
     content = await file.read()
-    text_content = content.decode("utf-8-sig")
-    reader = csv.DictReader(io.StringIO(text_content))
-    rows = [dict(row) for row in reader]
+
+    try:
+        if ext == "csv":
+            rows = _parse_csv(content)
+        elif ext == "xlsx":
+            rows = _parse_xlsx(content)
+        else:
+            rows = _parse_xls(content)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.warning(f"匯入檔案解析失敗: {e}")
+        raise HTTPException(status_code=400, detail="檔案解析失敗，請確認檔案內容格式正確")
+
+    if not rows:
+        raise HTTPException(status_code=400, detail="檔案中無有效資料")
 
     count = await faq_service.import_rules(db, category_id, rows, current_user.id)
+    _bump_rule_modified()
     return {
         "code": 200,
         "message": f"匯入成功，共 {count} 筆規則",

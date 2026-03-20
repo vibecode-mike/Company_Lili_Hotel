@@ -1,5 +1,6 @@
-import React, { useState, memo, useCallback, useMemo, useEffect } from "react";
+import React, { useState, useRef, memo, useCallback, useMemo, useEffect } from "react";
 import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from "../utils/apiClient";
+import { getAuthToken } from "../utils/token";
 import { useToast } from "./ToastProvider";
 import Sidebar from "./Sidebar";
 import {
@@ -34,7 +35,8 @@ interface RoomRecord {
   memberTags: string[];
   url: string;
   lastUpdated: string;
-  published: boolean;
+  enabled: boolean;    // 加入測試環境
+  published: boolean;  // 發佈狀態
   /** PMS 系統的房型代碼，用於驗證有效性 */
   pmsRoomCode: string;
   /** 使用者自訂的房型圖片 URL（自訂 FAQ 欄位） */
@@ -45,6 +47,8 @@ type FaqRuleRaw = {
   id: number;
   content_json: Record<string, string>;
   status: string;
+  is_enabled?: boolean;
+  published_at?: string | null;
   tags: Array<{ tag_name: string }>;
   updated_at: string | null;
 };
@@ -64,7 +68,8 @@ function mapRuleToRoom(rule: FaqRuleRaw): RoomRecord {
     lastUpdated: rule.updated_at
       ? rule.updated_at.slice(0, 16).replace("T", " ")
       : "—",
-    published: rule.is_enabled !== false,
+    enabled: rule.is_enabled !== false,
+    published: !!rule.published_at,
     pmsRoomCode: "",
     customImageUrl: c["image_url"] ?? "",
   };
@@ -84,6 +89,31 @@ const TagChip = memo(function TagChip({ label }: { label: string }) {
     <span className="inline-flex items-center px-[4px] py-[4px] rounded-[8px] bg-[#f0f6ff] text-[#0f6beb] text-[16px] leading-[1.5] whitespace-nowrap font-['Noto_Sans_TC',sans-serif] font-normal">
       {label}
     </span>
+  );
+});
+
+const TestEnvHeaderLabel = memo(function TestEnvHeaderLabel() {
+  const [show, setShow] = useState(false);
+  return (
+    <div
+      className="relative inline-flex items-center gap-[2px] cursor-default"
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+    >
+      <span className="whitespace-nowrap">加入測試環境</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" className="shrink-0">
+        <circle cx="12" cy="12" r="10" fill="#9ca3af" />
+        <path d="M11 7h2v2h-2zm0 4h2v6h-2z" fill="white" />
+      </svg>
+      {show && (
+        <div
+          className="absolute right-0 top-full mt-[6px] bg-[#383838] text-white text-[12px] leading-[1.5] font-['Noto_Sans_TC',sans-serif] font-normal rounded-[8px] p-[8px] w-[260px] whitespace-normal pointer-events-none"
+          style={{ zIndex: 100 }}
+        >
+          開啟後同步至測試環境。請進行 AI Chatbot 對話測試，確認回覆正確後，再點擊「發佈」按鈕，將同步發佈至前台。
+        </div>
+      )}
+    </div>
   );
 });
 
@@ -402,47 +432,63 @@ const TableRow = memo(function TableRow({
 
       {/* 最後更新 */}
       <td className="px-[12px] py-[12px] w-[220px] whitespace-nowrap text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5]">
-        <div className="flex items-center gap-[12px]">
-          <span>{record.lastUpdated}</span>
-          <div
-            className="inline-flex items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0"
-            style={{ backgroundColor: record.published ? "#e4fcea" : "#f5f5f5" }}
-          >
-            <span
-              className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[16px] text-center whitespace-nowrap"
-              style={{ color: record.published ? "#00470c" : "#383838" }}
-            >
-              {record.published ? "已發佈" : "未發佈"}
-            </span>
-          </div>
-        </div>
+        {record.lastUpdated}
       </td>
 
-      {/* 啟用狀態 — 凍結欄 */}
+      {/* 發佈狀態 — 凍結欄 */}
       <td
         style={{
-          width: 104,
-          minWidth: 104,
-          maxWidth: 104,
+          width: 90,
+          minWidth: 90,
+          maxWidth: 90,
           position: "sticky",
-          right: 68,
+          right: 188,
           zIndex: 1,
           boxShadow: "inset 1px 0 0 #ddd",
         }}
         className="px-[12px] py-[12px] align-middle text-center bg-white"
       >
-        <Toggle
-          checked={record.published}
-          onChange={(v) => onToggle(record.id, v)}
-        />
+        <div
+          className="inline-flex items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0"
+          style={{ backgroundColor: record.published ? "#e4fcea" : "#f5f5f5" }}
+        >
+          <span
+            className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[14px] text-center whitespace-nowrap"
+            style={{ color: record.published ? "#00470c" : "#383838" }}
+          >
+            {record.published ? "已發佈" : "未發佈"}
+          </span>
+        </div>
+      </td>
+
+      {/* 加入測試環境 — 凍結欄 */}
+      <td
+        style={{
+          width: 120,
+          minWidth: 120,
+          maxWidth: 120,
+          position: "sticky",
+          right: 68,
+          zIndex: 1,
+        }}
+        className="py-[12px] bg-white"
+      >
+        <div className="flex items-center justify-center w-full">
+          <Toggle
+            checked={record.enabled}
+            onChange={(v) => onToggle(record.id, v)}
+          />
+        </div>
       </td>
 
       {/* 動作 — 凍結欄 */}
       <td
         style={{ width: 68, minWidth: 68, maxWidth: 68, position: "sticky", right: 0, zIndex: 1 }}
-        className="px-[12px] py-[12px] align-middle text-center bg-white"
+        className="py-[12px] bg-white"
       >
-        <ButtonEdit onClick={() => onEdit(record.id)} />
+        <div className="flex items-center justify-center w-full">
+          <ButtonEdit onClick={() => onEdit(record.id)} />
+        </div>
       </td>
     </tr>
   );
@@ -475,6 +521,7 @@ const PMSDataTable = memo(function PMSDataTable({
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [editingRoom, setEditingRoom] = useState<RoomRecord | null>(null);
   const [editDraft, setEditDraft] = useState<RoomFaqDraft | null>(null);
+  const savedRuleIdRef = useRef<string | null>(null);
 
   // Load FAQ rules from API
   useEffect(() => {
@@ -497,6 +544,17 @@ const PMSDataTable = memo(function PMSDataTable({
       .finally(() => setLoadingRooms(false));
   }, []);
 
+  // 監聽發佈事件，即時更新發佈狀態
+  useEffect(() => {
+    const handler = () => {
+      setRooms((prev) =>
+        prev.map((r) => (r.enabled ? { ...r, published: true } : { ...r, published: false })),
+      );
+    };
+    window.addEventListener("faq-published", handler);
+    return () => window.removeEventListener("faq-published", handler);
+  }, []);
+
   const handleSort = useCallback((field: SortField) => {
     setSortField((prev) => {
       if (prev === field) {
@@ -508,19 +566,77 @@ const PMSDataTable = memo(function PMSDataTable({
     });
   }, []);
 
+  const fetchRules = useCallback(async () => {
+    if (!categoryId) return;
+    setLoadingRooms(true);
+    try {
+      const res = await apiGet(`/api/v1/faq/categories/${categoryId}/rules?page_size=50`);
+      const json = await res.json();
+      const items: FaqRuleRaw[] = json.data?.items ?? [];
+      setRooms(items.map(mapRuleToRoom));
+    } catch {
+      // ignore
+    } finally {
+      setLoadingRooms(false);
+    }
+  }, [categoryId]);
+
+  const handleImport = useCallback(async (file: File) => {
+    if (!categoryId) return;
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const token = getAuthToken() || "";
+      const res = await fetch(
+        `/api/v1/faq/categories/${categoryId}/rules/import`,
+        { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: formData },
+      );
+      if (res.ok) {
+        showToast("規則匯入成功", "success");
+        fetchRules();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.detail || "匯入失敗", "error");
+      }
+    } catch {
+      showToast("匯入失敗", "error");
+    }
+  }, [categoryId, showToast, fetchRules]);
+
+  const handleExport = useCallback(async (format: "csv" | "xls" | "xlsx" = "csv") => {
+    if (!categoryId) return;
+    try {
+      const token = getAuthToken() || "";
+      const res = await fetch(
+        `/api/v1/faq/categories/${categoryId}/rules/export?format=${format}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `rules_export.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      showToast("匯出失敗", "error");
+    }
+  }, [categoryId, showToast]);
+
   const handleToggle = useCallback(
     async (id: string, value: boolean) => {
       const room = rooms.find((r) => r.id === id);
       const name = room?.roomType ?? "";
       setRooms((prev) =>
-        prev.map((r) => (r.id === id ? { ...r, published: value } : r)),
+        prev.map((r) => (r.id === id ? { ...r, enabled: value } : r)),
       );
       try {
         await apiPatch(`/api/v1/faq/rules/${id}/toggle`, { is_enabled: value });
         showToast(
           value ? (
             <>
-              {name} 已啟用{" "}
+              {name} 同步至測試環境，請先進行對話測試以確保回覆品質{" "}
               <button
                 type="button"
                 onClick={(e) => {
@@ -548,7 +664,7 @@ const PMSDataTable = memo(function PMSDataTable({
       } catch {
         // Revert on error
         setRooms((prev) =>
-          prev.map((r) => (r.id === id ? { ...r, published: !value } : r)),
+          prev.map((r) => (r.id === id ? { ...r, enabled: !value } : r)),
         );
       }
     },
@@ -588,49 +704,68 @@ const PMSDataTable = memo(function PMSDataTable({
         image_url: draft.customImageUrl,
       };
       const now = new Date().toISOString().slice(0, 16).replace("T", " ");
-      setRooms((prev) =>
-        prev.map((r) =>
-          r.id === id
-            ? {
-                ...r,
-                roomType: draft.customRoomName || r.roomType,
-                customImageUrl: draft.customImageUrl,
-                features: draft.features,
-                memberTags: draft.memberTags,
-                url: draft.bookingUrl,
-                pricePerNight: Number(draft.customPrice) || r.pricePerNight,
-                maxGuests: Number(draft.customGuests) || r.maxGuests,
-                remainingRooms: draft.customRemaining || r.remainingRooms,
-                lastUpdated: now,
-                published: false, // editing resets to draft
-              }
-            : r,
-        ),
-      );
-      try {
-        if (id.startsWith("new-")) {
+      const updatedRoom: Partial<RoomRecord> = {
+        roomType: draft.customRoomName || room?.roomType || "",
+        customImageUrl: draft.customImageUrl,
+        features: draft.features,
+        memberTags: draft.memberTags,
+        url: draft.bookingUrl,
+        pricePerNight: Number(draft.customPrice) || room?.pricePerNight || 0,
+        maxGuests: Number(draft.customGuests) || room?.maxGuests || 0,
+        remainingRooms: draft.customRemaining || room?.remainingRooms || "",
+        lastUpdated: now,
+        published: false, // editing resets to draft
+      };
+      if (id.startsWith("new-")) {
+        // New item: add to list only after save succeeds
+        try {
           if (categoryId) {
             const res = await apiPost(
               `/api/v1/faq/categories/${categoryId}/rules`,
               { content_json, tag_names: draft.memberTags },
             );
             const json = await res.json();
-            if (json.data?.id) {
-              setRooms((prev) =>
-                prev.map((r) =>
-                  r.id === id ? { ...r, id: String(json.data.id) } : r,
-                ),
-              );
-            }
+            const newId = String(json.data?.id ?? id);
+            savedRuleIdRef.current = newId;
+            setRooms((prev) => [
+              {
+                id: newId,
+                roomType: updatedRoom.roomType || "",
+                image: draft.customImageUrl || "",
+                pricePerNight: updatedRoom.pricePerNight || 0,
+                maxGuests: updatedRoom.maxGuests || 0,
+                remainingRooms: updatedRoom.remainingRooms || "",
+                features: updatedRoom.features || "",
+                memberTags: updatedRoom.memberTags || [],
+                url: updatedRoom.url || "",
+                lastUpdated: now,
+                enabled: false,
+                published: false,
+                pmsRoomCode: "",
+                customImageUrl: draft.customImageUrl,
+              },
+              ...prev,
+            ]);
           }
-        } else {
+        } catch {
+          // Don't add to list on error
+        }
+      } else {
+        // Existing item: update in place
+        savedRuleIdRef.current = id;
+        setRooms((prev) =>
+          prev.map((r) =>
+            r.id === id ? { ...r, ...updatedRoom } : r,
+          ),
+        );
+        try {
           await apiPut(`/api/v1/faq/rules/${id}`, {
             content_json,
             tag_names: draft.memberTags,
           });
+        } catch {
+          // Silently keep local state on error
         }
-      } catch {
-        // Silently keep local state on error
       }
     },
     [rooms, categoryId],
@@ -742,7 +877,7 @@ const PMSDataTable = memo(function PMSDataTable({
 
         {/* 匯出/匯入 + 新增規則 + 測試 */}
         <div className="flex gap-[4px] self-stretch shrink-0 items-center">
-          <CategoryTitleDropdown />
+          <CategoryTitleDropdown onImport={handleImport} onExport={handleExport} />
           <button
             type="button"
             onClick={() => {
@@ -759,11 +894,11 @@ const PMSDataTable = memo(function PMSDataTable({
                 memberTags: [],
                 url: "",
                 lastUpdated: "—",
+                enabled: false,
                 published: false,
                 pmsRoomCode: "",
                 customImageUrl: "",
               };
-              setRooms((prev) => [newRoom, ...prev]);
               setEditingRoom(newRoom);
               setEditDraft({
                 customRoomName: "",
@@ -798,7 +933,7 @@ const PMSDataTable = memo(function PMSDataTable({
       {/* Record count + 變更 */}
       <div className="flex items-center pt-px w-full">
         <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[14px] text-[#6e6e6e] whitespace-nowrap leading-[1.5]">
-          共 {filtered.length} 筆，引用{" "}
+          共 {filtered.length} 筆，AI 引用{" "}
           <span className="text-[#383838]">{sourceName}</span> 內容
         </p>
         <button
@@ -870,26 +1005,41 @@ const PMSDataTable = memo(function PMSDataTable({
                 最後更新
               </Th>
 
-              {/* 啟用狀態 — 凍結欄 */}
+              {/* 發佈狀態 — 凍結欄 */}
               <th
                 onClick={() => handleSort("published")}
                 style={{
-                  width: 104,
-                  minWidth: 104,
-                  maxWidth: 104,
+                  width: 90,
+                  minWidth: 90,
+                  maxWidth: 90,
                   position: "sticky",
-                  right: 68,
+                  right: 188,
                   zIndex: 2,
                   boxShadow: "inset 1px 0 0 #ddd",
                 }}
                 className="px-[12px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap select-none bg-white border-b border-[#ddd] cursor-pointer hover:bg-[#f5f8ff] transition-colors duration-150"
               >
-                啟用狀態
+                發佈狀態
                 <SortIcon
                   field="published"
                   sortField={sortField}
                   sortDir={sortDir}
                 />
+              </th>
+
+              {/* 加入測試環境 — 凍結欄 */}
+              <th
+                style={{
+                  width: 120,
+                  minWidth: 120,
+                  maxWidth: 120,
+                  position: "sticky",
+                  right: 68,
+                  zIndex: 2,
+                }}
+                className="px-[8px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] bg-white border-b border-[#ddd]"
+              >
+                <TestEnvHeaderLabel />
               </th>
 
               {/* 動作 — 凍結欄 */}
@@ -972,11 +1122,20 @@ const PMSDataTable = memo(function PMSDataTable({
             // 只存資料；modal 由 SaveSuccessDialog 的按鈕關閉
             handleSaveEdit(editingRoom.id, draft);
           }}
+          onEnableTest={() => {
+            const id = savedRuleIdRef.current ?? editingRoom.id;
+            if (!id || id.startsWith("new-")) return;
+            setRooms((prev) =>
+              prev.map((r) => (r.id === id ? { ...r, enabled: true } : r)),
+            );
+            apiPatch(`/api/v1/faq/rules/${id}/toggle`, { is_enabled: true }).catch(() => {});
+          }}
           onDelete={async () => {
             const id = editingRoom.id;
             const snapshot = editingRoom;
             setEditingRoom(null);
             setEditDraft(null);
+            if (id.startsWith("new-")) return; // Not yet saved, nothing to delete
             setRooms((prev) => prev.filter((r) => r.id !== id));
             try {
               const res = await apiDelete(`/api/v1/faq/rules/${id}`);
@@ -1312,11 +1471,14 @@ const DataSourceTableRow = memo(function DataSourceTableRow({
   row,
   isLast,
   onToggle,
+  onNavigateToSettings,
 }: {
   row: DataSourceRow;
   isLast: boolean;
   onToggle: (type: string, v: boolean) => void;
+  onNavigateToSettings?: () => void;
 }) {
+  const isUnlinkedPms = row.type === "PMS" && row.statusLabel === "未串接";
   return (
     <tr
       className={`bg-white transition-colors hover:bg-[#f5f8ff] group ${
@@ -1338,8 +1500,10 @@ const DataSourceTableRow = memo(function DataSourceTableRow({
                 : row.statusColor === "red"
                   ? "#ffebee"
                   : "#f5f5f5",
+            cursor: isUnlinkedPms ? "pointer" : undefined,
           }}
           className="inline-flex items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0"
+          onClick={isUnlinkedPms ? onNavigateToSettings : undefined}
         >
           <p
             style={{
@@ -1362,10 +1526,10 @@ const DataSourceTableRow = memo(function DataSourceTableRow({
       <td className="px-[12px] py-[12px] align-middle text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] whitespace-nowrap">
         {row.lastPublished}
       </td>
-      {/* 啟用狀態 — 凍結欄 */}
+      {/* 加入測試環境 — 凍結欄 */}
       <td
         style={{
-          width: 104,
+          width: 120,
           position: "sticky",
           right: 0,
           zIndex: 1,
@@ -1389,35 +1553,15 @@ const DataSourceTableRow = memo(function DataSourceTableRow({
 });
 
 const DataSourcesTable = memo(function DataSourcesTable({
-  rows,
+  sources,
+  setSources,
+  onNavigateToSettings,
 }: {
-  rows: DataSourceRow[];
+  sources: DataSourceRow[];
+  setSources: React.Dispatch<React.SetStateAction<DataSourceRow[]>>;
+  onNavigateToSettings?: () => void;
 }) {
-  const [sources, setSources] = useState(rows);
-
-  // Fetch PMS enabled status on mount
-  useEffect(() => {
-    apiGet("/api/v1/chatbot/pms-status")
-      .then((res: any) => {
-        const enabled = !!res?.enabled;
-        const lastSync = res?.last_synced_at || "—";
-        setSources((prev) =>
-          prev.map((s) =>
-            s.type === "PMS"
-              ? {
-                  ...s,
-                  enabled,
-                  statusLabel: enabled ? "已串接" : "未串接",
-                  statusColor: enabled ? "green" : "gray",
-                  lastUpdated: lastSync,
-                  lastPublished: enabled ? lastSync : "—",
-                }
-              : s,
-          ),
-        );
-      })
-      .catch(() => {});
-  }, []);
+  const { showToast } = useToast();
 
   return (
     <div className="flex flex-col gap-[16px] items-start w-full">
@@ -1439,7 +1583,7 @@ const DataSourcesTable = memo(function DataSourcesTable({
       </div>
       {/* 共 N 筆 — own row */}
       <p className="text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]">
-        共 {rows.length} 筆，引用順序如下
+        共 {sources.length} 筆，引用順序如下
       </p>
       <div className="w-full overflow-x-auto rounded-[16px] ring-1 ring-[#ddd]">
         <table
@@ -1476,18 +1620,18 @@ const DataSourcesTable = memo(function DataSourcesTable({
                   ⇅
                 </span>
               </th>
-              {/* 凍結欄 header：啟用狀態 */}
+              {/* 凍結欄 header：加入測試環境 */}
               <th
                 style={{
-                  width: 104,
+                  width: 120,
                   position: "sticky",
                   right: 0,
                   zIndex: 2,
                   boxShadow: "inset 1px 0 0 #ddd",
                 }}
-                className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]"
+                className="px-[8px] py-[16px] text-center font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] bg-white border-b border-[#ddd]"
               >
-                啟用狀態
+                <TestEnvHeaderLabel />
               </th>
             </tr>
           </thead>
@@ -1495,6 +1639,7 @@ const DataSourcesTable = memo(function DataSourcesTable({
             {sources.map((row, idx) => (
               <DataSourceTableRow
                 key={row.type}
+                onNavigateToSettings={onNavigateToSettings}
                 row={row}
                 isLast={idx === sources.length - 1}
                 onToggle={(type, v) => {
@@ -1541,6 +1686,34 @@ const DataSourcesTable = memo(function DataSourcesTable({
                       ),
                     );
                   }
+                  showToast(
+                    v ? (
+                      <>
+                        {type} 同步至測試環境，請先進行對話測試以確保回覆品質{" "}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.dispatchEvent(new CustomEvent("open-chatfab"));
+                          }}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "#DBEDFF",
+                            cursor: "pointer",
+                            padding: 0,
+                            fontFamily: "'Noto Sans TC', sans-serif",
+                            fontSize: 16,
+                            lineHeight: 1.5,
+                            textDecoration: "underline",
+                          }}
+                        >
+                          測試
+                        </button>
+                      </>
+                    ) : `${type} 已停用`,
+                    "success",
+                  );
                 }}
               />
             ))}
@@ -1563,6 +1736,35 @@ export default function PMSIntegration({
   const [activeTab, setActiveTab] = useState<"data" | "sources" | "settings">(
     "data",
   );
+  const [dataSources, setDataSources] = useState<DataSourceRow[]>(DATA_SOURCES_PMS_INIT);
+
+  // Fetch PMS enabled status on mount
+  useEffect(() => {
+    apiGet("/api/v1/chatbot/pms-status")
+      .then((res: any) => {
+        const enabled = !!res?.enabled;
+        const lastSync = res?.last_synced_at || "—";
+        setDataSources((prev) =>
+          prev.map((s) =>
+            s.type === "PMS"
+              ? {
+                  ...s,
+                  enabled,
+                  statusLabel: enabled ? "已串接" : "未串接",
+                  statusColor: enabled ? "green" : "gray",
+                  lastUpdated: lastSync,
+                  lastPublished: enabled ? lastSync : "—",
+                }
+              : s,
+          ),
+        );
+      })
+      .catch(() => {});
+  }, []);
+
+  const pmsEnabled = dataSources.find((s) => s.type === "PMS")?.enabled ?? false;
+  const sourceName = pmsEnabled ? "PMS" : "自訂 FAQ";
+
   return (
     <div className="min-h-screen bg-slate-50 flex">
       {/* Sidebar */}
@@ -1621,11 +1823,11 @@ export default function PMSIntegration({
             <PMSDataTable
               onChangeSource={() => setActiveTab("sources")}
               onNavigateToSettings={() => setActiveTab("settings")}
-              sourceName="自訂 FAQ"
+              sourceName={sourceName}
             />
           )}
           {activeTab === "sources" && (
-            <DataSourcesTable rows={DATA_SOURCES_PMS_INIT} />
+            <DataSourcesTable sources={dataSources} setSources={setDataSources} onNavigateToSettings={() => setActiveTab("settings")} />
           )}
           {activeTab === "settings" && <PMSConnectionSettings />}
         </div>

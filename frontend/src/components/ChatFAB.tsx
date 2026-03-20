@@ -9,6 +9,7 @@ import {
   type RoomCard,
   type BookingContext,
 } from "../utils/chatbotApi";
+import { apiGet } from "../utils/apiClient";
 import chatfabLogo from "../assets/chatfab-logo.svg";
 import chatfabOaIcon from "../assets/chatfab-oa-icon.svg";
 import chatfabSend from "../assets/chatfab-send.svg";
@@ -944,6 +945,42 @@ export default function ChatFAB() {
     el.style.height = `${el.scrollHeight}px`;
   }, [chatInput]);
 
+  // --- 規則更新偵測 polling ---
+  const [ruleUpdateNotice, setRuleUpdateNotice] = useState(false);
+  const lastKnownTs = useRef<number>(0);
+
+  useEffect(() => {
+    if (!chatOpen) return;
+    let cancelled = false;
+
+    // 初始化：取得當前 ts 作為 baseline
+    apiGet("/api/v1/faq/last-modified")
+      .then((r) => r.json())
+      .then((d: any) => {
+        if (!cancelled) lastKnownTs.current = d.ts ?? 0;
+      })
+      .catch(() => {});
+
+    const timer = setInterval(() => {
+      apiGet("/api/v1/faq/last-modified")
+        .then((r) => r.json())
+        .then((d: any) => {
+          if (cancelled) return;
+          const ts = d.ts ?? 0;
+          if (lastKnownTs.current > 0 && ts > lastKnownTs.current) {
+            setRuleUpdateNotice(true);
+          }
+          lastKnownTs.current = ts;
+        })
+        .catch(() => {});
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [chatOpen]);
+
   const addBotMessage = useCallback((msg: Omit<ChatMessage, "id">) => {
     const id = `msg-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     setMessages((prev) => [...prev, { ...msg, id } as ChatMessage]);
@@ -959,6 +996,7 @@ export default function ChatFAB() {
       { id: userMsgId, role: "user", type: "text", text },
     ]);
     setChatInput("");
+    setRuleUpdateNotice(false);
     setIsLoading(true);
 
     try {
@@ -1184,6 +1222,7 @@ export default function ChatFAB() {
                       },
                     });
                     if (!res.ok) throw new Error();
+                    window.dispatchEvent(new CustomEvent("faq-published"));
                     showToast("發佈成功", "success");
                   } catch {
                     showToast("發佈失敗", "error");
@@ -1369,6 +1408,49 @@ export default function ChatFAB() {
                 >
                   回覆中…
                 </div>
+              </div>
+            )}
+            {/* 規則更新通知 */}
+            {ruleUpdateNotice && (
+              <div
+                style={{
+                  margin: "8px 16px",
+                  padding: "10px 14px",
+                  background: "#FFF8E1",
+                  border: "1px solid #FFD54F",
+                  borderRadius: 12,
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 8,
+                }}
+              >
+                <span style={{ fontSize: 16, lineHeight: 1, flexShrink: 0, marginTop: 2 }}>💡</span>
+                <span
+                  style={{
+                    fontFamily: "'Noto Sans TC', sans-serif",
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                    color: "#5D4037",
+                  }}
+                >
+                  偵測到新的更新，目前的回答將引用最新測試版本。
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setRuleUpdateNotice(false)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 0,
+                    marginLeft: "auto",
+                    fontSize: 14,
+                    color: "#999",
+                    flexShrink: 0,
+                  }}
+                >
+                  ✕
+                </button>
               </div>
             )}
             <div ref={messagesEndRef} />

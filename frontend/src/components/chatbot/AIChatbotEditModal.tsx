@@ -77,15 +77,24 @@ type SubDialog = "none" | "saveSuccess" | "saveFailed" | "pmsInvalid" | "confirm
 
 // ─── Sub-components: Section Field ───────────────────────────────────────────
 
-const FieldLabel = memo(function FieldLabel({ label }: { label: string }) {
+const FieldLabel = memo(function FieldLabel({ label, required = true, error }: { label: string; required?: boolean; error?: string }) {
   return (
-    <div className="flex items-center gap-[2px]">
-      <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#383838]">
-        {label}
-      </span>
-      <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#f44336]">
-        *
-      </span>
+    <div className="flex flex-col gap-[2px]">
+      <div className="flex items-center gap-[2px]">
+        <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#383838]">
+          {label}
+        </span>
+        {required && (
+          <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#f44336]">
+            *
+          </span>
+        )}
+      </div>
+      {error && (
+        <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[12px] leading-[1.5] text-[#f44336]">
+          {error}
+        </span>
+      )}
     </div>
   );
 });
@@ -213,6 +222,8 @@ const SplitSection = memo(function SplitSection({
   pmsHint,
   onChange,
   disabled,
+  required = true,
+  error,
 }: {
   label: string;
   pmsValue: string;
@@ -223,10 +234,12 @@ const SplitSection = memo(function SplitSection({
   pmsHint?: string;
   onChange: (v: string) => void;
   disabled?: boolean;
+  required?: boolean;
+  error?: string;
 }) {
   return (
     <div className="flex flex-col gap-[12px] w-full">
-      <FieldLabel label={label} />
+      <FieldLabel label={label} required={required} error={error} />
       <div className="flex gap-[12px] items-start w-full">
         {/* PMS column */}
         <div className="flex flex-col flex-1 min-w-0">
@@ -270,6 +283,8 @@ const TextareaSection = memo(function TextareaSection({
   hint,
   onChange,
   disabled,
+  required = true,
+  error,
 }: {
   label: string;
   value: string;
@@ -277,10 +292,12 @@ const TextareaSection = memo(function TextareaSection({
   hint?: string;
   onChange: (v: string) => void;
   disabled?: boolean;
+  required?: boolean;
+  error?: string;
 }) {
   return (
     <div className="flex flex-col gap-[12px] w-full">
-      <FieldLabel label={label} />
+      <FieldLabel label={label} required={required} error={error} />
       <div className="flex flex-col w-full">
         <textarea
           value={value}
@@ -337,7 +354,7 @@ const SaveSuccessDialog = memo(function SaveSuccessDialog({
           儲存成功
         </p>
         <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#383838]">
-          AI Chatbot 會引用您已儲存的內容作為回覆
+          內容已儲存，請先進行對話測試以確保回覆品質，再點擊「發佈」按鈕，AI Chatbot 才會引用最新版本進行回覆。
         </p>
       </div>
       <div className="flex gap-[8px] items-center justify-end h-[48px]">
@@ -554,6 +571,7 @@ interface RoomEditModalProps {
   onDelete: () => void;
   onNavigateToPMS?: () => void;
   onOpenChatFab?: () => void;
+  onEnableTest?: () => void;
 }
 
 export const RoomEditModal = memo(function RoomEditModal({
@@ -567,20 +585,39 @@ export const RoomEditModal = memo(function RoomEditModal({
   onDelete,
   onNavigateToPMS,
   onOpenChatFab,
+  onEnableTest,
 }: RoomEditModalProps) {
   const isPmsConnected = pmsData !== null;
   const [subDialog, setSubDialog] = useState<SubDialog>("none");
   const [saving, setSaving] = useState(false);
   const [tooltipVisible, setTooltipVisible] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const field = useCallback(
     <K extends keyof RoomFaqDraft>(key: K) =>
-      (v: RoomFaqDraft[K]) =>
-        onChange({ ...draft, [key]: v }),
+      (v: RoomFaqDraft[K]) => {
+        onChange({ ...draft, [key]: v });
+        setErrors((prev) => { const next = { ...prev }; delete next[key]; return next; });
+      },
     [draft, onChange],
   );
 
   const handleSave = async () => {
+    // Client-side required field validation (matches backend faq_category_fields)
+    const errs: Record<string, string> = {};
+    const roomName = draft.customRoomName || pmsData?.roomType || "";
+    if (!roomName.trim()) errs.customRoomName = "請填寫房型名稱";
+    if (!draft.features.trim()) errs.features = "請填寫房型特色";
+    const price = draft.customPrice || String(pmsData?.pricePerNight ?? "");
+    if (!price.trim()) errs.customPrice = "請填寫房價";
+    const guests = draft.customGuests || String(pmsData?.maxGuests ?? "");
+    if (!guests.trim()) errs.customGuests = "請填寫可入住人數";
+    if (Object.keys(errs).length > 0) {
+      setErrors(errs);
+      return;
+    }
+    setErrors({});
+
     setSaving(true);
     let isInvalid = false;
     if (isPmsConnected && pmsRoomCode) {
@@ -685,11 +722,12 @@ export const RoomEditModal = memo(function RoomEditModal({
               faqPlaceholder="輸入房型名稱"
               onChange={field("customRoomName")}
               disabled={saving}
+              error={errors.customRoomName}
             />
 
             {/* 房型圖片 */}
             <div className="flex flex-col gap-[12px] w-full">
-              <FieldLabel label="房型圖片" />
+              <FieldLabel label="房型圖片" required={false} />
               <ImageUploadField
                 value={displayImage || ""}
                 onChange={field("customImageUrl")}
@@ -709,6 +747,7 @@ export const RoomEditModal = memo(function RoomEditModal({
               faqHint="自訂內容為「一般房價」，非隨日期波動的「即時房價」"
               onChange={field("customPrice")}
               disabled={saving}
+              error={errors.customPrice}
             />
 
             {/* 可入住人數 */}
@@ -721,6 +760,7 @@ export const RoomEditModal = memo(function RoomEditModal({
               faqHint="可輸入 2，表示為雙人房"
               onChange={field("customGuests")}
               disabled={saving}
+              error={errors.customGuests}
             />
 
             {/* 剩餘間數 */}
@@ -733,6 +773,7 @@ export const RoomEditModal = memo(function RoomEditModal({
               faqHint="例：2 間、最後一間"
               onChange={field("customRemaining")}
               disabled={saving}
+              required={false}
             />
 
             {/* 房型特色 */}
@@ -743,11 +784,12 @@ export const RoomEditModal = memo(function RoomEditModal({
               hint="描述房型特色"
               onChange={field("features")}
               disabled={saving}
+              error={errors.features}
             />
 
             {/* 會員標籤 */}
             <div className="flex flex-col gap-[12px] w-full">
-              <FieldLabel label="會員標籤" />
+              <FieldLabel label="會員標籤" required={false} />
               <div className="flex flex-col w-full">
                 <TagsField
                   tags={draft.memberTags}
@@ -763,7 +805,7 @@ export const RoomEditModal = memo(function RoomEditModal({
 
             {/* 訂房 URL */}
             <div className="flex flex-col gap-[12px] w-full">
-              <FieldLabel label="訂房 URL" />
+              <FieldLabel label="訂房 URL" required={false} />
               <div className="flex flex-col w-full">
                 <FaqInput
                   value={draft.bookingUrl}
@@ -815,10 +857,12 @@ export const RoomEditModal = memo(function RoomEditModal({
         <SaveSuccessDialog
           onLater={() => {
             setSubDialog("none");
+            if (onEnableTest) onEnableTest();
             onClose();
           }}
           onTest={() => {
             setSubDialog("none");
+            if (onEnableTest) onEnableTest();
             onClose();
             window.dispatchEvent(new CustomEvent("open-chatfab"));
             if (onOpenChatFab) onOpenChatFab();
@@ -871,6 +915,7 @@ interface FacilityEditModalProps {
   onSave: (draft: FacilityFaqDraft) => void;
   onDelete: () => void;
   onOpenChatFab?: () => void;
+  onEnableTest?: () => void;
 }
 
 export const FacilityEditModal = memo(function FacilityEditModal({
@@ -881,18 +926,31 @@ export const FacilityEditModal = memo(function FacilityEditModal({
   onSave,
   onDelete,
   onOpenChatFab,
+  onEnableTest,
 }: FacilityEditModalProps) {
   const [subDialog, setSubDialog] = useState<SubDialog>("none");
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const field = useCallback(
     <K extends keyof FacilityFaqDraft>(key: K) =>
-      (v: FacilityFaqDraft[K]) =>
-        onChange({ ...draft, [key]: v }),
+      (v: FacilityFaqDraft[K]) => {
+        onChange({ ...draft, [key]: v });
+        setErrors((prev) => { const next = { ...prev }; delete next[key]; return next; });
+      },
     [draft, onChange],
   );
 
   const handleSave = async () => {
+    // Client-side required field validation (matches backend faq_category_fields)
+    const errs: Record<string, string> = {};
+    if (!draft.name.trim()) errs.name = "請填寫設施名稱";
+    if (Object.keys(errs).length > 0) {
+      setErrors(errs);
+      return;
+    }
+    setErrors({});
+
     setSaving(true);
     await new Promise((r) => setTimeout(r, 400));
     setSaving(false);
@@ -939,7 +997,7 @@ export const FacilityEditModal = memo(function FacilityEditModal({
           <div className="flex flex-col gap-[32px] w-full">
             {/* 設施名稱 */}
             <div className="flex flex-col gap-[12px] w-full">
-              <FieldLabel label="設施名稱" />
+              <FieldLabel label="設施名稱" error={errors.name} />
               <FaqInput
                 value={draft.name}
                 placeholder="輸入設施名稱"
@@ -950,7 +1008,7 @@ export const FacilityEditModal = memo(function FacilityEditModal({
 
             {/* 設施圖片 */}
             <div className="flex flex-col gap-[12px] w-full">
-              <FieldLabel label="設施圖片" />
+              <FieldLabel label="設施圖片" required={false} />
               <ImageUploadField
                 value={draft.imageUrl}
                 onChange={field("imageUrl")}
@@ -962,7 +1020,7 @@ export const FacilityEditModal = memo(function FacilityEditModal({
 
             {/* 開放時間 */}
             <div className="flex flex-col gap-[12px] w-full">
-              <FieldLabel label="開放時間" />
+              <FieldLabel label="開放時間" required={false} />
               <FaqInput
                 value={draft.hours}
                 placeholder="例：06:00 – 22:00"
@@ -973,7 +1031,7 @@ export const FacilityEditModal = memo(function FacilityEditModal({
 
             {/* 費用 */}
             <div className="flex flex-col gap-[12px] w-full">
-              <FieldLabel label="費用" />
+              <FieldLabel label="費用" required={false} />
               <FaqInput
                 value={draft.fee}
                 placeholder="例：免費 / NT$1,800"
@@ -990,11 +1048,12 @@ export const FacilityEditModal = memo(function FacilityEditModal({
               hint="描述設施特色"
               onChange={field("description")}
               disabled={saving}
+              required={false}
             />
 
             {/* 會員標籤 */}
             <div className="flex flex-col gap-[12px] w-full">
-              <FieldLabel label="會員標籤" />
+              <FieldLabel label="會員標籤" required={false} />
               <div className="flex flex-col w-full">
                 <TagsField
                   tags={draft.memberTags}
@@ -1040,10 +1099,12 @@ export const FacilityEditModal = memo(function FacilityEditModal({
         <SaveSuccessDialog
           onLater={() => {
             setSubDialog("none");
+            if (onEnableTest) onEnableTest();
             onClose();
           }}
           onTest={() => {
             setSubDialog("none");
+            if (onEnableTest) onEnableTest();
             onClose();
             window.dispatchEvent(new CustomEvent("open-chatfab"));
             if (onOpenChatFab) onOpenChatFab();

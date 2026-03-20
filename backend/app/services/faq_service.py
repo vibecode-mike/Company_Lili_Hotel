@@ -65,6 +65,19 @@ class FaqService:
             count_result = await db.execute(count_stmt)
             cat.rule_count = count_result.scalar() or 0
 
+            # 已發佈規則數量（status=active 且 is_enabled=1）
+            pub_stmt = (
+                select(func.count())
+                .select_from(FaqRule)
+                .where(
+                    FaqRule.category_id == cat.id,
+                    FaqRule.status == "active",
+                    FaqRule.is_enabled == True,  # noqa: E712
+                )
+            )
+            pub_result = await db.execute(pub_stmt)
+            cat.published_count = pub_result.scalar() or 0
+
         return list(categories)
 
     async def toggle_category(
@@ -428,9 +441,10 @@ class FaqService:
     async def export_rules(
         self, db: AsyncSession, category_id: int
     ) -> List[FaqRule]:
-        """匯出分類下所有規則"""
+        """匯出分類下所有規則（含標籤）"""
         stmt = (
             select(FaqRule)
+            .options(selectinload(FaqRule.tags))
             .where(FaqRule.category_id == category_id)
             .order_by(FaqRule.id)
         )
@@ -440,23 +454,72 @@ class FaqService:
     async def import_rules(
         self, db: AsyncSession, category_id: int, rows: List[Dict[str, Any]], user_id: int
     ) -> int:
-        """匯入規則（完全覆蓋現有規則），回傳匯入數量"""
-        # 刪除現有規則
-        await db.execute(
-            delete(FaqRule).where(FaqRule.category_id == category_id)
+        """匯入規則（以房型名稱為 key，Upsert + 刪除多餘），回傳匯入數量"""
+        # 查詢現有規則（含 tags），建立 {房型名稱: rule} 對照表
+        stmt = (
+            select(FaqRule)
+            .options(selectinload(FaqRule.tags))
+            .where(FaqRule.category_id == category_id)
         )
+        result = await db.execute(stmt)
+        existing_rules = list(result.scalars().all())
 
+        existing_map: Dict[str, FaqRule] = {}
+        for rule in existing_rules:
+            content = rule.content_json
+            if isinstance(content, str):
+                try:
+                    content = json.loads(content)
+                except (json.JSONDecodeError, TypeError):
+                    content = {}
+            name = content.get("房型名稱", "")
+            if name:
+                existing_map[name] = rule
+
+        # Upsert：以房型名稱比對
+        imported_names = set()
         count = 0
         for row in rows:
-            rule = FaqRule(
-                category_id=category_id,
-                content_json=json.dumps(row, ensure_ascii=False),
-                status="draft",
-                created_by=user_id,
-                updated_by=user_id,
-            )
-            db.add(rule)
+            # 抽出會員標籤，不存進 content_json
+            tag_value = row.pop("會員標籤", "").strip()
+            tag_names = [t.strip() for t in tag_value.split(",") if t.strip()] if tag_value else []
+
+            name = row.get("房型名稱", "")
+            imported_names.add(name)
+            content_json_str = json.dumps(row, ensure_ascii=False)
+
+            if name in existing_map:
+                # UPDATE
+                rule = existing_map[name]
+                rule.content_json = content_json_str
+                rule.status = "draft"
+                rule.published_at = None
+                rule.updated_by = user_id
+                # 更新標籤：刪除舊的，建立新的
+                for old_tag in list(rule.tags):
+                    await db.delete(old_tag)
+                await db.flush()
+                for tn in tag_names:
+                    db.add(FaqRuleTag(rule_id=rule.id, tag_name=tn))
+            else:
+                # INSERT
+                rule = FaqRule(
+                    category_id=category_id,
+                    content_json=content_json_str,
+                    status="draft",
+                    created_by=user_id,
+                    updated_by=user_id,
+                )
+                db.add(rule)
+                await db.flush()
+                for tn in tag_names:
+                    db.add(FaqRuleTag(rule_id=rule.id, tag_name=tn))
             count += 1
+
+        # 刪除 DB 中有但匯入檔沒有的規則
+        for name, rule in existing_map.items():
+            if name not in imported_names:
+                await db.delete(rule)
 
         await db.flush()
         return count

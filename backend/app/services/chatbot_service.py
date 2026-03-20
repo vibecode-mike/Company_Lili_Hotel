@@ -871,13 +871,21 @@ class ChatbotService:
         session.history.append({"role": "assistant", "content": reply})
 
         # Determine reply_type based on session state (spec 3.4–3.5)
-        if self._has_selected_room(session) and self._has_member_profile(session):
+        # If new room_cards arrived this turn, always treat as room_cards
+        # (overrides stale selected_room from a previous booking)
+        if room_cards:
+            reply_type = "room_cards"
+            session.intent_state = "confirmed"
+            # Clear stale selected_room so fresh selection can proceed
+            session.selected_room_type = None
+            session.selected_room_count = None
+            session.selected_room_name = None
+            session.selected_room_source = None
+            session.selected_rooms = []
+        elif self._has_selected_room(session) and self._has_member_profile(session):
             reply_type = "booking_confirm"
         elif self._has_selected_room(session):
             reply_type = "member_form"
-        elif room_cards:
-            reply_type = "room_cards"
-            session.intent_state = "confirmed"
         else:
             reply_type = "text"
 
@@ -886,7 +894,7 @@ class ChatbotService:
             intent_state=session.intent_state,
             reply_type=reply_type,
             reply=reply,
-            room_cards=room_cards if reply_type == "room_cards" else [],
+            room_cards=room_cards,
             missing_fields=self._compute_missing_fields(session),
             turn_count=session.turn_count,
             booking_context=self._booking_context(session),
