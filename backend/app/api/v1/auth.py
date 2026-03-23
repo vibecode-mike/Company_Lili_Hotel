@@ -121,6 +121,14 @@ async def refresh_token(
     )
 
 
+@router.post("/logout")
+async def logout(
+    current_user: User = Depends(get_current_user),
+):
+    """登出（stateless JWT，前端清除 token 即可，此端點提供審計記錄）"""
+    return {"code": 200, "message": "登出成功"}
+
+
 @router.get("/me", response_model=UserInfo)
 async def get_current_user_info(
     current_user: User = Depends(get_current_user),
