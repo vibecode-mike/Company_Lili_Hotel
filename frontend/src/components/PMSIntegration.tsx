@@ -1204,12 +1204,7 @@ const PMSDataTable = memo(function PMSDataTable({
           }}
           onChange={setEditDraft}
           onSave={async (draft) => {
-            try {
-              await handleSaveEdit(editingRoom.id, draft);
-              showToast("儲存成功", "success");
-            } catch {
-              showToast("儲存失敗", "error");
-            }
+            await handleSaveEdit(editingRoom.id, draft);
           }}
           onDelete={async () => {
             const id = editingRoom.id;

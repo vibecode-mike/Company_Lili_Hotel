@@ -834,60 +834,55 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
               url: "",
               image_url: draft.imageUrl,
             };
-            try {
-              const isNew = editingFacility.id.startsWith("new-");
-              if (isNew && categoryId) {
-                const res = await apiPost(
-                  `/api/v1/faq/categories/${categoryId}/rules`,
-                  { content_json, tag_names: draft.memberTags },
-                );
-                const json = await res.json();
-                const newId = String(json.data?.id ?? editingFacility.id);
-                savedRuleIdRef.current = newId;
-                const now = new Date().toISOString().slice(0, 16).replace("T", " ");
-                setFacilities((prev) => [
-                  {
-                    id: newId,
-                    name: draft.name,
-                    image: draft.imageUrl || img("facility-" + newId),
-                    hours: draft.hours,
-                    fee: draft.fee,
-                    description: draft.description,
-                    memberTags: draft.memberTags,
-                    lastUpdated: now,
-                    enabled: false,
-                    published: false,
-                  },
-                  ...prev,
-                ]);
-              } else {
-                savedRuleIdRef.current = editingFacility.id;
-                await apiPut(`/api/v1/faq/rules/${editingFacility.id}`, {
-                  content_json,
-                  tag_names: draft.memberTags,
-                });
-                const now = new Date().toISOString().slice(0, 16).replace("T", " ");
-                setFacilities((prev) =>
-                  prev.map((r) =>
-                    r.id === editingFacility.id
-                      ? {
-                          ...r,
-                          name: draft.name,
-                          image: draft.imageUrl || r.image,
-                          hours: draft.hours,
-                          fee: draft.fee,
-                          description: draft.description,
-                          memberTags: draft.memberTags,
-                          lastUpdated: now,
-                          published: false,
-                        }
-                      : r,
-                  ),
-                );
-              }
-              showToast("儲存成功", "success");
-            } catch {
-              showToast("儲存失敗", "error");
+            const isNew = editingFacility.id.startsWith("new-");
+            if (isNew && categoryId) {
+              const res = await apiPost(
+                `/api/v1/faq/categories/${categoryId}/rules`,
+                { content_json, tag_names: draft.memberTags },
+              );
+              const json = await res.json();
+              const newId = String(json.data?.id ?? editingFacility.id);
+              savedRuleIdRef.current = newId;
+              const now = new Date().toISOString().slice(0, 16).replace("T", " ");
+              setFacilities((prev) => [
+                {
+                  id: newId,
+                  name: draft.name,
+                  image: draft.imageUrl || img("facility-" + newId),
+                  hours: draft.hours,
+                  fee: draft.fee,
+                  description: draft.description,
+                  memberTags: draft.memberTags,
+                  lastUpdated: now,
+                  enabled: false,
+                  published: false,
+                },
+                ...prev,
+              ]);
+            } else {
+              savedRuleIdRef.current = editingFacility.id;
+              await apiPut(`/api/v1/faq/rules/${editingFacility.id}`, {
+                content_json,
+                tag_names: draft.memberTags,
+              });
+              const now = new Date().toISOString().slice(0, 16).replace("T", " ");
+              setFacilities((prev) =>
+                prev.map((r) =>
+                  r.id === editingFacility.id
+                    ? {
+                        ...r,
+                        name: draft.name,
+                        image: draft.imageUrl || r.image,
+                        hours: draft.hours,
+                        fee: draft.fee,
+                        description: draft.description,
+                        memberTags: draft.memberTags,
+                        lastUpdated: now,
+                        published: false,
+                      }
+                    : r,
+                ),
+              );
             }
           }}
           onDelete={async () => {

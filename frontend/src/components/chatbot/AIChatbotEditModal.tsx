@@ -6,6 +6,7 @@
 import React, { useState, useCallback, memo } from "react";
 import { createPortal } from "react-dom";
 import { apiPost } from "../../utils/apiClient";
+import { useToast } from "../ToastProvider";
 import ImageUploadField from "../common/ImageUploadField";
 
 // ─── Icons (inline SVG) ───────────────────────────────────────────────────────
@@ -549,6 +550,7 @@ export const RoomEditModal = memo(function RoomEditModal({
   const isPmsConnected = pmsData !== null;
   const isPmsView = viewMode === "pms";
   const isReadOnly = isPmsView;
+  const { showToast } = useToast();
   const [subDialog, setSubDialog] = useState<SubDialog>("none");
   const [saving, setSaving] = useState(false);
   const [tooltipVisible, setTooltipVisible] = useState(false);
@@ -597,6 +599,7 @@ export const RoomEditModal = memo(function RoomEditModal({
     } else {
       try {
         await onSave(draft);
+        showToast("儲存成功", "success");
         onClose();
       } catch {
         setSubDialog("saveFailed");
@@ -875,6 +878,7 @@ export const FacilityEditModal = memo(function FacilityEditModal({
   onSave,
   onDelete,
 }: FacilityEditModalProps) {
+  const { showToast } = useToast();
   const [subDialog, setSubDialog] = useState<SubDialog>("none");
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -901,6 +905,7 @@ export const FacilityEditModal = memo(function FacilityEditModal({
     setSaving(true);
     try {
       await onSave(draft);
+      showToast("儲存成功", "success");
       onClose();
     } catch {
       setSubDialog("saveFailed");
