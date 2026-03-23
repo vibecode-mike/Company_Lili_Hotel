@@ -96,6 +96,7 @@ async def _kb_fallback_rooms(db: Optional[AsyncSession], adults: int = 1) -> Lis
         price_raw = item.get("房價") or item.get("price") or 0
         price = _to_int(str(price_raw).replace(",", "").replace("元", "").split("~")[0].split("-")[0])
         max_occ = _to_int(item.get("人數") or item.get("max_occupancy"), ROOMTYPE_MAX_OCCUPANCY.get(code, 2))
+        room_count = _to_int(item.get("間數") or item.get("available_count"), None)
         features = str(item.get("房型特色") or "")
         raw_image = str(item.get("image_url") or item.get("url") or "").strip()
         image_url = raw_image if raw_image else (settings.DEFAULT_ROOM_IMAGE_URL or None)
@@ -104,7 +105,7 @@ async def _kb_fallback_rooms(db: Optional[AsyncSession], adults: int = 1) -> Lis
             room_type_name=name,
             price=price,
             price_label="參考房價",
-            available_count=None,
+            available_count=room_count,
             max_occupancy=max_occ,
             image_url=image_url,
             features=features,
@@ -185,6 +186,10 @@ async def _kb_search(
     cat_name = _CATEGORY_NAME_MAP.get(category)
     if not cat_name:
         return {"ok": False, "error": "unknown category", "items": []}
+
+    # PMS 啟用時，訂房類別由 PMS 提供，FAQ 不回傳避免資料衝突
+    if category == "booking_billing" and is_pms_enabled():
+        return {"ok": True, "category": category, "query": query, "items": []}
 
     # 查詢啟用中的分類
     cat_result = await db.execute(
@@ -1064,10 +1069,9 @@ class ChatbotService:
                         "room_type_code": c.room_type_code,
                         "room_type_name": c.room_type_name,
                         "price": c.price,
-                        "available_count": None,
+                        "available_count": c.available_count,
                         "max_occupancy": c.max_occupancy,
                         "features": c.features,
-                        "image_url": c.image_url,
                     }
                     for c in cards
                 ],
@@ -1107,7 +1111,6 @@ class ChatbotService:
                         "available_count": c.available_count,
                         "max_occupancy": c.max_occupancy,
                         "features": c.features,
-                        "image_url": c.image_url,
                     }
                     for c in cards
                 ],
@@ -1132,10 +1135,9 @@ class ChatbotService:
                         "room_type_code": c.room_type_code,
                         "room_type_name": c.room_type_name,
                         "price": c.price,
-                        "available_count": None,
+                        "available_count": c.available_count,
                         "max_occupancy": c.max_occupancy,
                         "features": c.features,
-                        "image_url": c.image_url,
                     }
                     for c in cards
                 ],
@@ -1930,6 +1932,7 @@ class ChatbotService:
 
         return {
             "reply": reply,
+            "room_cards": [card.model_dump() for card in ctx.room_cards] if ctx.room_cards else [],
             "tokens_used": ctx.total_tokens_used,
             "referenced_rules": [{"rule_id": rid} for rid in referenced_rule_ids],
             "auto_tags": auto_tags,

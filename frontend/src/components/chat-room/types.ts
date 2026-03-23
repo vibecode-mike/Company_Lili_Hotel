@@ -4,6 +4,7 @@
  */
 
 import type { Member } from '../../types/member';
+import type { RoomCard } from '../../utils/chatbotApi';
 
 // ========== 聊天消息相关 ==========
 
@@ -16,6 +17,8 @@ export interface ChatMessage {
   isRead: boolean;
   source?: string | null;  // ✅ 新增：message_source 欄位 ('manual' | 'gpt' | 'keyword' | 'welcome' | 'always' | null)
   senderName?: string | null;  // ✅ 新增：發送人員名稱（manual 顯示人員名稱，其他顯示「系統」）
+  messageType?: string;  // 'text' | 'chat' | 'room_cards' 等
+  roomCards?: RoomCard[];  // messageType='room_cards' 時填入
 }
 
 // ========== 组件 Props 接口 ==========

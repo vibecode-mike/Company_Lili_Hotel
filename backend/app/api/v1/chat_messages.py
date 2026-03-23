@@ -121,6 +121,8 @@ class ChatMessage(BaseModel):
     isRead: bool = False
     source: Optional[str] = None  # 'manual' | 'gpt' | 'keyword' | 'welcome' | 'always'
     senderName: Optional[str] = None  # 發送人員名稱：manual 顯示人員名稱，其他顯示「系統」
+    messageType: Optional[str] = None  # 'text' | 'chat' | 'room_cards' 等
+    roomCards: Optional[List[dict]] = None  # messageType='room_cards' 時填入房卡資料
 
     class Config:
         from_attributes = True
@@ -254,6 +256,8 @@ async def get_chat_messages(
                 isRead=record.get("isRead", False),
                 source=record.get("source"),
                 senderName=record.get("senderName"),
+                messageType=record.get("messageType"),
+                roomCards=record.get("roomCards"),
             ))
 
         logger.info(f"✅ 成功獲取 {len(messages)} 筆聊天紀錄（共 {result['total']} 筆）")

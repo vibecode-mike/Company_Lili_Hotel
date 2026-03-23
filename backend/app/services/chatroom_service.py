@@ -1,3 +1,4 @@
+import json
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -184,18 +185,27 @@ class ChatroomService:
                 else:
                     sender_name = "系統"
 
-            messages.append(
-                {
-                    "id": record.id,
-                    "type": msg_type,
-                    "text": record.content,
-                    "time": format_chat_time(record.created_at),  # 格式化為 "下午 03:30"
-                    "timestamp": timestamp_str,
-                    "isRead": record.status == "read" if hasattr(record, "status") else False,
-                    "source": record.message_source,
-                    "senderName": sender_name,
-                }
-            )
+            # 房卡訊息：解析 JSON 內容
+            msg_dict: Dict[str, Any] = {
+                "id": record.id,
+                "type": msg_type,
+                "text": record.content,
+                "time": format_chat_time(record.created_at),  # 格式化為 "下午 03:30"
+                "timestamp": timestamp_str,
+                "isRead": record.status == "read",
+                "source": record.message_source,
+                "senderName": sender_name,
+                "messageType": record.message_type,
+            }
+            if record.message_type == "room_cards" and record.content:
+                try:
+                    parsed = json.loads(record.content)
+                    msg_dict["roomCards"] = parsed.get("room_cards", [])
+                    msg_dict["text"] = ""
+                except Exception:
+                    logger.warning(f"Failed to parse room_cards content for message {record.id}")
+
+            messages.append(msg_dict)
 
         return {
             "messages": messages,

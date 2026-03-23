@@ -98,7 +98,7 @@ from services.conversation_service import (
     get_member_conversations,
 )
 from typing import Any, Dict, List, Optional, Tuple, Iterable
-from urllib.parse import quote_plus, quote
+from urllib.parse import quote_plus, quote, parse_qs
 from linebot.exceptions import InvalidSignatureError
 
 from flask import Flask, request, abort, jsonify, render_template_string, redirect, send_from_directory, g
@@ -592,6 +592,88 @@ def make_image_click_bubble(item: dict, tracked_uri: Optional[str]):
             }]
         }
     }
+
+
+def build_room_card_flex_carousel(room_cards: list) -> dict:
+    """
+    將 backend room_cards (list[dict]) 轉為 LINE Flex Carousel JSON。
+    每張房卡 = 一個 bubble：hero 圖片 + 房名/剩餘 + 價格 + separator + 數量選擇器。
+    """
+    bubbles = []
+    for card in room_cards[:12]:  # LINE carousel 最多 12 bubbles
+        image_url = card.get("image_url") or "https://dummyimage.com/1200x800/cccccc/333333&text=No+Image"
+        room_type_code = card.get("room_type_code", "")
+        room_type_name = card.get("room_type_name", "房型")
+        price = card.get("price", 0)
+        available_count = card.get("available_count")
+
+        name_row_contents = [
+            {"type": "text", "text": room_type_name, "weight": "bold", "size": "xl", "flex": 4},
+        ]
+        if available_count is not None:
+            name_row_contents.append({
+                "type": "text",
+                "text": f"剩 {available_count} 間",
+                "color": "#FF5555" if available_count <= 3 else "#999999",
+                "size": "sm", "align": "end", "gravity": "bottom", "flex": 2,
+            })
+
+        price_text = f"每晚 TWD {price:,}"
+        qty = 0
+
+        qty_selector = {
+            "type": "box", "layout": "horizontal", "margin": "lg", "alignItems": "center",
+            "contents": [
+                {"type": "text", "text": "選擇預訂數量", "flex": 2, "color": "#666666", "size": "md"},
+                {
+                    "type": "box", "layout": "horizontal", "flex": 3, "spacing": "md",
+                    "contents": [
+                        {
+                            "type": "box", "layout": "horizontal",
+                            "contents": [{"type": "text", "text": "－", "align": "center",
+                                          "gravity": "center", "color": "#ffffff", "weight": "bold", "size": "md"}],
+                            "width": "40px", "height": "40px",
+                            "backgroundColor": "#BBBBBB", "cornerRadius": "8px",
+                            "action": {"type": "postback", "label": "minus",
+                                       "data": f"action=minus&roomType={quote(room_type_code)}&currentQty={qty}"},
+                        },
+                        {"type": "text", "text": str(qty), "align": "center",
+                         "gravity": "center", "weight": "bold", "size": "lg", "flex": 1},
+                        {
+                            "type": "box", "layout": "horizontal",
+                            "contents": [{"type": "text", "text": "＋", "align": "center",
+                                          "gravity": "center", "color": "#ffffff", "weight": "bold", "size": "md"}],
+                            "width": "40px", "height": "40px",
+                            "backgroundColor": "#1DB446", "cornerRadius": "8px",
+                            "action": {"type": "postback", "label": "plus",
+                                       "data": f"action=plus&roomType={quote(room_type_code)}&currentQty={qty}"},
+                        },
+                    ],
+                },
+            ],
+        }
+
+        bubble = {
+            "type": "bubble",
+            "hero": {
+                "type": "image", "url": image_url,
+                "size": "full", "aspectRatio": "20:13", "aspectMode": "cover",
+            },
+            "body": {
+                "type": "box", "layout": "vertical",
+                "contents": [
+                    {"type": "box", "layout": "horizontal", "contents": name_row_contents},
+                    {"type": "text", "text": price_text, "size": "sm", "color": "#999999", "margin": "sm"},
+                    {"type": "separator", "margin": "lg"},
+                    qty_selector,
+                ],
+            },
+        }
+        bubbles.append(bubble)
+
+    if len(bubbles) == 1:
+        return bubbles[0]
+    return {"type": "carousel", "contents": bubbles}
 
 
 def build_user_messages_from_payload(payload: dict, campaign_id: int, line_user_id: str) -> List[FlexMessage]:
@@ -2674,6 +2756,30 @@ def on_postback(event: PostbackEvent):
             # 建議留 log，比較好除錯，不要完全吃掉
             logging.exception("[on_postback] update member/line_friends failed")
 
+    # --- 房卡數量 +/- 按鈕 ---
+    params = parse_qs(data)
+    action = params.get("action", [""])[0]
+    if action in ("plus", "minus"):
+        try:
+            room_type_code = params.get("roomType", [""])[0]
+
+            token = get_channel_access_token_by_channel_id(line_channel_id)
+            api = MessagingApi(ApiClient(Configuration(access_token=token)))
+            reply_token = getattr(event, "reply_token", None)
+            if reply_token:
+                if action == "plus":
+                    confirm_text = f"您對「{room_type_code}」有興趣，請告訴我您想預訂幾間，我來為您安排！"
+                else:
+                    confirm_text = f"已減少「{room_type_code}」的數量。"
+                api.reply_message(ReplyMessageRequest(
+                    reply_token=reply_token,
+                    messages=[TextMessage(text=confirm_text)]
+                ))
+                logging.info(f"[on_postback] room {action}: {room_type_code}")
+        except Exception:
+            logging.exception("[on_postback] room qty handling failed")
+        return
+
 
 def on_text(event: MessageEvent):
     """
@@ -2750,6 +2856,7 @@ def on_text(event: MessageEvent):
     # === 4. 自動回應處理（AI 優先 → keyword → always 降級備援）===
     reply_text = None
     message_source = None
+    ai_room_cards = []
 
     # 檢查是否啟用 GPT
     gpt_enabled = is_gpt_enabled_for_user(uid)
@@ -2764,7 +2871,8 @@ def on_text(event: MessageEvent):
                 elif ai_result.get("reply") and not ai_result["reply"].startswith("AI Token 額度已用完"):
                     reply_text = ai_result["reply"]
                     message_source = "gpt"
-                    logging.info(f"[on_text] Backend AI response for uid={uid}")
+                    ai_room_cards = ai_result.get("room_cards", [])
+                    logging.info(f"[on_text] Backend AI response for uid={uid}, room_cards={len(ai_room_cards)}")
         except Exception as e:
             logging.exception(f"[on_text] Backend AI failed: {e}")
     else:
@@ -2808,9 +2916,23 @@ def on_text(event: MessageEvent):
                 access_token=token
             )))
 
+            messages_to_send = [TextMessage(text=reply_text)]
+
+            # 房卡 → Flex Message carousel
+            if ai_room_cards:
+                try:
+                    carousel_dict = build_room_card_flex_carousel(ai_room_cards)
+                    flex_container = FlexContainer.from_dict(carousel_dict)
+                    messages_to_send.append(
+                        FlexMessage(alt_text="為您找到以下房型", contents=flex_container)
+                    )
+                    logging.info(f"[on_text] Room card FlexMessage appended, {len(ai_room_cards)} cards")
+                except Exception:
+                    logging.exception("[on_text] Failed to build room card FlexMessage")
+
             api.reply_message(ReplyMessageRequest(
                 reply_token=event.reply_token,
-                messages=[TextMessage(text=reply_text)]
+                messages=messages_to_send[:5]
             ))
 
             logging.info(f"[on_text] Reply sent successfully, source={message_source}")
@@ -2831,6 +2953,21 @@ def on_text(event: MessageEvent):
                     message_source=message_source,
                     status="sent"
                 )
+
+                # 房卡另存一筆 room_cards 訊息（供 CRM 聊天室顯示）
+                if ai_room_cards:
+                    try:
+                        insert_conversation_message(
+                            thread_id=thread_id,
+                            role="assistant",
+                            direction="outgoing",
+                            message_type="room_cards",
+                            response=json.dumps({"room_cards": ai_room_cards}, ensure_ascii=False),
+                            message_source=message_source,
+                            status="sent"
+                        )
+                    except Exception:
+                        logging.exception("[on_text] Failed to save room_cards message")
 
             except Exception:
                 logging.exception("[on_text] Failed to save outgoing message")

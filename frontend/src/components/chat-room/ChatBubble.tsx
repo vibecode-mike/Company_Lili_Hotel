@@ -22,7 +22,7 @@
 
 import React from 'react';
 import type { ChatMessage, ChatPlatform } from './types';
-import Container from '../../imports/Container-8548-103';
+import type { RoomCard } from '../../utils/chatbotApi';
 import { PlatformIcon } from '../common/icons/PlatformIcon';
 import WebChatIcon from '../../assets/Icon-web-chat-16.png';
 import {
@@ -123,6 +123,98 @@ function OfficialAvatar({ senderName }: { senderName?: string | null }) {
 }
 
 /**
+ * 房卡卡片列表（CRM 聊天室用，樣式完全對齊 ChatFAB RoomCardItem）
+ */
+function RoomCardList({ cards }: { cards: RoomCard[] }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        gap: 8,
+        overflowX: 'auto',
+        overscrollBehaviorX: 'contain',
+        padding: '6px 0 8px',
+        scrollbarWidth: 'thin',
+        WebkitOverflowScrolling: 'touch',
+        maxWidth: 360,
+      }}
+    >
+      {cards.map((card) => (
+          <div
+            key={card.room_type_code}
+            style={{
+              background: '#fff',
+              borderRadius: 18,
+              boxShadow: '0px 1px 4px 0px rgba(56,56,56,0.18)',
+              border: '3.1px solid transparent',
+              padding: 8,
+              width: 'calc(75% - 6px)',
+              minWidth: 'calc(75% - 6px)',
+              maxWidth: 'calc(75% - 6px)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+              flexShrink: 0,
+              boxSizing: 'border-box',
+            }}
+          >
+            {/* Image */}
+            <div style={{ height: 116, borderRadius: 10, overflow: 'hidden', background: '#f0f0f0', flexShrink: 0 }}>
+              {card.image_url && (
+                <img
+                  src={card.image_url}
+                  alt={card.room_type_name}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              )}
+            </div>
+            {/* Info */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }}>
+              <div style={{ fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 500, fontSize: 16, color: '#383838', lineHeight: 1.5 }}>
+                {card.room_type_name}
+              </div>
+              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                <div style={{ fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 500, fontSize: 16, color: '#6e6e6e', lineHeight: 1.5, whiteSpace: 'nowrap' }}>
+                  {card.source === 'pms' ? card.price_label : `NT$${card.price.toLocaleString()}`}
+                </div>
+                <div style={{ fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 500, fontSize: 16, color: '#6e6e6e', lineHeight: 1.5 }}>/</div>
+                <div style={{ fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 400, fontSize: 16, color: '#6e6e6e', lineHeight: 1.5, whiteSpace: 'nowrap' }}>
+                  {card.available_count != null ? `剩餘 ${card.available_count} 間` : '待確認'}
+                </div>
+              </div>
+            </div>
+            {/* Quantity Stepper */}
+            <div style={{ background: '#f8fafc', borderRadius: 8, padding: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <button
+                type="button"
+                disabled
+                style={{ width: 32, height: 32, background: 'none', border: 'none', padding: 0, cursor: 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+              >
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                  <path d="M8 16H24" stroke="#d1d5db" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </button>
+              <div style={{ flex: 1, textAlign: 'center', fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 400, fontSize: 16, color: '#383838', lineHeight: 1.5 }}>
+                0
+              </div>
+              <button
+                type="button"
+                disabled
+                style={{ width: 32, height: 32, background: 'none', border: 'none', padding: 0, cursor: 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+              >
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                  <path d="M16 8V24M8 16H24" stroke="#d1d5db" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+          </div>
+      ))}
+    </div>
+  );
+}
+
+/**
  * 聊天氣泡組件
  */
 export function ChatBubble({
@@ -131,6 +223,7 @@ export function ChatBubble({
   platform = 'LINE'
 }: ChatBubbleProps) {
   const isOfficial = message.type === 'official';
+  const isRoomCards = message.messageType === 'room_cards' && message.roomCards?.length;
 
   return (
     <div
@@ -147,20 +240,25 @@ export function ChatBubble({
           isOfficial ? 'items-end' : 'items-start'
         } relative shrink-0`}
       >
-        {/* 氣泡 - Figma 3.png 規格 */}
-        <div
-          className="flex flex-col items-center max-w-[288px] w-fit overflow-clip relative rounded-[16px] shrink-0"
-          style={{ backgroundColor: isOfficial ? '#9ED5FF' : '#FFFFFF' }}
-        >
-          <div className="box-border content-center flex flex-wrap gap-0 items-center p-[16px] relative w-full">
-            <p
-              className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[16px] text-[#383838] break-words whitespace-pre-wrap text-left"
-              style={{ overflowWrap: 'anywhere' }}
-            >
-              {message.text}
-            </p>
+        {isRoomCards ? (
+          /* 房卡卡片列表 */
+          <RoomCardList cards={message.roomCards!} />
+        ) : (
+          /* 氣泡 - Figma 3.png 規格 */
+          <div
+            className="flex flex-col items-center max-w-[288px] w-fit overflow-clip relative rounded-[16px] shrink-0"
+            style={{ backgroundColor: isOfficial ? '#9ED5FF' : '#FFFFFF' }}
+          >
+            <div className="box-border content-center flex flex-wrap gap-0 items-center p-[16px] relative w-full">
+              <p
+                className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[16px] text-[#383838] break-words whitespace-pre-wrap text-left"
+                style={{ overflowWrap: 'anywhere' }}
+              >
+                {message.text}
+              </p>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* 時間戳 - Figma 3.png: 灰色文字 */}
         <div className="h-[18px] relative shrink-0 w-full">
