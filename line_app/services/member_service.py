@@ -293,32 +293,38 @@ def maybe_update_member_profile(uid: str) -> None:
         logging.warning(f"[PROFILE] maybe_update_member_profile failed uid={uid}: {e}")
 
 
-def is_gpt_enabled_for_user(line_uid: str) -> bool:
-    """
-    檢查指定 LINE 使用者是否啟用 GPT 自動回應
-
-    Args:
-        line_uid: LINE 使用者 UID
-
-    Returns:
-        bool: True 表示啟用 GPT，False 表示停用
-
-    Note:
-        - 預設值為 True (啟用)
-        - 若查詢失敗，也回傳 True (安全降級)
-    """
+def get_member_reply_flags(line_uid: str) -> dict:
+    """一次查詢取得會員的自動回應控制旗標（gpt_enabled + human_override_until）"""
     try:
-        row = fetchone("SELECT gpt_enabled FROM members WHERE line_uid=:u", {"u": line_uid})
-        if row:
-            gpt_enabled = row.get("gpt_enabled", True)
-            logging.debug(f"[GPT Check] uid={line_uid}, gpt_enabled={gpt_enabled}")
-            return bool(gpt_enabled)
-        # 會員不存在於資料庫
-        logging.debug(f"[GPT Check] uid={line_uid} not found, default=True")
-        return True
+        row = fetchone(
+            "SELECT gpt_enabled, human_override_until FROM members WHERE line_uid=:u",
+            {"u": line_uid}
+        )
+        if not row:
+            return {"gpt_enabled": True, "human_override": False}
+
+        gpt_enabled = bool(row.get("gpt_enabled", True))
+        override_until = row.get("human_override_until")
+        human_override = False
+        if override_until:
+            if isinstance(override_until, str):
+                override_until = datetime.datetime.fromisoformat(override_until)
+            human_override = override_until > datetime.datetime.utcnow()
+
+        return {"gpt_enabled": gpt_enabled, "human_override": human_override}
     except Exception as e:
-        logging.error(f"[GPT Check] DB query failed for uid={line_uid}: {e}")
-        return True
+        logging.error(f"[Reply Flags] DB query failed for uid={line_uid}: {e}")
+        return {"gpt_enabled": True, "human_override": False}
+
+
+def is_gpt_enabled_for_user(line_uid: str) -> bool:
+    """檢查是否啟用 GPT（向後相容，內部使用 get_member_reply_flags）"""
+    return get_member_reply_flags(line_uid)["gpt_enabled"]
+
+
+def is_human_override_active(line_uid: str) -> bool:
+    """檢查管理者是否正在人工接管（向後相容，內部使用 get_member_reply_flags）"""
+    return get_member_reply_flags(line_uid)["human_override"]
 
 
 # -------------------------------------------------

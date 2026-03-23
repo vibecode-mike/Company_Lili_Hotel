@@ -77,7 +77,8 @@ Table Member {
   internal_note text [note: '內部人員可新增的備註，用於記錄該會員的消費習慣與喜好。使用 TEXT 型別不限長度']
   passport_number string(50) [note: '護照號碼，上限 50 字元。用於外籍會員識別']
   address_detail string(255) [note: '詳細地址，上限 255 字元。用於配送或寄送用途']
-  gpt_enabled bool [default: true, note: '是否啟用 GPT 自動回應。預設值：true。設為 false 時，該會員的訊息不會觸發 GPT 自動回應']
+  gpt_enabled bool [default: true, note: '是否啟用 GPT 自動回應（永久開關）。false 時禁止 AI，但 keyword/always 仍可觸發']
+  human_override_until timestamp [note: '人工接管到期時間（UTC）。非 NULL 且未過期時抑制所有自動回應（AI + keyword + always）。focus 輸入框時設為 now+10min，blur 時設為 now+30s，送訊息時續期']
   line_channel_id string(100) [note: 'LINE 頻道 ID，關聯 LineChannel']
   updated_at timestamp [note: '更新時間（UTC）。資料庫儲存 UTC 時間，API 回傳時轉換為 ISO 8601 格式字串']
 
@@ -1823,26 +1824,8 @@ Table FaqRule {
   '''
 }
 
-Table FaqRuleVersion {
-  id bigint [pk, increment, note: '版本快照唯一識別碼']
-  rule_id bigint [ref: > FaqRule.id, not null, note: '所屬規則 ID']
-  content_json text [not null, note: '該版本的規則內容快照（JSON 格式）']
-  status faq_rule_status [not null, note: '快照時的規則狀態']
-  version_number int [not null, default: 1, note: '版本號，遞增']
-  snapshot_at timestamp [not null, note: '快照建立時間（UTC）']
-
-  indexes {
-    rule_id_index (rule_id) [note: '優化規則版本查詢']
-    rule_version_index (rule_id, version_number) [note: '優化規則特定版本查詢']
-  }
-
-  Note: '''
-  FAQ 規則版本快照表，發佈時自動建立。
-  一筆規則最多保留 2 個版本：當前版本 + 上一個已啟用的正式發佈版本。
-  用於版本回復功能：將測試(未發佈)版本複寫回上一個已啟用版本。
-  關係：FaqRuleVersion N:1 FaqRule
-  '''
-}
+// REMOVED: FaqRuleVersion 表已於 2026-03-18 遷移移除（48f00ef7ab3d）。
+// 版本管理改用 FaqRule.status (draft/active) + published_at 時間戳追蹤。
 
 Table FaqRuleTag {
   id bigint [pk, increment, note: '規則標籤關聯唯一識別碼']

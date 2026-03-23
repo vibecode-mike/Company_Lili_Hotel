@@ -51,6 +51,7 @@ class Member(Base):
     )
     receive_notification = Column(Boolean, default=True, comment="是否接收優惠通知")
     gpt_enabled = Column(Boolean, default=True, comment="是否啟用 GPT 自動回應")
+    human_override_until = Column(DateTime, nullable=True, comment="人工接管到期時間（UTC），非 NULL 且未過期時抑制所有自動回應")
     internal_note = Column(Text, comment="內部備註")
     last_interaction_at = Column(DateTime, index=True, comment="最後互動時間")
 

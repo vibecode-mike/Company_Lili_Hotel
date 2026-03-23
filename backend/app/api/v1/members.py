@@ -28,7 +28,7 @@ from app.core.pagination import PageParams, PageResponse, paginate_query
 from app.api.v1.auth import get_current_user
 from app.clients.line_app_client import LineAppClient
 from app.clients.fb_message_client import FbMessageClient
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 import os
 import pytz
@@ -571,7 +571,7 @@ async def update_member_interaction_tags(
             tag_name=tag_name,
             tag_source="CRM",  # 手動添加的標籤來源為 CRM
             click_count=1,  # 手動標籤固定為 1
-            tagged_at=datetime.now(timezone.utc),
+            tagged_at=datetime.now(),
         )
         db.add(interaction_tag)
 
@@ -663,7 +663,7 @@ async def batch_update_member_tags(
                     tag_source="會員資訊表",
                     message_id=None,
                     click_count=1,
-                    tagged_at=datetime.now(timezone.utc),
+                    tagged_at=datetime.now(),
                 )
                 db.add(new_tag)
                 member_tags_updated += 1
@@ -726,7 +726,7 @@ async def batch_update_member_tags(
                     tag_source="會員資訊表",
                     message_id=None,
                     click_count=1,
-                    tagged_at=datetime.now(timezone.utc),
+                    tagged_at=datetime.now(),
                 )
                 db.add(new_tag)
                 interaction_tags_updated += 1
@@ -840,7 +840,7 @@ async def add_member_interaction_tag(
         tag_source="CRM",
         message_id=message_id,
         click_count=1,  # 手動標籤固定為 1
-        tagged_at=datetime.now(timezone.utc),
+        tagged_at=datetime.now(),
     )
     db.add(interaction_tag)
     await db.commit()
@@ -866,6 +866,51 @@ async def update_member_notes(
     await db.commit()
 
     return SuccessResponse(message="備註更新成功")
+
+
+# ============================================
+# Human Override（人工接管）
+# ============================================
+
+HUMAN_OVERRIDE_DURATION = timedelta(minutes=10)
+HUMAN_OVERRIDE_BLUR_BUFFER = timedelta(seconds=30)
+
+
+@router.put("/{member_id}/human-override", response_model=SuccessResponse)
+async def set_human_override(
+    member_id: str,
+    active: bool = Body(..., embed=True),
+    platform: Optional[str] = Query(None, description="渠道：LINE/Facebook/Webchat"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """設定/解除人工接管狀態。active=true 設定 10 分鐘，active=false 設定 30 秒緩衝。"""
+    normalized = _validate_platform(platform)
+    member = await _get_member_by_platform(db, member_id, normalized)
+    if not member:
+        raise HTTPException(status_code=404, detail="會員不存在")
+
+    duration = HUMAN_OVERRIDE_DURATION if active else HUMAN_OVERRIDE_BLUR_BUFFER
+    member.human_override_until = datetime.utcnow() + duration
+
+    await db.commit()
+
+    # SSE 廣播（多分頁同步）
+    from app.models.conversation import ConversationThread
+    thread = (await db.execute(
+        select(ConversationThread).where(
+            ConversationThread.member_id == member.id
+        ).order_by(ConversationThread.last_message_at.desc()).limit(1)
+    )).scalar_one_or_none()
+    if thread:
+        from app.websocket_manager import manager
+        await manager.send_new_message(thread.id, {
+            "type": "human_override_changed",
+            "active": active,
+            "changed_by": current_user.username,
+        })
+
+    return SuccessResponse(data={"human_override_active": active})
 
 
 # ============================================
@@ -950,7 +995,7 @@ async def send_member_chat_message(
                 await db.flush()
 
                 # WebSocket 推送通知前端即時更新（包含 senderName）
-                now_utc = datetime.now(timezone.utc)
+                now_utc = datetime.now()
                 time_str = format_taipei_time(now_utc)
                 sender_name = current_user.username
                 await manager.send_new_message(thread_id, {
@@ -965,11 +1010,15 @@ async def send_member_chat_message(
                     "senderName": sender_name
                 })
 
+            # 送訊息 = 人工操作，續期 human override
+            member.human_override_until = datetime.utcnow() + HUMAN_OVERRIDE_DURATION
+            await db.commit()
+
             return {
                 "success": True,
                 "message_id": line_msg_id,
                 "thread_id": thread_id,
-                "sent_at": datetime.now(timezone.utc).isoformat()
+                "sent_at": datetime.now().isoformat()
             }
 
         except Exception as e:
@@ -1063,7 +1112,7 @@ async def send_member_chat_message(
             "success": True,
             "message_id": send_result.get("message_id", msg.id if msg else None),
             "thread_id": msg.thread_id if msg else None,
-            "sent_at": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg and msg.created_at else datetime.now(timezone.utc).isoformat()
+            "sent_at": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg and msg.created_at else datetime.now().isoformat()
         }
 
     elif platform_stripped == "Webchat":
