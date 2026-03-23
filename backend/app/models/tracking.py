@@ -91,7 +91,7 @@ class ComponentInteractionLog(Base):
     interaction_value = Column(Text, comment="互動值（如URL、訊息內容等）")
     triggered_at = Column(
         DateTime,
-        default=datetime.utcnow,
+        default=datetime.now,
         nullable=False,
         index=True,
         comment="觸發時間",
@@ -128,12 +128,12 @@ class ClickTrackingDemo(Base):
     )
     last_clicked_at = Column(DateTime, nullable=True, comment="最後點擊時間")
     created_at = Column(
-        DateTime, default=datetime.utcnow, nullable=False, comment="建立時間"
+        DateTime, default=datetime.now, nullable=False, comment="建立時間"
     )
     updated_at = Column(
         DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=datetime.now,
+        onupdate=datetime.now,
         nullable=False,
         comment="更新時間",
     )

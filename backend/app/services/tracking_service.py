@@ -70,7 +70,7 @@ class TrackingService:
                 interaction_tag_id=interaction_tag_id,
                 interaction_type=interaction_type_enum,
                 interaction_value=interaction_value,
-                triggered_at=datetime.now(timezone.utc),
+                triggered_at=datetime.now(),
                 line_event_type=line_event_type,
                 user_agent=user_agent,
             )
@@ -133,7 +133,7 @@ class TrackingService:
             .values(
                 click_count=total_count,
                 unique_click_count=unique_count,
-                last_clicked_at=datetime.now(timezone.utc),
+                last_clicked_at=datetime.now(),
             )
         )
 
@@ -174,7 +174,7 @@ class TrackingService:
             .values(
                 trigger_count=total_count,
                 member_count=unique_members,
-                last_triggered_at=datetime.now(timezone.utc),
+                last_triggered_at=datetime.now(),
             )
         )
 
@@ -243,7 +243,7 @@ class TrackingService:
         if existing_tag:
             # 4a. 已存在：累加 click_count
             existing_tag.click_count = (existing_tag.click_count or 1) + 1
-            existing_tag.last_triggered_at = datetime.now(timezone.utc)
+            existing_tag.last_triggered_at = datetime.now()
             logger.debug(f"Updated member_interaction_tag: member_id={member_id}, tag={tag.tag_name}, click_count={existing_tag.click_count}")
         else:
             # 4b. 不存在：創建新記錄
@@ -252,7 +252,7 @@ class TrackingService:
                 tag_name=tag.tag_name,
                 tag_source=tag.tag_source,  # 保留原始來源（訊息模板/問券模板）
                 click_count=1,
-                last_triggered_at=datetime.now(timezone.utc),
+                last_triggered_at=datetime.now(),
             )
             db.add(new_tag)
             logger.info(f"Created member_interaction_tag: member_id={member_id}, tag={tag.tag_name}, source={tag.tag_source}")
@@ -375,7 +375,7 @@ class TrackingService:
             "interactions_by_type": interactions_by_type,
             "carousel_stats": carousel_stats,
             "component_stats": component_stats,
-            "generated_at": datetime.now(timezone.utc),
+            "generated_at": datetime.now(),
         }
 
     async def get_campaign_interactions(

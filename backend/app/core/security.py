@@ -39,7 +39,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
     # 使用 timezone-aware datetime (Python 3.12+ 推薦)
     # datetime.utcnow() 已在 Python 3.12 中棄用
-    now = datetime.now(timezone.utc)
+    now = datetime.now()
 
     if expires_delta:
         expire = now + expires_delta

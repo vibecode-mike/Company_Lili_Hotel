@@ -139,7 +139,7 @@ async def create_or_update_channel(data: FbChannelCreate, db: AsyncSession = Dep
     result = await db.execute(stmt)
     existing = result.scalar_one_or_none()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now()
     if existing:
         existing.page_id = page_id
         existing.channel_name = data.channel_name or existing.channel_name
@@ -174,7 +174,7 @@ async def sync_channels(data: FbChannelSyncRequest, db: AsyncSession = Depends(g
 
     這確保本地 DB 的 is_active 狀態與外部 API 的授權狀態一致。
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now()
     active_page_ids = [ch.page_id for ch in data.channels]
 
     # 1. 將不在列表中的頻道設為 is_active=False
