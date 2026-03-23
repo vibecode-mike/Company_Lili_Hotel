@@ -42,9 +42,9 @@ const ChevronUp = () => (
 );
 
 const EXPORT_OPTIONS: { label: string; value: "csv" | "xls" | "xlsx" }[] = [
-  { label: "逗號分隔值檔案 (.csv)", value: "csv" },
-  { label: "(.xls)", value: "xls" },
-  { label: "(.xlsx)", value: "xlsx" },
+  { label: "純文字表格 (.csv)", value: "csv" },
+  { label: "標準 Excel 試算表 (.xlsx)", value: "xlsx" },
+  { label: "舊版 Excel 試算表 (.xls)", value: "xls" },
 ];
 
 export default function CategoryTitleDropdown({

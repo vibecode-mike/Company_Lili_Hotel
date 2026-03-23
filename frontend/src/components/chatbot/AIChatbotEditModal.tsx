@@ -556,8 +556,11 @@ const PmsTooltip = memo(function PmsTooltip({ visible }: { visible: boolean }) {
 
 // ─── Main Room Edit Modal ─────────────────────────────────────────────────────
 
+export type ViewMode = "pms" | "faq";
+
 interface RoomEditModalProps {
   // Data
+  viewMode: ViewMode;
   pmsData: RoomPmsData | null; // null = not connected
   draft: RoomFaqDraft;
   // hasFaq: determined by caller based on draft content
@@ -575,6 +578,7 @@ interface RoomEditModalProps {
 }
 
 export const RoomEditModal = memo(function RoomEditModal({
+  viewMode,
   pmsData,
   draft,
   hasFaq,
@@ -588,6 +592,8 @@ export const RoomEditModal = memo(function RoomEditModal({
   onEnableTest,
 }: RoomEditModalProps) {
   const isPmsConnected = pmsData !== null;
+  const isPmsView = viewMode === "pms";
+  const isReadOnly = isPmsView;
   const [subDialog, setSubDialog] = useState<SubDialog>("none");
   const [saving, setSaving] = useState(false);
   const [tooltipVisible, setTooltipVisible] = useState(false);
@@ -714,76 +720,80 @@ export const RoomEditModal = memo(function RoomEditModal({
           {/* ── Content ── */}
           <div className="flex flex-col gap-[32px] w-full">
             {/* 房型名稱 */}
-            <SplitSection
-              label="房型名稱"
-              isPmsConnected={isPmsConnected}
-              pmsValue={pmsData?.roomType ?? ""}
-              faqValue={draft.customRoomName}
-              faqPlaceholder="輸入房型名稱"
-              onChange={field("customRoomName")}
-              disabled={saving}
-              error={errors.customRoomName}
-            />
+            <div className="flex flex-col gap-[12px] w-full">
+              <FieldLabel label="房型名稱" error={errors.customRoomName} />
+              {isPmsView ? (
+                <PmsReadCell value={isPmsConnected ? (pmsData?.roomType ?? "") : "尚未串接"} placeholder={!isPmsConnected} />
+              ) : (
+                <FaqInput value={draft.customRoomName} placeholder="輸入房型名稱" onChange={field("customRoomName")} disabled={saving} />
+              )}
+            </div>
 
             {/* 房型圖片 */}
             <div className="flex flex-col gap-[12px] w-full">
               <FieldLabel label="房型圖片" required={false} />
               <ImageUploadField
-                value={displayImage || ""}
+                value={isPmsView ? (pmsData?.imageUrl || "") : (displayImage || "")}
                 onChange={field("customImageUrl")}
-                disabled={saving}
+                disabled={saving || isReadOnly}
                 label="房型圖片"
                 aspectRatio="3/2"
               />
             </div>
 
             {/* 房價 */}
-            <SplitSection
-              label="房價"
-              isPmsConnected={isPmsConnected}
-              pmsValue={pmsData?.priceLabel ?? ""}
-              faqValue={draft.customPrice}
-              faqPlaceholder="輸入房價"
-              faqHint="自訂內容為「一般房價」，非隨日期波動的「即時房價」"
-              onChange={field("customPrice")}
-              disabled={saving}
-              error={errors.customPrice}
-            />
+            <div className="flex flex-col gap-[12px] w-full">
+              <FieldLabel label="房價" error={errors.customPrice} />
+              {isPmsView ? (
+                <PmsReadCell value={isPmsConnected ? (pmsData?.priceLabel ?? "") : "尚未串接"} placeholder={!isPmsConnected} />
+              ) : (
+                <>
+                  <FaqInput value={draft.customPrice} placeholder="輸入房價" onChange={field("customPrice")} disabled={saving} />
+                  <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[12px] leading-[1.5] text-[#6e6e6e] px-[8px] py-[4px]">
+                    自訂內容為「一般房價」，非隨日期波動的「即時房價」
+                  </p>
+                </>
+              )}
+            </div>
 
             {/* 可入住人數 */}
-            <SplitSection
-              label="可入住人數"
-              isPmsConnected={isPmsConnected}
-              pmsValue={pmsData?.guestsLabel ?? ""}
-              faqValue={draft.customGuests}
-              faqPlaceholder="輸入人數"
-              faqHint="可輸入 2，表示為雙人房"
-              onChange={field("customGuests")}
-              disabled={saving}
-              error={errors.customGuests}
-            />
+            <div className="flex flex-col gap-[12px] w-full">
+              <FieldLabel label="可入住人數" error={errors.customGuests} />
+              {isPmsView ? (
+                <PmsReadCell value={isPmsConnected ? (pmsData?.guestsLabel ?? "") : "尚未串接"} placeholder={!isPmsConnected} />
+              ) : (
+                <>
+                  <FaqInput value={draft.customGuests} placeholder="輸入人數" onChange={field("customGuests")} disabled={saving} />
+                  <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[12px] leading-[1.5] text-[#6e6e6e] px-[8px] py-[4px]">
+                    可輸入 2，表示為雙人房
+                  </p>
+                </>
+              )}
+            </div>
 
             {/* 剩餘間數 */}
-            <SplitSection
-              label="剩餘間數"
-              isPmsConnected={isPmsConnected}
-              pmsValue={pmsData?.remainingLabel ?? ""}
-              faqValue={draft.customRemaining}
-              faqPlaceholder="輸入內容"
-              faqHint="例：2 間、最後一間"
-              onChange={field("customRemaining")}
-              disabled={saving}
-              required={false}
-            />
+            <div className="flex flex-col gap-[12px] w-full">
+              <FieldLabel label="剩餘間數" required={false} />
+              {isPmsView ? (
+                <PmsReadCell value={isPmsConnected ? (pmsData?.remainingLabel ?? "") : "尚未串接"} placeholder={!isPmsConnected} />
+              ) : (
+                <>
+                  <FaqInput value={draft.customRemaining} placeholder="輸入內容" onChange={field("customRemaining")} disabled={saving} />
+                  <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[12px] leading-[1.5] text-[#6e6e6e] px-[8px] py-[4px]">
+                    例：2 間、最後一間
+                  </p>
+                </>
+              )}
+            </div>
 
             {/* 房型特色 */}
             <TextareaSection
               label="房型特色"
-              value={draft.features}
-              placeholder="輸入內容"
-              hint="描述房型特色"
+              value={isPmsView ? "" : draft.features}
+              placeholder={isPmsView ? "PMS 無此欄位" : "輸入內容"}
+              hint={isPmsView ? undefined : "描述房型特色"}
               onChange={field("features")}
-              disabled={saving}
+              disabled={saving || isReadOnly}
               error={errors.features}
             />
 
@@ -795,7 +805,7 @@ export const RoomEditModal = memo(function RoomEditModal({
                   tags={draft.memberTags}
                   hasFaq={hasFaq}
                   onChange={field("memberTags")}
-                  disabled={saving}
+                  disabled={saving || isReadOnly}
                 />
                 <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[12px] leading-[1.5] text-[#6e6e6e] px-[8px] py-[4px]">
                   為房型行銷方案與亮點建立標籤，根據互動行為對會員做精準行銷
@@ -811,7 +821,7 @@ export const RoomEditModal = memo(function RoomEditModal({
                   value={draft.bookingUrl}
                   placeholder="輸入 URL"
                   onChange={field("bookingUrl")}
-                  disabled={saving}
+                  disabled={saving || isReadOnly}
                 />
                 <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[12px] leading-[1.5] text-[#6e6e6e] px-[8px] py-[4px]">
                   輸入該房型的 URL
@@ -821,34 +831,36 @@ export const RoomEditModal = memo(function RoomEditModal({
           </div>
 
           {/* ── Footer ── */}
-          <div className="flex gap-[8px] items-center justify-center w-full">
-            {/* Delete */}
-            <button
-              type="button"
-              onClick={() => setSubDialog("confirmDelete")}
-              disabled={saving}
-              className="bg-[#ffebee] flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] cursor-pointer border-none hover:bg-[#ffd5d8] transition-colors disabled:opacity-50"
-            >
-              <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#f44336]">
-                刪除
-              </span>
-            </button>
+          {!isReadOnly && (
+            <div className="flex gap-[8px] items-center justify-center w-full">
+              {/* Delete */}
+              <button
+                type="button"
+                onClick={() => setSubDialog("confirmDelete")}
+                disabled={saving}
+                className="bg-[#ffebee] flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] cursor-pointer border-none hover:bg-[#ffd5d8] transition-colors disabled:opacity-50"
+              >
+                <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#f44336]">
+                  刪除
+                </span>
+              </button>
 
-            {/* Spacer */}
-            <div className="flex-1" />
+              {/* Spacer */}
+              <div className="flex-1" />
 
-            {/* Save */}
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              className="bg-[#242424] flex items-center justify-center min-h-[48px] w-[72px] px-[12px] py-[8px] rounded-[16px] cursor-pointer border-none hover:bg-[#383838] transition-colors disabled:opacity-60"
-            >
-              <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-white">
-                {saving ? "儲存中" : "儲存"}
-              </span>
-            </button>
-          </div>
+              {/* Save */}
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="bg-[#242424] flex items-center justify-center min-h-[48px] w-[72px] px-[12px] py-[8px] rounded-[16px] cursor-pointer border-none hover:bg-[#383838] transition-colors disabled:opacity-60"
+              >
+                <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-white">
+                  {saving ? "儲存中" : "儲存"}
+                </span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

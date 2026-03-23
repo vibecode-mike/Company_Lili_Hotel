@@ -1030,6 +1030,22 @@ const DataSourcesTable = memo(function DataSourcesTable({
 }) {
   const [sources, setSources] = useState(rows);
   const { showToast } = useToast();
+
+  // 監聽發佈事件，更新資料來源狀態
+  useEffect(() => {
+    const handler = () => {
+      setSources((prev) =>
+        prev.map((s) =>
+          s.enabled
+            ? { ...s, statusLabel: "已啟用", statusColor: "green" as const }
+            : { ...s, statusLabel: "已停用", statusColor: "red" as const },
+        ),
+      );
+    };
+    window.addEventListener("faq-published", handler);
+    return () => window.removeEventListener("faq-published", handler);
+  }, []);
+
   return (
     <div className="flex flex-col gap-[16px] items-start w-full">
       {/* 測試 button — own row, right-aligned */}
@@ -1111,14 +1127,7 @@ const DataSourcesTable = memo(function DataSourcesTable({
                 onToggle={(type, v) => {
                   setSources((prev) =>
                     prev.map((s) =>
-                      s.type === type
-                        ? {
-                            ...s,
-                            enabled: v,
-                            statusLabel: v ? "已啟用" : "已停用",
-                            statusColor: v ? "green" : "red",
-                          }
-                        : s,
+                      s.type === type ? { ...s, enabled: v } : s,
                     ),
                   );
                   showToast(

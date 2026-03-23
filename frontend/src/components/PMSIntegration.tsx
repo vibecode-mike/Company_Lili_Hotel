@@ -7,6 +7,7 @@ import {
   RoomEditModal,
   RoomFaqDraft,
   RoomPmsData,
+  ViewMode,
 } from "./chatbot/AIChatbotEditModal";
 
 import { PageHeaderWithBreadcrumb } from "./common/Breadcrumb";
@@ -492,6 +493,7 @@ const PMSDataTable = memo(function PMSDataTable({
       .then((res: any) => setPmsEnabled(!!res?.enabled))
       .catch(() => {});
   }, []);
+  const [viewMode, setViewMode] = useState<ViewMode>("faq");
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -693,6 +695,12 @@ const PMSDataTable = memo(function PMSDataTable({
         published: false, // editing resets to draft
       };
       if (id.startsWith("new-")) {
+        // 檢查是否有同名房型
+        const newName = draft.customRoomName || room?.roomType || "";
+        if (rooms.some((r) => r.id !== id && r.roomType === newName)) {
+          showToast("此房型名稱已存在，請編輯現有規則或刪除後重新新增", "error");
+          return;
+        }
         // New item: add to list only after save succeeds
         try {
           if (categoryId) {
@@ -851,48 +859,78 @@ const PMSDataTable = memo(function PMSDataTable({
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* 匯出/匯入 + 新增規則 + 測試 */}
+        {/* 匯出/匯入 + 新增規則 + PMS/FAQ 切換 + 測試 */}
         <div className="flex gap-[4px] self-stretch shrink-0 items-center">
-          <CategoryTitleDropdown onImport={handleImport} onExport={handleExport} />
-          <button
-            type="button"
-            onClick={() => {
-              if (!categoryId) return;
-              const newId = `new-${Date.now()}`;
-              const newRoom: RoomRecord = {
-                id: newId,
-                roomType: "",
-                image: "",
-                pricePerNight: 0,
-                maxGuests: 0,
-                remainingRooms: "",
-                features: "",
-                memberTags: [],
-                url: "",
-                lastUpdated: "—",
-                enabled: false,
-                published: false,
-                pmsRoomCode: "",
-                customImageUrl: "",
-              };
-              setEditingRoom(newRoom);
-              setEditDraft({
-                customRoomName: "",
-                customImageUrl: "",
-                customPrice: "",
-                customGuests: "",
-                customRemaining: "",
-                features: "",
-                memberTags: [],
-                bookingUrl: "",
-              });
-            }}
-            className="flex items-center justify-center px-[12px] py-[8px] rounded-[16px] shrink-0 self-stretch cursor-pointer hover:bg-[#f0f6ff] active:bg-[#dce8fc] transition-colors duration-150"
-          >
-            <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#0f6beb] text-center whitespace-nowrap">
-              新增規則
-            </span>
-          </button>
+          {viewMode === "faq" && (
+            <>
+              <CategoryTitleDropdown onImport={handleImport} onExport={handleExport} />
+              <button
+                type="button"
+                onClick={() => {
+                  if (!categoryId) return;
+                  const newId = `new-${Date.now()}`;
+                  const newRoom: RoomRecord = {
+                    id: newId,
+                    roomType: "",
+                    image: "",
+                    pricePerNight: 0,
+                    maxGuests: 0,
+                    remainingRooms: "",
+                    features: "",
+                    memberTags: [],
+                    url: "",
+                    lastUpdated: "—",
+                    enabled: false,
+                    published: false,
+                    pmsRoomCode: "",
+                    customImageUrl: "",
+                  };
+                  setEditingRoom(newRoom);
+                  setEditDraft({
+                    customRoomName: "",
+                    customImageUrl: "",
+                    customPrice: "",
+                    customGuests: "",
+                    customRemaining: "",
+                    features: "",
+                    memberTags: [],
+                    bookingUrl: "",
+                  });
+                }}
+                className="flex items-center justify-center px-[12px] py-[8px] rounded-[16px] shrink-0 self-stretch cursor-pointer hover:bg-[#f0f6ff] active:bg-[#dce8fc] transition-colors duration-150"
+              >
+                <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#0f6beb] text-center whitespace-nowrap">
+                  新增規則
+                </span>
+              </button>
+            </>
+          )}
+
+          {/* PMS / FAQ toggle */}
+          <div className="flex rounded-[12px] overflow-hidden border border-[#e0e0e0] shrink-0">
+            <button
+              type="button"
+              onClick={() => setViewMode("pms")}
+              className={`px-[16px] py-[8px] text-[14px] font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] border-none cursor-pointer transition-colors ${
+                viewMode === "pms"
+                  ? "bg-[#242424] text-white"
+                  : "bg-white text-[#6e6e6e] hover:bg-[#f5f5f5]"
+              }`}
+            >
+              PMS
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("faq")}
+              className={`px-[16px] py-[8px] text-[14px] font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] border-none cursor-pointer transition-colors ${
+                viewMode === "faq"
+                  ? "bg-[#242424] text-white"
+                  : "bg-white text-[#6e6e6e] hover:bg-[#f5f5f5]"
+              }`}
+            >
+              FAQ
+            </button>
+          </div>
 
           <button
             type="button"
@@ -1066,6 +1104,7 @@ const PMSDataTable = memo(function PMSDataTable({
       {/* 編輯房型彈窗 */}
       {editingRoom && editDraft && (
         <RoomEditModal
+          viewMode={viewMode}
           pmsData={
             pmsEnabled
               ? {
@@ -1539,6 +1578,26 @@ const DataSourcesTable = memo(function DataSourcesTable({
 }) {
   const { showToast } = useToast();
 
+  // 監聽發佈事件，更新資料來源狀態
+  useEffect(() => {
+    const handler = () => {
+      setSources((prev) =>
+        prev.map((s) => {
+          if (s.type === "PMS") {
+            return s.enabled
+              ? { ...s, statusLabel: "已串接", statusColor: "green" as const }
+              : { ...s, statusLabel: "未串接", statusColor: "gray" as const };
+          }
+          return s.enabled
+            ? { ...s, statusLabel: "已啟用", statusColor: "green" as const }
+            : { ...s, statusLabel: "已停用", statusColor: "red" as const };
+        }),
+      );
+    };
+    window.addEventListener("faq-published", handler);
+    return () => window.removeEventListener("faq-published", handler);
+  }, [setSources]);
+
   return (
     <div className="flex flex-col gap-[16px] items-start w-full">
       {/* 測試 button — own row, right-aligned */}
@@ -1620,45 +1679,23 @@ const DataSourcesTable = memo(function DataSourcesTable({
                 isLast={idx === sources.length - 1}
                 onToggle={(type, v) => {
                   if (type === "PMS") {
-                    // Optimistic update
+                    // Optimistic update — 只改 enabled，不改狀態
                     setSources((prev) =>
                       prev.map((s) =>
-                        s.type === "PMS"
-                          ? {
-                              ...s,
-                              enabled: v,
-                              statusLabel: v ? "已串接" : "未串接",
-                              statusColor: v ? "green" : "gray",
-                            }
-                          : s,
+                        s.type === "PMS" ? { ...s, enabled: v } : s,
                       ),
                     );
                     apiPut("/api/v1/chatbot/pms-status", { enabled: v }).catch(() => {
-                      // Revert on failure
                       setSources((prev) =>
                         prev.map((s) =>
-                          s.type === "PMS"
-                            ? {
-                                ...s,
-                                enabled: !v,
-                                statusLabel: !v ? "已串接" : "未串接",
-                                statusColor: !v ? "green" : "gray",
-                              }
-                            : s,
+                          s.type === "PMS" ? { ...s, enabled: !v } : s,
                         ),
                       );
                     });
                   } else {
                     setSources((prev) =>
                       prev.map((s) =>
-                        s.type === type
-                          ? {
-                              ...s,
-                              enabled: v,
-                              statusLabel: v ? "已啟用" : "已停用",
-                              statusColor: v ? "green" : "red",
-                            }
-                          : s,
+                        s.type === type ? { ...s, enabled: v } : s,
                       ),
                     );
                   }

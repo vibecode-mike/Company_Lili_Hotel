@@ -487,11 +487,12 @@ class FaqService:
             content_json_str = json.dumps(row, ensure_ascii=False)
 
             if name in existing_map:
-                # UPDATE
+                # UPDATE（視同新規則，重置所有狀態）
                 rule = existing_map[name]
                 rule.content_json = content_json_str
                 rule.status = "draft"
                 rule.published_at = None
+                rule.is_enabled = False
                 rule.updated_by = user_id
                 # 更新標籤：刪除舊的，建立新的
                 for old_tag in list(rule.tags):
@@ -500,11 +501,12 @@ class FaqService:
                 for tn in tag_names:
                     db.add(FaqRuleTag(rule_id=rule.id, tag_name=tn))
             else:
-                # INSERT
+                # INSERT（新規則，預設未發佈 + 測試環境 off）
                 rule = FaqRule(
                     category_id=category_id,
                     content_json=content_json_str,
                     status="draft",
+                    is_enabled=False,
                     created_by=user_id,
                     updated_by=user_id,
                 )
