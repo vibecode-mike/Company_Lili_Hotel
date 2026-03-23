@@ -890,14 +890,6 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
               showToast("儲存失敗", "error");
             }
           }}
-          onEnableTest={() => {
-            const id = savedRuleIdRef.current ?? editingFacility.id;
-            if (!id || id.startsWith("new-")) return;
-            setFacilities((prev) =>
-              prev.map((r) => (r.id === id ? { ...r, enabled: true } : r)),
-            );
-            apiPatch(`/api/v1/faq/rules/${id}/toggle`, { is_enabled: true }).catch(() => {});
-          }}
           onDelete={async () => {
             const isNew = editingFacility.id.startsWith("new-");
             try {

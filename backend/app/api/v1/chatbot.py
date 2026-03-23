@@ -29,7 +29,7 @@ from app.services.chatbot_service import (
     chatbot_service,
     init_pms_from_db, set_pms_enabled,
 )
-from app.services.pms_chatbot_client import pms_enabled as pms_configured, query_pms
+from app.services.pms_chatbot_client import pms_enabled as pms_configured, query_pms, query_pms_all_roomtypes
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
@@ -100,6 +100,40 @@ async def update_pms_status(body: dict, db: AsyncSession = Depends(get_db)):
 
     set_pms_enabled(bool(enabled))
     return {"enabled": conn.status == "enabled"}
+
+
+@router.get("/pms-rooms")
+async def get_pms_rooms():
+    """取得 PMS 即時房型列表（供管理後台顯示）"""
+    from app.services.chatbot_service import ROOMTYPE_NAME, ROOMTYPE_MAX_OCCUPANCY
+    from datetime import date, timedelta
+
+    if not pms_configured():
+        return {"rooms": [], "error": "PMS 未串接"}
+    try:
+        today = date.today()
+        tomorrow = today + timedelta(days=1)
+        result = await asyncio.get_event_loop().run_in_executor(
+            None, lambda: query_pms_all_roomtypes(today.isoformat(), tomorrow.isoformat())
+        )
+        rooms = []
+        for room in result.get("room", []):
+            code = room.get("roomtype", "")
+            data = room.get("data", [])
+            first = data[0] if data else {}
+            price_str = str(first.get("price", "0")).rstrip(";").strip()
+            remain_str = str(first.get("remain", "0")).strip()
+            rooms.append({
+                "room_type_code": code,
+                "room_type_name": ROOMTYPE_NAME.get(code, code),
+                "price": int(price_str) if price_str.isdigit() else 0,
+                "max_occupancy": ROOMTYPE_MAX_OCCUPANCY.get(code, 2),
+                "remaining": int(remain_str) if remain_str.isdigit() else 0,
+            })
+        return {"rooms": rooms}
+    except Exception as e:
+        logger.warning(f"PMS rooms fetch failed: {e}")
+        return {"rooms": [], "error": str(e)}
 
 
 @router.post("/pms-validate-room")

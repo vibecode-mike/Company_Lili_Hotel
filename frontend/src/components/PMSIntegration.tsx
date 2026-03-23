@@ -330,14 +330,14 @@ const TableRow = memo(function TableRow({
   isLast,
   onToggle,
   onEdit,
-  pmsEnabled,
+  pmsView,
 }: {
   record: RoomRecord;
   idx: number;
   isLast: boolean;
   onToggle: (id: string, v: boolean) => void;
   onEdit: (id: string) => void;
-  pmsEnabled: boolean;
+  pmsView: boolean;
 }) {
   return (
     <tr
@@ -364,109 +364,123 @@ const TableRow = memo(function TableRow({
 
       {/* 房價 — left-aligned */}
       <td className="px-[12px] py-[12px] w-[160px] text-[14px] text-[#383838] font-['Inter',sans-serif] font-normal tracking-[0.22px] leading-[24px] whitespace-nowrap">
-        {pmsEnabled ? "即時房價" : `NT$${record.pricePerNight.toLocaleString()}`}
+        {`NT$${record.pricePerNight.toLocaleString()}`}
       </td>
 
       {/* 可入住人數 — left-aligned */}
       <td className="px-[12px] py-[12px] w-[140px] text-[14px] text-[#383838] font-['Inter',sans-serif] font-normal tracking-[0.22px] leading-[24px]">
-        {pmsEnabled ? "即時資料" : record.maxGuests}
+        {record.maxGuests}
       </td>
 
       {/* 剩餘間數 — left-aligned */}
       <td className="px-[12px] py-[12px] w-[140px] text-[14px] text-[#383838] font-['Inter',sans-serif] font-normal tracking-[0.22px] leading-[24px]">
-        {pmsEnabled ? "即時資料" : record.remainingRooms}
+        {record.remainingRooms}
       </td>
 
-      {/* 房型特色 */}
-      <td className="px-[12px] py-[12px] w-[160px] text-[14px] text-[#383838] font-['Inter',sans-serif] font-normal tracking-[0.22px] leading-[24px]">
-        <span className="truncate block max-w-[136px]" title={record.features}>
-          {record.features}
-        </span>
-      </td>
-
-      {/* 會員標籤 */}
-      <td className="px-[12px] py-[12px] w-[200px]">
-        <div className="flex flex-wrap gap-[4px]">
-          {record.memberTags.map((tag, i) => (
-            <TagChip key={i} label={tag} />
-          ))}
-        </div>
-      </td>
-
-      {/* 訂房 URL */}
-      <td className="px-[12px] py-[12px] w-[160px]">
-        <a
-          href={`https://${record.url}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="booking-url-btn"
-        >
-          <span className="booking-url-text">{record.url}</span>
-          <ExternalLinkIcon />
-        </a>
-      </td>
-
-      {/* 最後更新 */}
-      <td className="px-[12px] py-[12px] w-[220px] whitespace-nowrap text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5]">
-        {record.lastUpdated}
-      </td>
-
-      {/* 發佈狀態 — 凍結欄 */}
-      <td
-        style={{
-          width: 90,
-          minWidth: 90,
-          maxWidth: 90,
-          position: "sticky",
-          right: 188,
-          zIndex: 1,
-          boxShadow: "inset 1px 0 0 #ddd",
-        }}
-        className="px-[12px] py-[12px] align-middle text-center bg-white"
-      >
-        <div
-          className="inline-flex items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0"
-          style={{ backgroundColor: record.published ? "#e4fcea" : "#f5f5f5" }}
-        >
-          <span
-            className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[14px] text-center whitespace-nowrap"
-            style={{ color: record.published ? "#00470c" : "#383838" }}
-          >
-            {record.published ? "已發佈" : "未發佈"}
+      {/* 房型特色 — FAQ only */}
+      {!pmsView && (
+        <td className="px-[12px] py-[12px] w-[160px] text-[14px] text-[#383838] font-['Inter',sans-serif] font-normal tracking-[0.22px] leading-[24px]">
+          <span className="truncate block max-w-[136px]" title={record.features}>
+            {record.features}
           </span>
-        </div>
-      </td>
+        </td>
+      )}
 
-      {/* 加入測試環境 — 凍結欄 */}
-      <td
-        style={{
-          width: 120,
-          minWidth: 120,
-          maxWidth: 120,
-          position: "sticky",
-          right: 68,
-          zIndex: 1,
-        }}
-        className="py-[12px] bg-white"
-      >
-        <div className="flex items-center justify-center w-full">
-          <Toggle
-            checked={record.enabled}
-            onChange={(v) => onToggle(record.id, v)}
-          />
-        </div>
-      </td>
+      {/* 會員標籤 — FAQ only */}
+      {!pmsView && (
+        <td className="px-[12px] py-[12px] w-[200px]">
+          <div className="flex flex-wrap gap-[4px]">
+            {record.memberTags.map((tag, i) => (
+              <TagChip key={i} label={tag} />
+            ))}
+          </div>
+        </td>
+      )}
 
-      {/* 動作 — 凍結欄 */}
-      <td
-        style={{ width: 68, minWidth: 68, maxWidth: 68, position: "sticky", right: 0, zIndex: 1 }}
-        className="py-[12px] bg-white"
-      >
-        <div className="flex items-center justify-center w-full">
-          <ButtonEdit onClick={() => onEdit(record.id)} />
-        </div>
-      </td>
+      {/* 訂房 URL — FAQ only */}
+      {!pmsView && (
+        <td className="px-[12px] py-[12px] w-[160px]">
+          <a
+            href={`https://${record.url}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="booking-url-btn"
+          >
+            <span className="booking-url-text">{record.url}</span>
+            <ExternalLinkIcon />
+          </a>
+        </td>
+      )}
+
+      {/* 最後更新 — FAQ only */}
+      {!pmsView && (
+        <td className="px-[12px] py-[12px] w-[220px] whitespace-nowrap text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5]">
+          {record.lastUpdated}
+        </td>
+      )}
+
+      {/* 發佈狀態 — FAQ only 凍結欄 */}
+      {!pmsView && (
+        <td
+          style={{
+            width: 90,
+            minWidth: 90,
+            maxWidth: 90,
+            position: "sticky",
+            right: 188,
+            zIndex: 1,
+            boxShadow: "inset 1px 0 0 #ddd",
+          }}
+          className="px-[12px] py-[12px] align-middle text-center bg-white"
+        >
+          <div
+            className="inline-flex items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0"
+            style={{ backgroundColor: record.published ? "#e4fcea" : "#f5f5f5" }}
+          >
+            <span
+              className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[14px] text-center whitespace-nowrap"
+              style={{ color: record.published ? "#00470c" : "#383838" }}
+            >
+              {record.published ? "已發佈" : "未發佈"}
+            </span>
+          </div>
+        </td>
+      )}
+
+      {/* 加入測試環境 — FAQ only 凍結欄 */}
+      {!pmsView && (
+        <td
+          style={{
+            width: 120,
+            minWidth: 120,
+            maxWidth: 120,
+            position: "sticky",
+            right: 68,
+            zIndex: 1,
+          }}
+          className="py-[12px] bg-white"
+        >
+          <div className="flex items-center justify-center w-full">
+            <Toggle
+              checked={record.enabled}
+              onChange={(v) => onToggle(record.id, v)}
+            />
+          </div>
+        </td>
+      )}
+
+      {/* 動作 — FAQ only 凍結欄 */}
+      {!pmsView && (
+        <td
+          style={{ width: 68, minWidth: 68, maxWidth: 68, position: "sticky", right: 0, zIndex: 1 }}
+          className="py-[12px] bg-white"
+        >
+          <div className="flex items-center justify-center w-full">
+            <ButtonEdit onClick={() => onEdit(record.id)} />
+          </div>
+        </td>
+      )}
     </tr>
   );
 });
@@ -490,10 +504,51 @@ const PMSDataTable = memo(function PMSDataTable({
   // Fetch PMS enabled status
   useEffect(() => {
     apiGet("/api/v1/chatbot/pms-status")
-      .then((res: any) => setPmsEnabled(!!res?.enabled))
+      .then((res) => res.json())
+      .then((json: any) => setPmsEnabled(!!json?.enabled))
       .catch(() => {});
   }, []);
   const [viewMode, setViewMode] = useState<ViewMode>("faq");
+  const [pmsRooms, setPmsRooms] = useState<RoomRecord[]>([]);
+  const [loadingPmsRooms, setLoadingPmsRooms] = useState(false);
+
+  // Fetch PMS rooms when switching to PMS mode
+  useEffect(() => {
+    if (viewMode !== "pms") return;
+    setLoadingPmsRooms(true);
+    apiGet("/api/v1/chatbot/pms-rooms")
+      .then((res) => res.json())
+      .then((json: any) => {
+        const items: Array<{
+          room_type_code: string;
+          room_type_name: string;
+          price: number;
+          max_occupancy: number;
+          remaining: number;
+        }> = json?.rooms ?? [];
+        setPmsRooms(
+          items.map((item) => ({
+            id: `pms-${item.room_type_code}`,
+            roomType: item.room_type_name,
+            image: "",
+            pricePerNight: item.price,
+            maxGuests: item.max_occupancy,
+            remainingRooms: String(item.remaining),
+            features: "",
+            memberTags: [],
+            url: "",
+            lastUpdated: "—",
+            enabled: false,
+            published: false,
+            pmsRoomCode: item.room_type_code,
+            customImageUrl: "",
+          })),
+        );
+      })
+      .catch(() => setPmsRooms([]))
+      .finally(() => setLoadingPmsRooms(false));
+  }, [viewMode]);
+
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -760,7 +815,8 @@ const PMSDataTable = memo(function PMSDataTable({
   }, []);
 
   const filtered = useMemo(() => {
-    let list = rooms.filter((r) => {
+    const source = viewMode === "pms" ? pmsRooms : rooms;
+    let list = source.filter((r) => {
       if (
         search &&
         !r.roomType.includes(search) &&
@@ -806,7 +862,7 @@ const PMSDataTable = memo(function PMSDataTable({
       });
     }
     return list;
-  }, [rooms, search, sortField, sortDir]);
+  }, [rooms, pmsRooms, viewMode, search, sortField, sortDir]);
 
   const thProps = { sortField, sortDir, onSort: handleSort };
 
@@ -1001,75 +1057,89 @@ const PMSDataTable = memo(function PMSDataTable({
                 剩餘間數
               </Th>
 
-              {/* 房型特色 — no sort */}
-              <th className="px-[12px] py-[16px] text-left text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd] w-[160px]">
-                房型特色
-              </th>
+              {/* 房型特色 — FAQ only */}
+              {viewMode === "faq" && (
+                <th className="px-[12px] py-[16px] text-left text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd] w-[160px]">
+                  房型特色
+                </th>
+              )}
 
-              <Th width={200} sortable field="memberTags" {...thProps}>
-                會員標籤
-              </Th>
+              {viewMode === "faq" && (
+                <Th width={200} sortable field="memberTags" {...thProps}>
+                  會員標籤
+                </Th>
+              )}
 
-              {/* 訂房 URL — no sort */}
-              <th className="px-[12px] py-[16px] text-left text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd] w-[160px]">
-                訂房 URL
-              </th>
+              {/* 訂房 URL — FAQ only */}
+              {viewMode === "faq" && (
+                <th className="px-[12px] py-[16px] text-left text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd] w-[160px]">
+                  訂房 URL
+                </th>
+              )}
 
-              <Th width={220} sortable field="lastUpdated" {...thProps}>
-                最後更新
-              </Th>
+              {viewMode === "faq" && (
+                <Th width={220} sortable field="lastUpdated" {...thProps}>
+                  最後更新
+                </Th>
+              )}
 
-              {/* 發佈狀態 — 凍結欄 */}
-              <th
-                onClick={() => handleSort("published")}
-                style={{
-                  width: 90,
-                  minWidth: 90,
-                  maxWidth: 90,
-                  position: "sticky",
-                  right: 188,
-                  zIndex: 2,
-                  boxShadow: "inset 1px 0 0 #ddd",
-                }}
-                className="px-[12px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap select-none bg-white border-b border-[#ddd] cursor-pointer hover:bg-[#f5f8ff] transition-colors duration-150"
-              >
-                發佈狀態
-                <SortIcon
-                  field="published"
-                  sortField={sortField}
-                  sortDir={sortDir}
-                />
-              </th>
+              {/* 發佈狀態 — FAQ only 凍結欄 */}
+              {viewMode === "faq" && (
+                <th
+                  onClick={() => handleSort("published")}
+                  style={{
+                    width: 90,
+                    minWidth: 90,
+                    maxWidth: 90,
+                    position: "sticky",
+                    right: 188,
+                    zIndex: 2,
+                    boxShadow: "inset 1px 0 0 #ddd",
+                  }}
+                  className="px-[12px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap select-none bg-white border-b border-[#ddd] cursor-pointer hover:bg-[#f5f8ff] transition-colors duration-150"
+                >
+                  發佈狀態
+                  <SortIcon
+                    field="published"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                  />
+                </th>
+              )}
 
-              {/* 加入測試環境 — 凍結欄 */}
-              <th
-                style={{
-                  width: 120,
-                  minWidth: 120,
-                  maxWidth: 120,
-                  position: "sticky",
-                  right: 68,
-                  zIndex: 2,
-                }}
-                className="px-[8px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] bg-white border-b border-[#ddd]"
-              >
-                <TestEnvHeaderLabel />
-              </th>
+              {/* 加入測試環境 — FAQ only 凍結欄 */}
+              {viewMode === "faq" && (
+                <th
+                  style={{
+                    width: 120,
+                    minWidth: 120,
+                    maxWidth: 120,
+                    position: "sticky",
+                    right: 68,
+                    zIndex: 2,
+                  }}
+                  className="px-[8px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] bg-white border-b border-[#ddd]"
+                >
+                  <TestEnvHeaderLabel />
+                </th>
+              )}
 
-              {/* 動作 — 凍結欄 */}
-              <th
-                style={{ width: 68, minWidth: 68, maxWidth: 68, position: "sticky", right: 0, zIndex: 2 }}
-                className="px-[12px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd]"
-              >
-                動作
-              </th>
+              {/* 動作 — FAQ only 凍結欄 */}
+              {viewMode === "faq" && (
+                <th
+                  style={{ width: 68, minWidth: 68, maxWidth: 68, position: "sticky", right: 0, zIndex: 2 }}
+                  className="px-[12px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd]"
+                >
+                  動作
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
-            {loadingRooms ? (
+            {(viewMode === "faq" ? loadingRooms : loadingPmsRooms) ? (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={viewMode === "pms" ? 4 : 10}
                   className="px-[12px] py-[40px] text-center text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]"
                 >
                   載入中…
@@ -1078,7 +1148,7 @@ const PMSDataTable = memo(function PMSDataTable({
             ) : filtered.length === 0 ? (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={viewMode === "pms" ? 4 : 10}
                   className="px-[12px] py-[40px] text-center text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]"
                 >
                   無符合條件的資料
@@ -1093,7 +1163,7 @@ const PMSDataTable = memo(function PMSDataTable({
                   isLast={idx === filtered.length - 1}
                   onToggle={handleToggle}
                   onEdit={handleEdit}
-                  pmsEnabled={pmsEnabled}
+                  pmsView={viewMode === "pms"}
                 />
               ))
             )}
@@ -1133,17 +1203,13 @@ const PMSDataTable = memo(function PMSDataTable({
             onNavigateToSettings();
           }}
           onChange={setEditDraft}
-          onSave={(draft) => {
-            // 只存資料；modal 由 SaveSuccessDialog 的按鈕關閉
-            handleSaveEdit(editingRoom.id, draft);
-          }}
-          onEnableTest={() => {
-            const id = savedRuleIdRef.current ?? editingRoom.id;
-            if (!id || id.startsWith("new-")) return;
-            setRooms((prev) =>
-              prev.map((r) => (r.id === id ? { ...r, enabled: true } : r)),
-            );
-            apiPatch(`/api/v1/faq/rules/${id}/toggle`, { is_enabled: true }).catch(() => {});
+          onSave={async (draft) => {
+            try {
+              await handleSaveEdit(editingRoom.id, draft);
+              showToast("儲存成功", "success");
+            } catch {
+              showToast("儲存失敗", "error");
+            }
           }}
           onDelete={async () => {
             const id = editingRoom.id;

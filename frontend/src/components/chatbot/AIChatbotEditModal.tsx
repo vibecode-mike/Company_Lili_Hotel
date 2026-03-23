@@ -73,7 +73,7 @@ export interface RoomPmsData {
   imageUrl?: string;
 }
 
-type SubDialog = "none" | "saveSuccess" | "saveFailed" | "pmsInvalid" | "confirmDelete" | "confirmLeave";
+type SubDialog = "none" | "saveFailed" | "pmsInvalid" | "confirmDelete" | "confirmLeave";
 
 // ─── Sub-components: Section Field ───────────────────────────────────────────
 
@@ -340,47 +340,6 @@ const SmallDialog = memo(function SmallDialog({
   );
 });
 
-const SaveSuccessDialog = memo(function SaveSuccessDialog({
-  onLater,
-  onTest,
-}: {
-  onLater: () => void;
-  onTest: () => void;
-}) {
-  return (
-    <SmallDialog>
-      <div className="flex flex-col gap-[32px]">
-        <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[32px] leading-[1.5] text-[#383838]">
-          儲存成功
-        </p>
-        <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#383838]">
-          內容已儲存，請先進行對話測試以確保回覆品質，再點擊「發佈」按鈕，AI Chatbot 才會引用最新版本進行回覆。
-        </p>
-      </div>
-      <div className="flex gap-[8px] items-center justify-end h-[48px]">
-        <button
-          type="button"
-          onClick={onLater}
-          className="bg-[#f5f5f5] flex items-center justify-center min-h-[48px] min-w-[72px] w-[134px] px-[12px] py-[8px] rounded-[16px] cursor-pointer border-none hover:bg-[#e8e8e8] transition-colors"
-        >
-          <span className="flex-1 font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#383838] text-center">
-            稍後再說
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={onTest}
-          className="bg-[#242424] flex items-center justify-center min-h-[48px] min-w-[72px] w-[114px] px-[12px] py-[8px] rounded-[16px] cursor-pointer border-none hover:bg-[#383838] transition-colors"
-        >
-          <span className="flex-1 font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-white text-center">
-            立即測試
-          </span>
-        </button>
-      </div>
-    </SmallDialog>
-  );
-});
-
 const SaveFailedDialog = memo(function SaveFailedDialog({
   onClose,
 }: {
@@ -570,11 +529,9 @@ interface RoomEditModalProps {
   // Callbacks
   onClose: () => void;
   onChange: (draft: RoomFaqDraft) => void;
-  onSave: (draft: RoomFaqDraft) => void;
+  onSave: (draft: RoomFaqDraft) => void | Promise<void>;
   onDelete: () => void;
   onNavigateToPMS?: () => void;
-  onOpenChatFab?: () => void;
-  onEnableTest?: () => void;
 }
 
 export const RoomEditModal = memo(function RoomEditModal({
@@ -588,8 +545,6 @@ export const RoomEditModal = memo(function RoomEditModal({
   onSave,
   onDelete,
   onNavigateToPMS,
-  onOpenChatFab,
-  onEnableTest,
 }: RoomEditModalProps) {
   const isPmsConnected = pmsData !== null;
   const isPmsView = viewMode === "pms";
@@ -641,8 +596,8 @@ export const RoomEditModal = memo(function RoomEditModal({
       setSubDialog("pmsInvalid");
     } else {
       try {
-        onSave(draft);
-        setSubDialog("saveSuccess");
+        await onSave(draft);
+        onClose();
       } catch {
         setSubDialog("saveFailed");
       }
@@ -865,22 +820,6 @@ export const RoomEditModal = memo(function RoomEditModal({
       </div>
 
       {/* ── Sub-dialogs ── */}
-      {subDialog === "saveSuccess" && (
-        <SaveSuccessDialog
-          onLater={() => {
-            setSubDialog("none");
-            if (onEnableTest) onEnableTest();
-            onClose();
-          }}
-          onTest={() => {
-            setSubDialog("none");
-            if (onEnableTest) onEnableTest();
-            onClose();
-            window.dispatchEvent(new CustomEvent("open-chatfab"));
-            if (onOpenChatFab) onOpenChatFab();
-          }}
-        />
-      )}
       {subDialog === "saveFailed" && (
         <SaveFailedDialog onClose={() => setSubDialog("none")} />
       )}
@@ -924,10 +863,8 @@ interface FacilityEditModalProps {
   hasFaq: boolean;
   onClose: () => void;
   onChange: (draft: FacilityFaqDraft) => void;
-  onSave: (draft: FacilityFaqDraft) => void;
+  onSave: (draft: FacilityFaqDraft) => void | Promise<void>;
   onDelete: () => void;
-  onOpenChatFab?: () => void;
-  onEnableTest?: () => void;
 }
 
 export const FacilityEditModal = memo(function FacilityEditModal({
@@ -937,8 +874,6 @@ export const FacilityEditModal = memo(function FacilityEditModal({
   onChange,
   onSave,
   onDelete,
-  onOpenChatFab,
-  onEnableTest,
 }: FacilityEditModalProps) {
   const [subDialog, setSubDialog] = useState<SubDialog>("none");
   const [saving, setSaving] = useState(false);
@@ -964,13 +899,13 @@ export const FacilityEditModal = memo(function FacilityEditModal({
     setErrors({});
 
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 400));
-    setSaving(false);
     try {
-      onSave(draft);
-      setSubDialog("saveSuccess");
+      await onSave(draft);
+      onClose();
     } catch {
       setSubDialog("saveFailed");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -1107,22 +1042,6 @@ export const FacilityEditModal = memo(function FacilityEditModal({
         </div>
       </div>
 
-      {subDialog === "saveSuccess" && (
-        <SaveSuccessDialog
-          onLater={() => {
-            setSubDialog("none");
-            if (onEnableTest) onEnableTest();
-            onClose();
-          }}
-          onTest={() => {
-            setSubDialog("none");
-            if (onEnableTest) onEnableTest();
-            onClose();
-            window.dispatchEvent(new CustomEvent("open-chatfab"));
-            if (onOpenChatFab) onOpenChatFab();
-          }}
-        />
-      )}
       {subDialog === "saveFailed" && (
         <SaveFailedDialog onClose={() => setSubDialog("none")} />
       )}
