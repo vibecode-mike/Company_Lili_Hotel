@@ -50,7 +50,7 @@ class TagTriggerLog(Base):
         comment="活動ID（選填）",
     )
     trigger_source = Column(SQLEnum(TriggerSource), nullable=False, comment="觸發來源")
-    triggered_at = Column(DateTime, default=datetime.utcnow, nullable=False, comment="觸發時間")
+    triggered_at = Column(DateTime, default=datetime.now, nullable=False, comment="觸發時間")
 
     # 關聯關係
     member = relationship("Member")

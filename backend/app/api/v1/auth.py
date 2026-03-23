@@ -86,7 +86,7 @@ async def login(
         )
 
     # 更新最後登入時間（使用 timezone-aware datetime）
-    user.last_login_at = datetime.now(timezone.utc)
+    user.last_login_at = datetime.now()
     await db.commit()
 
     # 創建訪問令牌
@@ -119,6 +119,14 @@ async def refresh_token(
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         user=UserInfo.model_validate(current_user),
     )
+
+
+@router.post("/logout")
+async def logout(
+    current_user: User = Depends(get_current_user),
+):
+    """登出（stateless JWT，前端清除 token 即可，此端點提供審計記錄）"""
+    return {"code": 200, "message": "登出成功"}
 
 
 @router.get("/me", response_model=UserInfo)

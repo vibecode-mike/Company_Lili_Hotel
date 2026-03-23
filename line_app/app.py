@@ -84,6 +84,7 @@ from services.member_service import (
     fetch_member_profile,
     maybe_update_member_profile,
     is_gpt_enabled_for_user,
+    is_human_override_active,
     get_all_follower_ids,
     backfill_line_friends_on_startup,
     DISPLAY_NAME_TOKEN,
@@ -2853,50 +2854,56 @@ def on_text(event: MessageEvent):
         except Exception:
             logging.exception("[on_text] Failed to update member/line_friends")
 
-    # === 4. 自動回應處理（AI 優先 → keyword → always 降級備援）===
+    # === 4. 自動回應處理（Human Override > AI > keyword > always）===
     reply_text = None
     message_source = None
     ai_room_cards = []
 
-    # 檢查是否啟用 GPT
-    gpt_enabled = is_gpt_enabled_for_user(uid)
+    # 4.0 一次查詢取得 human_override + gpt_enabled
+    from services.member_service import get_member_reply_flags
+    reply_flags = get_member_reply_flags(uid)
 
-    # 4.1 優先：Backend AI（需 gpt_enabled）
-    if gpt_enabled:
-        try:
-            ai_result = _call_backend_ai(uid, text_in)
-            if ai_result:
-                if ai_result.get("token_exhausted"):
-                    logging.info(f"[on_text] Token exhausted, falling back for uid={uid}")
-                elif ai_result.get("reply") and not ai_result["reply"].startswith("AI Token 額度已用完"):
-                    reply_text = ai_result["reply"]
-                    message_source = "gpt"
-                    ai_room_cards = ai_result.get("room_cards", [])
-                    logging.info(f"[on_text] Backend AI response for uid={uid}, room_cards={len(ai_room_cards)}")
-        except Exception as e:
-            logging.exception(f"[on_text] Backend AI failed: {e}")
+    if reply_flags["human_override"]:
+        logging.info(f"[on_text] Human override active for uid={uid}, skip all auto-responses")
     else:
-        logging.info(f"[on_text] AI disabled for uid={uid}, using fallback")
+        gpt_enabled = reply_flags["gpt_enabled"]
 
-    # 4.2 降級：關鍵字觸發
-    if not reply_text:
-        try:
-            reply_text = check_keyword_trigger(uid, text_in, line_channel_id=line_channel_id)
-            if reply_text:
-                message_source = "keyword"
-                logging.info(f"[on_text] Keyword response triggered for uid={uid}")
-        except Exception as e:
-            logging.exception(f"[on_text] Keyword check failed: {e}")
+        # 4.1 優先：Backend AI（需 gpt_enabled）
+        if gpt_enabled:
+            try:
+                ai_result = _call_backend_ai(uid, text_in)
+                if ai_result:
+                    if ai_result.get("token_exhausted"):
+                        logging.info(f"[on_text] Token exhausted, falling back for uid={uid}")
+                    elif ai_result.get("reply") and not ai_result["reply"].startswith("AI Token 額度已用完"):
+                        reply_text = ai_result["reply"]
+                        message_source = "gpt"
+                        ai_room_cards = ai_result.get("room_cards", [])
+                        logging.info(f"[on_text] Backend AI response for uid={uid}, room_cards={len(ai_room_cards)}")
+            except Exception as e:
+                logging.exception(f"[on_text] Backend AI failed: {e}")
+        else:
+            logging.info(f"[on_text] AI disabled for uid={uid}, using fallback")
 
-    # 4.3 降級：一律回應（在有效期/時段內）
-    if not reply_text:
-        try:
-            reply_text = check_always_response(line_channel_id=line_channel_id)
-            if reply_text:
-                message_source = "always"
-                logging.info(f"[on_text] Always response triggered for uid={uid}")
-        except Exception as e:
-            logging.exception(f"[on_text] Always response check failed: {e}")
+        # 4.2 降級：關鍵字觸發
+        if not reply_text:
+            try:
+                reply_text = check_keyword_trigger(uid, text_in, line_channel_id=line_channel_id)
+                if reply_text:
+                    message_source = "keyword"
+                    logging.info(f"[on_text] Keyword response triggered for uid={uid}")
+            except Exception as e:
+                logging.exception(f"[on_text] Keyword check failed: {e}")
+
+        # 4.3 降級：一律回應（在有效期/時段內）
+        if not reply_text:
+            try:
+                reply_text = check_always_response(line_channel_id=line_channel_id)
+                if reply_text:
+                    message_source = "always"
+                    logging.info(f"[on_text] Always response triggered for uid={uid}")
+            except Exception as e:
+                logging.exception(f"[on_text] Always response check failed: {e}")
 
     # === 5. 發送回覆訊息 ===
     if reply_text:

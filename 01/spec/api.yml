@@ -412,6 +412,43 @@ paths:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
 
+  /members/{member_id}/human-override:
+    put:
+      summary: 設定/解除人工接管狀態（抑制所有自動回應）
+      operationId: setHumanOverride
+      tags: [會員管理]
+      description: |
+        管理者 focus 輸入框時 active=true（設定 10 分鐘），blur 時 active=false（設定 30 秒緩衝）。
+        時間戳自然過期，不需主動清除。送訊息時後端自動續期。
+      parameters:
+        - name: member_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: platform
+          in: query
+          schema:
+            type: string
+            enum: [LINE, Facebook, Webchat]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [active]
+              properties:
+                active:
+                  type: boolean
+                  description: true=啟動人工接管(10min), false=縮短為30秒緩衝
+      responses:
+        '200':
+          description: 設定成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
   /members/{member_id}/chat/send:
     post:
       summary: 從 CRM 後台發送聊天訊息給會員
@@ -1914,7 +1951,7 @@ paths:
 
   # --------------------------------------------------------------------------
   # Facebook WebSocket 代理 (fb_ws_proxy)
-  # 前端透過後端代理與外部 FB API 建立 WebSocket 連線
+  # 前端透過後端代理與外部 FB API 建立 WebSocket 連線（此為 FB 外部 API 代理，非聊天室即時通訊）
   # --------------------------------------------------------------------------
 
   /fb-ws-proxy/start:
@@ -2140,18 +2177,20 @@ paths:
                 $ref: '#/components/schemas/SuccessResponse'
 
   # --------------------------------------------------------------------------
-  # SSE 即時通訊 (websocket/SSE)
+  # SSE 即時通訊
   # Feature: 聊天室多渠道
+  # 所有渠道（LINE / Facebook / Webchat）統一使用 SSE。
+  # 原 WebSocket 端點已於 2026-02 移除（外部代理 HTTP/2 不支援 WS Upgrade）。
   # --------------------------------------------------------------------------
 
   /sse/chat/{thread_id}:
     get:
-      summary: 建立 SSE 連線接收即時聊天訊息（LINE 渠道）
+      summary: 建立 SSE 連線接收即時聊天訊息（所有渠道）
       operationId: sseChatStream
       tags: [即時通訊]
       description: |
-        LINE 渠道使用 SSE（因外部代理 HTTP/2 不支援 WebSocket Upgrade）。
-        Facebook / Webchat 渠道使用下方的 WebSocket 端點。
+        所有渠道統一使用 SSE（Server-Sent Events）進行即時訊息推送。
+        前端使用 EventSource API，原生支援自動重連。
       parameters:
         - name: thread_id
           in: path
@@ -2166,26 +2205,6 @@ paths:
             text/event-stream:
               schema:
                 type: string
-
-  /ws/chat/{thread_id}:
-    get:
-      summary: WebSocket 即時聊天連線（Facebook / Webchat 渠道）
-      operationId: wsChatStream
-      tags: [即時通訊]
-      description: |
-        Facebook 與 Webchat 渠道使用 WebSocket 進行即時訊息推送。
-        連線後前端可發送 "ping" 保活，後端回覆 {"type": "pong"}。
-        當對應 thread 有新訊息時，後端推送 {"type": "new_message", "data": {...}}。
-      parameters:
-        - name: thread_id
-          in: path
-          required: true
-          schema:
-            type: string
-            description: 對話 Thread ID（格式：{platform}:{uid}）
-      responses:
-        '101':
-          description: WebSocket Upgrade 成功
 
   # --------------------------------------------------------------------------
   # LINE 訊息通知 (line_notify)
@@ -2524,54 +2543,8 @@ paths:
         '404':
           description: 規則不存在
 
-  /faq/rules/{rule_id}/versions:
-    get:
-      summary: 取得規則版本歷史
-      operationId: getFaqRuleVersions
-      tags: [FAQ 管理]
-      parameters:
-        - name: rule_id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: 版本清單
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  code:
-                    type: integer
-                  data:
-                    type: array
-                    items:
-                      type: object
-
-  /faq/rules/{rule_id}/revert:
-    post:
-      summary: 將規則恢復為上一個已啟用版本
-      operationId: revertFaqRule
-      tags: [FAQ 管理]
-      parameters:
-        - name: rule_id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: 恢復成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FaqRuleDetail'
-        '400':
-          description: 無可回復的版本
-        '403':
-          description: 未擁有 faq.manage 權限
+  # REMOVED: /faq/rules/{rule_id}/versions 和 /revert 端點已移除。
+  # FaqRuleVersion 表於 2026-03-18 遷移刪除，版本管理改用 status + published_at。
 
   /faq/publish:
     post:
@@ -4747,13 +4720,7 @@ components:
           items:
             type: string
           description: 規則關聯的標籤名稱
-        has_previous_version:
-          type: boolean
-        previous_version:
-          type: object
-          additionalProperties:
-            type: string
-          description: 上一已啟用版本的欄位值（若存在）
+        # REMOVED: has_previous_version / previous_version 欄位已隨 FaqRuleVersion 移除
         created_at:
           type: string
           format: date-time

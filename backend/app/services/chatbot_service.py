@@ -1509,7 +1509,7 @@ class ChatbotService:
                         existing_member.name = name
                         existing_member.phone = phone
                         existing_member.email = email
-                        existing_member.last_interaction_at = datetime.utcnow()
+                        existing_member.last_interaction_at = datetime.now()
                         crm_member_id = existing_member.id
                     else:
                         new_member = Member(
@@ -1518,7 +1518,7 @@ class ChatbotService:
                             email=email,
                             join_source="Webchat",
                             gpt_enabled=True,
-                            last_interaction_at=datetime.utcnow(),
+                            last_interaction_at=datetime.now(),
                         )
                         db.add(new_member)
                         db.flush()

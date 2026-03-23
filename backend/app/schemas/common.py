@@ -11,7 +11,7 @@ class ResponseBase(BaseModel):
 
     code: int = 200
     message: str = "success"
-    timestamp: datetime = datetime.utcnow()
+    timestamp: datetime = datetime.now()
 
 
 class SuccessResponse(ResponseBase):

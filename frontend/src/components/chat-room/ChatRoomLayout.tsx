@@ -232,10 +232,9 @@ export default function ChatRoomLayout({
     initialPlatform,
   ]);
 
-  // GPT 計時器狀態
-  const [isGptManualMode, setIsGptManualMode] = useState(false);
-  const gptTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const MANUAL_MODE_DURATION = 10 * 60 * 1000; // 10 分鐘
+  // Human Override 狀態
+  const [isHumanOverrideActive, setIsHumanOverrideActive] = useState(false);
+  const isHumanOverrideRef = useRef(false);
   const [note, setNote] = useState(member?.internal_note || "");
 
   // Avatar interaction states
@@ -243,159 +242,42 @@ export default function ChatRoomLayout({
   const [isAvatarPressed, setIsAvatarPressed] = useState(false);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
   const messageTextareaRef = useRef<HTMLTextAreaElement>(null);
-  const hasInitialScrolled = useRef(false); // 追蹤是否已完成初次滾動
+  const hasInitialScrolled = useRef(false);
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
   const { logout } = useAuth();
 
-  // GPT 計時器：共用工具函式
-  const getGptApiUrl = useCallback(() => {
+  // Human Override API URL
+  const getHumanOverrideUrl = useCallback(() => {
     const platformParam =
       currentPlatform === "Facebook" ? "?platform=Facebook" : "";
-    return `/api/v1/members/${member?.id}${platformParam}`;
+    return `/api/v1/members/${member?.id}/human-override${platformParam}`;
   }, [member?.id, currentPlatform]);
 
-  const clearGptTimer = useCallback(() => {
-    if (gptTimerRef.current) {
-      clearTimeout(gptTimerRef.current);
-      gptTimerRef.current = null;
-    }
-  }, []);
-
-  const clearGptLocalStorage = useCallback((memberId: number | string) => {
-    localStorage.removeItem(`gpt_fallback_${memberId}`);
-    localStorage.removeItem(`gpt_timer_${memberId}`);
-  }, []);
-
-  // GPT 計時器函式：恢復自動模式（必須在 useEffect 之前定義）
-  const restoreGptMode = useCallback(async () => {
+  // 啟動人工接管（focus 時呼叫）
+  const activateHumanOverride = useCallback(async () => {
     if (!member?.id) return;
-
-    const apiUrl = getGptApiUrl();
-    console.log("🔄 [GPT Timer] 恢復自動模式", {
-      member_id: member.id,
-      platform: currentPlatform,
-      url: apiUrl,
-    });
-
+    setIsHumanOverrideActive(true);
+    isHumanOverrideRef.current = true;
     try {
-      const response = await apiPut(apiUrl, { gpt_enabled: true });
-      console.log("📥 [GPT Timer] API 回應狀態 (恢復):", response.status);
-
-      // 404 表示會員不存在於 DB，改用 localStorage
-      if (response.status === 404) {
-        console.log(
-          "📦 [GPT Timer] 會員不存在於 DB，使用 localStorage fallback (恢復)",
-        );
-        clearGptLocalStorage(member.id);
-        setIsGptManualMode(false);
-        clearGptTimer();
-        return;
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error("❌ [GPT Timer] API 錯誤 (恢復):", errorData);
-        throw new Error(`API 錯誤: ${response.status}`);
-      }
-
-      console.log("✅ [GPT Timer] GPT 自動模式已恢復");
-      localStorage.removeItem(`gpt_timer_${member.id}`);
-      setIsGptManualMode(false);
-      clearGptTimer();
+      await apiPut(getHumanOverrideUrl(), { active: true });
     } catch (error) {
-      console.error("❌ [GPT Timer] 恢復 GPT 自動模式失敗:", error);
+      console.error("[Human Override] 啟動失敗:", error);
     }
-  }, [
-    member?.id,
-    currentPlatform,
-    getGptApiUrl,
-    clearGptLocalStorage,
-    clearGptTimer,
-  ]);
+  }, [member?.id, getHumanOverrideUrl]);
 
-  // GPT 計時器函式：啟動手動模式
-  const startGptTimer = useCallback(async () => {
+  // 解除人工接管（blur 時呼叫，後端設 30 秒緩衝）
+  const deactivateHumanOverride = useCallback(async () => {
     if (!member?.id) return;
-
-    const apiUrl = getGptApiUrl();
-    console.log("🔄 [GPT Timer] 啟動手動模式", {
-      member_id: member.id,
-      platform: currentPlatform,
-      url: apiUrl,
-    });
-
-    clearGptTimer();
-
-    // 內部函式：設定手動模式 UI 和計時器
-    const activateManualMode = () => {
-      setIsGptManualMode(true);
-      gptTimerRef.current = setTimeout(restoreGptMode, MANUAL_MODE_DURATION);
-      console.log(
-        "⏱️ [GPT Timer] 計時器已啟動，將在",
-        MANUAL_MODE_DURATION / 1000,
-        "秒後恢復",
-      );
-    };
-
-    const saveTimerState = () => {
-      localStorage.setItem(
-        `gpt_timer_${member.id}`,
-        JSON.stringify({
-          memberId: member.id,
-          isManualMode: true,
-          startTime: Date.now(),
-        }),
-      );
-    };
-
+    setIsHumanOverrideActive(false);
+    isHumanOverrideRef.current = false;
     try {
-      const response = await apiPut(apiUrl, { gpt_enabled: false });
-      console.log("📥 [GPT Timer] API 回應狀態:", response.status);
-
-      // 404 表示會員不存在於 DB，改用 localStorage fallback
-      if (response.status === 404) {
-        console.log(
-          "📦 [GPT Timer] 會員不存在於 DB，使用 localStorage fallback",
-        );
-        localStorage.setItem(
-          `gpt_fallback_${member.id}`,
-          JSON.stringify({
-            memberId: member.id,
-            platform: currentPlatform,
-            gpt_enabled: false,
-            startTime: Date.now(),
-            expiresAt: Date.now() + MANUAL_MODE_DURATION,
-          }),
-        );
-        saveTimerState();
-        activateManualMode();
-        return;
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error("❌ [GPT Timer] API 錯誤:", errorData);
-        throw new Error(`API 錯誤: ${response.status}`);
-      }
-
-      console.log("✅ [GPT Timer] 手動模式已啟動 (DB)");
-      saveTimerState();
-      activateManualMode();
+      await apiPut(getHumanOverrideUrl(), { active: false });
     } catch (error) {
-      console.error("❌ [GPT Timer] 啟動 GPT 手動模式失敗:", error);
-      showToast?.("操作失敗,請重試", "error");
+      console.error("[Human Override] 解除失敗:", error);
     }
-  }, [
-    member?.id,
-    currentPlatform,
-    MANUAL_MODE_DURATION,
-    getGptApiUrl,
-    clearGptTimer,
-    restoreGptMode,
-    showToast,
-  ]);
+  }, [member?.id, getHumanOverrideUrl]);
 
   const memberLastInteractionRaw = member
     ? (member as any).last_interaction_at
@@ -520,6 +402,13 @@ export default function ChatRoomLayout({
     (sseMessage: any) => {
       console.log("[SSE] 收到訊息:", JSON.stringify(sseMessage, null, 2));
       console.log("[SSE] currentThreadId:", currentThreadId);
+
+      // Human Override 狀態同步（多分頁）
+      if (sseMessage.type === "new_message" && sseMessage.data?.type === "human_override_changed") {
+        setIsHumanOverrideActive(sseMessage.data.active);
+        isHumanOverrideRef.current = sseMessage.data.active;
+        return;
+      }
 
       // 規則發佈通知 — 插入系統提示訊息
       if (sseMessage.type === "rule_updated" && sseMessage.data) {
@@ -880,68 +769,14 @@ export default function ChatRoomLayout({
 
   // Note: 不要在 messages 每次變動就強制滾到底部，否則會破壞「向上載入更早訊息」的滾動位置保持。
 
-  // GPT 計時器 useEffect：多分頁同步
-  useEffect(() => {
-    if (!member?.id) return;
-
-    const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === `gpt_timer_${member.id}`) {
-        if (event.newValue) {
-          // 其他分頁啟動了計時器
-          setIsGptManualMode(true);
-        } else {
-          // 其他分頁清除了計時器
-          setIsGptManualMode(false);
-        }
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-
-    return () => {
-      window.removeEventListener("storage", handleStorageChange);
-    };
-  }, [member?.id]);
-
-  // GPT 計時器初始化：清除殘留狀態並從資料庫同步
-  useEffect(() => {
-    if (!member?.id) return;
-
-    const timerKey = `gpt_timer_${member.id}`;
-    const storedTimer = localStorage.getItem(timerKey);
-
-    // 清除頁面重新整理時的殘留狀態
-    if (storedTimer) {
-      localStorage.removeItem(timerKey);
-      if (gptTimerRef.current) {
-        clearTimeout(gptTimerRef.current);
-        gptTimerRef.current = null;
-      }
-    }
-
-    // 從資料庫同步 GPT 模式狀態
-    if (member.gpt_enabled !== undefined) {
-      const shouldBeManualMode = !member.gpt_enabled;
-      if (shouldBeManualMode !== isGptManualMode) {
-        setIsGptManualMode(shouldBeManualMode);
-        if (shouldBeManualMode) {
-          startGptTimer();
-        }
-      }
-    }
-  }, [member?.id, member?.gpt_enabled]);
-
-  // GPT 計時器清理：會員切換或組件卸載時
+  // Human Override 清理：組件卸載時恢復
   useEffect(() => {
     return () => {
-      if (member?.id && isGptManualMode) {
-        restoreGptMode();
-      }
-      if (gptTimerRef.current) {
-        clearTimeout(gptTimerRef.current);
+      if (member?.id && isHumanOverrideRef.current) {
+        deactivateHumanOverride();
       }
     };
-  }, [member?.id, isGptManualMode, restoreGptMode]);
+  }, [member?.id, deactivateHumanOverride]);
 
   const handleSendMessage = async () => {
     const trimmedText = messageInput.trim();
@@ -1004,18 +839,7 @@ export default function ChatRoomLayout({
         // 清空輸入框
         setMessageInput("");
 
-        // ⭐ 根據輸入框焦點狀態決定 GPT 模式
-        // - 如果仍聚焦（用戶還在輸入框內）→ 重置計時器，繼續手動模式
-        // - 如果已失焦（用戶離開輸入框）→ 立即恢復自動模式
-        if (isGptManualMode) {
-          const isStillFocused =
-            messageTextareaRef.current === document.activeElement;
-          if (isStillFocused) {
-            startGptTimer(); // 仍聚焦 → 重置 10 分鐘計時器
-          } else {
-            restoreGptMode(); // 已失焦 → 恢復自動模式
-          }
-        }
+        // 送訊息後後端會自動續期 human_override_until，前端不需額外操作
 
         // SSE 未連線時：發送成功後重新載入聊天紀錄
         // SSE 已連線（含 FB 代理）：新訊息透過即時通道推送
@@ -1464,8 +1288,8 @@ export default function ChatRoomLayout({
                           ref={messageTextareaRef}
                           value={messageInput}
                           onChange={(e) => setMessageInput(e.target.value)}
-                          onFocus={startGptTimer}
-                          onBlur={restoreGptMode}
+                          onFocus={activateHumanOverride}
+                          onBlur={deactivateHumanOverride}
                           onKeyDown={(e) => {
                             // Prevent sending message during IME composition (Chinese, Japanese, Korean input)
                             if (
@@ -1489,7 +1313,7 @@ export default function ChatRoomLayout({
                       <div className="content-stretch flex gap-[12px] items-center justify-between relative shrink-0 w-full">
                         {/* 回覆模式指示 (左側) - 保留原有 GPT 計時器邏輯 */}
                         <ResponseModeIndicator
-                          mode={isGptManualMode ? "manual" : "ai_auto"}
+                          mode={isHumanOverrideActive ? "manual" : "ai_auto"}
                         />
 
                         {/* 傳送按鈕 (右側) */}
