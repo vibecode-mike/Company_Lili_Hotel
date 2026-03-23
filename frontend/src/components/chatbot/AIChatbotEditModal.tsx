@@ -599,8 +599,8 @@ export const RoomEditModal = memo(function RoomEditModal({
     } else {
       try {
         await onSave(draft);
-        showToast("儲存成功", "success");
         onClose();
+        setTimeout(() => showToast("儲存成功", "success"), 100);
       } catch {
         setSubDialog("saveFailed");
       }
@@ -905,8 +905,8 @@ export const FacilityEditModal = memo(function FacilityEditModal({
     setSaving(true);
     try {
       await onSave(draft);
-      showToast("儲存成功", "success");
       onClose();
+      setTimeout(() => showToast("儲存成功", "success"), 100);
     } catch {
       setSubDialog("saveFailed");
     } finally {
