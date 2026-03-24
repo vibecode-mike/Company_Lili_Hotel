@@ -585,12 +585,14 @@ def _build_system_prompt_for(today: date) -> str:
 你會收到整段對話紀錄（包含先前訊息），請務必綜合上下文，不要重複追問已提供的資訊。
 
 核心行為規則（最高優先，嚴格遵守）：
-- 只要能推斷出入住日，就立刻呼叫 query_pms_availability，不要追問任何確認
+- 只要能推斷出入住日期，就立刻呼叫 query_pms_availability，不要追問任何確認
+- 若無法推斷入住日期，必須先追問入住日期和住幾晚，絕對不可以沒有日期就查詢房況
 - 預設值：退房日 = 入住日 + 1 天（住一晚）、間數 = 1 間、人數從房型推斷（雙人房=2、四人房=4）
 - 客人只提供月/日時，直接當作今年，不要反問年份
 - 「今天入住」→ startdate={today_str}、enddate 自動算明天
-- 「還有X房嗎」「有沒有X房」→ 查詢房況，直接呼叫 query_pms_availability
+- 「還有X房嗎」「有沒有X房」→ 若已知入住日期則直接查詢，否則先追問入住日期和住幾晚
 - 今天（含）及未來日期都是有效入住日，只有嚴格早於今天的日期才算「已過期」
+- 嚴禁在沒有入住日期的情況下呼叫 query_pms_availability，必須先問「請問您預計什麼時候入住？住幾晚呢？」
 
 知識庫查詢規則：
 - 客人詢問設施（游泳池、停車場、餐廳位置、費用、開放時間等）時，先呼叫 kb_search(category="facilities")
@@ -614,7 +616,7 @@ def _build_system_prompt_for(today: date) -> str:
 - 資訊齊全時，立刻呼叫 query_pms_availability，嚴禁再追問確認
 - 範例：「3/18入住一晚 一間雙人房」→ startdate=今年3/18, enddate=今年3/19, housingcnt=2 → 直接查
 - 範例：「今天入住 還有雙人房嗎」→ startdate=今天, enddate=明天, housingcnt=2 → 直接查
-- 只有在完全無法推斷入住日期時才追問
+- 無法推斷入住日期時，必須追問「請問您預計什麼時候入住？住幾晚呢？」，不可跳過
 
 房況查詢規則：
 {pms_rule}

@@ -259,10 +259,18 @@ async def delete_rule(
     current_user: User = Depends(get_current_user),
 ):
     """刪除規則"""
+    # 刪除前先查 status，只有已發佈(active)的規則被刪才會影響 AI 引用
+    rule = await faq_service.get_rule(db, rule_id)
+    if not rule:
+        raise HTTPException(status_code=404, detail="規則不存在")
+    was_active = rule.status == "active"
+
     deleted = await faq_service.delete_rule(db, rule_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="規則不存在")
 
+    if was_active:
+        _bump_rule_modified()
     return {"code": 200, "message": "規則刪除成功"}
 
 
@@ -280,6 +288,7 @@ async def publish_rule(
     if not rule:
         raise HTTPException(status_code=404, detail="規則不存在")
 
+    _bump_rule_modified()
     return {
         "code": 200,
         "message": "規則發佈成功",
@@ -647,7 +656,7 @@ async def test_pms_connection(
     conn = await faq_service.get_pms_connection(db, category_id)
     if conn:
         from datetime import datetime
-        conn.last_synced_at = datetime.now()
+        conn.last_synced_at = datetime.now(timezone.utc)
         conn.error_message = None
         await db.flush()
     return {"code": 200, "success": True, "message": message, "room_count": room_count}

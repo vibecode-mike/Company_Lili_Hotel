@@ -29,7 +29,6 @@ interface AIChatbotOverviewProps {
 }
 
 type CategoryStatus = "normal" | "error";
-type TabType = "categories" | "connection";
 
 interface CategoryRecord {
   id: string;
@@ -141,38 +140,6 @@ const IconSearch = memo(function IconSearch() {
   );
 });
 
-const TabButton = memo(function TabButton({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <div className="content-stretch flex gap-[4px] items-center relative shrink-0">
-      {active && (
-        <div
-          aria-hidden="true"
-          className="absolute border-[#0f6beb] border-[0px_0px_2px] border-solid inset-0 pointer-events-none"
-        />
-      )}
-      <div
-        onClick={onClick}
-        className="box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer transition-colors"
-      >
-        <p
-          className={`basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center ${
-            active ? "text-[#383838]" : "text-[#6e6e6e]"
-          }`}
-        >
-          {label}
-        </p>
-      </div>
-    </div>
-  );
-});
 
 const StatusTag = memo(function StatusTag({
   label,
@@ -345,7 +312,7 @@ export default function AIChatbotOverview({
   onNavigateToFacilities,
 }: AIChatbotOverviewProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabType>("categories");
+  const [sortDir, setSortDir] = useState<"none" | "asc" | "desc">("none");
   const [search, setSearch] = useState("");
   const [categories, setCategories] = useState<CategoryRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -447,9 +414,13 @@ export default function AIChatbotOverview({
 
   const handleClearSearch = useCallback(() => setSearch(""), []);
 
-  const filtered = categories.filter((c) =>
-    search.trim() === "" ? true : c.name.includes(search.trim()),
-  );
+  const filtered = categories
+    .filter((c) => search.trim() === "" ? true : c.name.includes(search.trim()))
+    .sort((a, b) => {
+      if (sortDir === "none") return 0;
+      const cmp = a.lastUpdated.localeCompare(b.lastUpdated);
+      return sortDir === "asc" ? cmp : -cmp;
+    });
 
   const enabledCount = categories.filter((c) => c.enabled).length;
 
@@ -561,19 +532,10 @@ export default function AIChatbotOverview({
           </div>
         </div>
 
-        <div className="content-stretch flex items-center relative shrink-0 w-full px-[40px]">
-          <TabButton
-            label="分類"
-            active={activeTab === "categories"}
-            onClick={() => setActiveTab("categories")}
-          />
-        </div>
-
         <div
           className="px-[40px]"
           style={{ paddingTop: 16, paddingBottom: 24 }}
         >
-          {activeTab === "categories" && (
             <div className="flex flex-col gap-[16px] items-start w-full">
               <div className="flex items-stretch gap-[4px] w-full">
                 <div
@@ -638,10 +600,13 @@ export default function AIChatbotOverview({
                       <th className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]">
                         分類
                       </th>
-                      <th className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]">
+                      <th
+                        className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd] cursor-pointer select-none hover:bg-[#f5f8ff] transition-colors duration-150"
+                        onClick={() => setSortDir((d) => d === "none" ? "desc" : d === "desc" ? "asc" : "none")}
+                      >
                         最後更新{" "}
-                        <span className="text-[11px] text-[#9ca3af] select-none font-['PingFang_TC',sans-serif]">
-                          ⇅
+                        <span className={`text-[11px] select-none font-['PingFang_TC',sans-serif] ${sortDir !== "none" ? "text-[#0f6beb]" : "text-[#9ca3af]"}`}>
+                          {sortDir === "none" ? "⇅" : sortDir === "asc" ? "↑" : "↓"}
                         </span>
                       </th>
                       {/* 凍結欄 header：發佈狀態 */}
@@ -719,15 +684,6 @@ export default function AIChatbotOverview({
                 </table>
               </div>
             </div>
-          )}
-
-          {activeTab === "connection" && (
-            <div className="flex items-center justify-center py-[80px]">
-              <p className="text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]">
-                串接設定（待實作）
-              </p>
-            </div>
-          )}
         </div>
       </main>
 

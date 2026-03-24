@@ -948,9 +948,18 @@ export default function ChatFAB() {
   const [ruleUpdateNotice, setRuleUpdateNotice] = useState(false);
   const lastKnownTs = useRef<number>(0);
 
+  // 關閉聊天視窗時清除提示並重設 baseline，避免重開時補顯示
+  useEffect(() => {
+    if (!chatOpen) {
+      setRuleUpdateNotice(false);
+      lastKnownTs.current = 0;
+    }
+  }, [chatOpen]);
+
   useEffect(() => {
     if (!chatOpen || ruleUpdateNotice) return;
     let cancelled = false;
+    let isFirstPoll = lastKnownTs.current === 0;
 
     const poll = () =>
       fetch("/api/v1/faq/last-modified")
@@ -958,6 +967,12 @@ export default function ChatFAB() {
         .then((d: any) => {
           if (cancelled) return;
           const ts = d.ts ?? 0;
+          // 第一次 poll 只記錄 baseline，不觸發提示
+          if (isFirstPoll) {
+            isFirstPoll = false;
+            lastKnownTs.current = ts;
+            return;
+          }
           if (lastKnownTs.current > 0 && ts > lastKnownTs.current) {
             setRuleUpdateNotice(true);
           }
@@ -1221,8 +1236,10 @@ export default function ChatFAB() {
                     showToast("發佈失敗", "error");
                   }
                 } : undefined}
-                onMouseEnter={() => { setPublishTooltipVisible(true); }}
-                onMouseLeave={() => { setPublishTooltipVisible(false); }}
+                onMouseEnter={(e) => { setPublishTooltipVisible(true); if (canPublish) e.currentTarget.style.background = "#E5F1FF"; }}
+                onMouseLeave={(e) => { setPublishTooltipVisible(false); e.currentTarget.style.background = "transparent"; }}
+                onMouseDown={(e) => { if (canPublish) e.currentTarget.style.background = "#DBEDFF"; }}
+                onMouseUp={(e) => { if (canPublish) e.currentTarget.style.background = "#E5F1FF"; }}
                 style={{
                   width: 28, height: 28, borderRadius: 8, border: "none",
                   background: "transparent",
@@ -1465,7 +1482,7 @@ export default function ChatFAB() {
               ref={textareaRef}
               rows={1}
               value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
+              onChange={(e) => { setChatInput(e.target.value); setRuleUpdateNotice(false); }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey && !inputDisabled && !e.nativeEvent.isComposing) {
                   e.preventDefault();

@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lili Chatbot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@200;300;400;500&family=Space+Grotesk:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#050508;
+  --bg2:#08080f;
+  --bg3:#0d0d18;
+  --bg4:#12121f;
+  --bg5:#1a1a2e;
+  --blue:#4A7FFF;
+  --blue-l:#7AA3FF;
+  --blue-xl:#A8C2FF;
+  --cyan:#00D4FF;
+  --cyan-d:#0099BB;
+  --white:#F0F2FF;
+  --white-d:rgba(240,242,255,0.6);
+  --white-f:rgba(240,242,255,0.1);
+  --white-ff:rgba(240,242,255,0.04);
+  --sans:'Space Grotesk','Noto Sans TC',sans-serif;
+  --sans-zh:'Noto Sans TC',sans-serif;
+  --ease:0.4s cubic-bezier(.25,.46,.45,.94);
+}
+*{box-sizing:border-box;margin:0;padding:0;font-family:var(--sans-zh);font-weight:300}
+html,body{height:100%;background:var(--bg2);overflow:hidden;color:var(--white)}
+#app{height:100%;display:flex;flex-direction:column}
+
+/* ── HEADER ── */
+.header{
+  display:flex;align-items:center;gap:12px;
+  padding:15px 18px;background:var(--bg3);
+  border-bottom:1px solid rgba(74,127,255,.1);flex-shrink:0;position:relative;
+}
+.header::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(to right,transparent,var(--blue) 30%,var(--cyan) 70%,transparent);
+}
+.header-avatar{
+  width:34px;height:34px;flex-shrink:0;
+  background:linear-gradient(135deg,var(--blue),var(--cyan));
+  display:flex;align-items:center;justify-content:center;
+  border-radius:4px;
+}
+.header-info{flex:1}
+.header-title{font-size:12px;font-weight:400;letter-spacing:.12em;color:var(--white)}
+.header-status{
+  font-size:9px;letter-spacing:.1em;margin-top:2px;
+  display:flex;align-items:center;gap:5px;font-family:var(--sans);
+  background:linear-gradient(to right,var(--blue-l),var(--cyan));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.dot-live{
+  width:5px;height:5px;background:var(--cyan);border-radius:50%;
+  animation:liveBlink 2s infinite;flex-shrink:0;
+}
+@keyframes liveBlink{0%,100%{opacity:1}50%{opacity:.3}}
+.header-btn{
+  background:none;border:1px solid rgba(74,127,255,.18);
+  color:var(--white-d);padding:4px 10px;font-size:10px;
+  letter-spacing:.08em;cursor:pointer;transition:all var(--ease);
+  font-family:var(--sans-zh);
+}
+.header-btn:hover{color:var(--cyan);border-color:var(--cyan);background:rgba(0,212,255,.06)}
+
+/* ── MESSAGES AREA ── */
+.msgs{
+  flex:1;overflow-y:auto;background:var(--bg2);padding:16px;
+  display:flex;flex-direction:column;gap:12px;scroll-behavior:smooth;
+}
+.msgs::-webkit-scrollbar{width:2px}
+.msgs::-webkit-scrollbar-thumb{background:rgba(74,127,255,.3)}
+
+/* ── CHAT LINES ── */
+.line{display:flex;gap:8px;align-items:flex-start;animation:lineIn .28s ease}
+@keyframes lineIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.line.user{flex-direction:row-reverse}
+.line.assistant,.line.system{justify-content:flex-start}
+
+.avatar{
+  width:26px;height:26px;flex-shrink:0;
+  background:linear-gradient(135deg,var(--blue),var(--cyan));
+  display:flex;align-items:center;justify-content:center;
+  border-radius:3px;
+}
+.avatar.user-av{
+  background:var(--bg4);border:1px solid rgba(74,127,255,.2);
+  font-family:var(--sans);font-size:10px;font-weight:600;color:var(--blue-l);
+}
+
+.bubble{
+  max-width:80%;padding:11px 14px;font-size:12px;line-height:1.75;
+  letter-spacing:.04em;color:var(--white);word-break:break-word;white-space:pre-wrap;
+  border:1px solid rgba(74,127,255,.1);font-family:var(--sans-zh);
+}
+.bubble.user{background:rgba(74,127,255,.07);border-color:rgba(74,127,255,.2)}
+.bubble.assistant{background:var(--bg3)}
+.bubble.system{
+  margin:0 auto;max-width:85%;text-align:center;font-size:10px;
+  letter-spacing:.06em;
+  background:rgba(74,127,255,.04);border:1px solid rgba(74,127,255,.12);
+  color:var(--blue-l);
+}
+
+/* ── WELCOME HINT ── */
+.hint{
+  border:1px solid rgba(74,127,255,.12);background:var(--bg3);
+  padding:14px 16px;font-size:12px;line-height:1.75;color:var(--white-d);
+  letter-spacing:.04em;
+}
+.hint strong{
+  background:linear-gradient(to right,var(--blue-l),var(--cyan));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  font-weight:500;
+}
+
+/* ── QUICK CHIPS ── */
+.chips{
+  display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;
+}
+.chip{
+  padding:6px 12px;font-size:10px;letter-spacing:.08em;
+  color:var(--blue-l);background:none;
+  border:1px solid rgba(74,127,255,.18);cursor:pointer;
+  transition:all var(--ease);font-family:var(--sans-zh);
+}
+.chip:hover{color:var(--cyan);border-color:var(--cyan);background:rgba(0,212,255,.06)}
+
+/* ── ROOM CARDS HORIZONTAL SCROLL ── */
+.room-scroll{
+  display:flex;gap:10px;overflow-x:auto;overflow-y:visible;
+  padding:4px 0 10px;cursor:grab;
+  -webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;
+  scroll-snap-type:x mandatory;flex-shrink:0;
+}
+.room-scroll:active{cursor:grabbing}
+.room-scroll::-webkit-scrollbar{height:4px}
+.room-scroll::-webkit-scrollbar-track{background:transparent}
+.room-scroll::-webkit-scrollbar-thumb{background:rgba(74,127,255,.3);border-radius:2px}
+.room{
+  border:1px solid rgba(74,127,255,.12);background:var(--bg3);
+  padding:10px;flex-shrink:0;width:200px;min-width:200px;
+  scroll-snap-align:start;
+}
+.room.selected{border-color:var(--cyan);background:rgba(0,212,255,.04)}
+.room-img{width:100%;height:140px;object-fit:cover;margin-bottom:10px;opacity:.9}
+.room-header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.room-name{font-size:13px;font-weight:400;letter-spacing:.06em;color:var(--white)}
+.room-meta{font-size:10px;color:var(--white-d);margin-top:2px;letter-spacing:.04em}
+.room-price{
+  font-size:14px;font-weight:500;white-space:nowrap;
+  background:linear-gradient(to right,var(--blue-l),var(--cyan));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.room-actions{display:flex;align-items:center;justify-content:space-between;margin-top:10px}
+.room-stepper{display:flex;align-items:center;gap:0}
+.room-stepper button{
+  width:28px;height:28px;border:1px solid rgba(74,127,255,.2);
+  background:var(--bg4);color:var(--white);font-size:14px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:all var(--ease);font-family:var(--sans);
+}
+.room-stepper button:hover{border-color:var(--cyan);color:var(--cyan)}
+.room-stepper button:disabled{opacity:.3;cursor:not-allowed}
+.room-stepper .qty-val{
+  width:28px;height:28px;display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:500;color:var(--white);
+  border-top:1px solid rgba(74,127,255,.2);border-bottom:1px solid rgba(74,127,255,.2);
+  background:var(--bg4);font-family:var(--sans);
+}
+.room-confirm-bar{
+  display:flex;gap:6px;margin-top:6px;align-items:center;
+}
+.room-confirm-bar .confirm-summary{
+  flex:1;font-size:10px;color:var(--white-d);letter-spacing:.04em;
+}
+.label{font-size:10px;color:var(--white-d);font-weight:400;letter-spacing:.06em;line-height:1.4}
+.inp{
+  width:100%;border:1px solid rgba(74,127,255,.15);
+  background:var(--bg4);color:var(--white);
+  padding:9px 12px;font-size:12px;outline:none;
+  transition:border-color var(--ease);font-family:var(--sans-zh);
+}
+.inp::placeholder{color:rgba(240,242,255,.2)}
+.inp:focus{border-color:var(--blue);box-shadow:0 0 0 2px rgba(74,127,255,.08)}
+.btn{
+  border:none;padding:8px 14px;font-size:11px;font-weight:400;
+  letter-spacing:.06em;cursor:pointer;transition:all var(--ease);font-family:var(--sans-zh);
+}
+.btn-primary{
+  background:linear-gradient(135deg,var(--blue),var(--cyan));color:#fff;
+}
+.btn-primary:hover{opacity:.85;box-shadow:0 4px 16px rgba(74,127,255,.3)}
+.btn-primary:disabled{opacity:0.4;cursor:not-allowed}
+.btn-cancel{
+  background:rgba(255,255,255,0.08);color:var(--white-d);border:1px solid rgba(255,255,255,0.15);
+}
+.btn-cancel:hover{background:rgba(255,255,255,0.15)}
+.btn-row{display:flex;gap:6px;margin-top:10px}
+.btn-row .btn{flex:1}
+
+/* ── MEMBER FORM ── */
+.member-form{
+  border:1px solid rgba(74,127,255,.12);background:var(--bg3);
+  padding:12px;margin-top:4px;
+}
+.member-form .form-title{
+  font-size:11px;font-weight:400;letter-spacing:.1em;color:var(--white);margin-bottom:10px;
+}
+.member-form .form-row{margin-bottom:8px}
+
+/* ── BOOKING RESULT ── */
+.booking-result{
+  border:1px solid rgba(0,212,255,.2);background:rgba(0,212,255,.04);
+  padding:12px;margin-top:4px;font-size:11px;color:var(--white-d);line-height:1.7;
+}
+.booking-result a{
+  background:linear-gradient(to right,var(--blue-l),var(--cyan));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  text-decoration:underline;word-break:break-all;
+}
+.booking-result strong{color:var(--cyan);font-weight:400}
+
+/* ── ERROR ── */
+.error-box{
+  border:1px solid rgba(255,80,80,.25);background:rgba(255,80,80,.06);
+  padding:10px 12px;font-size:11px;color:#ff8888;line-height:1.6;
+  margin-top:4px;
+}
+
+/* ── INPUT FOOTER ── */
+.foot{
+  padding:10px 14px 14px;
+  border-top:1px solid rgba(74,127,255,.1);
+  display:flex;gap:8px;align-items:flex-end;
+  flex-shrink:0;background:var(--bg3);
+}
+.foot textarea{
+  flex:1;background:var(--bg4);
+  border:1px solid rgba(74,127,255,.15);
+  color:var(--white);padding:10px 14px;font-size:12px;
+  font-family:var(--sans-zh);resize:none;outline:none;
+  max-height:88px;transition:border-color var(--ease);line-height:1.6;
+}
+.foot textarea::placeholder{color:rgba(240,242,255,.2);letter-spacing:.05em}
+.foot textarea:focus{border-color:var(--blue)}
+.foot .send-btn{
+  width:38px;height:38px;border:none;cursor:pointer;
+  background:linear-gradient(135deg,var(--blue),var(--cyan));
+  display:flex;align-items:center;justify-content:center;
+  transition:all var(--ease);flex-shrink:0;
+}
+.foot .send-btn:hover{opacity:.85;box-shadow:0 4px 16px rgba(74,127,255,.3)}
+.foot .send-btn:disabled{opacity:0.3;cursor:not-allowed}
+
+/* ── TYPING INDICATOR ── */
+.t-row{display:flex;gap:4px;align-items:center;padding:2px 0}
+.t-dot{
+  width:5px;height:5px;border-radius:50%;background:var(--blue-l);
+  animation:tdot 1.2s ease-in-out infinite;
+}
+.t-dot:nth-child(2){animation-delay:.15s}
+.t-dot:nth-child(3){animation-delay:.3s}
+@keyframes tdot{0%,60%,100%{opacity:.2;transform:translateY(0)}30%{opacity:1;transform:translateY(-4px)}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+  "use strict";
+
+  var API_BASE = "";
+
+  var STAR_SVG = '<svg width="16" height="16" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 1.5C18 1.5 20 10.5 24.5 12.5C29 14.5 34.5 14.5 34.5 14.5C34.5 14.5 29 16.5 24.5 19C20 21.5 18 34.5 18 34.5C18 34.5 16 21.5 11.5 19C7 16.5 1.5 14.5 1.5 14.5C1.5 14.5 7 14.5 11.5 12.5C16 10.5 18 1.5 18 1.5Z" fill="white"/></svg>';
+  var SEND_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="14" y1="2" x2="2" y2="8"/><line x1="14" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="8" y2="14"/></svg>';
+
+  /* browser key */
+  var BK_STORAGE = "lili_chatbot_browser_key";
+  function getBrowserKey() {
+    var k = localStorage.getItem(BK_STORAGE);
+    if (k) return k;
+    k = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : "browser_" + Date.now();
+    localStorage.setItem(BK_STORAGE, k);
+    return k;
+  }
+  var browserKey = getBrowserKey();
+
+  /* state */
+  var sessionId = "";
+  var sending = false;
+  var roomCards = [];        // from AI response
+  var roomCounts = {};       // user-adjusted counts (default 0)
+  var selectedRooms = [];    // confirmed selections [{room_type_code, room_type_name, room_count, source}]
+  var memberForm = null;     // from confirm-room response
+  var guestDraft = { guest_name: "", guest_phone: "", guest_email: "" };
+  var reservationId = "";
+  var bookingUrl = "";
+  var savingBooking = false;
+  var errorMsg = "";
+  var showChips = true;
+  var inputLocked = false;
+
+  function lockInput(lock) {
+    inputLocked = lock;
+    if (inputEl) { inputEl.disabled = lock; inputEl.placeholder = lock ? "請先完成選房流程…" : "請輸入您的問題…"; }
+    var sendBtn = document.getElementById("btn-send");
+    if (sendBtn) sendBtn.disabled = lock;
+  }
+
+  function esc(s) { var d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+  async function api(method, path, body) {
+    var url = API_BASE + path;
+    var opts = { method: method, headers: { "Content-Type": "application/json" } };
+    if (body !== undefined) opts.body = JSON.stringify(body);
+    var res = await fetch(url, opts);
+    if (!res.ok) {
+      var detail = "Request failed: " + res.status;
+      try { var d = await res.json(); detail = d.detail || d.message || detail; } catch (_) {}
+      throw new Error(detail);
+    }
+    return res.json();
+  }
+
+  var msgsEl, inputEl;
+
+  function scrollBottom() {
+    if (msgsEl) setTimeout(function () { msgsEl.scrollTop = msgsEl.scrollHeight; }, 30);
+  }
+
+  /* ── Append message bubble ── */
+  function appendLine(role, content) {
+    if (!msgsEl) return;
+    var div = document.createElement("div");
+    div.className = "line " + role;
+    if (role === "system") {
+      div.innerHTML = '<div class="bubble system">' + esc(content) + '</div>';
+    } else if (role === "user") {
+      div.innerHTML = '<div class="avatar user-av">客</div><div class="bubble user">' + esc(content) + '</div>';
+    } else {
+      div.innerHTML = '<div class="avatar">' + STAR_SVG + '</div><div class="bubble assistant">' + esc(content) + '</div>';
+    }
+    msgsEl.appendChild(div);
+    scrollBottom();
+  }
+
+  /* ── Typing indicator ── */
+  var typingEl = null;
+  function showTyping() {
+    if (!msgsEl) return;
+    typingEl = document.createElement("div");
+    typingEl.className = "line assistant";
+    typingEl.innerHTML = '<div class="avatar">' + STAR_SVG + '</div><div class="bubble assistant"><div class="t-row"><div class="t-dot"></div><div class="t-dot"></div><div class="t-dot"></div></div></div>';
+    msgsEl.appendChild(typingEl);
+    scrollBottom();
+  }
+  function removeTyping() {
+    if (typingEl) { typingEl.remove(); typingEl = null; }
+  }
+
+  /* ── Render room cards (horizontal scroll, multi-select) ── */
+  function renderRoomCards() {
+    if (!msgsEl || roomCards.length === 0) return;
+
+    // Horizontal scroll container
+    var scrollWrap = document.createElement("div");
+    scrollWrap.className = "room-scroll";
+
+    // Drag-to-scroll
+    var isDragging = false, startX = 0, scrollLeft0 = 0;
+    scrollWrap.onmousedown = function (e) {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "BUTTON") return;
+      isDragging = true; startX = e.pageX; scrollLeft0 = scrollWrap.scrollLeft;
+      scrollWrap.style.cursor = "grabbing"; e.preventDefault();
+    };
+    scrollWrap.onmousemove = function (e) {
+      if (!isDragging) return;
+      scrollWrap.scrollLeft = scrollLeft0 - (e.pageX - startX);
+    };
+    scrollWrap.onmouseup = scrollWrap.onmouseleave = function () {
+      isDragging = false; scrollWrap.style.cursor = "grab";
+    };
+
+    roomCards.forEach(function (card) {
+      var div = document.createElement("div");
+      div.className = "room";
+      div.setAttribute("data-room-card", card.room_type_code);
+      var cnt = roomCounts[card.room_type_code] || 0;
+      var maxQty = (card.available_count != null && card.available_count > 0) ? card.available_count : 9;
+      var priceLabel = card.source === "pms" ? card.price_label : "NT$" + card.price.toLocaleString();
+      var availLabel = card.available_count != null ? "剩 " + card.available_count + " 間" : "";
+      var imgHTML = card.image_url ? '<img class="room-img" src="' + esc(card.image_url) + '" onerror="this.style.display=\'none\'">' : "";
+      div.innerHTML = imgHTML +
+        '<div class="room-header"><div><div class="room-name">' + esc(card.room_type_name) + '</div>' +
+        '<div class="room-meta">' + esc(card.room_type_code + (priceLabel ? " · " + priceLabel : "") + (availLabel ? " · " + availLabel : "")) + '</div></div>' +
+        '<div class="room-price">NT$ ' + card.price.toLocaleString() + '</div></div>' +
+        (card.features ? '<div class="room-meta" style="margin-top:6px">' + esc(card.features) + '</div>' : '') +
+        '<div class="room-actions"><span class="label">房數</span>' +
+        '<div class="room-stepper">' +
+        '<button class="step-minus" data-step-room="' + esc(card.room_type_code) + '">−</button>' +
+        '<span class="qty-val" data-qty-display="' + esc(card.room_type_code) + '">' + cnt + '</span>' +
+        '<button class="step-plus" data-step-room="' + esc(card.room_type_code) + '">+</button>' +
+        '</div></div>';
+      if (cnt > 0) div.classList.add("selected");
+      scrollWrap.appendChild(div);
+
+      // bind stepper events
+      var minusBtn = div.querySelector(".step-minus");
+      var plusBtn = div.querySelector(".step-plus");
+      minusBtn.disabled = cnt <= 0;
+      plusBtn.disabled = cnt >= maxQty;
+
+      minusBtn.onclick = function () {
+        var v = Math.max(0, (roomCounts[card.room_type_code] || 0) - 1);
+        roomCounts[card.room_type_code] = v;
+        updateStepper(card.room_type_code, v, maxQty);
+      };
+      plusBtn.onclick = function () {
+        var v = Math.min(maxQty, (roomCounts[card.room_type_code] || 0) + 1);
+        roomCounts[card.room_type_code] = v;
+        updateStepper(card.room_type_code, v, maxQty);
+      };
+    });
+
+    msgsEl.appendChild(scrollWrap);
+
+    // Confirm bar below scroll container
+    var confirmBar = document.createElement("div");
+    confirmBar.className = "room-confirm-bar";
+    confirmBar.id = "room-confirm-bar";
+    confirmBar.innerHTML =
+      '<span class="confirm-summary" id="room-summary">請選擇房型與數量</span>' +
+      '<button class="btn btn-cancel" id="cancel-room-cards">取消</button>' +
+      '<button class="btn btn-primary" id="confirm-rooms-btn" disabled>確認選房</button>';
+    msgsEl.appendChild(confirmBar);
+    confirmBar.querySelector("#cancel-room-cards").onclick = function () { handleCancelBooking("room_cards"); };
+    confirmBar.querySelector("#confirm-rooms-btn").onclick = handleConfirmRooms;
+    lockInput(true);
+    scrollBottom();
+  }
+
+  /* ── Update stepper display & selection state ── */
+  function updateStepper(roomCode, val, maxQty) {
+    var display = msgsEl.querySelector('[data-qty-display="' + roomCode + '"]');
+    if (display) display.textContent = val;
+    var cardEl = msgsEl.querySelector('[data-room-card="' + roomCode + '"]');
+    if (cardEl) {
+      if (val > 0) cardEl.classList.add("selected");
+      else cardEl.classList.remove("selected");
+      var minus = cardEl.querySelector(".step-minus");
+      var plus = cardEl.querySelector(".step-plus");
+      if (minus) minus.disabled = val <= 0;
+      if (plus) plus.disabled = val >= maxQty;
+    }
+    // Update confirm bar summary
+    var parts = [];
+    var totalRooms = 0;
+    roomCards.forEach(function (c) {
+      var n = roomCounts[c.room_type_code] || 0;
+      if (n > 0) { parts.push(c.room_type_name + " ×" + n); totalRooms += n; }
+    });
+    var summary = document.getElementById("room-summary");
+    var confirmBtn = document.getElementById("confirm-rooms-btn");
+    if (summary) summary.textContent = totalRooms > 0 ? parts.join("、") : "請選擇房型與數量";
+    if (confirmBtn) confirmBtn.disabled = totalRooms === 0;
+  }
+
+  /* ── Render member form ── */
+  function renderMemberForm() {
+    if (!msgsEl || !memberForm) return;
+    var div = document.createElement("div");
+    div.className = "member-form";
+    var fieldsHTML = '';
+    memberForm.fields.forEach(function (f) {
+      fieldsHTML += '<div class="form-row"><span class="label">' + esc(f.label) + (f.is_required ? ' *' : '') + '</span>' +
+        '<input class="inp" type="' + f.input_type + '" data-guest="' + esc(f.field_name) + '" placeholder="' + esc(f.label) + '"' +
+        (f.validation_pattern ? ' pattern="' + esc(f.validation_pattern) + '"' : '') + '></div>';
+    });
+    div.innerHTML = '<div class="form-title">旅客資料</div>' +
+      '<div style="font-size:10px;color:var(--white-d);margin-bottom:10px;letter-spacing:.04em">已選：' +
+      esc(selectedRooms.map(function(r){ return r.room_type_name + " ×" + r.room_count; }).join("、")) + '</div>' +
+      fieldsHTML +
+      '<div style="font-size:9px;color:var(--white-d);margin:8px 0 10px;letter-spacing:.03em">' + esc(memberForm.privacy_note) + '</div>' +
+      '<div class="btn-row"><button class="btn btn-cancel" id="cancel-member-form">取消</button>' +
+      '<button class="btn btn-primary" id="save-booking">確認並儲存</button></div>';
+    msgsEl.appendChild(div);
+
+    // bind events
+    div.querySelectorAll("[data-guest]").forEach(function (el) {
+      el.oninput = function () { guestDraft[el.getAttribute("data-guest")] = el.value; };
+    });
+    var saveBtn = div.querySelector("#save-booking");
+    if (saveBtn) saveBtn.onclick = handleCreateBooking;
+    var cancelFormBtn = div.querySelector("#cancel-member-form");
+    if (cancelFormBtn) cancelFormBtn.onclick = function () { handleCancelBooking("member_form"); };
+    scrollBottom();
+  }
+
+  /* ── Render booking result ── */
+  function renderBookingResult() {
+    if (!msgsEl) return;
+    var div = document.createElement("div");
+    div.className = "booking-result";
+    div.innerHTML = '<div><strong>reservation_id:</strong> ' + esc(reservationId) + '</div>' +
+      (bookingUrl ? '<div><strong>cart_url:</strong> <a href="' + esc(bookingUrl) + '" target="_blank" rel="noreferrer">' + esc(bookingUrl) + '</a></div>' : '');
+    msgsEl.appendChild(div);
+    scrollBottom();
+  }
+
+  /* ── Render error ── */
+  function renderError(msg) {
+    if (!msgsEl) return;
+    var div = document.createElement("div");
+    div.className = "error-box";
+    div.textContent = msg;
+    msgsEl.appendChild(div);
+    scrollBottom();
+  }
+
+  /* ── INIT ── */
+  function init() {
+    var root = document.getElementById("app");
+    root.innerHTML =
+      '<div class="header">' +
+      '<div class="header-avatar">' + STAR_SVG + '</div>' +
+      '<div class="header-info"><div class="header-title">AI 訂房助手</div>' +
+      '<div class="header-status"><span class="dot-live"></span><span>AI · 全天候服務中</span></div></div>' +
+      '<button class="header-btn" id="btn-reset">Reset</button></div>' +
+      '<div class="msgs" id="msgs"></div>' +
+      '<div class="foot">' +
+      '<textarea id="cw-input" rows="1" placeholder="請輸入您的問題…"></textarea>' +
+      '<button class="send-btn" id="btn-send">' + SEND_SVG + '</button></div>';
+
+    msgsEl = document.getElementById("msgs");
+    inputEl = document.getElementById("cw-input");
+
+    // welcome message
+    var welcome = document.createElement("div");
+    welcome.className = "line assistant";
+    welcome.innerHTML = '<div class="avatar">' + STAR_SVG + '</div><div class="bubble assistant">' +
+      '歡迎使用 <strong style="background:linear-gradient(to right,var(--blue-l),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-weight:500">AI 訂房助手</strong>。\n\n' +
+      '您可以直接告訴我訂房需求，例如入住/退房日期、人數，我會為您查詢房況並完成預訂。</div>';
+    msgsEl.appendChild(welcome);
+
+    // quick chips
+    var chipsDiv = document.createElement("div");
+    chipsDiv.className = "chips";
+    chipsDiv.id = "chips";
+    var chipTexts = ["我要訂房", "查詢房型與房價", "有什麼房型？"];
+    chipTexts.forEach(function (t) {
+      var btn = document.createElement("button");
+      btn.className = "chip";
+      btn.textContent = t;
+      btn.onclick = function () { sendChip(t); };
+      chipsDiv.appendChild(btn);
+    });
+    msgsEl.appendChild(chipsDiv);
+
+    // events
+    document.getElementById("btn-reset").onclick = handleReset;
+    document.getElementById("btn-send").onclick = handleSend;
+    inputEl.onkeydown = function (e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } };
+    inputEl.oninput = function () { this.style.height = "auto"; this.style.height = Math.min(this.scrollHeight, 88) + "px"; };
+  }
+
+  function hideChips() {
+    var c = document.getElementById("chips");
+    if (c) c.style.display = "none";
+    showChips = false;
+  }
+
+  function sendChip(text) {
+    if (inputLocked) return;
+    hideChips();
+    doSend(text);
+  }
+
+  /* ── SEND MESSAGE ── */
+  function handleSend() {
+    if (inputLocked) return;
+    var text = inputEl ? inputEl.value.trim() : "";
+    if (!text) return;
+    inputEl.value = "";
+    inputEl.style.height = "auto";
+    hideChips();
+    doSend(text);
+  }
+
+  async function doSend(text) {
+    if (sending) return;
+    sending = true;
+    errorMsg = "";
+    var sendBtn = document.getElementById("btn-send");
+    if (sendBtn) sendBtn.disabled = true;
+
+    appendLine("user", text);
+    showTyping();
+
+    try {
+      var res = await api("POST", "/api/v1/chatbot/message", { browser_key: browserKey, message: text, test_mode: true });
+      removeTyping();
+      sessionId = res.session_id;
+
+      // Room cards: show short prompt + cards, skip verbose text list
+      if (res.reply_type === "room_cards" && res.room_cards && res.room_cards.length > 0) {
+        appendLine("assistant", "幫您查到囉，請參考以下房型：");
+        roomCards = res.room_cards;
+        roomCards.forEach(function (c) { if (!(c.room_type_code in roomCounts)) roomCounts[c.room_type_code] = 0; });
+        renderRoomCards();
+      } else {
+        if (res.reply) appendLine("assistant", res.reply);
+      }
+
+    } catch (err) {
+      removeTyping();
+      renderError(err.message || "訊息送出失敗");
+    }
+
+    sending = false;
+    if (sendBtn) sendBtn.disabled = false;
+    if (inputEl) inputEl.focus();
+  }
+
+  /* ── CONFIRM ROOMS (multi-select) ── */
+  async function handleConfirmRooms() {
+    // Collect all rooms with count > 0
+    var rooms = [];
+    var summaryParts = [];
+    roomCards.forEach(function (card) {
+      var n = roomCounts[card.room_type_code] || 0;
+      if (n > 0) {
+        rooms.push({ room_type_code: card.room_type_code, room_count: n, room_type_name: card.room_type_name, source: card.source });
+        summaryParts.push(card.room_type_name + " × " + n + " 間");
+      }
+    });
+    if (rooms.length === 0) return;
+
+    var confirmBtn = document.getElementById("confirm-rooms-btn");
+    if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = "確認中..."; }
+
+    try {
+      var res = await api("POST", "/api/v1/chatbot/confirm-room", {
+        browser_key: browserKey,
+        rooms: rooms
+      });
+      sessionId = res.session_id;
+      selectedRooms = rooms;
+      memberForm = res.member_form || null;
+
+      // Clear room cards & confirm bar
+      if (msgsEl) {
+        msgsEl.querySelectorAll(".room-scroll, .room-confirm-bar").forEach(function (el) { el.remove(); });
+      }
+
+      appendLine("assistant", "已收到房型選擇：" + summaryParts.join("、") + "，請填寫旅客資料。");
+
+      // show member form
+      if (memberForm) {
+        renderMemberForm();
+      } else {
+        lockInput(false);
+      }
+    } catch (err) {
+      renderError(err.message || "確認房型失敗");
+      if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = "確認選房"; }
+    }
+  }
+
+  /* ── SAVE BOOKING ── */
+  async function handleCreateBooking() {
+    if (selectedRooms.length === 0 || savingBooking) return;
+    if (!guestDraft.guest_name.trim() || !guestDraft.guest_phone.trim() || !guestDraft.guest_email.trim()) {
+      renderError("請填寫所有必填欄位（姓名、電話、Email）");
+      return;
+    }
+    savingBooking = true;
+    var saveBtn = document.getElementById("save-booking");
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = "儲存中..."; }
+
+    try {
+      var res = await api("POST", "/api/v1/chatbot/booking-save", {
+        browser_key: browserKey,
+        member_name: guestDraft.guest_name.trim(),
+        member_phone: guestDraft.guest_phone.trim(),
+        member_email: guestDraft.guest_email.trim()
+      });
+      reservationId = res.reservation_id;
+      bookingUrl = res.cart_url || "";
+
+      // Clear room cards, confirm bar, and member form from DOM
+      if (msgsEl) {
+        msgsEl.querySelectorAll(".room-scroll, .room-confirm-bar, .member-form").forEach(function (el) { el.remove(); });
+      }
+      // Reset booking state
+      roomCards = []; roomCounts = {}; selectedRooms = [];
+      memberForm = null; guestDraft = { guest_name: "", guest_phone: "", guest_email: "" };
+
+      appendLine("system", "訂房資料已儲存完成！");
+      renderBookingResult();
+      lockInput(false);
+    } catch (err) {
+      renderError(err.message || "儲存訂房資料失敗");
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "確認並儲存"; }
+    }
+    savingBooking = false;
+  }
+
+  /* ── CANCEL BOOKING ── */
+  function handleCancelBooking(source) {
+    // Remove room cards, cancel button row, and member form from DOM
+    if (msgsEl) {
+      msgsEl.querySelectorAll(".room-scroll, .room, .btn-row, .room-confirm-bar, .member-form").forEach(function (el) { el.remove(); });
+    }
+    // Reset booking state
+    roomCards = []; roomCounts = {}; selectedRooms = [];
+    memberForm = null; guestDraft = { guest_name: "", guest_phone: "", guest_email: "" };
+    // Show cancel message
+    appendLine("assistant", "已取消訂房，如需重新查詢請隨時告訴我！");
+    lockInput(false);
+  }
+
+  /* ── RESET ── */
+  async function handleReset() {
+    try {
+      var res = await api("POST", "/api/v1/chatbot/session/reset", { browser_key: browserKey });
+      sessionId = res.session_id;
+    } catch (_) {}
+    // reset all state
+    roomCards = []; roomCounts = {}; selectedRooms = [];
+    memberForm = null; guestDraft = { guest_name: "", guest_phone: "", guest_email: "" };
+    reservationId = ""; bookingUrl = ""; errorMsg = ""; showChips = true; sending = false; savingBooking = false;
+    lockInput(false);
+    init();
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>

@@ -66,21 +66,13 @@ const MessengerIcon = memo(function MessengerIcon() {
 // Sort order type
 type SortOrder = 'asc' | 'desc';
 
-// 排序圖標組件 - 與 InteractiveMessageTable.tsx 相同
+// 排序圖標組件
 const SortIcon = memo(function SortIcon({ order }: { order: SortOrder }) {
+  const icon = order === "asc" ? "↑" : "↓";
   return (
-    <div className="overflow-clip shrink-0 size-[20px] relative">
-      <div
-        className={`absolute h-[8px] left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%] w-[12px] ${order === 'asc' ? 'rotate-180' : ''}`}
-      >
-        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 8">
-          <path
-            d="M0.666667 8H3.33333C3.7 8 4 7.7 4 7.33333C4 6.96667 3.7 6.66667 3.33333 6.66667H0.666667C0.3 6.66667 0 6.96667 0 7.33333C0 7.7 0.3 8 0.666667 8ZM0 0.666667C0 1.03333 0.3 1.33333 0.666667 1.33333H11.3333C11.7 1.33333 12 1.03333 12 0.666667C12 0.3 11.7 0 11.3333 0H0.666667C0.3 0 0 0.3 0 0.666667ZM0.666667 4.66667H7.33333C7.7 4.66667 8 4.36667 8 4C8 3.63333 7.7 3.33333 7.33333 3.33333H0.666667C0.3 3.33333 0 3.63333 0 4C0 4.36667 0.3 4.66667 0.666667 4.66667Z"
-            fill="#0F6BEB"
-          />
-        </svg>
-      </div>
-    </div>
+    <span className="text-[11px] select-none font-['PingFang_TC',sans-serif] text-[#0f6beb]">
+      {icon}
+    </span>
   );
 });
 

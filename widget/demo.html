@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chatbot Widget Demo</title>
+  <style>
+    body { font-family: sans-serif; padding: 40px; background: #f5f5f5; }
+    h1 { color: #333; }
+    p { color: #666; line-height: 1.8; }
+    code { background: #e8e8e8; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 20px; border-radius: 12px; overflow-x: auto; font-size: 14px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <h1>力麗飯店 AI Chatbot Widget Demo</h1>
+  <p>右下角的聊天按鈕就是嵌入的 widget，點擊即可開始對話。</p>
+
+  <h2>嵌入方式</h2>
+  <pre>&lt;script
+  src="https://YOUR_DOMAIN/widget/lili-chatbot.js"
+  data-api="https://crmpoc.star-bit.io"
+&gt;&lt;/script&gt;</pre>
+
+  <h2>可選參數</h2>
+  <ul>
+    <li><code>data-api</code> — 後端 API 網址（必填）</li>
+    <li><code>data-position</code> — "right"（預設）或 "left"</li>
+    <li><code>data-color</code> — 主色 hex，預設 "#0f6beb"</li>
+    <li><code>data-title</code> — 標題文字，預設 "AI 訂房助手"</li>
+    <li><code>data-greeting</code> — 初始提示文字</li>
+  </ul>
+
+  <!-- 嵌入 chatbot widget -->
+  <script
+    src="./lili-chatbot.js"
+    data-api="https://crmpoc.star-bit.io"
+  ></script>
+</body>
+</html>

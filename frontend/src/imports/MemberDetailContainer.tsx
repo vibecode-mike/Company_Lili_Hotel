@@ -2053,20 +2053,17 @@ function ConsumptionTableHeader({
   sortOrder: SortOrder; 
   onSort: (field: SortField) => void;
 }) {
-  const renderSortIcon = (field: SortField, active: boolean) => (
-    <div className="overflow-clip relative shrink-0 size-[20px] cursor-pointer" data-name="Sorting" onClick={() => onSort(field)}>
-      <div className="absolute inset-0" data-name="Vector">
-        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
-          <g id="Vector"></g>
-        </svg>
-      </div>
-      <div className="absolute h-[8px] left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%] w-[12px]" data-name="Vector">
-        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 8">
-          <path d={svgPathsConsumption.p24dcb900} fill={active ? "var(--fill-0, #0F6BEB)" : "var(--fill-0, #6E6E6E)"} id="Vector" />
-        </svg>
-      </div>
-    </div>
-  );
+  const renderSortIcon = (field: SortField, active: boolean) => {
+    const icon = !active ? "⇅" : sortOrder === "asc" ? "↑" : "↓";
+    return (
+      <span
+        className={`text-[11px] select-none font-['PingFang_TC',sans-serif] cursor-pointer ${active ? "text-[#0f6beb]" : "text-[#9ca3af]"}`}
+        onClick={() => onSort(field)}
+      >
+        {icon}
+      </span>
+    );
+  };
 
   return (
     <div className="bg-white relative rounded-tl-[16px] rounded-tr-[16px] shrink-0 w-full" data-name="Container">

@@ -778,7 +778,7 @@ const PMSDataTable = memo(function PMSDataTable({
                 memberTags: updatedRoom.memberTags || [],
                 url: updatedRoom.url || "",
                 lastUpdated: now,
-                enabled: false,
+                enabled: true,
                 published: false,
                 pmsRoomCode: "",
                 customImageUrl: draft.customImageUrl,
