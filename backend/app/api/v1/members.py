@@ -571,7 +571,7 @@ async def update_member_interaction_tags(
             tag_name=tag_name,
             tag_source="CRM",  # 手動添加的標籤來源為 CRM
             click_count=1,  # 手動標籤固定為 1
-            tagged_at=datetime.now(),
+            tagged_at=datetime.now(timezone.utc),
         )
         db.add(interaction_tag)
 
@@ -663,7 +663,7 @@ async def batch_update_member_tags(
                     tag_source="會員資訊表",
                     message_id=None,
                     click_count=1,
-                    tagged_at=datetime.now(),
+                    tagged_at=datetime.now(timezone.utc),
                 )
                 db.add(new_tag)
                 member_tags_updated += 1
@@ -726,7 +726,7 @@ async def batch_update_member_tags(
                     tag_source="會員資訊表",
                     message_id=None,
                     click_count=1,
-                    tagged_at=datetime.now(),
+                    tagged_at=datetime.now(timezone.utc),
                 )
                 db.add(new_tag)
                 interaction_tags_updated += 1
@@ -840,7 +840,7 @@ async def add_member_interaction_tag(
         tag_source="CRM",
         message_id=message_id,
         click_count=1,  # 手動標籤固定為 1
-        tagged_at=datetime.now(),
+        tagged_at=datetime.now(timezone.utc),
     )
     db.add(interaction_tag)
     await db.commit()
@@ -995,7 +995,7 @@ async def send_member_chat_message(
                 await db.flush()
 
                 # WebSocket 推送通知前端即時更新（包含 senderName）
-                now_utc = datetime.now()
+                now_utc = datetime.now(timezone.utc)
                 time_str = format_taipei_time(now_utc)
                 sender_name = current_user.username
                 await manager.send_new_message(thread_id, {
@@ -1018,7 +1018,7 @@ async def send_member_chat_message(
                 "success": True,
                 "message_id": line_msg_id,
                 "thread_id": thread_id,
-                "sent_at": datetime.now().isoformat()
+                "sent_at": datetime.now(timezone.utc).isoformat()
             }
 
         except Exception as e:
@@ -1112,7 +1112,7 @@ async def send_member_chat_message(
             "success": True,
             "message_id": send_result.get("message_id", msg.id if msg else None),
             "thread_id": msg.thread_id if msg else None,
-            "sent_at": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg and msg.created_at else datetime.now().isoformat()
+            "sent_at": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg and msg.created_at else datetime.now(timezone.utc).isoformat()
         }
 
     elif platform_stripped == "Webchat":

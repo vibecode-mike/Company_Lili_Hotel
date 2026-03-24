@@ -12,7 +12,7 @@ import re
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from threading import Lock
 from typing import Any, Dict, List, Literal, Optional, Tuple
@@ -567,7 +567,7 @@ def _build_system_prompt_for(today: date) -> str:
         pms_rule = (
             "- 能推斷出入住日就可以呼叫 query_pms_availability（退房日預設入住日+1天，間數預設1間，人數從房型推斷）\n"
             "- 若入住日期嚴格早於今天（不含今天），不要查詢房況，直接提醒旅客「您提供的日期已過，請重新提供入住日期」；今天當天是有效入住日\n"
-            "- 工具回傳後，簡短列出可用房型、間數、價格\n"
+            "- 工具回傳後，不要在文字中列出房型清單，系統會自動顯示房卡，你只需簡短回覆一句話\n"
             "- 若查無房型，告知並詢問是否調整日期或人數\n"
             "- PMS 失敗時，改用靜態房型資料告知旅客（標明為「一般參考房價」）"
         )
@@ -576,7 +576,7 @@ def _build_system_prompt_for(today: date) -> str:
             "- 目前無即時房況系統，但仍需呼叫 query_pms_availability 取得靜態參考房價\n"
             "- 能推斷出入住日就可以呼叫 query_pms_availability（退房日預設入住日+1天，間數預設1間，人數從房型推斷）\n"
             "- 若入住日期嚴格早於今天（不含今天），不要查詢房況，直接提醒旅客「您提供的日期已過，請重新提供入住日期」；今天當天是有效入住日\n"
-            "- 工具回傳後，簡短列出可用房型與參考價格，標明為「一般參考房價」"
+            "- 工具回傳後，不要在文字中列出房型清單，系統會自動顯示房卡，你只需簡短回覆一句話並標明為「一般參考房價」"
         )
 
     return f"""今天日期：{today_str}
@@ -629,13 +629,17 @@ def _build_system_prompt_for(today: date) -> str:
 
 回覆風格：
 - 純文字回覆，嚴禁使用任何 Markdown 語法（禁止 **粗體**、*斜體*、# 標題、![圖片](url)、[連結](url)、``` 程式碼區塊等）
-- 簡短、清楚、條列優先
+- 回覆盡量簡短，一兩句話就好，不要長篇大論
 - 語氣親切有溫度，適時加入輕鬆的語氣詞
 - 不要瞎編；不知道就說不知道
-- 嚴禁提及「房卡」「下方房卡」「下方的房型」，除非你在本次回覆中確實呼叫了 query_pms_availability 並取得結果
-- 若你有呼叫 query_pms_availability 且成功取得房型資料，只需簡短回覆一句（例如「有多種雙人房可選，請參考以下房型！」），系統會自動顯示房卡
-- 嚴禁在文字中列出房型名稱清單、價格、間數等資訊，這些房卡已包含
-- 若對方使用中文，一律使用台灣繁體中文回覆，嚴禁出現簡體中文字"""
+- 若對方使用中文，一律使用台灣繁體中文回覆，嚴禁出現簡體中文字
+
+查到房型後的回覆規則（最高優先）：
+- 呼叫 query_pms_availability 取得房型資料後，你的回覆只能是簡短一句話（例如「幫您查到囉，請參考以下房型！」）
+- 絕對不可以在文字中列出任何房型名稱、價格、間數、編號清單，系統會自動用房卡呈現這些資訊
+- 違反範例（禁止）：「森森系雙人房 NT$2600」「1. 琴香古韻 - $3800」「以下是可用的房型：...」
+- 正確範例：「有多種雙人房可選，請參考以下房型！」「幫您查到了，請看看哪間喜歡！」
+- 嚴禁提及「房卡」「下方房卡」這類系統術語"""
 
 
 # ---------------------------------------------------------------------------
@@ -1117,7 +1121,7 @@ class ChatbotService:
                 ],
             }
             if fallback_housingcnt is not None:
-                result_dict["_fallback_housingcnt_from"] = fallback_housingcnt
+                result_dict["note"] = "沒有符合人數的房型，以下是其他可參考的房型"
             return result_dict, cards
 
         except Exception as exc:
@@ -1509,7 +1513,7 @@ class ChatbotService:
                         existing_member.name = name
                         existing_member.phone = phone
                         existing_member.email = email
-                        existing_member.last_interaction_at = datetime.now()
+                        existing_member.last_interaction_at = datetime.now(timezone.utc)
                         crm_member_id = existing_member.id
                     else:
                         new_member = Member(
@@ -1518,7 +1522,7 @@ class ChatbotService:
                             email=email,
                             join_source="Webchat",
                             gpt_enabled=True,
-                            last_interaction_at=datetime.now(),
+                            last_interaction_at=datetime.now(timezone.utc),
                         )
                         db.add(new_member)
                         db.flush()

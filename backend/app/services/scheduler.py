@@ -3,7 +3,7 @@
 使用 APScheduler 管理定時任務
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.date import DateTrigger
@@ -194,7 +194,7 @@ class CampaignScheduler:
                 campaigns = result.scalars().all()
 
                 # 使用本地時間比較（資料庫存的是本地時間）
-                now = datetime.now()
+                now = datetime.now(timezone.utc)
                 restored_count = 0
                 expired_count = 0
 

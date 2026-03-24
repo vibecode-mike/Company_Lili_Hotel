@@ -78,14 +78,14 @@ class ChatroomService:
             thread.member_id = member.id
             thread.platform = platform
             thread.platform_uid = platform_uid
-            thread.last_message_at = thread.last_message_at or datetime.now()
+            thread.last_message_at = thread.last_message_at or datetime.now(timezone.utc)
         else:
             thread = ConversationThread(
                 id=thread_id,
                 member_id=member.id,
                 platform=platform,
                 platform_uid=platform_uid,
-                last_message_at=datetime.now(),
+                last_message_at=datetime.now(timezone.utc),
             )
             self.db.add(thread)
         await self.db.flush()
@@ -110,7 +110,7 @@ class ChatroomService:
             content=content,
             message_source=message_source,
             sent_by=sender_id,
-            created_at=datetime.now(),
+            created_at=datetime.now(timezone.utc),
         )
         self.db.add(msg)
         thread.last_message_at = msg.created_at

@@ -3,7 +3,7 @@ LINE Bot 服務層
 封裝 LINE 推播邏輯，連接 FastAPI 和 LINE Bot SDK
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -123,7 +123,7 @@ class LineBotService:
 
                 if ok:
                     campaign.send_status = "已發送"
-                    campaign.send_time = datetime.now()
+                    campaign.send_time = datetime.now(timezone.utc)
                 else:
                     campaign.send_status = "發送失敗"
                     logger.error(

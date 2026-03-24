@@ -155,9 +155,9 @@ class ConversationThreadRepository:
         thread = self.threads.get(thread_id)
         if thread:
             thread.member_id = member_id
-            thread.last_message_at = datetime.now()
+            thread.last_message_at = datetime.now(timezone.utc)
             return thread
-        thread = ConversationThread(thread_id=thread_id, member_id=member_id, platform=platform, platform_uid=platform_uid, last_message_at=datetime.now())
+        thread = ConversationThread(thread_id=thread_id, member_id=member_id, platform=platform, platform_uid=platform_uid, last_message_at=datetime.now(timezone.utc))
         self.threads[thread_id] = thread
         return thread
 

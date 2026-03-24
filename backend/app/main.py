@@ -11,7 +11,7 @@ from app.database import close_db
 from app.api.v1 import api_router
 from app.core.exceptions import AppException
 from app.services.scheduler import scheduler
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 # 配置日誌
@@ -99,7 +99,7 @@ async def app_exception_handler(request: Request, exc: AppException):
         content={
             "code": exc.code,
             "message": exc.message,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         },
     )
 
@@ -122,7 +122,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "code": 422,
             "message": "Invalid request parameters",
             "errors": errors,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         },
     )
 
@@ -136,7 +136,7 @@ async def general_exception_handler(request: Request, exc: Exception):
         content={
             "code": 500,
             "message": "Internal server error",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         },
     )
 

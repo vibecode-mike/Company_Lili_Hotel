@@ -2,7 +2,7 @@
 通用 Schema
 """
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Any
 
 
@@ -11,7 +11,7 @@ class ResponseBase(BaseModel):
 
     code: int = 200
     message: str = "success"
-    timestamp: datetime = datetime.now()
+    timestamp: datetime = datetime.now(timezone.utc)
 
 
 class SuccessResponse(ResponseBase):

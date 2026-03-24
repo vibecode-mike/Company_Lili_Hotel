@@ -426,7 +426,7 @@ async def get_tag_trends(
 
     從 TagTriggerLog 和 MemberTagRelation 表中統計實際資料。
     """
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     from sqlalchemy import and_, distinct
 
     # 獲取前10個最活躍的標籤（MySQL 不支持 NULLS LAST，使用 COALESCE 處理）
@@ -461,7 +461,7 @@ async def get_tag_trends(
 
     # 生成趨勢資料
     trends = []
-    today = datetime.now().date()
+    today = datetime.now(timezone.utc).date()
 
     for i in range(days - 1, -1, -1):
         date = today - timedelta(days=i)
