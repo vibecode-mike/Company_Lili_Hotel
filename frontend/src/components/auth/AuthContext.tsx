@@ -19,7 +19,7 @@ import {
   setLoginMethod,
   clearAllAuthData,
 } from "../../utils/token";
-import { setLogoutCallback, apiPost } from "../../utils/apiClient";
+import { setLogoutCallback, apiPost, resetLogoutState } from "../../utils/apiClient";
 
 export interface User {
   email: string;
@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Logout 函式（先定義，供 apiClient 使用）
   const logout = useCallback(async () => {
     try {
-      await apiPost("/api/v1/auth/logout", {});
+      await apiPost("/api/v1/auth/logout", {}, { skipRetry: true, skipRefresh: true });
     } catch {
       // API 失敗仍繼續登出（清除本地資料）
     }
@@ -126,6 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         setLoginMethod("email");
 
+        resetLogoutState();
         setIsAuthenticated(true);
         setUser({
           email: data.user.email,

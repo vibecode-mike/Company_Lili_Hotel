@@ -77,13 +77,23 @@ async function refreshToken(): Promise<boolean> {
 }
 
 /**
- * 處理登出
+ * 處理登出（一次性，防止遞迴循環）
  */
+let isLoggingOut = false;
 function handleLogout(): void {
+  if (isLoggingOut) return;
+  isLoggingOut = true;
   clearAllAuthData();
   if (onLogout) {
     onLogout();
   }
+}
+
+/**
+ * 重設登出狀態（供登入成功後呼叫）
+ */
+export function resetLogoutState(): void {
+  isLoggingOut = false;
 }
 
 export interface ApiClientOptions extends RequestInit {
@@ -128,8 +138,7 @@ export async function apiFetch<T = unknown>(
       console.log('[ApiClient] Token 即將過期，主動刷新...');
       const refreshed = await refreshToken();
       if (!refreshed) {
-        console.error('[ApiClient] 主動刷新失敗，執行登出');
-        handleLogout();
+        console.warn('[ApiClient] 主動刷新失敗，將由 401 handler 處理');
       }
     }
   }

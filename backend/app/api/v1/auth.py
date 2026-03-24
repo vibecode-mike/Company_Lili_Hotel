@@ -86,7 +86,7 @@ async def login(
         )
 
     # 更新最後登入時間（使用 timezone-aware datetime）
-    user.last_login_at = datetime.now()
+    user.last_login_at = datetime.now(timezone.utc)
     await db.commit()
 
     # 創建訪問令牌
