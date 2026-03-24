@@ -1,21 +1,25 @@
-name: Deploy to VM                                                                                            
-on:                                                                                                           
-    push:                                                                                                       
-      branches: [main]                                                                                          
-                  
+  name: Deploy to VM
+                                                                                                                
+  on:             
+    push:
+      branches: [main]
+
+  concurrency:
+    group: deploy-production
+    cancel-in-progress: false
+
   jobs:
-    deploy:                                                                                                     
-      runs-on: ubuntu-latest                                                                                    
-      steps:                                                                                                    
+    deploy:
+      runs-on: ubuntu-latest
+      steps:
         - name: Deploy via SSH                                                                                  
-          uses: appleboy/ssh-action@v1                                                                          
+          uses: appleboy/ssh-action@v1
           with:                                                                                                 
             host: ${{ secrets.VM_HOST }}
-            username: ${{ secrets.VM_USER }}                                                                    
+            username: ${{ secrets.VM_USER }}
             key: ${{ secrets.SSH_PRIVATE_KEY }}
-            script: |
-              cd /path/to/your/app                                                                              
+            script: |                                                                                           
+              set -e
+              cd /你的實際應用路徑                                                                              
               git pull origin main
-              # 重啟服務，例如：                                                                                
-              # npm install && pm2 restart app                                                                  
-              # docker compose up -d --build     
+              npm install && pm2 restart app 
