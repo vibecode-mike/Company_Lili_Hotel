@@ -63,6 +63,9 @@ async def main():
 
     print("✨ 資料庫初始化完成！")
 
+    # 關閉引擎連線，避免 Event loop is closed 警告
+    await engine.dispose()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
