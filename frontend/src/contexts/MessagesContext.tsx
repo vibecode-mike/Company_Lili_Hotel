@@ -237,30 +237,16 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
     ]);
   }, [fetchMessages, fetchQuota]);
 
-  // 🔧 全局調試函數
-  useEffect(() => {
-    (window as any).__debugFetchMessages = () => {
-      console.log('🔧 手動觸發 fetchMessages');
-      fetchMessages();
-    };
-    (window as any).__debugStatusCounts = () => {
-      console.log('🔧 當前 backendStatusCounts:', backendStatusCounts);
-      console.log('🔧 當前 messages 數量:', messages.length);
-    };
-    console.log('✅ 全局調試函數已註冊: window.__debugFetchMessages() 和 window.__debugStatusCounts()');
-  }, [fetchMessages, backendStatusCounts, messages.length]);
-
   // 初始載入數據
   useEffect(() => {
-    console.log('🔍 useEffect 觸發, hasFetchedRef:', hasFetchedRef.current, 'isAuthenticated:', isAuthenticated);
-
-    // ⚠️ 調試：每次 mount 都載入
-    console.log('📞 強制調用 fetchMessages');
-    fetchMessages();
-
-    // 配額查詢仍需要認證
-    if (isAuthenticated) {
+    if (isAuthenticated && !hasFetchedRef.current) {
+      hasFetchedRef.current = true;
+      fetchMessages();
       fetchQuota();
+    }
+    if (!isAuthenticated) {
+      hasFetchedRef.current = false;
+      setMessages([]);
     }
   }, [isAuthenticated, fetchMessages, fetchQuota]);
 
