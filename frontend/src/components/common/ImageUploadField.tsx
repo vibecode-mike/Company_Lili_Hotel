@@ -1,4 +1,5 @@
 import React, { useRef, useState } from "react";
+import { ImageWithFallback } from "../figma/ImageWithFallback";
 
 export interface ImageUploadFieldProps {
   value: string;
@@ -53,21 +54,16 @@ export default function ImageUploadField({
 
   return (
     <div className="flex flex-col gap-[8px] w-full">
-      {value && (
-        <div
-          className="relative rounded-[4px] overflow-hidden w-full shrink-0"
-          style={{ aspectRatio }}
-        >
-          <img
-            src={value}
-            alt={label}
-            className="absolute inset-0 w-full h-full object-cover"
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).style.display = "none";
-            }}
-          />
-        </div>
-      )}
+      <div
+        className="relative rounded-[4px] overflow-hidden w-full shrink-0"
+        style={{ aspectRatio }}
+      >
+        <ImageWithFallback
+          src={value || ""}
+          alt={label}
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+      </div>
 
       <div className="flex gap-[8px] items-center">
         <input

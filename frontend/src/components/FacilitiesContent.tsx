@@ -7,6 +7,7 @@ import svgPaths from "../imports/svg-icons-common";
 import togglePaths from "../imports/svg-wbwsye31ry";
 import ButtonEdit from "../imports/ButtonEdit";
 import TestEnvHeaderLabel from "./common/TestEnvHeaderLabel";
+import { ImageWithFallback } from "./figma/ImageWithFallback";
 import {
   FacilityEditModal,
   FacilityFaqDraft,
@@ -306,7 +307,7 @@ const TableRow = memo(function TableRow({
       {/* 設施名稱 — thumbnail + name */}
       <td className="p-0 w-[220px]">
         <div className="flex items-center py-[12px] pl-[12px]">
-          <img
+          <ImageWithFallback
             src={record.image}
             alt={record.name}
             className="shrink-0 rounded-[4px] object-cover"

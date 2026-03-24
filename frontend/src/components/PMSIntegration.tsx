@@ -16,6 +16,7 @@ import svgPaths from "../imports/svg-icons-common";
 import togglePaths from "../imports/svg-wbwsye31ry";
 import ButtonEdit from "../imports/ButtonEdit";
 import TestEnvHeaderLabel from "./common/TestEnvHeaderLabel";
+import { ImageWithFallback } from "./figma/ImageWithFallback";
 
 interface PMSIntegrationProps {
   onNavigateToMessages?: () => void;
@@ -349,10 +350,10 @@ const TableRow = memo(function TableRow({
       <td className="p-0 w-[220px]">
         <div className="flex items-center py-[12px] pl-[12px]">
           {/* Room thumbnail */}
-          <img
+          <ImageWithFallback
             src={record.customImageUrl || record.image || ""}
             alt={record.roomType}
-            className="shrink-0 rounded-[4px] object-cover bg-[#f0f0f0]"
+            className="shrink-0 rounded-[4px] object-cover"
             style={{ width: 110, height: 74 }}
           />
           {/* Room name */}
