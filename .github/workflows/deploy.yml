@@ -18,8 +18,27 @@
             host: ${{ secrets.VM_HOST }}
             username: ${{ secrets.VM_USER }}
             key: ${{ secrets.SSH_PRIVATE_KEY }}
-            script: |                                                                                           
+            script: |
               set -e
-              cd /你的實際應用路徑                                                                              
+              cd /home/Company_Lili_Hotel
+
+              # Pull latest code
               git pull origin main
-              npm install && pm2 restart app 
+
+              # Backend: install dependencies & run migrations
+              cd backend
+              source venv/bin/activate
+              pip install -r requirements.txt
+              alembic upgrade head
+              deactivate
+              cd ..
+
+              # Frontend: build production bundle
+              cd frontend
+              npm install
+              npm run build
+              cd ..
+
+              # Restart services
+              pm2 restart lili-backend || pm2 start ecosystem.config.js
+              pm2 restart lili-line-app || true
