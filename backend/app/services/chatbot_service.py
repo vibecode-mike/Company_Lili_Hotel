@@ -65,7 +65,7 @@ ROOMTYPE_NAME = {
 
 ROOMTYPE_MAX_OCCUPANCY = {
     "V7": 2, "V6": 2, "V5": 2, "V3": 2, "V2": 2,
-    "V1": 6, "WS": 2, "GS": 4, "V8": 2,
+    "V1": 4, "WS": 2, "GS": 2, "V8": 2,
 }
 
 # ---------------------------------------------------------------------------
@@ -1124,6 +1124,8 @@ class ChatbotService:
             }
             if fallback_housingcnt is not None:
                 result_dict["note"] = "沒有符合人數的房型，以下是其他可參考的房型"
+            elif cards and not any(c.max_occupancy == housingcnt for c in cards):
+                result_dict["note"] = f"目前沒有剛好 {housingcnt} 人的房型有空房，以下是其他可入住的房型供您參考"
             return result_dict, cards
 
         except Exception as exc:
@@ -1658,7 +1660,7 @@ class ChatbotService:
                 room_type_code=item["roomtype"],
                 room_type_name=item["name"],
                 price=item["nightly_price"],
-                price_label="即時房價",
+                price_label=f"NT${item['nightly_price']:,}/晚",
                 available_count=item["min_remain"],
                 max_occupancy=ROOMTYPE_MAX_OCCUPANCY.get(item["roomtype"], 2),
                 image_url=None,
@@ -1959,7 +1961,7 @@ class ChatbotService:
             {"role": "user", "content": message},
         ]
 
-        ctx = ToolCallingContext(db=db, test_mode=True)
+        ctx = ToolCallingContext(db=db, test_mode=True, collect_rule_ids=True)
         reply = await self._unified_tool_loop(messages, ctx)
 
         if token_usage and not isinstance(token_usage, dict) and ctx.total_tokens_used > 0:
