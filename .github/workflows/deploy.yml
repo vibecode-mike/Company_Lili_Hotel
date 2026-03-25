@@ -1,44 +1,35 @@
-  name: Deploy to VM
-                                                                                                                
-  on:             
-    push:
-      branches: [gcp]
+name: Deploy to VM
 
-  concurrency:
-    group: deploy-production
-    cancel-in-progress: false
+on:
+  push:
+    branches: [main]
 
-  jobs:
-    deploy:
-      runs-on: ubuntu-latest
-      steps:
-        - name: Deploy via SSH                                                                                  
-          uses: appleboy/ssh-action@v1
-          with:                                                                                                 
-            host: ${{ secrets.VM_HOST }}
-            username: ${{ secrets.VM_USER }}
-            key: ${{ secrets.SSH_PRIVATE_KEY }}
-            script: |
-              set -e
-              cd /home/Company_Lili_Hotel
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /data2/lili_hotel
+            git pull origin main
 
-              # Pull latest code
-              git pull origin main
+            # Backend
+            cd /data2/lili_hotel/backend
+            pip install -r requirements.txt -q
+            sudo systemctl restart lili_backend
 
-              # Backend: install dependencies & run migrations
-              cd backend
-              source venv/bin/activate
-              pip install -r requirements.txt
-              alembic upgrade head
-              deactivate
-              cd ..
+            # Frontend
+            cd /data2/lili_hotel/frontend
+            npm install --silent
+            npm run build
+            sudo systemctl restart lili_frontend
 
-              # Frontend: build production bundle
-              cd frontend
-              npm install
-              npm run build
-              cd ..
-
-              # Restart services
-              pm2 restart lili-backend || pm2 start ecosystem.config.js
-              pm2 restart lili-line-app || true
+            # LINE App
+            cd /data2/lili_hotel/line_app
+            pip install -r requirements.txt -q
+            sudo systemctl restart lili_lineapp
