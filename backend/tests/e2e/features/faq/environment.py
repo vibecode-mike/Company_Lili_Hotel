@@ -27,8 +27,8 @@ load_dotenv(os.path.join(BACKEND_DIR, ".env"))
 API_BASE = "http://localhost:8700/api/v1"
 
 # Test user credentials (must exist in the DB)
-TEST_USER = "admin"
-TEST_PASS = "admin123"
+TEST_USER = "admin@lilihotel.com"
+TEST_PASS = "StarBit!23"
 
 
 def _build_sync_db_url() -> str:

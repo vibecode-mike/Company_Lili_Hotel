@@ -12,7 +12,7 @@ echo ""
 echo "1. 登入獲取 Token..."
 TOKEN_RESPONSE=$(curl -s -X POST "$API_BASE/auth/login" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=admin&password=admin123")
+  -d "username=admin@lilihotel.com&password=StarBit!23")
 
 TOKEN=$(echo $TOKEN_RESPONSE | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('access_token',''))" 2>/dev/null)
 

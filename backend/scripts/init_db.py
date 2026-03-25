@@ -47,8 +47,7 @@ async def ensure_user(session: AsyncSession, username: str, email: str, password
 async def create_default_admin():
     """創建默認管理員賬戶以及外部登入帳號"""
     async with AsyncSessionLocal() as session:
-        await ensure_user(session, "admin", "admin@lilihotel.com", "admin123")
-        await ensure_user(session, "tycg-admin", "tycg-admin@lilihotel.com", "123456")
+        await ensure_user(session, "admin@lilihotel.com", "admin@lilihotel.com", "StarBit!23")
 
 
 async def main():
