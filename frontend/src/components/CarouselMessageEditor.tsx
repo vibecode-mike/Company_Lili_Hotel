@@ -125,11 +125,11 @@ export const FlexMessageCardPreview = memo(function FlexMessageCardPreview({ car
     <div className="bg-white rounded-[10px] shadow-[0px_20px_25px_-5px_rgba(0,0,0,0.1),0px_8px_10px_-6px_rgba(0,0,0,0.1)] w-[300px] overflow-hidden">
       {/* Hero Image */}
       {card.enableImage && (
-        <div className="w-full bg-gray-200 flex items-center justify-center overflow-hidden">
-          <img
-            src={card.image || imgImageHero}
+        <div className="w-full overflow-hidden">
+          <ImageWithFallback
+            src={card.image}
             alt="卡片圖片"
-            className="w-full h-auto object-cover"
+            className="w-full"
             style={{ aspectRatio: aspectRatio }}
           />
         </div>

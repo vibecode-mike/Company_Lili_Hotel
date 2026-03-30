@@ -4,6 +4,7 @@
  */
 
 import React from 'react';
+import { ImageWithFallback } from '../figma/ImageWithFallback';
 
 // ========== 类型定义 ==========
 
@@ -153,20 +154,12 @@ function ActionButtons({ button1, button2 }: { button1?: string; button2?: strin
  */
 export function CardImage({ imageUrl, placeholder = '選擇圖片', className = '' }: CardImageProps) {
   return (
-    <div className={`bg-[#edf0f8] h-[192px] overflow-clip w-full relative ${className}`}>
-      {imageUrl ? (
-        <img 
-          src={imageUrl} 
-          alt="卡片圖片" 
-          className="absolute inset-0 w-full h-full object-cover"
-        />
-      ) : (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <p className="font-['Inter:Regular',_'Noto_Sans_JP:Regular',_sans-serif] font-normal leading-[28.5px] text-[#383838] text-[19px] text-center text-nowrap tracking-[-0.4453px] whitespace-pre">
-            {placeholder}
-          </p>
-        </div>
-      )}
+    <div className={`h-[192px] overflow-clip w-full relative ${className}`}>
+      <ImageWithFallback
+        src={imageUrl}
+        alt="卡片圖片"
+        className="w-full h-full rounded-none"
+      />
     </div>
   );
 }
@@ -199,20 +192,12 @@ export function MessageCard({ cardData, className = '' }: MessageCardProps) {
  */
 export function TriggerImage({ imageUrl, placeholder = '選擇圖片' }: TriggerImageProps) {
   return (
-    <div className="bg-[#edf0f8] h-[240px] relative rounded-[15px] shrink-0 w-full overflow-hidden">
-      <div className="bg-clip-padding border-0 border-[transparent] border-solid box-border content-stretch flex h-[240px] items-center justify-center relative w-full">
-        {imageUrl ? (
-          <img 
-            src={imageUrl} 
-            alt="觸發圖片" 
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[24px] text-center text-nowrap whitespace-pre">
-            {placeholder}
-          </p>
-        )}
-      </div>
+    <div className="h-[240px] relative rounded-[15px] shrink-0 w-full overflow-hidden">
+      <ImageWithFallback
+        src={imageUrl}
+        alt="觸發圖片"
+        className="w-full h-full rounded-[15px]"
+      />
     </div>
   );
 }

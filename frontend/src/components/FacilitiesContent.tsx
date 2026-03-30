@@ -14,8 +14,6 @@ import {
 } from "./chatbot/AIChatbotEditModal";
 import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from "../utils/apiClient";
 
-// Facility-matched placeholder images via picsum (seed = stable, unique per facility)
-const img = (seed: string) => `https://picsum.photos/seed/${seed}/110/74`;
 
 interface FacilitiesContentProps {
   onNavigateToMessages?: () => void;
@@ -58,7 +56,7 @@ function mapRuleToFacility(rule: FaqRuleRaw): FacilityRecord {
   return {
     id: String(rule.id),
     name: c["設施名稱"] ?? "",
-    image: c["image_url"] || img("facility-" + rule.id),
+    image: c["image_url"] || "",
     hours: c["開放時間"] ?? "",
     fee: c["費用"] ?? "",
     description: c["說明"] ?? "",
@@ -849,7 +847,7 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
                 {
                   id: newId,
                   name: draft.name,
-                  image: draft.imageUrl || img("facility-" + newId),
+                  image: draft.imageUrl || "",
                   hours: draft.hours,
                   fee: draft.fee,
                   description: draft.description,

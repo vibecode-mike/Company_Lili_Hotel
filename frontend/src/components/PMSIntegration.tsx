@@ -963,32 +963,6 @@ const PMSDataTable = memo(function PMSDataTable({
             </>
           )}
 
-          {/* PMS / FAQ toggle */}
-          <div className="flex rounded-[12px] overflow-hidden border border-[#e0e0e0] shrink-0">
-            <button
-              type="button"
-              onClick={() => setViewMode("pms")}
-              className={`px-[16px] py-[8px] text-[14px] font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] border-none cursor-pointer transition-colors ${
-                viewMode === "pms"
-                  ? "bg-[#242424] text-white"
-                  : "bg-white text-[#6e6e6e] hover:bg-[#f5f5f5]"
-              }`}
-            >
-              PMS
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("faq")}
-              className={`px-[16px] py-[8px] text-[14px] font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] border-none cursor-pointer transition-colors ${
-                viewMode === "faq"
-                  ? "bg-[#242424] text-white"
-                  : "bg-white text-[#6e6e6e] hover:bg-[#f5f5f5]"
-              }`}
-            >
-              FAQ
-            </button>
-          </div>
-
           <button
             type="button"
             onClick={() => window.dispatchEvent(new CustomEvent("open-chatfab"))}
@@ -1001,21 +975,100 @@ const PMSDataTable = memo(function PMSDataTable({
         </div>
       </div>
 
-      {/* Record count + 變更 */}
-      <div className="flex items-center pt-px w-full">
-        <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[14px] text-[#6e6e6e] whitespace-nowrap leading-[1.5]">
-          共 {filtered.length} 筆，AI 引用{" "}
-          <span className="text-[#383838]">{sourceName}</span> 內容
-        </p>
-        <button
-          type="button"
-          onClick={onChangeSource}
-          className="flex items-center px-[8px] cursor-pointer bg-transparent border-none"
+      {/* PMS/FAQ toggle + Record count — same row per Figma node 1479:30318 */}
+      <div className="flex gap-[12px] items-center pt-px w-full">
+        {/* PMS / FAQ pill switch — Figma node 1492:30309 */}
+        <div
+          style={{
+            display: "flex",
+            gap: 4,
+            alignItems: "center",
+            padding: 4,
+            borderRadius: 16,
+            backgroundColor: "#fff",
+            width: 180,
+            minWidth: 180,
+            flexShrink: 0,
+            cursor: "pointer",
+          }}
         >
-          <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[14px] text-[#0f6beb] leading-[1.5] whitespace-nowrap">
-            變更
-          </span>
-        </button>
+          <div
+            onClick={() => setViewMode("pms")}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === "Enter" && setViewMode("pms")}
+            style={{
+              flex: "1 0 0",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 4,
+              borderRadius: 12,
+              backgroundColor: viewMode === "pms" ? "#f6f9fd" : "#fff",
+              transition: "background-color 0.2s",
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "'Noto Sans TC', sans-serif",
+                fontWeight: 400,
+                fontSize: 16,
+                lineHeight: 1.5,
+                color: "#383838",
+                textAlign: "center",
+                whiteSpace: "nowrap",
+              }}
+            >
+              PMS
+            </span>
+          </div>
+          <div
+            onClick={() => setViewMode("faq")}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === "Enter" && setViewMode("faq")}
+            style={{
+              flex: "1 0 0",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 4,
+              borderRadius: 12,
+              backgroundColor: viewMode === "faq" ? "#f6f9fd" : "#fff",
+              transition: "background-color 0.2s",
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "'Noto Sans TC', sans-serif",
+                fontWeight: 400,
+                fontSize: 16,
+                lineHeight: 1.5,
+                color: "#383838",
+                textAlign: "center",
+                whiteSpace: "nowrap",
+              }}
+            >
+              FAQ
+            </span>
+          </div>
+        </div>
+        {/* Record count + 變更 — Figma node 1492:30319 */}
+        <div className="flex flex-[1_0_0] items-center min-h-px min-w-px">
+          <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[12px] text-[#6e6e6e] whitespace-nowrap leading-[1.5]">
+            共 {filtered.length} 筆，引用{" "}
+            <span className="text-[#383838]">{sourceName}</span> 內容
+          </p>
+          <button
+            type="button"
+            onClick={onChangeSource}
+            className="flex gap-[4px] items-center px-[8px] cursor-pointer bg-transparent border-none"
+          >
+            <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[12px] text-[#0f6beb] leading-[1.5] whitespace-nowrap">
+              變更
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* Table */}
