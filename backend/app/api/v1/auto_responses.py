@@ -393,7 +393,7 @@ async def _get_fb_auto_responses_from_api(jwt_token: str, db: AsyncSession) -> L
             ]
 
             # Parse create_time with fallback to current time
-            created_at_dt = _parse_datetime(item.get("create_time")) or datetime.now(timezone.utc)
+            created_at_dt = _parse_datetime(item.get("create_time")) or datetime.now()
 
             # 粉專名稱
             channel_name = item.get("channel_name") or f"FB 自動回應 #{item.get('id')}"

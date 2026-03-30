@@ -194,7 +194,7 @@ class CampaignScheduler:
                 campaigns = result.scalars().all()
 
                 # 使用本地時間比較（資料庫存的是本地時間）
-                now = datetime.now(timezone.utc)
+                now = datetime.now()
                 restored_count = 0
                 expired_count = 0
 

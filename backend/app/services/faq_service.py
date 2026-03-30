@@ -38,7 +38,7 @@ class FaqService:
         result = await db.execute(stmt)
         cat = result.scalar_one_or_none()
         if cat:
-            cat.updated_at = datetime.now(timezone.utc)
+            cat.updated_at = datetime.now()
 
     # === 大分類 ===
 
@@ -89,7 +89,7 @@ class FaqService:
             return None
 
         category.is_active = is_active
-        category.updated_at = datetime.now(timezone.utc)
+        category.updated_at = datetime.now()
         await db.flush()
         return category
 
@@ -265,7 +265,7 @@ class FaqService:
         if not rule:
             return None
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now()
         rule.status = "active"
         rule.published_at = now
         rule.published_by = user_id
@@ -350,7 +350,7 @@ class FaqService:
     ) -> FaqModuleAuth:
         """設定模組授權"""
         auth = await self.get_module_auth(db, client_id)
-        now = datetime.now(timezone.utc)
+        now = datetime.now()
         if not auth:
             auth = FaqModuleAuth(
                 client_id=client_id,
@@ -425,7 +425,7 @@ class FaqService:
         result = await db.execute(stmt)
         rules = result.scalars().all()
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now()
         count = 0
         for rule in rules:
             rule.status = "active"
@@ -551,7 +551,7 @@ class FaqService:
             existing.api_key_encrypted = api_key
             existing.auth_type = auth_type
             existing.status = "enabled"
-            existing.last_synced_at = datetime.now(timezone.utc)
+            existing.last_synced_at = datetime.now()
             existing.error_message = None
             await self._touch_category(db, category_id)
             await db.flush()
@@ -560,7 +560,7 @@ class FaqService:
                 await self._snapshot_pms_to_faq(db, category_id, existing)
             return existing
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now()
         conn = FaqPmsConnection(
             faq_category_id=category_id,
             api_endpoint=api_endpoint,
@@ -599,8 +599,8 @@ class FaqService:
         try:
             # 查詢 PMS 取得所有房型（用明天~後天做為查詢區間）
             from datetime import timedelta
-            tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%d")
-            day_after = (datetime.now(timezone.utc) + timedelta(days=2)).strftime("%Y-%m-%d")
+            tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+            day_after = (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d")
             raw = await asyncio.to_thread(query_pms, tomorrow, day_after, None, 2)
 
             rooms = raw.get("room", []) if isinstance(raw, dict) else []
@@ -660,7 +660,7 @@ class FaqService:
             return None
         conn.status = status
         if status == "enabled":
-            conn.last_synced_at = datetime.now(timezone.utc)
+            conn.last_synced_at = datetime.now()
         await self._touch_category(db, category_id)
         await db.flush()
         return conn

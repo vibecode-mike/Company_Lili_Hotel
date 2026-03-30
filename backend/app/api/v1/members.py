@@ -571,7 +571,7 @@ async def update_member_interaction_tags(
             tag_name=tag_name,
             tag_source="CRM",  # 手動添加的標籤來源為 CRM
             click_count=1,  # 手動標籤固定為 1
-            tagged_at=datetime.now(timezone.utc),
+            tagged_at=datetime.now(),
         )
         db.add(interaction_tag)
 
@@ -663,7 +663,7 @@ async def batch_update_member_tags(
                     tag_source="會員資訊表",
                     message_id=None,
                     click_count=1,
-                    tagged_at=datetime.now(timezone.utc),
+                    tagged_at=datetime.now(),
                 )
                 db.add(new_tag)
                 member_tags_updated += 1
@@ -726,7 +726,7 @@ async def batch_update_member_tags(
                     tag_source="會員資訊表",
                     message_id=None,
                     click_count=1,
-                    tagged_at=datetime.now(timezone.utc),
+                    tagged_at=datetime.now(),
                 )
                 db.add(new_tag)
                 interaction_tags_updated += 1
@@ -840,7 +840,7 @@ async def add_member_interaction_tag(
         tag_source="CRM",
         message_id=message_id,
         click_count=1,  # 手動標籤固定為 1
-        tagged_at=datetime.now(timezone.utc),
+        tagged_at=datetime.now(),
     )
     db.add(interaction_tag)
     await db.commit()
@@ -891,7 +891,7 @@ async def set_human_override(
         raise HTTPException(status_code=404, detail="會員不存在")
 
     duration = HUMAN_OVERRIDE_DURATION if active else HUMAN_OVERRIDE_BLUR_BUFFER
-    member.human_override_until = datetime.utcnow() + duration
+    member.human_override_until = datetime.now() + duration
 
     await db.commit()
 
@@ -995,7 +995,7 @@ async def send_member_chat_message(
                 await db.flush()
 
                 # WebSocket 推送通知前端即時更新（包含 senderName）
-                now_utc = datetime.now(timezone.utc)
+                now_utc = datetime.now()
                 time_str = format_taipei_time(now_utc)
                 sender_name = current_user.username
                 await manager.send_new_message(thread_id, {
@@ -1011,14 +1011,14 @@ async def send_member_chat_message(
                 })
 
             # 送訊息 = 人工操作，續期 human override
-            member.human_override_until = datetime.utcnow() + HUMAN_OVERRIDE_DURATION
+            member.human_override_until = datetime.now() + HUMAN_OVERRIDE_DURATION
             await db.commit()
 
             return {
                 "success": True,
                 "message_id": line_msg_id,
                 "thread_id": thread_id,
-                "sent_at": datetime.now(timezone.utc).isoformat()
+                "sent_at": datetime.now().isoformat()
             }
 
         except Exception as e:
@@ -1112,7 +1112,7 @@ async def send_member_chat_message(
             "success": True,
             "message_id": send_result.get("message_id", msg.id if msg else None),
             "thread_id": msg.thread_id if msg else None,
-            "sent_at": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg and msg.created_at else datetime.now(timezone.utc).isoformat()
+            "sent_at": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg and msg.created_at else datetime.now().isoformat()
         }
 
     elif platform_stripped == "Webchat":

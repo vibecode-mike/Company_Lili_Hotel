@@ -371,7 +371,7 @@ class MessageService:
 
         # 1. 创建基础模板（仅用于关联，实际内容存储在 Message.flex_message_json）
         if not template_name:
-            template_name = f"消息_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+            template_name = f"消息_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
         template = MessageTemplate(
             name=template_name,
@@ -495,7 +495,7 @@ class MessageService:
 
         # ✅ 添加：明確更新 updated_at
         from datetime import datetime, timezone
-        message.updated_at = datetime.now(timezone.utc)
+        message.updated_at = datetime.now()
 
         await db.commit()
 
@@ -582,7 +582,7 @@ class MessageService:
         logger.info(f"📋 从草稿发布: draft_id={draft_id}")
 
         # 2. 创建新模板（复制草稿的模板信息）
-        template_name = f"消息_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+        template_name = f"消息_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         template = MessageTemplate(
             name=template_name,
             template_type="FlexMessage",
@@ -836,7 +836,7 @@ class MessageService:
                         send_status="已發送",
                         send_count=item.get("amount", 0),
                         click_count=item.get("click_amount", 0),
-                        created_at=datetime.fromtimestamp(item.get("create_time", 0)) if item.get("create_time") else datetime.now(timezone.utc),
+                        created_at=datetime.fromtimestamp(item.get("create_time", 0)) if item.get("create_time") else datetime.now(),
                         send_time=datetime.fromtimestamp(item.get("create_time", 0)) if item.get("create_time") else None,
                         # 其他欄位使用默認值
                         scheduled_datetime_utc=None,
@@ -1442,7 +1442,7 @@ class MessageService:
 
         if success:
             message.send_count = target_recipient_count
-            message.send_time = datetime.now(timezone.utc)
+            message.send_time = datetime.now()
         else:
             # 保留實際失敗原因以便排查
             if result.get("errors"):

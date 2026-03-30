@@ -123,7 +123,7 @@ class LineBotService:
 
                 if ok:
                     campaign.send_status = "已發送"
-                    campaign.send_time = datetime.now(timezone.utc)
+                    campaign.send_time = datetime.now()
                 else:
                     campaign.send_status = "發送失敗"
                     logger.error(

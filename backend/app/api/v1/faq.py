@@ -658,7 +658,7 @@ async def test_pms_connection(
     conn = await faq_service.get_pms_connection(db, category_id)
     if conn:
         from datetime import datetime
-        conn.last_synced_at = datetime.now(timezone.utc)
+        conn.last_synced_at = datetime.now()
         conn.error_message = None
         await db.flush()
     return {"code": 200, "success": True, "message": message, "room_count": room_count}

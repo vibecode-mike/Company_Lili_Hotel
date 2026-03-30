@@ -27,7 +27,7 @@ def get_file_extension(filename: str) -> str:
 def generate_unique_filename(original_filename: str) -> str:
     """生成唯一文件名: timestamp_uuid_original"""
     ext = get_file_extension(original_filename)
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     unique_id = str(uuid.uuid4())[:8]
     return f"{timestamp}_{unique_id}{ext}"
 
@@ -106,7 +106,7 @@ async def upload_image(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail=f"图片处理失败: {str(e)}")
 
         # 5. 生成唯一文件名 (強制使用 .jpg)
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         unique_id = str(uuid.uuid4())[:8]
         unique_filename = f"{timestamp}_{unique_id}.jpg"
         file_path = settings.upload_dir_path / unique_filename
