@@ -179,6 +179,7 @@ async def create_rule(
         rule = await faq_service.create_rule(
             db, category_id, data.content_json, data.tag_names, current_user.id
         )
+        _bump_rule_modified()
         return {
             "code": 200,
             "message": "規則建立成功",
@@ -245,6 +246,7 @@ async def update_rule(
     if not rule:
         raise HTTPException(status_code=404, detail="規則不存在")
 
+    _bump_rule_modified()
     return {
         "code": 200,
         "message": "規則更新成功",
