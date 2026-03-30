@@ -271,8 +271,7 @@ async def delete_rule(
     if not deleted:
         raise HTTPException(status_code=404, detail="規則不存在")
 
-    if was_active:
-        _bump_rule_modified()
+    _bump_rule_modified()
     return {"code": 200, "message": "規則刪除成功"}
 
 
