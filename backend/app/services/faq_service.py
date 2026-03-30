@@ -417,21 +417,47 @@ class FaqService:
     async def publish_all_draft(
         self, db: AsyncSession, user_id: int
     ) -> int:
-        """發佈所有 draft 規則，回傳發佈數量"""
-        from datetime import datetime, timezone
-
-        # 發佈所有啟用的 draft 規則（停用規則不建立快照）
-        stmt = select(FaqRule).where(FaqRule.status == "draft", FaqRule.is_enabled_filter())
-        result = await db.execute(stmt)
-        rules = result.scalars().all()
-
+        """發佈所有 draft 規則，回傳發佈數量。
+        - 分類 is_active=True + 規則 is_enabled=True + status=draft → 發佈
+        - 分類 is_active=False 的已發佈規則 → 撤回為未發佈
+        """
         now = datetime.now()
+
+        # 1. 取得所有啟用分類的 ID
+        active_cat_stmt = select(FaqCategory.id).where(FaqCategory.is_active == True)  # noqa: E712
+        active_cat_result = await db.execute(active_cat_stmt)
+        active_cat_ids = set(active_cat_result.scalars().all())
+
+        # 2. 發佈：分類 on + 規則 on + draft
+        publish_stmt = select(FaqRule).where(
+            FaqRule.status == "draft",
+            FaqRule.is_enabled_filter(),
+            FaqRule.category_id.in_(active_cat_ids),
+        )
+        publish_result = await db.execute(publish_stmt)
+        publish_rules = publish_result.scalars().all()
+
         count = 0
-        for rule in rules:
+        for rule in publish_rules:
             rule.status = "active"
             rule.published_at = now
             rule.published_by = user_id
             count += 1
+
+        # 3. 撤回：分類 off 的已發佈規則 → 未發佈
+        if active_cat_ids:
+            revoke_stmt = select(FaqRule).where(
+                FaqRule.status == "active",
+                FaqRule.category_id.notin_(active_cat_ids),
+            )
+        else:
+            revoke_stmt = select(FaqRule).where(FaqRule.status == "active")
+        revoke_result = await db.execute(revoke_stmt)
+        revoke_rules = revoke_result.scalars().all()
+
+        for rule in revoke_rules:
+            rule.status = "draft"
+            rule.published_at = None
 
         await db.flush()
         return count

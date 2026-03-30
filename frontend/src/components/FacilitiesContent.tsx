@@ -1,4 +1,5 @@
 import React, { useState, useRef, memo, useCallback, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 import Sidebar from "./Sidebar";
 import { useToast } from "./ToastProvider";
 import { PageHeaderWithBreadcrumb } from "./common/Breadcrumb";
@@ -82,36 +83,70 @@ const TagChip = memo(function TagChip({ label }: { label: string }) {
 const Toggle = memo(function Toggle({
   checked,
   onChange,
+  disabled = false,
+  disabledTip = "",
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
+  disabledTip?: string;
 }) {
+  const [showTip, setShowTip] = React.useState(false);
+  const [tipPos, setTipPos] = React.useState<{ top: number; left: number } | null>(null);
+  const wrapRef = React.useRef<HTMLDivElement>(null);
+
+  const handleMouseEnter = React.useCallback(() => {
+    if (!disabled || !disabledTip) return;
+    if (wrapRef.current) {
+      const rect = wrapRef.current.getBoundingClientRect();
+      setTipPos({ top: rect.bottom + 6, left: rect.left + rect.width / 2 });
+    }
+    setShowTip(true);
+  }, [disabled, disabledTip]);
+
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className="flex items-center justify-center cursor-pointer border-none bg-transparent p-0"
+    <div
+      ref={wrapRef}
+      className="relative inline-flex items-center justify-center"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={() => setShowTip(false)}
     >
-      <div className="relative size-[40px]">
-        <svg className="block size-full" fill="none" viewBox="0 0 40 40">
-          <g clipPath="url(#clip0_toggle_facilities)">
-            <g />
-            <path
-              d={checked ? togglePaths.p13e42a00 : togglePaths.p3ed4d200}
-              fill={checked ? "#0F6BEB" : "#E5E7EB"}
-              className="transition-all duration-300 ease-in-out"
-            />
-          </g>
-          <defs>
-            <clipPath id="clip0_toggle_facilities">
-              <rect fill="white" height="40" width="40" />
-            </clipPath>
-          </defs>
-        </svg>
-      </div>
-    </button>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        disabled={disabled}
+        onClick={() => !disabled && onChange(!checked)}
+        className={`flex items-center justify-center border-none bg-transparent p-0 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}
+      >
+        <div className="relative size-[40px]">
+          <svg className="block size-full" fill="none" viewBox="0 0 40 40">
+            <g clipPath="url(#clip0_toggle_facilities)">
+              <g />
+              <path
+                d={checked ? togglePaths.p13e42a00 : togglePaths.p3ed4d200}
+                fill={disabled ? "#C0C4CC" : checked ? "#0F6BEB" : "#E5E7EB"}
+                className="transition-all duration-300 ease-in-out"
+              />
+            </g>
+            <defs>
+              <clipPath id="clip0_toggle_facilities">
+                <rect fill="white" height="40" width="40" />
+              </clipPath>
+            </defs>
+          </svg>
+        </div>
+      </button>
+      {showTip && tipPos && createPortal(
+        <div
+          className="fixed bg-[#383838] text-white text-[12px] leading-[1.5] font-['Noto_Sans_TC',sans-serif] font-normal rounded-[8px] p-[8px] whitespace-nowrap pointer-events-none"
+          style={{ zIndex: 9999, top: tipPos.top, left: tipPos.left, transform: "translateX(-85%)" }}
+        >
+          {disabledTip}
+        </div>,
+        document.body,
+      )}
+    </div>
   );
 });
 
@@ -290,11 +325,15 @@ const TableRow = memo(function TableRow({
   isLast,
   onToggle,
   onEdit,
+  categoryActive = true,
+  categoryName = "",
 }: {
   record: FacilityRecord;
   isLast: boolean;
   onToggle: (id: string, v: boolean) => void;
   onEdit: (id: string) => void;
+  categoryActive?: boolean;
+  categoryName?: string;
 }) {
   return (
     <tr
@@ -393,6 +432,8 @@ const TableRow = memo(function TableRow({
           <Toggle
             checked={record.enabled}
             onChange={(v) => onToggle(record.id, v)}
+            disabled={!categoryActive}
+            disabledTip={`請先至分類列表開啟 ${categoryName} 的測試環境開關，確保測試環境生效。`}
           />
         </div>
       </td>
@@ -421,6 +462,8 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
   const { showToast } = useToast();
   const [facilities, setFacilities] = useState<FacilityRecord[]>([]);
   const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [categoryActive, setCategoryActive] = useState(true);
+  const [categoryName, setCategoryName] = useState("設施");
   const [loadingFacilities, setLoadingFacilities] = useState(true);
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState<SortField | null>(null);
@@ -437,10 +480,12 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
     apiGet("/api/v1/faq/categories")
       .then((res) => res.json())
       .then(async (json) => {
-        const cats: Array<{ id: number; name: string }> = json.data ?? [];
+        const cats: Array<{ id: number; name: string; is_active: boolean }> = json.data ?? [];
         const facilityCat = cats.find((c) => c.name === "設施");
         if (!facilityCat) return;
         setCategoryId(facilityCat.id);
+        setCategoryActive(facilityCat.is_active ?? true);
+        setCategoryName(facilityCat.name);
         const rulesRes = await apiGet(
           `/api/v1/faq/categories/${facilityCat.id}/rules?page_size=50`,
         );
@@ -803,6 +848,8 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
                   isLast={idx === filtered.length - 1}
                   onToggle={handleToggle}
                   onEdit={handleEdit}
+                  categoryActive={categoryActive}
+                  categoryName={categoryName}
                 />
               ))
             )}
