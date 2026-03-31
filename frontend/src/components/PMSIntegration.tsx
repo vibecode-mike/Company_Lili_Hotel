@@ -1738,14 +1738,13 @@ const DataSourceTableRow = memo(function DataSourceTableRow({
           </span>
         </div>
       </td>
-      {/* 加入測試環境 — 凍結欄 */}
+      {/* 加入測試環境 — 凍結欄（左線已在發佈狀態欄，此處不重複） */}
       <td
         style={{
           width: 120,
           position: "sticky",
           right: 0,
           zIndex: 1,
-          boxShadow: "inset 1px 0 0 #ddd",
         }}
         className="px-[12px] py-[12px] align-middle text-center bg-white"
       >
@@ -1852,14 +1851,13 @@ const DataSourcesTable = memo(function DataSourcesTable({
               >
                 發佈狀態
               </th>
-              {/* 凍結欄 header：加入測試環境 */}
+              {/* 凍結欄 header：加入測試環境（左線已在發佈狀態欄，此處不重複） */}
               <th
                 style={{
                   width: 120,
                   position: "sticky",
                   right: 0,
                   zIndex: 2,
-                  boxShadow: "inset 1px 0 0 #ddd",
                 }}
                 className="px-[8px] py-[16px] text-center font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] bg-white border-b border-[#ddd]"
               >
@@ -1953,9 +1951,10 @@ export default function PMSIntegration({
   // Fetch PMS enabled status on mount
   useEffect(() => {
     apiGet("/api/v1/chatbot/pms-status")
-      .then((res: any) => {
-        const enabled = !!res?.enabled;
-        const lastSync = res?.last_synced_at || "—";
+      .then((res) => res.json())
+      .then((data: any) => {
+        const enabled = !!data?.enabled;
+        const lastSync = data?.last_synced_at || "—";
         setDataSources((prev) =>
           prev.map((s) =>
             s.type === "PMS"
