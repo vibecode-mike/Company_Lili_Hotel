@@ -158,8 +158,8 @@ function RoomCardList({ cards }: { cards: RoomCard[] }) {
               boxSizing: 'border-box',
             }}
           >
-            {/* Image */}
-            <div style={{ height: 116, borderRadius: 10, overflow: 'hidden', background: '#f0f0f0', flexShrink: 0 }}>
+            {/* Image + 剩餘徽章 */}
+            <div style={{ height: 116, borderRadius: 10, overflow: 'hidden', background: '#f0f0f0', flexShrink: 0, position: 'relative' }}>
               {card.image_url && (
                 <img
                   src={card.image_url}
@@ -167,6 +167,17 @@ function RoomCardList({ cards }: { cards: RoomCard[] }) {
                   style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
+              )}
+              {card.available_count != null && (
+                <span style={{
+                  position: 'absolute', top: 6, right: 6,
+                  background: '#FF3B30', color: '#fff',
+                  fontSize: 11, fontWeight: 700,
+                  padding: '2px 8px', borderRadius: 10,
+                  whiteSpace: 'nowrap', lineHeight: '18px',
+                }}>
+                  剩 {card.available_count} 間
+                </span>
               )}
             </div>
             {/* Info */}
@@ -176,11 +187,10 @@ function RoomCardList({ cards }: { cards: RoomCard[] }) {
               </div>
               <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                 <div style={{ fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 500, fontSize: 16, color: '#6e6e6e', lineHeight: 1.5, whiteSpace: 'nowrap' }}>
-                  {card.source === 'pms' ? card.price_label : `NT$${card.price.toLocaleString()}`}
+                  {card.source === 'pms' ? card.price_label.replace('/晚', '/每晚') : `NT$${card.price.toLocaleString()}/每晚`}
                 </div>
-                <div style={{ fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 500, fontSize: 16, color: '#6e6e6e', lineHeight: 1.5 }}>/</div>
-                <div style={{ fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 400, fontSize: 16, color: '#6e6e6e', lineHeight: 1.5, whiteSpace: 'nowrap' }}>
-                  {card.available_count != null ? `剩餘 ${card.available_count} 間` : '待確認'}
+                <div style={{ fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 400, fontSize: 13, color: '#AAAAAA', lineHeight: 1.5, whiteSpace: 'nowrap', marginLeft: 'auto' }}>
+                  👤 可住 {card.max_occupancy ?? 2} 人
                 </div>
               </div>
             </div>

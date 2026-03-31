@@ -147,7 +147,14 @@ html,body{height:100%;background:var(--bg2);overflow:hidden;color:var(--white)}
   scroll-snap-align:start;
 }
 .room.selected{border-color:var(--cyan);background:rgba(0,212,255,.04)}
-.room-img{width:100%;height:140px;object-fit:cover;margin-bottom:10px;opacity:.9}
+.room-img-wrap{position:relative;margin-bottom:10px}
+.room-img{width:100%;height:140px;object-fit:cover;opacity:.9;display:block}
+.room-avail-badge{
+  position:absolute;top:6px;right:6px;
+  background:#FF3B30;color:#fff;font-size:10px;font-weight:700;
+  padding:2px 8px;border-radius:10px;white-space:nowrap;
+  line-height:18px;letter-spacing:.02em;
+}
 .room-header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
 .room-name{font-size:13px;font-weight:400;letter-spacing:.06em;color:var(--white)}
 .room-meta{font-size:10px;color:var(--white-d);margin-top:2px;letter-spacing:.04em}
@@ -392,13 +399,13 @@ html,body{height:100%;background:var(--bg2);overflow:hidden;color:var(--white)}
       div.setAttribute("data-room-card", card.room_type_code);
       var cnt = roomCounts[card.room_type_code] || 0;
       var maxQty = (card.available_count != null && card.available_count > 0) ? card.available_count : 9;
-      var priceLabel = card.source === "pms" ? card.price_label : "NT$" + card.price.toLocaleString();
-      var availLabel = card.available_count != null ? "剩 " + card.available_count + " 間" : "";
-      var imgHTML = card.image_url ? '<img class="room-img" src="' + esc(card.image_url) + '" onerror="this.style.display=\'none\'">' : "";
+      var availBadge = card.available_count != null ? '<span class="room-avail-badge">剩 ' + card.available_count + ' 間</span>' : "";
+      var imgHTML = card.image_url ? '<div class="room-img-wrap"><img class="room-img" src="' + esc(card.image_url) + '" onerror="this.style.display=\'none\'">' + availBadge + '</div>' : (availBadge ? '<div class="room-img-wrap">' + availBadge + '</div>' : "");
+      var maxOcc = card.max_occupancy || 2;
       div.innerHTML = imgHTML +
         '<div class="room-header"><div><div class="room-name">' + esc(card.room_type_name) + '</div>' +
-        '<div class="room-meta">' + esc(card.room_type_code + (priceLabel ? " · " + priceLabel : "") + (availLabel ? " · " + availLabel : "")) + '</div></div>' +
-        '<div class="room-price">NT$ ' + card.price.toLocaleString() + '</div></div>' +
+        '<div class="room-meta">' + esc(card.room_type_code) + ' · 👤 可住 ' + maxOcc + ' 人</div></div>' +
+        '<div class="room-price">NT$' + card.price.toLocaleString() + ' / 每晚</div></div>' +
         (card.features ? '<div class="room-meta" style="margin-top:6px">' + esc(card.features) + '</div>' : '') +
         '<div class="room-actions"><span class="label">房數</span>' +
         '<div class="room-stepper">' +
