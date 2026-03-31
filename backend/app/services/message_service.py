@@ -367,6 +367,7 @@ class MessageService:
                 fb_message_json=fb_message_json,
                 estimated_send_count=estimated_send_count,
                 created_by=created_by,
+                channel_id=channel_id,
             )
 
         # 1. 创建基础模板（仅用于关联，实际内容存储在 Message.flex_message_json）
@@ -550,6 +551,7 @@ class MessageService:
         fb_message_json: Optional[str] = None,
         estimated_send_count: Optional[int] = None,
         created_by: Optional[int] = None,
+        channel_id: Optional[str] = None,
     ) -> Message:
         """从草稿发布 - 复制成新记录，原草稿保留
 
@@ -616,6 +618,7 @@ class MessageService:
             interaction_tags=normalized_tags,
             source_draft_id=draft_id,  # 记录来源草稿
             created_by=created_by,  # 發送人員（當前登入者 ID）
+            channel_id=channel_id or draft.channel_id,  # 渠道 ID（優先用傳入值，fallback 草稿值）
         )
 
         if scheduled_at and schedule_type == "scheduled":
