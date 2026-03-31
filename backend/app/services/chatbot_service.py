@@ -854,6 +854,13 @@ class ChatbotService:
                 session.checkout_date = ctx.checkout_date
             if ctx.booking_adults is not None:
                 session.booking_adults = ctx.booking_adults
+            # AI 這輪沒查 PMS 也沒產生房卡 → 清掉訂房狀態，避免 fallback 自動查
+            if not ctx.pms_called and not ctx.room_cards:
+                session.checkin_date = None
+                session.checkout_date = None
+                session.booking_adults = None
+                session.room_plan_requests = []
+
             # token 扣除
             if db is not None and ctx.total_tokens_used > 0:
                 await self._deduct_tokens(db, ctx.total_tokens_used)
@@ -1966,6 +1973,13 @@ class ChatbotService:
                 session.checkout_date = ctx.checkout_date
             if ctx.booking_adults is not None:
                 session.booking_adults = ctx.booking_adults
+
+            # AI 這輪沒查 PMS 也沒產生房卡 → 清掉訂房狀態，避免 fallback 自動查
+            if not ctx.pms_called and not ctx.room_cards:
+                session.checkin_date = None
+                session.checkout_date = None
+                session.booking_adults = None
+                session.room_plan_requests = []
 
         room_cards = await self._pms_fallback(session, ctx, room_cards)
         if room_cards:
