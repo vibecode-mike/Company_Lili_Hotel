@@ -446,7 +446,7 @@ export default function AIChatbotOverview({
       return sortDir === "asc" ? cmp : -cmp;
     });
 
-  const enabledCount = categories.filter((c) => c.enabled).length;
+  const publishedCount = categories.filter((c) => c.published).length;
 
   const marginLeft = sidebarOpen
     ? "ml-[330px] lg:ml-[280px] md:ml-[250px]"
@@ -611,7 +611,7 @@ export default function AIChatbotOverview({
               </div>
 
               <p className="text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]">
-                共 {categories.length} 類，已啟用 {enabledCount} 類
+                共 {categories.length} 類，已發佈 {publishedCount} 類
               </p>
 
               <div className="w-full overflow-x-auto rounded-[16px] ring-1 ring-[#ddd]">
