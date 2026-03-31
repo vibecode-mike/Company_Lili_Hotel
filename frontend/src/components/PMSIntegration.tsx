@@ -551,16 +551,20 @@ const PMSDataTable = memo(function PMSDataTable({
   onChangeSource,
   onNavigateToSettings,
   sourceName,
+  categoryActive = true,
+  categoryName = "訂房",
+  onCategoryActiveChange,
 }: {
   onChangeSource: () => void;
   onNavigateToSettings: () => void;
   sourceName: string;
+  categoryActive?: boolean;
+  categoryName?: string;
+  onCategoryActiveChange?: (v: boolean) => void;
 }) {
   const { showToast } = useToast();
   const [rooms, setRooms] = useState<RoomRecord[]>([]);
   const [categoryId, setCategoryId] = useState<number | null>(null);
-  const [categoryActive, setCategoryActive] = useState(true);
-  const [categoryName, setCategoryName] = useState("訂房");
   const [loadingRooms, setLoadingRooms] = useState(true);
   const [pmsEnabled, setPmsEnabled] = useState(false);
 
@@ -629,8 +633,6 @@ const PMSDataTable = memo(function PMSDataTable({
         const booking = cats.find((c) => c.name === "訂房") ?? cats[0];
         if (!booking) return;
         setCategoryId(booking.id);
-        setCategoryActive(booking.is_active ?? true);
-        setCategoryName(booking.name);
         const rulesRes = await apiGet(
           `/api/v1/faq/categories/${booking.id}/rules?page_size=50`,
         );
@@ -1649,11 +1651,13 @@ const PMSConnectionSettings = memo(function PMSConnectionSettings() {
 // ------- 資料來源 Tab -------
 type DataSourceRow = {
   type: string;
+  // 保留供未來「已串接/未串接」功能使用
   statusLabel: string;
   statusColor: "green" | "gray" | "red";
   lastUpdated: string;
   lastPublished: string;
   enabled: boolean;
+  published: boolean;
   enabledDisabled?: boolean;
 };
 
@@ -1665,6 +1669,7 @@ const DATA_SOURCES_PMS_INIT: DataSourceRow[] = [
     lastUpdated: "—",
     lastPublished: "—",
     enabled: false,
+    published: false,
   },
   {
     type: "自訂 FAQ",
@@ -1673,6 +1678,7 @@ const DATA_SOURCES_PMS_INIT: DataSourceRow[] = [
     lastUpdated: "2026-03-02 22:47",
     lastPublished: "2026-03-02 22:47",
     enabled: true,
+    published: false,
   },
 ];
 
@@ -1680,14 +1686,15 @@ const DataSourceTableRow = memo(function DataSourceTableRow({
   row,
   isLast,
   onToggle,
-  onNavigateToSettings,
+  categoryActive = true,
+  categoryName = "",
 }: {
   row: DataSourceRow;
   isLast: boolean;
   onToggle: (type: string, v: boolean) => void;
-  onNavigateToSettings?: () => void;
+  categoryActive?: boolean;
+  categoryName?: string;
 }) {
-  const isUnlinkedPms = row.type === "PMS" && row.statusLabel === "未串接";
   return (
     <tr
       className={`bg-white transition-colors hover:bg-[#f5f8ff] group ${
@@ -1700,40 +1707,36 @@ const DataSourceTableRow = memo(function DataSourceTableRow({
       >
         {row.type}
       </td>
-      <td className="px-[12px] py-[12px] align-middle">
-        <div
-          style={{
-            backgroundColor:
-              row.statusColor === "green"
-                ? "#e4fcea"
-                : row.statusColor === "red"
-                  ? "#ffebee"
-                  : "#f5f5f5",
-            cursor: isUnlinkedPms ? "pointer" : undefined,
-          }}
-          className="inline-flex items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0"
-          onClick={isUnlinkedPms ? onNavigateToSettings : undefined}
-        >
-          <p
-            style={{
-              color:
-                row.statusColor === "green"
-                  ? "#00470c"
-                  : row.statusColor === "red"
-                    ? "#b71c1c"
-                    : "#383838",
-            }}
-            className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[16px] text-center whitespace-nowrap"
-          >
-            {row.statusLabel}
-          </p>
-        </div>
-      </td>
       <td className="px-[12px] py-[12px] align-middle text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] whitespace-nowrap">
         {row.lastUpdated}
       </td>
       <td className="px-[12px] py-[12px] align-middle text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] whitespace-nowrap">
         {row.lastPublished}
+      </td>
+      {/* 發佈狀態 — 凍結欄 */}
+      <td
+        style={{
+          width: 90,
+          minWidth: 90,
+          maxWidth: 90,
+          position: "sticky",
+          right: 120,
+          zIndex: 1,
+          boxShadow: "inset 1px 0 0 #ddd",
+        }}
+        className="px-[12px] py-[12px] align-middle text-center bg-white"
+      >
+        <div
+          className="inline-flex items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0"
+          style={{ backgroundColor: row.published ? "#e4fcea" : "#f5f5f5" }}
+        >
+          <span
+            className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[14px] text-center whitespace-nowrap"
+            style={{ color: row.published ? "#00470c" : "#383838" }}
+          >
+            {row.published ? "已發佈" : "未發佈"}
+          </span>
+        </div>
       </td>
       {/* 加入測試環境 — 凍結欄 */}
       <td
@@ -1746,14 +1749,12 @@ const DataSourceTableRow = memo(function DataSourceTableRow({
         }}
         className="px-[12px] py-[12px] align-middle text-center bg-white"
       >
-        <div
-          className={
-            row.enabledDisabled ? "opacity-50 pointer-events-none" : ""
-          }
-        >
+        <div className="flex items-center justify-center w-full">
           <Toggle
             checked={row.enabled}
             onChange={(v) => onToggle(row.type, v)}
+            disabled={!categoryActive}
+            disabledTip={`請先至分類列表開啟 ${categoryName} 的測試環境開關，確保測試環境生效。`}
           />
         </div>
       </td>
@@ -1764,28 +1765,21 @@ const DataSourceTableRow = memo(function DataSourceTableRow({
 const DataSourcesTable = memo(function DataSourcesTable({
   sources,
   setSources,
-  onNavigateToSettings,
+  categoryActive = true,
+  categoryName = "",
 }: {
   sources: DataSourceRow[];
   setSources: React.Dispatch<React.SetStateAction<DataSourceRow[]>>;
-  onNavigateToSettings?: () => void;
+  categoryActive?: boolean;
+  categoryName?: string;
 }) {
   const { showToast } = useToast();
 
-  // 監聽發佈事件，更新資料來源狀態
+  // 監聽發佈事件，更新發佈狀態（enabled === true → published: true）
   useEffect(() => {
     const handler = () => {
       setSources((prev) =>
-        prev.map((s) => {
-          if (s.type === "PMS") {
-            return s.enabled
-              ? { ...s, statusLabel: "已串接", statusColor: "green" as const }
-              : { ...s, statusLabel: "未串接", statusColor: "gray" as const };
-          }
-          return s.enabled
-            ? { ...s, statusLabel: "已啟用", statusColor: "green" as const }
-            : { ...s, statusLabel: "已停用", statusColor: "red" as const };
-        }),
+        prev.map((s) => ({ ...s, published: s.enabled })),
       );
     };
     window.addEventListener("faq-published", handler);
@@ -1832,12 +1826,6 @@ const DataSourcesTable = memo(function DataSourcesTable({
                 來源類型
               </th>
               <th className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]">
-                狀態{" "}
-                <span className="text-[11px] text-[#9ca3af] select-none font-['PingFang_TC',sans-serif]">
-                  ⇅
-                </span>
-              </th>
-              <th className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]">
                 最後更新{" "}
                 <span className="text-[11px] text-[#9ca3af] select-none font-['PingFang_TC',sans-serif]">
                   ⇅
@@ -1848,6 +1836,21 @@ const DataSourcesTable = memo(function DataSourcesTable({
                 <span className="text-[11px] text-[#9ca3af] select-none font-['PingFang_TC',sans-serif]">
                   ⇅
                 </span>
+              </th>
+              {/* 凍結欄 header：發佈狀態 */}
+              <th
+                style={{
+                  width: 90,
+                  minWidth: 90,
+                  maxWidth: 90,
+                  position: "sticky",
+                  right: 120,
+                  zIndex: 2,
+                  boxShadow: "inset 1px 0 0 #ddd",
+                }}
+                className="px-[12px] py-[16px] text-center font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] bg-white border-b border-[#ddd]"
+              >
+                發佈狀態
               </th>
               {/* 凍結欄 header：加入測試環境 */}
               <th
@@ -1868,12 +1871,12 @@ const DataSourcesTable = memo(function DataSourcesTable({
             {sources.map((row, idx) => (
               <DataSourceTableRow
                 key={row.type}
-                onNavigateToSettings={onNavigateToSettings}
                 row={row}
                 isLast={idx === sources.length - 1}
+                categoryActive={categoryActive}
+                categoryName={categoryName}
                 onToggle={(type, v) => {
                   if (type === "PMS") {
-                    // Optimistic update — 只改 enabled，不改狀態
                     setSources((prev) =>
                       prev.map((s) =>
                         s.type === "PMS" ? { ...s, enabled: v } : s,
@@ -1944,6 +1947,8 @@ export default function PMSIntegration({
     "data",
   );
   const [dataSources, setDataSources] = useState<DataSourceRow[]>(DATA_SOURCES_PMS_INIT);
+  const [categoryActive, setCategoryActive] = useState(true);
+  const [categoryName, setCategoryName] = useState("訂房");
 
   // Fetch PMS enabled status on mount
   useEffect(() => {
@@ -1957,12 +1962,34 @@ export default function PMSIntegration({
               ? {
                   ...s,
                   enabled,
+                  // 保留供未來「已串接/未串接」功能使用
                   statusLabel: enabled ? "已串接" : "未串接",
                   statusColor: enabled ? "green" : "gray",
                   lastUpdated: lastSync,
                   lastPublished: enabled ? lastSync : "—",
                 }
               : s,
+          ),
+        );
+      })
+      .catch(() => {});
+  }, []);
+
+  // Fetch category info（is_active、published_count）on mount
+  useEffect(() => {
+    apiGet("/api/v1/faq/categories")
+      .then((res) => res.json())
+      .then((json: any) => {
+        const cats: Array<{ id: number; name: string; is_active: boolean; published_count?: number }> = json.data ?? [];
+        const booking = cats.find((c: any) => c.name === "訂房") ?? cats[0];
+        if (!booking) return;
+        setCategoryActive(booking.is_active ?? true);
+        setCategoryName(booking.name);
+        // 用 published_count 初始化 FAQ 的發佈狀態
+        const faqPublished = (booking.published_count ?? 0) > 0;
+        setDataSources((prev) =>
+          prev.map((s) =>
+            s.type === "自訂 FAQ" ? { ...s, published: faqPublished } : s,
           ),
         );
       })
@@ -2031,10 +2058,18 @@ export default function PMSIntegration({
               onChangeSource={() => setActiveTab("sources")}
               onNavigateToSettings={() => setActiveTab("settings")}
               sourceName={sourceName}
+              categoryActive={categoryActive}
+              categoryName={categoryName}
+              onCategoryActiveChange={setCategoryActive}
             />
           )}
           {activeTab === "sources" && (
-            <DataSourcesTable sources={dataSources} setSources={setDataSources} onNavigateToSettings={() => setActiveTab("settings")} />
+            <DataSourcesTable
+              sources={dataSources}
+              setSources={setDataSources}
+              categoryActive={categoryActive}
+              categoryName={categoryName}
+            />
           )}
           {activeTab === "settings" && <PMSConnectionSettings />}
         </div>

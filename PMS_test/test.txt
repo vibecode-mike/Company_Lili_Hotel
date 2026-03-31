@@ -1,0 +1,13 @@
+curl -X POST "https://www.booking-wise0.com.tw/hotel_conn/starbituse.php" \
+  -H "Content-Type: application/json" \
+  -H "Api-Key: uGyt2W6Rovhkm4" \
+  -d '{
+    "checkindate": "2026-03-25",
+    "checkoutdate": "2026-03-26",
+    "name": "黃運文",
+    "phone": "0912345678",
+    "email": "test@example.com",
+    "roomtype": "SD"
+
+    /* 可自行增加其他欄位 */
+  }'
