@@ -35,6 +35,7 @@ from app.schemas.chatbot import (
     ConfirmRoomOutSchema,
     MemberFormDefinitionSchema,
     MemberFormFieldSchema,
+    ReplyType,
     RoomCardSchema,
     SessionResetOutSchema,
 )
@@ -798,7 +799,6 @@ class ChatbotService:
 
         session.turn_count += 1
         session.history.append({"role": "user", "content": message})
-        session.ts = time.time()
 
         # Spec: 訊息含明確訂房信號時立即標記 intent_state = confirmed
         if session.intent_state == "detecting" and self._has_booking_intent(message):
@@ -858,48 +858,13 @@ class ChatbotService:
             if db is not None and ctx.total_tokens_used > 0:
                 await self._deduct_tokens(db, ctx.total_tokens_used)
 
-        # Fallback: LLM didn't call PMS tool but we have enough info → query PMS ourselves
-        if not room_cards and not ctx.pms_called and session.checkin_date and session.checkout_date:
-            adults = 2
-            if session.room_plan_requests:
-                adults = session.room_plan_requests[0].get("adults_per_room", 2)
-            try:
-                ctx.checkin_date = session.checkin_date
-                ctx.checkout_date = session.checkout_date
-                ctx.booking_adults = adults
-                _, fallback_cards = await self._run_pms_tool(
-                    {"startdate": session.checkin_date, "enddate": session.checkout_date, "housingcnt": adults},
-                    ctx,
-                )
-                logger.info(f"[Fallback] PMS returned {len(fallback_cards)} cards")
-                if fallback_cards:
-                    room_cards = fallback_cards
-            except Exception as e:
-                logger.warning(f"[Fallback] PMS query error: {e}")
-
+        room_cards = await self._pms_fallback(session, ctx, room_cards)
         if room_cards:
             session.last_room_cards = room_cards
 
         session.history.append({"role": "assistant", "content": reply})
-
-        # Determine reply_type based on session state (spec 3.4–3.5)
-        # If new room_cards arrived this turn, always treat as room_cards
-        # (overrides stale selected_room from a previous booking)
-        if room_cards:
-            reply_type = "room_cards"
-            session.intent_state = "confirmed"
-            # Clear stale selected_room so fresh selection can proceed
-            session.selected_room_type = None
-            session.selected_room_count = None
-            session.selected_room_name = None
-            session.selected_room_source = None
-            session.selected_rooms = []
-        elif self._has_selected_room(session) and self._has_member_profile(session):
-            reply_type = "booking_confirm"
-        elif self._has_selected_room(session):
-            reply_type = "member_form"
-        else:
-            reply_type = "text"
+        reply_type = self._determine_reply_type(session, room_cards)
+        session.ts = time.time()
 
         return ChatbotMessageOutSchema(
             session_id=session.session_id,
@@ -910,6 +875,7 @@ class ChatbotService:
             missing_fields=self._compute_missing_fields(session),
             turn_count=session.turn_count,
             booking_context=self._booking_context(session),
+            tokens_used=ctx.total_tokens_used,
         )
 
     async def _deduct_tokens(self, db: AsyncSession, tokens_used: int) -> None:
@@ -1425,6 +1391,14 @@ class ChatbotService:
                 detail={"error_code": "INVALID_PHONE", "message": "電話格式錯誤，請輸入 10 位數號碼"},
             )
 
+        # 2.5 Email format (must contain @)
+        if email and "@" not in email:
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=422,
+                detail={"error_code": "INVALID_EMAIL", "message": "Email 格式錯誤"},
+            )
+
         # 3. Date range
         try:
             checkin_obj = datetime.strptime(checkin, "%Y-%m-%d").date()
@@ -1696,6 +1670,48 @@ class ChatbotService:
             missing.append("checkout_date")
         return missing
 
+    def _determine_reply_type(
+        self, session: ChatbotSessionState, room_cards: List[RoomCardSchema],
+    ) -> ReplyType:
+        """Determine reply_type and clear stale room selection when new cards arrive."""
+        if room_cards:
+            session.intent_state = "confirmed"
+            session.selected_room_type = None
+            session.selected_room_count = None
+            session.selected_room_name = None
+            session.selected_room_source = None
+            session.selected_rooms = []
+            return "room_cards"
+        elif self._has_selected_room(session) and self._has_member_profile(session):
+            return "booking_confirm"
+        elif self._has_selected_room(session):
+            return "member_form"
+        return "text"
+
+    async def _pms_fallback(
+        self, session: ChatbotSessionState, ctx: ToolCallingContext,
+        room_cards: List[RoomCardSchema],
+    ) -> List[RoomCardSchema]:
+        """Query PMS if LLM didn't call the tool but we have enough info."""
+        if room_cards or ctx.pms_called or not session.checkin_date or not session.checkout_date:
+            return room_cards
+        adults = 2
+        if session.room_plan_requests:
+            adults = session.room_plan_requests[0].get("adults_per_room", 2)
+        try:
+            ctx.checkin_date = session.checkin_date
+            ctx.checkout_date = session.checkout_date
+            ctx.booking_adults = adults
+            _, fallback_cards = await self._run_pms_tool(
+                {"startdate": session.checkin_date, "enddate": session.checkout_date, "housingcnt": adults},
+                ctx,
+            )
+            if fallback_cards:
+                return fallback_cards
+        except Exception as e:
+            logger.warning(f"[PMS fallback] query error: {e}")
+        return room_cards
+
     # ------------------------------------------------------------------
     # Deterministic extraction helpers
     # ------------------------------------------------------------------
@@ -1869,23 +1885,34 @@ class ChatbotService:
         message: str,
         line_uid: Optional[str] = None,
         industry_id: Optional[int] = None,
-    ) -> Dict[str, Any]:
+    ) -> ChatbotMessageOutSchema:
         """
         會員聊天室 AI 入口（LINE / Facebook / Webchat）
 
-        與 handle_message() 共用 _unified_tool_loop + _execute_tool，差異：
-        - 對話歷史從 DB 讀取（非記憶體 session）
+        與 handle_message() 共用 _unified_tool_loop + _execute_tool + 訂房流程。
+        差異：
+        - 對話歷史從 DB 讀取（保留原本 session 管理）
         - 自動貼標籤（根據 AI 引用的規則）
         - Token 耗盡時降級為自動回應
+        - 用 line_uid 作為 session key 追蹤訂房狀態
         """
-        # 1. Token 額度檢查
+        # 1. Token 額度檢查（保留）
         token_usage = await self._get_token_usage(db, industry_id)
         if token_usage is None:
             return self._chat_error("系統尚未設定產業資料")
-        if isinstance(token_usage, dict):
+        if isinstance(token_usage, ChatbotMessageOutSchema):
             return token_usage  # exhausted error
 
-        # 2. 組裝 messages
+        # 2. Booking session — 用 line_uid 追蹤訂房狀態（不影響對話歷史）
+        session_key = line_uid or f"anon-{uuid4()}"
+        session = self.get_or_create_session(session_key)
+
+        # 2.1 Turn count（同 handle_message — 5 輪後 reset）
+        if session.turn_count >= self._max_turns:
+            session = self.reset_session(session_key)
+        session.turn_count += 1
+
+        # 3. 對話歷史從 DB 讀取（保留原本邏輯）
         messages: List[Dict[str, Any]] = [
             {"role": "system", "content": _build_system_prompt()}
         ]
@@ -1894,10 +1921,11 @@ class ChatbotService:
             messages.extend(history)
         messages.append({"role": "user", "content": message})
 
-        # 3. 建 ToolCallingContext（與官網一致的 tool 行為）
-        ctx = ToolCallingContext(db=db, collect_rule_ids=True)
+        # 4. Intent detection（同 handle_message）
+        if session.intent_state == "detecting" and self._has_booking_intent(message):
+            session.intent_state = "confirmed"
 
-        # 確定性日期/房型提取（與官網一致）
+        # 5. 確定性日期/房型提取 → 同步到 session
         past_date_warning: Optional[str] = None
         try:
             dates = self._extract_dates(message)
@@ -1907,46 +1935,73 @@ class ChatbotService:
                 if checkin_obj < today:
                     past_date_warning = "您輸入的日期已過，請重新提供入住與退房日期。"
                 else:
-                    ctx.checkin_date, ctx.checkout_date = dates
-        except Exception:
-            pass
+                    session.checkin_date = dates[0]
+                    session.checkout_date = dates[1]
+        except Exception as e:
+            logger.warning(f"Date extraction failed: {e}")
         room_plan = self._extract_room_plan(message)
         if room_plan:
-            ctx.booking_adults = room_plan["room_count"] * room_plan["adults_per_room"]
+            session.room_plan_requests = [room_plan]
+            session.booking_adults = room_plan["room_count"] * room_plan["adults_per_room"]
 
-        # 4. 統一 Tool Calling 迴圈
+        # 6. 建 ToolCallingContext — 帶 _session 解鎖 confirm_room + save_member_info
+        ctx = ToolCallingContext(
+            db=db,
+            collect_rule_ids=True,
+            _session=session,
+            checkin_date=session.checkin_date,
+            checkout_date=session.checkout_date,
+            booking_adults=session.booking_adults,
+        )
+
+        # 7. 統一 Tool Calling 迴圈
         if past_date_warning:
             reply = past_date_warning
+            room_cards: List[RoomCardSchema] = []
         else:
             reply = await self._unified_tool_loop(messages, ctx)
+            room_cards = ctx.room_cards
+            # Context sync-back（同 handle_message）
+            if ctx.checkin_date is not None:
+                session.checkin_date = ctx.checkin_date
+            if ctx.checkout_date is not None:
+                session.checkout_date = ctx.checkout_date
+            if ctx.booking_adults is not None:
+                session.booking_adults = ctx.booking_adults
 
-        # PMS fallback（與官網一致）— 只在 LLM 未呼叫 PMS 時才補查
-        if not ctx.room_cards and not ctx.pms_called and ctx.checkin_date and ctx.checkout_date:
-            try:
-                await self._run_pms_tool(
-                    {"startdate": ctx.checkin_date, "enddate": ctx.checkout_date,
-                     "housingcnt": ctx.booking_adults or 2},
-                    ctx,
-                )
-            except Exception as e:
-                logger.warning(f"[Member chat] PMS fallback error: {e}")
+        room_cards = await self._pms_fallback(session, ctx, room_cards)
+        if room_cards:
+            session.last_room_cards = room_cards
 
-        # 5. 扣除 token + 自動貼標籤
+        reply_type = self._determine_reply_type(session, room_cards)
+
+        # Token deduction
         if token_usage and ctx.total_tokens_used > 0:
             token_usage.used_amount += ctx.total_tokens_used
             await db.flush()
 
+        # 11. Auto-tagging（保留）
         referenced_rule_ids = list(ctx.referenced_rule_ids)
         auto_tags = await self._auto_tag_member(db, line_uid, referenced_rule_ids)
 
-        return {
-            "reply": reply,
-            "room_cards": [card.model_dump() for card in ctx.room_cards] if ctx.room_cards else [],
-            "tokens_used": ctx.total_tokens_used,
-            "referenced_rules": [{"rule_id": rid} for rid in referenced_rule_ids],
-            "auto_tags": auto_tags,
-            "token_exhausted": False,
-        }
+        # 12. 更新 session 時間戳
+        session.ts = time.time()
+
+        return ChatbotMessageOutSchema(
+            session_id=session.session_id,
+            intent_state=session.intent_state,
+            reply_type=reply_type,
+            reply=reply,
+            room_cards=room_cards,
+            missing_fields=self._compute_missing_fields(session),
+            turn_count=session.turn_count,
+            booking_context=self._booking_context(session),
+            member_form=_MEMBER_FORM if reply_type == "member_form" else None,
+            tokens_used=ctx.total_tokens_used,
+            referenced_rules=[{"rule_id": rid} for rid in referenced_rule_ids],
+            auto_tags=auto_tags,
+            token_exhausted=False,
+        )
 
     async def test_chat(
         self,
@@ -1964,7 +2019,7 @@ class ChatbotService:
         ctx = ToolCallingContext(db=db, test_mode=True, collect_rule_ids=True)
         reply = await self._unified_tool_loop(messages, ctx)
 
-        if token_usage and not isinstance(token_usage, dict) and ctx.total_tokens_used > 0:
+        if token_usage and not isinstance(token_usage, ChatbotMessageOutSchema) and ctx.total_tokens_used > 0:
             token_usage.used_amount += ctx.total_tokens_used
             await db.flush()
 
@@ -2061,21 +2116,21 @@ class ChatbotService:
 
         tagged: List[str] = []
         for tag_name in tag_names - existing_tags:
-            db.add(MemberTag(member_id=member.id, tag_name=tag_name, tag_source="AI"))
+            db.add(MemberTag(member_id=member.id, tag_name=tag_name, tag_source="AI_chatbot"))
             tagged.append(tag_name)
         if tagged:
             await db.flush()
         return tagged
 
     @staticmethod
-    def _chat_error(message: str, token_exhausted: bool = False) -> Dict[str, Any]:
-        return {
-            "reply": message,
-            "tokens_used": 0,
-            "referenced_rules": [],
-            "auto_tags": [],
-            "token_exhausted": token_exhausted,
-        }
+    def _chat_error(message: str, token_exhausted: bool = False) -> ChatbotMessageOutSchema:
+        return ChatbotMessageOutSchema(
+            session_id="",
+            intent_state="none",
+            reply_type="text",
+            reply=message,
+            token_exhausted=token_exhausted,
+        )
 
 
 chatbot_service = ChatbotService()

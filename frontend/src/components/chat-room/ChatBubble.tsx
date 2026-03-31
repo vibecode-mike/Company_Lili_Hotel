@@ -215,6 +215,42 @@ function RoomCardList({ cards }: { cards: RoomCard[] }) {
 }
 
 /**
+ * 訂房確認結果（CRM 唯讀顯示）
+ */
+function BookingResultDisplay({ result }: { result: { reservationId: string; cartUrl?: string | null } }) {
+  return (
+    <div style={{
+      background: '#fff',
+      borderRadius: 12,
+      padding: 14,
+      boxShadow: '0 1px 6px rgba(0,0,0,0.08)',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 8,
+      border: '1px solid #e5e7eb',
+      maxWidth: 288,
+    }}>
+      <div style={{ fontSize: 14, fontFamily: "'Noto Sans TC', sans-serif", color: '#383838', fontWeight: 600 }}>
+        ✅ 訂房資訊已儲存
+      </div>
+      <div style={{ fontSize: 12, fontFamily: "'Noto Sans TC', sans-serif", color: '#6e6e6e' }}>
+        預訂編號：<span style={{ color: '#383838', fontWeight: 600 }}>{result.reservationId}</span>
+      </div>
+      {result.cartUrl && (
+        <a
+          href={result.cartUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ fontSize: 12, fontFamily: "'Noto Sans TC', sans-serif", color: '#2563eb', textDecoration: 'underline' }}
+        >
+          前往付款頁面
+        </a>
+      )}
+    </div>
+  );
+}
+
+/**
  * 聊天氣泡組件
  */
 export function ChatBubble({
@@ -224,6 +260,7 @@ export function ChatBubble({
 }: ChatBubbleProps) {
   const isOfficial = message.type === 'official';
   const isRoomCards = message.messageType === 'room_cards' && message.roomCards?.length;
+  const isBookingResult = message.messageType === 'booking_result' && message.bookingResult;
 
   return (
     <div
@@ -240,7 +277,10 @@ export function ChatBubble({
           isOfficial ? 'items-end' : 'items-start'
         } relative shrink-0`}
       >
-        {isRoomCards ? (
+        {isBookingResult ? (
+          /* 訂房確認結果 */
+          <BookingResultDisplay result={message.bookingResult!} />
+        ) : isRoomCards ? (
           /* 房卡卡片列表 */
           <RoomCardList cards={message.roomCards!} />
         ) : (
@@ -257,6 +297,13 @@ export function ChatBubble({
                 {message.text}
               </p>
             </div>
+          </div>
+        )}
+
+        {/* 訂房日期資訊（房卡下方顯示） */}
+        {isRoomCards && message.bookingContext?.checkin_date && message.bookingContext?.checkout_date && (
+          <div style={{ fontSize: 11, color: '#9ca3af', fontFamily: "'Noto Sans TC', sans-serif", paddingLeft: 2 }}>
+            入住 {message.bookingContext.checkin_date} → 退房 {message.bookingContext.checkout_date}
           </div>
         )}
 

@@ -4,7 +4,7 @@ Chatbot booking schemas.
 
 from __future__ import annotations
 
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -35,15 +35,24 @@ class ChatbotMessageInSchema(BaseModel):
     test_mode: bool = False
 
 
+ReplyType = Literal["text", "room_cards", "member_form", "booking_confirm"]
+
+
 class ChatbotMessageOutSchema(BaseModel):
     session_id: str
     intent_state: Literal["detecting", "confirmed", "none"]
-    reply_type: Literal["text", "room_cards", "member_form", "booking_confirm"]
+    reply_type: ReplyType
     reply: str
     room_cards: List[RoomCardSchema] = []
     missing_fields: List[str] = []
-    turn_count: int
+    turn_count: int = 0
     booking_context: BookingContextSchema = BookingContextSchema()
+    # 以下欄位由 chat() 填入，handle_message() 使用預設值
+    member_form: Optional[MemberFormDefinitionSchema] = None
+    tokens_used: int = 0
+    referenced_rules: List[Dict[str, Any]] = []
+    auto_tags: List[str] = []
+    token_exhausted: bool = False
 
 
 class ChatbotRoomsOutSchema(BaseModel):

@@ -598,7 +598,7 @@ def make_image_click_bubble(item: dict, tracked_uri: Optional[str]):
 def build_room_card_flex_carousel(room_cards: list) -> dict:
     """
     將 backend room_cards (list[dict]) 轉為 LINE Flex Carousel JSON。
-    每張房卡 = 一個 bubble：hero 圖片 + 房名/剩餘 + 價格 + separator + 數量選擇器。
+    每張房卡 = 一個 bubble：hero 圖片 + 剩餘徽章 + 房名/價格 + 立即訂房按鈕。
     """
     bubbles = []
     for card in room_cards[:12]:  # LINE carousel 最多 12 bubbles
@@ -607,67 +607,67 @@ def build_room_card_flex_carousel(room_cards: list) -> dict:
         room_type_name = card.get("room_type_name", "房型")
         price = card.get("price", 0)
         available_count = card.get("available_count")
+        max_occupancy = card.get("max_occupancy", 2)
 
-        name_row_contents = [
-            {"type": "text", "text": room_type_name, "weight": "bold", "size": "xl", "flex": 4},
-        ]
-        if available_count is not None:
-            name_row_contents.append({
-                "type": "text",
-                "text": f"剩 {available_count} 間",
-                "color": "#FF5555" if available_count <= 3 else "#999999",
-                "size": "sm", "align": "end", "gravity": "bottom", "flex": 2,
-            })
-
-        price_text = f"每晚 TWD {price:,}"
-        qty = 0
-
-        qty_selector = {
-            "type": "box", "layout": "horizontal", "margin": "lg", "alignItems": "center",
-            "contents": [
-                {"type": "text", "text": "選擇預訂數量", "flex": 2, "color": "#666666", "size": "md"},
-                {
-                    "type": "box", "layout": "horizontal", "flex": 3, "spacing": "md",
-                    "contents": [
-                        {
-                            "type": "box", "layout": "horizontal",
-                            "contents": [{"type": "text", "text": "－", "align": "center",
-                                          "gravity": "center", "color": "#ffffff", "weight": "bold", "size": "md"}],
-                            "width": "40px", "height": "40px",
-                            "backgroundColor": "#BBBBBB", "cornerRadius": "8px",
-                            "action": {"type": "postback", "label": "minus",
-                                       "data": f"action=minus&roomType={quote(room_type_code)}&currentQty={qty}"},
-                        },
-                        {"type": "text", "text": str(qty), "align": "center",
-                         "gravity": "center", "weight": "bold", "size": "lg", "flex": 1},
-                        {
-                            "type": "box", "layout": "horizontal",
-                            "contents": [{"type": "text", "text": "＋", "align": "center",
-                                          "gravity": "center", "color": "#ffffff", "weight": "bold", "size": "md"}],
-                            "width": "40px", "height": "40px",
-                            "backgroundColor": "#1DB446", "cornerRadius": "8px",
-                            "action": {"type": "postback", "label": "plus",
-                                       "data": f"action=plus&roomType={quote(room_type_code)}&currentQty={qty}"},
-                        },
-                    ],
-                },
-            ],
-        }
-
-        bubble = {
-            "type": "bubble",
-            "hero": {
+        # Hero: 圖片 + 可用數量徽章（絕對定位）
+        hero_contents = [
+            {
                 "type": "image", "url": image_url,
                 "size": "full", "aspectRatio": "20:13", "aspectMode": "cover",
             },
-            "body": {
+        ]
+        if available_count is not None:
+            hero_contents.append({
                 "type": "box", "layout": "vertical",
+                "contents": [{
+                    "type": "text", "text": f"剩 {available_count} 間",
+                    "color": "#ffffff", "size": "xs",
+                    "align": "center", "gravity": "center", "weight": "bold",
+                }],
+                "backgroundColor": "#FF3B30", "cornerRadius": "12px",
+                "width": "60px", "height": "24px",
+                "position": "absolute", "offsetTop": "10px", "offsetEnd": "10px",
+                "justifyContent": "center", "alignItems": "center",
+            })
+
+        bubble = {
+            "type": "bubble",
+            "size": "mega",
+            "hero": {
+                "type": "box", "layout": "vertical",
+                "contents": hero_contents,
+            },
+            "body": {
+                "type": "box", "layout": "vertical", "spacing": "sm",
                 "contents": [
-                    {"type": "box", "layout": "horizontal", "contents": name_row_contents},
-                    {"type": "text", "text": price_text, "size": "sm", "color": "#999999", "margin": "sm"},
-                    {"type": "separator", "margin": "lg"},
-                    qty_selector,
+                    {
+                        "type": "box", "layout": "horizontal",
+                        "contents": [
+                            {"type": "text", "text": room_type_name,
+                             "weight": "bold", "size": "xl", "flex": 4},
+                        ],
+                    },
+                    {
+                        "type": "box", "layout": "horizontal", "alignItems": "center",
+                        "contents": [
+                            {"type": "text", "text": f"NT${price:,} / 每晚",
+                             "color": "#666666", "flex": 3, "size": "lg", "weight": "regular"},
+                            {"type": "text", "text": f"\U0001f464 可住 {max_occupancy} 人",
+                             "size": "sm", "color": "#AAAAAA", "align": "end", "flex": 2},
+                        ],
+                    },
                 ],
+            },
+            "footer": {
+                "type": "box", "layout": "vertical",
+                "contents": [{
+                    "type": "button", "style": "primary", "color": "#1DB446",
+                    "action": {
+                        "type": "postback", "label": "立即訂房",
+                        "data": f"action=select_room&roomID={quote(room_type_code)}&roomName={quote(room_type_name)}&price={price}",
+                        "displayText": "開啟 Liff 瀏覽器",
+                    },
+                }],
             },
         }
         bubbles.append(bubble)
@@ -2760,6 +2760,42 @@ def on_postback(event: PostbackEvent):
     # --- 房卡數量 +/- 按鈕 ---
     params = parse_qs(data)
     action = params.get("action", [""])[0]
+    if action == "select_room":
+        try:
+            room_id = params.get("roomID", [""])[0]
+            room_name = params.get("roomName", [""])[0]
+            token = get_channel_access_token_by_channel_id(line_channel_id)
+            api = MessagingApi(ApiClient(Configuration(access_token=token)))
+            reply_token = getattr(event, "reply_token", None)
+
+            # 先回覆 LINE（避免 reply token 過期）
+            confirm_text = (
+                f"已為您選好「{room_name}」！\n"
+                "請提供您的姓名和聯絡電話，以便我為您完成訂房。"
+            )
+            if reply_token:
+                api.reply_message(ReplyMessageRequest(
+                    reply_token=reply_token,
+                    messages=[TextMessage(text=confirm_text)]
+                ))
+
+            # 再呼叫 Backend 確認選房（與官網 chatbot 統一流程）
+            backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8700")
+            confirm_resp = requests.post(
+                f"{backend_url}/api/v1/ai/confirm-room",
+                json={
+                    "line_uid": uid,
+                    "rooms": [{"room_type_code": room_id, "room_count": 1, "room_type_name": room_name}],
+                },
+                timeout=5,
+            )
+            if not confirm_resp.ok:
+                logging.warning(f"[on_postback] confirm-room failed: {confirm_resp.status_code}")
+            logging.info(f"[on_postback] select_room: {room_name} ({room_id}), confirm_room={'OK' if confirm_resp.ok else 'FAIL'}")
+        except Exception:
+            logging.exception("[on_postback] select_room handling failed")
+        return
+
     if action in ("plus", "minus"):
         try:
             room_type_code = params.get("roomType", [""])[0]

@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
+from app.schemas.chatbot import ReplyType
+
 
 # === FaqCategoryField ===
 
@@ -193,9 +195,15 @@ class AiChatRequestSchema(BaseModel):
 
 
 class AiChatResponseSchema(BaseModel):
-    """AI 聊天回應"""
+    """AI 聊天回應（與官網 chatbot 統一訂房流程）"""
 
     reply: str
+    reply_type: ReplyType = "text"
+    session_id: Optional[str] = None
+    intent_state: Optional[str] = None
+    room_cards: List[Dict[str, Any]] = []
+    booking_context: Optional[Dict[str, Any]] = None
+    member_form: Optional[Dict[str, Any]] = None
     tokens_used: int = 0
     referenced_rules: List[Dict[str, Any]] = []
     auto_tags: List[str] = []
