@@ -8,6 +8,16 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Debug secrets
+        run: |
+          echo "VM_HOST length: ${#VM_HOST}"
+          echo "VM_USER length: ${#VM_USER}"
+          echo "SSH_KEY length: ${#SSH_KEY}"
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_USER: ${{ secrets.VM_USER }}
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:
