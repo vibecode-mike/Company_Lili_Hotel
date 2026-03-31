@@ -15,21 +15,19 @@ jobs:
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /data2/lili_hotel
+            export PATH="/home/creative_design/miniconda3/bin:$PATH"
+            cd /home/Company_Lili_Hotel
+
+            # Pull latest code
             git pull origin main
 
-            # Backend
-            cd /data2/lili_hotel/backend
-            /data2/lili_hotel/venv/bin/pip install -r requirements.txt -q
-            /data2/lili_hotel/venv/bin/alembic upgrade head
-            sudo systemctl restart lili_backend
+            # Backend: install dependencies & run migrations
+            cd /home/Company_Lili_Hotel/backend
+            pip install -r requirements.txt -q
+            alembic upgrade head
+            # uvicorn --reload 會自動偵測變更重啟
 
-            # Frontend (nginx serves static build)
-            cd /data2/lili_hotel/frontend
+            # Frontend: build production bundle (nginx serves static)
+            cd /home/Company_Lili_Hotel/frontend
             npm install --silent
             npm run build
-
-            # LINE App
-            cd /data2/lili_hotel/line_app
-            /data2/lili_hotel/venv/bin/pip install -r requirements.txt -q
-            sudo systemctl restart mike_app
