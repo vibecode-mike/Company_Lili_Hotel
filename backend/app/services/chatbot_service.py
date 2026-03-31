@@ -1912,14 +1912,12 @@ class ChatbotService:
             session = self.reset_session(session_key)
         session.turn_count += 1
 
-        # 3. 對話歷史從 DB 讀取（保留原本邏輯）
+        # 3. 對話歷史用記憶體 session（與 handle_message 統一，不從 DB 讀）
+        session.history.append({"role": "user", "content": message})
         messages: List[Dict[str, Any]] = [
-            {"role": "system", "content": _build_system_prompt()}
+            {"role": "system", "content": _build_system_prompt()},
+            *session.history,
         ]
-        if line_uid:
-            history = await self._get_conversation_history(db, line_uid, limit=10)
-            messages.extend(history)
-        messages.append({"role": "user", "content": message})
 
         # 4. Intent detection（同 handle_message）
         if session.intent_state == "detecting" and self._has_booking_intent(message):
@@ -1973,6 +1971,7 @@ class ChatbotService:
         if room_cards:
             session.last_room_cards = room_cards
 
+        session.history.append({"role": "assistant", "content": reply})
         reply_type = self._determine_reply_type(session, room_cards)
 
         # Token deduction

@@ -1,4 +1,4 @@
-name: Deploy to VM
+name: Deploy to GCP
 
 on:
   push:
@@ -20,16 +20,16 @@ jobs:
 
             # Backend
             cd /data2/lili_hotel/backend
-            pip install -r requirements.txt -q
+            /data2/lili_hotel/venv/bin/pip install -r requirements.txt -q
+            /data2/lili_hotel/venv/bin/alembic upgrade head
             sudo systemctl restart lili_backend
 
-            # Frontend
+            # Frontend (nginx serves static build)
             cd /data2/lili_hotel/frontend
             npm install --silent
             npm run build
-            sudo systemctl restart lili_frontend
 
             # LINE App
             cd /data2/lili_hotel/line_app
-            pip install -r requirements.txt -q
-            sudo systemctl restart lili_lineapp
+            /data2/lili_hotel/venv/bin/pip install -r requirements.txt -q
+            sudo systemctl restart mike_app
