@@ -1,0 +1,25 @@
+ 
+
+
+$data = array(
+    "hotel" => "zhida",
+    "hid"   => "101",
+    "rooms" => array(
+        array(
+            "roomtype" => "V1",
+            "quantity" => 1,
+            "checkindate" => "2026-04-05",
+            "checkoutdate" => "2026-04-06"
+        ),
+        array(
+            "roomtype" => "WS",
+            "quantity" => 1,
+            "checkindate" => "2026-04-05",
+            "checkoutdate" => "2026-04-06"
+        )
+    ),
+    "name"  => "測試用戶",
+    "phone" => "0912345678",
+    "email" => "test@example.com",
+    "comments" => "多房型測試"
+);

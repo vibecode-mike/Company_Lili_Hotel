@@ -1,23 +1,23 @@
 #!/bin/bash
 # ============================================================
 # GCP VM 一鍵初始化腳本
-# 用法: sudo bash deploy/gcp/setup.sh
-# 前提: Ubuntu 24.04, Miniconda3 已安裝在 /home/creative_design/miniconda3
+# 用法: sudo bash setup.sh
+# 前提: Ubuntu 22.04+, 已有 miniconda3 (Python 3.13)
 # ============================================================
 set -e
 
-# --- 配置 ---
-APP_USER="creative_design"
+# --- 配置（與 deploy.yml 一致）---
 APP_DIR="/home/Company_Lili_Hotel"
-CONDA_DIR="/home/$APP_USER/miniconda3"
-PYTHON_BIN="$CONDA_DIR/bin/python3"
-PIP_BIN="$CONDA_DIR/bin/pip"
+CONDA_PATH="/home/creative_design/miniconda3/bin"
 REPO_URL="https://github.com/vibecode-mike/Company_Lili_Hotel.git"
+
+export PATH="$CONDA_PATH:$PATH"
+PYTHON_BIN=$(which python3)
 
 echo "=========================================="
 echo "  力麗飯店 CRM - GCP VM 初始化"
 echo "=========================================="
-echo "Python: $($PYTHON_BIN --version 2>&1)"
+echo "Python: $PYTHON_BIN ($($PYTHON_BIN --version))"
 echo ""
 
 # --- 1. 系統依賴 ---
@@ -28,10 +28,10 @@ apt-get install -y -qq \
     build-essential libffi-dev libjpeg-dev zlib1g-dev \
     git curl > /dev/null
 
-# Node.js (如果沒有)
+# Node.js 22 (如果沒有)
 if ! command -v node &> /dev/null; then
-    echo "  安裝 Node.js 18..."
-    curl -fsSL https://deb.nodesource.com/setup_18.x | bash - > /dev/null
+    echo "  安裝 Node.js 22..."
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - > /dev/null
     apt-get install -y -qq nodejs > /dev/null
 fi
 echo "  Node: $(node --version), npm: $(npm --version)"
@@ -40,23 +40,23 @@ echo "  Node: $(node --version), npm: $(npm --version)"
 echo "[2/7] Clone repo..."
 if [ -d "$APP_DIR/.git" ]; then
     echo "  Repo 已存在，git pull..."
-    cd "$APP_DIR" && sudo -u $APP_USER git pull origin main
+    cd "$APP_DIR" && git pull origin main
 else
+    mkdir -p "$(dirname $APP_DIR)"
     git clone "$REPO_URL" "$APP_DIR"
-    chown -R $APP_USER:$APP_USER "$APP_DIR"
 fi
 
-# --- 3. Python 依賴 ---
+# --- 3. Python 依賴（用 conda base pip，不用 venv）---
 echo "[3/7] 安裝 Python 依賴..."
-sudo -u $APP_USER $PIP_BIN install -r "$APP_DIR/backend/requirements.txt" -q
-sudo -u $APP_USER $PIP_BIN install flask flask-cors flask-basicauth pytz xlrd xlwt opencc-python-reimplemented -q
-echo "  pip packages installed"
+pip install -r "$APP_DIR/backend/requirements.txt" -q
+pip install flask==3.0.0 flask-cors==6.0.1 flask-basicauth==0.2.0 pytz xlrd xlwt opencc-python-reimplemented -q
+echo "  Python: $(python3 --version)"
 
 # --- 4. Frontend build ---
 echo "[4/7] Frontend build..."
 cd "$APP_DIR/frontend"
-sudo -u $APP_USER npm install --silent
-sudo -u $APP_USER npm run build
+npm install --silent
+npm run build
 echo "  Build: $(ls -d $APP_DIR/frontend/build 2>/dev/null && echo 'OK' || echo 'FAIL')"
 
 # --- 5. MySQL ---
@@ -73,8 +73,9 @@ GCP_IP=$(curl -s -H "Metadata-Flavor: Google" http://metadata.google.internal/co
 if [ ! -f "$APP_DIR/backend/.env" ]; then
     cp "$APP_DIR/backend/.env.example" "$APP_DIR/backend/.env" 2>/dev/null || true
     echo ""
-    echo "  !! 請編輯 $APP_DIR/backend/.env"
+    echo "  ⚠️  請編輯 $APP_DIR/backend/.env"
     echo "     設定 DATABASE_URL, LINE_CHANNEL_ACCESS_TOKEN, OPENAI_API_KEY 等"
+    echo "     CORS_ORIGINS 加入 http://$GCP_IP"
 fi
 
 # LINE App .env
@@ -86,10 +87,10 @@ BACKEND_API_URL=http://localhost:8700
 DATABASE_URL=mysql+pymysql://root:@127.0.0.1:3306/lili_hotel
 PUBLIC_BASE_URL=http://$GCP_IP
 ENVEOF
-    echo "  !! 請編輯 $APP_DIR/line_app/.env"
+    echo "  ⚠️  請編輯 $APP_DIR/line_app/.env"
 fi
 
-# Frontend .env.production (空 VITE_API_BASE_URL = nginx proxy)
+# Frontend .env.production
 cat > "$APP_DIR/frontend/.env.production" <<ENVEOF
 VITE_API_BASE_URL=
 ENVEOF
@@ -97,14 +98,15 @@ ENVEOF
 # --- 7. Nginx ---
 echo "[7/7] 設定 Nginx..."
 
-cat > /etc/nginx/sites-available/lili-hotel <<'NGINXEOF'
+# CRM 後台
+cat > /etc/nginx/sites-available/lili-crm <<'NGINXEOF'
 server {
     listen 80 default_server;
     server_name _;
 
     add_header X-Robots-Tag "noindex, nofollow" always;
 
-    # SSE (禁用緩衝)
+    # SSE（禁用緩衝）
     location /api/v1/sse/ {
         proxy_pass http://127.0.0.1:8700;
         proxy_http_version 1.1;
@@ -146,7 +148,7 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
     }
 
-    # 前端靜態檔 (nginx 直接 serve build/)
+    # 前端靜態檔（nginx 直接 serve build/）
     location / {
         root /home/Company_Lili_Hotel/frontend/build;
         index index.html;
@@ -155,24 +157,43 @@ server {
 }
 NGINXEOF
 
+# LINE webhook
+cat > /etc/nginx/sites-available/lili-linebot <<'NGINXEOF'
+server {
+    listen 3080;
+    server_name _;
+
+    location / {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+NGINXEOF
+
+# 啟用站點
 rm -f /etc/nginx/sites-enabled/default 2>/dev/null
-ln -sf /etc/nginx/sites-available/lili-hotel /etc/nginx/sites-enabled/
+ln -sf /etc/nginx/sites-available/lili-crm /etc/nginx/sites-enabled/
+ln -sf /etc/nginx/sites-available/lili-linebot /etc/nginx/sites-enabled/
 nginx -t && systemctl restart nginx
 echo "  Nginx OK"
 
 echo ""
 echo "=========================================="
-echo "  初始化完成!"
+echo "  初始化完成！"
 echo "=========================================="
 echo ""
 echo "  CRM 後台: http://$GCP_IP"
 echo "  API 文件: http://$GCP_IP/api/v1/docs"
+echo "  LINE Bot: http://$GCP_IP:3080"
 echo ""
-echo "  待辦:"
-echo "  1. 編輯 $APP_DIR/backend/.env (API keys)"
-echo "  2. 編輯 $APP_DIR/line_app/.env (LINE tokens)"
-echo "  3. DB migration: cd $APP_DIR/backend && alembic upgrade head"
-echo "  4. 啟動 backend: cd $APP_DIR/backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8700"
-echo "  5. 啟動 LINE app: cd $APP_DIR/line_app && python app.py"
-echo "  6. 之後 push main -> GitHub Actions 自動部署"
+echo "  ⚠️  待辦："
+echo "  1. 編輯 $APP_DIR/backend/.env（API keys）"
+echo "  2. 編輯 $APP_DIR/line_app/.env（LINE tokens）"
+echo "  3. 啟動 backend: cd $APP_DIR/backend && uvicorn app.main:app --host 0.0.0.0 --port 8700 --reload &"
+echo "  4. 執行 DB migration: cd $APP_DIR/backend && alembic upgrade head"
+echo "  5. LINE webhook URL 設定 HTTPS（需域名或 Cloudflare Tunnel）"
 echo ""

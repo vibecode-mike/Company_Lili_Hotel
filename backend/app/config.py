@@ -55,6 +55,12 @@ class Settings(BaseSettings):
     PMS_BOOKING_BASE_URL: str = ""
     BOOKING_SOURCE: str = "AI_bot"
 
+    # 外部訂房 API（閎運訂房系統）
+    BOOKING_API_URL: str = ""
+    BOOKING_API_KEY: str = ""
+    BOOKING_HOTEL_CODE: str = ""
+    BOOKING_HOTEL_ID: str = ""
+
     # 文件存儲配置
     UPLOAD_DIR: str = "uploads"
     MAX_FILE_SIZE: int = 10485760  # 10MB

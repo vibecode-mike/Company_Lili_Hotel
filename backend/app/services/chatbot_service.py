@@ -49,6 +49,66 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# External Booking API (閎運訂房系統)
+# ---------------------------------------------------------------------------
+
+def _call_booking_api(
+    rooms: List[Dict[str, Any]],
+    checkin: str,
+    checkout: str,
+    name: str,
+    phone: str,
+    email: str,
+) -> Optional[str]:
+    """呼叫外部訂房 API，回傳付款頁面 URL（從 302 Location header 取得）"""
+    import requests as _requests
+
+    api_url = settings.BOOKING_API_URL
+    api_key = settings.BOOKING_API_KEY
+    hotel_code = settings.BOOKING_HOTEL_CODE
+    hotel_id = settings.BOOKING_HOTEL_ID
+
+    if not api_url or not api_key:
+        logger.warning("[BookingAPI] BOOKING_API_URL or BOOKING_API_KEY not configured")
+        return None
+
+    payload = {
+        "hotel": hotel_code,
+        "hid": hotel_id,
+        "rooms": [
+            {
+                "roomtype": room.get("room_type_code", ""),
+                "quantity": max(1, int(room.get("room_count") or 1)),
+                "checkindate": checkin,
+                "checkoutdate": checkout,
+            }
+            for room in rooms
+        ],
+        "name": name,
+        "phone": phone,
+        "email": email,
+        "comments": "AI chatbot 訂房",
+    }
+
+    resp = _requests.post(
+        api_url,
+        json=payload,
+        headers={"Content-Type": "application/json", "Api-Key": api_key},
+        allow_redirects=False,
+        timeout=15,
+    )
+
+    if resp.status_code == 302:
+        location = resp.headers.get("Location")
+        if location:
+            logger.info(f"[BookingAPI] Got payment URL: {location}")
+            return location
+
+    logger.warning(f"[BookingAPI] Unexpected response: {resp.status_code} {resp.text[:200]}")
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Static hotel data
 # ---------------------------------------------------------------------------
 
@@ -1450,28 +1510,19 @@ class ChatbotService:
             )
 
         cart_url: Optional[str] = None
-        room_codes = {
-            str(room.get("room_type_code") or "").strip()
-            for room in selected_rooms
-            if str(room.get("room_type_code") or "").strip()
-        }
-        if len(room_codes) == 1 and first_room:
-            room_type_code = next(iter(room_codes))
-            room_count = sum(max(1, int(room.get("room_count") or 1)) for room in selected_rooms)
-            try:
-                cart_url = build_booking_url(
-                    checkin=checkin,
-                    checkout=checkout,
-                    rooms=room_count,
-                    adults=session.booking_adults or 1,
-                    children=session.booking_children,
-                    room_type=room_type_code,
-                    guest_name=name,
-                    phone=phone,
-                    email=email,
-                )
-            except ValueError:
-                cart_url = None
+        # 呼叫外部訂房 API 取得付款 URL
+        try:
+            cart_url = _call_booking_api(
+                rooms=selected_rooms,
+                checkin=checkin,
+                checkout=checkout,
+                name=name,
+                phone=phone,
+                email=email,
+            )
+        except Exception as e:
+            logger.warning(f"[booking_save] External booking API failed: {e}")
+            cart_url = None
 
         # --- Generate reservation_id ---
         reservation_id = str(uuid4())
