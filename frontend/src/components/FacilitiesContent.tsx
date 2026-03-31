@@ -562,7 +562,7 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
         showToast(
           value ? (
             <>
-              {name} 同步至測試環境，請先進行對話測試以確保回覆品質{" "}
+              {name} 已進入測試，請先試聊看看以確保回覆品質。{" "}
               <button
                 type="button"
                 onClick={(e) => {
@@ -584,7 +584,31 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
                 測試
               </button>
             </>
-          ) : `${name} 已停用`,
+          ) : (
+            <>
+              已關閉 {name} 的測試模式。{" "}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.dispatchEvent(new CustomEvent("open-chatfab"));
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#DBEDFF",
+                  cursor: "pointer",
+                  padding: 0,
+                  fontFamily: "'Noto Sans TC', sans-serif",
+                  fontSize: 16,
+                  lineHeight: 1.5,
+                  textDecoration: "underline",
+                }}
+              >
+                測試
+              </button>
+            </>
+          ),
           "success",
         );
       } catch {
@@ -1200,7 +1224,7 @@ const DataSourcesTable = memo(function DataSourcesTable({
                   showToast(
                     v ? (
                       <>
-                        {type} 同步至測試環境，請先進行對話測試以確保回覆品質{" "}
+                        {type} 已進入測試，請先試聊看看以確保回覆品質。{" "}
                         <button
                           type="button"
                           onClick={(e) => {
@@ -1222,7 +1246,31 @@ const DataSourcesTable = memo(function DataSourcesTable({
                           測試
                         </button>
                       </>
-                    ) : `${type} 已停用`,
+                    ) : (
+                      <>
+                        已關閉 {type} 的測試模式。{" "}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.dispatchEvent(new CustomEvent("open-chatfab"));
+                          }}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "#DBEDFF",
+                            cursor: "pointer",
+                            padding: 0,
+                            fontFamily: "'Noto Sans TC', sans-serif",
+                            fontSize: 16,
+                            lineHeight: 1.5,
+                            textDecoration: "underline",
+                          }}
+                        >
+                          測試
+                        </button>
+                      </>
+                    ),
                     "success",
                   );
                 }}
