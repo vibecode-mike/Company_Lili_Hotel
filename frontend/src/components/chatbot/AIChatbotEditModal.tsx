@@ -168,6 +168,7 @@ const TagsField = memo(function TagsField({
   const [inputVal, setInputVal] = useState("");
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.nativeEvent.isComposing) return;
     if ((e.key === "Enter" || e.key === ",") && inputVal.trim()) {
       e.preventDefault();
       const newTag = inputVal.trim().replace(/,$/, "");
@@ -204,7 +205,7 @@ const TagsField = memo(function TagsField({
           value={inputVal}
           onChange={(e) => setInputVal(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={!hasFaq && tags.length === 0 ? "輸入內容" : ""}
+          placeholder={tags.length === 0 ? "輸入後點擊 Enter 新增標籤" : ""}
           className="flex-1 min-w-[80px] bg-transparent border-none outline-none font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#383838] placeholder:text-[#a8a8a8]"
         />
       )}
