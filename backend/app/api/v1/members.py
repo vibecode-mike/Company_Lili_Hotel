@@ -873,7 +873,7 @@ async def update_member_notes(
 # ============================================
 
 HUMAN_OVERRIDE_DURATION = timedelta(minutes=10)
-HUMAN_OVERRIDE_BLUR_BUFFER = timedelta(seconds=30)
+HUMAN_OVERRIDE_BLUR_BUFFER = timedelta(seconds=0)
 
 
 @router.put("/{member_id}/human-override", response_model=SuccessResponse)

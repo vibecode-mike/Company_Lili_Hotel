@@ -309,7 +309,7 @@ def get_member_reply_flags(line_uid: str) -> dict:
         if override_until:
             if isinstance(override_until, str):
                 override_until = datetime.datetime.fromisoformat(override_until)
-            human_override = override_until > datetime.datetime.utcnow()
+            human_override = override_until > datetime.datetime.now()
 
         return {"gpt_enabled": gpt_enabled, "human_override": human_override}
     except Exception as e:
