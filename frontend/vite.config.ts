@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react-swc';
 import path from 'path';
 import { visualizer } from 'rollup-plugin-visualizer';
 
-const DEV_HOST = process.env.VITE_DEV_HOST || process.env.DEV_HOST || '0.0.0.0';
+const DEV_HOST = process.env.VITE_DEV_HOST || process.env.DEV_HOST || '127.0.0.1';
 const HMR_HOST = process.env.VITE_HMR_HOST || process.env.HMR_HOST;
 const HMR_PORT = Number(process.env.VITE_HMR_PORT || process.env.HMR_PORT) || 5173;
 const HMR_PROTOCOL = process.env.VITE_HMR_PROTOCOL || process.env.HMR_PROTOCOL || 'ws';
