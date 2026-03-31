@@ -8,23 +8,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Debug secrets
-        run: |
-          echo "VM_HOST length: ${#VM_HOST}"
-          echo "VM_USER length: ${#VM_USER}"
-          echo "SSH_KEY length: ${#SSH_KEY}"
-          echo "--- Key first/last line ---"
-          echo "$SSH_KEY" | head -1
-          echo "$SSH_KEY" | tail -1
-          echo "--- Key fingerprint ---"
-          echo "$SSH_KEY" > /tmp/test_key && chmod 600 /tmp/test_key
-          ssh-keygen -lf /tmp/test_key 2>&1 || echo "INVALID KEY"
-          rm -f /tmp/test_key
-        env:
-          VM_HOST: ${{ secrets.VM_HOST }}
-          VM_USER: ${{ secrets.VM_USER }}
-          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:
