@@ -181,7 +181,7 @@ const TagsField = memo(function TagsField({
   };
 
   return (
-    <div className="bg-white rounded-[8px] min-h-[48px] p-[8px] w-full flex flex-wrap gap-[4px] items-center">
+    <div className="bg-[#f6f9fd] rounded-[8px] min-h-[48px] p-[8px] w-full flex flex-wrap gap-[4px] items-center">
       {tags.map((tag) => (
         <span
           key={tag}
