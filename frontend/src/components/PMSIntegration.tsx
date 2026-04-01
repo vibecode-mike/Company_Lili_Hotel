@@ -85,7 +85,8 @@ type SortField =
   | "remainingRooms"
   | "memberTags"
   | "lastUpdated"
-  | "published";
+  | "published"
+  | "lastPublished";
 type SortDir = "asc" | "desc";
 
 const TagChip = memo(function TagChip({ label }: { label: string }) {
@@ -1797,6 +1798,39 @@ const DataSourcesTable = memo(function DataSourcesTable({
   categoryName?: string;
 }) {
   const { showToast } = useToast();
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  const handleSort = useCallback((field: SortField, dir?: SortDir) => {
+    if (dir) {
+      setSortField(field);
+      setSortDir(dir);
+    } else {
+      if (sortField === field) {
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      } else {
+        setSortField(field);
+        setSortDir("asc");
+      }
+    }
+  }, [sortField]);
+
+  const sorted = useMemo(() => {
+    if (!sortField) return sources;
+    const copy = [...sources];
+    copy.sort((a, b) => {
+      let av = "";
+      let bv = "";
+      if (sortField === "lastUpdated") { av = a.lastUpdated; bv = b.lastUpdated; }
+      else if (sortField === "lastPublished") { av = a.lastPublished; bv = b.lastPublished; }
+      else return 0;
+      if (av === "—") av = "";
+      if (bv === "—") bv = "";
+      const cmp = av.localeCompare(bv);
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return copy;
+  }, [sources, sortField, sortDir]);
 
   // 監聽發佈事件，更新發佈狀態（enabled === true → published: true）
   useEffect(() => {
@@ -1848,16 +1882,22 @@ const DataSourcesTable = memo(function DataSourcesTable({
               >
                 來源類型
               </th>
-              <th className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]">
-                最後更新{" "}
-                <span className="text-[11px] text-[#9ca3af] select-none font-['PingFang_TC',sans-serif]">
-                  ⇅
+              <th
+                onClick={() => handleSort("lastUpdated")}
+                className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd] cursor-pointer hover:bg-[#f5f8ff] transition-colors duration-150"
+              >
+                <span className="inline-flex items-center gap-[4px]">
+                  最後更新
+                  <SortIcon field="lastUpdated" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                 </span>
               </th>
-              <th className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]">
-                最後發佈{" "}
-                <span className="text-[11px] text-[#9ca3af] select-none font-['PingFang_TC',sans-serif]">
-                  ⇅
+              <th
+                onClick={() => handleSort("lastPublished")}
+                className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd] cursor-pointer hover:bg-[#f5f8ff] transition-colors duration-150"
+              >
+                <span className="inline-flex items-center gap-[4px]">
+                  最後發佈
+                  <SortIcon field="lastPublished" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                 </span>
               </th>
               {/* 凍結欄 header：發佈狀態 */}
@@ -1890,11 +1930,11 @@ const DataSourcesTable = memo(function DataSourcesTable({
             </tr>
           </thead>
           <tbody>
-            {sources.map((row, idx) => (
+            {sorted.map((row, idx) => (
               <DataSourceTableRow
                 key={row.type}
                 row={row}
-                isLast={idx === sources.length - 1}
+                isLast={idx === sorted.length - 1}
                 categoryActive={categoryActive}
                 categoryName={categoryName}
                 onToggle={(type, v) => {
@@ -1996,51 +2036,43 @@ export default function PMSIntegration({
   const [categoryActive, setCategoryActive] = useState(true);
   const [categoryName, setCategoryName] = useState("訂房");
 
-  // Fetch PMS enabled status on mount
+  // Fetch PMS status + category info on mount, then set published for both rows
   useEffect(() => {
-    apiGet("/api/v1/chatbot/pms-status")
-      .then((res) => res.json())
-      .then((data: any) => {
-        const enabled = !!data?.enabled;
-        const lastSync = data?.last_synced_at || "—";
-        setDataSources((prev) =>
-          prev.map((s) =>
-            s.type === "PMS"
-              ? {
-                  ...s,
-                  enabled,
-                  // 保留供未來「已串接/未串接」功能使用
-                  statusLabel: enabled ? "已串接" : "未串接",
-                  statusColor: enabled ? "green" : "gray",
-                  lastUpdated: lastSync,
-                  lastPublished: enabled ? lastSync : "—",
-                }
-              : s,
-          ),
-        );
-      })
-      .catch(() => {});
-  }, []);
+    Promise.all([
+      apiGet("/api/v1/chatbot/pms-status").then((res) => res.json()).catch(() => null),
+      apiGet("/api/v1/faq/categories").then((res) => res.json()).catch(() => null),
+    ]).then(([pmsData, catData]) => {
+      const pmsEnabled = !!pmsData?.enabled;
+      const lastSync = pmsData?.last_synced_at || "—";
 
-  // Fetch category info（is_active、published_count）on mount
-  useEffect(() => {
-    apiGet("/api/v1/faq/categories")
-      .then((res) => res.json())
-      .then((json: any) => {
-        const cats: Array<{ id: number; name: string; is_active: boolean; published_count?: number }> = json.data ?? [];
-        const booking = cats.find((c: any) => c.name === "訂房") ?? cats[0];
-        if (!booking) return;
+      const cats: Array<{ id: number; name: string; is_active: boolean; published_count?: number }> = catData?.data ?? [];
+      const booking = cats.find((c: any) => c.name === "訂房") ?? cats[0];
+      if (booking) {
         setCategoryActive(booking.is_active ?? true);
         setCategoryName(booking.name);
-        // 用 published_count 初始化 FAQ 的發佈狀態
-        const faqPublished = (booking.published_count ?? 0) > 0;
-        setDataSources((prev) =>
-          prev.map((s) =>
-            s.type === "自訂 FAQ" ? { ...s, published: faqPublished } : s,
-          ),
-        );
-      })
-      .catch(() => {});
+      }
+      const hasPublished = (booking?.published_count ?? 0) > 0;
+
+      setDataSources((prev) =>
+        prev.map((s) => {
+          if (s.type === "PMS") {
+            return {
+              ...s,
+              enabled: pmsEnabled,
+              published: pmsEnabled && hasPublished,
+              statusLabel: pmsEnabled ? "已串接" : "未串接",
+              statusColor: pmsEnabled ? "green" : "gray",
+              lastUpdated: lastSync,
+              lastPublished: pmsEnabled ? lastSync : "—",
+            };
+          }
+          if (s.type === "自訂 FAQ") {
+            return { ...s, published: hasPublished };
+          }
+          return s;
+        }),
+      );
+    });
   }, []);
 
   const pmsEnabled = dataSources.find((s) => s.type === "PMS")?.enabled ?? false;

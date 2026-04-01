@@ -24,11 +24,10 @@ def format_chat_time(dt: Optional[datetime]) -> str:
     if not dt:
         return ""
 
-    # 統一處理：假設 naive datetime 是 UTC 時間，然後轉換為台北時間顯示
+    # MySQL NOW() 已是台灣時間（server timezone = Asia/Taipei）
+    # naive datetime 直接視為台灣時間，不做 UTC 轉換
     if dt.tzinfo is None:
-        # naive datetime 視為 UTC
-        utc_dt = dt.replace(tzinfo=timezone.utc)
-        local_dt = utc_dt.astimezone(TAIPEI_TZ)
+        local_dt = dt.replace(tzinfo=TAIPEI_TZ)
     else:
         local_dt = dt.astimezone(TAIPEI_TZ)
     hour = local_dt.hour
@@ -166,13 +165,11 @@ class ChatroomService:
         for record in records:
             msg_type = "user" if record.direction == "incoming" else "official"
             if record.created_at:
-                # naive datetime 視為 UTC（與 append_message 存入方式一致）
+                # MySQL NOW() 已是台灣時間，naive datetime 直接標記為 TAIPEI_TZ
                 if record.created_at.tzinfo is None:
-                    utc_dt = record.created_at.replace(tzinfo=timezone.utc)
+                    created_at_local = record.created_at.replace(tzinfo=TAIPEI_TZ)
                 else:
-                    utc_dt = record.created_at.astimezone(timezone.utc)
-                # 轉換為台北時間後輸出 ISO 格式
-                created_at_local = utc_dt.astimezone(TAIPEI_TZ)
+                    created_at_local = record.created_at.astimezone(TAIPEI_TZ)
                 timestamp_str = created_at_local.isoformat()
             else:
                 timestamp_str = None

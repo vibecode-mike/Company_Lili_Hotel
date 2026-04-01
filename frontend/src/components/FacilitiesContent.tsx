@@ -38,7 +38,7 @@ interface FacilityRecord {
   published: boolean;  // 發佈狀態
 }
 
-type SortField = "hours" | "fee" | "memberTags" | "lastUpdated" | "published";
+type SortField = "hours" | "fee" | "memberTags" | "lastUpdated" | "published" | "lastPublished" | "status";
 type SortDir = "asc" | "desc";
 
 // ------- API types & mapping -------
@@ -1121,6 +1121,40 @@ const DataSourcesTable = memo(function DataSourcesTable({
 }) {
   const [sources, setSources] = useState(rows);
   const { showToast } = useToast();
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  const handleSort = useCallback((field: SortField, dir?: SortDir) => {
+    if (dir) {
+      setSortField(field);
+      setSortDir(dir);
+    } else {
+      if (sortField === field) {
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      } else {
+        setSortField(field);
+        setSortDir("asc");
+      }
+    }
+  }, [sortField]);
+
+  const sorted = useMemo(() => {
+    if (!sortField) return sources;
+    const copy = [...sources];
+    copy.sort((a, b) => {
+      let av = "";
+      let bv = "";
+      if (sortField === "status") { av = a.statusLabel; bv = b.statusLabel; }
+      else if (sortField === "lastUpdated") { av = a.lastUpdated; bv = b.lastUpdated; }
+      else if (sortField === "lastPublished") { av = a.lastPublished; bv = b.lastPublished; }
+      else return 0;
+      if (av === "—") av = "";
+      if (bv === "—") bv = "";
+      const cmp = av.localeCompare(bv);
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return copy;
+  }, [sources, sortField, sortDir]);
 
   // 監聽發佈事件，更新資料來源狀態
   useEffect(() => {
@@ -1176,22 +1210,31 @@ const DataSourcesTable = memo(function DataSourcesTable({
               >
                 來源類型
               </th>
-              <th className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]">
-                狀態{" "}
-                <span className="text-[11px] text-[#9ca3af] select-none font-['PingFang_TC',sans-serif]">
-                  ⇅
+              <th
+                onClick={() => handleSort("status")}
+                className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd] cursor-pointer hover:bg-[#f5f8ff] transition-colors duration-150"
+              >
+                <span className="inline-flex items-center gap-[4px]">
+                  狀態
+                  <SortIcon field="status" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                 </span>
               </th>
-              <th className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]">
-                最後更新{" "}
-                <span className="text-[11px] text-[#9ca3af] select-none font-['PingFang_TC',sans-serif]">
-                  ⇅
+              <th
+                onClick={() => handleSort("lastUpdated")}
+                className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd] cursor-pointer hover:bg-[#f5f8ff] transition-colors duration-150"
+              >
+                <span className="inline-flex items-center gap-[4px]">
+                  最後更新
+                  <SortIcon field="lastUpdated" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                 </span>
               </th>
-              <th className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]">
-                最後發佈{" "}
-                <span className="text-[11px] text-[#9ca3af] select-none font-['PingFang_TC',sans-serif]">
-                  ⇅
+              <th
+                onClick={() => handleSort("lastPublished")}
+                className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd] cursor-pointer hover:bg-[#f5f8ff] transition-colors duration-150"
+              >
+                <span className="inline-flex items-center gap-[4px]">
+                  最後發佈
+                  <SortIcon field="lastPublished" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                 </span>
               </th>
               {/* 凍結欄 header：加入測試環境 */}
@@ -1210,11 +1253,11 @@ const DataSourcesTable = memo(function DataSourcesTable({
             </tr>
           </thead>
           <tbody>
-            {sources.map((row, idx) => (
+            {sorted.map((row, idx) => (
               <DataSourceTableRow
                 key={row.type}
                 row={row}
-                isLast={idx === sources.length - 1}
+                isLast={idx === sorted.length - 1}
                 onToggle={(type, v) => {
                   setSources((prev) =>
                     prev.map((s) =>

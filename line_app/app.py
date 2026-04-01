@@ -595,11 +595,15 @@ def make_image_click_bubble(item: dict, tracked_uri: Optional[str]):
     }
 
 
-def build_room_card_flex_carousel(room_cards: list) -> dict:
+def build_room_card_flex_carousel(room_cards: list, checkin: str = "", checkout: str = "", booking_token: str = "") -> dict:
     """
     將 backend room_cards (list[dict]) 轉為 LINE Flex Carousel JSON。
     每張房卡 = 一個 bubble：hero 圖片 + 剩餘徽章 + 房名/價格 + 立即訂房按鈕。
+    點「立即訂房」→ 開網頁表單（帶 token）。
     """
+    base_url = os.getenv("BOOKING_FORM_URL", "https://crmpoc.star-bit.io/api/v1/booking/form")
+    booking_url = f"{base_url}?token={booking_token}" if booking_token else ""
+
     bubbles = []
     for card in room_cards[:12]:  # LINE carousel 最多 12 bubbles
         image_url = card.get("image_url") or "https://dummyimage.com/1200x800/cccccc/333333&text=No+Image"
@@ -629,6 +633,19 @@ def build_room_card_flex_carousel(room_cards: list) -> dict:
                 "position": "absolute", "offsetTop": "10px", "offsetEnd": "10px",
                 "justifyContent": "center", "alignItems": "center",
             })
+
+        # Footer: 立即訂房按鈕（有 token 就開表單，沒有就 fallback postback）
+        if booking_url:
+            footer_action = {
+                "type": "uri", "label": "立即訂房",
+                "uri": booking_url,
+            }
+        else:
+            footer_action = {
+                "type": "postback", "label": "立即訂房",
+                "data": f"action=select_room&roomID={quote(room_type_code)}&roomName={quote(room_type_name)}&price={price}",
+                "displayText": "開啟訂房表單",
+            }
 
         bubble = {
             "type": "bubble",
@@ -662,11 +679,7 @@ def build_room_card_flex_carousel(room_cards: list) -> dict:
                 "type": "box", "layout": "vertical",
                 "contents": [{
                     "type": "button", "style": "primary", "color": "#1DB446",
-                    "action": {
-                        "type": "postback", "label": "立即訂房",
-                        "data": f"action=select_room&roomID={quote(room_type_code)}&roomName={quote(room_type_name)}&price={price}",
-                        "displayText": "開啟 Liff 瀏覽器",
-                    },
+                    "action": footer_action,
                 }],
             },
         }
@@ -2964,10 +2977,48 @@ def on_text(event: MessageEvent):
             # 房卡 → Flex Message carousel
             if ai_room_cards:
                 try:
-                    carousel_dict = build_room_card_flex_carousel(ai_room_cards)
+                    booking_ctx = ai_result.get("booking_context") or {} if ai_result else {}
+                    # 生成短效 token（1 小時有效，用完即棄，含房型資料）
+                    booking_token = ""
+                    try:
+                        backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8700")
+                        token_resp = requests.post(
+                            f"{backend_url}/api/v1/booking/generate-token",
+                            json={
+                                "line_uid": uid,
+                                "rooms": [
+                                    {
+                                        "code": c.get("room_type_code", ""),
+                                        "name": c.get("room_type_name", ""),
+                                        "price": c.get("price", 0),
+                                        "image": c.get("image_url", ""),
+                                        "available": c.get("available_count"),
+                                        "maxOcc": c.get("max_occupancy", 2),
+                                    }
+                                    for c in ai_room_cards[:11]
+                                ],
+                                "checkin": booking_ctx.get("checkin_date", ""),
+                                "checkout": booking_ctx.get("checkout_date", ""),
+                            },
+                            timeout=5,
+                        )
+                        if token_resp.ok:
+                            booking_token = token_resp.json().get("token", "")
+                    except Exception:
+                        logging.exception("[on_text] Failed to generate booking token")
+
+                    carousel_dict = build_room_card_flex_carousel(
+                        ai_room_cards,
+                        checkin=booking_ctx.get("checkin_date", ""),
+                        checkout=booking_ctx.get("checkout_date", ""),
+                        booking_token=booking_token,
+                    )
                     flex_container = FlexContainer.from_dict(carousel_dict)
                     messages_to_send.append(
                         FlexMessage(alt_text="為您找到以下房型", contents=flex_container)
+                    )
+                    messages_to_send.append(
+                        TextMessage(text="請點擊房型下方的「立即訂房」按鈕，即可選擇數量並填寫資料完成訂房喔！")
                     )
                     logging.info(f"[on_text] Room card FlexMessage appended, {len(ai_room_cards)} cards")
                 except Exception:

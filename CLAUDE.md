@@ -119,6 +119,14 @@ Frontend:
 - `VITE_API_BASE_URL` - Backend API URL
 - `VITE_FB_API_URL` - Facebook external API URL
 
+## Timezone Convention
+
+- **MySQL server timezone = Asia/Taipei (UTC+8)**，`NOW()` 回傳台灣時間
+- **DB 中所有 naive datetime 都是台灣時間**，不是 UTC
+- 讀取 DB datetime 時：`dt.replace(tzinfo=TAIPEI_TZ)`，**不要**當 UTC 再轉換
+- 外部 API 的 epoch timestamp（如 FB API）才是真正的 UTC，需用 `datetime.fromtimestamp(ts, tz=timezone.utc)`
+- Base model 的 `_now_taipei()` 回傳不帶 tzinfo 的台灣時間，與 MySQL `NOW()` 一致
+
 ## Database
 
 MySQL 8.0 with SQLAlchemy 2.0 async. Key models:

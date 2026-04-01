@@ -8,15 +8,54 @@ from datetime import datetime, date
 from typing import List, Optional
 from zoneinfo import ZoneInfo
 
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException, Header
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 import httpx
 
 from app.config import settings
 
+import secrets
+import time
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# ---------------------------------------------------------------------------
+# Booking Token Store (line_uid ↔ token, 1 小時有效, 用完即棄)
+# ---------------------------------------------------------------------------
+_TOKEN_STORE: dict = {}  # {token: {"line_uid": str, "ts": float}}
+_TOKEN_TTL = 3600  # 1 hour
+
+
+def _generate_booking_token(line_uid: str, booking_data: Optional[dict] = None) -> str:
+    """生成短效 token 對應 line_uid + 訂房資料"""
+    now = time.time()
+    expired = [k for k, v in _TOKEN_STORE.items() if now - v["ts"] > _TOKEN_TTL]
+    for k in expired:
+        del _TOKEN_STORE[k]
+
+    token = secrets.token_urlsafe(24)
+    _TOKEN_STORE[token] = {"line_uid": line_uid, "ts": now, "data": booking_data or {}}
+    return token
+
+
+def _resolve_booking_token(token: str, consume: bool = True) -> Optional[dict]:
+    """用 token 取回完整資料 {line_uid, data}。consume=True 時用完即刪"""
+    if consume:
+        entry = _TOKEN_STORE.pop(token, None)
+    else:
+        entry = _TOKEN_STORE.get(token)
+    if not entry:
+        return None
+    if time.time() - entry["ts"] > _TOKEN_TTL:
+        if token in _TOKEN_STORE:
+            del _TOKEN_STORE[token]
+        return None
+    return entry
 
 # ---------------------------------------------------------------------------
 # 房型代碼 → 中文名稱對照表
@@ -232,3 +271,127 @@ async def booking_callback(
         "line_sent": line_sent,
         "line_uid": line_uid,
     }
+
+
+# ---------------------------------------------------------------------------
+# Submit Endpoint (LIFF 表單 → 打閎運訂房 API → 回傳付款 URL)
+# ---------------------------------------------------------------------------
+
+class SubmitRoom(BaseModel):
+    room_type_code: str
+    room_count: int = 1
+    room_type_name: str = ""
+
+class BookingSubmitRequest(BaseModel):
+    token: str  # 短效 token，對應 line_uid
+    checkin_date: str
+    checkout_date: str
+    rooms: List[SubmitRoom]
+    name: str
+    phone: str
+    email: str = ""
+
+
+class GenerateTokenRequest(BaseModel):
+    line_uid: str
+    rooms: list = []
+    checkin: str = ""
+    checkout: str = ""
+
+@router.get("/form")
+async def booking_form_page():
+    """Serve 訂房表單 HTML"""
+    form_path = Path(__file__).resolve().parent.parent.parent.parent / "public" / "uploads" / "booking_form.html"
+    if not form_path.exists():
+        raise HTTPException(status_code=404, detail="booking form not found")
+    return HTMLResponse(content=form_path.read_text(encoding="utf-8"))
+
+
+@router.post("/generate-token")
+async def generate_token(data: GenerateTokenRequest):
+    """LINE app 呼叫：為 line_uid 生成短效 booking token，同時存房型資料"""
+    if not data.line_uid:
+        raise HTTPException(status_code=422, detail="line_uid required")
+    booking_data = {"rooms": data.rooms, "checkin": data.checkin, "checkout": data.checkout}
+    token = _generate_booking_token(data.line_uid, booking_data)
+    return {"ok": True, "token": token}
+
+@router.get("/token-data")
+async def get_token_data(token: str = ""):
+    """表單頁面呼叫：用 token 取回房型資料（不消耗 token）"""
+    if not token:
+        return {"ok": False, "message": "missing token"}
+    entry = _resolve_booking_token(token, consume=False)
+    if not entry:
+        return {"ok": False, "message": "expired"}
+    return {"ok": True, "data": entry["data"]}
+
+
+@router.post("/submit")
+async def booking_submit(data: BookingSubmitRequest):
+    """
+    訂房表單提交。
+    驗證 token → 打閎運訂房 API → 取得付款 URL → 回傳給前端跳轉。
+    """
+    import requests as _requests
+
+    # 用 token 取回 line_uid（consume=True，用完即棄）
+    entry = _resolve_booking_token(data.token, consume=True)
+    if not entry:
+        return {"ok": False, "message": "連結已過期，請重新從 LINE 開啟訂房"}
+    line_uid = entry["line_uid"]
+
+    api_url = settings.BOOKING_API_URL
+    api_key = settings.BOOKING_API_KEY
+    hotel_code = settings.BOOKING_HOTEL_CODE
+    hotel_id = settings.BOOKING_HOTEL_ID
+
+    if not api_url or not api_key:
+        raise HTTPException(status_code=500, detail="訂房 API 未設定")
+
+    if not data.rooms:
+        raise HTTPException(status_code=422, detail="請至少選擇一間房型")
+    if not data.name:
+        raise HTTPException(status_code=422, detail="請輸入姓名")
+    if not data.phone:
+        raise HTTPException(status_code=422, detail="請輸入電話")
+
+    payload = {
+        "hotel": hotel_code,
+        "hid": hotel_id,
+        "rooms": [
+            {
+                "roomtype": r.room_type_code,
+                "quantity": max(1, r.room_count),
+                "checkindate": data.checkin_date,
+                "checkoutdate": data.checkout_date,
+            }
+            for r in data.rooms
+        ],
+        "name": data.name,
+        "phone": data.phone,
+        "email": data.email,
+        "comments": f"line_uid:{line_uid}",
+    }
+
+    try:
+        resp = _requests.post(
+            api_url,
+            json=payload,
+            headers={"Content-Type": "application/json", "Api-Key": api_key},
+            allow_redirects=False,
+            timeout=15,
+        )
+
+        if resp.status_code == 302:
+            payment_url = resp.headers.get("Location")
+            if payment_url:
+                logger.info(f"[BookingSubmit] Payment URL: {payment_url}")
+                return {"ok": True, "payment_url": payment_url}
+
+        logger.warning(f"[BookingSubmit] Unexpected: {resp.status_code} {resp.text[:200]}")
+        return {"ok": False, "message": "訂房系統回應異常，請稍後再試"}
+
+    except Exception as e:
+        logger.error(f"[BookingSubmit] Failed: {e}")
+        return {"ok": False, "message": "訂房系統連線失敗，請稍後再試"}

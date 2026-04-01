@@ -173,8 +173,8 @@ async def _kb_fallback_rooms(db: Optional[AsyncSession], adults: int = 1) -> Lis
             features=features,
             source="faq_kb",
         ))
-    # Filter by occupancy, sort by match (closest first), then price
-    filtered = [c for c in cards if c.max_occupancy >= adults]
+    # 過濾：可住人數 >= 查詢人數，照匹配度排序（最接近的排前面）
+    filtered = [c for c in cards if (c.max_occupancy or 2) >= adults]
     result = filtered if filtered else cards
     result.sort(key=lambda c: (abs((c.max_occupancy or 2) - adults), c.price if c.price > 0 else 10**12))
     return result
@@ -915,20 +915,17 @@ class ChatbotService:
                 session.checkout_date = ctx.checkout_date
             if ctx.booking_adults is not None:
                 session.booking_adults = ctx.booking_adults
-            # AI 這輪沒查 PMS 也沒產生房卡 → 清掉訂房狀態，避免 fallback 自動查
-            if not ctx.pms_called and not ctx.room_cards:
-                session.checkin_date = None
-                session.checkout_date = None
-                session.booking_adults = None
-                session.room_plan_requests = []
-
             # token 扣除
             if db is not None and ctx.total_tokens_used > 0:
                 await self._deduct_tokens(db, ctx.total_tokens_used)
 
-        room_cards = await self._pms_fallback(session, ctx, room_cards)
         if room_cards:
             session.last_room_cards = room_cards
+            # 房卡已出現，清掉訂房狀態（後續訂房走表單，不走 bot 對話）
+            session.checkin_date = None
+            session.checkout_date = None
+            session.booking_adults = None
+            session.room_plan_requests = []
 
         session.history.append({"role": "assistant", "content": reply})
         reply_type = self._determine_reply_type(session, room_cards)
@@ -1703,9 +1700,11 @@ class ChatbotService:
             )
             for item in availability.get("available", [])
         ]
-        # Spec: 依入住人數匹配度排序（差距小的優先），同匹配度按價格
-        cards.sort(key=lambda c: (abs((c.max_occupancy or 2) - housingcnt), c.price if c.price > 0 else 10**12))
-        return cards
+        # 過濾：可住人數 >= 查詢人數，照匹配度排序（最接近的排前面）
+        filtered = [c for c in cards if (c.max_occupancy or 2) >= housingcnt]
+        result = filtered if filtered else cards
+        result.sort(key=lambda c: (abs((c.max_occupancy or 2) - housingcnt), c.price if c.price > 0 else 10**12))
+        return result
 
     # ------------------------------------------------------------------
     # Helpers
@@ -2027,16 +2026,13 @@ class ChatbotService:
             if ctx.booking_adults is not None:
                 session.booking_adults = ctx.booking_adults
 
-            # AI 這輪沒查 PMS 也沒產生房卡 → 清掉訂房狀態，避免 fallback 自動查
-            if not ctx.pms_called and not ctx.room_cards:
-                session.checkin_date = None
-                session.checkout_date = None
-                session.booking_adults = None
-                session.room_plan_requests = []
-
-        room_cards = await self._pms_fallback(session, ctx, room_cards)
         if room_cards:
             session.last_room_cards = room_cards
+            # 房卡已出現，清掉訂房狀態（後續訂房走表單，不走 bot 對話）
+            session.checkin_date = None
+            session.checkout_date = None
+            session.booking_adults = None
+            session.room_plan_requests = []
 
         session.history.append({"role": "assistant", "content": reply})
         reply_type = self._determine_reply_type(session, room_cards)

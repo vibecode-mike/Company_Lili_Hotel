@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>訂房表單</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Noto Sans TC', -apple-system, sans-serif; background: #f5f5f5; color: #333; }
+.loading { display: flex; align-items: center; justify-content: center; height: 100vh; font-size: 16px; color: #888; }
+.container { max-width: 480px; margin: 0 auto; padding: 16px; }
+.header { text-align: center; padding: 12px 0; font-size: 18px; font-weight: 700; color: #1DB446; }
+.date-info { text-align: center; font-size: 14px; color: #666; margin-bottom: 16px; padding: 8px; background: #fff; border-radius: 8px; }
+
+#roomList {
+  display: flex; gap: 12px; overflow-x: auto; padding: 4px 0 12px;
+  -webkit-overflow-scrolling: touch; scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+}
+#roomList::-webkit-scrollbar { height: 4px; }
+#roomList::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 2px; }
+.room-card {
+  background: #fff; border-radius: 12px; overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+  flex-shrink: 0; width: 220px; min-width: 220px; scroll-snap-align: start;
+}
+.room-img { width: 100%; height: 140px; object-fit: cover; display: block; }
+.room-body { padding: 12px; }
+.room-name { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.room-meta { font-size: 13px; color: #888; margin-bottom: 8px; }
+.room-price { font-size: 15px; color: #1DB446; font-weight: 600; }
+.room-stepper { display: flex; align-items: center; gap: 0; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; width: fit-content; }
+.room-stepper button { width: 36px; height: 36px; border: none; background: #f8f8f8; font-size: 18px; cursor: pointer; color: #333; }
+.room-stepper button:active { background: #e0e0e0; }
+.room-stepper button:disabled { color: #ccc; }
+.room-stepper .qty { width: 40px; height: 36px; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 600; border-left: 1px solid #ddd; border-right: 1px solid #ddd; }
+.room-row { display: flex; justify-content: space-between; align-items: center; }
+
+.form-section { background: #fff; border-radius: 12px; padding: 16px; margin-top: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+.form-section h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+.field { margin-bottom: 12px; }
+.field label { display: block; font-size: 13px; color: #666; margin-bottom: 4px; }
+.field input { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 15px; outline: none; }
+.field input:focus { border-color: #1DB446; }
+.required::after { content: ' *'; color: #FF3B30; }
+
+.submit-btn { width: 100%; padding: 14px; margin-top: 16px; margin-bottom: 32px; background: #1DB446; color: #fff; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; }
+.submit-btn:disabled { background: #ccc; }
+.submit-btn:active:not(:disabled) { background: #18963b; }
+.error-msg { color: #FF3B30; font-size: 13px; text-align: center; margin-top: 8px; }
+.status-msg { text-align: center; padding: 60px 20px; color: #888; }
+.status-msg h2 { margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<div id="loading" class="loading">載入中...</div>
+
+<div id="app" class="container" style="display:none">
+  <div class="header">訂房表單</div>
+  <div id="dateInfo" class="date-info"></div>
+  <div id="roomList"></div>
+
+  <div class="form-section">
+    <h3>聯絡資訊</h3>
+    <div class="field">
+      <label class="required">姓名</label>
+      <input type="text" id="nameInput" placeholder="請輸入姓名">
+    </div>
+    <div class="field">
+      <label class="required">聯絡電話</label>
+      <input type="tel" id="phoneInput" placeholder="例：0912345678" maxlength="10">
+    </div>
+    <div class="field">
+      <label class="required">Email</label>
+      <input type="email" id="emailInput" placeholder="example@mail.com">
+    </div>
+  </div>
+
+  <div id="errorMsg" class="error-msg" style="display:none"></div>
+  <button id="submitBtn" class="submit-btn">立即訂房</button>
+</div>
+
+<div id="expiredPage" class="status-msg" style="display:none">
+  <h2 style="color:#FF3B30">連結已過期</h2>
+  <p>請回到 LINE 重新查詢房型</p>
+</div>
+
+<script>
+(async function() {
+  var p = new URLSearchParams(location.search);
+  var token = p.get("token") || "";
+
+  if (!token) {
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("expiredPage").style.display = "block";
+    return;
+  }
+
+  // 用 token 從後端取房型資料
+  var tokenData;
+  try {
+    var resp = await fetch("/api/v1/booking/token-data?token=" + encodeURIComponent(token));
+    var result = await resp.json();
+    if (!result.ok) {
+      document.getElementById("loading").style.display = "none";
+      document.getElementById("expiredPage").style.display = "block";
+      return;
+    }
+    tokenData = result.data;
+  } catch(e) {
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("expiredPage").style.display = "block";
+    return;
+  }
+
+  var rooms = tokenData.rooms || [];
+  var checkin = tokenData.checkin || "";
+  var checkout = tokenData.checkout || "";
+
+  if (!rooms.length) {
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("expiredPage").style.display = "block";
+    return;
+  }
+
+  // Show app
+  document.getElementById("loading").style.display = "none";
+  document.getElementById("app").style.display = "block";
+
+  // Date info
+  if (checkin) {
+    var ci = new Date(checkin);
+    var co = checkout ? new Date(checkout) : null;
+    var nights = co ? Math.round((co - ci) / 86400000) : 1;
+    var wd = ["日","一","二","三","四","五","六"];
+    document.getElementById("dateInfo").textContent =
+      "入住：" + checkin + "（" + wd[ci.getDay()] + "）｜" + nights + " 晚";
+  }
+
+  // Room cards
+  var roomList = document.getElementById("roomList");
+  rooms.forEach(function(r, i) {
+    r.qty = 0;
+    var maxQty = r.available || 9;
+    var div = document.createElement("div");
+    div.className = "room-card";
+    div.innerHTML =
+      (r.image ? '<img class="room-img" src="' + r.image + '" onerror="this.style.display=\'none\'">' : '') +
+      '<div class="room-body">' +
+        '<div class="room-name">' + r.name + '</div>' +
+        '<div class="room-meta">\u{1F464} 可住 ' + (r.maxOcc || 2) + ' 人' +
+          (r.available != null ? ' \u00B7 剩 ' + r.available + ' 間' : '') + '</div>' +
+        '<div class="room-row">' +
+          '<div class="room-price">NT$' + (r.price || 0).toLocaleString() + ' / 每晚</div>' +
+          '<div class="room-stepper">' +
+            '<button class="minus" data-i="' + i + '">−</button>' +
+            '<div class="qty" id="qty-' + i + '">0</div>' +
+            '<button class="plus" data-i="' + i + '">+</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    roomList.appendChild(div);
+
+    div.querySelector(".minus").onclick = function() {
+      r.qty = Math.max(0, r.qty - 1);
+      document.getElementById("qty-" + i).textContent = r.qty;
+      this.disabled = r.qty <= 0;
+    };
+    div.querySelector(".plus").onclick = function() {
+      r.qty = Math.min(maxQty, r.qty + 1);
+      document.getElementById("qty-" + i).textContent = r.qty;
+      div.querySelector(".minus").disabled = r.qty <= 0;
+    };
+    div.querySelector(".minus").disabled = true;
+  });
+
+  // Submit
+  document.getElementById("submitBtn").onclick = async function() {
+    var name = document.getElementById("nameInput").value.trim();
+    var phone = document.getElementById("phoneInput").value.trim();
+    var email = document.getElementById("emailInput").value.trim();
+    var errEl = document.getElementById("errorMsg");
+    errEl.style.display = "none";
+
+    var selectedRooms = rooms.filter(function(r) { return r.qty > 0; });
+    if (selectedRooms.length === 0) { errEl.textContent = "請至少選擇一間房型"; errEl.style.display = "block"; return; }
+    if (!name) { errEl.textContent = "請輸入姓名"; errEl.style.display = "block"; return; }
+    if (!phone || !/^09\d{8}$/.test(phone)) { errEl.textContent = "請輸入正確的手機號碼（09開頭10碼）"; errEl.style.display = "block"; return; }
+    if (!email || !email.includes("@")) { errEl.textContent = "請輸入正確的 Email"; errEl.style.display = "block"; return; }
+
+    var btn = document.getElementById("submitBtn");
+    btn.disabled = true;
+    btn.textContent = "處理中...";
+
+    try {
+      var resp = await fetch("/api/v1/booking/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: token,
+          checkin_date: checkin,
+          checkout_date: checkout,
+          rooms: selectedRooms.map(function(r) {
+            return { room_type_code: r.code, room_count: r.qty, room_type_name: r.name };
+          }),
+          name: name,
+          phone: phone,
+          email: email
+        })
+      });
+      var result = await resp.json();
+
+      if (result.ok && result.payment_url) {
+        btn.textContent = "正在前往付款...";
+        window.location.href = result.payment_url;
+      } else {
+        errEl.textContent = result.message || "訂房失敗，請稍後再試";
+        errEl.style.display = "block";
+        btn.disabled = false;
+        btn.textContent = "立即訂房";
+      }
+    } catch(e) {
+      errEl.textContent = "網路錯誤，請稍後再試";
+      errEl.style.display = "block";
+      btn.disabled = false;
+      btn.textContent = "立即訂房";
+    }
+  };
+})();
+</script>
+</body>
+</html>
