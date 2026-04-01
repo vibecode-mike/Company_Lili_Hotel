@@ -151,6 +151,37 @@ def _push_line_flex(line_uid: str, flex_dict: dict, alt_text: str = "訂房確�
         return False
 
 
+def _build_booking_failed_flex(data: BookingCallbackRequest) -> dict:
+    """付款失敗 Flex Message"""
+    return {
+        "type": "bubble",
+        "body": {
+            "type": "box", "layout": "vertical", "paddingAll": "xl",
+            "contents": [
+                {"type": "text", "text": "⚠ 付款未完成", "weight": "bold", "size": "xl", "color": "#FF3B30"},
+                {
+                    "type": "text", "wrap": True, "size": "md", "margin": "lg",
+                    "color": "#444444", "lineSpacing": "4px",
+                    "text": f"{data.name}您好，\n您的訂房付款未完成，訂單已自動取消。\n如需重新訂房，請再次告訴我，我會重新為您查詢房況。",
+                },
+                {
+                    "type": "box", "layout": "vertical", "margin": "xxl", "spacing": "sm",
+                    "contents": [
+                        {"type": "box", "layout": "horizontal", "contents": [
+                            {"type": "text", "text": "訂單編號", "size": "sm", "color": "#888888", "flex": 2},
+                            {"type": "text", "text": data.order_id, "size": "sm", "color": "#111111", "flex": 4},
+                        ]},
+                        {"type": "box", "layout": "horizontal", "contents": [
+                            {"type": "text", "text": "狀態", "size": "sm", "color": "#888888", "flex": 2},
+                            {"type": "text", "text": "已取消", "size": "sm", "color": "#FF3B30", "flex": 4, "weight": "bold"},
+                        ]},
+                    ],
+                },
+            ],
+        },
+    }
+
+
 # ---------------------------------------------------------------------------
 # Callback Endpoint
 # ---------------------------------------------------------------------------
@@ -172,16 +203,21 @@ async def booking_callback(
     if expected_key and api_key != expected_key:
         raise HTTPException(status_code=401, detail="Invalid Api-Key")
 
-    # 2. 只處理 paid 狀態
-    if data.status != "paid":
+    # 2. 檢查 status
+    if data.status not in ("paid", "failed"):
         return {"ok": True, "message": f"status={data.status}, skipped"}
 
     # 3. 發送 LINE Flex
     line_uid = data.line_uid
     line_sent = False
     if line_uid:
-        flex_dict = _build_booking_confirm_flex(data)
-        line_sent = _push_line_flex(line_uid, flex_dict)
+        if data.status == "paid":
+            flex_dict = _build_booking_confirm_flex(data)
+            alt_text = "訂房確認通知"
+        else:
+            flex_dict = _build_booking_failed_flex(data)
+            alt_text = "付款未完成通知"
+        line_sent = _push_line_flex(line_uid, flex_dict, alt_text=alt_text)
     else:
         logger.warning(f"[BookingCallback] No line_uid provided, cannot push")
 
