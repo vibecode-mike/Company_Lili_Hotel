@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     BOOKING_API_KEY: str = ""
     BOOKING_HOTEL_CODE: str = ""
     BOOKING_HOTEL_ID: str = ""
+    BOOKING_CALLBACK_API_KEY: str = ""
 
     # 文件存儲配置
     UPLOAD_DIR: str = "uploads"

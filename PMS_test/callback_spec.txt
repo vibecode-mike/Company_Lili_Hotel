@@ -1,0 +1,53 @@
+====================================================
+付款完成 Callback 規格（提供給閎運）
+====================================================
+
+一、Callback URL
+----------------------------------------------------
+POST https://linebot.star-bit.io/api/v1/booking/callback
+
+驗證方式：Header「Api-Key: U7q4J9QE06JK6qx-yctlGQ」（同訂房 API）
+
+
+二、請求格式（JSON）
+----------------------------------------------------
+付款完成後，請 POST 以下 JSON 到上述 URL：
+
+{
+  "order_id": "ZW20260401088",
+  "status": "paid",
+  "name": "客人姓名",
+  "line_uid": "U9c8988cf2cd74b173c2a5b7ed60bdab0",
+  "checkindate": "2026-04-05",
+  "rooms": [
+    { "roomtype": "GS", "quantity": 2 },
+    { "roomtype": "WS", "quantity": 1 }
+  ]
+}
+
+欄位說明：
+- order_id  (必填) 閎運系統產生的訂單編號
+- status    (必填) 付款狀態，成功為 "paid"
+- name      (必填) 訂房人姓名
+- line_uid  (必填) 我方送訂房 API 時在 comments 帶過去的值，格式為 "line_uid:Uxxxxxxx"，callback 時請取冒號後面的部分帶回
+- checkindate (必填) 入住日期 YYYY-MM-DD
+- rooms     (必填) 房型陣列，每筆含 roomtype 代碼 + quantity 間數
+
+
+三、我方回傳格式
+----------------------------------------------------
+成功接收：
+  HTTP 200
+  { "ok": true, "message": "received" }
+
+失敗：
+  HTTP 400 / 500
+  { "ok": false, "message": "錯誤原因" }
+
+
+四、備註
+----------------------------------------------------
+- line_uid 是我方在呼叫訂房 API 時放在 comments 欄位中帶過去的
+  格式為 "line_uid:U9c8988cf2cd74b173c2a5b7ed60bdab0"
+  callback 時請將此值放在 line_uid 欄位回傳
+- 我方收到後會透過 LINE 發送訂房確認通知給客人

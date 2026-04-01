@@ -1,0 +1,168 @@
+{
+  "type": "bubble",
+  "hero": {
+    "type": "image",
+    "url": "https://images.unsplash.com/photo-1540518614846-7eded433c457?auto=format&fit=crop&w=800&q=80",
+    "size": "full",
+    "aspectRatio": "20:13",
+    "aspectMode": "cover"
+  },
+  "body": {
+    "type": "box",
+    "layout": "vertical",
+    "paddingBottom": "xl",
+    "contents": [
+      {
+        "type": "text",
+        "text": "訂單完成",
+        "weight": "bold",
+        "size": "xl",
+        "margin": "md"
+      },
+      {
+        "type": "text",
+        "text": "卓小姐您好，\n提醒您有一筆即將到來的訂房。\n系統已為您保留房源，期待您的光臨。如需取消或更改，請聯絡客服。",
+        "wrap": true,
+        "size": "md",
+        "margin": "lg",
+        "color": "#444444",
+        "lineSpacing": "4px"
+      },
+      {
+        "type": "box",
+        "layout": "vertical",
+        "margin": "xxl",
+        "spacing": "sm",
+        "contents": [
+          {
+            "type": "text",
+            "text": "知達飯店",
+            "weight": "bold",
+            "size": "md",
+            "color": "#111111"
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "margin": "md",
+            "contents": [
+              {
+                "type": "text",
+                "text": "訂單編號",
+                "size": "sm",
+                "color": "#888888",
+                "flex": 2
+              },
+              {
+                "type": "text",
+                "text": "ZW20260401088",
+                "size": "sm",
+                "color": "#111111",
+                "flex": 4,
+                "weight": "bold"
+              }
+            ]
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+              {
+                "type": "text",
+                "text": "入住日期",
+                "size": "sm",
+                "color": "#888888",
+                "flex": 2
+              },
+              {
+                "type": "text",
+                "text": "2026/4/1, 週三",
+                "size": "sm",
+                "color": "#111111",
+                "flex": 4
+              }
+            ]
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+              {
+                "type": "text",
+                "text": "最晚進房",
+                "size": "sm",
+                "color": "#888888",
+                "flex": 2
+              },
+              {
+                "type": "text",
+                "text": "15:00",
+                "size": "sm",
+                "color": "#111111",
+                "flex": 4
+              }
+            ]
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "margin": "sm",
+            "contents": [
+              {
+                "type": "text",
+                "text": "入住房型",
+                "size": "sm",
+                "color": "#888888",
+                "flex": 2
+              },
+              {
+                "type": "box",
+                "layout": "vertical",
+                "flex": 4,
+                "spacing": "xs",
+                "contents": [
+                  {
+                    "type": "text",
+                    "text": "．望空間尊親房 x 2",
+                    "size": "sm",
+                    "color": "#111111",
+                    "wrap": true
+                  },
+                  {
+                    "type": "text",
+                    "text": "．豪華雙人房 x 1",
+                    "size": "sm",
+                    "color": "#111111",
+                    "wrap": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "margin": "sm",
+            "contents": [
+              {
+                "type": "text",
+                "text": "注意事項",
+                "size": "sm",
+                "color": "#888888",
+                "flex": 2
+              },
+              {
+                "type": "text",
+                "text": "如有疑問請聯繫飯店",
+                "size": "sm",
+                "color": "#111111",
+                "flex": 4,
+                "wrap": true
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

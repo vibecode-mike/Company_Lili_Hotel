@@ -2,7 +2,7 @@
 訂房 API 串接 SOP（2026-03-31）
 ====================================================
 
-一、外部訂房 API（閎運 booking-wise）
+一、外部訂房 API（閎運 booking-wise）— 我方 → 閎運
 ----------------------------------------------------
 - 端點：POST https://www.booking-wise0.com.tw/hotel_conn/starbituse.php
 - 驗證：Header「Api-Key: uGyt2W6Rovhkm4」
@@ -11,7 +11,7 @@
 - 銀行端：約 30 分鐘未付款取消交易（各家不同）
 - 注意：金流是真實的，刷卡會扣款，等閎運弄 1 元測試房再測刷卡
 
-二、API 請求格式
+二、訂房 API 請求格式（我方 → 閎運）
 ----------------------------------------------------
 {
   "hotel": "zhida",
@@ -27,57 +27,82 @@
   "name": "客人姓名",
   "phone": "0912345678",
   "email": "test@example.com",
-  "comments": "AI chatbot 訂房"
+  "comments": "line_uid:U9c8988cf2cd74b173c2a5b7ed60bdab0"
 }
 
 - hotel / hid 固定值
 - rooms 陣列：每個房型各自帶入退房日期（支援不同房型不同天數）
 - roomtype 代碼需對應 PMS 房型代碼（V1, WS, GS, V2...）
+- comments 帶 line_uid，供 callback 時識別要通知哪個 LINE 用戶
 
-三、完整訂房流程
+三、付款完成 Callback（閎運 → 我方）
+----------------------------------------------------
+- 端點：POST https://linebot.star-bit.io/api/v1/booking/callback
+- 驗證：Header「Api-Key: U7q4J9QE06JK6qx-yctlGQ」（callback 專用，與訂房 API key 分開）
+- 請求格式：
+{
+  "order_id": "ZW20260401088",
+  "status": "paid",
+  "name": "客人姓名",
+  "line_uid": "U9c8988cf2cd74b173c2a5b7ed60bdab0",
+  "checkindate": "2026-04-05",
+  "rooms": [
+    { "roomtype": "GS", "quantity": 2 },
+    { "roomtype": "WS", "quantity": 1 }
+  ]
+}
+
+- line_uid 來自訂房 API 的 comments 欄位（格式 "line_uid:Uxxxxxxx"）
+- 我方收到後用 line_uid push LINE Flex 訂房確認卡片給客人
+
+四、完整訂房流程
 ----------------------------------------------------
 1. 客人在 LINE / CRM Widget 說要訂房
 2. 機器人問日期、人數 → 查 PMS → 顯示房卡
 3. 客人選房卡 → 機器人問姓名、電話、Email
 4. 客人提供資料 → 點確認
-5. 後端 booking_save() 呼叫閎運 API
+5. 後端 booking_save() 呼叫閎運 API（comments 帶 line_uid）
 6. 閎運回傳 302 + Location URL（付款頁面）
 7. 機器人把 URL 傳給客人
 8. 客人點 URL → 進入付款頁面 → 刷卡付款
-9. 1 小時內未付款 → 自動取消訂單、退房
+9. 付款完成 → 閎運打 callback API → 我方收到
+10. 用 line_uid push LINE Flex 訂房確認通知給客人
+11. 1 小時內未付款 → 自動取消訂單、退房
 
-四、程式碼對應
+五、程式碼對應
 ----------------------------------------------------
 - 環境變數：backend/.env
-  BOOKING_API_URL=https://www.booking-wise0.com.tw/hotel_conn/starbituse.php
-  BOOKING_API_KEY=uGyt2W6Rovhkm4
-  BOOKING_HOTEL_CODE=zhida
-  BOOKING_HOTEL_ID=101
+  BOOKING_API_URL, BOOKING_API_KEY, BOOKING_HOTEL_CODE, BOOKING_HOTEL_ID
 
-- Settings：backend/app/config.py（BOOKING_API_URL 等四個欄位）
+- Settings：backend/app/config.py
 
-- API Client：backend/app/services/chatbot_service.py
-  函式 _call_booking_api() — 打 API、從 302 Location 抓 URL
+- 訂房 API Client：backend/app/services/chatbot_service.py
+  函式 _call_booking_api() — 打 API、comments 帶 line_uid、從 302 Location 抓 URL
 
 - 訂房儲存：backend/app/services/chatbot_service.py
   方法 booking_save() — 驗證 → 呼叫 _call_booking_api() → 存 DB → 回傳 cart_url
 
-- Widget 前端：widget/chatbot-frame.html
-  renderBookingResult() 顯示付款連結
+- Callback API：backend/app/api/v1/booking_callback.py
+  POST /api/v1/booking/callback — 收閎運 callback → push LINE Flex
 
+- Flex 模板：booking_callback.py 內 _build_booking_confirm_flex()
+  參考設計：PMS_test/flex.txt
+
+- Widget 前端：widget/chatbot-frame.html
 - CRM 後台聊天：frontend/src/components/chat-room/ChatBubble.tsx
 - CRM 彈窗：frontend/src/components/ChatFAB.tsx
 
-五、退版方式
+六、退版方式
 ----------------------------------------------------
 git tag: pre-booking-api（commit c9d59c37）
 退版指令：
   git reset --hard pre-booking-api
   sudo systemctl restart lili_backend
 
-六、待確認事項
+七、待確認事項
 ----------------------------------------------------
 - [ ] 閎運弄好 1 元測試房後，測試完整刷卡流程
-- [ ] 確認 API 回傳的 token 是否一次性（目前看起來是）
+- [ ] 確認 API 回傳的 token 是否一次性
+- [ ] 確認閎運能從 comments 解析 line_uid 並在 callback 帶回
 - [ ] LINE 端訂房流程尚未完整串接（postback 選房 → 填資料 → booking-save）
 - [ ] 確認 roomtype 代碼與閎運系統的對應是否正確

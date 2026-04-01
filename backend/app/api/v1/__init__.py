@@ -35,6 +35,7 @@ from app.api.v1 import (
     fb_ws_proxy,
     chatbot,
     sse,
+    booking_callback,
 )
 
 api_router = APIRouter()
@@ -72,3 +73,4 @@ api_router.include_router(ai_chat.router, prefix="/ai", tags=["AI 聊天"])
 api_router.include_router(chatbot.router, prefix="/chatbot", tags=["官網 Chatbot 訂房"])
 api_router.include_router(fb_ws_proxy.router, prefix="/fb-ws-proxy", tags=["Facebook WS 代理"])
 api_router.include_router(sse.router, prefix="", tags=["SSE 即時通訊"])
+api_router.include_router(booking_callback.router, prefix="/booking", tags=["外部訂房 Callback"])

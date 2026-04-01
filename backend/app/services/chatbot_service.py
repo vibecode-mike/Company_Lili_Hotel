@@ -59,6 +59,7 @@ def _call_booking_api(
     name: str,
     phone: str,
     email: str,
+    line_uid: str = "",
 ) -> Optional[str]:
     """呼叫外部訂房 API，回傳付款頁面 URL（從 302 Location header 取得）"""
     import requests as _requests
@@ -87,7 +88,7 @@ def _call_booking_api(
         "name": name,
         "phone": phone,
         "email": email,
-        "comments": "AI chatbot 訂房",
+        "comments": f"line_uid:{line_uid}" if line_uid else "AI chatbot 訂房",
     }
 
     resp = _requests.post(
@@ -1519,6 +1520,7 @@ class ChatbotService:
                 name=name,
                 phone=phone,
                 email=email,
+                line_uid=browser_key if browser_key.startswith("U") else "",
             )
         except Exception as e:
             logger.warning(f"[booking_save] External booking API failed: {e}")
