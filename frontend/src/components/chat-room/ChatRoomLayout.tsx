@@ -442,10 +442,25 @@ export default function ChatRoomLayout({
           return;
         }
 
+        // 先記錄是否在底部附近（setMessages 前判斷）
+        const container = chatContainerRef.current;
+        const wasNearBottom = container
+          ? container.scrollHeight - container.scrollTop - container.clientHeight < 150
+          : true;
+
         // 將新訊息按時間戳插入正確位置（messages 維持「舊 -> 新」排序）
         setMessages((prev) => mergeNewMessages(prev, [sseMessage.data]));
 
-        // 同步更新會員的最後聊天時間
+        // SSE 新訊息到達後，若使用者在底部附近則自動捲到底
+        if (wasNearBottom && container) {
+          requestAnimationFrame(() => {
+            if (chatContainerRef.current) {
+              chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+            }
+          });
+        }
+
+        // 同步更新會員的最後聯天時間
         if (member) {
           setMember({
             ...member,

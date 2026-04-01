@@ -187,36 +187,12 @@ function RoomCardList({ cards }: { cards: RoomCard[] }) {
               </div>
               <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                 <div style={{ fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 500, fontSize: 16, color: '#6e6e6e', lineHeight: 1.5, whiteSpace: 'nowrap' }}>
-                  {card.source === 'pms' ? card.price_label.replace('/晚', '/每晚') : `NT$${card.price.toLocaleString()}/每晚`}
+                  {`NT$${card.price.toLocaleString()} / 每晚`}
                 </div>
                 <div style={{ fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 400, fontSize: 13, color: '#AAAAAA', lineHeight: 1.5, whiteSpace: 'nowrap', marginLeft: 'auto' }}>
                   👤 可住 {card.max_occupancy ?? 2} 人
                 </div>
               </div>
-            </div>
-            {/* Quantity Stepper */}
-            <div style={{ background: '#f8fafc', borderRadius: 8, padding: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <button
-                type="button"
-                disabled
-                style={{ width: 32, height: 32, background: 'none', border: 'none', padding: 0, cursor: 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-              >
-                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                  <path d="M8 16H24" stroke="#d1d5db" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-              </button>
-              <div style={{ flex: 1, textAlign: 'center', fontFamily: "'Noto Sans TC', sans-serif", fontWeight: 400, fontSize: 16, color: '#383838', lineHeight: 1.5 }}>
-                0
-              </div>
-              <button
-                type="button"
-                disabled
-                style={{ width: 32, height: 32, background: 'none', border: 'none', padding: 0, cursor: 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-              >
-                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                  <path d="M16 8V24M8 16H24" stroke="#d1d5db" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-              </button>
             </div>
           </div>
       ))}

@@ -394,13 +394,18 @@ class MessageService:
 
         normalized_tags = self._normalize_interaction_tags(interaction_tags)
 
+        # 確保 channel_id 不為空：根據平台自動查表補正
+        actual_platform = platform or "LINE"
+        if not channel_id:
+            channel_id = await self._resolve_default_channel_id(db, actual_platform)
+
         message = Message(
             template_id=template.id,
             target_type=target_type,
             target_filter=target_filter or {},
             send_status=send_status,
             campaign_id=campaign_id,
-            platform=platform or "LINE",  # 發送平台
+            platform=actual_platform,  # 發送平台
             channel_id=channel_id,  # 渠道 ID（LINE channel_id 或 FB page_id）
             flex_message_json=flex_message_json,  # LINE Flex Message JSON
             fb_message_json=fb_message_json,  # Facebook Messenger JSON
@@ -513,6 +518,30 @@ class MessageService:
 
         return message
 
+    async def _resolve_default_channel_id(
+        self,
+        db: AsyncSession,
+        platform: str,
+    ) -> Optional[str]:
+        """當 channel_id 未提供時，根據平台查表取得預設頻道 ID"""
+        if platform == "LINE":
+            result = await db.execute(
+                select(LineChannel.channel_id).order_by(LineChannel.id).limit(1)
+            )
+            channel_id = result.scalar()
+            if channel_id:
+                logger.info(f"✅ 自動補正 LINE channel_id: {channel_id}")
+            return channel_id
+        elif platform in ("Facebook", "Instagram"):
+            result = await db.execute(
+                select(FbChannel.page_id).order_by(FbChannel.id).limit(1)
+            )
+            page_id = result.scalar()
+            if page_id:
+                logger.info(f"✅ 自動補正 FB page_id: {page_id}")
+            return page_id
+        return None
+
     def _normalize_interaction_tags(
         self,
         tags: Optional[List[str]]
@@ -603,13 +632,19 @@ class MessageService:
             interaction_tags if interaction_tags is not None else draft.interaction_tags
         )
 
+        # 確保 channel_id 不為空
+        actual_platform = platform or draft.platform or "LINE"
+        resolved_channel_id = channel_id or draft.channel_id
+        if not resolved_channel_id:
+            resolved_channel_id = await self._resolve_default_channel_id(db, actual_platform)
+
         new_message = Message(
             template_id=template.id,
             target_type=target_type or draft.target_type,
             target_filter=target_filter if target_filter is not None else draft.target_filter,
             send_status=send_status,
             campaign_id=draft.campaign_id,
-            platform=platform or draft.platform or "LINE",  # 發送平台
+            platform=actual_platform,  # 發送平台
             flex_message_json=flex_message_json or draft.flex_message_json,
             fb_message_json=fb_message_json or draft.fb_message_json,  # Facebook JSON
             message_title=message_title or draft.message_title,
@@ -618,7 +653,7 @@ class MessageService:
             interaction_tags=normalized_tags,
             source_draft_id=draft_id,  # 记录来源草稿
             created_by=created_by,  # 發送人員（當前登入者 ID）
-            channel_id=channel_id or draft.channel_id,  # 渠道 ID（優先用傳入值，fallback 草稿值）
+            channel_id=resolved_channel_id,  # 渠道 ID（優先用傳入值，fallback 草稿值，最後查表）
         )
 
         if scheduled_at and schedule_type == "scheduled":
