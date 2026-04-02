@@ -179,7 +179,9 @@ const Sidebar = memo(
                     currentPage === "facilities"
                   }
                   label="AI Chatbot"
-                  onClick={() => navigate("ai-chatbot")}
+                  onClick={navigationLocked ? undefined : () => navigate("ai-chatbot")}
+                  disabled={navigationLocked}
+                  tooltip={lockedTooltip}
                 />
                 <MenuItem
                   isActive={currentPage === "auto-reply"}

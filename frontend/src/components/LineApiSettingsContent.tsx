@@ -284,7 +284,13 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
     }
   };
 
-  const canSubmitConnection = Boolean(loginChannelSecret.trim()) && !isVerifyingUsage;
+  const canSubmitConnection =
+    Boolean(channelId.trim()) &&
+    Boolean(channelSecret.trim()) &&
+    Boolean(channelAccessToken.trim()) &&
+    Boolean(loginChannelId.trim()) &&
+    Boolean(loginChannelSecret.trim()) &&
+    !isVerifyingUsage;
 
   // 如果已完成設定且沒有提供 onComplete（獨立使用模式），顯示完成頁面
   // 當有 onComplete 時，由父元件控制流程，這裡顯示設定精靈讓用戶重新設定
