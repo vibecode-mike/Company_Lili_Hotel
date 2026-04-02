@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import Sidebar from "./Sidebar";
 import { useToast } from "./ToastProvider";
 import { PageHeaderWithBreadcrumb } from "./common/Breadcrumb";
+import { BlankStateCard, BlankStateContainer } from "./common/BlankStateCard";
 import CategoryTitleDropdown from "./common/CategoryTitleDropdown";
 import svgPaths from "../imports/svg-icons-common";
 import togglePaths from "../imports/svg-wbwsye31ry";
@@ -14,6 +15,7 @@ import {
   FacilityFaqDraft,
 } from "./chatbot/AIChatbotEditModal";
 import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from "../utils/apiClient";
+import { getAuthToken } from "../utils/token";
 
 
 interface FacilitiesContentProps {
@@ -550,6 +552,43 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
     }
   }, [sortDir]);
 
+  const fetchFacilities = useCallback(async () => {
+    if (!categoryId) return;
+    setLoadingFacilities(true);
+    try {
+      const res = await apiGet(`/api/v1/faq/categories/${categoryId}/rules?page_size=50`);
+      const json = await res.json();
+      const items: FaqRuleRaw[] = json.data?.items ?? [];
+      setFacilities(items.map(mapRuleToFacility));
+    } catch {
+      // ignore
+    } finally {
+      setLoadingFacilities(false);
+    }
+  }, [categoryId]);
+
+  const handleImport = useCallback(async (file: File) => {
+    if (!categoryId) return;
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const token = getAuthToken() || "";
+      const res = await fetch(
+        `/api/v1/faq/categories/${categoryId}/rules/import`,
+        { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: formData },
+      );
+      if (res.ok) {
+        showToast("規則匯入成功", "success");
+        fetchFacilities();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast((err as any).detail || "匯入失敗", "error");
+      }
+    } catch {
+      showToast("匯入失敗", "error");
+    }
+  }, [categoryId, showToast, fetchFacilities]);
+
   const handleToggle = useCallback(
     async (id: string, value: boolean) => {
       const facility = facilities.find((r) => r.id === id);
@@ -691,9 +730,31 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
 
   const thProps = { sortField, sortDir, onSort: handleSort };
 
+  // Blank state detection for FAQ-only page
+  // DEBUG: window.__BLANK_DEBUG = 'facility' to force blank state for visual QA
+  const _dbg = typeof window !== "undefined" ? (window as any).__BLANK_DEBUG : undefined;
+  const isEmpty = _dbg === "facility" || (!loadingFacilities && facilities.length === 0);
+
+  // Hidden file input for blank-state 匯入 button
+  const blankImportRef = useRef<HTMLInputElement>(null);
+
   return (
     <div className="flex flex-col gap-[16px] w-full">
-      {/* Filter row */}
+      {/* Hidden file input for blank-state import */}
+      <input
+        ref={blankImportRef}
+        type="file"
+        accept=".csv,.xls,.xlsx"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleImport(file);
+          e.target.value = "";
+        }}
+      />
+
+      {/* Filter row — hidden when empty */}
+      {!isEmpty ? (
       <div className="flex flex-wrap gap-y-[8px] items-stretch w-full">
         {/* Search bar + 清除全部條件 */}
         <div className="flex gap-[4px] self-stretch shrink-0">
@@ -741,7 +802,7 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
 
         {/* 匯出/匯入 + 新增規則 + 測試 */}
         <div className="flex gap-[4px] self-stretch shrink-0 items-center">
-          <CategoryTitleDropdown />
+          <CategoryTitleDropdown onImport={handleImport} />
           <button
             type="button"
             onClick={() => {
@@ -789,8 +850,38 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
           </button>
         </div>
       </div>
+      ) : (
+        /* Empty state toolbar: only 新增規則 */
+        <div className="flex items-center w-full">
+          <div className="flex-1" />
+          <button
+            type="button"
+            onClick={() => {
+              if (!categoryId) {
+                showToast("尚未載入分類資料", "error");
+                return;
+              }
+              const newFacility: FacilityRecord = {
+                id: `new-${Date.now()}`,
+                name: "", image: "", hours: "", fee: "", description: "",
+                memberTags: [], lastUpdated: "—", enabled: false, published: false,
+              };
+              setEditingFacility(newFacility);
+              setEditDraft({
+                name: "", imageUrl: "", hours: "", fee: "", description: "", memberTags: [],
+              });
+            }}
+            className="flex items-center justify-center px-[12px] py-[8px] rounded-[16px] shrink-0 cursor-pointer hover:bg-[#f0f6ff] active:bg-[#dce8fc] transition-colors duration-150"
+          >
+            <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#0f6beb] text-center whitespace-nowrap">
+              新增規則
+            </span>
+          </button>
+        </div>
+      )}
 
-      {/* Record count + 變更 */}
+      {/* Record count + 變更 — hidden when empty */}
+      {!isEmpty && (
       <div className="flex items-center pt-px w-full">
         <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[14px] text-[#6e6e6e] whitespace-nowrap leading-[1.5]">
           共 {filtered.length} 筆，AI 引用{" "}
@@ -806,8 +897,22 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
           </span>
         </button>
       </div>
+      )}
 
-      {/* Table */}
+      {/* Blank state: FAQ-only page with no data */}
+      {isEmpty && (
+        <BlankStateContainer>
+          <BlankStateCard
+            title="批次匯入常見問答，補充 AI 回覆內容"
+            subtitle="檔案格式（.csv / .xlsx / .xls）"
+            actionLabel="匯入"
+            onAction={() => blankImportRef.current?.click()}
+          />
+        </BlankStateContainer>
+      )}
+
+      {/* Table — only shown when data exists */}
+      {!isEmpty && (
       <div className="w-full overflow-x-auto rounded-[16px] ring-1 ring-[#ddd]">
         <table
           className="min-w-[1200px] w-full"
@@ -914,6 +1019,7 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
           </tbody>
         </table>
       </div>
+      )}
 
       {/* 編輯設施彈窗 */}
       {editingFacility && editDraft && (

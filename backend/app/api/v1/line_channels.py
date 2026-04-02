@@ -100,6 +100,21 @@ def _collect_missing_fields(channel: LineChannel) -> List[str]:
     return missing
 
 
+@router.post("/basic-id")
+async def get_basic_id(payload: dict):
+    """
+    透過 Channel Access Token 從 LINE 取得 Bot Basic ID
+    內部轉接 line_app (Flask :3001)
+    """
+    token = payload.get("channel_access_token")
+    if not token:
+        raise HTTPException(status_code=400, detail="缺少 channel_access_token")
+    basic_id = fetch_basic_id_from_line(token)
+    if not basic_id:
+        raise HTTPException(status_code=502, detail="無法從 LINE 取得 Basic ID")
+    return {"ok": True, "basicId": basic_id}
+
+
 @router.get("/current", response_model=Optional[LineChannelResponse])
 async def get_current_channel(db: AsyncSession = Depends(get_db)):
     """

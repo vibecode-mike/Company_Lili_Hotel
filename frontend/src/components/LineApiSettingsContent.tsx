@@ -143,7 +143,7 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
 
     try {
       // 調用現有的 Flask endpoint
-      const response = await fetch('/api/bot/basic-id', {
+      const response = await fetch('/api/v1/line_channels/basic-id', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -12,6 +12,7 @@ import {
 } from "./chatbot/AIChatbotEditModal";
 
 import { PageHeaderWithBreadcrumb } from "./common/Breadcrumb";
+import { BlankStateCard, BlankStateContainer } from "./common/BlankStateCard";
 import CategoryTitleDropdown from "./common/CategoryTitleDropdown";
 import svgPaths from "../imports/svg-icons-common";
 import togglePaths from "../imports/svg-wbwsye31ry";
@@ -968,9 +969,33 @@ const PMSDataTable = memo(function PMSDataTable({
 
   const thProps = { sortField, sortDir, onSort: handleSort };
 
+  // Blank state detection
+  // DEBUG: window.__BLANK_DEBUG = 'both' | 'faq' to force blank states for visual QA
+  const _dbg = typeof window !== "undefined" ? (window as any).__BLANK_DEBUG : undefined;
+  const bothEmpty = _dbg === "both" || (!loadingRooms && !loadingPmsRooms && rooms.length === 0 && pmsRooms.length === 0);
+  const pmsViewEmpty = !bothEmpty && viewMode === "pms" && !loadingPmsRooms && pmsRooms.length === 0;
+  const faqViewEmpty = !bothEmpty && (_dbg === "faq" || (viewMode === "faq" && !loadingRooms && rooms.length === 0));
+
+  // Hidden file input for blank-state 匯入 button
+  const blankImportRef = useRef<HTMLInputElement>(null);
+
   return (
     <div className="flex flex-col gap-[16px] w-full">
-      {/* Filter row */}
+      {/* Hidden file input for blank-state import */}
+      <input
+        ref={blankImportRef}
+        type="file"
+        accept=".csv,.xls,.xlsx"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleImport(file);
+          e.target.value = "";
+        }}
+      />
+
+      {/* Filter row — hidden when both sources are empty */}
+      {!bothEmpty && (
       <div className="flex flex-wrap gap-y-[8px] items-stretch w-full">
         {/* Search bar + 清除全部條件 */}
         <div className="flex gap-[4px] self-stretch shrink-0">
@@ -1075,7 +1100,41 @@ const PMSDataTable = memo(function PMSDataTable({
           </button>
         </div>
       </div>
+      )}
 
+      {/* Both-empty toolbar: only 新增規則 */}
+      {bothEmpty && (
+        <div className="flex items-center w-full">
+          <div className="flex-1" />
+          <button
+            type="button"
+            onClick={() => {
+              if (!categoryId) return;
+              const newId = `new-${Date.now()}`;
+              const newRoom: RoomRecord = {
+                id: newId, roomType: "", image: "", pricePerNight: 0, maxGuests: 0,
+                remainingRooms: "", features: "", memberTags: [], url: "",
+                lastUpdated: "—", enabled: false, published: false,
+                pmsRoomCode: "", customImageUrl: "",
+              };
+              setEditingRoom(newRoom);
+              setEditDraft({
+                customRoomName: "", customImageUrl: "", customPrice: "",
+                customGuests: "", customRemaining: "", features: "",
+                memberTags: [], bookingUrl: "",
+              });
+            }}
+            className="flex items-center justify-center px-[12px] py-[8px] rounded-[16px] shrink-0 cursor-pointer hover:bg-[#f0f6ff] active:bg-[#dce8fc] transition-colors duration-150"
+          >
+            <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#0f6beb] text-center whitespace-nowrap">
+              新增規則
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* PMS/FAQ toggle + Record count — hidden when both empty */}
+      {!bothEmpty && (<>
       {/* PMS/FAQ toggle + Record count — same row per Figma node 1479:30318 */}
       <div className="flex gap-[12px] items-center pt-px w-full">
         {/* PMS / FAQ pill switch — Figma node 1492:30309 */}
@@ -1171,8 +1230,50 @@ const PMSDataTable = memo(function PMSDataTable({
           </button>
         </div>
       </div>
+      </>)}
 
-      {/* Table */}
+      {/* Blank state: both PMS and FAQ empty — two side-by-side cards */}
+      {bothEmpty && (
+        <BlankStateContainer>
+          <BlankStateCard
+            title="同步房況、房型與訂房相關資訊，讓 AI 可引用最新資料"
+            actionLabel="串接 PMS"
+            onAction={onNavigateToSettings}
+          />
+          <BlankStateCard
+            title="批次匯入常見問答，補充 AI 回覆內容"
+            subtitle="檔案格式（.csv / .xlsx / .xls）"
+            actionLabel="匯入"
+            onAction={() => blankImportRef.current?.click()}
+          />
+        </BlankStateContainer>
+      )}
+
+      {/* Blank state: PMS view empty (FAQ has data) — single PMS card */}
+      {pmsViewEmpty && (
+        <BlankStateContainer>
+          <BlankStateCard
+            title="此來源目前無資料"
+            description="同步房況、房型與訂房相關資訊，讓 AI 可引用最新資料"
+            actionLabel="串接 PMS"
+            onAction={onNavigateToSettings}
+          />
+        </BlankStateContainer>
+      )}
+
+      {/* Blank state: FAQ view empty (PMS has data) — single FAQ card */}
+      {faqViewEmpty && (
+        <BlankStateContainer>
+          <BlankStateCard
+            title="此來源目前無資料，可透過上方匯入新增"
+            subtitle="檔案格式（.csv / .xlsx / .xls）"
+            paddingY="pt-[68px] pb-[68px]"
+          />
+        </BlankStateContainer>
+      )}
+
+      {/* Table — only shown when current view has data */}
+      {!bothEmpty && !pmsViewEmpty && !faqViewEmpty && (
       <div className="w-full overflow-x-auto rounded-[16px] ring-1 ring-[#ddd]">
         <table
           className="min-w-[1486px] w-full"
@@ -1330,6 +1431,7 @@ const PMSDataTable = memo(function PMSDataTable({
           </tbody>
         </table>
       </div>
+      )}
 
       {/* 編輯房型彈窗 */}
       {editingRoom && editDraft && (
