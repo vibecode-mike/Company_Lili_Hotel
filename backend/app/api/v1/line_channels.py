@@ -315,3 +315,26 @@ async def delete_channel(
         await db.rollback()
         logger.error(f"❌ 刪除 LINE 頻道設定失敗: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"刪除設定失敗: {str(e)}")
+
+
+@router.post("/basic-id")
+async def get_basic_id(data: dict):
+    """
+    透過 line_app 取得 LINE Bot Basic ID（供前端呼叫）
+    """
+    token = data.get("channel_access_token", "")
+    if not token:
+        raise HTTPException(status_code=400, detail="channel_access_token is required")
+
+    from app.config import settings
+    try:
+        flask_url = f"{settings.LINE_APP_URL}/api/bot/basic-id"
+        response = requests.post(
+            flask_url,
+            json={"channel_access_token": token},
+            timeout=10,
+        )
+        return response.json()
+    except Exception as e:
+        logger.error(f"❌ 取得 Basic ID 失敗: {e}")
+        raise HTTPException(status_code=502, detail="無法連接 LINE Bot 服務")

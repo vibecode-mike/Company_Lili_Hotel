@@ -15,19 +15,40 @@ jobs:
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            set -e
             export PATH="/home/creative_design/miniconda3/bin:$PATH"
             cd /home/Company_Lili_Hotel
 
-            # Pull latest code
+            echo "=== Backup GCP env files ==="
+            cp frontend/.env.production /tmp/frontend-env-production.bak
+
+            echo "=== Stash local changes if any ==="
+            git stash push -m "auto-stash before deploy $(date +%Y%m%d-%H%M%S)" || true
+
+            echo "=== Pull latest code ==="
             git pull origin main
 
-            # Backend: install dependencies & run migrations
+            echo "=== Restore local changes ==="
+            git stash pop || true
+
+            echo "=== Restore GCP env files ==="
+            cp /tmp/frontend-env-production.bak frontend/.env.production
+
+            echo "=== Backend: dependencies & migrations ==="
             cd /home/Company_Lili_Hotel/backend
             pip install -r requirements.txt -q
             alembic upgrade head
-            # uvicorn --reload 會自動偵測變更重啟
 
-            # Frontend: build production bundle (nginx serves static)
+            echo "=== Frontend: build ==="
             cd /home/Company_Lili_Hotel/frontend
             npm install --silent
             npm run build
+
+            echo "=== Restart services ==="
+            sudo systemctl restart lili-backend
+            sudo systemctl restart lili-linebot
+
+            echo "=== Health check ==="
+            sleep 3
+            curl -sf http://127.0.0.1:8700/health > /dev/null && echo "Backend OK" || echo "Backend FAIL"
+            sudo systemctl is-active lili-linebot > /dev/null && echo "LINE Bot OK" || echo "LINE Bot FAIL"

@@ -1,0 +1,18 @@
+[Unit]
+Description=Lili Hotel CRM Backend (FastAPI)
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=creative_design
+Group=creative_design
+WorkingDirectory=/home/Company_Lili_Hotel/backend
+EnvironmentFile=/home/Company_Lili_Hotel/backend/.env
+Environment=PATH=/home/creative_design/miniconda3/bin:/usr/local/bin:/usr/bin
+ExecStart=/home/creative_design/miniconda3/bin/uvicorn app.main:app --host 0.0.0.0 --port 8700
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

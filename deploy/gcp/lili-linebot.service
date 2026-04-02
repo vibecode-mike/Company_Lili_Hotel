@@ -1,0 +1,19 @@
+[Unit]
+Description=Lili Hotel LINE Bot (Flask)
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=creative_design
+Group=creative_design
+WorkingDirectory=/home/Company_Lili_Hotel/line_app
+EnvironmentFile=/home/Company_Lili_Hotel/backend/.env
+Environment=PATH=/home/creative_design/miniconda3/bin:/usr/local/bin:/usr/bin
+Environment=PUBLIC_BASE=http://35.239.121.53:3001
+ExecStart=/home/creative_design/miniconda3/bin/python3 app.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

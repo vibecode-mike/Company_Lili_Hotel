@@ -142,7 +142,7 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
     setBasicIdError('');
 
     try {
-      // 調用現有的 Flask endpoint
+      // 調用 backend 轉接 endpoint
       const response = await fetch('/api/v1/line_channels/basic-id', {
         method: 'POST',
         headers: {
