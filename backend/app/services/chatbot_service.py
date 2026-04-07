@@ -919,13 +919,19 @@ class ChatbotService:
             if db is not None and ctx.total_tokens_used > 0:
                 await self._deduct_tokens(db, ctx.total_tokens_used)
 
+        # 先保存 booking_context（房卡產生後會清掉 session 日期）
+        booking_ctx = self._booking_context(session)
+
         if room_cards:
             session.last_room_cards = room_cards
             # 房卡已出現，清掉訂房狀態（後續訂房走表單，不走 bot 對話）
+            # 同時清 history，避免下次查詢時 AI 被舊對話誤導而跳過 PMS 查詢
             session.checkin_date = None
             session.checkout_date = None
             session.booking_adults = None
             session.room_plan_requests = []
+            session.history = []
+            session.intent_state = "idle"
 
         session.history.append({"role": "assistant", "content": reply})
         reply_type = self._determine_reply_type(session, room_cards)
@@ -939,7 +945,7 @@ class ChatbotService:
             room_cards=room_cards,
             missing_fields=self._compute_missing_fields(session),
             turn_count=session.turn_count,
-            booking_context=self._booking_context(session),
+            booking_context=booking_ctx,
             tokens_used=ctx.total_tokens_used,
         )
 
@@ -987,6 +993,8 @@ class ChatbotService:
                 return msg.content or ""
 
             messages.append(msg)
+            tool_names = [tc.function.name for tc in msg.tool_calls]
+            logger.info(f"[tool_loop] AI called tools: {tool_names}")
             for tc in msg.tool_calls:
                 fn_name = tc.function.name
                 args = json.loads(tc.function.arguments)
@@ -1073,6 +1081,7 @@ class ChatbotService:
         enddate = str(args.get("enddate", ""))
         housingcnt = int(args.get("housingcnt") or 2)
         roomtype = args.get("roomtype") or None
+        logger.info(f"[PMS] tool args: startdate={startdate}, enddate={enddate}, housingcnt={housingcnt}, roomtype={roomtype}")
 
         # Auto-fill enddate if missing (default: checkin + 1 night)
         if startdate and not enddate:
@@ -1117,8 +1126,10 @@ class ChatbotService:
 
         try:
             raw = await asyncio.to_thread(query_pms, startdate, enddate, roomtype, housingcnt)
+            logger.info(f"[PMS] query result: {len(raw.get('room', []))} room types, startdate={startdate}, enddate={enddate}, housingcnt={housingcnt}")
             availability = self._extract_availability(raw, startdate, enddate)
             cards = self._availability_to_room_cards(availability, housingcnt)
+            logger.info(f"[PMS] after extraction: {len(cards)} cards")
 
             # Spec: housingcnt=1 查無房時自動以 housingcnt=2 重查
             fallback_housingcnt = None
@@ -2026,13 +2037,19 @@ class ChatbotService:
             if ctx.booking_adults is not None:
                 session.booking_adults = ctx.booking_adults
 
+        # 先保存 booking_context（房卡產生後會清掉 session 日期）
+        booking_ctx = self._booking_context(session)
+
         if room_cards:
             session.last_room_cards = room_cards
             # 房卡已出現，清掉訂房狀態（後續訂房走表單，不走 bot 對話）
+            # 同時清 history，避免下次查詢時 AI 被舊對話誤導而跳過 PMS 查詢
             session.checkin_date = None
             session.checkout_date = None
             session.booking_adults = None
             session.room_plan_requests = []
+            session.history = []
+            session.intent_state = "idle"
 
         session.history.append({"role": "assistant", "content": reply})
         reply_type = self._determine_reply_type(session, room_cards)
@@ -2057,7 +2074,7 @@ class ChatbotService:
             room_cards=room_cards,
             missing_fields=self._compute_missing_fields(session),
             turn_count=session.turn_count,
-            booking_context=self._booking_context(session),
+            booking_context=booking_ctx,
             member_form=_MEMBER_FORM if reply_type == "member_form" else None,
             tokens_used=ctx.total_tokens_used,
             referenced_rules=[{"rule_id": rid} for rid in referenced_rule_ids],

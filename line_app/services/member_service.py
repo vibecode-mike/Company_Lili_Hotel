@@ -111,8 +111,9 @@ def upsert_member(line_uid: str,
         ph.append(":liat")
         p["liat"] = utcnow()
 
-    # UPDATE part
+    # UPDATE part — 只更新有傳值的欄位，避免把未傳入的欄位蓋回 NULL
     set_parts = []
+    inserted_cols = set(fields)
     for k in (
         "line_display_name",
         "line_avatar",
@@ -123,7 +124,7 @@ def upsert_member(line_uid: str,
         "residence", "address_detail",
         "receive_notification"
     ):
-        if _table_has("members", k):
+        if _table_has("members", k) and k in inserted_cols:
             set_parts.append(f"{k}=VALUES({k})")
 
     if _table_has("members", "updated_at"):

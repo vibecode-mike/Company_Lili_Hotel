@@ -634,11 +634,12 @@ def build_room_card_flex_carousel(room_cards: list, checkin: str = "", checkout:
                 "justifyContent": "center", "alignItems": "center",
             })
 
-        # Footer: 立即訂房按鈕（有 token 就開表單，沒有就 fallback postback）
+        # Footer: 立即訂房按鈕 → 直接開表單（帶 selected 預選該房型）
         if booking_url:
+            room_url = f"{booking_url}&selected={quote(room_type_code)}"
             footer_action = {
                 "type": "uri", "label": "立即訂房",
-                "uri": booking_url,
+                "uri": room_url,
             }
         else:
             footer_action = {
@@ -2777,23 +2778,14 @@ def on_postback(event: PostbackEvent):
         try:
             room_id = params.get("roomID", [""])[0]
             room_name = params.get("roomName", [""])[0]
+            price = int(params.get("price", ["0"])[0] or 0)
             token = get_channel_access_token_by_channel_id(line_channel_id)
             api = MessagingApi(ApiClient(Configuration(access_token=token)))
             reply_token = getattr(event, "reply_token", None)
 
-            # 先回覆 LINE（避免 reply token 過期）
-            confirm_text = (
-                f"已為您選好「{room_name}」！\n"
-                "請提供您的姓名和聯絡電話，以便我為您完成訂房。"
-            )
-            if reply_token:
-                api.reply_message(ReplyMessageRequest(
-                    reply_token=reply_token,
-                    messages=[TextMessage(text=confirm_text)]
-                ))
-
-            # 再呼叫 Backend 確認選房（與官網 chatbot 統一流程）
             backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8700")
+
+            # 1) 呼叫 Backend 確認選房（與官網 chatbot 統一流程）
             confirm_resp = requests.post(
                 f"{backend_url}/api/v1/ai/confirm-room",
                 json={
@@ -2805,6 +2797,76 @@ def on_postback(event: PostbackEvent):
             if not confirm_resp.ok:
                 logging.warning(f"[on_postback] confirm-room failed: {confirm_resp.status_code}")
             logging.info(f"[on_postback] select_room: {room_name} ({room_id}), confirm_room={'OK' if confirm_resp.ok else 'FAIL'}")
+
+            # 2) 產生 booking token → 組訂房表單連結
+            booking_url = ""
+            try:
+                token_resp = requests.post(
+                    f"{backend_url}/api/v1/booking/generate-token",
+                    json={
+                        "line_uid": uid,
+                        "rooms": [{
+                            "code": room_id,
+                            "name": room_name,
+                            "price": price,
+                            "image": "",
+                            "available": None,
+                            "maxOcc": 2,
+                        }],
+                        "checkin": "",
+                        "checkout": "",
+                    },
+                    timeout=5,
+                )
+                if token_resp.ok:
+                    booking_token = token_resp.json().get("token", "")
+                    if booking_token:
+                        base_url = os.getenv("BOOKING_FORM_URL", "https://crmpoc.star-bit.io/api/v1/booking/form")
+                        booking_url = f"{base_url}?token={booking_token}"
+            except Exception:
+                logging.exception("[on_postback] generate booking token failed")
+
+            # 3) 回覆：有表單連結就送按鈕，沒有就 fallback 純文字
+            if reply_token:
+                if booking_url:
+                    flex_dict = {
+                        "type": "bubble",
+                        "body": {
+                            "type": "box", "layout": "vertical", "spacing": "md",
+                            "contents": [
+                                {"type": "text", "text": f"已為您選好「{room_name}」！",
+                                 "weight": "bold", "size": "lg", "wrap": True},
+                                {"type": "text", "text": "請點擊下方按鈕填寫資料完成訂房",
+                                 "size": "sm", "color": "#888888", "wrap": True},
+                            ],
+                        },
+                        "footer": {
+                            "type": "box", "layout": "vertical",
+                            "contents": [{
+                                "type": "button", "style": "primary",
+                                "color": "#1DB446",
+                                "action": {
+                                    "type": "uri",
+                                    "label": "填寫訂房資料",
+                                    "uri": booking_url,
+                                },
+                            }],
+                        },
+                    }
+                    flex_container = FlexContainer.from_dict(flex_dict)
+                    api.reply_message(ReplyMessageRequest(
+                        reply_token=reply_token,
+                        messages=[FlexMessage(alt_text=f"已選好「{room_name}」，請填寫訂房資料", contents=flex_container)]
+                    ))
+                else:
+                    confirm_text = (
+                        f"已為您選好「{room_name}」！\n"
+                        "請提供您的姓名和聯絡電話，以便我為您完成訂房。"
+                    )
+                    api.reply_message(ReplyMessageRequest(
+                        reply_token=reply_token,
+                        messages=[TextMessage(text=confirm_text)]
+                    ))
         except Exception:
             logging.exception("[on_postback] select_room handling failed")
         return
@@ -2997,13 +3059,16 @@ def on_text(event: MessageEvent):
                                     }
                                     for c in ai_room_cards[:11]
                                 ],
-                                "checkin": booking_ctx.get("checkin_date", ""),
-                                "checkout": booking_ctx.get("checkout_date", ""),
+                                "checkin": booking_ctx.get("checkin_date") or "",
+                                "checkout": booking_ctx.get("checkout_date") or "",
                             },
                             timeout=5,
                         )
                         if token_resp.ok:
                             booking_token = token_resp.json().get("token", "")
+                            logging.info(f"[on_text] booking_token generated: {booking_token[:8]}...")
+                        else:
+                            logging.warning(f"[on_text] generate-token failed: status={token_resp.status_code}, body={token_resp.text[:200]}")
                     except Exception:
                         logging.exception("[on_text] Failed to generate booking token")
 

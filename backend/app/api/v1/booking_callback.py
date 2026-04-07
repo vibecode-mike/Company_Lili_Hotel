@@ -17,6 +17,10 @@ from pydantic import BaseModel
 import httpx
 
 from app.config import settings
+from app.database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from fastapi import Depends
 
 import secrets
 import time
@@ -308,11 +312,32 @@ async def booking_form_page():
 
 
 @router.post("/generate-token")
-async def generate_token(data: GenerateTokenRequest):
+async def generate_token(data: GenerateTokenRequest, db: AsyncSession = Depends(get_db)):
     """LINE app 呼叫：為 line_uid 生成短效 booking token，同時存房型資料"""
     if not data.line_uid:
         raise HTTPException(status_code=422, detail="line_uid required")
-    booking_data = {"rooms": data.rooms, "checkin": data.checkin, "checkout": data.checkout}
+
+    # 查會員已存的聯絡資訊，帶入 token 供表單預填
+    member_info = {}
+    try:
+        from app.models.member import Member
+        result = await db.execute(select(Member).where(Member.line_uid == data.line_uid))
+        member = result.scalar_one_or_none()
+        if member:
+            member_info = {
+                "name": member.name or "",
+                "phone": member.phone or "",
+                "email": member.email or "",
+            }
+    except Exception:
+        logger.exception("[generate-token] Failed to load member info")
+
+    booking_data = {
+        "rooms": data.rooms,
+        "checkin": data.checkin,
+        "checkout": data.checkout,
+        "member": member_info,
+    }
     token = _generate_booking_token(data.line_uid, booking_data)
     return {"ok": True, "token": token}
 
@@ -332,6 +357,7 @@ async def booking_submit(data: BookingSubmitRequest):
     """
     訂房表單提交。
     驗證 token → 打閎運訂房 API → 取得付款 URL → 回傳給前端跳轉。
+    同時將姓名/電話/email 存到會員資料，下次訂房自動帶入。
     """
     import requests as _requests
 
@@ -340,6 +366,20 @@ async def booking_submit(data: BookingSubmitRequest):
     if not entry:
         return {"ok": False, "message": "連結已過期，請重新從 LINE 開啟訂房"}
     line_uid = entry["line_uid"]
+
+    # 存會員聯絡資訊（用 raw SQL 確保寫入）
+    try:
+        from app.database import AsyncSessionLocal
+        from sqlalchemy import text
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                text("UPDATE members SET name=:name, phone=:phone, email=:email WHERE line_uid=:uid"),
+                {"name": data.name or None, "phone": data.phone or None, "email": data.email or None, "uid": line_uid},
+            )
+            await db.commit()
+            logger.info(f"[BookingSubmit] raw SQL rowcount={result.rowcount}, line_uid={line_uid}, name={data.name}")
+    except Exception:
+        logger.exception("[BookingSubmit] Failed to save member info")
 
     api_url = settings.BOOKING_API_URL
     api_key = settings.BOOKING_API_KEY
