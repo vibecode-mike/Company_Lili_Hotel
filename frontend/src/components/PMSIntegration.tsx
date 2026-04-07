@@ -1217,7 +1217,7 @@ const PMSDataTable = memo(function PMSDataTable({
         <div className="flex flex-[1_0_0] items-center min-h-px min-w-px">
           <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[12px] text-[#6e6e6e] whitespace-nowrap leading-[1.5]">
             共 {filtered.length} 筆，引用{" "}
-            <span className="text-[#383838]">{sourceName}</span> 內容
+            <span className="text-[#383838]">{viewMode === "pms" ? "PMS" : "自訂 FAQ"}</span> 內容
           </p>
           <button
             type="button"
