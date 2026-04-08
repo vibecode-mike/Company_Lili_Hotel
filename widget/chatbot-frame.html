@@ -504,9 +504,11 @@ html,body{height:100%;background:var(--bg2);overflow:hidden;color:var(--white)}
       '<button class="btn btn-primary" id="save-booking">確認並儲存</button></div>';
     msgsEl.appendChild(div);
 
-    // bind events
+    // 預填已有的值 + bind events
     div.querySelectorAll("[data-guest]").forEach(function (el) {
-      el.oninput = function () { guestDraft[el.getAttribute("data-guest")] = el.value; };
+      var key = el.getAttribute("data-guest");
+      if (guestDraft[key]) el.value = guestDraft[key];
+      el.oninput = function () { guestDraft[key] = el.value; };
     });
     var saveBtn = div.querySelector("#save-booking");
     if (saveBtn) saveBtn.onclick = handleCreateBooking;
@@ -673,6 +675,12 @@ html,body{height:100%;background:var(--bg2);overflow:hidden;color:var(--white)}
 
       appendLine("assistant", "已收到房型選擇：" + summaryParts.join("、") + "，請填寫旅客資料。");
 
+      // 預填會員資料（回頭客自動帶入）
+      var prefill = res.member_prefill || {};
+      if (prefill.guest_name) guestDraft.guest_name = prefill.guest_name;
+      if (prefill.guest_phone) guestDraft.guest_phone = prefill.guest_phone;
+      if (prefill.guest_email) guestDraft.guest_email = prefill.guest_email;
+
       // show member form
       if (memberForm) {
         renderMemberForm();
@@ -714,9 +722,16 @@ html,body{height:100%;background:var(--bg2);overflow:hidden;color:var(--white)}
       roomCards = []; roomCounts = {}; selectedRooms = [];
       memberForm = null; guestDraft = { guest_name: "", guest_phone: "", guest_email: "" };
 
-      appendLine("system", "訂房資料已儲存完成！");
-      renderBookingResult();
-      lockInput(false);
+      // 有付款 URL 就直接跳轉，跟 LINE 流程一致
+      if (bookingUrl) {
+        appendLine("system", "正在前往付款頁面...");
+        window.open(bookingUrl, "_blank");
+        lockInput(false);
+      } else {
+        appendLine("system", "訂房資料已儲存完成！");
+        renderBookingResult();
+        lockInput(false);
+      }
     } catch (err) {
       renderError(err.message || "儲存訂房資料失敗");
       if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "確認並儲存"; }

@@ -253,7 +253,7 @@ async def booking_callback(
     # 3. 發送 LINE Flex
     line_uid = data.line_uid
     line_sent = False
-    if line_uid:
+    if line_uid and line_uid.startswith("U"):
         if data.status == "paid":
             flex_dict = _build_booking_confirm_flex(data)
             alt_text = "訂房確認通知"
@@ -396,9 +396,13 @@ async def booking_submit(data: BookingSubmitRequest):
     if not data.phone:
         raise HTTPException(status_code=422, detail="請輸入電話")
 
+    import uuid as _uuid
+    order_id = str(_uuid.uuid4()).replace("-", "")[:20]
+
     payload = {
         "hotel": hotel_code,
         "hid": hotel_id,
+        "order_id": order_id,
         "rooms": [
             {
                 "roomtype": r.room_type_code,
@@ -411,6 +415,7 @@ async def booking_submit(data: BookingSubmitRequest):
         "name": data.name,
         "phone": data.phone,
         "email": data.email,
+        "line_uid": line_uid,
         "comments": f"line_uid:{line_uid}",
     }
 

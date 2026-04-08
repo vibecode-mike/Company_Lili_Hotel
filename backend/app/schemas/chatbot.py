@@ -92,12 +92,19 @@ class MemberFormDefinitionSchema(BaseModel):
     privacy_note: str
 
 
+class MemberPrefillSchema(BaseModel):
+    guest_name: str = ""
+    guest_phone: str = ""
+    guest_email: str = ""
+
+
 class ConfirmRoomOutSchema(BaseModel):
     reply_type: Literal["member_form"] = "member_form"
     session_id: str
     selected_room_type: str
     selected_room_count: int
     member_form: MemberFormDefinitionSchema
+    member_prefill: Optional[MemberPrefillSchema] = None
 
 
 class SessionResetInSchema(BaseModel):

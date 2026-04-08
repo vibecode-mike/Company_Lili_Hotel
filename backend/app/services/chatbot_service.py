@@ -73,9 +73,14 @@ def _call_booking_api(
         logger.warning("[BookingAPI] BOOKING_API_URL or BOOKING_API_KEY not configured")
         return None
 
+    import uuid as _uuid
+    order_id = str(_uuid.uuid4()).replace("-", "")[:20]
+
     payload = {
         "hotel": hotel_code,
         "hid": hotel_id,
+        "order_id": order_id,
+        "line_uid": line_uid,
         "rooms": [
             {
                 "roomtype": room.get("room_type_code", ""),
@@ -1455,11 +1460,19 @@ class ChatbotService:
             max(1, first.get("room_count", 1)),
             source=first.get("source", "pms"),
         )
+        from app.schemas.chatbot import MemberPrefillSchema
+        prefill = MemberPrefillSchema(
+            guest_name=session.member_name or "",
+            guest_phone=session.member_phone or "",
+            guest_email=session.member_email or "",
+        ) if (session.member_name or session.member_phone or session.member_email) else None
+
         return ConfirmRoomOutSchema(
             session_id=session.session_id,
             selected_room_type=session.selected_room_type or first["room_type_code"],
             selected_room_count=session.selected_room_count or 1,
             member_form=_MEMBER_FORM,
+            member_prefill=prefill,
         )
 
     # ------------------------------------------------------------------
@@ -1575,7 +1588,7 @@ class ChatbotService:
                 name=name,
                 phone=phone,
                 email=email,
-                line_uid=browser_key if browser_key.startswith("U") else "",
+                line_uid=browser_key if browser_key.startswith("U") else f"web_{browser_key[:16]}",
             )
         except Exception as e:
             logger.warning(f"[booking_save] External booking API failed: {e}")

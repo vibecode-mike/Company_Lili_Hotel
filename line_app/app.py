@@ -3279,6 +3279,34 @@ def test_push():
 def serve_uploads(filename):
     return send_from_directory(ASSET_LOCAL_DIR, filename)
 # -------------------------------------------------
+# 閎運訂房 callback proxy → backend (port 8700)
+# -------------------------------------------------
+@app.route("/api/v1/booking/callback", methods=["POST"])
+def proxy_booking_callback():
+    """閎運打 linebot.star-bit.io 的 callback，轉給 backend 處理"""
+    backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8700")
+    try:
+        fwd_headers = {"Content-Type": request.content_type or "application/json"}
+        api_key = (request.headers.get("Api-Key")
+                   or request.headers.get("api-key")
+                   or request.headers.get("X-Api-Key")
+                   or request.headers.get("ApiKey")
+                   or "")
+        logging.info(f"[proxy_booking_callback] received Api-Key={api_key!r}, headers={list(request.headers.keys())}")
+        if api_key:
+            fwd_headers["Api-Key"] = api_key
+        resp = requests.post(
+            f"{backend_url}/api/v1/booking/callback",
+            data=request.get_data(),
+            headers=fwd_headers,
+            timeout=15,
+        )
+        return resp.text, resp.status_code, {"Content-Type": resp.headers.get("Content-Type", "application/json")}
+    except Exception as e:
+        logging.exception(f"[proxy_booking_callback] Failed: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 502
+
+# -------------------------------------------------
 # Dev run（正式用 gunicorn）
 # -------------------------------------------------
 if __name__ == "__main__":

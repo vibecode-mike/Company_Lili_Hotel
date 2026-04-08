@@ -224,7 +224,8 @@ body { font-family: 'Noto Sans TC', -apple-system, sans-serif; background: #f5f5
   nameInput.addEventListener("input", checkFormValid);
   phoneInput.addEventListener("input", checkFormValid);
   emailInput.addEventListener("input", checkFormValid);
-  submitBtn.disabled = true;  // 初始禁用
+  // 初始驗證（預填資料時也要檢查）
+  checkFormValid();
 
   // Submit
   submitBtn.onclick = async function() {
