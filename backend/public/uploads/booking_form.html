@@ -42,6 +42,8 @@ body { font-family: 'Noto Sans TC', -apple-system, sans-serif; background: #f5f5
 .field label { display: block; font-size: 13px; color: #666; margin-bottom: 4px; }
 .field input { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 15px; outline: none; }
 .field input:focus { border-color: #1DB446; }
+.field input.invalid { border-color: #FF3B30; }
+.field .field-error { color: #FF3B30; font-size: 12px; margin-top: 2px; display: none; }
 .required::after { content: ' *'; color: #FF3B30; }
 
 .submit-btn { width: 100%; padding: 14px; margin-top: 16px; margin-bottom: 32px; background: #1DB446; color: #fff; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; }
@@ -66,14 +68,17 @@ body { font-family: 'Noto Sans TC', -apple-system, sans-serif; background: #f5f5
     <div class="field">
       <label class="required">姓名</label>
       <input type="text" id="nameInput" placeholder="請輸入姓名">
+      <div class="field-error" id="nameError">請輸入姓名</div>
     </div>
     <div class="field">
       <label class="required">聯絡電話</label>
       <input type="tel" id="phoneInput" placeholder="例：0912345678" maxlength="10">
+      <div class="field-error" id="phoneError">請輸入正確的手機號碼（09開頭10碼）</div>
     </div>
     <div class="field">
       <label class="required">Email</label>
       <input type="email" id="emailInput" placeholder="example@mail.com">
+      <div class="field-error" id="emailError">請輸入正確的 Email</div>
     </div>
   </div>
 
@@ -173,32 +178,68 @@ body { font-family: 'Noto Sans TC', -apple-system, sans-serif; background: #f5f5
       r.qty = Math.max(0, r.qty - 1);
       document.getElementById("qty-" + i).textContent = r.qty;
       this.disabled = r.qty <= 0;
+      if (typeof checkFormValid === "function") checkFormValid();
     };
     div.querySelector(".plus").onclick = function() {
       r.qty = Math.min(maxQty, r.qty + 1);
       document.getElementById("qty-" + i).textContent = r.qty;
       div.querySelector(".minus").disabled = r.qty <= 0;
+      if (typeof checkFormValid === "function") checkFormValid();
     };
     div.querySelector(".minus").disabled = r.qty <= 0;
   });
 
+  // 即時驗證
+  var nameInput = document.getElementById("nameInput");
+  var phoneInput = document.getElementById("phoneInput");
+  var emailInput = document.getElementById("emailInput");
+  var submitBtn = document.getElementById("submitBtn");
+
+  function validateName() {
+    var ok = nameInput.value.trim().length > 0;
+    nameInput.classList.toggle("invalid", !ok && nameInput.value.length > 0);
+    document.getElementById("nameError").style.display = (!ok && nameInput.value.length > 0) ? "block" : "none";
+    return ok;
+  }
+  function validatePhone() {
+    var ok = /^09\d{8}$/.test(phoneInput.value.trim());
+    phoneInput.classList.toggle("invalid", !ok && phoneInput.value.length > 0);
+    document.getElementById("phoneError").style.display = (!ok && phoneInput.value.length > 0) ? "block" : "none";
+    return ok;
+  }
+  function validateEmail() {
+    var val = emailInput.value.trim();
+    var ok = val.length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+    emailInput.classList.toggle("invalid", !ok && val.length > 0);
+    document.getElementById("emailError").style.display = (!ok && val.length > 0) ? "block" : "none";
+    return ok;
+  }
+  function checkFormValid() {
+    var hasRoom = rooms.some(function(r) { return r.qty > 0; });
+    var allValid = hasRoom && validateName() && validatePhone() && validateEmail();
+    submitBtn.disabled = !allValid;
+    return allValid;
+  }
+
+  nameInput.addEventListener("input", checkFormValid);
+  phoneInput.addEventListener("input", checkFormValid);
+  emailInput.addEventListener("input", checkFormValid);
+  submitBtn.disabled = true;  // 初始禁用
+
   // Submit
-  document.getElementById("submitBtn").onclick = async function() {
-    var name = document.getElementById("nameInput").value.trim();
-    var phone = document.getElementById("phoneInput").value.trim();
-    var email = document.getElementById("emailInput").value.trim();
+  submitBtn.onclick = async function() {
+    if (!checkFormValid()) return;
+
+    var name = nameInput.value.trim();
+    var phone = phoneInput.value.trim();
+    var email = emailInput.value.trim();
     var errEl = document.getElementById("errorMsg");
     errEl.style.display = "none";
 
     var selectedRooms = rooms.filter(function(r) { return r.qty > 0; });
-    if (selectedRooms.length === 0) { errEl.textContent = "請至少選擇一間房型"; errEl.style.display = "block"; return; }
-    if (!name) { errEl.textContent = "請輸入姓名"; errEl.style.display = "block"; return; }
-    if (!phone || !/^09\d{8}$/.test(phone)) { errEl.textContent = "請輸入正確的手機號碼（09開頭10碼）"; errEl.style.display = "block"; return; }
-    if (!email || !email.includes("@")) { errEl.textContent = "請輸入正確的 Email"; errEl.style.display = "block"; return; }
 
-    var btn = document.getElementById("submitBtn");
-    btn.disabled = true;
-    btn.textContent = "處理中...";
+    submitBtn.disabled = true;
+    submitBtn.textContent = "處理中...";
 
     try {
       var resp = await fetch("/api/v1/booking/submit", {
@@ -216,22 +257,24 @@ body { font-family: 'Noto Sans TC', -apple-system, sans-serif; background: #f5f5
           email: email
         })
       });
-      var result = await resp.json();
+
+      var result;
+      try { result = await resp.json(); } catch(e) { result = {}; }
 
       if (result.ok && result.payment_url) {
-        btn.textContent = "正在前往付款...";
+        submitBtn.textContent = "正在前往付款...";
         window.location.href = result.payment_url;
       } else {
         errEl.textContent = result.message || "訂房失敗，請稍後再試";
         errEl.style.display = "block";
-        btn.disabled = false;
-        btn.textContent = "立即訂房";
+        submitBtn.disabled = false;
+        submitBtn.textContent = "立即訂房";
       }
     } catch(e) {
       errEl.textContent = "網路錯誤，請稍後再試";
       errEl.style.display = "block";
-      btn.disabled = false;
-      btn.textContent = "立即訂房";
+      submitBtn.disabled = false;
+      submitBtn.textContent = "立即訂房";
     }
   };
 })();

@@ -646,15 +646,16 @@ def _build_system_prompt_for(today: date) -> str:
 
 你會收到整段對話紀錄（包含先前訊息），請務必綜合上下文，不要重複追問已提供的資訊。
 
-核心行為規則（最高優先，嚴格遵守）：
-- 只要能推斷出入住日期，就立刻呼叫 query_pms_availability，不要追問任何確認
-- 若無法推斷入住日期，必須先追問入住日期和住幾晚，絕對不可以沒有日期就查詢房況
-- 預設值：退房日 = 入住日 + 1 天（住一晚）、間數 = 1 間、人數從房型推斷（雙人房=2、四人房=4）
+核心行為規則（最高優先，嚴格遵守，違反視為錯誤）：
+- 必須收齊以下三項資訊才能呼叫 query_pms_availability：(1) 入住日期 (2) 住幾晚 (3) 幾間、幾人房
+- 三項齊全時，「必須」在本次回覆中呼叫 query_pms_availability tool，絕對不可以只回文字而不呼叫 tool
+- 嚴禁回覆「幫您查詢」「請稍等」之類的話而不實際呼叫 tool
+- 缺少任何一項時，只追問缺少的項目，不要重複追問已知的資訊
+- 追問順序：入住日期 → 住幾晚 → 幾間幾人房
 - 客人只提供月/日時，直接當作今年，不要反問年份
-- 「今天入住」→ startdate={today_str}、enddate 自動算明天
-- 「還有X房嗎」「有沒有X房」→ 若已知入住日期則直接查詢，否則先追問入住日期和住幾晚
+- 「今天入住」→ startdate={today_str}
 - 今天（含）及未來日期都是有效入住日，只有嚴格早於今天的日期才算「已過期」
-- 嚴禁在沒有入住日期的情況下呼叫 query_pms_availability，必須先問「請問您預計什麼時候入住？住幾晚呢？」
+- 若客人一次給齊所有資訊（例如「4/11入住一晚 一間雙人房」），直接呼叫 tool 不要追問
 
 知識庫查詢規則：
 - 客人詢問設施（游泳池、停車場、餐廳位置、費用、開放時間等）時，先呼叫 kb_search(category="facilities")
@@ -671,19 +672,18 @@ def _build_system_prompt_for(today: date) -> str:
 - 若客人明確表示不需要訂房，則不再追加引導語
 
 訂房引導規則：
-- 若客人說「今天入住」且沒說退房日，預設住一晚（退房=明天）
-- 若客人沒說幾間，預設 1 間
-- 「雙人房」=2人房、「四人房」=4人房、「家庭房」=4人房、「單人房」=1人房，不需要再確認人數
-- 「還有X房嗎」「有沒有X房」= 查詢房況，預設 1 間，直接查詢不要追問
-- 資訊齊全時，立刻呼叫 query_pms_availability，嚴禁再追問確認
-- 範例：「3/18入住一晚 一間雙人房」→ startdate=今年3/18, enddate=今年3/19, housingcnt=2 → 直接查
-- 範例：「今天入住 還有雙人房嗎」→ startdate=今天, enddate=明天, housingcnt=2 → 直接查
-- 無法推斷入住日期時，必須追問「請問您預計什麼時候入住？住幾晚呢？」，不可跳過
+- 「雙人房」=2人房(housingcnt=2)、「四人房」=4人房(housingcnt=4)、「家庭房」=4人房(housingcnt=4)、「單人房」=1人房(housingcnt=1)
+- 三項資訊齊全時，必須在本次回覆中呼叫 query_pms_availability tool，嚴禁只回文字不呼叫 tool，嚴禁再追問確認
+- 範例：「3/18入住一晚 一間雙人房」→ 三項齊全 → startdate=今年3/18, enddate=今年3/19, housingcnt=2 → 直接查
+- 範例：「4/11」→ 只有入住日期，缺住幾晚和幾間幾人房 → 追問「請問住幾晚？需要幾間什麼房型呢？」
+- 範例：「4/11 一晚」→ 有日期和晚數，缺幾間幾人房 → 追問「請問需要幾間房呢？雙人房還是其他房型？」
+- 範例：「一間雙人房」→ 有房型但缺日期 → 追問「請問您預計什麼時候入住？住幾晚呢？」
 
 房況查詢規則：
 {pms_rule}
 - 呼叫 query_pms_availability 時，roomtype 參數只在客人指定了「確切房型名稱」（例如「森森系雙人房」「琴香古韻」）時才傳；若客人只說「雙人房」「四人房」等通稱，不要傳 roomtype，讓系統回傳所有適合的房型供客人選擇
-- 客人指定多種房型組合（例如「四人房 1 間、雙人房 3 間」）時，呼叫 query_pms_mixed_availability
+- 只有客人同時指定「兩種以上不同房型」（例如「四人房 1 間 + 雙人房 3 間」）時，才呼叫 query_pms_mixed_availability
+- 單一房型多間（例如「2間雙人房」「3間四人房」）時，用 query_pms_availability 即可，不要用 mixed
 - 依 all_available 與 items 回答是否可行；可行時回覆每種房型間數
 
 選房與聯絡資訊規則：
@@ -902,8 +902,40 @@ class ChatbotService:
             reply = past_date_warning
             room_cards: List[RoomCardSchema] = []
         else:
+            # 組裝 system prompt，附加已知的訂房狀態讓 AI 不重複追問
+            sys_prompt = _build_system_prompt()
+            known_parts = []
+            missing_parts = []
+            if session.checkin_date:
+                known_parts.append(f"入住日期：{session.checkin_date}")
+            else:
+                missing_parts.append("入住日期")
+            if session.checkout_date:
+                known_parts.append(f"退房日期：{session.checkout_date}")
+            else:
+                missing_parts.append("住幾晚")
+            if session.booking_adults:
+                known_parts.append(f"人數：{session.booking_adults}")
+            else:
+                missing_parts.append("幾間幾人房")
+            if session.room_plan_requests:
+                rp = session.room_plan_requests[0] if session.room_plan_requests else {}
+                known_parts.append(f"房型需求：{rp.get('room_count', 1)}間{rp.get('adults_per_room', 2)}人房")
+            elif session.booking_adults:
+                pass  # 已有人數
+            else:
+                if "幾間幾人房" not in missing_parts:
+                    missing_parts.append("幾間幾人房")
+
+            if known_parts:
+                sys_prompt += "\n\n目前已收集到的訂房資訊（不需要再追問這些）：\n" + "、".join(known_parts)
+            if missing_parts:
+                sys_prompt += "\n尚缺：" + "、".join(missing_parts) + " → 請追問這些資訊"
+            elif session.checkin_date:
+                sys_prompt += "\n→ 三項資訊已齊全，你必須在本次回覆中呼叫 query_pms_availability，不可只回文字。"
+
             messages: List[Dict[str, Any]] = [
-                {"role": "system", "content": _build_system_prompt()},
+                {"role": "system", "content": sys_prompt},
                 *session.history,
             ]
             reply = await self._unified_tool_loop(messages, ctx)
@@ -924,11 +956,8 @@ class ChatbotService:
 
         if room_cards:
             session.last_room_cards = room_cards
-            # 房卡已出現，清掉訂房狀態（後續訂房走表單，不走 bot 對話）
-            # 同時清 history，避免下次查詢時 AI 被舊對話誤導而跳過 PMS 查詢
-            session.checkin_date = None
-            session.checkout_date = None
-            session.booking_adults = None
+            # 房卡已出現：清 history 和 intent（避免下次查詢被舊對話誤導）
+            # 但保留日期和人數（booking-save 還需要用）
             session.room_plan_requests = []
             session.history = []
             session.intent_state = "idle"
@@ -1038,7 +1067,10 @@ class ChatbotService:
                 ctx.room_cards = cards
             return result
         elif fn_name == "query_pms_mixed_availability":
-            return await self._run_mixed_avail_tool(args)
+            result = await self._run_mixed_avail_tool(args, ctx)
+            if ctx.room_cards:
+                pass  # cards already set by _run_mixed_avail_tool
+            return result
         elif fn_name == "confirm_room_selection":
             if ctx._session is not None:
                 return self._run_confirm_room_tool(args, ctx._session)
@@ -1218,7 +1250,7 @@ class ChatbotService:
         self._apply_member_to_session(session, name, phone, email)
         return {"ok": True, "name": name, "phone": phone, "email": email}
 
-    async def _run_mixed_avail_tool(self, args: Dict[str, Any]) -> Dict[str, Any]:
+    async def _run_mixed_avail_tool(self, args: Dict[str, Any], ctx: Optional[ToolCallingContext] = None) -> Dict[str, Any]:
         """Execute mixed-room availability check (adapted from zhida)."""
         startdate = str(args.get("startdate", ""))
         enddate = str(args.get("enddate", ""))
@@ -1293,6 +1325,21 @@ class ChatbotService:
                 "price": chosen_price,
                 "subtotal_price": chosen_price * req_count if chosen_price > 0 else 0,
             })
+
+        # 產生 room_cards 讓前端顯示房卡 carousel
+        if ctx is not None and inventory:
+            cards = self._availability_to_room_cards(
+                {"ok": True, "available": inventory},
+                max((r.get("occupancy") or 2) for r in requests),
+            )
+            if cards:
+                db = ctx.db
+                cards = await _enrich_cards_with_kb(cards, db)
+                ctx.room_cards = cards
+            if startdate:
+                ctx.checkin_date = startdate
+            if enddate:
+                ctx.checkout_date = enddate
 
         return {"ok": True, "all_available": all_available, "items": item_results}
 
@@ -1630,6 +1677,14 @@ class ChatbotService:
         except Exception:
             pass  # DB unavailable → JSON fallback
 
+        # 訂房完成，清掉訂房狀態（下次對話重新收集）
+        session.checkin_date = None
+        session.checkout_date = None
+        session.booking_adults = None
+        session.selected_rooms = []
+        session.selected_room_type = None
+        session.selected_room_count = None
+
         return BookingSaveOutSchema(
             ok=True,
             reservation_id=reservation_id,
@@ -1788,21 +1843,27 @@ class ChatbotService:
 
     def _extract_room_plan(self, message: str) -> Optional[Dict[str, int]]:
         """Spec: '我要X間Y人房' → {room_count, adults_per_room}。不調用 LLM。"""
+        cn_num = {"一": 1, "二": 2, "兩": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
         # Pattern: [X間][Y人房 | 雙人房 | 單人房 | ...]
         room_count_match = re.search(r"(\d+)\s*間", message)
-        room_count = int(room_count_match.group(1)) if room_count_match else 1
+        if room_count_match:
+            room_count = int(room_count_match.group(1))
+        else:
+            cn_match = re.search(r"([一二兩三四五六七八九十])\s*間", message)
+            room_count = cn_num.get(cn_match.group(1), 1) if cn_match else None
 
         # Named room type → people count
         named = {"雙人房": 2, "單人房": 1, "家庭房": 4, "四人房": 4, "三人房": 3}
         for name, people in named.items():
             if name in message:
-                return {"room_count": room_count, "adults_per_room": people}
+                return {"room_count": room_count or 1, "adults_per_room": people}
 
         # Numeric: X人房
         numeric_match = re.search(r"(\d+)\s*人\s*房", message)
         if numeric_match:
-            return {"room_count": room_count, "adults_per_room": int(numeric_match.group(1))}
+            return {"room_count": room_count or 1, "adults_per_room": int(numeric_match.group(1))}
 
+        # 只說了「X間」但沒說房型 → 不算齊全
         return None
 
     def _extract_dates(self, message: str) -> Optional[Tuple[str, str]]:
@@ -2022,7 +2083,33 @@ class ChatbotService:
             booking_adults=session.booking_adults,
         )
 
-        # 7. 統一 Tool Calling 迴圈
+        # 7. 附加已知訂房狀態到 system prompt
+        known_parts = []
+        missing_parts = []
+        if session.checkin_date:
+            known_parts.append(f"入住日期：{session.checkin_date}")
+        else:
+            missing_parts.append("入住日期")
+        if session.checkout_date:
+            known_parts.append(f"退房日期：{session.checkout_date}")
+        else:
+            missing_parts.append("住幾晚")
+        if session.booking_adults:
+            known_parts.append(f"人數：{session.booking_adults}")
+        else:
+            missing_parts.append("幾間幾人房")
+        if session.room_plan_requests:
+            rp = session.room_plan_requests[0] if session.room_plan_requests else {}
+            known_parts.append(f"房型需求：{rp.get('room_count', 1)}間{rp.get('adults_per_room', 2)}人房")
+
+        if known_parts:
+            messages[0]["content"] += "\n\n目前已收集到的訂房資訊（不需要再追問這些）：\n" + "、".join(known_parts)
+        if missing_parts:
+            messages[0]["content"] += "\n尚缺：" + "、".join(missing_parts) + " → 請追問這些資訊"
+        elif session.checkin_date:
+            messages[0]["content"] += "\n→ 三項資訊已齊全，你必須在本次回覆中呼叫 query_pms_availability，不可只回文字。"
+
+        # 統一 Tool Calling 迴圈
         if past_date_warning:
             reply = past_date_warning
             room_cards: List[RoomCardSchema] = []
@@ -2042,11 +2129,8 @@ class ChatbotService:
 
         if room_cards:
             session.last_room_cards = room_cards
-            # 房卡已出現，清掉訂房狀態（後續訂房走表單，不走 bot 對話）
-            # 同時清 history，避免下次查詢時 AI 被舊對話誤導而跳過 PMS 查詢
-            session.checkin_date = None
-            session.checkout_date = None
-            session.booking_adults = None
+            # 房卡已出現：清 history 和 intent（避免下次查詢被舊對話誤導）
+            # 但保留日期和人數（booking-save 還需要用）
             session.room_plan_requests = []
             session.history = []
             session.intent_state = "idle"

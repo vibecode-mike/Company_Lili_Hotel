@@ -328,7 +328,14 @@ html,body{height:100%;background:var(--bg2);overflow:hidden;color:var(--white)}
     var res = await fetch(url, opts);
     if (!res.ok) {
       var detail = "Request failed: " + res.status;
-      try { var d = await res.json(); detail = d.detail || d.message || detail; } catch (_) {}
+      try {
+        var d = await res.json();
+        if (d.detail && typeof d.detail === "object") {
+          detail = d.detail.message || JSON.stringify(d.detail);
+        } else {
+          detail = d.detail || d.message || detail;
+        }
+      } catch (_) {}
       throw new Error(detail);
     }
     return res.json();
