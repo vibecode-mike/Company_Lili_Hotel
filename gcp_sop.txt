@@ -1,0 +1,141 @@
+============================================================
+GCP 部署架構規劃 - 力麗飯店 CRM 多租戶方案
+============================================================
+最後更新：2026-04-08
+
+一、統一入口設計
+------------------------------------------------------------
+一個域名服務所有飯店客戶：
+
+  api.star-bit.io
+  ├── /api/v1/booking/callback             （閎運只打這一個）
+  ├── /hotel-zhida/api/v1/...              （知達飯店 API）
+  ├── /hotel-lili/api/v1/...               （力麗飯店 API）
+  ├── /hotel-younglake/api/v1/...          （鄰近飯店 API）
+  └── /hotel-xxx/callback/{line_channel_id}（LINE webhook）
+
+閎運永遠只設定一個 callback URL，不因新增客戶而改動。
+
+
+二、架構圖
+------------------------------------------------------------
+
+                      閎運 PMS
+                         |
+                         v
+                +-----------------+
+                |  Cloud Load     |  一個固定 IP + SSL
+                |  Balancer       |  所有流量入口
+                +--------+--------+
+                         |
+                +--------v--------+
+                |  API Gateway /  |  統一路由分流
+                |  Nginx          |  依 hotel_code 或路徑分派
+                +--------+--------+
+                         |
+           +-------------+-------------+
+           v             v             v
+      +---------+   +---------+   +---------+
+      | Hotel A |   | Hotel B |   | Hotel C |  Cloud Run 或 GCE
+      | Backend |   | Backend |   | Backend |  每間飯店獨立容器
+      | + Flask |   | + Flask |   | + Flask |
+      +----+----+   +----+----+   +----+----+
+           |             |             |
+      +----v----+   +----v----+   +----v----+
+      | MySQL A |   | MySQL B |   | MySQL C |  Cloud SQL
+      +---------+   +---------+   +---------+  各自獨立 DB
+
+
+三、閎運 Callback 統一分流邏輯
+------------------------------------------------------------
+閎運打：POST https://api.star-bit.io/api/v1/booking/callback
+
+API Gateway 收到後，用 order_id 前綴判斷飯店：
+
+  order_id 前綴對照表：
+    ZW  → hotel-zhida   （知達飯店）
+    LL  → hotel-lili    （力麗飯店）
+    YL  → hotel-younglake
+
+轉發到對應飯店的 backend 處理，各 backend 獨立推 LINE Flex。
+
+
+四、每間飯店需要的資源
+------------------------------------------------------------
+  共用資源（只需一份）：
+    - 域名：api.star-bit.io
+    - SSL 憑證：一張萬用憑證 *.star-bit.io
+    - Cloud Load Balancer：一個
+    - API Gateway / Nginx 路由：一個
+
+  獨立資源（每間飯店各一份）：
+    - Backend 容器（FastAPI, port 8700）
+    - LINE App 容器（Flask, port 3001）
+    - MySQL 資料庫（Cloud SQL）
+    - LINE Official Account + Messaging API Channel
+    - 閎運 PMS 帳號（hotel_code, API key）
+    - .env 環境變數設定
+
+
+五、新增客戶 SOP
+------------------------------------------------------------
+  1. 建立飯店設定
+     - 取得閎運 PMS 帳號（hotel_code, API key）
+     - 申請 LINE Official Account + Messaging API Channel
+     - 準備 .env 設定檔
+
+  2. 部署服務
+     - 部署 Backend 容器（Cloud Run 或 GCE）
+     - 部署 LINE App 容器
+     - 建立 Cloud SQL 資料庫
+     - 執行 alembic upgrade head 初始化 DB
+
+  3. 路由設定
+     - API Gateway 加一條路由規則（hotel-code → 對應容器）
+     - 不需要改閎運的 callback URL
+
+  4. LINE 設定
+     - LINE Developers Console 設定 Webhook URL
+     - 指向：https://api.star-bit.io/hotel-xxx/callback/{line_channel_id}
+     - 啟用 Use webhook
+
+  5. 驗證測試
+     - 測試 LINE webhook 收發
+     - 測試 AI 訂房流程
+     - 測試閎運訂房 API + callback
+     - 測試 CRM 後台登入
+
+
+六、成本估算（每間飯店 / 月）
+------------------------------------------------------------
+  Cloud Run（Backend + Flask）     $10 - $30
+  Cloud SQL（MySQL）               $15 - $30
+  共攤（LB + 域名 + SSL）          ~$5
+  ------------------------------------------
+  合計                             約 $30 - $65 / 月
+
+  備註：
+  - Cloud Run 按使用量計費，流量低時更便宜
+  - Cloud SQL 可用 db-f1-micro 省錢（測試/小型客戶）
+  - 多間飯店共用一個 Cloud SQL instance（不同 database）可再省
+
+
+七、現有環境 vs GCP 對照
+------------------------------------------------------------
+  現有（地端）                    GCP
+  ----------------------------------------
+  192.168.50.123                  GCE VM 或 Cloud Run
+  210.242.27.235（Nginx 代理）    Cloud Load Balancer
+  本機 MySQL                      Cloud SQL
+  SSH tunnel                      不需要（直接連）
+  linebot.star-bit.io             api.star-bit.io（統一）
+  crmpoc.star-bit.io              api.star-bit.io（統一）
+  手動 systemctl 管理              Cloud Run 自動管理
+
+
+八、備註
+------------------------------------------------------------
+- 現有程式碼不需要大改，主要是部署方式和路由層的變化
+- Docker 化是第一步：把 Backend / Flask / Frontend 各包成 image
+- 建議先用一間飯店測試 GCP 部署，驗證流程後再擴展
+- 閎運 API 金鑰等敏感資訊用 GCP Secret Manager 管理
