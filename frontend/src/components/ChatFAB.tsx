@@ -788,50 +788,8 @@ function BookingResultMessage({
             fontWeight: 600,
           }}
         >
-          ✅ 訂房資訊已儲存
+          ✅ 訂房資訊已儲存，正在前往付款頁面...
         </div>
-        <div
-          style={{
-            fontSize: 12,
-            fontFamily: "'Noto Sans TC', sans-serif",
-            color: "#6e6e6e",
-          }}
-        >
-          預訂編號：
-          <span style={{ color: "#383838", fontWeight: 600 }}>
-            {msg.reservationId}
-          </span>
-        </div>
-        <div
-          style={{
-            fontSize: 11,
-            fontFamily: "'Noto Sans TC', sans-serif",
-            color: "#9ca3af",
-          }}
-        >
-          房價與訂房確認詳情請完成付款後確認。
-        </div>
-        {msg.cartUrl && (
-          <a
-            href={msg.cartUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: "block",
-              textAlign: "center",
-              background: "#0f6beb",
-              color: "#fff",
-              borderRadius: 12,
-              padding: "10px 0",
-              fontSize: 14,
-              fontFamily: "'Noto Sans TC', sans-serif",
-              fontWeight: 600,
-              textDecoration: "none",
-            }}
-          >
-            立即前往付款 →
-          </a>
-        )}
       </div>
     </div>
   );
@@ -1092,6 +1050,10 @@ export default function ChatFAB() {
         reservationId,
         cartUrl,
       });
+      // 有付款 URL 就自動跳轉
+      if (cartUrl) {
+        window.open(cartUrl, "_blank");
+      }
     },
     [addBotMessage],
   );
