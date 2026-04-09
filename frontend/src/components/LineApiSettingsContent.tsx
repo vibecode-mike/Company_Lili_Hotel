@@ -114,6 +114,22 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
         });
       }
 
+      // POST 失敗（可能已存在），查詢現有記錄改用 PATCH
+      if (!response.ok && !lineChannelDbId) {
+        const currentRes = await fetch('/api/v1/line_channels/current');
+        if (currentRes.ok) {
+          const current = await currentRes.json();
+          if (current?.id) {
+            setLineChannelDbId(current.id);
+            response = await fetch(`/api/v1/line_channels/${current.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(data)
+            });
+          }
+        }
+      }
+
       if (!response.ok) {
         throw new Error('保存失敗');
       }
