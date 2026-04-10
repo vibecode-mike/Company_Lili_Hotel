@@ -203,13 +203,17 @@ async def _enrich_cards_with_kb(
     for card in cards:
         kb = kb_by_name.get(card.room_type_name)
         if kb:
-            raw_image = str(kb.get("image_url") or kb.get("url") or "").strip()
-            image = raw_image if raw_image else (settings.DEFAULT_ROOM_IMAGE_URL or None)
             features = str(kb.get("房型特色") or "")
-            card = card.model_copy(update={
-                "image_url": image if image else card.image_url,
-                "features": features if features else card.features,
-            })
+            update: dict = {}
+            if features and not card.features:
+                update["features"] = features
+            if not card.image_url:
+                raw_image = str(kb.get("image_url") or kb.get("url") or "").strip()
+                image = raw_image if raw_image else (settings.DEFAULT_ROOM_IMAGE_URL or None)
+                if image:
+                    update["image_url"] = image
+            if update:
+                card = card.model_copy(update=update)
         enriched.append(card)
     return enriched
 
@@ -360,12 +364,14 @@ def _inventory_cards_from_pms_raw(
 
         nightly_price = _clean_price(filtered[0].get("price", 0))
         max_occupancy = ROOMTYPE_MAX_OCCUPANCY.get(room_type_code, occupancy_fallback)
+        pms_image = str(room.get("image") or "").strip() or None
         cards.append({
             "room_type_code": room_type_code,
             "room_type_name": room_type_name,
             "available_count": min(remains),
             "max_occupancy": max_occupancy,
             "price": nightly_price,
+            "image_url": pms_image,
             "source": "pms_inventory",
         })
     return cards
@@ -1759,6 +1765,7 @@ class ChatbotService:
                 "name": _room_display_name(room_type),
                 "nightly_price": _clean_price(filtered[0].get("price", 0)),
                 "min_remain": min_remain,
+                "image": str(room.get("image") or "").strip() or None,
             })
 
         return {"ok": True, "available": available}
@@ -1773,7 +1780,7 @@ class ChatbotService:
                 price_label=f"NT${item['nightly_price']:,}/晚",
                 available_count=item["min_remain"],
                 max_occupancy=ROOMTYPE_MAX_OCCUPANCY.get(item["roomtype"], 2),
-                image_url=None,
+                image_url=item.get("image"),
                 features="",
                 source="pms",
             )
