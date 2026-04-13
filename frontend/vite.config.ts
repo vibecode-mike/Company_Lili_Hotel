@@ -94,6 +94,21 @@ export default defineConfig({
           secure: false,
           ws: true,  // 啟用 WebSocket 代理
         },
+        '/callback': {
+          target: 'http://127.0.0.1:3001',
+          changeOrigin: true,
+          secure: false,
+        },
+        '/__track': {
+          target: 'http://127.0.0.1:3001',
+          changeOrigin: true,
+          secure: false,
+        },
+        '/uploads': {
+          target: 'http://127.0.0.1:8700',
+          changeOrigin: true,
+          secure: false,
+        },
       },
     },
   });

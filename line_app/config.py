@@ -31,6 +31,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # 公開 URL 配置
 # -------------------------------------------------
 PUBLIC_BASE = (os.getenv("PUBLIC_BASE") or "").rstrip("/")
+# 外部可見的靜態資源 URL（圖片、追蹤連結）走 crmpoc 代理
+# 因為 linebot 代理只轉發 /callback，不轉發靜態檔案
+PUBLIC_ASSET_BASE = (os.getenv("PUBLIC_ASSET_BASE") or "https://crmpoc.star-bit.io").rstrip("/")
 
 # -------------------------------------------------
 # LINE 相關配置

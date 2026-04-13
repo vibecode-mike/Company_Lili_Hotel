@@ -3,9 +3,10 @@ FastAPI 應用入口
 """
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
+import httpx
 from app.config import settings
 from app.database import close_db
 from app.api.v1 import api_router
@@ -172,10 +173,28 @@ async def health_check():
 # 註冊 API 路由
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
+# 點擊追蹤轉發到 line_app（因為外部代理只轉發 /api/ 路徑）
+@app.get("/api/v1/track")
+async def track_redirect(request: Request):
+    """轉發點擊追蹤到 line_app 的 /__track"""
+    query_string = str(request.query_params)
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(
+            f"http://localhost:3001/__track?{query_string}",
+            follow_redirects=False
+        )
+    # line_app 的 __track 回傳 302 redirect，直接轉發
+    if resp.status_code in (301, 302):
+        return RedirectResponse(url=resp.headers.get("location", "/"), status_code=resp.status_code)
+    return JSONResponse(content={"ok": True}, status_code=resp.status_code)
+
+
 # 掛載靜態文件目錄（上傳的圖片）
 UPLOAD_DIR = settings.upload_dir_path
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+# 額外掛載一個走 /api/v1/ 路徑的圖片路由，讓外部代理能正確轉發
+app.mount("/api/v1/public/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="public_uploads")
 
 # Chatbot widget 靜態檔（供外部網頁嵌入）
 from pathlib import Path as _Path

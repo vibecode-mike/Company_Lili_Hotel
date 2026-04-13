@@ -127,6 +127,12 @@ Frontend:
 - 外部 API 的 epoch timestamp（如 FB API）才是真正的 UTC，需用 `datetime.fromtimestamp(ts, tz=timezone.utc)`
 - Base model 的 `_now_taipei()` 回傳不帶 tzinfo 的台灣時間，與 MySQL `NOW()` 一致
 
+## ⛔ 部署規則
+
+- **預設推版只推到 `main` 分支**，不推到 `prod`
+- **推到 `prod` 前必須詢問使用者兩次確認**（第一次：「確定要推到 prod 嗎？」；第二次：「再次確認，推到 prod 會觸發正式環境部署，確定嗎？」）
+- 未經兩次確認，禁止執行 `git push origin prod` 或任何會觸發正式環境部署的操作
+
 ## ⛔ 禁止修改的架構規則
 
 以下是歷史 bug 修復後確立的規則，**任何情況下都不可違反**：

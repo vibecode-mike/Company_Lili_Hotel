@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "uploads"
     MAX_FILE_SIZE: int = 10485760  # 10MB
     ALLOWED_IMAGE_TYPES: str = "jpg,jpeg,png,webp"
-    PUBLIC_BASE: str = "https://linebot.star-bit.io"  # 公開訪問的基礎URL
+    PUBLIC_BASE: str = ""  # 從 .env 讀取，例如 https://linebot.star-bit.io
 
     # LINE App 服務 URL
     LINE_APP_URL: str = "http://localhost:3001"
