@@ -36,16 +36,17 @@ def _has_value(value: Optional[str]) -> bool:
     return bool(value and value.strip())
 
 
-def fetch_basic_id_from_line(channel_access_token: str) -> Optional[str]:
+def fetch_bot_info_from_line(channel_access_token: str) -> dict:
     """
-    調用 Flask line_app 的 /api/bot/basic-id 端點獲取 LINE Bot Basic ID
+    調用 Flask line_app 的 /api/bot/basic-id 端點獲取 LINE Bot 資訊
 
     Args:
         channel_access_token: LINE Messaging API Channel Access Token
 
     Returns:
-        Basic ID (格式: @xxxxxxx) 或 None（如果獲取失敗）
+        dict with keys: basic_id, display_name (值可能為 None)
     """
+    result = {"basic_id": None, "display_name": None}
     try:
         # Flask line_app 運行在 port 3001
         from app.config import settings
@@ -59,26 +60,28 @@ def fetch_basic_id_from_line(channel_access_token: str) -> Optional[str]:
 
         if response.status_code == 200:
             data = response.json()
-            if data.get("ok") and data.get("basicId"):
-                logger.info(f"✅ 成功獲取 Basic ID: {data['basicId']}")
-                return data["basicId"]
+            if data.get("ok"):
+                result["basic_id"] = data.get("basicId")
+                result["display_name"] = data.get("displayName")
+                logger.info(f"✅ 成功獲取 Bot 資訊: basicId={result['basic_id']}, displayName={result['display_name']}")
+                return result
 
         # 記錄錯誤但不中斷流程
-        logger.warning(f"⚠️ 無法獲取 Basic ID: status={response.status_code}, response={response.text[:200]}")
-        return None
+        logger.warning(f"⚠️ 無法獲取 Bot 資訊: status={response.status_code}, response={response.text[:200]}")
+        return result
 
     except requests.exceptions.ConnectionError as e:
         logger.error(f"❌ 無法連接到 Flask line_app (port 3001): {str(e)}")
-        return None
+        return result
     except requests.exceptions.Timeout as e:
         logger.error(f"❌ 請求 Flask line_app 超時: {str(e)}")
-        return None
+        return result
     except requests.exceptions.RequestException as e:
-        logger.error(f"❌ 請求 Basic ID 時發生網路錯誤: {str(e)}")
-        return None
+        logger.error(f"❌ 請求 Bot 資訊時發生網路錯誤: {str(e)}")
+        return result
     except Exception as e:
-        logger.error(f"❌ 獲取 Basic ID 時發生未預期錯誤: {str(e)}", exc_info=True)
-        return None
+        logger.error(f"❌ 獲取 Bot 資訊時發生未預期錯誤: {str(e)}", exc_info=True)
+        return result
 
 
 def _collect_missing_fields(channel: LineChannel) -> List[str]:
@@ -195,12 +198,13 @@ async def create_channel(
         # 創建新設定
         channel = LineChannel(**data.model_dump())
 
-        # 🆕 自動獲取 Basic ID
+        # 🆕 自動獲取 Basic ID + Channel Name
         if data.channel_access_token:
-            basic_id = fetch_basic_id_from_line(data.channel_access_token)
-            if basic_id:
-                channel.basic_id = basic_id
-                logger.info(f"✅ 自動獲取並設定 Basic ID: {basic_id}")
+            bot_info = fetch_bot_info_from_line(data.channel_access_token)
+            if bot_info["basic_id"]:
+                channel.basic_id = bot_info["basic_id"]
+            if bot_info["display_name"]:
+                channel.channel_name = bot_info["display_name"]
 
         db.add(channel)
         await db.commit()
@@ -242,13 +246,14 @@ async def update_channel(
         # 更新欄位（只更新提供的欄位）
         update_data = data.model_dump(exclude_unset=True)
 
-        # 🆕 當 token 更新時，自動重新獲取 Basic ID
+        # 🆕 當 token 更新時，自動重新獲取 Basic ID + Channel Name
         if "channel_access_token" in update_data:
             new_token = update_data["channel_access_token"]
-            basic_id = fetch_basic_id_from_line(new_token)
-            if basic_id:
-                update_data["basic_id"] = basic_id
-                logger.info(f"✅ Token 更新後重新獲取 Basic ID: {basic_id}")
+            bot_info = fetch_bot_info_from_line(new_token)
+            if bot_info["basic_id"]:
+                update_data["basic_id"] = bot_info["basic_id"]
+            if bot_info["display_name"]:
+                update_data["channel_name"] = bot_info["display_name"]
 
         for field, value in update_data.items():
             setattr(channel, field, value)

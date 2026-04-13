@@ -127,6 +127,21 @@ Frontend:
 - 外部 API 的 epoch timestamp（如 FB API）才是真正的 UTC，需用 `datetime.fromtimestamp(ts, tz=timezone.utc)`
 - Base model 的 `_now_taipei()` 回傳不帶 tzinfo 的台灣時間，與 MySQL `NOW()` 一致
 
+## ⛔ 禁止修改的架構規則
+
+以下是歷史 bug 修復後確立的規則，**任何情況下都不可違反**：
+
+1. **messages 表只能由 Backend (FastAPI) 建立記錄**
+   - `line_app/app.py` 的 `push_campaign()` 收到 `campaign_id` 時，必須直接使用，禁止再呼叫 `_create_campaign_row()`
+   - `_create_campaign_row()` 僅供獨立腳本（無 Backend 參與）使用
+   - 違反會導致：重複記錄、UTC 時間錯誤、sent 計數翻倍
+
+2. **修改 `line_app/app.py` 的推播流程前，必須先讀懂 `push_campaign()` 和 `_create_campaign_row()` 的註解**
+
+3. **DB 時間慣例：台灣時間（Asia/Taipei, UTC+8）**
+   - 詳見「Timezone Convention」章節
+   - `line_app` 中禁止用 `utcnow()` 寫入 messages 表
+
 ## Database
 
 MySQL 8.0 with SQLAlchemy 2.0 async. Key models:

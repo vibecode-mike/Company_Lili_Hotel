@@ -841,6 +841,11 @@ def _create_campaign_row(payload: dict) -> int:
     """
     建立一筆 messages「群發活動」紀錄，回傳 messages.id。
 
+    ⛔ 注意：此函式只應在「沒有 campaign_id」時被呼叫（獨立腳本等情境）。
+    Backend (FastAPI) 透過 HTTP 呼叫時已自行建好 messages 記錄，
+    不可在 push_campaign() 中重複呼叫此函式，否則會產生重複記錄。
+    詳見 push_campaign() 中的註解。
+
     ⚠ 不改資料庫結構，只使用你現在 messages / message_templates 表裡「確實存在」的欄位。
       - message_templates: 用 template_type 找 id，找不到就讓 template_id = NULL
       - messages: 寫入欄位：
@@ -967,7 +972,11 @@ def _add_campaign_recipients(campaign_id: int, mids: List[int]):
                      {"n": len(mids), "cid": campaign_id, "now": utcnow()})
 
 def push_campaign(payload: dict) -> Dict[str, Any]:
-    cid = _create_campaign_row(payload)
+    # ⛔ 重要：不要在這裡無條件呼叫 _create_campaign_row()！
+    # Backend (FastAPI) 已在 messages 表建好記錄，並透過 payload["campaign_id"] 傳過來。
+    # 如果這裡再 INSERT 一筆，會造成重複記錄（歷史 bug，2026-04-13 修復）。
+    # 只有獨立腳本（manage_push.py 等）不帶 campaign_id 時，才需要自行建立。
+    cid = payload.get("campaign_id") or _create_campaign_row(payload)
 
     # 依 target_audience 取得目標用戶（使用 members 表）
     target_audience = payload.get("target_audience", "all")
@@ -1196,23 +1205,6 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
                 logging.exception(f"[{idx}/{total_targets}] ✗ Failed to {uid}: {e}")
                 failed += 1
                 continue
-
-            sent += 1
-            logging.info(f"[{idx}/{total_targets}] ✓ Success to {uid}")
-
-            # 紀錄一筆 outgoing 訊息（清掉大欄位避免塞爆）
-            # 註解：群發記錄已在 _create_campaign_row() 和 _add_campaign_recipients() 中處理
-            # if mid is not None:
-            #     payload_for_log = dict(payload)
-            #     payload_for_log.pop("image_base64", None)
-            #     payload_for_log.pop("image_url", None)
-            #     insert_message(
-            #         mid,
-            #         "outgoing",
-            #         "text",
-            #         {"campaign_id": cid, "payload": payload_for_log},
-            #         campaign_id=cid,
-            #     )
 
         except Exception as e:
             logging.exception(f"[{idx}/{total_targets}] ✗ Failed to {uid}: {e}")
