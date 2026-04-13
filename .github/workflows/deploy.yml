@@ -2,10 +2,11 @@ name: Deploy to GCP
 
 on:
   push:
-    branches: [main]
+    branches: [main, prod]
 
 jobs:
-  deploy:
+  deploy-staging:
+    if: github.ref_name == 'main'
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH
@@ -27,6 +28,55 @@ jobs:
 
             echo "=== Pull latest code ==="
             git pull origin main
+
+            echo "=== Restore local changes ==="
+            git stash pop || true
+
+            echo "=== Restore GCP env files ==="
+            cp /tmp/frontend-env-production.bak frontend/.env.production
+
+            echo "=== Backend: dependencies & migrations ==="
+            cd /home/Company_Lili_Hotel/backend
+            pip install -r requirements.txt -q
+            alembic upgrade head
+
+            echo "=== Frontend: build ==="
+            cd /home/Company_Lili_Hotel/frontend
+            npm install --silent
+            npm run build
+
+            echo "=== Restart services ==="
+            sudo systemctl restart lili-backend
+            sudo systemctl restart lili-linebot
+
+            echo "=== Health check ==="
+            sleep 3
+            curl -sf http://127.0.0.1:8700/health > /dev/null && echo "Backend OK" || echo "Backend FAIL"
+            sudo systemctl is-active lili-linebot > /dev/null && echo "LINE Bot OK" || echo "LINE Bot FAIL"
+
+  deploy-prod:
+    if: github.ref_name == 'prod'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_VM_HOST }}
+          username: ${{ secrets.PROD_VM_USER }}
+          key: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            export PATH="/home/creative_design/miniconda3/bin:$PATH"
+            cd /home/Company_Lili_Hotel
+
+            echo "=== Backup GCP env files ==="
+            cp frontend/.env.production /tmp/frontend-env-production.bak
+
+            echo "=== Stash local changes if any ==="
+            git stash push -m "auto-stash before deploy $(date +%Y%m%d-%H%M%S)" || true
+
+            echo "=== Pull latest code ==="
+            git pull origin prod
 
             echo "=== Restore local changes ==="
             git stash pop || true
