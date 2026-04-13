@@ -104,6 +104,8 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   // Get quota status and refreshAll from MessagesContext
   const { quotaStatus, quotaLoading, quotaError, refreshAll } = useMessages();
 
+  const [isPublishing, setIsPublishing] = useState(false);
+  const isPublishingRef = useRef(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [templateType, setTemplateType] = useState('select');
   const [title, setTitle] = useState('');
@@ -877,6 +879,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       const token = localStorage.getItem('auth_token');
       if (!token) {
         toast.error('請先登入');
+        resetPublishButton();
         return;
       }
 
@@ -907,6 +910,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       if (selectedPlatform === 'Facebook') {
         if (!fbMessageJson) {
           toast.error('請先編輯 Facebook 訊息內容');
+          resetPublishButton();
           return;
         }
         requestBody.fb_message_json = JSON.stringify(fbMessageJson);
@@ -1673,17 +1677,37 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     return Array.from(tagSet);
   };
 
+  const resetPublishButton = () => {
+    isPublishingRef.current = false;
+    setIsPublishing(false);
+    const btn = document.getElementById('publish-btn');
+    if (btn) {
+      btn.dataset.publishing = '';
+      btn.textContent = '發佈';
+      btn.style.backgroundColor = '';
+      btn.style.pointerEvents = '';
+      btn.style.cursor = '';
+    }
+  };
+
   const handlePublish = async () => {
+    // 防止重複點擊：按鈕保持灰色直到跳轉離開
+    if (isPublishingRef.current) return;
+    isPublishingRef.current = true;
+    setIsPublishing(true);
+
     // 驗證表單，如果有錯誤則停止發佈
     const isValid = validateForm();
     if (!isValid) {
       toast.error('請修正表單錯誤後再發佈');
+      resetPublishButton();
       return;
     }
 
     // FB 平台檢查發送人數是否超過上限
     if (selectedPlatform === 'Facebook' && estimatedRecipientCount && estimatedRecipientCount > FB_BROADCAST_MAX_RECIPIENTS) {
       setShowFbLimitDialog(true);
+      resetPublishButton();
       return;
     }
 
@@ -1695,6 +1719,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         const uploadSuccess = await uploadCroppedImages();
         if (!uploadSuccess) {
           toast.error('圖片上傳失敗，請重試');
+          resetPublishButton();
           return;
         }
         // Generate flex message JSON from cards (使用 uploadedImageUrl)
@@ -1704,6 +1729,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       const token = localStorage.getItem('auth_token');
       if (!token) {
         toast.error('請先登入');
+        resetPublishButton();
         return;
       }
 
@@ -1728,6 +1754,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       if (selectedPlatform === 'Facebook') {
         if (!fbMessageJson) {
           toast.error('請先編輯 Facebook 訊息內容');
+          resetPublishButton();
           return;
         }
         requestBody.fb_message_json = JSON.stringify(fbMessageJson);
@@ -1787,6 +1814,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       if (!createResponse.ok) {
         const errorData = await createResponse.json().catch(() => ({ detail: '建立訊息失敗' }));
         toast.error(errorData.detail || '建立訊息失敗');
+        resetPublishButton();
         return;
       }
 
@@ -1795,6 +1823,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
       if (!messageId) {
         toast.error('無法取得訊息 ID');
+        resetPublishButton();
         return;
       }
 
@@ -1811,6 +1840,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
           const jwtToken = localStorage.getItem('jwt_token');
           if (!jwtToken) {
             toast.error('請先登入 Facebook 帳號');
+            resetPublishButton();
             return;
           }
           sendBody.jwt_token = jwtToken;
@@ -1833,6 +1863,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         if (!sendResponse.ok) {
           const errorData = await sendResponse.json().catch(() => ({ detail: '發送訊息失敗' }));
           toast.error(errorData.detail || '發送訊息失敗');
+          resetPublishButton();
           return;
         }
 
@@ -1856,10 +1887,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
       setIsDirty(false); // 發佈後清除未儲存標記
 
-      // Refresh all data (messages list + quota status)
-      await refreshAll();
-
-      // Navigate back to message list immediately
+      // 直接跳轉到列表頁（列表頁會自動載入最新數據）
       if (onNavigate) {
         onNavigate('message-list');
       }
@@ -1867,6 +1895,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     } catch (error) {
       console.error('發佈錯誤:', error);
       toast.error('發佈失敗，請檢查網絡連接');
+      resetPublishButton();
     }
   };
 
@@ -2078,7 +2107,17 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                   儲存草稿
                 </Button>
                 <Button
-                  onClick={handlePublish}
+                  id="publish-btn"
+                  onClick={(e) => {
+                    const btn = e.currentTarget;
+                    if (btn.dataset.publishing === 'true') return;
+                    btn.dataset.publishing = 'true';
+                    btn.textContent = '發佈中...';
+                    btn.style.backgroundColor = '#999';
+                    btn.style.pointerEvents = 'none';
+                    btn.style.cursor = 'not-allowed';
+                    handlePublish();
+                  }}
                   className="bg-[#242424] hover:bg-[#383838] text-white h-[48px] px-3 min-w-[72px] rounded-[16px]"
                 >
                   發佈
