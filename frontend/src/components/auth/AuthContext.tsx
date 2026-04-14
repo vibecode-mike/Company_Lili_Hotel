@@ -18,6 +18,7 @@ import {
   setFaqPerms,
   setLoginMethod,
   clearAllAuthData,
+  isTokenExpired,
 } from "../../utils/token";
 import { setLogoutCallback, apiPost, resetLogoutState } from "../../utils/apiClient";
 
@@ -86,6 +87,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setLogoutCallback(logout);
   }, [logout]);
+
+  // 定時檢查 token 是否過期，過期立刻跳回登入頁（不等使用者點擊才發現）
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const checkToken = () => {
+      if (!getAuthToken() || isTokenExpired()) {
+        toast.error("登入已過期，請重新登入");
+        logout();
+      }
+    };
+
+    const interval = setInterval(checkToken, 10_000);
+
+    return () => clearInterval(interval);
+  }, [isAuthenticated, logout]);
 
   // Email/Password login
   const login = useCallback(

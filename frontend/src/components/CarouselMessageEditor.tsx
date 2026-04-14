@@ -1,4 +1,4 @@
-import { useState, useRef, memo, useEffect } from 'react';
+import { useState, useRef, memo, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { Plus, Upload, Copy, Trash2 } from 'lucide-react';
 import { Checkbox } from './ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -79,7 +79,7 @@ export interface CarouselCard {
   imageTag: string;
 }
 
-type TagFieldKey = 'button1Tag' | 'button2Tag' | 'button3Tag';
+type TagFieldKey = 'imageTag' | 'button1Tag' | 'button2Tag' | 'button3Tag';
 
 const splitTags = (value?: string) =>
   (value || '')
@@ -115,6 +115,11 @@ interface CarouselMessageEditorProps {
   onDeleteCarousel?: () => void; // 刪除輪播回調
   errors?: CardErrors; // 當前卡片的錯誤訊息
   selectedPlatform?: 'LINE' | 'Facebook' | 'Instagram';
+}
+
+export interface CarouselEditorHandle {
+  /** 取得未按 Enter 送出的標籤文字，空陣列代表全部已送出 */
+  getPendingTags: () => string[];
 }
 
 // LINE Flex Message 風格的卡片預覽組件
@@ -230,7 +235,7 @@ export const FlexMessageCardPreview = memo(function FlexMessageCardPreview({ car
   );
 });
 
-export default function CarouselMessageEditor({
+const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEditorProps>(function CarouselMessageEditor({
   cards,
   activeTab,
   onTabChange,
@@ -240,7 +245,7 @@ export default function CarouselMessageEditor({
   onDeleteCarousel,
   errors,
   selectedPlatform = 'LINE'
-}: CarouselMessageEditorProps) {
+}, ref) {
   const imageUploadRef = useRef<HTMLInputElement>(null);
   const isComposingRef = useRef(false);
   const currentCard = cards.find(c => c.id === activeTab) || cards[0];
@@ -249,6 +254,7 @@ export default function CarouselMessageEditor({
   const isMasterCard = currentCard?.id === masterCardId;
   const structureLocked = !isMasterCard;
   const [tagInputState, setTagInputState] = useState<Record<TagFieldKey, string>>({
+    imageTag: '',
     button1Tag: '',
     button2Tag: '',
     button3Tag: ''
@@ -256,11 +262,17 @@ export default function CarouselMessageEditor({
 
   useEffect(() => {
     setTagInputState({
+      imageTag: '',
       button1Tag: '',
       button2Tag: '',
       button3Tag: ''
     });
   }, [activeTab]);
+
+  useImperativeHandle(ref, () => ({
+    getPendingTags: () =>
+      Object.values(tagInputState).filter(v => v.trim().length > 0),
+  }), [tagInputState]);
 
   const renderTagInput = (
     field: TagFieldKey,
@@ -309,6 +321,7 @@ export default function CarouselMessageEditor({
           ))}
           <input
             type="text"
+            data-tag-input={field}
             value={inputValue}
             onChange={(e) => setTagInputState(prev => ({ ...prev, [field]: e.target.value }))}
             onKeyDown={(e) => {
@@ -670,14 +683,7 @@ export default function CarouselMessageEditor({
                       {/* Tag Field */}
                       <div className="flex flex-col gap-[4px]">
                         <p className="text-[12px] leading-[16px] text-[#4a5565] font-medium">互動標籤</p>
-                        <input
-                          type="text"
-                          value={currentCard.imageTag}
-                          onChange={(e) => onUpdateCard({ imageTag: e.target.value })}
-                          placeholder="輸入互動標籤（僅供後台紀錄）"
-                          className="w-full h-[36px] px-[12px] rounded-[8px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
-                        />
-                        <p className="text-[12px] leading-[16px] text-[#6a7282]">此欄位不影響 Flex Message，僅供後台紀錄使用</p>
+                        {renderTagInput('imageTag', '輸入按 Enter 新增互動標籤')}
                       </div>
                     </div>
                   )}
@@ -1398,4 +1404,6 @@ export default function CarouselMessageEditor({
       </div>
     </div>
   );
-}
+});
+
+export default CarouselMessageEditor;

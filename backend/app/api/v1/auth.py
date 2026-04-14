@@ -27,7 +27,7 @@ async def get_current_user(
     """獲取當前用戶（無有效 Token 時拋出 401 錯誤）"""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="無效的認證憑證",
+        detail="登入已過期，請重新登入",
         headers={"WWW-Authenticate": "Bearer"},
     )
 

@@ -246,16 +246,17 @@ async def get_members(
     for member in members:
         tags = []
 
-        # 使用預加載的會員標籤（已經在內存中，無需額外查詢）
-        for tag in sorted(member.member_tags, key=lambda t: t.tag_name):
-            tags.append(TagInfo(id=tag.id, name=tag.tag_name, type="member"))
-
-        # 使用預加載的互動標籤（已經在內存中，無需額外查詢）
-        for tag in sorted(
-            member.member_interaction_tags,
-            key=lambda t: (-t.click_count, t.tag_name)
-        ):
-            tags.append(TagInfo(id=tag.id, name=tag.tag_name, type="interaction"))
+        # 會員標籤 + 互動標籤混合，按最近互動時間排序（新的在前）
+        from datetime import datetime
+        all_tag_items = []
+        for tag in member.member_tags:
+            latest = tag.last_triggered_at or tag.updated_at or tag.created_at or datetime.min
+            all_tag_items.append((latest, TagInfo(id=tag.id, name=tag.tag_name, type="member")))
+        for tag in member.member_interaction_tags:
+            latest = tag.last_triggered_at or tag.updated_at or tag.created_at or datetime.min
+            all_tag_items.append((latest, TagInfo(id=tag.id, name=tag.tag_name, type="interaction")))
+        all_tag_items.sort(key=lambda x: x[0], reverse=True)
+        tags = [item[1] for item in all_tag_items]
 
         member_dict = MemberListItem.model_validate(member).model_dump()
         member_dict["tags"] = tags

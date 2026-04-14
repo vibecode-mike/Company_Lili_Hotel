@@ -441,14 +441,11 @@ export default function AutoReplyTableStyled({ data, onRowClick, onToggleStatus,
       <div className="bg-white rounded-[16px] w-full overflow-x-auto table-scroll">
         {/* 內層容器 - 最小寬度確保欄位對齊 */}
         <div className="min-w-[1160px]">
-          {/* 垂直滾動容器 + Sticky 表頭 */}
-          <div className="max-h-[600px] overflow-y-auto table-scroll">
-            {/* 表頭 - Sticky */}
-            <div className="sticky top-0 z-10">
-              <TableHeader sortConfig={sortConfig} onSortChange={handleSort} />
-            </div>
+          {/* 表頭 - 固定在滾動區域外 */}
+          <TableHeader sortConfig={sortConfig} onSortChange={handleSort} />
 
-            {/* 表格內容 */}
+          {/* 垂直滾動容器 - 只有資料列滾動 */}
+          <div className="max-h-[600px] overflow-y-auto table-scroll">
             {sortedData.map((row, index) => (
               <AutoReplyRow
                 key={row.id}

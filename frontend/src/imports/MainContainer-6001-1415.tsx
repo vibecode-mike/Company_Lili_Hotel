@@ -540,14 +540,11 @@ function Table8Columns3Actions({
       <div className="bg-white rounded-[16px] w-full overflow-x-auto table-scroll">
         {/* 內層容器 - 最小寬度確保欄位對齊 */}
         <div className="min-w-[1160px]">
-          {/* 垂直滾動容器 + Sticky 表頭 */}
-          <div className="max-h-[600px] overflow-y-auto table-scroll">
-            {/* Table Header - Sticky */}
-            <div className="sticky top-0 z-10">
-              <Container6 sortConfig={sortConfig} onSortChange={onSortChange} />
-            </div>
+          {/* 表頭 - 固定在滾動區域外 */}
+          <Container6 sortConfig={sortConfig} onSortChange={onSortChange} />
 
-            {/* Table Body */}
+          {/* 垂直滾動容器 - 只有資料列滾動 */}
+          <div className="max-h-[600px] overflow-y-auto table-scroll">
             {members.map((member, index) => (
               <MemberRow
                 key={member.id}

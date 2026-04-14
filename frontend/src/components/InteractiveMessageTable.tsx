@@ -355,14 +355,11 @@ export default function InteractiveMessageTable({ messages, onEdit, onViewDetail
       <div className="bg-white rounded-[16px] w-full overflow-x-auto table-scroll">
         {/* 內層容器 - 最小寬度確保欄位對齊 */}
         <div className="min-w-[1060px]">
-          {/* 垂直滾動容器 + Sticky 表頭 */}
-          <div className="max-h-[600px] overflow-y-auto table-scroll">
-            {/* 表頭 - Sticky */}
-            <div className="sticky top-0 z-10">
-              <TableHeader sortConfig={sortConfig} onSortChange={handleSort} statusFilter={statusFilter} />
-            </div>
+          {/* 表頭 - 固定在滾動區域外 */}
+          <TableHeader sortConfig={sortConfig} onSortChange={handleSort} statusFilter={statusFilter} />
 
-            {/* 表格內容 */}
+          {/* 垂直滾動容器 - 只有資料列滾動 */}
+          <div className="max-h-[600px] overflow-y-auto table-scroll">
             {sortedMessages.length === 0 ? (
               <EmptyStateRow />
             ) : (

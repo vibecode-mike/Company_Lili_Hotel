@@ -7,6 +7,7 @@ import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Label } from './ui/label';
 import { Checkbox } from './ui/checkbox';
 import { toast } from 'sonner';
+import { apiGet, apiPost, apiPut, apiFetch } from '../utils/apiClient';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { Dialog, DialogTrigger, DialogTitle, DialogDescription, DialogPortal, DialogOverlay } from './ui/dialog';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
@@ -20,7 +21,7 @@ import closeIconPaths from '../imports/svg-b62f9l13m2';
 import uploadIconPaths from '../imports/svg-wb8nmg8j6i';
 import messageTextSvgPaths from '../imports/svg-hbkooryl5v';
 import FlexMessageEditorNew from './flex-message/FlexMessageEditorNew';
-import CarouselMessageEditor, { type CarouselCard } from './CarouselMessageEditor';
+import CarouselMessageEditor, { type CarouselCard, type CarouselEditorHandle } from './CarouselMessageEditor';
 import { FacebookMessageEditor, FlexMessage as FBFlexMessage } from './facebook-message';
 import { TriggerImagePreview, TriggerTextPreview, GradientPreviewContainer, DeleteButton } from './common';
 import ActionTriggerTextMessage from '../imports/ActionTriggerTextMessage';
@@ -151,20 +152,16 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null); // 待執行的導航
   const [estimatedRecipientCount, setEstimatedRecipientCount] = useState<number | null>(null); // 預計發送人數
   const cardRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
+  const carouselEditorRef = useRef<CarouselEditorHandle>(null);
 
   // 獲取可用渠道列表
   useEffect(() => {
     const fetchChannels = async () => {
       const options: ChannelOption[] = [];
-      const token = localStorage.getItem('auth_token');
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` })
-      };
 
       // 獲取 LINE 頻道
       try {
-        const lineRes = await fetch('/api/v1/line_channels/current', { headers });
+        const lineRes = await apiGet('/api/v1/line_channels/current');
         if (lineRes.ok) {
           const lineChannel = await lineRes.json();
           if (lineChannel?.channel_id) {
@@ -183,7 +180,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
       // 獲取 Facebook 粉專
       try {
-        const fbRes = await fetch('/api/v1/fb_channels', { headers });
+        const fbRes = await apiGet('/api/v1/fb_channels');
         if (fbRes.ok) {
           const fbChannels = await fbRes.json();
           fbChannels.forEach((fb: { page_id: string; channel_name: string; is_active: boolean }) => {
@@ -239,19 +236,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
             };
           }
 
-          const headers: Record<string, string> = {
-            'Content-Type': 'application/json'
-          };
-          const token = localStorage.getItem('auth_token');
-          if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-          }
-
-          const response = await fetch('/api/v1/messages/quota', {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(requestBody)
-          });
+          const response = await apiPost('/api/v1/messages/quota', requestBody);
 
           if (!isActive) return;
 
@@ -856,10 +841,17 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   };
 
   const handleSaveDraft = async () => {
+    // 檢查標籤是否忘記按 Enter
+    const pendingTags = carouselEditorRef.current?.getPendingTags() ?? [];
+    if (pendingTags.length > 0) {
+      toast.error(`互動標籤「${pendingTags[0]}」還沒按 Enter 新增，請確認後再儲存`);
+      return;
+    }
+
     // 使用與發布相同的完整驗證邏輯
     const isValid = validateForm();
     if (!isValid) {
-      toast.error('請修正表單錯誤後再儲存草稿');
+      toast.error('儲存失敗，請檢查欄位格式是否正確');
       return;
     }
 
@@ -874,13 +866,6 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         }
         // Generate flex message JSON from cards (使用 uploadedImageUrl)
         flexMessage = generateFlexMessage(cards);
-      }
-
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
-        toast.error('請先登入');
-        resetPublishButton();
-        return;
       }
 
       // 取得選中渠道的 ID
@@ -947,14 +932,9 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       console.log('[handleSaveDraft] 發送到後端:', { method, url, requestBody });
 
       // Create or update draft message
-      const saveResponse = await fetch(url, {
-        method,
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(requestBody)
-      });
+      const saveResponse = isUpdate
+        ? await apiPut(url, requestBody)
+        : await apiPost(url, requestBody);
 
       if (!saveResponse.ok) {
         const errorData = await saveResponse.json().catch(() => ({ detail: '儲存草稿失敗' }));
@@ -1308,13 +1288,9 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
       formData.append('file', file);
       formData.append('aspect_ratio', aspectRatio);  // 傳遞裁切比例
 
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch('/api/v1/upload', {
+      const response = await apiFetch('/api/v1/upload', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formData
+        body: formData,
       });
 
       if (!response.ok) {
@@ -1343,8 +1319,6 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   // 批量上傳裁切後的圖片（在保存訊息前調用）
   const uploadCroppedImages = async (): Promise<boolean> => {
     try {
-      const token = localStorage.getItem('auth_token');
-
       // 遍歷所有卡片，上傳有 originalFile 的圖片
       for (let i = 0; i < cards.length; i++) {
         const card = cards[i];
@@ -1368,12 +1342,9 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
           const formData = new FormData();
           formData.append('file', croppedFile);
 
-          const response = await fetch('/api/v1/upload', {
+          const response = await apiFetch('/api/v1/upload', {
             method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-            body: formData
+            body: formData,
           });
 
           if (!response.ok) {
@@ -1696,10 +1667,18 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     isPublishingRef.current = true;
     setIsPublishing(true);
 
-    // 驗證表單，如果有錯誤則停止發佈
+    // 檢查標籤是否忘記按 Enter（有自己的提示，不需要通用提示）
+    const pendingTags = carouselEditorRef.current?.getPendingTags() ?? [];
+    if (pendingTags.length > 0) {
+      toast.error(`互動標籤「${pendingTags[0]}」還沒按 Enter 新增，請確認後再發佈`);
+      resetPublishButton();
+      return;
+    }
+
+    // 驗證表單其他欄位
     const isValid = validateForm();
     if (!isValid) {
-      toast.error('請修正表單錯誤後再發佈');
+      toast.error('發佈失敗，請檢查欄位格式是否正確');
       resetPublishButton();
       return;
     }
@@ -1724,13 +1703,6 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         }
         // Generate flex message JSON from cards (使用 uploadedImageUrl)
         flexMessage = generateFlexMessage(cards);
-      }
-
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
-        toast.error('請先登入');
-        resetPublishButton();
-        return;
       }
 
       // 取得選中渠道的 ID（LINE channel_id 或 FB page_id）
@@ -1802,14 +1774,9 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         url = '/api/v1/messages';
       }
 
-      const createResponse = await fetch(url, {
-        method,
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(requestBody)
-      });
+      const createResponse = method === 'PUT'
+        ? await apiPut(url, requestBody)
+        : await apiPost(url, requestBody);
 
       if (!createResponse.ok) {
         const errorData = await createResponse.json().catch(() => ({ detail: '建立訊息失敗' }));
@@ -1851,14 +1818,9 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
           sendBody.channel_id = channelId;  // LINE 使用 channel_id
         }
 
-        const sendResponse = await fetch(`/api/v1/messages/${messageId}/send`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: Object.keys(sendBody).length > 0 ? JSON.stringify(sendBody) : undefined
-        });
+        const sendResponse = Object.keys(sendBody).length > 0
+          ? await apiPost(`/api/v1/messages/${messageId}/send`, sendBody)
+          : await apiPost(`/api/v1/messages/${messageId}/send`);
 
         if (!sendResponse.ok) {
           const errorData = await sendResponse.json().catch(() => ({ detail: '發送訊息失敗' }));
@@ -2524,6 +2486,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
             <div className="h-[calc(100vh-300px)] min-h-[600px]">
               {selectedPlatform === 'LINE' ? (
                 <CarouselMessageEditor
+                  ref={carouselEditorRef}
                   cards={cards}
                   activeTab={activeTab}
                   onTabChange={setActiveTab}
