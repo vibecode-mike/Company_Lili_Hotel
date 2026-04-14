@@ -11,6 +11,7 @@ import imgStep2 from "figma:asset/88076181b402df2ffcba98c51345afaaa2165468.png";
 import imgStep2New from "figma:asset/bf4ffd108c2e836b466874e959531fdf5c9bd8b1.png";
 import imgStep3 from "figma:asset/e859f2896aa57670db9ed9933eb059d29ffaf7c7.png";
 import imgStep4 from "figma:asset/e0079245ea67343450871e33ff689154160aa2bb.png";
+import imgStep5Webhook from "../assets/step5-webhook.png";
 import imgStep6 from "figma:asset/e9db79d0f3507f2a61e25dfa2f8f638bbcaf8b9d.png";
 import imgStep7 from "figma:asset/f05dee67f2743d5c7b8183a074546e987c63f567.png";
 import imgStep8 from "figma:asset/9c06d369cd4b66fb5b16a4209259f1271ce88ec7.png";
@@ -981,10 +982,10 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
                     {/* Screenshot - 待替換 */}
                     <div className="shrink-0">
                       <ImageWithFallback
-                        src={imgStep4}
+                        src={imgStep5Webhook}
                         alt="LINE Webhook URL Settings"
                         className="w-[398.4px] h-[224.1px] rounded-[10px] border-[1.6px] border-[#0f6beb] object-cover shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)]"
-                        onClick={() => setEnlargedImage(imgStep4)}
+                        onClick={() => setEnlargedImage(imgStep5Webhook)}
                       />
                     </div>
 
@@ -993,7 +994,16 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
                       <div className="flex gap-[8px] items-start">
                         <span className="text-[14px] leading-[21px] text-[#364153]">1.</span>
                         <p className="text-[14px] leading-[20px] text-[#364153]">
-                          回到 LINE 官方帳號後台（LINE Official Account Manager）
+                          回到{' '}
+                          <a
+                            href="https://account.line.biz/login?redirectUri=https%3A%2F%2Faccount.line.biz%2Foauth2%2Fcallback%3Fclient_id%3D10%26code_challenge%3DQRWU3NlqNfuAHKIf61Lav9XdqFw90xQ_yw0n_PwZJZ4%26code_challenge_method%3DS256%26redirect_uri%3Dhttps%253A%252F%252Fmanager.line.biz%252Fapi%252Foauth2%252FbizId%252Fcallback%26response_type%3Dcode%26state%3DdN6GnGuQU6OqkM3dKqLo6b5uAhJp6idd"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-[4px] bg-[#0f6beb] text-white px-[8px] py-[1px] rounded-[4px] text-[12px] leading-[16px] hover:bg-[#0d5bbf] transition-colors"
+                          >
+                            LINE 官方帳號後台
+                            <ExternalLink className="size-[12px]" />
+                          </a>
                         </p>
                       </div>
 
