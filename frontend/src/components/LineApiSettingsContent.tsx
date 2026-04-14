@@ -1031,22 +1031,28 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
                 {/* Webhook URL with copy button */}
                 <div className="bg-white border-[0.8px] border-[#bedbff] rounded-[10px] px-[12.8px] py-[12.8px]">
                   <p className="text-[14px] leading-[20px] text-[#364153] mb-[8px]">你的 Webhook 網址：</p>
-                  <div className="flex items-center gap-[8px]">
-                    <code className="flex-1 bg-[#f3f3f5] px-[12px] py-[8px] rounded-[8px] text-[14px] text-[#383838] break-all">
-                      {`https://console.star-bit.io/callback/${channelId || '{Channel_ID}'}`}
-                    </code>
-                    <button
-                      onClick={() => {
-                        const url = `https://console.star-bit.io/callback/${channelId}`;
-                        navigator.clipboard.writeText(url);
-                        showToast('已複製 Webhook 網址', 'success');
-                      }}
-                      className="shrink-0 bg-[#0f6beb] hover:bg-[#0d5bbf] text-white px-[12px] py-[8px] rounded-[8px] text-[12px] leading-[16px] flex items-center gap-[4px] transition-colors"
-                    >
-                      <Copy className="size-[14px]" />
-                      複製
-                    </button>
-                  </div>
+                  {channelId.trim() ? (
+                    <div className="flex items-center gap-[8px]">
+                      <code className="flex-1 bg-[#f3f3f5] px-[12px] py-[8px] rounded-[8px] text-[14px] text-[#383838] break-all">
+                        {`https://console.star-bit.io/callback/${channelId}`}
+                      </code>
+                      <button
+                        onClick={() => {
+                          const url = `https://console.star-bit.io/callback/${channelId}`;
+                          navigator.clipboard.writeText(url);
+                          showToast('已複製 Webhook 網址', 'success');
+                        }}
+                        className="shrink-0 bg-[#0f6beb] hover:bg-[#0d5bbf] text-white px-[12px] py-[8px] rounded-[8px] text-[12px] leading-[16px] flex items-center gap-[4px] transition-colors"
+                      >
+                        <Copy className="size-[14px]" />
+                        複製
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-[14px] leading-[20px] text-[#717182] bg-[#f3f3f5] px-[12px] py-[8px] rounded-[8px]">
+                      請先完成前面步驟
+                    </p>
+                  )}
                 </div>
 
                 {/* Next Button */}
