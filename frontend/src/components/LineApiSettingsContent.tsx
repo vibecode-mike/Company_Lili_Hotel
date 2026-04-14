@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, ChevronUp, ExternalLink, X, Check, ArrowLeft } from 'lucide-react';
+import { ChevronDown, ChevronUp, ExternalLink, X, Check, ArrowLeft, Copy } from 'lucide-react';
 import { Checkbox } from './ui/checkbox';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useToast } from './ToastProvider';
@@ -52,6 +52,7 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
   const card6Ref = useRef<HTMLDivElement>(null);
   const card7Ref = useRef<HTMLDivElement>(null);
   const card8Ref = useRef<HTMLDivElement>(null);
+  const card9Ref = useRef<HTMLDivElement>(null);
 
   // 載入現有設定
   useEffect(() => {
@@ -200,7 +201,7 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
   };
 
   const scrollToCard = (cardNumber: number) => {
-    const refs = [null, card1Ref, card2Ref, card3Ref, card4Ref, card5Ref, card6Ref, card7Ref, card8Ref];
+    const refs = [null, card1Ref, card2Ref, card3Ref, card4Ref, card5Ref, card6Ref, card7Ref, card8Ref, card9Ref];
     const targetRef = refs[cardNumber];
     
     if (targetRef?.current) {
@@ -943,8 +944,8 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
             )}
           </div>
 
-          {/* Card 5: Webhook */}
-          <div 
+          {/* Card 5: Webhook URL - 截圖待替換 */}
+          <div
             ref={card5Ref}
             className={`bg-white rounded-[14px] border-[1.6px] ${expandedCard === 5 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
           >
@@ -957,7 +958,7 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
                   <span className="text-[14px] leading-[20px] text-white">5</span>
                 </div>
                 <div className="flex flex-col items-start">
-                  <p className="text-[18px] leading-[28px] text-neutral-950">啟用聊天機器人與 Webhook</p>
+                  <p className="text-[18px] leading-[28px] text-neutral-950">設定 Line Webhook 網址</p>
                   <p className="text-[16px] leading-[24px] text-[#717182]">從 LINE 官方帳號後台設定</p>
                 </div>
               </div>
@@ -968,8 +969,124 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
               )}
             </button>
 
-            {/* Card Content */}
             {expandedCard === 5 && (
+              <div className="px-[24px] pb-[24px] flex flex-col gap-[16px]">
+                {/* Steps Section */}
+                <div className="bg-[#e1edfd] rounded-[10px] p-[16px]">
+                  <p className="text-[14px] leading-[20px] font-bold text-[#364153] mb-[16px]">
+                    📘 操作步驟
+                  </p>
+
+                  <div className="flex gap-[16px]">
+                    {/* Screenshot - 待替換 */}
+                    <div className="shrink-0">
+                      <ImageWithFallback
+                        src={imgStep4}
+                        alt="LINE Webhook URL Settings"
+                        className="w-[398.4px] h-[224.1px] rounded-[10px] border-[1.6px] border-[#0f6beb] object-cover shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)]"
+                        onClick={() => setEnlargedImage(imgStep4)}
+                      />
+                    </div>
+
+                    {/* Steps */}
+                    <div className="flex flex-col gap-[8px] justify-start pt-[8px]">
+                      <div className="flex gap-[8px] items-start">
+                        <span className="text-[14px] leading-[21px] text-[#364153]">1.</span>
+                        <p className="text-[14px] leading-[20px] text-[#364153]">
+                          回到 LINE 官方帳號後台（LINE Official Account Manager）
+                        </p>
+                      </div>
+
+                      <div className="flex gap-[8px] items-start">
+                        <span className="text-[14px] leading-[21px] text-[#364153]">2.</span>
+                        <p className="text-[14px] leading-[20px] text-[#364153]">
+                          點擊右上角的「齒輪」圖示（⚙️）進入設定
+                        </p>
+                      </div>
+
+                      <div className="flex gap-[8px] items-start">
+                        <span className="text-[14px] leading-[21px] text-[#364153]">3.</span>
+                        <p className="text-[14px] leading-[20px] text-[#364153]">
+                          在左側選單中選擇「Messaging API」
+                        </p>
+                      </div>
+
+                      <div className="flex gap-[8px] items-start">
+                        <span className="text-[14px] leading-[21px] text-[#364153]">4.</span>
+                        <p className="text-[14px] leading-[20px] text-[#364153]">
+                          將下方的 Webhook 網址貼入對應欄位
+                        </p>
+                      </div>
+
+                      <div className="flex gap-[8px] items-start">
+                        <span className="text-[14px] leading-[21px] text-[#364153]">5.</span>
+                        <p className="text-[14px] leading-[20px] text-[#364153]">
+                          點擊右方「儲存」完成設定
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Webhook URL with copy button */}
+                <div className="bg-white border-[0.8px] border-[#bedbff] rounded-[10px] px-[12.8px] py-[12.8px]">
+                  <p className="text-[14px] leading-[20px] text-[#364153] mb-[8px]">你的 Webhook 網址：</p>
+                  <div className="flex items-center gap-[8px]">
+                    <code className="flex-1 bg-[#f3f3f5] px-[12px] py-[8px] rounded-[8px] text-[14px] text-[#383838] break-all">
+                      {`https://console.star-bit.io/callback/${channelId || '{Channel_ID}'}`}
+                    </code>
+                    <button
+                      onClick={() => {
+                        const url = `https://console.star-bit.io/callback/${channelId}`;
+                        navigator.clipboard.writeText(url);
+                        showToast('已複製 Webhook 網址', 'success');
+                      }}
+                      className="shrink-0 bg-[#0f6beb] hover:bg-[#0d5bbf] text-white px-[12px] py-[8px] rounded-[8px] text-[12px] leading-[16px] flex items-center gap-[4px] transition-colors"
+                    >
+                      <Copy className="size-[14px]" />
+                      複製
+                    </button>
+                  </div>
+                </div>
+
+                {/* Next Button */}
+                <button
+                  onClick={() => goToNextCard(6)}
+                  className="bg-[#0f6beb] h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] hover:bg-[#0d5bbf] transition-colors flex items-center justify-center"
+                >
+                  下一步
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Card 6: Webhook confirmation */}
+          <div
+            ref={card6Ref}
+            className={`bg-white rounded-[14px] border-[1.6px] ${expandedCard === 6 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
+          >
+            <button
+              onClick={() => toggleCard(6)}
+              className="w-full px-[24px] py-[16px] flex items-center justify-between hover:bg-gray-50 rounded-t-[14px] transition-colors"
+            >
+              <div className="flex items-center gap-[12px]">
+                <div className="bg-[#0f6beb] rounded-full size-[32px] flex items-center justify-center">
+                  <span className="text-[14px] leading-[20px] text-white">6</span>
+                </div>
+                <div className="flex flex-col items-start">
+                  <p className="text-[18px] leading-[28px] text-neutral-950">啟用聊天機器人與 Webhook</p>
+                  <p className="text-[16px] leading-[24px] text-[#717182]">從 LINE 官方帳號後台設定</p>
+                </div>
+              </div>
+              {expandedCard === 6 ? (
+                <ChevronUp className="size-[20px] text-[#6A7282]" />
+              ) : (
+                <ChevronDown className="size-[20px] text-[#6A7282]" />
+              )}
+            </button>
+
+            {/* Card Content */}
+            {expandedCard === 6 && (
               <div className="px-[24px] pb-[24px] flex flex-col gap-[16px]">
                 {/* Steps Section */}
                 <div className="bg-[#e1edfd] rounded-[10px] p-[16px]">
@@ -993,28 +1110,28 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
                       <div className="flex gap-[8px] items-start">
                         <span className="text-[14px] leading-[21px] text-[#364153]">1.</span>
                         <p className="text-[14px] leading-[20px] text-[#364153]">
-                          點擊右上角的「齒輪」圖示（⚙️）進入設定
+                          在 LINE 官方帳號後台（LINE Official Account Manager）的設定
                         </p>
                       </div>
-                      
+
                       <div className="flex gap-[8px] items-start">
                         <span className="text-[14px] leading-[21px] text-[#364153]">2.</span>
                         <p className="text-[14px] leading-[20px] text-[#364153]">
                           在左側選單中選擇「回應模式」
                         </p>
                       </div>
-                      
+
                       <div className="flex gap-[8px] items-start">
                         <span className="text-[14px] leading-[21px] text-[#364153]">3.</span>
                         <div className="flex flex-col gap-[4px]">
                           <p className="text-[14px] leading-[20px] text-[#364153]">
-                            將以下選項開啟：
+                            將回應功能中的以下選項開啟：
                           </p>
                           <p className="text-[14px] leading-[20px] text-[#364153] pl-[16px]">
-                            - 聊天機器人（Chatbot）
+                            - 聊天
                           </p>
                           <p className="text-[14px] leading-[20px] text-[#364153] pl-[16px]">
-                            - Webhook（用於接收外部事件）
+                            - Webhook（若無法開啟請回上一步確認是否成功設定 Webhook 網址）
                           </p>
                         </div>
                       </div>
@@ -1022,7 +1139,7 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
                       <div className="flex gap-[8px] items-start">
                         <span className="text-[14px] leading-[21px] text-[#364153]">4.</span>
                         <p className="text-[14px] leading-[20px] text-[#364153]">
-                          將回應方式改為手動回應」，以便系統自動處理訊息互動
+                          將聊天的回應方式改為「手動聊天」，以便系統自動處理訊息互動
                         </p>
                       </div>
                     </div>
@@ -1038,7 +1155,7 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
                         const isChecked = checked === true;
                         setIsStep5Confirmed(isChecked);
                         if (isChecked) {
-                          goToNextCard(6);
+                          goToNextCard(7);
                         }
                       }}
                       className="size-[16px]"
@@ -1058,26 +1175,26 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
             )}
           </div>
 
-          {/* Card 6: Duplicate of Card 1 for future editing */}
-          <div 
-            ref={card6Ref}
-            className={`bg-white rounded-[14px] border-[1.6px] ${expandedCard === 6 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
+          {/* Card 7: LINE Login Channel */}
+          <div
+            ref={card7Ref}
+            className={`bg-white rounded-[14px] border-[1.6px] ${expandedCard === 7 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
           >
             {/* Card Header */}
             <button
-              onClick={() => toggleCard(6)}
+              onClick={() => toggleCard(7)}
               className="w-full px-[24px] py-[16px] flex items-center justify-between hover:bg-gray-50 rounded-t-[14px] transition-colors"
             >
               <div className="flex items-center gap-[12px]">
                 <div className="bg-[#0f6beb] rounded-full size-[32px] flex items-center justify-center">
-                  <span className="text-[14px] leading-[20px] text-white">6</span>
+                  <span className="text-[14px] leading-[20px] text-white">7</span>
                 </div>
                 <div className="flex flex-col items-start">
                   <p className="text-[18px] leading-[28px] text-neutral-950">連結 LINE Login Channel</p>
                   <p className="text-[16px] leading-[24px] text-[#717182]">建立 LINE Login Channel</p>
                 </div>
               </div>
-              {expandedCard === 6 ? (
+              {expandedCard === 7 ? (
                 <ChevronUp className="size-[20px] text-[#6A7282]" />
               ) : (
                 <ChevronDown className="size-[20px] text-[#6A7282]" />
@@ -1085,7 +1202,7 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
             </button>
 
             {/* Card Content */}
-            {expandedCard === 6 && (
+            {expandedCard === 7 && (
               <div className="px-[24px] pb-[24px] flex flex-col gap-[16px]">
                 {/* Steps Section */}
                 <div className="bg-[#e1edfd] rounded-[10px] p-[16px]">
@@ -1109,38 +1226,38 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
                       <div className="flex gap-[8px] items-start">
                         <span className="text-[14px] leading-[21px] text-[#364153]">1.</span>
                         <p className="text-[14px] leading-[20px] text-[#364153]">
-                          使用管理員帳號登入{' '}
-                          <a 
-                            href="https://developers.line.biz/en/" 
-                            target="_blank" 
+                          到{' '}
+                          <a
+                            href="https://developers.line.biz/console/"
+                            target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-[4px] bg-[#0f6beb] text-white px-[8px] py-[1px] rounded-[4px] text-[12px] leading-[16px] hover:bg-[#0d5bbf] transition-colors"
                           >
                             LINE Developers Console
                             <ExternalLink className="size-[12px]" />
                           </a>
-                          ，選擇您欲綁定帳號的 Provider
+                          ，左側 Providers 選單下選擇和先前相同的 Provider
                         </p>
                       </div>
-                      
+
                       <div className="flex gap-[8px] items-start">
                         <span className="text-[14px] leading-[21px] text-[#364153]">2.</span>
                         <p className="text-[14px] leading-[20px] text-[#364153]">
-                          點擊「Create a new channel」，並選擇 LINE Login。
+                          點擊「Create a new channel」，並選擇「LINE Login」
                         </p>
                       </div>
-                      
+
                       <div className="flex gap-[8px] items-start">
                         <span className="text-[14px] leading-[21px] text-[#364153]">3.</span>
                         <p className="text-[14px] leading-[20px] text-[#364153]">
-                          完成 Channel name 等基本資訊，並將 App types 設定為 Web app。
+                          完成基本資訊及 icon 設置後，將 App types 勾選為「Web app」
                         </p>
                       </div>
-                      
+
                       <div className="flex gap-[8px] items-start">
                         <span className="text-[14px] leading-[21px] text-[#364153]">4.</span>
                         <p className="text-[14px] leading-[20px] text-[#364153]">
-                          閱讀並同意相關條款後，點擊 Create 按鈕完成 Channel 建立。
+                          閱讀並同意相關條款後，點擊「Create」按鈕完成 Channel 建立
                         </p>
                       </div>
                     </div>
@@ -1149,7 +1266,7 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
 
                 {/* Next Button */}
                 <button
-                  onClick={() => goToNextCard(7)}
+                  onClick={() => goToNextCard(8)}
                   className="bg-[#0f6beb] h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] hover:bg-[#0d5bbf] transition-colors flex items-center justify-center"
                 >
                   下一步
@@ -1158,26 +1275,26 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
             )}
           </div>
 
-          {/* Card 7: Duplicate of Card 2 structure */}
-          <div 
-            ref={card7Ref}
-            className={`bg-white rounded-[14px] border-[1.6px] ${expandedCard === 7 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
+          {/* Card 8: Login Channel ID */}
+          <div
+            ref={card8Ref}
+            className={`bg-white rounded-[14px] border-[1.6px] ${expandedCard === 8 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
           >
             {/* Card Header */}
             <button
-              onClick={() => toggleCard(7)}
+              onClick={() => toggleCard(8)}
               className="w-full px-[24px] py-[16px] flex items-center justify-between hover:bg-gray-50 rounded-t-[14px] transition-colors"
             >
               <div className="flex items-center gap-[12px]">
                 <div className="bg-[#0f6beb] rounded-full size-[32px] flex items-center justify-center">
-                  <span className="text-[14px] leading-[20px] text-white">7</span>
+                  <span className="text-[14px] leading-[20px] text-white">8</span>
                 </div>
                 <div className="flex flex-col items-start">
                   <p className="text-[18px] leading-[28px] text-neutral-950">設定 Channel ID</p>
                   <p className="text-[16px] leading-[24px] text-[#717182]">從 Basic Settings 取得</p>
                 </div>
               </div>
-              {expandedCard === 7 ? (
+              {expandedCard === 8 ? (
                 <ChevronUp className="size-[20px] text-[#6A7282]" />
               ) : (
                 <ChevronDown className="size-[20px] text-[#6A7282]" />
@@ -1185,7 +1302,7 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
             </button>
 
             {/* Card Content */}
-            {expandedCard === 7 && (
+            {expandedCard === 8 && (
               <div className="px-[24px] pb-[24px] flex flex-col gap-[16px]">
                 {/* Steps Section */}
                 <div className="bg-[#e1edfd] rounded-[10px] p-[16px]">
@@ -1241,7 +1358,7 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
                 <button
                   onClick={async () => {
                     await saveSettings({ login_channel_id: loginChannelId });
-                    goToNextCard(8);
+                    goToNextCard(9);
                   }}
                   className="bg-[#0f6beb] h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] hover:bg-[#0d5bbf] transition-colors flex items-center justify-center"
                 >
@@ -1251,25 +1368,25 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
             )}
           </div>
 
-          {/* Card 8: Channel Secret (duplicated from Card 3) */}
-          <div 
-            ref={card8Ref}
-            className={`bg-white rounded-[14px] border-[1.6px] ${expandedCard === 8 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
+          {/* Card 9: Login Channel Secret */}
+          <div
+            ref={card9Ref}
+            className={`bg-white rounded-[14px] border-[1.6px] ${expandedCard === 9 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
           >
             <button
-              onClick={() => toggleCard(8)}
+              onClick={() => toggleCard(9)}
               className="w-full px-[24px] py-[16px] flex items-center justify-between hover:bg-gray-50 rounded-t-[14px] transition-colors"
             >
               <div className="flex items-center gap-[12px]">
                 <div className="bg-[#0f6beb] rounded-full size-[32px] flex items-center justify-center">
-                  <span className="text-[14px] leading-[20px] text-white">8</span>
+                  <span className="text-[14px] leading-[20px] text-white">9</span>
                 </div>
                 <div className="flex flex-col items-start">
                   <p className="text-[18px] leading-[28px] text-neutral-950">設定 Channel Secret</p>
                   <p className="text-[16px] leading-[24px] text-[#717182]">從 Basic Settings 取得</p>
                 </div>
               </div>
-              {expandedCard === 8 ? (
+              {expandedCard === 9 ? (
                 <ChevronUp className="size-[20px] text-[#6A7282]" />
               ) : (
                 <ChevronDown className="size-[20px] text-[#6A7282]" />
@@ -1277,7 +1394,7 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
             </button>
 
             {/* Card Content */}
-            {expandedCard === 8 && (
+            {expandedCard === 9 && (
               <div className="px-[24px] pb-[24px] flex flex-col gap-[16px]">
                 {/* Steps Section */}
                 <div className="bg-[#e1edfd] rounded-[10px] p-[16px]">
