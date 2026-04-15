@@ -19,7 +19,8 @@ export type Page =
   | "line-api-settings" // LINE API 基本設定
   | "pms" // PMS 串接 (訂房)
   | "facilities" // 設施 內頁
-  | "ai-chatbot"; // AI Chatbot 總覽
+  | "ai-chatbot" // AI Chatbot 總覽
+  | "insights"; // 數據洞察
 
 // URL 路徑映射
 const pageToPath: Record<Page, string> = {
@@ -33,6 +34,7 @@ const pageToPath: Record<Page, string> = {
   pms: "/pms",
   facilities: "/facilities",
   "ai-chatbot": "/ai-chatbot",
+  insights: "/insights",
 };
 
 // 路徑到頁面的反向映射
@@ -47,6 +49,7 @@ const pathToPage: Record<string, Page> = {
   "/pms": "pms",
   "/facilities": "facilities",
   "/ai-chatbot": "ai-chatbot",
+  "/insights": "insights",
 };
 
 // 导航参数类型

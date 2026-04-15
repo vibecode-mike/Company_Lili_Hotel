@@ -5,7 +5,7 @@ import { useLineChannelStatus } from "../../contexts/LineChannelStatusContext";
 
 interface MainLayoutProps {
   children: ReactNode;
-  currentPage?: "messages" | "auto-reply" | "members" | "settings";
+  currentPage?: "messages" | "auto-reply" | "members" | "settings" | "insights";
   sidebarOpen?: boolean;
   onToggleSidebar?: (open: boolean) => void;
 }

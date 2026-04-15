@@ -105,6 +105,7 @@ The system supports LINE, Facebook, and Webchat through:
 - **Pydantic**: Name models `<Entity>Schema`
 - **React/TS**: PascalCase components, camelCase hooks/utils
 - **Commits**: Conventional Commits (`fix:`, `feat:`, `chore:`, `docs:`)
+- **註解語言**: 所有程式碼中的註解（含 HTML/JSX 註解）一律使用**台灣繁體中文**，禁止使用英文或簡體中文
 
 ## Environment Variables
 

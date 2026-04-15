@@ -18,6 +18,7 @@ const LineApiSettingsPage = lazy(() => import("./pages/LineApiSettingsPage"));
 const PMSPage = lazy(() => import("./pages/PMSPage"));
 const FacilitiesPage = lazy(() => import("./pages/FacilitiesPage"));
 const AIChatbotPage = lazy(() => import("./pages/AIChatbotPage"));
+const InsightsPage = lazy(() => import("./pages/InsightsPage"));
 
 /**
  * 路由配置對象
@@ -34,6 +35,7 @@ const routes: Record<Page, React.ComponentType> = {
   pms: PMSPage,
   facilities: FacilitiesPage,
   "ai-chatbot": AIChatbotPage,
+  insights: InsightsPage,
 };
 
 /**
@@ -51,6 +53,7 @@ const pageTitles: Record<Page, string> = {
   pms: "AI Chatbot",
   facilities: "AI Chatbot",
   "ai-chatbot": "AI Chatbot",
+  insights: "數據洞察",
 };
 
 /**
