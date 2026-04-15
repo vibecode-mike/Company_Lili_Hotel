@@ -256,9 +256,11 @@ function RankingBar({ item, maxTotal }: { item: RankingItem; maxTotal: number })
 
   return (
     <div className="flex items-center py-[10px]">
-      <span className="text-[15px] w-[140px] shrink-0 text-left rounded-[8px] px-[8px] py-[2px] mr-[40px]" style={{ color: "#0f6beb", backgroundColor: "#e8f0fe" }}>
-        {item.category}
-      </span>
+      <div style={{ width: 380, flexShrink: 0, marginRight: 24 }}>
+        <span className="text-[15px] inline-block rounded-[8px] px-[8px] py-[2px] whitespace-nowrap" style={{ color: "#0f6beb", backgroundColor: "#e8f0fe" }}>
+          {item.category}
+        </span>
+      </div>
       <div className="flex-1">
         <div className="flex h-[36px] rounded-[6px] overflow-hidden" style={{ width: `${(total / maxTotal) * 65}%` }}>
           {item.counts.map(
@@ -279,7 +281,7 @@ function RankingBar({ item, maxTotal }: { item: RankingItem; maxTotal: number })
           )}
         </div>
       </div>
-      <span className="text-[14px] text-[#a8a8a8] w-[48px] shrink-0 text-left ml-[12px]">
+      <span style={{ fontSize: 14, color: "#a8a8a8", width: 48, flexShrink: 0, textAlign: "left", marginLeft: 6 }}>
         {total} 次
       </span>
     </div>
