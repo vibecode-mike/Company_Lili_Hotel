@@ -129,6 +129,7 @@ async def get_pms_rooms():
                 "price": int(price_str) if price_str.isdigit() else 0,
                 "max_occupancy": ROOMTYPE_MAX_OCCUPANCY.get(code, 2),
                 "remaining": int(remain_str) if remain_str.isdigit() else 0,
+                "image": str(room.get("image") or "").strip() or None,
             })
         return {"rooms": rooms}
     except Exception as e:
@@ -199,7 +200,6 @@ async def chatbot_rooms(
     checkin_date: str = Query(...),
     checkout_date: str = Query(...),
     adults: int = Query(..., ge=1, le=20),
-    children: int = Query(0, ge=0, le=20),
     db: AsyncSession = Depends(get_db),
 ) -> ChatbotRoomsOutSchema:
     _validate_date_range(checkin_date, checkout_date)
@@ -209,7 +209,6 @@ async def chatbot_rooms(
             checkin_date=checkin_date,
             checkout_date=checkout_date,
             adults=adults,
-            children=children,
             db=db,
         )
     except ValueError as exc:

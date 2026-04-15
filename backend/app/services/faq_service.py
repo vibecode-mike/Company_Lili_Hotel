@@ -649,6 +649,7 @@ class FaqService:
                 remain = min((d.get("remain", 0) for d in data_rows), default=0)
                 max_occ = ROOMTYPE_MAX_OCCUPANCY.get(code, 2)
 
+                pms_image = str(room.get("image") or "").strip()
                 content_json = json.dumps({
                     "房型名稱": name,
                     "房型特色": "",
@@ -656,7 +657,7 @@ class FaqService:
                     "人數": str(max_occ),
                     "間數": str(remain),
                     "url": "",
-                    "image_url": "",
+                    "image_url": pms_image,
                 }, ensure_ascii=False)
 
                 rule = FaqRule(

@@ -594,12 +594,13 @@ const PMSDataTable = memo(function PMSDataTable({
           price: number;
           max_occupancy: number;
           remaining: number;
+          image?: string | null;
         }> = json?.rooms ?? [];
         setPmsRooms(
           items.map((item) => ({
             id: `pms-${item.room_type_code}`,
             roomType: item.room_type_name,
-            image: "",
+            image: item.image || "",
             pricePerNight: item.price,
             maxGuests: item.max_occupancy,
             remainingRooms: String(item.remaining),
@@ -610,7 +611,7 @@ const PMSDataTable = memo(function PMSDataTable({
             enabled: false,
             published: false,
             pmsRoomCode: item.room_type_code,
-            customImageUrl: "",
+            customImageUrl: item.image || "",
           })),
         );
       })
