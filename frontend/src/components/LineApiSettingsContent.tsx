@@ -34,9 +34,9 @@ const VALIDATION = {
 
 const FORMAT_ERROR = {
   channel_id: 'Channel ID 必須為 10 位數字',
-  channel_secret: 'Channel Secret 必須為 32 位十六進位字串',
+  channel_secret: 'Channel Secret 格式不正確，請從 LINE 後台重新複製',
   login_channel_id: 'Channel ID 必須為 10 位數字',
-  login_channel_secret: 'Channel Secret 必須為 32 位十六進位字串',
+  login_channel_secret: 'Channel Secret 格式不正確，請從 LINE 後台重新複製',
 } as const;
 
 const FIELD_LABEL = {
