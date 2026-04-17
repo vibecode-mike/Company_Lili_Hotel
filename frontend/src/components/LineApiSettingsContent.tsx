@@ -24,6 +24,31 @@ interface LineApiSettingsContentProps {
   onBack?: () => void;
 }
 
+// 欄位格式驗證規則（LINE Developers Console 規範）
+const VALIDATION = {
+  channel_id: /^\d{10}$/,                 // 10 位數字
+  channel_secret: /^[0-9a-f]{32}$/,       // 32 位十六進位
+  login_channel_id: /^\d{10}$/,           // 10 位數字
+  login_channel_secret: /^[0-9a-f]{32}$/, // 32 位十六進位
+} as const;
+
+const FORMAT_ERROR = {
+  channel_id: 'Channel ID 必須為 10 位數字',
+  channel_secret: 'Channel Secret 必須為 32 位十六進位字串',
+  login_channel_id: 'Channel ID 必須為 10 位數字',
+  login_channel_secret: 'Channel Secret 必須為 32 位十六進位字串',
+} as const;
+
+const FIELD_LABEL = {
+  channel_id: 'Channel ID',
+  channel_secret: 'Channel Secret',
+  channel_access_token: 'Channel Access Token',
+  login_channel_id: 'Login Channel ID',
+  login_channel_secret: 'Login Channel Secret',
+} as const;
+
+const DRAFT_STORAGE_KEY = 'line_setup_draft';
+
 export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSettingsContentProps = {}) {
   const [expandedCard, setExpandedCard] = useState<number>(1);
   const [channelId, setChannelId] = useState<string>('');
@@ -55,14 +80,15 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
   const card8Ref = useRef<HTMLDivElement>(null);
   const card9Ref = useRef<HTMLDivElement>(null);
 
-  // 載入現有設定
+  // 載入現有設定：優先用 DB，DB 無資料時從 localStorage 恢復草稿
   useEffect(() => {
     const loadSettings = async () => {
+      let hasDbData = false;
       try {
         const response = await fetch('/api/v1/line_channels/current');
         if (response.ok) {
           const data = await response.json();
-          if (data) {
+          if (data && data.id) {
             setLineChannelDbId(data.id);
             setChannelId(data.channel_id || '');
             setChannelSecret(data.channel_secret || '');
@@ -70,6 +96,7 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
             setLoginChannelId(data.login_channel_id || '');
             setLoginChannelSecret(data.login_channel_secret || '');
             setBasicId(data.basic_id || '');
+            hasDbData = true;
 
             // 如果所有必填欄位都有值，顯示完成頁面
             if (data.channel_id && data.channel_secret && data.channel_access_token &&
@@ -80,13 +107,49 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
         }
       } catch (error) {
         console.error('載入 LINE 頻道設定失敗:', error);
-      } finally {
-        setIsLoading(false);
       }
+
+      // DB 無資料 → 從 localStorage 恢復草稿
+      if (!hasDbData) {
+        try {
+          const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+          if (raw) {
+            const draft = JSON.parse(raw);
+            if (draft.channelId) setChannelId(draft.channelId);
+            if (draft.channelSecret) setChannelSecret(draft.channelSecret);
+            if (draft.channelAccessToken) setChannelAccessToken(draft.channelAccessToken);
+            if (draft.loginChannelId) setLoginChannelId(draft.loginChannelId);
+            if (draft.loginChannelSecret) setLoginChannelSecret(draft.loginChannelSecret);
+            if (draft.basicId) setBasicId(draft.basicId);
+          }
+        } catch (error) {
+          console.error('恢復草稿失敗:', error);
+        }
+      }
+
+      setIsLoading(false);
     };
 
     loadSettings();
   }, []);
+
+  // 欄位變動時同步寫入 localStorage 草稿（只在尚未完成設定時）
+  useEffect(() => {
+    if (isLoading || isSetupComplete) return;
+    try {
+      const draft = {
+        channelId,
+        channelSecret,
+        channelAccessToken,
+        loginChannelId,
+        loginChannelSecret,
+        basicId,
+      };
+      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    } catch (error) {
+      console.error('寫入草稿失敗:', error);
+    }
+  }, [channelId, channelSecret, channelAccessToken, loginChannelId, loginChannelSecret, basicId, isLoading, isSetupComplete]);
 
   useEffect(() => {
     setIsSetupComplete(isConfigured);
@@ -175,22 +238,13 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
 
       if (response.ok && data.ok && data.basicId) {
         setBasicId(data.basicId);
-
-        // 同時更新到資料庫
-        if (lineChannelDbId) {
-          await fetch(`/api/v1/line_channels/${lineChannelDbId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ basic_id: data.basicId }),
-          });
-        }
         return true;
       } else {
-        throw new Error(data.error?.message || data.error || '無法獲取 Basic ID');
+        throw new Error(data.error?.message || data.error || 'Channel Access Token 無效');
       }
     } catch (error) {
-      console.error('[ERROR] 獲取 Basic ID 失敗:', error);
-      setBasicIdError('無法自動獲取 Basic ID，請確認 Token 是否正確');
+      console.error('[ERROR] 驗證 Channel Access Token 失敗:', error);
+      setBasicIdError('Channel Access Token 無效，請確認後重新貼上');
       return false;
     } finally {
       setIsFetchingBasicId(false);
@@ -220,71 +274,66 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
     scrollToCard(nextCardNumber);
   };
 
-  // 驗證所有必填欄位
+  // 驗證所有必填欄位（格式 + 非空）
   const validateAllFields = () => {
-    const requiredFields = [
-      channelId.trim(),
-      channelSecret.trim(),
-      channelAccessToken.trim(),
-      loginChannelId.trim(),
-      loginChannelSecret.trim(),
-    ];
-    const isValid = requiredFields.every(Boolean);
-    if (!isValid) {
-      showToast('填寫內容有誤', 'error');
+    const errors: string[] = [];
+    if (!VALIDATION.channel_id.test(channelId.trim())) {
+      errors.push(FIELD_LABEL.channel_id);
     }
-    return isValid;
+    if (!VALIDATION.channel_secret.test(channelSecret.trim())) {
+      errors.push(FIELD_LABEL.channel_secret);
+    }
+    if (!channelAccessToken.trim()) {
+      errors.push(FIELD_LABEL.channel_access_token);
+    }
+    if (!VALIDATION.login_channel_id.test(loginChannelId.trim())) {
+      errors.push(FIELD_LABEL.login_channel_id);
+    }
+    if (!VALIDATION.login_channel_secret.test(loginChannelSecret.trim())) {
+      errors.push(FIELD_LABEL.login_channel_secret);
+    }
+    if (errors.length > 0) {
+      showToast(`以下欄位格式錯誤：${errors.join('、')}`, 'error');
+      return false;
+    }
+    return true;
   };
 
-  // 驗證是否能順利抓取本月訊息用量
-  const verifyMessageUsage = async () => {
-    const token = localStorage.getItem('auth_token');
-    if (!token) {
-      throw new Error('尚未登入，請重新登入再試');
-    }
-
-    const response = await fetch('/api/v1/messages/quota', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        target_type: 'all_friends'
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error('無法抓取本月訊息用量，請確認設定後再試');
-    }
-
-    const result = await response.json();
-    if (typeof result.used !== 'number') {
-      throw new Error('取得的訊息用量格式不正確，請稍後再試');
-    }
-  };
-
-  // 處理建立連結
+  // 處理建立連結：先驗證 → 再寫 DB
   const handleCreateConnection = async () => {
+    // 1. 格式 + 非空檢查
     if (!validateAllFields()) {
       return;
     }
 
     setIsVerifyingUsage(true);
     try {
+      // 2. 最終驗證：用當下 state 的 token 重新打 LINE API
+      const tokenValid = await fetchBasicId(channelAccessToken);
+      if (!tokenValid) {
+        showToast('Channel Access Token 無效或已過期，請回步驟 4 重新確認', 'error');
+        return;
+      }
+
+      // 3. 驗證通過才一次寫入 DB
       const saved = await saveSettings({
         channel_id: channelId,
         channel_secret: channelSecret,
         channel_access_token: channelAccessToken,
         login_channel_id: loginChannelId,
-        login_channel_secret: loginChannelSecret
+        login_channel_secret: loginChannelSecret,
       });
-
       if (!saved) {
         return;
       }
 
-      await verifyMessageUsage();
+      // 4. 清除草稿
+      try {
+        localStorage.removeItem(DRAFT_STORAGE_KEY);
+      } catch (error) {
+        console.error('清除草稿失敗:', error);
+      }
+
       setIsSetupComplete(true);
 
       // 如果有提供 onComplete 回調，則使用它；否則使用內建導航
@@ -295,19 +344,20 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
         navigate('member-management');
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : '無法抓取本月訊息用量，請確認設定後再試';
+      const message = error instanceof Error ? error.message : '建立連結失敗，請稍後再試';
       showToast(message, 'error');
     } finally {
       setIsVerifyingUsage(false);
     }
   };
 
+  // 按鈕 disabled 邏輯：5 個欄位格式都通過才能按
   const canSubmitConnection =
-    Boolean(channelId.trim()) &&
-    Boolean(channelSecret.trim()) &&
+    VALIDATION.channel_id.test(channelId.trim()) &&
+    VALIDATION.channel_secret.test(channelSecret.trim()) &&
     Boolean(channelAccessToken.trim()) &&
-    Boolean(loginChannelId.trim()) &&
-    Boolean(loginChannelSecret.trim()) &&
+    VALIDATION.login_channel_id.test(loginChannelId.trim()) &&
+    VALIDATION.login_channel_secret.test(loginChannelSecret.trim()) &&
     !isVerifyingUsage;
 
   // 如果已完成設定且沒有提供 onComplete（獨立使用模式），顯示完成頁面
@@ -692,17 +742,21 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
                   />
                 </div>
 
+                {/* 格式錯誤提示 */}
+                {channelId.trim() && !VALIDATION.channel_id.test(channelId.trim()) && (
+                  <p className="text-[12px] text-red-500">{FORMAT_ERROR.channel_id}</p>
+                )}
+
                 {/* Next Button */}
                 <button
-                  disabled={!channelId.trim()}
-                  onClick={async () => {
-                    if (channelId.trim()) {
-                      await saveSettings({ channel_id: channelId });
+                  disabled={!VALIDATION.channel_id.test(channelId.trim())}
+                  onClick={() => {
+                    if (VALIDATION.channel_id.test(channelId.trim())) {
                       goToNextCard(3);
                     }
                   }}
                   className={`h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] flex items-center justify-center transition-colors ${
-                    channelId.trim()
+                    VALIDATION.channel_id.test(channelId.trim())
                       ? 'bg-[#0f6beb] hover:bg-[#0d5bbf]'
                       : 'bg-[#d1d5dc] opacity-50 cursor-not-allowed'
                   }`}
@@ -798,17 +852,21 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
                   />
                 </div>
 
+                {/* 格式錯誤提示 */}
+                {channelSecret.trim() && !VALIDATION.channel_secret.test(channelSecret.trim()) && (
+                  <p className="text-[12px] text-red-500">{FORMAT_ERROR.channel_secret}</p>
+                )}
+
                 {/* Next Button */}
                 <button
-                  disabled={!channelSecret.trim()}
-                  onClick={async () => {
-                    if (channelSecret.trim()) {
-                      await saveSettings({ channel_secret: channelSecret });
+                  disabled={!VALIDATION.channel_secret.test(channelSecret.trim())}
+                  onClick={() => {
+                    if (VALIDATION.channel_secret.test(channelSecret.trim())) {
                       goToNextCard(4);
                     }
                   }}
                   className={`h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] flex items-center justify-center transition-colors ${
-                    channelSecret.trim()
+                    VALIDATION.channel_secret.test(channelSecret.trim())
                       ? 'bg-[#0f6beb] hover:bg-[#0d5bbf]'
                       : 'bg-[#d1d5dc] opacity-50 cursor-not-allowed'
                   }`}
@@ -922,12 +980,8 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
                   disabled={!channelAccessToken.trim() || isFetchingBasicId}
                   onClick={async () => {
                     if (channelAccessToken.trim()) {
-                      await saveSettings({ channel_access_token: channelAccessToken });
-
-                      // 🆕 自動獲取 Basic ID
+                      // 呼叫 LINE API 驗證 token（早期回饋，不寫 DB）
                       const success = await fetchBasicId(channelAccessToken);
-
-                      // 只有成功時才跳到下一步
                       if (success) {
                         goToNextCard(5);
                       }
@@ -1370,13 +1424,24 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
                   />
                 </div>
 
+                {/* 格式錯誤提示 */}
+                {loginChannelId.trim() && !VALIDATION.login_channel_id.test(loginChannelId.trim()) && (
+                  <p className="text-[12px] text-red-500">{FORMAT_ERROR.login_channel_id}</p>
+                )}
+
                 {/* Next Button */}
                 <button
-                  onClick={async () => {
-                    await saveSettings({ login_channel_id: loginChannelId });
-                    goToNextCard(9);
+                  disabled={!VALIDATION.login_channel_id.test(loginChannelId.trim())}
+                  onClick={() => {
+                    if (VALIDATION.login_channel_id.test(loginChannelId.trim())) {
+                      goToNextCard(9);
+                    }
                   }}
-                  className="bg-[#0f6beb] h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] hover:bg-[#0d5bbf] transition-colors flex items-center justify-center"
+                  className={`h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] flex items-center justify-center transition-colors ${
+                    VALIDATION.login_channel_id.test(loginChannelId.trim())
+                      ? 'bg-[#0f6beb] hover:bg-[#0d5bbf]'
+                      : 'bg-[#d1d5dc] opacity-50 cursor-not-allowed'
+                  }`}
                 >
                   下一步
                 </button>
@@ -1468,6 +1533,18 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
                     className="bg-[#f3f3f5] h-[36px] px-[12px] py-[4px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] border-none outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
                   />
                 </div>
+
+                {/* 格式錯誤提示 */}
+                {loginChannelSecret.trim() && !VALIDATION.login_channel_secret.test(loginChannelSecret.trim()) && (
+                  <p className="text-[12px] text-red-500">{FORMAT_ERROR.login_channel_secret}</p>
+                )}
+
+                {/* 建立連結按鈕 disabled 的提示 */}
+                {!canSubmitConnection && !isVerifyingUsage && (
+                  <p className="text-[12px] text-orange-500">
+                    尚有欄位未填寫或格式錯誤，請檢查各步驟設定
+                  </p>
+                )}
 
                 {/* Next Button */}
                 <button

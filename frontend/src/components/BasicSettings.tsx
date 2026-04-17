@@ -189,11 +189,12 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     const nextAccounts: ChannelAccount[] = [];
 
     // 1. 取得 LINE 資料（獨立 try-catch）
+    // 必須 5 個必填欄位齊全（isConfigured）才視為已連結，避免半成品被誤判
     try {
       const lineRes = await fetch('/api/v1/line_channels/current');
       if (lineRes.ok) {
         const data = await lineRes.json();
-        if (data?.channel_id) {
+        if (data?.channel_id && isConfigured) {
           nextAccounts.push({
             id: data.id?.toString() || 'line-1',
             platform: 'line',
@@ -273,7 +274,7 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     console.log('[BasicSettings] 最終帳號數量:', nextAccounts.length, nextAccounts);
     setAccounts(nextAccounts);
     return nextAccounts.length;
-  }, [ensureJwtToken, fetchFbLoginStatus, formatZhDateTime]);
+  }, [ensureJwtToken, fetchFbLoginStatus, formatZhDateTime, isConfigured]);
 
   // 初始化：載入帳號並決定初始視圖
   useEffect(() => {
