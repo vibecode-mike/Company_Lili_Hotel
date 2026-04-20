@@ -1,19 +1,29 @@
 @query
 Feature: 查詢空房型
   作為系統
-  當訂房資訊齊全時，查詢 PMS 或 FAQ_KB 取得可用房型
-  並決定推薦策略
+  當訂房資訊齊全（入住日期 + 住幾晚）時，查詢 PMS 或 FAQ_KB 取得可用房型
+  並決定推薦策略。人數／房型屬選填，未指定時回傳所有房型依人數由小到大排序。
 
   Background:
-    Given booking_context 中 room_plan_requests、checkin_date、checkout_date 皆已齊全
+    Given booking_context 中 checkin_date、checkout_date 皆已齊全
 
   Rule: PMS 啟用時優先查詢 PMS 即時資料
 
-    Example: PMS 啟用且回傳有效房型
+    Example: PMS 啟用、未指定人數 → 呼叫 query_pms_all_roomtypes 取得所有房型
       Given ENABLE_PMS = true
       And PMS API 連線正常
-      When 系統呼叫 query_pms(startdate, enddate, housingcnt)
+      And 民眾未指定人數或房型
+      When 系統呼叫 query_pms_all_roomtypes(startdate, enddate)
       Then 回傳房型列表，每筆包含 room_type_code、price、available_count、max_occupancy
+      And 房卡依 max_occupancy 由小到大排序，相同人數則依價格由低至高
+      And 系統以 PMS 資料為主，FAQ_KB 資料補充房型圖片與特色描述
+
+    Example: PMS 啟用、民眾指定人數或房型 → 呼叫 query_pms 依條件過濾
+      Given ENABLE_PMS = true
+      And PMS API 連線正常
+      And 民眾主動指定人數 4 或房型「V1」
+      When 系統呼叫 query_pms(startdate, enddate, housingcnt, roomtype)
+      Then 回傳符合條件的房型列表
       And 系統以 PMS 資料為主，FAQ_KB 資料補充房型圖片與特色描述
 
     @ignore
@@ -65,5 +75,5 @@ Feature: 查詢空房型
       Given PMS 回傳空房型
       And FAQ_KB 亦無符合條件的靜態房型
       When AI 生成回覆
-      Then reply = "哎呀，找不到完全符合條件的房型！目前根據您輸入的人數與日期，暫時沒有對應的選項。建議您可以調整入住日期，或是留下您的資訊，如有空房以利客服專員主動聯繫您！"
-      And missing_fields 重新包含 room_plan 與日期，引導民眾重新輸入
+      Then reply = "哎呀，找不到完全符合條件的房型！目前根據您輸入的日期，暫時沒有對應的選項。建議您可以調整入住日期，或是留下您的資訊，如有空房以利客服專員主動聯繫您！"
+      And missing_fields 重新包含日期欄位，引導民眾重新輸入

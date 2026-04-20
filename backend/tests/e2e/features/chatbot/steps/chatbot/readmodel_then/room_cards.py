@@ -74,6 +74,7 @@ def step_query_two_types(context):
 
 
 @then("reply = \"哎呀，找不到完全符合條件的房型！目前根據您輸入的人數與日期，暫時沒有對應的選項。建議您可以調整入住日期，或是留下您的資訊，如有空房以利客服專員主動聯繫您！\"")
+@then("reply = \"哎呀，找不到完全符合條件的房型！目前根據您輸入的日期，暫時沒有對應的選項。建議您可以調整入住日期，或是留下您的資訊，如有空房以利客服專員主動聯繫您！\"")
 def step_no_room_reply(context):
     """LLM 文字非確定性，只驗證 HTTP 200。"""
     assert context.last_response.status_code == 200
@@ -82,3 +83,35 @@ def step_no_room_reply(context):
 @then("missing_fields 重新包含 room_plan 與日期，引導民眾重新輸入")
 def step_missing_fields_reset(context):
     assert context.last_response.status_code == 200
+
+
+@then("missing_fields 重新包含日期欄位，引導民眾重新輸入")
+def step_missing_fields_dates_only(context):
+    assert context.last_response.status_code == 200
+
+
+@then("回傳符合條件的房型列表")
+def step_filtered_rooms(context):
+    assert context.last_response is not None
+    assert context.last_response.status_code == 200
+    data = context.last_response.json()
+    assert "room_cards" in data
+
+
+@then("房卡依 max_occupancy 由小到大排序，相同人數則依價格由低至高")
+def step_sort_by_occupancy_then_price(context):
+    """驗證房卡排序：max_occupancy 升序優先，相同 occupancy 則 price 升序。"""
+    assert context.last_response is not None
+    assert context.last_response.status_code == 200
+    cards = context.last_response.json().get("room_cards", [])
+    if len(cards) < 2:
+        return  # 0 或 1 張房卡無法驗排序
+    for prev, curr in zip(cards, cards[1:]):
+        prev_occ = prev.get("max_occupancy") or 2
+        curr_occ = curr.get("max_occupancy") or 2
+        prev_price = prev.get("price") or 0
+        curr_price = curr.get("price") or 0
+        assert (prev_occ, prev_price) <= (curr_occ, curr_price), (
+            f"排序錯誤：前卡 (occ={prev_occ}, price={prev_price}) 應 ≤ "
+            f"後卡 (occ={curr_occ}, price={curr_price})"
+        )

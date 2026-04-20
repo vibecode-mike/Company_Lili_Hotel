@@ -47,3 +47,15 @@ def step_impl_still_contains_checkin(context):
     assert "checkin_date" in missing, (
         f"missing_fields 應仍包含 'checkin_date'，實際 {missing}"
     )
+
+
+@then("missing_fields 仍包含日期欄位")
+def step_impl_still_contains_dates(context):
+    resp = context.last_response
+    assert resp is not None, "context.last_response 為 None"
+    assert resp.status_code == 200, f"期望 200，實際 {resp.status_code}: {resp.text[:200]}"
+    data = resp.json()
+    missing = data.get("missing_fields", [])
+    assert "checkin_date" in missing or "checkout_date" in missing, (
+        f"missing_fields 應仍包含日期欄位，實際 {missing}"
+    )

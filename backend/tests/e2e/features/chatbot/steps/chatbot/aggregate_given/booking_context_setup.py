@@ -26,9 +26,27 @@ def step_impl_dates_set(context):
     _send(context, "3月20號住到3月22號")
 
 
+@given("booking_context 中 checkin_date 已設定")
+def step_impl_checkin_only(context):
+    """只送入住日，不含退房日，讓 checkout_date 維持 null。"""
+    _send(context, "3月20號入住")
+
+
+@given("booking_context 中 checkin_date 為 null")
+def step_impl_checkin_still_null(context):
+    """新 session 預設 checkin_date 為 null。"""
+    assert "browser_key" in context.memo
+
+
+@given("booking_context 為新 session")
+def step_impl_new_session(context):
+    """新 session，尚未送任何訊息。"""
+    assert "browser_key" in context.memo
+
+
 @given("booking_context 中 room_plan_requests 已設定")
 def step_impl_room_plan_set(context):
-    """送含幾間幾人房訊息讓系統解析。"""
+    """送含房型訊息讓系統解析（選填資訊）。"""
     _send(context, "我要1間雙人房")
 
 
@@ -38,9 +56,15 @@ def step_impl_checkin_null(context):
     assert "browser_key" in context.memo
 
 
+@given("checkout_date 為 null")
+def step_impl_checkout_null(context):
+    """新 session 預設 checkout_date 為 null，無需特別設定。"""
+    assert "browser_key" in context.memo
+
+
 @given("booking_context room_plan_requests 已設定")
 def step_impl_room_plan_set_alt(context):
-    """送含幾間幾人房訊息讓系統解析（備用 Given 文案）。"""
+    """送含房型訊息讓系統解析（備用 Given 文案；選填資訊）。"""
     _send(context, "我要1間雙人房")
 
 

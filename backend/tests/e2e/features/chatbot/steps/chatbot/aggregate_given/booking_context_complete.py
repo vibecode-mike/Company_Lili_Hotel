@@ -14,10 +14,30 @@ def _send(context, message: str) -> dict:
 
 @given("booking_context 中 room_plan_requests、checkin_date、checkout_date 皆已齊全")
 def step_impl_all_complete(context):
-    """送幾間幾人房 + 日期訊息，讓 booking_context 齊全。"""
+    """送房型 + 日期訊息，讓 booking_context 齊全（人數／房型已改為選填，但仍可解析）。"""
     _send(context, "我想訂房")
     _send(context, "我要1間雙人房")
     _send(context, "3月20號住到3月22號")
+
+
+@given("booking_context 中 checkin_date、checkout_date 皆已齊全")
+def step_impl_dates_complete(context):
+    """只送日期訊息，讓 checkin_date 與 checkout_date 齊全（不提供房型）。"""
+    _send(context, "我想訂房")
+    _send(context, "3月20號住到3月22號")
+
+
+@given("民眾未指定人數或房型")
+def step_no_headcount_or_roomtype(context):
+    """民眾沒主動提房型／人數，走 query_pms_all_roomtypes 路徑。"""
+    context.memo["no_headcount"] = True
+
+
+@given("民眾主動指定人數 {n:d} 或房型「{code}」")
+def step_has_headcount_or_roomtype(context, n, code):
+    """民眾主動提人數或房型，走 query_pms 路徑。"""
+    context.memo["requested_headcount"] = n
+    context.memo["requested_roomtype"] = code
 
 
 @given("ENABLE_PMS = true")

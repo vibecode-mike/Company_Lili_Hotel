@@ -43,6 +43,7 @@ from app.services.pms_chatbot_client import (
     build_booking_url,
     pms_enabled,
     query_pms,
+    query_pms_all_roomtypes,
 )
 
 logger = logging.getLogger(__name__)
@@ -139,11 +140,16 @@ ROOMTYPE_MAX_OCCUPANCY = {
 # FAQ KB fallback — read room data from DB instead of hardcoded list
 # ---------------------------------------------------------------------------
 
-async def _kb_fallback_rooms(db: Optional[AsyncSession], adults: int = 1) -> List[RoomCardSchema]:
-    """Query FAQ KB for room data. Returns RoomCardSchema list (source=faq_kb).
+async def _kb_fallback_rooms(
+    db: Optional[AsyncSession], adults: Optional[int] = None,
+) -> List[RoomCardSchema]:
+    """查詢 FAQ KB 取得靜態房型資料，回傳 RoomCardSchema 清單（source=faq_kb）。
 
     Spec: 查詢空房型.feature — PMS 未啟用或異常時降級至 FAQ_KB，
     呼叫 _kb_search("booking_billing", query) 取得靜態房型資料。
+
+    adults=None：未指定人數，依 max_occupancy 由小到大排序，不過濾。
+    adults=整數：過濾 max_occupancy >= adults，再依匹配度與價格排序。
     """
     if db is None:
         return []
@@ -178,7 +184,11 @@ async def _kb_fallback_rooms(db: Optional[AsyncSession], adults: int = 1) -> Lis
             features=features,
             source="faq_kb",
         ))
-    # 過濾：可住人數 >= 查詢人數，照匹配度排序（最接近的排前面）
+    # 未指定人數：依人數由小到大排序，相同人數價格低者優先
+    if adults is None:
+        cards.sort(key=lambda c: ((c.max_occupancy or 2), c.price if c.price > 0 else 10**12))
+        return cards
+    # 指定人數：過濾可住人數 >= 查詢人數，照匹配度排序（最接近的排前面）
     filtered = [c for c in cards if (c.max_occupancy or 2) >= adults]
     result = filtered if filtered else cards
     result.sort(key=lambda c: (abs((c.max_occupancy or 2) - adults), c.price if c.price > 0 else 10**12))
@@ -469,7 +479,8 @@ _PMS_TOOL = {
         "name": "query_pms_availability",
         "description": (
             "查詢即時房況。只要知道入住日就立刻呼叫，不要追問客人確認。"
-            "客人沒說退房日就填入住日+1天；沒說人數就從房型推斷（雙人房填2、四人房填4）或預設填2。"
+            "客人沒說退房日就填入住日+1天；不需要追問人數，未提供時省略 housingcnt 即可，"
+            "系統會回傳所有可用房型依人數由小到大排序。"
         ),
         "parameters": {
             "type": "object",
@@ -478,14 +489,14 @@ _PMS_TOOL = {
                 "enddate": {"type": "string", "description": "退房日期 YYYY-MM-DD（未提供則填入住日+1天）"},
                 "housingcnt": {
                     "type": "integer",
-                    "description": "每間房入住人數，雙人房=2、四人房=4、未知預設2",
+                    "description": "每間房入住人數（選填）。僅當客人主動指定房型才帶入（雙人房=2、四人房=4）；未指定則省略。",
                 },
                 "roomtype": {
                     "type": "string",
                     "description": "指定房型代碼（可選，例如 V2、GS）",
                 },
             },
-            "required": ["startdate", "enddate", "housingcnt"],
+            "required": ["startdate", "enddate"],
         },
     },
 }
@@ -638,16 +649,16 @@ def _build_system_prompt_for(today: date) -> str:
     today_str = today.strftime("%Y-%m-%d")
     if is_pms_enabled():
         pms_rule = (
-            "- 能推斷出入住日就可以呼叫 query_pms_availability（退房日預設入住日+1天，間數預設1間，人數從房型推斷）\n"
+            "- 能推斷出入住日與住幾晚就可以呼叫 query_pms_availability（不需要人數，系統會回傳所有房型依人數由小到大排序）\n"
             "- 若入住日期嚴格早於今天（不含今天），不要查詢房況，直接提醒旅客「您提供的日期已過，請重新提供入住日期」；今天當天是有效入住日\n"
             "- 工具回傳後，不要在文字中列出房型清單，系統會自動顯示房卡，你只需簡短回覆一句話\n"
-            "- 若查無房型，告知並詢問是否調整日期或人數\n"
+            "- 若查無房型，告知並詢問是否調整日期\n"
             "- PMS 失敗時，改用靜態房型資料告知旅客（標明為「一般參考房價」）"
         )
     else:
         pms_rule = (
             "- 目前無即時房況系統，但仍需呼叫 query_pms_availability 取得靜態參考房價\n"
-            "- 能推斷出入住日就可以呼叫 query_pms_availability（退房日預設入住日+1天，間數預設1間，人數從房型推斷）\n"
+            "- 能推斷出入住日與住幾晚就可以呼叫 query_pms_availability（不需要人數，系統會回傳所有房型依人數由小到大排序）\n"
             "- 若入住日期嚴格早於今天（不含今天），不要查詢房況，直接提醒旅客「您提供的日期已過，請重新提供入住日期」；今天當天是有效入住日\n"
             "- 工具回傳後，不要在文字中列出房型清單，系統會自動顯示房卡，你只需簡短回覆一句話並標明為「一般參考房價」"
         )
@@ -658,16 +669,20 @@ def _build_system_prompt_for(today: date) -> str:
 你會收到整段對話紀錄（包含先前訊息），請務必綜合上下文，不要重複追問已提供的資訊。
 
 核心行為規則（最高優先，嚴格遵守，違反視為錯誤）：
-- 必須收齊以下三項資訊才能呼叫 query_pms_availability：(1) 入住日期 (2) 住幾晚 (3) 幾人房（雙人房/四人房等）
-- 三項齊全時，「必須」在本次回覆中呼叫 query_pms_availability tool，絕對不可以只回文字而不呼叫 tool
+- 必須收齊以下兩項資訊才能呼叫 query_pms_availability：(1) 入住日期 (2) 住幾晚
+- 絕對不要追問「幾人房」「幾人入住」「要幾人的房型」，系統會直接回傳所有房型（依人數由小到大排序）供客人挑選
+- 兩項齊全時，「必須」在本次回覆中呼叫 query_pms_availability tool，絕對不可以只回文字而不呼叫 tool
 - 嚴禁回覆「幫您查詢」「請稍等」之類的話而不實際呼叫 tool
+- 嚴禁在未呼叫 query_pms_availability（本輪或先前輪次的 tool 結果）的情況下，宣稱「沒有 X 房型」「今天沒房」「X 日期無房」「X 房型已售完」等任何房況結論；即便客人用疑問句詢問（例如「今天沒有四人房了嗎？」），也不得把疑問當作事實，務必先查或追問缺少的資訊
+- 當資訊不齊（例如只有日期缺住幾晚）時，只能追問缺少的項目，絕不自行編造查詢結果或建議「改其他日期」
 - 缺少任何一項時，只追問缺少的項目，不要重複追問已知的資訊
-- 追問順序：入住日期 → 住幾晚 → 幾人房
+- 追問順序：入住日期 → 住幾晚
 - 不需要追問「幾間」，間數在選房後再確認即可
 - 客人只提供月/日時，直接當作今年，不要反問年份
 - 「今天入住」→ startdate={today_str}
 - 今天（含）及未來日期都是有效入住日，只有嚴格早於今天的日期才算「已過期」
-- 若客人一次給齊所有資訊（例如「4/11入住一晚 一間雙人房」），直接呼叫 tool 不要追問
+- 若客人一次給齊所有資訊（例如「4/11入住一晚」），直接呼叫 tool 不要追問
+- 若客人主動提及房型（例如「雙人房」「四人房」），仍不必追問人數，直接查詢即可，房卡會依人數由小到大顯示所有房型
 
 知識庫查詢規則：
 - 客人詢問設施（游泳池、停車場、餐廳位置、費用、開放時間等）時，先呼叫 kb_search(category="facilities")
@@ -684,12 +699,11 @@ def _build_system_prompt_for(today: date) -> str:
 - 若客人明確表示不需要訂房，則不再追加引導語
 
 訂房引導規則：
-- 「雙人房」=2人房(housingcnt=2)、「四人房」=4人房(housingcnt=4)、「家庭房」=4人房(housingcnt=4)、「單人房」=1人房(housingcnt=1)
-- 三項資訊齊全時，必須在本次回覆中呼叫 query_pms_availability tool，嚴禁只回文字不呼叫 tool，嚴禁再追問確認
-- 範例：「3/18入住一晚 雙人房」→ 三項齊全 → startdate=今年3/18, enddate=今年3/19, housingcnt=2 → 直接查
-- 範例：「4/11」→ 只有入住日期，缺住幾晚和幾人房 → 追問「請問住幾晚？想住幾人房呢？」
-- 範例：「4/11 一晚」→ 有日期和晚數，缺幾人房 → 追問「請問想住幾人房呢？」
-- 範例：「雙人房」→ 有房型但缺日期 → 追問「請問您預計什麼時候入住？住幾晚呢？」
+- 兩項資訊（入住日期、住幾晚）齊全時，必須在本次回覆中呼叫 query_pms_availability tool，嚴禁只回文字不呼叫 tool，嚴禁再追問確認
+- 範例：「3/18入住一晚」→ 兩項齊全 → startdate=今年3/18, enddate=今年3/19 → 直接查（不用問人數）
+- 範例：「4/11」→ 只有入住日期，缺住幾晚 → 追問「請問住幾晚呢？」
+- 範例：「4/11 一晚」→ 兩項齊全 → 直接查（不用問房型或人數）
+- 範例：「雙人房」→ 只有房型但缺日期 → 追問「請問您預計什麼時候入住？住幾晚呢？」
 
 房況查詢規則：
 {pms_rule}
@@ -739,7 +753,6 @@ class ChatbotSessionState:
     turn_count: int = 0
     booking_rooms: int = 1          # 間數 (spec: booking_rooms)
     booking_adults: Optional[int] = None  # 每間人數
-    booking_children: int = 0
     checkin_date: Optional[str] = None
     checkout_date: Optional[str] = None
     room_plan_requests: List[Dict[str, int]] = field(default_factory=list)
@@ -926,25 +939,19 @@ class ChatbotService:
                 known_parts.append(f"退房日期：{session.checkout_date}")
             else:
                 missing_parts.append("住幾晚")
+            # 人數／房型屬於選填，僅在使用者主動提供時列入 known_parts，不加入 missing_parts
             if session.booking_adults:
                 known_parts.append(f"人數：{session.booking_adults}")
-            else:
-                missing_parts.append("幾間幾人房")
             if session.room_plan_requests:
                 rp = session.room_plan_requests[0] if session.room_plan_requests else {}
                 known_parts.append(f"房型需求：{rp.get('room_count', 1)}間{rp.get('adults_per_room', 2)}人房")
-            elif session.booking_adults:
-                pass  # 已有人數
-            else:
-                if "幾間幾人房" not in missing_parts:
-                    missing_parts.append("幾間幾人房")
 
             if known_parts:
                 sys_prompt += "\n\n目前已收集到的訂房資訊（不需要再追問這些）：\n" + "、".join(known_parts)
             if missing_parts:
                 sys_prompt += "\n尚缺：" + "、".join(missing_parts) + " → 請追問這些資訊"
-            elif session.checkin_date:
-                sys_prompt += "\n→ 三項資訊已齊全，你必須在本次回覆中呼叫 query_pms_availability，不可只回文字。"
+            elif session.checkin_date and session.checkout_date:
+                sys_prompt += "\n→ 兩項資訊已齊全，你必須在本次回覆中呼叫 query_pms_availability，不可只回文字，嚴禁追問人數或房型。"
 
             messages: List[Dict[str, Any]] = [
                 {"role": "system", "content": sys_prompt},
@@ -1123,9 +1130,15 @@ class ChatbotService:
         """
         startdate = str(args.get("startdate", ""))
         enddate = str(args.get("enddate", ""))
-        housingcnt = int(args.get("housingcnt") or 2)
+        # housingcnt 為選填：客人未指定時為 None，此時回傳所有房型依人數由小到大排序
+        housingcnt_raw = args.get("housingcnt")
+        housingcnt_specified = housingcnt_raw is not None and str(housingcnt_raw).strip() != ""
+        housingcnt = int(housingcnt_raw) if housingcnt_specified else 2
         roomtype = args.get("roomtype") or None
-        logger.info(f"[PMS] tool args: startdate={startdate}, enddate={enddate}, housingcnt={housingcnt}, roomtype={roomtype}")
+        logger.info(
+            f"[PMS] tool args: startdate={startdate}, enddate={enddate}, "
+            f"housingcnt={housingcnt if housingcnt_specified else 'unspecified'}, roomtype={roomtype}"
+        )
 
         # Auto-fill enddate if missing (default: checkin + 1 night)
         if startdate and not enddate:
@@ -1138,14 +1151,18 @@ class ChatbotService:
             ctx.checkin_date = startdate
         if enddate:
             ctx.checkout_date = enddate
-        if housingcnt > 0:
+        # 僅在使用者明確指定人數時才寫入 booking_adults，未指定保持 None
+        if housingcnt_specified and housingcnt > 0:
             ctx.booking_adults = housingcnt
 
         db = ctx.db
 
+        # 未指定人數時傳 None 給 _availability_to_room_cards，讓其以人數由小到大排序不過濾
+        sort_housingcnt: Optional[int] = housingcnt if housingcnt_specified else None
+
         # PMS disabled → FAQ KB fallback (spec: _kb_search("booking_billing"))
         if not is_pms_enabled():
-            cards = await _kb_fallback_rooms(db, housingcnt)
+            cards = await _kb_fallback_rooms(db, housingcnt if housingcnt_specified else None)
             if not cards:
                 return {
                     "source": "no_data",
@@ -1169,15 +1186,27 @@ class ChatbotService:
             }, cards
 
         try:
-            raw = await asyncio.to_thread(query_pms, startdate, enddate, roomtype, housingcnt)
-            logger.info(f"[PMS] query result: {len(raw.get('room', []))} room types, startdate={startdate}, enddate={enddate}, housingcnt={housingcnt}")
+            # 未指定人數且未指定房型 → 用 query_pms_all_roomtypes（housingcnt 空字串）取全部房型；
+            # 否則用 query_pms（會依 housingcnt 過濾）
+            if not housingcnt_specified and not roomtype:
+                raw = await asyncio.to_thread(query_pms_all_roomtypes, startdate, enddate)
+                logger.info(
+                    f"[PMS] all-roomtypes query: {len(raw.get('room', []))} room types, "
+                    f"startdate={startdate}, enddate={enddate}"
+                )
+            else:
+                raw = await asyncio.to_thread(query_pms, startdate, enddate, roomtype, housingcnt)
+                logger.info(
+                    f"[PMS] query result: {len(raw.get('room', []))} room types, "
+                    f"startdate={startdate}, enddate={enddate}, housingcnt={housingcnt}"
+                )
             availability = self._extract_availability(raw, startdate, enddate)
-            cards = self._availability_to_room_cards(availability, housingcnt)
+            cards = self._availability_to_room_cards(availability, sort_housingcnt)
             logger.info(f"[PMS] after extraction: {len(cards)} cards")
 
-            # Spec: housingcnt=1 查無房時自動以 housingcnt=2 重查
+            # Spec: 僅在客人明確指定 housingcnt=1 且查無房時自動以 housingcnt=2 重查
             fallback_housingcnt = None
-            if not cards and housingcnt == 1:
+            if housingcnt_specified and not cards and housingcnt == 1:
                 logger.info("[PMS] housingcnt=1 returned empty, retrying with housingcnt=2")
                 raw2 = await asyncio.to_thread(query_pms, startdate, enddate, roomtype, 2)
                 availability = self._extract_availability(raw2, startdate, enddate)
@@ -1187,7 +1216,7 @@ class ChatbotService:
 
             if not cards:
                 # PMS returned empty → FAQ KB fallback
-                cards = await _kb_fallback_rooms(db, housingcnt)
+                cards = await _kb_fallback_rooms(db, housingcnt if housingcnt_specified else None)
                 source_note = "faq_kb"
             else:
                 # Spec: PMS 資料為主，FAQ_KB 資料補充房型圖片與特色描述
@@ -1208,14 +1237,16 @@ class ChatbotService:
                     for c in cards
                 ],
             }
-            if fallback_housingcnt is not None:
-                result_dict["note"] = "沒有符合人數的房型，以下是其他可參考的房型"
-            elif cards and not any(c.max_occupancy == housingcnt for c in cards):
-                result_dict["note"] = f"目前沒有剛好 {housingcnt} 人的房型有空房，以下是其他可入住的房型供您參考"
+            # 僅在使用者明確指定人數時才加「沒有符合人數」的 note，未指定一律靜默
+            if housingcnt_specified:
+                if fallback_housingcnt is not None:
+                    result_dict["note"] = "沒有符合人數的房型，以下是其他可參考的房型"
+                elif cards and not any(c.max_occupancy == housingcnt for c in cards):
+                    result_dict["note"] = f"目前沒有剛好 {housingcnt} 人的房型有空房，以下是其他可入住的房型供您參考"
             return result_dict, cards
 
         except Exception as exc:
-            cards = await _kb_fallback_rooms(db, housingcnt)
+            cards = await _kb_fallback_rooms(db, housingcnt if housingcnt_specified else None)
             if not cards:
                 return {
                     "source": "no_data",
@@ -1397,14 +1428,12 @@ class ChatbotService:
         checkin_date: str,
         checkout_date: str,
         adults: int,
-        children: int = 0,
         db: Optional[AsyncSession] = None,
     ) -> ChatbotRoomsOutSchema:
         session = self.get_or_create_session(browser_key)
         session.checkin_date = checkin_date
         session.checkout_date = checkout_date
         session.booking_adults = adults
-        session.booking_children = children
 
         try:
             raw = await asyncio.to_thread(query_pms, checkin_date, checkout_date, None, adults)
@@ -1653,7 +1682,6 @@ class ChatbotService:
                     chatbot_session_rec.intent_state = session.intent_state
                     chatbot_session_rec.turn_count = session.turn_count
                     chatbot_session_rec.booking_adults = session.booking_adults
-                    chatbot_session_rec.booking_children = session.booking_children
                     chatbot_session_rec.checkin_date = checkin_obj if checkin else None
                     chatbot_session_rec.checkout_date = checkout_obj if checkout else None
                     chatbot_session_rec.room_plan_requests = list(session.room_plan_requests)
@@ -1771,8 +1799,14 @@ class ChatbotService:
 
         return {"ok": True, "available": available}
 
-    def _availability_to_room_cards(self, availability: dict, housingcnt: int = 2) -> List[RoomCardSchema]:
-        """Convert PMS availability to room cards, sorted by occupancy match then price."""
+    def _availability_to_room_cards(
+        self, availability: dict, housingcnt: Optional[int] = None,
+    ) -> List[RoomCardSchema]:
+        """將 PMS 可用房型轉為房卡。
+
+        housingcnt=None：未指定人數，依 max_occupancy 由小到大排序，不過濾。
+        housingcnt=整數：過濾 max_occupancy >= housingcnt，再依「匹配度、價格」排序。
+        """
         cards = [
             RoomCardSchema(
                 room_type_code=item["roomtype"],
@@ -1787,7 +1821,11 @@ class ChatbotService:
             )
             for item in availability.get("available", [])
         ]
-        # 過濾：可住人數 >= 查詢人數，照匹配度排序（最接近的排前面）
+        if housingcnt is None:
+            # 未指定人數：依人數由小到大排序，相同人數則價格低者優先
+            cards.sort(key=lambda c: ((c.max_occupancy or 2), c.price if c.price > 0 else 10**12))
+            return cards
+        # 指定人數：過濾後依匹配度排序
         filtered = [c for c in cards if (c.max_occupancy or 2) >= housingcnt]
         result = filtered if filtered else cards
         result.sort(key=lambda c: (abs((c.max_occupancy or 2) - housingcnt), c.price if c.price > 0 else 10**12))
@@ -1806,10 +1844,8 @@ class ChatbotService:
         )
 
     def _compute_missing_fields(self, session: ChatbotSessionState) -> List[str]:
-        """Spec: 訂房 context 齊全條件 → 日期 + 幾間幾人房都有才算齊全。"""
+        """訂房 context 齊全條件 → 入住日與退房日都有才算齊全（人數／房型已改為選填）。"""
         missing: List[str] = []
-        if not session.room_plan_requests:
-            missing.append("room_plan")
         if not session.checkin_date:
             missing.append("checkin_date")
         if not session.checkout_date:
@@ -2115,10 +2151,9 @@ class ChatbotService:
             known_parts.append(f"退房日期：{session.checkout_date}")
         else:
             missing_parts.append("住幾晚")
+        # 人數／房型屬於選填，僅在使用者主動提供時列入 known_parts
         if session.booking_adults:
             known_parts.append(f"人數：{session.booking_adults}")
-        else:
-            missing_parts.append("幾間幾人房")
         if session.room_plan_requests:
             rp = session.room_plan_requests[0] if session.room_plan_requests else {}
             known_parts.append(f"房型需求：{rp.get('room_count', 1)}間{rp.get('adults_per_room', 2)}人房")
@@ -2127,8 +2162,8 @@ class ChatbotService:
             messages[0]["content"] += "\n\n目前已收集到的訂房資訊（不需要再追問這些）：\n" + "、".join(known_parts)
         if missing_parts:
             messages[0]["content"] += "\n尚缺：" + "、".join(missing_parts) + " → 請追問這些資訊"
-        elif session.checkin_date:
-            messages[0]["content"] += "\n→ 三項資訊已齊全，你必須在本次回覆中呼叫 query_pms_availability，不可只回文字。"
+        elif session.checkin_date and session.checkout_date:
+            messages[0]["content"] += "\n→ 兩項資訊已齊全，你必須在本次回覆中呼叫 query_pms_availability，不可只回文字，嚴禁追問人數或房型。"
 
         # 統一 Tool Calling 迴圈
         if past_date_warning:

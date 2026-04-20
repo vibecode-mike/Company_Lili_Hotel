@@ -13,6 +13,35 @@ def step_query_pms(context):
     context.last_response = resp
 
 
+@when("系統呼叫 query_pms_all_roomtypes(startdate, enddate)")
+def step_query_pms_all(context):
+    """未指定人數／房型 → 走 query_pms_all_roomtypes 取得所有房型。"""
+    resp = requests.post(
+        f"{context.api_base}/chatbot/message",
+        json={"browser_key": context.memo["browser_key"], "message": "幫我看有什麼房型可以住"},
+        timeout=30,
+    )
+    context.last_response = resp
+
+
+@when("系統呼叫 query_pms(startdate, enddate, housingcnt, roomtype)")
+def step_query_pms_filtered(context):
+    """民眾指定人數或房型 → 走 query_pms 依條件過濾。"""
+    msg_bits = []
+    if "requested_headcount" in context.memo:
+        n = context.memo["requested_headcount"]
+        msg_bits.append(f"{n}人房")
+    if "requested_roomtype" in context.memo:
+        msg_bits.append(context.memo["requested_roomtype"])
+    message = "、".join(msg_bits) if msg_bits else "幫我看有什麼房型可以住"
+    resp = requests.post(
+        f"{context.api_base}/chatbot/message",
+        json={"browser_key": context.memo["browser_key"], "message": message},
+        timeout=30,
+    )
+    context.last_response = resp
+
+
 @when("系統嘗試查詢房型")
 def step_try_query_rooms(context):
     """觸發房型查詢（ENABLE_PMS=false 時走 FAQ_KB）。"""
