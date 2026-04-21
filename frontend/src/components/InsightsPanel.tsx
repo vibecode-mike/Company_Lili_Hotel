@@ -243,16 +243,60 @@ const JOURNEY_TAGS: Record<Channel, string[]> = {
   nonMember: ["訂房查詢", "活動資訊", "房型介紹", "交通指南", "常見問題"],
 };
 
-// heatmap 色階：從 #FFDF94（少）到 #D24546（多）做等分線性插值
-// 用 OKLab 色空間以避免 sRGB 直插中段變灰；瀏覽器 native 計算。
-const HEATMAP_LOW = "#FFDF94";
-const HEATMAP_HIGH = "#D24546";
+// heatmap 色階：從 #FFE08A（少）到 #B8232D（多）— 端點明度差拉大
+// 用 OKLCH 色空間沿色相走，路徑經過橘色、保持高彩度，避免中段變灰。
+const HEATMAP_LOW = "#FFE08A";
+const HEATMAP_HIGH = "#B8232D";
 
-function heatColor(value: number, min: number, max: number): string {
-  const span = max - min;
-  const t = span > 0 ? Math.min(1, Math.max(0, (value - min) / span)) : 0;
-  const pct = Math.round(t * 1000) / 10; // 0.0–100.0
-  return `color-mix(in oklab, ${HEATMAP_LOW}, ${HEATMAP_HIGH} ${pct}%)`;
+function heatColor(t: number): string {
+  const clamped = Math.min(1, Math.max(0, t));
+  const pct = Math.round(clamped * 1000) / 10; // 0.0–100.0
+  return `color-mix(in oklch shorter hue, ${HEATMAP_LOW}, ${HEATMAP_HIGH} ${pct}%)`;
+}
+
+// 對 42 格計算色階 t：rank 百分位 × log-scale 幅度感知 的混合。
+//  - rank 成分：ties 取平均 rank，確保 42 格均勻鋪滿色階（小差異看得到）。
+//  - log 成分：以 log(v) 正規化至 [0,1]，讓離群值（如 line 的 89）與
+//    次高值（17）之間保持實際幅度差，避免全部擠在色階頂端。
+const RANK_WEIGHT = 0.5;
+const LOG_WEIGHT = 0.5;
+
+function computeColorMap(data: number[][]): number[][] {
+  const flat: { r: number; c: number; v: number }[] = [];
+  let minV = Infinity;
+  let maxV = -Infinity;
+  for (let r = 0; r < data.length; r++) {
+    const row = data[r]!;
+    for (let c = 0; c < row.length; c++) {
+      const v = row[c]!;
+      flat.push({ r, c, v });
+      if (v < minV) minV = v;
+      if (v > maxV) maxV = v;
+    }
+  }
+  flat.sort((a, b) => a.v - b.v);
+  const n = flat.length;
+  const logMin = Math.log(Math.max(1, minV));
+  const logMax = Math.log(Math.max(1, maxV));
+  const logSpan = logMax - logMin;
+  const out: number[][] = data.map((row) => row.map(() => 0));
+
+  let i = 0;
+  while (i < n) {
+    let j = i;
+    while (j + 1 < n && flat[j + 1]!.v === flat[i]!.v) j++;
+    const avgRank = (i + j) / 2;
+    const rankT = n > 1 ? avgRank / (n - 1) : 0;
+    const logT =
+      logSpan > 0 ? (Math.log(Math.max(1, flat[i]!.v)) - logMin) / logSpan : 0;
+    const t = RANK_WEIGHT * rankT + LOG_WEIGHT * logT;
+    for (let k = i; k <= j; k++) {
+      const { r, c } = flat[k]!;
+      out[r]![c] = t;
+    }
+    i = j + 1;
+  }
+  return out;
 }
 
 // 由今天起算，回傳往後 7 天的顯示字串 'M/D（週）'
@@ -539,10 +583,7 @@ function TimeInsightsSection() {
   const [loadingJourney, setLoadingJourney] = useState(false);
 
   const heatmap = HEATMAP_BY_CHANNEL[channel];
-  const { min, max } = useMemo(() => {
-    const flat = heatmap.flat();
-    return { min: Math.min(...flat), max: Math.max(...flat) };
-  }, [heatmap]);
+  const colorMap = useMemo(() => computeColorMap(heatmap), [heatmap]);
   const selectedValue = heatmap[cell.r]?.[cell.c] ?? 0;
   const journey = useMemo(
     () => buildJourney(channel, selectedValue),
@@ -588,7 +629,7 @@ function TimeInsightsSection() {
             描述描述
           </span>
         </div>
-        <div className="flex shrink-0 border-t md:border-t-0 border-solid border-[#ddd] overflow-x-auto">
+        <div className="flex shrink-0 overflow-x-auto">
           {CHANNELS.map((ch, idx) => {
             const active = channel === ch.key;
             return (
@@ -597,9 +638,7 @@ function TimeInsightsSection() {
                 type="button"
                 onClick={() => setChannel(ch.key)}
                 aria-pressed={active}
-                className={`${idx === 0 ? "md:border-l" : "border-l"} border-solid border-[#ddd] px-[24px] py-[16px] flex flex-col gap-[12px] items-start justify-center min-w-[152px] transition-colors cursor-pointer ${
-                  active ? "bg-[#f7f7f7]" : "bg-white hover:bg-[#fafafa]"
-                }`}
+                className={`${idx === 0 ? "md:border-l" : "border-l"} border-solid border-[#ddd] px-[24px] py-[16px] flex flex-col items-start justify-center min-w-[152px] cursor-pointer insights-channel-tab`}
               >
                 <span className="text-[16px] leading-[1.5] text-[#6e6e6e] whitespace-nowrap">
                   {ch.label}
@@ -624,10 +663,16 @@ function TimeInsightsSection() {
               {TIME_BLOCKS.map((label, r) => (
                 <Fragment key={`row-${r}`}>
                   <div
-                    className="pr-[4px] flex items-start justify-end text-[14px] leading-[1.5] text-[#6e6e6e]"
+                    className="pr-[4px] flex flex-col"
                     style={{ minHeight: 64 }}
                   >
-                    {label}
+                    <span
+                      aria-hidden="true"
+                      className="h-px bg-[#dddddd] rounded-full"
+                    />
+                    <span className="text-left text-[14px] leading-[1.5] text-[#6e6e6e]">
+                      {label}
+                    </span>
                   </div>
                   {(heatmap[r] ?? []).map((value, c) => {
                     const isSelected = cell.r === r && cell.c === c;
@@ -643,7 +688,7 @@ function TimeInsightsSection() {
                             ? "ring-2 ring-[#0f6beb] ring-inset relative z-10"
                             : "hover:brightness-95"
                         }`}
-                        style={{ backgroundColor: heatColor(value, min, max), minHeight: 64 }}
+                        style={{ backgroundColor: heatColor(colorMap[r]?.[c] ?? 0), minHeight: 64 }}
                       >
                         {value}
                       </button>
@@ -671,8 +716,7 @@ function TimeInsightsSection() {
           <div
             className="h-[8px] w-[100px] rounded-[2px]"
             style={{
-              backgroundImage:
-                "linear-gradient(in oklab 90deg, #FFDF94 0%, #D24546 100%)",
+              backgroundImage: `linear-gradient(in oklch shorter hue 90deg, ${HEATMAP_LOW} 0%, ${HEATMAP_HIGH} 100%)`,
             }}
           />
           <span className="text-[14px] leading-[1.5] text-[#6e6e6e]">多</span>

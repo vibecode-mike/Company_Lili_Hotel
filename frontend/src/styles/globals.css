@@ -1,5 +1,12 @@
 @custom-variant dark (&:is(.dark *));
 
+/* 全域字型：Noto Sans TC + 預設 0% 字距，作為後續設計系統 tokenize 的基線 */
+html,
+body {
+  font-family: 'Noto Sans TC', sans-serif;
+  letter-spacing: 0;
+}
+
 :root {
   --font-size: 16px;
   --background: #ffffff;
@@ -438,5 +445,19 @@ html {
   width: 100%;
   min-width: 0;
   flex: 1 0 0;
+}
+
+/* 時段洞察 - 渠道 tab 狀態色（避開 index.css 未預編譯的 arbitrary hover/focus 類別） */
+.insights-channel-tab {
+  background-color: #ffffff;
+  transition: background-color 150ms;
+}
+
+.insights-channel-tab:hover,
+.insights-channel-tab:focus,
+.insights-channel-tab:focus-visible,
+.insights-channel-tab:active,
+.insights-channel-tab[aria-pressed="true"] {
+  background-color: #f7f7f7;
 }
 
