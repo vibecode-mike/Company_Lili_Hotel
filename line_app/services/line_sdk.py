@@ -20,7 +20,7 @@ from linebot.v3.messaging import (
     MessagingApi,
 )
 
-from config import LINE_CHANNEL_SECRET, LINE_CHANNEL_ACCESS_TOKEN
+from config import LINE_CHANNEL_SECRET, LINE_CHANNEL_ACCESS_TOKEN, PUBLIC_BASE
 from db import fetchone, execute, table_has_column as _table_has
 
 # -------------------------------------------------
@@ -178,7 +178,7 @@ def fetch_line_profile(user_id: str, line_channel_id: Optional[str] = None) -> t
 # -------------------------------------------------
 def setup_line_webhook(line_channel_id: str, access_token: str):
     """用 Messaging API 的 Channel Access Token 設定/啟用 Webhook"""
-    webhook_url = f"https://linebot.star-bit.io/callback/{line_channel_id}"
+    webhook_url = f"{PUBLIC_BASE}/callback/{line_channel_id}"
 
     headers = {
         "Authorization": f"Bearer {access_token}",

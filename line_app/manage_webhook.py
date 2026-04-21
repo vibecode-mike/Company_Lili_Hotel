@@ -12,13 +12,13 @@ manage_webhook.py
     python manage_webhook.py \
       --channel-id 2005363092 \
       --access-token 'YOUR_LONG_LIVED_CHANNEL_ACCESS_TOKEN' \
-      --base 'https://linebot.star-bit.io/callback'
+      --base 'https://<YOUR_DOMAIN>/callback'
 
   每客戶一條（自動把 channel_id 接在最後）：
     python manage_webhook.py \
       --channel-id 2005363092 \
       --access-token 'YOUR_LONG_LIVED_CHANNEL_ACCESS_TOKEN' \
-      --base 'https://linebot.star-bit.io/callback' \
+      --base 'https://<YOUR_DOMAIN>/callback' \
       --with-id
 """
 import argparse
@@ -76,7 +76,7 @@ def main():
     ap = argparse.ArgumentParser(description="設定並啟用 LINE Webhook URL")
     ap.add_argument("--channel-id", required=True, help="Messaging API 的 Channel ID")
     ap.add_argument("--access-token", required=True, help="Messaging API 的『長期』Channel Access Token")
-    ap.add_argument("--base", required=True, help="Webhook 基底網址，例如 https://linebot.star-bit.io/callback")
+    ap.add_argument("--base", required=True, help="Webhook 基底網址，例如 https://<YOUR_DOMAIN>/callback")
     ap.add_argument("--with-id", action="store_true", help="是否把 channel_id 接在 base 後面（/callback/<channel_id>）")
     args = ap.parse_args()
 

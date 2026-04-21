@@ -147,8 +147,20 @@ const Sidebar = memo(
         <div className="flex-1 w-full overflow-y-auto">
           {isOpen && (
             <>
-              {/* 會員 Section */}
+              {/* 數據洞察 Section */}
               <div className="box-border flex flex-col gap-1 px-4">
+                <SectionHeader icon="M3.33333 16.6667V7.50001H6.66667V16.6667H3.33333ZM8.33333 16.6667V3.33334H11.6667V16.6667H8.33333ZM13.3333 16.6667V10.8333H16.6667V16.6667H13.3333Z" label="數據洞察" />
+                <MenuItem
+                  isActive={currentPage === "insights"}
+                  label="數據洞察"
+                  onClick={navigationLocked ? undefined : (onNavigateToInsights ?? (() => navigate("insights")))}
+                  disabled={navigationLocked}
+                  tooltip={lockedTooltip}
+                />
+              </div>
+
+              {/* 會員 Section */}
+              <div className="box-border flex flex-col gap-1 px-4 mt-5">
                 <SectionHeader icon={sidebarPaths.pa54d00} label="會員" />
                 <MenuItem
                   isActive={currentPage === "members"}
@@ -189,18 +201,6 @@ const Sidebar = memo(
                   isActive={currentPage === "auto-reply"}
                   label="關鍵字回應"
                   onClick={navigationLocked ? undefined : onNavigateToAutoReply}
-                  disabled={navigationLocked}
-                  tooltip={lockedTooltip}
-                />
-              </div>
-
-              {/* 數據洞察 Section */}
-              <div className="box-border flex flex-col gap-1 px-4 mt-5">
-                <SectionHeader icon="M3.33333 16.6667V7.50001H6.66667V16.6667H3.33333ZM8.33333 16.6667V3.33334H11.6667V16.6667H8.33333ZM13.3333 16.6667V10.8333H16.6667V16.6667H13.3333Z" label="數據洞察" />
-                <MenuItem
-                  isActive={currentPage === "insights"}
-                  label="數據洞察"
-                  onClick={navigationLocked ? undefined : (onNavigateToInsights ?? (() => navigate("insights")))}
                   disabled={navigationLocked}
                   tooltip={lockedTooltip}
                 />

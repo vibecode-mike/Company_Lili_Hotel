@@ -44,9 +44,6 @@ class ChatbotSession(Base):
         SmallInteger, nullable=False, default=0, comment="本 Session 對話輪數"
     )
     booking_adults = Column(SmallInteger, nullable=True, comment="入住大人數")
-    booking_children = Column(
-        SmallInteger, nullable=False, default=0, comment="入住小孩數"
-    )
     checkin_date = Column(Date, nullable=True, comment="入住日期")
     checkout_date = Column(Date, nullable=True, comment="退房日期")
     room_plan_requests = Column(
