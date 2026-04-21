@@ -10,6 +10,7 @@
 """
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     Column,
     String,
     ForeignKey,
@@ -116,6 +117,13 @@ class ConversationMessage(Base):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
         comment="發送人員ID（僅 manual 訊息有值）",
+    )
+    unanswered = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="0",
+        comment="AI 是否答不出此訊息（mark_unanswerable tool 標記），僅 message_source=gpt 有意義",
     )
     created_at = Column(
         DateTime, server_default=func.now(), nullable=True, comment="建立時間"

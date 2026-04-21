@@ -605,8 +605,57 @@ _PMS_CONFIGURED: bool = pms_enabled()
 # Runtime toggle — loaded from DB on first access, defaults to False (disabled)
 _pms_runtime_enabled: Optional[bool] = None  # None = not yet loaded from DB
 
-_TOOLS_WITH_PMS = [_KB_SEARCH_TOOL, _PMS_TOOL, _MIXED_AVAIL_TOOL, _CONFIRM_ROOM_TOOL, _SAVE_MEMBER_TOOL]
-_TOOLS_WITHOUT_PMS = [_KB_SEARCH_TOOL, _PMS_TOOL, _CONFIRM_ROOM_TOOL, _SAVE_MEMBER_TOOL]
+_MARK_UNANSWERABLE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "mark_unanswerable",
+        "description": (
+            "當你無法回答使用者的問題時呼叫此工具。"
+            "適用情境：問題超出你的知識範圍、資料庫沒有相關資訊、需要人工客服判斷、"
+            "或者你只能誠實告知對方「不知道」「沒辦法解答」時。"
+            "呼叫此工具後，請繼續用文字回覆使用者說明你無法解答並建議聯繫客服。"
+            "注意：對於訂房相關問題（房況、房價、訂房流程）有對應的工具可查，不要呼叫此工具；"
+            "對於你能正常回答的問題也不要呼叫。"
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "reason": {
+                    "type": "string",
+                    "description": "無法回答的原因（內部標記用，例如：超出知識範圍、需人工判斷）",
+                },
+            },
+            "required": ["reason"],
+        },
+    },
+}
+
+_TOOLS_WITH_PMS = [_KB_SEARCH_TOOL, _PMS_TOOL, _MIXED_AVAIL_TOOL, _CONFIRM_ROOM_TOOL, _SAVE_MEMBER_TOOL, _MARK_UNANSWERABLE_TOOL]
+_TOOLS_WITHOUT_PMS = [_KB_SEARCH_TOOL, _PMS_TOOL, _CONFIRM_ROOM_TOOL, _SAVE_MEMBER_TOOL, _MARK_UNANSWERABLE_TOOL]
+
+# 保險網：AI 回覆含以下任一字串時，即使沒呼叫 mark_unanswerable 也視為答不出
+# 這些字串都是 AI 自認答不出時才會出現的明確措辭，正常對答不會誤中
+_UNANSWERABLE_PHRASES = (
+    "沒有相關資料",
+    "我無法回答",
+    "我無法協助",
+    "我無法提供",
+    "沒辦法回答",
+    "沒辦法解答",
+    "沒辦法提供",
+    "無法回應",
+    "超出我的知識",
+    "超出我的範圍",
+    "建議您聯繫客服",
+    "建議聯繫客服",
+    "建議您查詢官方",
+)
+
+
+def _contains_unanswerable_phrase(reply: str) -> bool:
+    if not reply:
+        return False
+    return any(kw in reply for kw in _UNANSWERABLE_PHRASES)
 
 
 def is_pms_enabled() -> bool:
@@ -724,6 +773,19 @@ def _build_system_prompt_for(today: date) -> str:
 - 不要瞎編；不知道就說不知道
 - 若對方使用中文，一律使用台灣繁體中文回覆，嚴禁出現簡體中文字
 
+無法回答的情境（強制規則，違反視為錯誤）：
+- 定義：「無法回答」= 你沒有真正解決使用者問的問題。包含以下所有情境（不限於此）：
+  (A) 不知道答案（超出知識範圍、沒有資料、細節不清楚）
+  (B) 拒絕回答（不當請求、違法話題、非業務範圍、道德上不協助）
+  (C) 系統性失敗（工具回傳空結果但使用者還繼續追問）
+  (D) 需要人工判斷（客訴、情緒訴求、個案協商）
+- 當你要回覆「我無法回答」「無法協助」「超出範圍」「不清楚」「建議聯繫客服」「建議遵守法律」或任何「沒實際解答使用者問題」的話時，「必須」在同一輪同時呼叫 mark_unanswerable 工具（parallel tool call），再輸出文字回覆；工具用來做內部統計，不影響你的文字回覆內容
+- 不觸發時機：訂房相關問題（日期、房況、房型、訂房流程）—這些先呼叫 query_pms_availability 或 kb_search，有回答到就不要標；設施/帳務類問題被 kb_search 查到資料也不要標
+- 範例：
+  (A) 使用者問「你知道今天台積電股價嗎」→ 呼叫 mark_unanswerable(reason="股市查詢超出範圍") + 文字回「抱歉，這我沒辦法提供，建議查詢金融網站喔」
+  (B) 使用者問「能跟我去搶銀行嗎」→ 呼叫 mark_unanswerable(reason="違法請求拒絕") + 文字回「抱歉，我無法協助進行此類活動，建議遵守法律喔」
+  (C) 使用者問「飯店 CEO 是誰」→ 呼叫 mark_unanswerable(reason="超出飯店公開資訊") + 文字回「這部分我沒辦法提供，建議聯繫官方客服」
+
 查到房型後的回覆規則（最高優先）：
 - 呼叫 query_pms_availability 取得房型資料後，你的回覆只能是簡短一句話（例如「幫您查到囉，請參考以下房型！」）
 - 絕對不可以在文字中列出任何房型名稱、價格、間數、編號清單，系統會自動用房卡呈現這些資訊
@@ -801,6 +863,8 @@ class ToolCallingContext:
     referenced_rule_ids: set = field(default_factory=set)
     total_tokens_used: int = 0
     pms_called: bool = False
+    unanswered: bool = False
+    unanswered_reason: Optional[str] = None
     # 官網 session 參照（僅官網 chatbot 使用）
     _session: Optional[ChatbotSessionState] = field(default=None, repr=False)
 
@@ -995,6 +1059,7 @@ class ChatbotService:
             turn_count=session.turn_count,
             booking_context=booking_ctx,
             tokens_used=ctx.total_tokens_used,
+            unanswered=ctx.unanswered,
         )
 
     async def _deduct_tokens(self, db: AsyncSession, tokens_used: int) -> None:
@@ -1038,7 +1103,12 @@ class ChatbotService:
             msg = resp.choices[0].message
 
             if not msg.tool_calls:
-                return msg.content or ""
+                reply = msg.content or ""
+                # 保險網：AI 沒呼叫 mark_unanswerable 但回覆含明確答不出字樣 → 補標
+                if not ctx.unanswered and _contains_unanswerable_phrase(reply):
+                    ctx.unanswered = True
+                    logger.info(f"[unanswered-fallback] caught by keyword: {reply[:80]}")
+                return reply
 
             messages.append(msg)
             tool_names = [tc.function.name for tc in msg.tool_calls]
@@ -1062,6 +1132,8 @@ class ChatbotService:
                     "content": json.dumps(llm_result, ensure_ascii=False),
                 })
 
+        # 超過 5 輪迴圈仍未完成 → 視為系統性答不出
+        ctx.unanswered = True
         return "很抱歉，系統暫時無法回應，請稍後再試。"
 
     async def _execute_tool(
@@ -1098,6 +1170,12 @@ class ChatbotService:
             if ctx._session is not None:
                 return self._run_save_member_tool(args, ctx._session)
             return {"info": "此功能僅在網站訂房時可用，請前往官網完成訂房。"}
+        elif fn_name == "mark_unanswerable":
+            # AI 自主判斷無法回答 → 設定旗標，讓上層存進 conversation_messages.unanswered
+            ctx.unanswered = True
+            ctx.unanswered_reason = args.get("reason") or ""
+            logger.info(f"[mark_unanswerable] reason={ctx.unanswered_reason}")
+            return {"ok": True, "acknowledged": True}
         else:
             return {"error": f"unknown tool {fn_name}"}
 
@@ -2220,6 +2298,7 @@ class ChatbotService:
             referenced_rules=[{"rule_id": rid} for rid in referenced_rule_ids],
             auto_tags=auto_tags,
             token_exhausted=False,
+            unanswered=ctx.unanswered,
         )
 
     async def test_chat(

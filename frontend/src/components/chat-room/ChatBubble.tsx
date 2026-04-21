@@ -201,6 +201,134 @@ function RoomCardList({ cards }: { cards: RoomCard[] }) {
 }
 
 /**
+ * 圖片訊息氣泡（webhook content 格式：{"type": "image", "url": "..."}）
+ */
+function ImageBubble({ content }: { content: string }) {
+  let url = '';
+  try {
+    const parsed = JSON.parse(content);
+    url = parsed?.url || '';
+  } catch {
+    url = '';
+  }
+  if (!url) {
+    return <TextFallback text="（圖片訊息）" />;
+  }
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block' }}>
+      <img
+        src={url}
+        alt="圖片訊息"
+        style={{
+          maxWidth: 240,
+          maxHeight: 240,
+          borderRadius: 12,
+          display: 'block',
+          objectFit: 'cover',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+        }}
+        onError={(e) => {
+          (e.currentTarget.parentElement as HTMLAnchorElement).innerHTML =
+            '<span style="color:#6e6e6e;font-size:14px">（圖片已失效）</span>';
+        }}
+      />
+    </a>
+  );
+}
+
+/**
+ * 貼圖訊息氣泡（webhook content 格式：{"type": "sticker", "packageId": "...", "stickerId": "..."}）
+ * LINE 官方 CDN：https://stickershop.line-scdn.net/stickershop/v1/sticker/{stickerId}/PC/sticker.png
+ */
+function StickerBubble({ content }: { content: string }) {
+  let stickerId = '';
+  try {
+    const parsed = JSON.parse(content);
+    stickerId = String(parsed?.stickerId || '');
+  } catch {
+    stickerId = '';
+  }
+  if (!stickerId) {
+    return <TextFallback text="（貼圖）" />;
+  }
+  const url = `https://stickershop.line-scdn.net/stickershop/v1/sticker/${stickerId}/PC/sticker.png`;
+  return (
+    <img
+      src={url}
+      alt="LINE 貼圖"
+      style={{
+        width: 120,
+        height: 120,
+        objectFit: 'contain',
+        display: 'block',
+      }}
+      onError={(e) => {
+        (e.currentTarget.outerHTML =
+          '<span style="color:#6e6e6e;font-size:14px">（貼圖無法顯示）</span>');
+      }}
+    />
+  );
+}
+
+/**
+ * Postback 訊息氣泡（使用者點按鈕事件，content 格式：{"data": "action=select_room&roomID=..."}）
+ * 解析常見 action 轉成人類可讀文字，否則 fallback 顯示原始 data 欄位
+ */
+function PostbackBubble({ content }: { content: string }) {
+  let label = '（按鈕點擊事件）';
+  try {
+    const parsed = JSON.parse(content);
+    const data = String(parsed?.data || '');
+    if (data) {
+      const params = new URLSearchParams(data);
+      const action = params.get('action') || '';
+      const roomName = params.get('roomName') || params.get('roomID') || '';
+      const price = params.get('price') || '';
+      if (action === 'select_room' && roomName) {
+        const priceStr = price ? `（NT$${Number(price).toLocaleString()}）` : '';
+        label = `🛏 選擇房型：${decodeURIComponent(roomName)}${priceStr}`;
+      } else if (action) {
+        label = `👆 ${decodeURIComponent(action)}`;
+      } else {
+        label = `👆 ${decodeURIComponent(data).slice(0, 80)}`;
+      }
+    }
+  } catch {
+    // keep default
+  }
+  return (
+    <div
+      className="flex flex-col max-w-[288px] w-fit rounded-[16px] overflow-hidden"
+      style={{ backgroundColor: '#F3F4F6', border: '1px dashed #d1d5db' }}
+    >
+      <div className="p-[12px]">
+        <p
+          className="font-['Noto_Sans_TC:Regular',sans-serif] text-[14px] leading-[1.5] text-[#6e6e6e] italic"
+          style={{ overflowWrap: 'anywhere' }}
+        >
+          {label}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * fallback 文字泡（內部工具，當 image/sticker 解析失敗時使用）
+ */
+function TextFallback({ text }: { text: string }) {
+  return (
+    <div className="flex flex-col max-w-[288px] w-fit rounded-[16px] overflow-hidden" style={{ backgroundColor: '#FFFFFF' }}>
+      <div className="p-[16px]">
+        <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] leading-[1.5] text-[#6e6e6e]">
+          {text}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
  * 訂房確認結果（CRM 唯讀顯示）
  */
 function BookingResultDisplay({ result }: { result: { reservationId: string; cartUrl?: string | null } }) {
@@ -247,6 +375,9 @@ export function ChatBubble({
   const isOfficial = message.type === 'official';
   const isRoomCards = message.messageType === 'room_cards' && message.roomCards?.length;
   const isBookingResult = message.messageType === 'booking_result' && message.bookingResult;
+  const isImage = message.messageType === 'image';
+  const isSticker = message.messageType === 'sticker';
+  const isPostback = message.messageType === 'postback';
 
   return (
     <div
@@ -269,6 +400,15 @@ export function ChatBubble({
         ) : isRoomCards ? (
           /* 房卡卡片列表 */
           <RoomCardList cards={message.roomCards!} />
+        ) : isImage ? (
+          /* 圖片訊息 */
+          <ImageBubble content={message.text} />
+        ) : isSticker ? (
+          /* LINE 貼圖 */
+          <StickerBubble content={message.text} />
+        ) : isPostback ? (
+          /* 使用者按鈕點擊事件 */
+          <PostbackBubble content={message.text} />
         ) : (
           /* 氣泡 - Figma 3.png 規格 */
           <div

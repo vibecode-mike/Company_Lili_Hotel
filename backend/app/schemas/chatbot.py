@@ -53,6 +53,7 @@ class ChatbotMessageOutSchema(BaseModel):
     referenced_rules: List[Dict[str, Any]] = []
     auto_tags: List[str] = []
     token_exhausted: bool = False
+    unanswered: bool = False
 
 
 class ChatbotRoomsOutSchema(BaseModel):

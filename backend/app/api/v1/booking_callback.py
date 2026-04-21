@@ -229,6 +229,59 @@ def _build_booking_failed_flex(data: BookingCallbackRequest) -> dict:
 # Callback Endpoint
 # ---------------------------------------------------------------------------
 
+async def _persist_paid_booking(data: BookingCallbackRequest) -> bool:
+    """
+    status=paid 時寫入 bookings 表（INSERT IGNORE 以 order_id 去重）
+    會嘗試依 line_uid 查 members.id 塞到 member_id 欄位，查不到就留 NULL
+    回傳 True=寫入成功或已存在；False=例外
+    """
+    try:
+        from app.database import AsyncSessionLocal
+        from sqlalchemy import text as _text
+
+        rooms_json = [
+            {"roomtype": r.roomtype, "quantity": max(1, r.quantity)}
+            for r in data.rooms
+        ]
+        paid_at = datetime.now(ZoneInfo("Asia/Taipei")).replace(tzinfo=None)
+
+        async with AsyncSessionLocal() as db:
+            # 依 line_uid 查 member_id（查不到就 NULL）
+            member_id = None
+            if data.line_uid:
+                row = (await db.execute(
+                    _text("SELECT id FROM members WHERE line_uid = :uid LIMIT 1"),
+                    {"uid": data.line_uid},
+                )).first()
+                if row:
+                    member_id = row.id
+
+            # rooms JSON 參數：MySQL 接受 JSON 字串
+            import json as _json
+            await db.execute(
+                _text("""
+                    INSERT IGNORE INTO bookings
+                        (order_id, line_uid, member_id, checkin_date, rooms, source, paid_at, created_at)
+                    VALUES
+                        (:order_id, :line_uid, :member_id, :checkin_date, :rooms, :source, :paid_at, NOW())
+                """),
+                {
+                    "order_id": data.order_id,
+                    "line_uid": data.line_uid,
+                    "member_id": member_id,
+                    "checkin_date": data.checkindate,
+                    "rooms": _json.dumps(rooms_json, ensure_ascii=False),
+                    "source": "LINE",
+                    "paid_at": paid_at,
+                },
+            )
+            await db.commit()
+        return True
+    except Exception:
+        logger.exception("[BookingCallback] Failed to persist booking")
+        return False
+
+
 @router.post("/callback")
 async def booking_callback(
     data: BookingCallbackRequest,
@@ -237,9 +290,8 @@ async def booking_callback(
     """
     閎運付款完成後呼叫此端點。
     1. 驗證 Api-Key
-    2. 用 phone 找到 LINE 會員
-    3. 發送訂房確認 Flex Message
-    4. 更新訂單狀態
+    2. status=paid 時寫入 bookings 表（供「完成訂單」KPI 使用）
+    3. 發送訂房確認 / 失敗 Flex Message 給 LINE 使用者
     """
     # 1. 驗證 API Key（callback 專用 key，與訂房 API key 分開）
     expected_key = settings.BOOKING_CALLBACK_API_KEY
@@ -250,7 +302,12 @@ async def booking_callback(
     if data.status not in ("paid", "failed"):
         return {"ok": True, "message": f"status={data.status}, skipped"}
 
-    # 3. 發送 LINE Flex
+    # 3. paid → 寫入 bookings（INSERT IGNORE 以 order_id 去重，閎運重送不會重複）
+    booking_saved = False
+    if data.status == "paid":
+        booking_saved = await _persist_paid_booking(data)
+
+    # 4. 發送 LINE Flex
     line_uid = data.line_uid
     line_sent = False
     if line_uid and line_uid.startswith("U"):
@@ -265,8 +322,8 @@ async def booking_callback(
         logger.warning(f"[BookingCallback] No line_uid provided, cannot push")
 
     logger.info(
-        f"[BookingCallback] order_id={data.order_id}, name={data.name}, "
-        f"line_uid={line_uid}, line_sent={line_sent}"
+        f"[BookingCallback] order_id={data.order_id}, status={data.status}, "
+        f"line_uid={line_uid}, line_sent={line_sent}, booking_saved={booking_saved}"
     )
 
     return {

@@ -56,7 +56,8 @@ def insert_conversation_message(*, thread_id: str, role: str, direction: str,
                                 status: str = "received",
                                 message_source: str | None = None,
                                 message_id: str | None = None,
-                                platform: str | None = "LINE"):
+                                platform: str | None = "LINE",
+                                unanswered: bool = False):
     """
     儲存對話訊息到 conversation_messages 表
 
@@ -72,6 +73,8 @@ def insert_conversation_message(*, thread_id: str, role: str, direction: str,
         message_source: 訊息來源 (manual|gpt|keyword|welcome|always)
         message_id: 指定 message ID（未傳則產生 UUID）
         platform: 平台 (LINE / facebook / webchat)
+        unanswered: AI 是否答不出（由 chatbot_service 的 mark_unanswerable tool 旗標決定，
+                    用於數據洞察頁計算 AI 覆蓋率）
     """
     # 確保 thread_id 去除前後空白字元
     thread_id = thread_id.strip() if thread_id else ""
@@ -125,6 +128,12 @@ def insert_conversation_message(*, thread_id: str, role: str, direction: str,
             columns.append("platform")
             values.append(":platform")
             params["platform"] = platform
+
+        # unanswered 欄位（若該 DB 已套用 migration）
+        if _table_has("conversation_messages", "unanswered"):
+            columns.append("unanswered")
+            values.append(":unanswered")
+            params["unanswered"] = 1 if unanswered else 0
 
         columns.extend(["created_at", "updated_at"])
         values.extend(["NOW()", "NOW()"])

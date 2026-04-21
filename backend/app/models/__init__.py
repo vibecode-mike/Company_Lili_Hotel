@@ -25,6 +25,7 @@ from app.models.line_channel import LineChannel
 from app.models.fb_channel import FbChannel
 from app.models.conversation import ConversationThread, ConversationMessage
 from app.models.chatbot_booking import ChatbotSession, FaqPmsConnection, BookingRecord
+from app.models.booking import Booking
 from app.models.faq import (
     Industry,
     FaqCategory,
@@ -69,6 +70,7 @@ __all__ = [
     "ChatbotSession",
     "FaqPmsConnection",
     "BookingRecord",
+    "Booking",
     "Industry",
     "FaqCategory",
     "FaqCategoryField",

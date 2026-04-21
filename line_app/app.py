@@ -3096,6 +3096,13 @@ def on_text(event: MessageEvent):
         # 儲存 outgoing message 到資料庫
         if thread_id:
             try:
+                # 僅 AI 回覆（message_source=gpt）才帶 unanswered 旗標
+                # 來源：chatbot_service 呼叫 mark_unanswerable tool 時設為 True
+                is_unanswered = bool(
+                    message_source == "gpt"
+                    and ai_result
+                    and ai_result.get("unanswered")
+                )
                 msg_id = insert_conversation_message(
                     thread_id=thread_id,
                     role="assistant",
@@ -3103,7 +3110,8 @@ def on_text(event: MessageEvent):
                     message_type="chat" if message_source == "gpt" else "text",
                     response=reply_text,
                     message_source=message_source,
-                    status="sent"
+                    status="sent",
+                    unanswered=is_unanswered,
                 )
 
                 # 房卡另存一筆 room_cards 訊息（供 CRM 聊天室顯示）

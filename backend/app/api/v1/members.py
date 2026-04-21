@@ -220,7 +220,9 @@ async def get_members(
             select(
                 ConversationMessage.thread_id,
                 ConversationMessage.created_at,
-                ConversationMessage.direction
+                ConversationMessage.direction,
+                ConversationMessage.message_source,
+                ConversationMessage.unanswered,
             )
             .join(subq, and_(
                 ConversationMessage.thread_id == subq.c.thread_id,
@@ -228,10 +230,18 @@ async def get_members(
             ))
         )
 
-        for thread_id, created_at, direction in chat_result:
+        for thread_id, created_at, direction, message_source, unanswered in chat_result:
             last_chat_times[thread_id] = created_at
-            # 如果最新訊息是 incoming（客戶發送），則標記為未回覆
-            if direction == 'incoming':
+            # 亮藍點的條件：
+            # (a) 最後一筆是 incoming（使用者訊息尚未被回覆）
+            # (b) 最後一筆是 AI 回覆但被標記 unanswered=1（mark_unanswerable 觸發）→ 需人工介入
+            is_user_waiting = direction == 'incoming'
+            is_ai_failed = (
+                direction == 'outgoing'
+                and message_source == 'gpt'
+                and bool(unanswered)
+            )
+            if is_user_waiting or is_ai_failed:
                 unanswered_members[thread_id] = created_at
 
     # 查詢 LINE 渠道名稱
