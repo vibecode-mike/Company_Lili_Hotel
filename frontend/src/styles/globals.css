@@ -461,3 +461,99 @@ html {
   background-color: #f7f7f7;
 }
 
+/* 時段洞察 - 互動旅程：Label 欄 + Tab buttons + 下方 stacked bar badge 欄三者左邊界同步 */
+.journey-header-row {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid #ddd;
+  flex-direction: column;
+}
+
+@media (min-width: 768px) {
+  .journey-header-row {
+    flex-direction: row;
+  }
+}
+
+.journey-label-col {
+  flex: 0 0 auto;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  align-self: stretch;
+  min-height: 104px;
+  cursor: pointer;
+  /* <button> 重置：避開 UA 預設字型 / 邊框 / 背景 */
+  background: transparent;
+  border: none;
+  text-align: left;
+  font-family: 'Noto Sans TC', sans-serif;
+}
+
+@media (min-width: 768px) {
+  .journey-label-col {
+    flex: none;
+    min-width: var(--journey-left-col, 232px);
+  }
+}
+
+.journey-tabs-col {
+  display: flex;
+  flex-shrink: 0;
+}
+
+@media (min-width: 768px) {
+  .journey-tabs-col {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+
+/* Tab 按鈕：width fill container, min-height 104px, min-width 152px */
+.journey-tab-btn {
+  flex: 1 1 0;
+  min-width: 152px;
+  min-height: 104px;
+  padding-left: 24px;
+  padding-right: 24px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-family: 'Noto Sans TC', sans-serif;
+  font-style: normal;
+  font-weight: 400;
+  font-size: 24px;
+  line-height: 1.5;
+  color: #383838;
+}
+
+/* 互動旅程 stacked bar：badge 欄寬度 = --journey-left-col - 24（= 20 容器 px + 4 gap） */
+.journey-bar-badge {
+  display: flex;
+  align-items: center;
+  min-width: 160px;
+  flex-shrink: 0;
+}
+
+@media (min-width: 768px) {
+  .journey-bar-badge {
+    min-width: calc(var(--journey-left-col, 232px) - 24px);
+    width: calc(var(--journey-left-col, 232px) - 24px);
+  }
+}
+
+/* Heatmap cell hover：在原 bg 上覆蓋 15% 白，不遮住數字 */
+.heatmap-cell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: #ffffff;
+  opacity: 0;
+  transition: opacity 150ms ease;
+  pointer-events: none;
+}
+.heatmap-cell:hover::before {
+  opacity: 0.15;
+}
+

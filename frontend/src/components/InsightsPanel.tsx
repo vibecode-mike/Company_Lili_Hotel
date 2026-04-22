@@ -1,10 +1,11 @@
-import { useState, useMemo, useEffect, useRef, Fragment } from "react";
+import { useState, useMemo, useEffect, useLayoutEffect, useRef, Fragment } from "react";
 import Sidebar from "./Sidebar";
 import { PageHeaderWithBreadcrumb } from "./common/Breadcrumb";
 import { useNavigation } from "../contexts/NavigationContext";
 import { useLineChannelStatus } from "../contexts/LineChannelStatusContext";
 import { ChevronDown, ChevronUp, Check } from "lucide-react";
 import { apiGet } from "../utils/apiClient";
+import { formatUnansweredTime } from "../utils/memberTime";
 
 // ─── 比較期間設定 ──────────────────────────────────
 
@@ -434,7 +435,7 @@ function CoreInsightsCard({
   const { name: periodName, trendPrefix } = PERIOD_MAP[period];
 
   return (
-    <div className="bg-white rounded-[16px] border border-solid border-[#ddd] overflow-hidden flex flex-col w-full">
+    <div className="bg-white rounded-[16px] overflow-hidden flex flex-col w-full">
       {/* Header：核心洞察 + 期間 dropdown + 描述 */}
       <div className="bg-white border-b border-solid border-[#ddd] py-[16px]">
         <div className="flex items-start">
@@ -576,13 +577,76 @@ function InfoIcon({ className = "" }: { className?: string }) {
 }
 
 // 時段洞察 + 互動旅程：一張卡三個區段
+type JourneyTab = "overall" | "conversation" | "interaction" | "conversion";
+
+const JOURNEY_SEG_COLORS = ["#83bfff", "#2578ff", "#004ac2"] as const;
+const JOURNEY_TAB_TO_SEG: Record<JourneyTab, number | null> = {
+  overall: null,
+  conversation: 0,
+  interaction: 1,
+  conversion: 2,
+};
+
+// 互動旅程 header 左側 label 寬度下限，等於下方 stacked bar 的 left-offset：
+// container px-[20px] + badge wrapper 208px + gap-[4px] = 232
+const JOURNEY_LEFT_MIN = 232;
+
+// 後端回傳格式
+interface TimeSlotInsightsResponse {
+  start_date: string;
+  end_date: string;
+  channel: string;
+  total_unique_members: number;
+  dates: string[];
+  weekdays: string[];
+  matrix: number[][];
+}
+
 function TimeInsightsSection() {
-  const dateLabels = useMemo(() => getNext7DayLabels(), []);
   const [channel, setChannel] = useState<Channel>("line");
+  // 先放 mock 當 fallback，API 成功就覆蓋
+  const [matrixByChannel, setMatrixByChannel] = useState<Record<Channel, number[][]>>(HEATMAP_BY_CHANNEL);
+  const [totalByChannel, setTotalByChannel] = useState<Record<Channel, number>>({
+    line: CHANNELS[0].total,
+    facebook: CHANNELS[1].total,
+    nonMember: CHANNELS[2].total,
+  });
+  const [apiDateLabels, setApiDateLabels] = useState<string[] | null>(null);
   const [cell, setCell] = useState(() => findMaxCell(HEATMAP_BY_CHANNEL.line));
   const [loadingJourney, setLoadingJourney] = useState(false);
+  const [journeyTab, setJourneyTab] = useState<JourneyTab>("overall");
+  const journeyLabelRef = useRef<HTMLSpanElement>(null);
+  const [journeyLeftCol, setJourneyLeftCol] = useState<number>(JOURNEY_LEFT_MIN);
 
-  const heatmap = HEATMAP_BY_CHANNEL[channel];
+  // 後端 channel key → 我們的 Channel 型別。nonMember 對應後端 webchat
+  const apiChannelKey: Record<Channel, string> = { line: "line", facebook: "facebook", nonMember: "webchat" };
+
+  useEffect(() => {
+    const load = async (ch: Channel) => {
+      try {
+        const res = await apiGet(
+          `/api/v1/analytics/time-slot-insights?channel=${apiChannelKey[ch]}`,
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = (await res.json()) as TimeSlotInsightsResponse;
+        setMatrixByChannel((prev) => ({ ...prev, [ch]: data.matrix }));
+        setTotalByChannel((prev) => ({ ...prev, [ch]: data.total_unique_members }));
+        // 日期標籤：轉成 'M/D（週X）' 格式
+        const labels = data.dates.map((d, i) => {
+          const [, m, day] = d.split("-");
+          return `${Number(m)}/${Number(day)}（${data.weekdays[i]}）`;
+        });
+        setApiDateLabels(labels);
+      } catch (err) {
+        console.error("[TimeInsights] load failed:", err);
+      }
+    };
+    load(channel);
+  }, [channel]);
+
+  // 有 API 資料就用；沒有（初始化前）先用 hardcoded mock
+  const dateLabels = apiDateLabels ?? getNext7DayLabels();
+  const heatmap = matrixByChannel[channel];
   const colorMap = useMemo(() => computeColorMap(heatmap), [heatmap]);
   const selectedValue = heatmap[cell.r]?.[cell.c] ?? 0;
   const journey = useMemo(
@@ -597,6 +661,15 @@ function TimeInsightsSection() {
       ),
     [journey],
   );
+  // filter 到單一色段時 bar 依該色段的最大值伸縮，長條才不會被 overall 的大總和壓扁
+  const maxSegmentCount = useMemo(
+    () =>
+      [0, 1, 2].map((idx) =>
+        Math.max(1, ...journey.map((j) => j.counts[idx] ?? 0)),
+      ),
+    [journey],
+  );
+  const activeSegIdx = JOURNEY_TAB_TO_SEG[journeyTab];
 
   // 切換 channel 時重新聚焦在該 channel 的最高值格子
   const isFirstRun = useRef(true);
@@ -605,8 +678,20 @@ function TimeInsightsSection() {
       isFirstRun.current = false;
       return;
     }
-    setCell(findMaxCell(HEATMAP_BY_CHANNEL[channel]));
-  }, [channel]);
+    setCell(findMaxCell(matrixByChannel[channel] ?? HEATMAP_BY_CHANNEL[channel]));
+  }, [channel, matrixByChannel]);
+
+  // 測量 journey label 自然寬度。selectedValue 改變後，
+  // 若 "此 {N} 人次的互動旅程" 需要 > 232px 才能維持一行字，則擴張寬度，
+  // 這樣 header tabs 和下方 stacked bar 會一起往右推、保持左側對齊。
+  useLayoutEffect(() => {
+    const span = journeyLabelRef.current;
+    if (!span) return;
+    const natural = span.getBoundingClientRect().width;
+    // label wrapper = px-[20px] + span + gap-[4px] + InfoIcon(16px) + px-[20px]
+    const required = 20 + natural + 4 + 16 + 20;
+    setJourneyLeftCol(Math.max(JOURNEY_LEFT_MIN, Math.ceil(required)));
+  }, [selectedValue]);
 
   // cell 或 channel 改變 → 模擬 loading，重繪下方互動旅程
   const cellKey = `${channel}|${cell.r}|${cell.c}`;
@@ -617,7 +702,7 @@ function TimeInsightsSection() {
   }, [cellKey]);
 
   return (
-    <div className="bg-white rounded-[16px] border border-solid border-[#ddd] flex flex-col w-full overflow-hidden">
+    <div className="bg-white rounded-[16px] flex flex-col w-full overflow-hidden">
       {/* A. 標題 + 三個渠道 tab */}
       <div className="flex items-stretch border-b border-solid border-[#ddd] flex-col md:flex-row">
         <div className="flex-1 min-w-0 px-[20px] py-[16px] flex flex-col gap-[4px] self-stretch">
@@ -644,7 +729,7 @@ function TimeInsightsSection() {
                   {ch.label}
                 </span>
                 <span className="text-[32px] leading-[1.5] font-medium text-[#383838] whitespace-nowrap">
-                  {ch.total}人次
+                  {totalByChannel[ch.key] ?? ch.total}人次
                 </span>
               </button>
             );
@@ -683,14 +768,14 @@ function TimeInsightsSection() {
                         onClick={() => setCell({ r, c })}
                         aria-pressed={isSelected}
                         aria-label={`${dateLabels[c]} ${label} 時段：${value} 人`}
-                        className={`flex items-center justify-center text-[16px] leading-[1.5] text-[#383838] p-[4px] transition-[filter,box-shadow] cursor-pointer focus:outline-none ${
+                        className={`heatmap-cell relative flex items-center justify-center text-[16px] leading-[1.5] text-[#383838] p-[4px] transition-[filter,box-shadow] cursor-pointer focus:outline-none ${
                           isSelected
-                            ? "ring-2 ring-[#0f6beb] ring-inset relative z-10"
-                            : "hover:brightness-95"
+                            ? "ring-2 ring-[#0f6beb] ring-inset z-10"
+                            : ""
                         }`}
                         style={{ backgroundColor: heatColor(colorMap[r]?.[c] ?? 0), minHeight: 64 }}
                       >
-                        {value}
+                        <span className="relative">{value}</span>
                       </button>
                     );
                   })}
@@ -725,32 +810,51 @@ function TimeInsightsSection() {
       </div>
 
       {/* C. 互動旅程：標題 + 三個彩色底線 tab + stacked bar list */}
-      <div className="bg-white flex flex-col">
-        <div className="flex items-stretch border-b border-solid border-[#ddd] flex-col md:flex-row">
-          <div className="flex-[0_0_auto] md:flex-1 md:min-w-0 px-[20px] py-[16px] flex items-center gap-[4px]">
-            <span className="text-[16px] leading-[1.5] text-[#6e6e6e] whitespace-nowrap">
+      <div
+        className="bg-white flex flex-col"
+        style={{ ["--journey-left-col" as string]: `${journeyLeftCol}px` }}
+      >
+        <div className="journey-header-row">
+          <button
+            type="button"
+            onClick={() => setJourneyTab("overall")}
+            aria-pressed={journeyTab === "overall"}
+            className="journey-label-col insights-channel-tab"
+          >
+            <span
+              ref={journeyLabelRef}
+              className="text-[16px] leading-[1.5] text-[#6e6e6e] whitespace-nowrap"
+            >
               此{" "}
               <span className="font-medium text-[#383838]">{selectedValue}</span>{" "}
               人次的互動旅程
             </span>
             <InfoIcon />
-          </div>
-          <div className="flex shrink-0 md:shrink md:min-w-0 md:flex-[3]">
-            {[
-              { label: "對話", color: "#83bfff" },
-              { label: "互動", color: "#2578ff" },
-              { label: "轉單", color: "#004ac2" },
-            ].map((t, i) => (
-              <div
-                key={t.label}
-                className={`flex-1 min-w-0 py-[16px] px-[24px] flex items-center ${i === 0 ? "md:border-l-0" : "border-l"} border-solid border-[#ddd]`}
-                style={{ borderBottom: `6px solid ${t.color}` }}
-              >
-                <span className="text-[24px] leading-[1.5] text-[#383838] whitespace-nowrap">
-                  {t.label}
-                </span>
-              </div>
-            ))}
+          </button>
+          <div className="journey-tabs-col">
+            {(
+              [
+                { key: "conversation", label: "對話", color: "#83bfff" },
+                { key: "interaction", label: "互動", color: "#2578ff" },
+                { key: "conversion", label: "轉單", color: "#004ac2" },
+              ] as { key: JourneyTab; label: string; color: string }[]
+            ).map((t, i) => {
+              const active = journeyTab === t.key;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setJourneyTab(t.key)}
+                  aria-pressed={active}
+                  className={`insights-channel-tab journey-tab-btn ${i === 0 ? "" : "border-l border-solid border-[#ddd]"}`}
+                  style={{ borderBottom: `6px solid ${t.color}` }}
+                >
+                  <span className="text-[24px] leading-[1.5] text-[#383838] whitespace-nowrap">
+                    {t.label}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -765,35 +869,53 @@ function TimeInsightsSection() {
           ) : (
             journey.map((item) => {
               const total = item.counts.reduce((a, b) => a + b, 0);
-              const segColors = ["#83bfff", "#2578ff", "#004ac2"];
+              const segments =
+                activeSegIdx === null
+                  ? item.counts.map((count, idx) => ({
+                      idx,
+                      count,
+                      color: JOURNEY_SEG_COLORS[idx],
+                      widthPct: (count / maxJourneyTotal) * 100,
+                    }))
+                  : [
+                      {
+                        idx: activeSegIdx,
+                        count: item.counts[activeSegIdx] ?? 0,
+                        color: JOURNEY_SEG_COLORS[activeSegIdx],
+                        widthPct:
+                          ((item.counts[activeSegIdx] ?? 0) /
+                            maxSegmentCount[activeSegIdx]) *
+                          100,
+                      },
+                    ];
+              const trailingCount =
+                activeSegIdx === null ? total : item.counts[activeSegIdx] ?? 0;
               return (
                 <div key={item.tag} className="flex items-center gap-[4px] w-full">
-                  <div className="flex items-center min-w-[160px] md:min-w-[208px] md:w-[208px] shrink-0">
+                  <div className="journey-bar-badge">
                     <span className="bg-[#f0f6ff] rounded-[8px] px-[8px] py-[4px] min-w-[32px] text-[#0f6beb] text-[16px] leading-[1.5] text-center whitespace-nowrap">
                       {`{${item.tag}}`}
                     </span>
                   </div>
                   <div className="flex-1 min-w-0 flex items-center gap-[8px]">
                     <div className="flex-1 min-w-0 bg-[#fafafa] rounded-[4px] overflow-hidden flex items-center">
-                      {item.counts.map((count, idx) => {
-                        const widthPct = (count / maxJourneyTotal) * 100;
-                        if (widthPct <= 0) return null;
-                        return (
+                      {segments.map((seg) =>
+                        seg.widthPct <= 0 ? null : (
                           <div
-                            key={idx}
+                            key={seg.idx}
                             style={{
-                              width: `${widthPct}%`,
-                              backgroundColor: segColors[idx],
+                              width: `${seg.widthPct}%`,
+                              backgroundColor: seg.color,
                             }}
                             className="flex items-center justify-center text-white text-[16px] leading-[1.5] py-[10px] px-[4px] whitespace-nowrap"
                           >
-                            {count}
+                            {seg.count}
                           </div>
-                        );
-                      })}
+                        ),
+                      )}
                     </div>
                     <span className="text-[16px] leading-[1.5] text-[#6e6e6e] whitespace-nowrap shrink-0">
-                      {total} 次
+                      {trailingCount} 次
                     </span>
                   </div>
                 </div>
@@ -995,7 +1117,6 @@ export default function InsightsPanel({
 
           {/* 行動建議區塊 */}
           <div className="bg-[rgba(255,255,255,0.3)] relative rounded-[16px] w-full">
-            <div aria-hidden="true" className="absolute border border-[#f0f6ff] border-solid inset-0 pointer-events-none rounded-[16px]" />
             <div className="relative p-[24px] flex flex-col gap-[24px]">
               <p className="text-[16px] text-[#383838] font-medium">
                 行動建議
@@ -1034,9 +1155,21 @@ export default function InsightsPanel({
                         </div>
                         <div className="flex items-center gap-[16px] shrink-0 ml-[16px]">
                           <span className="text-[12px] text-[#a8a8a8]">
-                            {item.question_at?.slice(0, 16).replace("T", " ")}
+                            {formatUnansweredTime(item.question_at) || ""}
                           </span>
-                          <button className="text-[#0f6beb] text-[14px] hover:underline cursor-pointer">查看詳情</button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // LINE 渠道：優先用 member.id（DB ID），fallback 用 thread_id（= line_uid / channelUid）
+                              const mid = item.member_id != null
+                                ? String(item.member_id)
+                                : item.thread_id;
+                              navigate("chat-room", { memberId: mid, channel: "LINE" });
+                            }}
+                            className="text-[#0f6beb] text-[14px] hover:underline cursor-pointer"
+                          >
+                            查看詳情
+                          </button>
                         </div>
                       </div>
                     ))
@@ -1069,9 +1202,19 @@ export default function InsightsPanel({
                         </span>
                         <div className="flex items-center gap-[16px] shrink-0 ml-[16px]">
                           <span className="text-[12px] text-[#a8a8a8]">
-                            {q.created_at?.slice(0, 16).replace("T", " ")}
+                            {formatUnansweredTime(q.created_at) || ""}
                           </span>
-                          <button className="text-[#0f6beb] text-[14px] hover:underline cursor-pointer">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // 跳到關鍵字回應頁並開新建畫面，回應類型預設「觸發關鍵字」
+                              navigate("auto-reply", {
+                                view: "edit",
+                                replyType: "keyword",
+                              });
+                            }}
+                            className="text-[#0f6beb] text-[14px] hover:underline cursor-pointer"
+                          >
                             加入知識庫
                           </button>
                         </div>
