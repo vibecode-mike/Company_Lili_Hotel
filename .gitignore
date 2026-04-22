@@ -35,6 +35,10 @@ public/uploads/*
 .env
 .env.local
 .env.*.local
+# .env 備份檔（時間戳/自訂後綴皆忽略）
+*.env.bak
+.env.bak.*
+.env.bak
 
 # Database
 *.db
