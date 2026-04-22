@@ -2384,7 +2384,17 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                 </Tooltip>
               </Label>
               <div className="flex-1 flex items-start gap-[52px]">
-                <RadioGroup value={targetType} onValueChange={setTargetType} className="space-y-2">
+                <RadioGroup
+                  value={targetType}
+                  onValueChange={(v) => {
+                    setTargetType(v);
+                    // 切到「所有好友」時清空已選標籤，避免視覺殘留
+                    if (v === 'all') {
+                      setSelectedFilterTags([]);
+                    }
+                  }}
+                  className="space-y-2"
+                >
                   <div className="flex items-center gap-2">
                     <RadioGroupItem value="all" id="all" />
                     <Label htmlFor="all" className="cursor-pointer text-[16px] text-[#383838]">所有好友</Label>
@@ -2398,7 +2408,12 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                         </Label>
                       </div>
                     </div>
-                    <div className="bg-white max-w-[600px] min-w-[300px] rounded-[8px] shrink-0 w-full border border-neutral-100">
+                    <div
+                      className={`bg-white max-w-[600px] min-w-[300px] rounded-[8px] shrink-0 w-full border border-neutral-100 ${
+                        targetType !== 'filtered' ? 'opacity-60 pointer-events-none select-none' : ''
+                      }`}
+                      aria-disabled={targetType !== 'filtered'}
+                    >
                       <div className="flex flex-col justify-center max-w-inherit min-w-inherit size-full">
                         <div className="box-border content-stretch flex flex-row flex-wrap gap-[4px] items-start justify-start max-w-inherit min-w-inherit p-[8px] w-full">
                           {selectedFilterTags.length > 0 && (
@@ -2406,9 +2421,11 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                               {selectedFilterTags.map(tag => (
                                 <div key={tag.id} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0">
                                   <p className="basis-0 font-normal grow leading-[1.5] min-h-px min-w-px shrink-0 text-[#0f6beb] text-[16px]">{tag.name}</p>
-                                  <button 
+                                  <button
+                                    type="button"
+                                    disabled={targetType !== 'filtered'}
                                     onClick={() => setSelectedFilterTags(selectedFilterTags.filter(t => t.id !== tag.id))}
-                                    className="shrink-0 size-[16px] hover:opacity-70 transition-opacity"
+                                    className="shrink-0 size-[16px] hover:opacity-70 transition-opacity disabled:cursor-not-allowed"
                                   >
                                     <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 16 16">
                                       <g clipPath="url(#clip0_23_1462)">
@@ -2427,14 +2444,18 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                           )}
                           <Dialog open={modalOpen} onOpenChange={setModalOpen}>
                             <DialogTrigger asChild>
-                              <button className="box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0 hover:bg-neutral-50 transition-colors">
+                              <button
+                                type="button"
+                                disabled={targetType !== 'filtered'}
+                                className="box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0 hover:bg-neutral-50 transition-colors disabled:cursor-not-allowed"
+                              >
                                 <p className="basis-0 font-normal grow leading-[1.5] min-h-px min-w-px shrink-0 text-[#a8a8a8] text-[16px] text-center">＋ 新增標籤</p>
                               </button>
                             </DialogTrigger>
                             <DialogContentNoClose className="p-0 bg-transparent border-0 !w-auto !max-w-none !h-auto">
                               <DialogTitle className="sr-only">篩選目標對象</DialogTitle>
                               <DialogDescription className="sr-only">選擇或建立標籤來篩選目標對象</DialogDescription>
-                              <FilterModal 
+                              <FilterModal
                                 onClose={() => setModalOpen(false)}
                                 onConfirm={handleFilterConfirm}
                                 initialSelectedTags={selectedFilterTags}

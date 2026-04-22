@@ -24,6 +24,8 @@ interface CreateAutoReplyProps {
   autoReplyId?: string | null;
   onSaved?: () => void;
   onDeleted?: () => void;
+  // 新建時的預設回應類型（welcome/keyword/follow），由外部帶入可跳過預設 welcome
+  initialReplyType?: 'welcome' | 'keyword' | 'follow';
 }
 
 type ReplyType = 'welcome' | 'keyword' | 'follow';
@@ -77,13 +79,17 @@ export default function CreateAutoReplyInteractive({
   autoReplyId,
   onSaved,
   onDeleted,
+  initialReplyType,
 }: CreateAutoReplyProps) {
   const { saveAutoReply, removeAutoReply, getAutoReplyById, fetchAutoReplyById, deleteFbKeyword, deleteFbMessage, deleteFbAutoReply } = useAutoReplies();
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isHydrating, setIsHydrating] = useState<boolean>(Boolean(autoReplyId));
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [replyType, setReplyType] = useState<ReplyType>('welcome');
+  // 新建模式才吃 initialReplyType；編輯模式由現有資料 hydrate 覆蓋
+  const [replyType, setReplyType] = useState<ReplyType>(
+    !autoReplyId && initialReplyType ? initialReplyType : 'welcome',
+  );
   const [selectedChannel, setSelectedChannel] = useState<ChannelType>('LINE');
   const [isEnabled, setIsEnabled] = useState(true);
   const [messages, setMessages] = useState<MessageItem[]>([{ id: 1, text: '' }]);
@@ -107,7 +113,8 @@ export default function CreateAutoReplyInteractive({
   const [selectedChannelValue, setSelectedChannelValue] = useState<string>('');
 
   const resetForm = useCallback(() => {
-    setReplyType('welcome');
+    // 新建時若外部帶入 initialReplyType 就採用，否則回到預設 welcome
+    setReplyType(initialReplyType ?? 'welcome');
     setIsEnabled(true);
     setMessages([{ id: 1, text: '' }]);
     setKeywordTags([]);
@@ -115,7 +122,7 @@ export default function CreateAutoReplyInteractive({
     setTriggerTime('immediate');
     setScheduledDateTime({ ...INITIAL_SCHEDULE });
     setScheduleMode('time');
-  }, []);
+  }, [initialReplyType]);
 
   // 獲取渠道列表（動態構建選項，與群發訊息頁面一致）
   useEffect(() => {

@@ -233,9 +233,15 @@ export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNav
   };
 
   if (view === 'editor') {
+    const initialReplyType = (params.replyType === 'welcome'
+      || params.replyType === 'keyword'
+      || params.replyType === 'follow')
+      ? (params.replyType as 'welcome' | 'keyword' | 'follow')
+      : undefined;
     return (
       <CreateAutoReplyInteractive
         autoReplyId={editingId}
+        initialReplyType={initialReplyType}
         onBack={closeEditor}
         onSaved={closeEditor}
         onDeleted={closeEditor}

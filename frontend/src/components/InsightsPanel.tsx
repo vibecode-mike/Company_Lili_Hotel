@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef, Fragment } from "react";
+import { createPortal } from "react-dom";
 import Sidebar from "./Sidebar";
 import { PageHeaderWithBreadcrumb } from "./common/Breadcrumb";
 import { useNavigation } from "../contexts/NavigationContext";
@@ -12,11 +13,11 @@ import { formatUnansweredTime } from "../utils/memberTime";
 type Period = "day" | "week" | "month" | "quarter" | "year";
 
 const PERIOD_OPTIONS: { value: Period; name: string; trendPrefix: string }[] = [
-  { value: "year", name: "年", trendPrefix: "相較去年" },
-  { value: "quarter", name: "季", trendPrefix: "相較上季" },
-  { value: "month", name: "月", trendPrefix: "相較上月" },
-  { value: "week", name: "週", trendPrefix: "相較上週" },
   { value: "day", name: "日", trendPrefix: "相較昨天" },
+  { value: "week", name: "週", trendPrefix: "相較上週" },
+  { value: "month", name: "月", trendPrefix: "相較上月" },
+  { value: "quarter", name: "季", trendPrefix: "相較上季" },
+  { value: "year", name: "年", trendPrefix: "相較去年" },
 ];
 
 const PERIOD_MAP: Record<Period, { name: string; trendPrefix: string }> = Object.fromEntries(
@@ -355,6 +356,7 @@ function buildJourney(channel: Channel, cellValue: number): JourneyItem[] {
 // ─── 子元件 ─────────────────────────────────────
 
 // 單一指標欄位（核心洞察卡內的 column）
+// 由呼叫端透過 className 決定是否帶 border-l divider。
 function KpiColumn({
   label,
   value,
@@ -362,7 +364,7 @@ function KpiColumn({
   trend,
   up,
   trendPrefix,
-  isFirst,
+  className = "",
 }: {
   label: string;
   value: number | string;
@@ -370,16 +372,11 @@ function KpiColumn({
   trend: number;
   up: boolean;
   trendPrefix: string;
-  isFirst: boolean;
+  className?: string;
 }) {
-  // RWD：桌機 3 欄（左側分隔線）；手機 1 欄（上方分隔線）
-  const dividerClass = isFirst
-    ? ""
-    : "border-t md:border-t-0 md:border-l border-solid border-[#ddd]";
-
   return (
     <div
-      className={`flex-1 min-w-0 bg-white px-[20px] py-[16px] flex flex-col gap-[12px] ${dividerClass}`}
+      className={`flex-1 min-w-0 bg-white px-[20px] py-[16px] flex flex-col gap-[12px] ${className}`}
     >
       <div className="text-[16px] leading-[1.5] text-[#6e6e6e]">{label}</div>
       <div className="flex items-center gap-[12px]">
@@ -392,9 +389,24 @@ function KpiColumn({
         className="flex items-center gap-[4px] text-[16px] leading-[1.5]"
         style={{ color: up ? "#005c0f" : "#b71c1c" }}
       >
-        <span className="inline-flex size-[24px] items-center justify-center shrink-0">
-          {up ? <ChevronUp size={18} strokeWidth={2.5} /> : <ChevronDown size={18} strokeWidth={2.5} />}
-        </span>
+        <svg
+          className="shrink-0 size-[24px]"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          aria-hidden
+        >
+          {up ? (
+            <path
+              transform="translate(7.41 8.77)"
+              d="M0.379036 3.68517L3.69026 0.373951C4.18886 -0.12465 4.99429 -0.12465 5.49289 0.373951L8.80412 3.68517C9.60955 4.49061 9.03424 5.87135 7.89641 5.87135H1.27396C0.136127 5.87135 -0.426397 4.49061 0.379036 3.68517Z"
+            />
+          ) : (
+            <path
+              transform="translate(7.41 9.36)"
+              d="M0.379036 2.18617L3.69026 5.4974C4.18886 5.996 4.99429 5.996 5.49289 5.4974L8.80412 2.18617C9.60955 1.38074 9.03424 0 7.89641 0H1.27396C0.136127 0 -0.426397 1.38074 0.379036 2.18617Z"
+            />
+          )}
+        </svg>
         <span className="whitespace-nowrap">
           {trendPrefix}{up ? "提升" : "下降"} {trend} %
         </span>
@@ -419,24 +431,44 @@ function CoreInsightsCard({
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  // dropdown 以 React Portal 渲染到 document.body，position: fixed，
+  // 避免被 CoreInsightsCard 的 overflow-hidden 裁切。
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
-  // 點 dropdown 外部時關閉選單
+  // 量測觸發按鈕位置（viewport 座標）
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+  }, [open]);
+
+  // 外部點擊關閉 + scroll/resize 自動關閉（因為 fixed 定位不會跟著 trigger 滾動）
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const target = e.target as Node;
+      const insideWrap = wrapRef.current?.contains(target);
+      const insideList = listRef.current?.contains(target);
+      if (!insideWrap && !insideList) setOpen(false);
     };
+    const close = () => setOpen(false);
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true); // capture 才能抓到可滾動祖先
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+    };
   }, [open]);
 
   const { name: periodName, trendPrefix } = PERIOD_MAP[period];
 
   return (
-    <div className="bg-white rounded-[16px] overflow-hidden flex flex-col w-full">
-      {/* Header：核心洞察 + 期間 dropdown + 描述 */}
+    <div className="bg-white rounded-[16px] flex flex-col w-full overflow-hidden">
+      {/* Header：核心洞察 + 期間 dropdown + 描述（自帶 border-b #ddd，對應 Figma Dimesion 1744:33108） */}
       <div className="bg-white border-b border-solid border-[#ddd] py-[16px]">
         <div className="flex items-start">
           <div className="flex-1 min-w-0 px-[20px] flex flex-col gap-[4px] self-stretch">
@@ -446,6 +478,7 @@ function CoreInsightsCard({
               {/* 比較期間 dropdown */}
               <div ref={wrapRef} className="relative">
                 <button
+                  ref={triggerRef}
                   type="button"
                   onClick={() => setOpen((v) => !v)}
                   className="flex items-center gap-[2px] justify-center p-[4px] rounded-[8px] cursor-pointer hover:bg-[#f0f6ff] transition-colors"
@@ -466,32 +499,48 @@ function CoreInsightsCard({
                   </span>
                 </button>
 
-                {open && (
+                {open && createPortal(
                   <ul
+                    ref={listRef}
                     role="listbox"
-                    className="absolute left-0 top-[calc(100%+4px)] z-20 min-w-[120px] bg-white border border-solid border-[#ddd] rounded-[8px] shadow-md py-[4px]"
+                    className="fixed min-w-[120px] bg-white border border-solid rounded-[12px] flex flex-col gap-[4px] p-[4px]"
+                    style={{
+                      top: dropdownPos.top,
+                      left: dropdownPos.left,
+                      zIndex: 1000,
+                      borderColor: "rgba(221, 221, 221, 0.55)",
+                      boxShadow:
+                        "0px 2px 2px 0px rgba(221, 221, 221, 0.32), 0px 5px 15px 0px rgba(221, 221, 221, 0.2)",
+                    }}
                   >
                     {PERIOD_OPTIONS.map((opt) => {
                       const selected = opt.value === period;
                       return (
-                        <li key={opt.value} role="option" aria-selected={selected}>
+                        <li key={opt.value} role="option" aria-selected={selected} className="w-full">
                           <button
                             type="button"
                             onClick={() => {
                               onPeriodChange(opt.value);
                               setOpen(false);
                             }}
-                            className={`flex w-full items-center justify-between px-[12px] py-[8px] text-[14px] leading-[1.5] text-left cursor-pointer transition-colors hover:bg-[#f0f6ff] ${
-                              selected ? "text-[#0f6beb]" : "text-[#383838]"
+                            className={`flex w-full items-center gap-[4px] min-h-[48px] p-[8px] rounded-[8px] text-[16px] leading-[1.5] text-[#383838] text-left cursor-pointer transition-colors hover:bg-[#f0f6ff] ${
+                              selected ? "bg-[#f0f6ff]" : "bg-white"
                             }`}
                           >
-                            <span>{opt.name}</span>
-                            {selected && <Check size={14} className="text-[#0f6beb]" />}
+                            <span className="flex-1 min-w-0">{opt.name}</span>
+                            {selected && (
+                              <Check
+                                size={24}
+                                className="shrink-0 text-[#0f6beb]"
+                                strokeWidth={2}
+                              />
+                            )}
                           </button>
                         </li>
                       );
                     })}
-                  </ul>
+                  </ul>,
+                  document.body,
                 )}
               </div>
             </div>
@@ -502,11 +551,22 @@ function CoreInsightsCard({
         </div>
       </div>
 
-      {/* Body：3 columns（桌機橫排、手機直排） */}
+      {/* Body：3 columns（桌機橫排、手機直排）
+          divider：第一欄無線；2、3 欄桌機左側加 border-l，手機直排時改由上方 border-t 分隔 */}
       <div className="flex flex-col md:flex-row items-stretch w-full">
-        <KpiColumn label="AI 覆蓋率" {...aiCoverage} trendPrefix={trendPrefix} isFirst />
-        <KpiColumn label="完成訂單" {...completedOrders} trendPrefix={trendPrefix} isFirst={false} />
-        <KpiColumn label="新增會員" {...newMembers} trendPrefix={trendPrefix} isFirst={false} />
+        <KpiColumn label="AI 覆蓋率" {...aiCoverage} trendPrefix={trendPrefix} />
+        <KpiColumn
+          label="完成訂單"
+          {...completedOrders}
+          trendPrefix={trendPrefix}
+          className="border-t md:border-t-0 md:border-l border-solid border-[#ddd]"
+        />
+        <KpiColumn
+          label="新增會員"
+          {...newMembers}
+          trendPrefix={trendPrefix}
+          className="border-t md:border-t-0 md:border-l border-solid border-[#ddd]"
+        />
       </div>
     </div>
   );
@@ -563,15 +623,17 @@ function FaqRow({
 function InfoIcon({ className = "" }: { className?: string }) {
   return (
     <svg
-      className={`shrink-0 size-[16px] ${className}`}
+      className={`shrink-0 size-[20px] ${className}`}
       fill="none"
       viewBox="0 0 16 16"
       aria-hidden
     >
-      <path
-        fill="#6E6E6E"
-        d="M8 1.333A6.667 6.667 0 1 0 8 14.667 6.667 6.667 0 0 0 8 1.333Zm0 12A5.333 5.333 0 1 1 8 2.667a5.333 5.333 0 0 1 0 10.666Zm.667-8h-1.334v-1.333h1.334V5.333Zm0 5.334h-1.334V6.667h1.334v4Z"
-      />
+      <g transform="translate(2 2) scale(1.125)">
+        <path
+          fill="#9CA3AF"
+          d="M5.33333 10.6667C2.38773 10.6667 0 8.27893 0 5.33333C0 2.38773 2.38773 0 5.33333 0C8.27893 0 10.6667 2.38773 10.6667 5.33333C10.6667 8.27893 8.27893 10.6667 5.33333 10.6667ZM5.33333 9.6C6.46492 9.6 7.55017 9.15048 8.35032 8.35032C9.15048 7.55017 9.6 6.46492 9.6 5.33333C9.6 4.20174 9.15048 3.1165 8.35032 2.31634C7.55017 1.51619 6.46492 1.06667 5.33333 1.06667C4.20174 1.06667 3.1165 1.51619 2.31634 2.31634C1.51619 3.1165 1.06667 4.20174 1.06667 5.33333C1.06667 6.46492 1.51619 7.55017 2.31634 8.35032C3.1165 9.15048 4.20174 9.6 5.33333 9.6ZM4.8 2.66667H5.86667V3.73333H4.8V2.66667ZM4.8 4.8H5.86667V8H4.8V4.8Z"
+        />
+      </g>
     </svg>
   );
 }
@@ -602,6 +664,26 @@ interface TimeSlotInsightsResponse {
   matrix: number[][];
 }
 
+interface TimeSlotDetailTag {
+  tag: string;
+  conversation: number;
+  interaction: number;
+  conversion: number;
+  total: number;
+  last_triggered_at: string;
+}
+
+interface TimeSlotDetailResponse {
+  start_date: string;
+  end_date: string;
+  channel: string;
+  scope: "range" | "cell";
+  cell_date: string | null;
+  cell_block: number | null;
+  total_unique_members: number;
+  tags: TimeSlotDetailTag[];
+}
+
 function TimeInsightsSection() {
   const [channel, setChannel] = useState<Channel>("line");
   // 先放 mock 當 fallback，API 成功就覆蓋
@@ -612,7 +694,11 @@ function TimeInsightsSection() {
     nonMember: CHANNELS[2].total,
   });
   const [apiDateLabels, setApiDateLabels] = useState<string[] | null>(null);
-  const [cell, setCell] = useState(() => findMaxCell(HEATMAP_BY_CHANNEL.line));
+  const [apiDates, setApiDates] = useState<string[]>([]);
+  // 預設 cell=null：載入時顯示整個 7 天範圍。點擊任一格才會設成具體 r/c
+  // 設定後不可回到 null（依需求：刷新或離開頁再回來才重置）
+  const [cell, setCell] = useState<{ r: number; c: number } | null>(null);
+  const [journeyTags, setJourneyTags] = useState<TimeSlotDetailTag[]>([]);
   const [loadingJourney, setLoadingJourney] = useState(false);
   const [journeyTab, setJourneyTab] = useState<JourneyTab>("overall");
   const journeyLabelRef = useRef<HTMLSpanElement>(null);
@@ -621,6 +707,7 @@ function TimeInsightsSection() {
   // 後端 channel key → 我們的 Channel 型別。nonMember 對應後端 webchat
   const apiChannelKey: Record<Channel, string> = { line: "line", facebook: "facebook", nonMember: "webchat" };
 
+  // heatmap 載入（隨 channel 切換）
   useEffect(() => {
     const load = async (ch: Channel) => {
       try {
@@ -631,6 +718,7 @@ function TimeInsightsSection() {
         const data = (await res.json()) as TimeSlotInsightsResponse;
         setMatrixByChannel((prev) => ({ ...prev, [ch]: data.matrix }));
         setTotalByChannel((prev) => ({ ...prev, [ch]: data.total_unique_members }));
+        setApiDates(data.dates);
         // 日期標籤：轉成 'M/D（週X）' 格式
         const labels = data.dates.map((d, i) => {
           const [, m, day] = d.split("-");
@@ -644,42 +732,65 @@ function TimeInsightsSection() {
     load(channel);
   }, [channel]);
 
+  // 互動旅程明細載入（隨 channel + cell 切換）
+  useEffect(() => {
+    const load = async () => {
+      setLoadingJourney(true);
+      try {
+        const params = new URLSearchParams({ channel: apiChannelKey[channel] });
+        if (cell && apiDates[cell.c]) {
+          params.set("cell_date", apiDates[cell.c]);
+          params.set("cell_block", String(cell.r));
+        }
+        const res = await apiGet(`/api/v1/analytics/time-slot-detail?${params.toString()}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = (await res.json()) as TimeSlotDetailResponse;
+        setJourneyTags(data.tags);
+      } catch (err) {
+        console.error("[TimeInsightsDetail] load failed:", err);
+        setJourneyTags([]);
+      } finally {
+        setLoadingJourney(false);
+      }
+    };
+    // cell 模式需要 apiDates 對齊；apiDates 沒載入時跳過 cell 請求避免錯位
+    if (cell && apiDates.length === 0) return;
+    load();
+  }, [channel, cell, apiDates]);
+
   // 有 API 資料就用；沒有（初始化前）先用 hardcoded mock
   const dateLabels = apiDateLabels ?? getNext7DayLabels();
   const heatmap = matrixByChannel[channel];
   const colorMap = useMemo(() => computeColorMap(heatmap), [heatmap]);
-  const selectedValue = heatmap[cell.r]?.[cell.c] ?? 0;
-  const journey = useMemo(
-    () => buildJourney(channel, selectedValue),
-    [channel, selectedValue],
-  );
+  // 沒選 cell：顯示 7 天 distinct member 總數（從 totalByChannel 取）
+  // 有選 cell：顯示該格的數值
+  const selectedValue = cell
+    ? (heatmap[cell.r]?.[cell.c] ?? 0)
+    : (totalByChannel[channel] ?? 0);
   const maxJourneyTotal = useMemo(
-    () =>
-      Math.max(
-        1,
-        ...journey.map((j) => j.counts.reduce((s, v) => s + v, 0)),
-      ),
-    [journey],
+    () => Math.max(1, ...journeyTags.map((t) => t.conversation + t.interaction + t.conversion)),
+    [journeyTags],
   );
-  // filter 到單一色段時 bar 依該色段的最大值伸縮，長條才不會被 overall 的大總和壓扁
+  // filter 到單一色段時 bar 依該色段的最大值伸縮
   const maxSegmentCount = useMemo(
-    () =>
-      [0, 1, 2].map((idx) =>
-        Math.max(1, ...journey.map((j) => j.counts[idx] ?? 0)),
-      ),
-    [journey],
+    () => [
+      Math.max(1, ...journeyTags.map((t) => t.conversation)),
+      Math.max(1, ...journeyTags.map((t) => t.interaction)),
+      Math.max(1, ...journeyTags.map((t) => t.conversion)),
+    ],
+    [journeyTags],
   );
   const activeSegIdx = JOURNEY_TAB_TO_SEG[journeyTab];
 
-  // 切換 channel 時重新聚焦在該 channel 的最高值格子
+  // 切換 channel 時重置 cell 為 null（回到 7 天總覽）
   const isFirstRun = useRef(true);
   useEffect(() => {
     if (isFirstRun.current) {
       isFirstRun.current = false;
       return;
     }
-    setCell(findMaxCell(matrixByChannel[channel] ?? HEATMAP_BY_CHANNEL[channel]));
-  }, [channel, matrixByChannel]);
+    setCell(null);
+  }, [channel]);
 
   // 測量 journey label 自然寬度。selectedValue 改變後，
   // 若 "此 {N} 人次的互動旅程" 需要 > 232px 才能維持一行字，則擴張寬度，
@@ -688,18 +799,10 @@ function TimeInsightsSection() {
     const span = journeyLabelRef.current;
     if (!span) return;
     const natural = span.getBoundingClientRect().width;
-    // label wrapper = px-[20px] + span + gap-[4px] + InfoIcon(16px) + px-[20px]
-    const required = 20 + natural + 4 + 16 + 20;
+    // label wrapper = px-[20px] + span + gap-[4px] + InfoIcon(20px) + px-[20px]
+    const required = 20 + natural + 4 + 20 + 20;
     setJourneyLeftCol(Math.max(JOURNEY_LEFT_MIN, Math.ceil(required)));
   }, [selectedValue]);
-
-  // cell 或 channel 改變 → 模擬 loading，重繪下方互動旅程
-  const cellKey = `${channel}|${cell.r}|${cell.c}`;
-  useEffect(() => {
-    setLoadingJourney(true);
-    const t = setTimeout(() => setLoadingJourney(false), 260);
-    return () => clearTimeout(t);
-  }, [cellKey]);
 
   return (
     <div className="bg-white rounded-[16px] flex flex-col w-full overflow-hidden">
@@ -760,7 +863,7 @@ function TimeInsightsSection() {
                     </span>
                   </div>
                   {(heatmap[r] ?? []).map((value, c) => {
-                    const isSelected = cell.r === r && cell.c === c;
+                    const isSelected = cell?.r === r && cell?.c === c;
                     return (
                       <button
                         key={`cell-${r}-${c}`}
@@ -866,12 +969,21 @@ function TimeInsightsSection() {
                 aria-label="載入中"
               />
             </div>
+          ) : journeyTags.length === 0 ? (
+            <div className="absolute inset-0 flex items-center justify-center text-[#6e6e6e] text-[14px]">
+              此範圍尚無標籤資料
+            </div>
           ) : (
-            journey.map((item) => {
-              const total = item.counts.reduce((a, b) => a + b, 0);
+            journeyTags.map((item) => {
+              const counts: [number, number, number] = [
+                item.conversation,
+                item.interaction,
+                item.conversion,
+              ];
+              const total = counts.reduce((a, b) => a + b, 0);
               const segments =
                 activeSegIdx === null
-                  ? item.counts.map((count, idx) => ({
+                  ? counts.map((count, idx) => ({
                       idx,
                       count,
                       color: JOURNEY_SEG_COLORS[idx],
@@ -880,21 +992,21 @@ function TimeInsightsSection() {
                   : [
                       {
                         idx: activeSegIdx,
-                        count: item.counts[activeSegIdx] ?? 0,
+                        count: counts[activeSegIdx] ?? 0,
                         color: JOURNEY_SEG_COLORS[activeSegIdx],
                         widthPct:
-                          ((item.counts[activeSegIdx] ?? 0) /
+                          ((counts[activeSegIdx] ?? 0) /
                             maxSegmentCount[activeSegIdx]) *
                           100,
                       },
                     ];
               const trailingCount =
-                activeSegIdx === null ? total : item.counts[activeSegIdx] ?? 0;
+                activeSegIdx === null ? total : counts[activeSegIdx] ?? 0;
               return (
                 <div key={item.tag} className="flex items-center gap-[4px] w-full">
                   <div className="journey-bar-badge">
                     <span className="bg-[#f0f6ff] rounded-[8px] px-[8px] py-[4px] min-w-[32px] text-[#0f6beb] text-[16px] leading-[1.5] text-center whitespace-nowrap">
-                      {`{${item.tag}}`}
+                      {item.tag}
                     </span>
                   </div>
                   <div className="flex-1 min-w-0 flex items-center gap-[8px]">
@@ -907,7 +1019,7 @@ function TimeInsightsSection() {
                               width: `${seg.widthPct}%`,
                               backgroundColor: seg.color,
                             }}
-                            className="flex items-center justify-center text-white text-[16px] leading-[1.5] py-[10px] px-[4px] whitespace-nowrap"
+                            className="shrink-0 min-w-0 flex items-center justify-center text-white text-[16px] leading-[1.5] py-[10px] px-[4px] whitespace-nowrap overflow-hidden"
                           >
                             {seg.count}
                           </div>
@@ -915,7 +1027,7 @@ function TimeInsightsSection() {
                       )}
                     </div>
                     <span className="text-[16px] leading-[1.5] text-[#6e6e6e] whitespace-nowrap shrink-0">
-                      {trailingCount} 次
+                      {trailingCount} 人
                     </span>
                   </div>
                 </div>
@@ -1116,23 +1228,29 @@ export default function InsightsPanel({
           />
 
           {/* 行動建議區塊 */}
-          <div className="bg-[rgba(255,255,255,0.3)] relative rounded-[16px] w-full">
-            <div className="relative p-[24px] flex flex-col gap-[24px]">
-              <p className="text-[16px] text-[#383838] font-medium">
-                行動建議
-              </p>
+          <div className="bg-white relative rounded-[16px] w-full">
+            <div className="relative py-[16px] px-[20px] flex flex-col gap-[24px]">
+              <div className="flex items-center gap-[4px]">
+                <span className="text-[16px] text-[#383838] font-medium">
+                  行動建議
+                </span>
+                <InfoIcon />
+              </div>
 
               {/* 1. 待回覆對話（含：使用者訊息無人回 + AI 被標 unanswered 的對話） */}
               <div>
                 <p className="text-[14px] text-[#383838] mb-[12px]">
-                  1. <span style={{ color: "#dc2626" }}>{pending?.total ?? 0}則</span>對話待回覆
+                  1. <span style={{ color: "#B71C1C" }}>{pending?.total ?? 0}則</span>對話待回覆
                 </p>
                 <div className="flex flex-col">
                   {pending && pending.items.length > 0 ? (
-                    pending.items.map((item) => (
+                    <>
+                      {pending.items.slice(0, 10).map((item, idx, arr) => (
                       <div
                         key={item.thread_id}
-                        className="flex items-center justify-between py-[10px] border-b border-[#f0f6ff] last:border-b-0"
+                        className={`flex items-center justify-between py-[10px] ${
+                          idx < arr.length - 1 ? "border-b border-[#f0f6ff]" : ""
+                        }`}
                       >
                         <div className="flex items-center gap-[10px] min-w-0">
                           {item.avatar_url ? (
@@ -1172,7 +1290,21 @@ export default function InsightsPanel({
                           </button>
                         </div>
                       </div>
-                    ))
+                      ))}
+                      {pending.items.length > 10 && (
+                        <div className="flex items-center justify-end pl-[16px] w-full">
+                          <button
+                            type="button"
+                            onClick={() => {}}
+                            className="flex items-center justify-center p-[8px] rounded-[8px] cursor-pointer hover:bg-[#f0f6ff] transition-colors"
+                          >
+                            <span className="text-[#0f6beb] text-[16px] leading-[1.5] whitespace-nowrap">
+                              查看全部
+                            </span>
+                          </button>
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <div className="py-[10px] text-[13px] text-[#a8a8a8]">
                       目前沒有待回覆的對話
@@ -1185,17 +1317,20 @@ export default function InsightsPanel({
               <div>
                 <p className="text-[14px] text-[#383838] mb-[12px]">
                   2. AI 未能回答
-                  <span style={{ color: "#dc2626" }}>
+                  <span style={{ color: "#B71C1C" }}>
                     {aiCoverage?.unanswered ?? 0}則
                   </span>
                   訊息，建議加入知識庫
                 </p>
                 <div className="flex flex-col">
                   {aiCoverage && aiCoverage.top_unanswered.length > 0 ? (
-                    aiCoverage.top_unanswered.map((q) => (
+                    <>
+                      {aiCoverage.top_unanswered.slice(0, 10).map((q, idx, arr) => (
                       <div
                         key={q.message_id}
-                        className="flex items-center justify-between py-[10px] border-b border-[#f0f6ff] last:border-b-0"
+                        className={`flex items-center justify-between py-[10px] ${
+                          idx < arr.length - 1 ? "border-b border-[#f0f6ff]" : ""
+                        }`}
                       >
                         <span className="text-[14px] text-[#6e6e6e] truncate" title={q.question}>
                           {q.question || "(無對應提問)"}
@@ -1219,7 +1354,21 @@ export default function InsightsPanel({
                           </button>
                         </div>
                       </div>
-                    ))
+                      ))}
+                      {aiCoverage.top_unanswered.length > 10 && (
+                        <div className="flex items-center justify-end pl-[16px] w-full">
+                          <button
+                            type="button"
+                            onClick={() => {}}
+                            className="flex items-center justify-center p-[8px] rounded-[8px] cursor-pointer hover:bg-[#f0f6ff] transition-colors"
+                          >
+                            <span className="text-[#0f6beb] text-[16px] leading-[1.5] whitespace-nowrap">
+                              查看全部
+                            </span>
+                          </button>
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <div className="py-[10px] text-[13px] text-[#a8a8a8]">
                       目前本月沒有 AI 答不出的問題

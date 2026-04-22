@@ -5482,3 +5482,20 @@ html {
 .border-\[\#ddd\] {
   border-color: #ddd;
 }
+
+/* border-l (1px) — missing from static Tailwind output; jumps from .border-l-0 to .border-l-2 */
+.border-l {
+  border-left-style: var(--tw-border-style);
+  border-left-width: 1px;
+}
+
+@media (min-width: 768px) {
+  .md\:border-l {
+    border-left-style: var(--tw-border-style);
+    border-left-width: 1px;
+  }
+  .md\:border-t-0 {
+    border-top-style: var(--tw-border-style);
+    border-top-width: 0;
+  }
+}
