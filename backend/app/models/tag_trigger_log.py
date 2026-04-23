@@ -1,7 +1,7 @@
 """
 標籤觸發日誌模型
 """
-from sqlalchemy import Column, BigInteger, DateTime, Enum as SQLEnum, ForeignKey
+from sqlalchemy import Column, BigInteger, DateTime, Enum as SQLEnum, ForeignKey, Index, String
 from sqlalchemy.orm import relationship
 from app.models.base import Base
 from datetime import datetime
@@ -11,15 +11,29 @@ import enum
 class TriggerSource(str, enum.Enum):
     """觸發來源"""
 
-    CLICK = "click"  # 點擊
-    INTERACTION = "interaction"  # 互動
-    MANUAL = "manual"  # 手動
+    CLICK = "click"  # 點擊（圖片/按鈕，→「互動」tab）
+    INTERACTION = "interaction"  # 對話（AI 自動打標，→「對話」tab）
+    MANUAL = "manual"  # 手動（後台管理員操作，不在三個 tab 內）
+    CONVERSION = "conversion"  # 轉單（訂單成立時的房型標籤，→「轉單」tab）
+
+
+class TagType(str, enum.Enum):
+    """標籤類型"""
+
+    MEMBER = "member"  # 會員標籤
+    INTERACTION = "interaction"  # 互動標籤
 
 
 class TagTriggerLog(Base):
-    """標籤觸發日誌表"""
+    """
+    標籤觸發日誌表
+    每次會員被貼標或觸發既有標籤都寫一筆，供「時段洞察」等統計使用
+    """
 
     __tablename__ = "tag_trigger_logs"
+    __table_args__ = (
+        Index("ix_tag_trigger_logs_member_triggered", "member_id", "triggered_at"),
+    )
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     member_id = Column(
@@ -31,10 +45,23 @@ class TagTriggerLog(Base):
     )
     tag_id = Column(
         BigInteger,
-        ForeignKey("interaction_tags.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
-        comment="標籤ID",
+        comment="標籤ID（interaction_tags.id 或 null；原有 FK 已放寬）",
+    )
+    tag_type = Column(
+        SQLEnum(TagType),
+        nullable=False,
+        default=TagType.INTERACTION,
+        server_default="interaction",
+        comment="標籤類型：member / interaction",
+    )
+    tag_name = Column(
+        String(100),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="標籤名稱快照",
     )
     message_id = Column(
         BigInteger,
@@ -52,8 +79,7 @@ class TagTriggerLog(Base):
     trigger_source = Column(SQLEnum(TriggerSource), nullable=False, comment="觸發來源")
     triggered_at = Column(DateTime, default=datetime.now, nullable=False, comment="觸發時間")
 
-    # 關聯關係
+    # 關聯關係（tag_id 不再硬連 FK）
     member = relationship("Member")
-    tag = relationship("InteractionTag", back_populates="tag_trigger_logs")
     message = relationship("Message", back_populates="tag_trigger_logs")
     campaign = relationship("Campaign")

@@ -538,6 +538,8 @@ async def update_member_tags(
     await db.execute(delete(MemberTag).where(MemberTag.member_id == member_id))
 
     # 2. 新增新的標籤
+    from app.services.tag_trigger_service import record_tag_trigger
+    from app.models.tag_trigger_log import TagType, TriggerSource
     for tag_name in request.tag_names:
         member_tag = MemberTag(
             member_id=member_id,
@@ -546,6 +548,13 @@ async def update_member_tags(
             click_count=1,  # 初始點擊次數為 1
         )
         db.add(member_tag)
+        await record_tag_trigger(
+            db,
+            member_id=member_id,
+            tag_name=tag_name,
+            tag_type=TagType.MEMBER,
+            source=TriggerSource.MANUAL,
+        )
 
     await db.commit()
 
@@ -576,6 +585,8 @@ async def update_member_interaction_tags(
     await db.execute(delete(MemberInteractionTag).where(MemberInteractionTag.member_id == member_id))
 
     # 2. 新增新的互動標籤
+    from app.services.tag_trigger_service import record_tag_trigger
+    from app.models.tag_trigger_log import TagType, TriggerSource
     for tag_name in request.tag_names:
         interaction_tag = MemberInteractionTag(
             member_id=member_id,
@@ -585,6 +596,13 @@ async def update_member_interaction_tags(
             tagged_at=datetime.now(),
         )
         db.add(interaction_tag)
+        await record_tag_trigger(
+            db,
+            member_id=member_id,
+            tag_name=tag_name,
+            tag_type=TagType.INTERACTION,
+            source=TriggerSource.MANUAL,
+        )
 
     await db.commit()
 
@@ -665,6 +683,8 @@ async def batch_update_member_tags(
         member_tags_updated = 0
         existing_tag_names = {tag_name for tag_name, _ in current_member_tags}
 
+        from app.services.tag_trigger_service import record_tag_trigger
+        from app.models.tag_trigger_log import TagType, TriggerSource
         for tag_name in request.member_tags:
             if tag_name not in existing_tag_names:
                 # 只有標籤不存在時才插入
@@ -681,6 +701,14 @@ async def batch_update_member_tags(
             else:
                 # 標籤已存在，計入更新數
                 member_tags_updated += 1
+            # 無論新舊都記錄觸發事件（供時段洞察 heatmap 使用）
+            await record_tag_trigger(
+                db,
+                member_id=member_id,
+                tag_name=tag_name,
+                tag_type=TagType.MEMBER,
+                source=TriggerSource.MANUAL,
+            )
 
         # === 處理互動標籤 (MemberInteractionTag) ===
 
@@ -744,6 +772,13 @@ async def batch_update_member_tags(
             else:
                 # 標籤已存在，計入更新數
                 interaction_tags_updated += 1
+            await record_tag_trigger(
+                db,
+                member_id=member_id,
+                tag_name=tag_name,
+                tag_type=TagType.INTERACTION,
+                source=TriggerSource.MANUAL,
+            )
 
         # 提交事務
         await db.commit()
@@ -854,6 +889,18 @@ async def add_member_interaction_tag(
         tagged_at=datetime.now(),
     )
     db.add(interaction_tag)
+
+    from app.services.tag_trigger_service import record_tag_trigger
+    from app.models.tag_trigger_log import TagType, TriggerSource
+    await record_tag_trigger(
+        db,
+        member_id=member_id,
+        tag_name=tag_name,
+        tag_type=TagType.INTERACTION,
+        source=TriggerSource.MANUAL,
+        message_id=message_id,
+    )
+
     await db.commit()
 
     return SuccessResponse(message="互動標籤新增成功")

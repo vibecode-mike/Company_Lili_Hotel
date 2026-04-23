@@ -97,9 +97,7 @@ class InteractionTag(Base):
     updated_at = Column(DateTime, onupdate=func.now(), comment="更新時間")
 
     # 關聯關係
-    tag_trigger_logs = relationship(
-        "TagTriggerLog", back_populates="tag", cascade="all, delete-orphan"
-    )
+    # 備註：tag_trigger_logs.tag_id 已拿掉 FK（migration 7810b55a4479），不再 back_populates
     interaction_logs = relationship(
         "ComponentInteractionLog", back_populates="interaction_tag"
     )

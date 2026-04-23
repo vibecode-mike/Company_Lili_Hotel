@@ -2110,6 +2110,26 @@ def __track():
                         """, {"mid": member_id, "tag_name": tag_name})
                         logging.info(f"[TRACK] Created member_interaction_tag for member {member_id}, tag '{tag_name}'")
 
+                    # 寫入 tag_trigger_logs（供時段洞察 heatmap 使用）
+                    msg_id_int = None
+                    try:
+                        if message_id_value is not None:
+                            msg_id_int = int(message_id_value)
+                    except (ValueError, TypeError):
+                        msg_id_int = None
+                    execute(f"""
+                        INSERT INTO `{MYSQL_DB}`.`tag_trigger_logs`
+                            (member_id, tag_id, tag_type, tag_name, message_id,
+                             trigger_source, triggered_at, created_at)
+                        VALUES (:mid, :tag_id, 'interaction', :tag_name, :msg_id,
+                                'CLICK', NOW(), NOW())
+                    """, {
+                        "mid": member_id,
+                        "tag_id": tag_id,
+                        "tag_name": tag_name[:100],
+                        "msg_id": msg_id_int,
+                    })
+
                 logging.info(f"[TRACK] Updated tag '{tag_name}' (id={tag_id}) for user {uid}")
         except Exception as e:
             logging.exception(f"[TRACK] Failed to process tag '{tag_name}': {e}")

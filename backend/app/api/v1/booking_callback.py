@@ -233,6 +233,8 @@ async def _persist_paid_booking(data: BookingCallbackRequest) -> bool:
     """
     status=paid 時寫入 bookings 表（INSERT IGNORE 以 order_id 去重）
     會嘗試依 line_uid 查 members.id 塞到 member_id 欄位，查不到就留 NULL
+    若解析得到 member_id，順便寫 tag_trigger_logs（每個房型一筆，trigger_source=CONVERSION）
+    供時段洞察「轉單」tab 統計使用
     回傳 True=寫入成功或已存在；False=例外
     """
     try:
@@ -275,6 +277,33 @@ async def _persist_paid_booking(data: BookingCallbackRequest) -> bool:
                     "paid_at": paid_at,
                 },
             )
+
+            # 寫 tag_trigger_logs（每個房型一筆，trigger_source=CONVERSION）
+            # 房型代碼透過 ROOMTYPE_NAME 映射成中文名作為標籤
+            # member_id 為 NULL 時跳過（tag_trigger_logs.member_id NOT NULL）
+            if member_id:
+                seen_roomtypes = set()
+                for r in data.rooms:
+                    if r.roomtype in seen_roomtypes:
+                        continue
+                    seen_roomtypes.add(r.roomtype)
+                    tag_name = ROOMTYPE_NAME.get(r.roomtype, r.roomtype)[:100]
+                    await db.execute(
+                        _text("""
+                            INSERT INTO tag_trigger_logs
+                                (member_id, tag_id, tag_type, tag_name,
+                                 trigger_source, triggered_at, created_at)
+                            VALUES
+                                (:mid, NULL, 'interaction', :tag_name,
+                                 'CONVERSION', :triggered_at, NOW())
+                        """),
+                        {
+                            "mid": member_id,
+                            "tag_name": tag_name,
+                            "triggered_at": paid_at,
+                        },
+                    )
+
             await db.commit()
         return True
     except Exception:

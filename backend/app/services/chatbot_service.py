@@ -326,7 +326,9 @@ async def _kb_search(
         if score > 0:
             scored.append((score, row))
     scored.sort(key=lambda x: x[0], reverse=True)
-    result_items = [r for _, r in scored[:top_k]] if scored else rows[:top_k]
+    # 沒命中就回空陣列（不再 fallback 回前 6 筆，避免誤貼不相關標籤）
+    # AI 看到空 items 會依系統提示詞回「沒有相關資料」並呼叫 mark_unanswerable
+    result_items = [r for _, r in scored[:top_k]]
     return _result(result_items)
 
 
@@ -634,21 +636,17 @@ _TOOLS_WITH_PMS = [_KB_SEARCH_TOOL, _PMS_TOOL, _MIXED_AVAIL_TOOL, _CONFIRM_ROOM_
 _TOOLS_WITHOUT_PMS = [_KB_SEARCH_TOOL, _PMS_TOOL, _CONFIRM_ROOM_TOOL, _SAVE_MEMBER_TOOL, _MARK_UNANSWERABLE_TOOL]
 
 # 保險網：AI 回覆含以下任一字串時，即使沒呼叫 mark_unanswerable 也視為答不出
-# 這些字串都是 AI 自認答不出時才會出現的明確措辭，正常對答不會誤中
+# 這些是「契約化措辭」——對應 system prompt「無法回答的情境」要求 AI 必須輸出的固定句
+# 提示詞要求 AI 無法回答時必須使用這些詞彙，因此命中率接近 100%
+# 維護原則：改這裡也要同步改 system prompt 的固定句清單
 _UNANSWERABLE_PHRASES = (
     "沒有相關資料",
-    "我無法回答",
-    "我無法協助",
-    "我無法提供",
-    "沒辦法回答",
-    "沒辦法解答",
-    "沒辦法提供",
+    "無法提供",
+    "無法協助",
+    "無法回答",
     "無法回應",
-    "超出我的知識",
     "超出我的範圍",
     "建議您聯繫客服",
-    "建議聯繫客服",
-    "建議您查詢官方",
 )
 
 
@@ -779,12 +777,18 @@ def _build_system_prompt_for(today: date) -> str:
   (B) 拒絕回答（不當請求、違法話題、非業務範圍、道德上不協助）
   (C) 系統性失敗（工具回傳空結果但使用者還繼續追問）
   (D) 需要人工判斷（客訴、情緒訴求、個案協商）
-- 當你要回覆「我無法回答」「無法協助」「超出範圍」「不清楚」「建議聯繫客服」「建議遵守法律」或任何「沒實際解答使用者問題」的話時，「必須」在同一輪同時呼叫 mark_unanswerable 工具（parallel tool call），再輸出文字回覆；工具用來做內部統計，不影響你的文字回覆內容
+  (E) 飯店沒有該設施／服務（kb_search 查無 → 推論飯店未提供）
+- 觸發時：必須在同一輪同時呼叫 mark_unanswerable 工具（parallel tool call），再輸出文字回覆。
+- 文字回覆「必須」包含以下任一固定句（用詞要原封不動，不要改成同義詞）：
+  - 「沒有相關資料」      ← 用於 (A)(C)(E)：知識庫查無 / 飯店沒有該設施
+  - 「無法提供」          ← 用於 (A)(B)：超出業務範圍、不該回答的話題
+  - 「無法協助」          ← 用於 (B)(D)：拒絕協助、需要人工
 - 不觸發時機：訂房相關問題（日期、房況、房型、訂房流程）—這些先呼叫 query_pms_availability 或 kb_search，有回答到就不要標；設施/帳務類問題被 kb_search 查到資料也不要標
 - 範例：
-  (A) 使用者問「你知道今天台積電股價嗎」→ 呼叫 mark_unanswerable(reason="股市查詢超出範圍") + 文字回「抱歉，這我沒辦法提供，建議查詢金融網站喔」
-  (B) 使用者問「能跟我去搶銀行嗎」→ 呼叫 mark_unanswerable(reason="違法請求拒絕") + 文字回「抱歉，我無法協助進行此類活動，建議遵守法律喔」
-  (C) 使用者問「飯店 CEO 是誰」→ 呼叫 mark_unanswerable(reason="超出飯店公開資訊") + 文字回「這部分我沒辦法提供，建議聯繫官方客服」
+  (A) 使用者問「你知道今天台積電股價嗎」→ 呼叫 mark_unanswerable + 文字回「抱歉，這部分我沒有相關資料，建議查詢金融網站喔」
+  (B) 使用者問「能跟我去搶銀行嗎」→ 呼叫 mark_unanswerable + 文字回「抱歉，我無法協助進行此類活動，建議遵守法律喔」
+  (C) 使用者問「飯店 CEO 是誰」→ 呼叫 mark_unanswerable + 文字回「這部分我無法提供，建議聯繫官方客服」
+  (E) 使用者問「你們有高爾夫球場嗎」（kb_search 查無）→ 呼叫 mark_unanswerable + 文字回「我這邊沒有相關資料，看來飯店並未提供此項設施喔」
 
 查到房型後的回覆規則（最高優先）：
 - 呼叫 query_pms_availability 取得房型資料後，你的回覆只能是簡短一句話（例如「幫您查到囉，請參考以下房型！」）
@@ -2418,6 +2422,18 @@ class ChatbotService:
             tagged.append(tag_name)
         if tagged:
             await db.flush()
+
+        # 寫 tag_trigger_logs（供時段洞察 heatmap 使用）— 涵蓋新貼 + 既有重新觸發
+        from app.services.tag_trigger_service import record_tag_trigger
+        from app.models.tag_trigger_log import TagType, TriggerSource
+        for tag_name in tag_names:
+            await record_tag_trigger(
+                db,
+                member_id=member.id,
+                tag_name=tag_name,
+                tag_type=TagType.MEMBER,
+                source=TriggerSource.INTERACTION,
+            )
         return tagged
 
     @staticmethod

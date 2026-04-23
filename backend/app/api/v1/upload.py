@@ -103,7 +103,7 @@ async def upload_image(file: UploadFile = File(...)):
             file_size = len(contents)
 
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"图片处理失败: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"圖片處理失敗：{str(e)}")
 
         # 5. 生成唯一文件名 (強制使用 .jpg)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -126,7 +126,7 @@ async def upload_image(file: UploadFile = File(...)):
             status_code=200,
             content={
                 "code": 200,
-                "message": "上传成功",
+                "message": "上傳成功",
                 "data": {
                     "url": file_url,
                     "filename": unique_filename,
@@ -138,7 +138,7 @@ async def upload_image(file: UploadFile = File(...)):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"上传失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"上傳失敗：{str(e)}")
 
 
 @router.delete("/{filename}", summary="删除图片", description="删除已上传的图片")
@@ -156,7 +156,7 @@ async def delete_image(filename: str):
         file_path = settings.upload_dir_path / filename
 
         if not file_path.exists():
-            raise HTTPException(status_code=404, detail="文件不存在")
+            raise HTTPException(status_code=404, detail="檔案不存在")
 
         # 删除文件
         file_path.unlink()
@@ -165,11 +165,11 @@ async def delete_image(filename: str):
             status_code=200,
             content={
                 "code": 200,
-                "message": "删除成功"
+                "message": "刪除成功"
             }
         )
 
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"删除失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"刪除失敗：{str(e)}")

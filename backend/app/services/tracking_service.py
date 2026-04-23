@@ -257,6 +257,18 @@ class TrackingService:
             db.add(new_tag)
             logger.info(f"Created member_interaction_tag: member_id={member_id}, tag={tag.tag_name}, source={tag.tag_source}")
 
+        # 寫 tag_trigger_logs（供時段洞察 heatmap 使用）— 新貼或重新觸發都記
+        from app.services.tag_trigger_service import record_tag_trigger
+        from app.models.tag_trigger_log import TagType, TriggerSource
+        await record_tag_trigger(
+            db,
+            member_id=member_id,
+            tag_name=tag.tag_name,
+            tag_type=TagType.INTERACTION,
+            source=TriggerSource.CLICK,
+            tag_id=interaction_tag_id,
+        )
+
     async def get_campaign_statistics(
         self,
         db: AsyncSession,

@@ -100,7 +100,7 @@ async def get_quota_status(
 
     except Exception as e:
         logger.error(f"❌ 配额查询失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"配额查询失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"配額查詢失敗：{str(e)}")
 
 
 @router.post("", response_model=MessageDetail)
@@ -174,7 +174,7 @@ async def create_message(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"❌ 创建消息失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"创建消息失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"建立訊息失敗：{str(e)}")
 
 
 @router.put("/{message_id}", response_model=MessageDetail)
@@ -209,7 +209,7 @@ async def update_message(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"❌ 更新消息失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"更新消息失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"更新訊息失敗：{str(e)}")
 
 
 @router.post("/{message_id}/send", response_model=MessageSendResponse)
@@ -253,20 +253,27 @@ async def send_message(
         )
 
         if not result.get("ok"):
-            # 发送失败 - 处理 error (单数) 和 errors (复数) 两种情况
-            error_detail = result.get('errors') or result.get('error') or '未知错误'
-            error_msg = f"发送失败: {error_detail}"
+            # 發送失敗 — 處理 error（單數）和 errors（複數）兩種情況
+            error_detail = result.get('errors') or result.get('error')
+            sent = result.get("sent", 0)
+            failed = result.get("failed") or 0
+            # 沒拿到明確錯誤但 sent=0 → 多半是目標篩選條件沒人符合
+            if not error_detail and sent == 0 and failed == 0:
+                error_detail = "目前無符合目標條件的會員，請確認標籤是否有對應會員"
+            elif not error_detail:
+                error_detail = "未知錯誤，請聯繫系統管理員"
+            error_msg = f"發送失敗：{error_detail}"
             logger.error(f"❌ {error_msg}")
             raise HTTPException(status_code=500, detail=error_msg)
 
-        # 发送成功
+        # 發送成功
         sent_count = result.get("sent", 0)
         failed_count = result.get("failed", 0)
 
-        logger.info(f"✅ 发送完成: 成功 {sent_count}, 失败 {failed_count}")
+        logger.info(f"✅ 發送完成：成功 {sent_count}，失敗 {failed_count}")
 
         return MessageSendResponse(
-            message="发送成功",
+            message="發送成功",
             sent_count=sent_count,
             failed_count=failed_count,
             errors=result.get("errors")
@@ -277,8 +284,8 @@ async def send_message(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ 发送消息失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"发送消息失败: {str(e)}")
+        logger.error(f"❌ 發送訊息失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"發送訊息失敗：{str(e)}")
 
 
 @router.get("/fb/{fb_message_id}")
@@ -465,7 +472,7 @@ async def get_message(
         raise
     except Exception as e:
         logger.error(f"❌ 获取消息详情失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"获取消息详情失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"取得訊息詳情失敗：{str(e)}")
 
 
 @router.delete("/{message_id}", response_model=SuccessResponse)

@@ -581,7 +581,7 @@ Table ComponentInteractionLog {
   carousel_item_id bigint [note: '輪播圖卡片 ID（對應 template_carousel_items.id）']
   interaction_tag_id bigint [note: '互動標籤 ID（對應 interaction_tags.id）']
   component_slot string [note: '模板元件槽位（最大長度 50）']
-  interaction_type enum('button_url') [not null, note: '互動類型：button_url（按鈕網址）']
+  interaction_type enum('image_click','button_message','button_url','button_image','postback') [not null, note: '互動類型：image_click（圖片點擊）/ button_message（按鈕訊息）/ button_url（按鈕網址）/ button_image（按鈕圖片）/ postback（Postback 事件）']
   interaction_value text [note: '互動值（如 URL、訊息內容等）']
   triggered_at timestamp [not null, default: `now()`, note: '觸發時間（UTC）']
   line_event_type string [note: 'LINE 事件類型（最大長度 50）']
@@ -632,11 +632,11 @@ Table Message {
   estimated_send_count int [note: '預計發送好友人數，>= 0。計算時機：發送前根據篩選條件（target_filter）計算符合條件的會員數量。計算邏輯：依 platform 計算：LINE → 查詢 LineFriend is_following=true；Facebook → 查詢 FbFriend is_following=true（若有）；Instagram → 查詢對應好友表。每次發送前即時計算，不長存']
   available_quota int [note: '可用訊息配額餘額，>= 0。資料來源依 platform 而定：LINE → 即時呼叫 LINE Messaging API quota endpoint 並同步更新；Facebook/Instagram：若平台無配額或無配額 API，則 available_quota 設為 NULL 並視為「無限額」且不阻擋發送（僅記錄狀態），若未來提供配額 API，改為同樣即時查詢與驗證']
   thumbnail string(500) [note: '縮圖 URL，上限 500 字元，無圖片則為系統預設圖']
-  flex_message_json text [note: 'Flex Message JSON 內容（選填），由前端 Flex Message Simulator 產生。後端驗證：(1) JSON 格式正確性（可解析）、(2) 基本結構完整性。前端使用 LINE 官方 Simulator 確保符合 LINE Flex Message 規範']
+  flex_message_json mediumtext [note: 'Flex Message JSON 內容（選填，最大 16MB），由前端 Flex Message Simulator 產生。後端驗證：(1) JSON 格式正確性（可解析）、(2) 基本結構完整性。前端使用 LINE 官方 Simulator 確保符合 LINE Flex Message 規範']
   platform string(20) [default: 'LINE', note: '發送平台：LINE / Facebook；Instagram 暫不支援且不允許選取。預設值：LINE。未來若加入 Instagram，需補齊好友表、配額查詢與投遞管線後再開放']
   source_draft_id bigint [ref: > Message.id, note: '來源草稿 ID。當訊息從草稿發布時，記錄原始草稿的 message_id，用於追蹤訊息來源']
   notification_message string(200) [note: '通知推播訊息，上限 200 字元。顯示在手機通知欄的文字內容']
-  fb_message_json text [note: 'Facebook Messenger 訊息 JSON 內容']
+  fb_message_json mediumtext [note: 'Facebook Messenger 訊息 JSON 內容（最大 16MB）']
   created_by bigint [note: '建立者 ID']
   channel_id string(100) [note: '頻道 ID']
   interaction_tags json [note: '互動標籤（JSON 格式）']
@@ -1790,17 +1790,18 @@ Table FaqCategoryField {
   '''
 }
 
-Enum faq_rule_status {
-  draft [note: '測試(未發佈) - 僅測試環境可引用']
-  active [note: '已啟用 - 前台聊天機器人可引用']
-  disabled [note: '已停用 - 不可被引用']
-}
+// faq_rule_status enum 已移除，改為雙維度設計：
+// - status varchar(20): draft/active（發佈狀態）
+// - is_enabled bool: 啟用/停用（獨立於發佈狀態）
+// 原因：三值 enum 無法表達「停用但保留上次發佈快照」的狀態。
+// 雙維度允許停用規則不影響前台已發佈快照，直到下次發佈才同步。
 
 Table FaqRule {
   id bigint [pk, increment, note: '規則唯一識別碼']
   category_id bigint [ref: > FaqCategory.id, not null, note: '所屬大分類 ID']
   content_json text [not null, note: '規則內容，JSON 格式儲存結構化欄位值。如：{"房型名稱":"豪華雙人房","房型特色":"海景、獨立陽台","房價":"3500","人數":"2","間數":"15","url":"https://...","標籤":"豪華房型"}']
-  status faq_rule_status [not null, default: 'draft', note: '規則狀態：draft（測試未發佈）、active（已啟用）、disabled（已停用）']
+  status string(20) [not null, default: 'draft', note: '發佈狀態：draft（未發佈）/ active（已發佈）。停用由 is_enabled 獨立控制']
+  is_enabled bool [not null, default: true, note: '啟用/停用開關。停用時前台已發佈快照不受影響；重新啟用後 status 回到 draft，需重新發佈才上線']
   created_by bigint [ref: > User.id, note: '建立者 User ID']
   updated_by bigint [ref: > User.id, note: '最後更新者 User ID']
   published_at timestamp [note: '最後發佈時間（UTC）']

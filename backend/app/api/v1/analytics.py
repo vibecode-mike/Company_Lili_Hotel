@@ -6,6 +6,7 @@
 - GET /analytics/completed-orders — 完成訂單數（依 bookings.paid_at 計算）
 - GET /analytics/pending-conversations — 需人工介入的對話清單（待回覆 + AI 答不出）
 - GET /analytics/new-members — 新增會員數（預設 source=line，未來可擴充 fb/webchat/all）
+- GET /analytics/time-slot-insights — 時段洞察 heatmap（每日 × 4hr 時段的不重複觸發標籤會員數）
 
 DB 時區：MySQL server timezone = Asia/Taipei，created_at 為台灣時間（見 CLAUDE.md）。
 """
@@ -456,4 +457,254 @@ async def get_new_members(
         source=source,
         total=total,
         daily=daily,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 時段洞察 heatmap
+# ---------------------------------------------------------------------------
+
+
+class TimeSlotInsightsResponseSchema(BaseModel):
+    start_date: str  # 滾動 7 天的起日（含）
+    end_date: str  # 滾動 7 天的迄日（含）
+    channel: str  # line / facebook / webchat
+    total_unique_members: int  # 7 天內至少觸發過一次標籤的不重複會員人數
+    dates: List[str]  # 7 天日期（YYYY-MM-DD）
+    weekdays: List[str]  # 對應週幾（一~日）
+    # 6 列（時段 0:00/4:00/8:00/12:00/16:00/20:00）× 7 欄（日期）
+    # 每 cell = 該時段該天有觸發標籤的不重複會員人數
+    matrix: List[List[int]]
+
+
+_CHANNEL_WHERE = {
+    "line": "m.line_uid IS NOT NULL AND m.line_uid <> ''",
+    "facebook": "m.fb_customer_id IS NOT NULL AND m.fb_customer_id <> ''",
+    "webchat": "m.webchat_uid IS NOT NULL AND m.webchat_uid <> ''",
+}
+
+_WEEKDAY_ZH = ["一", "二", "三", "四", "五", "六", "日"]
+
+
+@router.get("/time-slot-insights", response_model=TimeSlotInsightsResponseSchema)
+async def get_time_slot_insights(
+    channel: str = Query("line", description="渠道：line / facebook / webchat"),
+    end_date: Optional[str] = Query(None, description="滾動 7 天的結束日期（含），預設為昨天"),
+    db: AsyncSession = Depends(get_db),
+) -> TimeSlotInsightsResponseSchema:
+    """
+    時段洞察 heatmap：6 時段 × 7 天，每格為該時段該天至少觸發過一次標籤的不重複會員人數。
+    資料來源 tag_trigger_logs（AI 自動打標 / 點擊 / 手動）。
+    """
+    where_clause = _CHANNEL_WHERE.get(channel) or _CHANNEL_WHERE["line"]
+    if channel not in _CHANNEL_WHERE:
+        channel = "line"
+
+    today = date.today()
+    # 預設 end_date = 今天，7 天區間含今天（today-6 ~ today）
+    end = _parse_date(end_date, today)
+    start = end - timedelta(days=6)
+
+    start_dt = datetime.combine(start, datetime.min.time())
+    end_dt = datetime.combine(end + timedelta(days=1), datetime.min.time())
+
+    # 每個（日期、4hr 時段）算 COUNT(DISTINCT member_id）
+    sql = text(f"""
+        SELECT DATE(t.triggered_at) AS d,
+               FLOOR(HOUR(t.triggered_at) / 4) AS block,
+               COUNT(DISTINCT t.member_id) AS n
+        FROM tag_trigger_logs t
+        JOIN members m ON m.id = t.member_id
+        WHERE t.triggered_at >= :start_dt AND t.triggered_at < :end_dt
+          AND ({where_clause})
+        GROUP BY DATE(t.triggered_at), FLOOR(HOUR(t.triggered_at) / 4)
+    """)
+    rows = (await db.execute(sql, {"start_dt": start_dt, "end_dt": end_dt})).all()
+
+    # 初始化 6x7 全 0 矩陣
+    matrix: List[List[int]] = [[0] * 7 for _ in range(6)]
+    dates: List[str] = [(start + timedelta(days=i)).isoformat() for i in range(7)]
+    weekdays: List[str] = [_WEEKDAY_ZH[(start + timedelta(days=i)).weekday()] for i in range(7)]
+    date_index = {d: i for i, d in enumerate(dates)}
+
+    for row in rows:
+        d_str = row.d.isoformat() if isinstance(row.d, date) else str(row.d)
+        col = date_index.get(d_str)
+        block = int(row.block or 0)
+        if col is not None and 0 <= block < 6:
+            matrix[block][col] = int(row.n or 0)
+
+    # 7 天總不重複會員數（不論時段）
+    total_sql = text(f"""
+        SELECT COUNT(DISTINCT t.member_id) AS n
+        FROM tag_trigger_logs t
+        JOIN members m ON m.id = t.member_id
+        WHERE t.triggered_at >= :start_dt AND t.triggered_at < :end_dt
+          AND ({where_clause})
+    """)
+    total_row = (await db.execute(total_sql, {"start_dt": start_dt, "end_dt": end_dt})).first()
+    total_unique = int(total_row.n) if total_row and total_row.n else 0
+
+    return TimeSlotInsightsResponseSchema(
+        start_date=start.isoformat(),
+        end_date=end.isoformat(),
+        channel=channel,
+        total_unique_members=total_unique,
+        dates=dates,
+        weekdays=weekdays,
+        matrix=matrix,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 時段洞察 — 互動旅程明細
+# ---------------------------------------------------------------------------
+
+
+class JourneyTagSchema(BaseModel):
+    tag: str  # 標籤名
+    conversation: int  # 對話 distinct member 數（trigger_source=INTERACTION）
+    interaction: int  # 互動 distinct member 數（trigger_source=CLICK）
+    conversion: int  # 轉單 distinct member 數（trigger_source=CONVERSION）
+    total: int  # conversation + interaction + conversion
+    last_triggered_at: str  # 該標籤在範圍內最近一次被觸發的時間（ISO）
+
+
+class TimeSlotDetailResponseSchema(BaseModel):
+    start_date: str
+    end_date: str
+    channel: str
+    scope: str  # "range" = 整個 7 天 / "cell" = 單一格
+    cell_date: Optional[str] = None  # scope=cell 時為該格日期
+    cell_block: Optional[int] = None  # scope=cell 時為時段 index 0..5
+    total_unique_members: int  # 該範圍 distinct member 數（不分 source）
+    tags: List[JourneyTagSchema]
+
+
+# trigger_source → tab key
+_SOURCE_TO_TAB = {
+    "INTERACTION": "conversation",
+    "CLICK": "interaction",
+    "CONVERSION": "conversion",
+}
+
+
+@router.get("/time-slot-detail", response_model=TimeSlotDetailResponseSchema)
+async def get_time_slot_detail(
+    channel: str = Query("line", description="渠道：line / facebook / webchat"),
+    end_date: Optional[str] = Query(None, description="滾動 7 天的結束日期（含），預設為今天"),
+    cell_date: Optional[str] = Query(None, description="若提供，僅統計該日期"),
+    cell_block: Optional[int] = Query(None, ge=0, le=5, description="若提供，僅統計該時段（0=00:00,1=04:00,...,5=20:00）"),
+    db: AsyncSession = Depends(get_db),
+) -> TimeSlotDetailResponseSchema:
+    """
+    互動旅程明細：
+    - 不傳 cell_date/cell_block → 整個 7 天範圍
+    - 傳完整的 cell_date + cell_block → 單一格 4 小時範圍
+    每個 tag 計算 distinct member 數（依 trigger_source 拆三組：對話/互動/轉單）
+    排序：total desc，同 total 比 last_triggered_at desc
+    只取「對話/互動/轉單」三種 trigger_source，MANUAL 不計
+    """
+    where_clause = _CHANNEL_WHERE.get(channel) or _CHANNEL_WHERE["line"]
+    if channel not in _CHANNEL_WHERE:
+        channel = "line"
+
+    today = date.today()
+    end = _parse_date(end_date, today)
+    start = end - timedelta(days=6)
+
+    # 決定 scope（單格或全 7 天）
+    if cell_date and cell_block is not None:
+        d = _parse_date(cell_date, end)
+        block_start = datetime.combine(d, datetime.min.time()) + timedelta(hours=cell_block * 4)
+        block_end = block_start + timedelta(hours=4)
+        scope_start = block_start
+        scope_end = block_end
+        scope = "cell"
+        scope_cell_date: Optional[str] = d.isoformat()
+        scope_cell_block: Optional[int] = cell_block
+    else:
+        scope_start = datetime.combine(start, datetime.min.time())
+        scope_end = datetime.combine(end + timedelta(days=1), datetime.min.time())
+        scope = "range"
+        scope_cell_date = None
+        scope_cell_block = None
+
+    # 一次撈出三類 source 的 (tag_name, trigger_source, distinct_member_count, last_triggered_at)
+    sql = text(f"""
+        SELECT t.tag_name AS tag,
+               t.trigger_source AS src,
+               COUNT(DISTINCT t.member_id) AS n,
+               MAX(t.triggered_at) AS last_at
+        FROM tag_trigger_logs t
+        JOIN members m ON m.id = t.member_id
+        WHERE t.triggered_at >= :start_dt AND t.triggered_at < :end_dt
+          AND t.trigger_source IN ('INTERACTION', 'CLICK', 'CONVERSION')
+          AND t.tag_name <> ''
+          AND ({where_clause})
+        GROUP BY t.tag_name, t.trigger_source
+    """)
+    rows = (await db.execute(sql, {"start_dt": scope_start, "end_dt": scope_end})).all()
+
+    # 聚合到 tag 為 key
+    bucket: dict = {}
+    for row in rows:
+        tag = (row.tag or "").strip()
+        if not tag:
+            continue
+        src = (row.src or "").upper()
+        tab_key = _SOURCE_TO_TAB.get(src)
+        if not tab_key:
+            continue
+        entry = bucket.setdefault(
+            tag,
+            {"conversation": 0, "interaction": 0, "conversion": 0, "last_at": None},
+        )
+        entry[tab_key] = int(row.n or 0)
+        last_at = row.last_at
+        if last_at and (entry["last_at"] is None or last_at > entry["last_at"]):
+            entry["last_at"] = last_at
+
+    # 整理 + 排序：total desc, last_at desc, tag asc
+    raw_tags = []
+    for tag, e in bucket.items():
+        total = e["conversation"] + e["interaction"] + e["conversion"]
+        last_at = e["last_at"] or scope_start
+        raw_tags.append((tag, e, total, last_at))
+    # ISO 字串字典序 == 時間先後序，取負 timestamp 簡化排序
+    raw_tags.sort(key=lambda x: (-x[2], -x[3].timestamp(), x[0]))
+
+    tags: List[JourneyTagSchema] = [
+        JourneyTagSchema(
+            tag=tag,
+            conversation=e["conversation"],
+            interaction=e["interaction"],
+            conversion=e["conversion"],
+            total=total,
+            last_triggered_at=last_at.isoformat(),
+        )
+        for tag, e, total, last_at in raw_tags
+    ]
+
+    # range 內 distinct member 數（不分 source，跟 heatmap 的 total_unique_members 同義）
+    total_sql = text(f"""
+        SELECT COUNT(DISTINCT t.member_id) AS n
+        FROM tag_trigger_logs t
+        JOIN members m ON m.id = t.member_id
+        WHERE t.triggered_at >= :start_dt AND t.triggered_at < :end_dt
+          AND t.trigger_source IN ('INTERACTION', 'CLICK', 'CONVERSION')
+          AND ({where_clause})
+    """)
+    total_row = (await db.execute(total_sql, {"start_dt": scope_start, "end_dt": scope_end})).first()
+    total_unique = int(total_row.n) if total_row and total_row.n else 0
+
+    return TimeSlotDetailResponseSchema(
+        start_date=start.isoformat(),
+        end_date=end.isoformat(),
+        channel=channel,
+        scope=scope,
+        cell_date=scope_cell_date,
+        cell_block=scope_cell_block,
+        total_unique_members=total_unique,
+        tags=tags,
     )
