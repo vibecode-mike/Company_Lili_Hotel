@@ -1329,15 +1329,14 @@ export default function InsightsPanel({
                 <p className="text-[14px] text-[#383838] mb-[12px]">
                   1. <span style={{ color: "#B71C1C" }}>{pending?.total ?? 0}則</span>對話待回覆
                 </p>
-                <div className="flex flex-col">
+                <div className="flex flex-col gap-[8px]">
                   {pending && pending.items.length > 0 ? (
                     <>
                       {pending.items.slice(0, 10).map((item, idx, arr) => (
                       <div
                         key={item.thread_id}
-                        className={`flex items-center justify-between py-[10px] ${
-                          idx < arr.length - 1 ? "border-b border-[#f0f6ff]" : ""
-                        }`}
+                        className="flex items-center justify-between py-[8px] px-[12px] rounded-[8px]"
+                        style={{ backgroundColor: idx % 2 === 0 ? "#FFFFFF" : "#FAFAFA" }}
                       >
                         <div className="flex items-center gap-[10px] min-w-0">
                           {item.avatar_url ? (
@@ -1409,15 +1408,14 @@ export default function InsightsPanel({
                   </span>
                   訊息，建議加入知識庫
                 </p>
-                <div className="flex flex-col">
+                <div className="flex flex-col gap-[8px]">
                   {unansweredSnapshot && unansweredSnapshot.top_unanswered.length > 0 ? (
                     <>
                       {unansweredSnapshot.top_unanswered.slice(0, 10).map((q, idx, arr) => (
                       <div
                         key={q.message_id}
-                        className={`flex items-center justify-between py-[10px] ${
-                          idx < arr.length - 1 ? "border-b border-[#f0f6ff]" : ""
-                        }`}
+                        className="flex items-center justify-between min-h-[48px] py-[8px] px-[12px] rounded-[8px]"
+                        style={{ backgroundColor: idx % 2 === 0 ? "#FFFFFF" : "#FAFAFA" }}
                       >
                         <span className="text-[14px] text-[#6e6e6e] truncate" title={q.question}>
                           {q.question || "(無對應提問)"}
