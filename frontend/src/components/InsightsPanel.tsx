@@ -203,6 +203,47 @@ const MOCK_FAQ: FaqItem[] = [
 // ─── 時段洞察 ─ 資料與工具 ─────────────────────
 type Channel = "line" | "facebook" | "nonMember";
 
+// ⚠️ 時段洞察假數據注入（開發展示用）⚠️
+// 為了檢視色塊色階分佈，把 FAKE_HEATMAP_DATES 列出的日期灌固定假值（5-100）；
+// 其他日期維持後端真實資料。最後一欄 4/23 保留真實。
+// 還原方式：把 FAKE_HEATMAP_ENABLED 改為 false（或把這整段 + load 內的注入段落刪掉）。
+const FAKE_HEATMAP_ENABLED = true;
+const FAKE_HEATMAP_DATES = [
+  "2026-04-17",
+  "2026-04-18",
+  "2026-04-19",
+  "2026-04-20",
+  "2026-04-21",
+  "2026-04-22",
+];
+// 每個渠道 6 列（時段）× 6 欄（日期 4/17-4/22）
+const FAKE_HEATMAP_MATRIX: Record<"line" | "facebook" | "nonMember", number[][]> = {
+  line: [
+    [8, 15, 22, 35, 50, 78],
+    [5, 12, 28, 42, 65, 95],
+    [10, 25, 40, 55, 72, 88],
+    [18, 33, 48, 62, 80, 100],
+    [9, 22, 38, 52, 70, 92],
+    [6, 16, 30, 45, 58, 82],
+  ],
+  facebook: [
+    [7, 12, 20, 28, 40, 60],
+    [5, 10, 22, 35, 45, 55],
+    [8, 18, 28, 38, 48, 70],
+    [12, 25, 35, 50, 60, 80],
+    [9, 15, 25, 35, 55, 65],
+    [6, 11, 18, 30, 42, 50],
+  ],
+  nonMember: [
+    [5, 10, 15, 20, 30, 45],
+    [5, 8, 12, 18, 25, 35],
+    [7, 12, 20, 25, 32, 50],
+    [10, 18, 25, 35, 45, 60],
+    [6, 9, 15, 22, 30, 48],
+    [5, 7, 11, 16, 22, 38],
+  ],
+};
+
 const CHANNELS: { key: Channel; label: string; total: number }[] = [
   { key: "line", label: "LINE 會員", total: 389 },
   { key: "facebook", label: "Facebook 會員", total: 79 },
@@ -245,10 +286,12 @@ const JOURNEY_TAGS: Record<Channel, string[]> = {
   nonMember: ["訂房查詢", "活動資訊", "房型介紹", "交通指南", "常見問題"],
 };
 
-// heatmap 色階：從 #FFE08A（少）到 #B8232D（多）— 端點明度差拉大
+// heatmap 色階：兩段漸層 淺黃 → 鮮紅
 // 用 OKLCH 色空間沿色相走，路徑經過橘色、保持高彩度，避免中段變灰。
-const HEATMAP_LOW = "#FFE08A";
-const HEATMAP_HIGH = "#B8232D";
+// 另外 HEATMAP_MAX 用紫紅，專門給「數值等於當前最大值」的那幾格，凸顯極值。
+const HEATMAP_LOW = "#FFEBA8";
+const HEATMAP_HIGH = "#E53845";
+const HEATMAP_MAX = "#CF3868";
 
 function heatColor(t: number): string {
   const clamped = Math.min(1, Math.max(0, t));
@@ -701,6 +744,7 @@ function TimeInsightsSection() {
   const [journeyTags, setJourneyTags] = useState<TimeSlotDetailTag[]>([]);
   const [loadingJourney, setLoadingJourney] = useState(false);
   const [journeyTab, setJourneyTab] = useState<JourneyTab>("overall");
+  const [isJourneyExpanded, setIsJourneyExpanded] = useState<boolean>(false);
   const journeyLabelRef = useRef<HTMLSpanElement>(null);
   const [journeyLeftCol, setJourneyLeftCol] = useState<number>(JOURNEY_LEFT_MIN);
 
@@ -716,6 +760,20 @@ function TimeInsightsSection() {
         );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as TimeSlotInsightsResponse;
+        // ⚠️ 假數據注入（還原：把 FAKE_HEATMAP_ENABLED 設為 false）
+        if (FAKE_HEATMAP_ENABLED) {
+          const fakeRows = FAKE_HEATMAP_MATRIX[ch];
+          data.dates.forEach((dateStr, colIdx) => {
+            const fakeColIdx = FAKE_HEATMAP_DATES.indexOf(dateStr);
+            if (fakeColIdx >= 0) {
+              for (let rowIdx = 0; rowIdx < 6; rowIdx++) {
+                if (data.matrix[rowIdx] && fakeRows[rowIdx]) {
+                  data.matrix[rowIdx][colIdx] = fakeRows[rowIdx][fakeColIdx]!;
+                }
+              }
+            }
+          });
+        }
         setMatrixByChannel((prev) => ({ ...prev, [ch]: data.matrix }));
         setTotalByChannel((prev) => ({ ...prev, [ch]: data.total_unique_members }));
         setApiDates(data.dates);
@@ -758,10 +816,20 @@ function TimeInsightsSection() {
     load();
   }, [channel, cell, apiDates]);
 
+  useEffect(() => {
+    setIsJourneyExpanded(false);
+  }, [journeyTags]);
+
   // 有 API 資料就用；沒有（初始化前）先用 hardcoded mock
   const dateLabels = apiDateLabels ?? getNext7DayLabels();
   const heatmap = matrixByChannel[channel];
   const colorMap = useMemo(() => computeColorMap(heatmap), [heatmap]);
+  // 找出當前 heatmap 的最大值，用來凸顯最高格（可能多格同時最大）
+  const maxHeatValue = useMemo(() => {
+    let m = 0;
+    for (const row of heatmap) for (const v of row) if (v > m) m = v;
+    return m;
+  }, [heatmap]);
   // 沒選 cell：顯示 7 天 distinct member 總數（從 totalByChannel 取）
   // 有選 cell：顯示該格的數值
   const selectedValue = cell
@@ -868,65 +936,80 @@ function TimeInsightsSection() {
               此範圍尚無標籤資料
             </div>
           ) : (
-            journeyTags.map((item) => {
-              const counts: [number, number, number] = [
-                item.conversation,
-                item.interaction,
-                item.conversion,
-              ];
-              const total = counts.reduce((a, b) => a + b, 0);
-              const segments =
-                activeSegIdx === null
-                  ? counts.map((count, idx) => ({
-                      idx,
-                      count,
-                      color: JOURNEY_SEG_COLORS[idx],
-                      widthPct: (count / maxJourneyTotal) * 100,
-                    }))
-                  : [
-                      {
-                        idx: activeSegIdx,
-                        count: counts[activeSegIdx] ?? 0,
-                        color: JOURNEY_SEG_COLORS[activeSegIdx],
-                        widthPct:
-                          ((counts[activeSegIdx] ?? 0) /
-                            maxSegmentCount[activeSegIdx]) *
-                          100,
-                      },
-                    ];
-              const trailingCount =
-                activeSegIdx === null ? total : counts[activeSegIdx] ?? 0;
-              return (
-                <div key={item.tag} className="flex items-center gap-[4px] w-full">
-                  <div className="journey-bar-badge">
-                    <span className="bg-[#f0f6ff] rounded-[8px] px-[8px] py-[4px] min-w-[32px] text-[#0f6beb] text-[16px] leading-[1.5] text-center whitespace-nowrap">
-                      {item.tag}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0 flex items-center gap-[8px]">
-                    <div className="flex-1 min-w-0 bg-[#fafafa] rounded-[4px] overflow-hidden flex items-center">
-                      {segments.map((seg) =>
-                        seg.widthPct <= 0 ? null : (
-                          <div
-                            key={seg.idx}
-                            style={{
-                              width: `${seg.widthPct}%`,
-                              backgroundColor: seg.color,
-                            }}
-                            className="shrink-0 min-w-0 flex items-center justify-center text-white text-[16px] leading-[1.5] py-[10px] px-[4px] whitespace-nowrap overflow-hidden"
-                          >
-                            {seg.count}
-                          </div>
-                        ),
-                      )}
+            <>
+              {(isJourneyExpanded ? journeyTags : journeyTags.slice(0, 10)).map((item) => {
+                const counts: [number, number, number] = [
+                  item.conversation,
+                  item.interaction,
+                  item.conversion,
+                ];
+                const total = counts.reduce((a, b) => a + b, 0);
+                const segments =
+                  activeSegIdx === null
+                    ? counts.map((count, idx) => ({
+                        idx,
+                        count,
+                        color: JOURNEY_SEG_COLORS[idx],
+                        widthPct: (count / maxJourneyTotal) * 100,
+                      }))
+                    : [
+                        {
+                          idx: activeSegIdx,
+                          count: counts[activeSegIdx] ?? 0,
+                          color: JOURNEY_SEG_COLORS[activeSegIdx],
+                          widthPct:
+                            ((counts[activeSegIdx] ?? 0) /
+                              maxSegmentCount[activeSegIdx]) *
+                            100,
+                        },
+                      ];
+                const trailingCount =
+                  activeSegIdx === null ? total : counts[activeSegIdx] ?? 0;
+                return (
+                  <div key={item.tag} className="flex items-center gap-[4px] w-full">
+                    <div className="journey-bar-badge">
+                      <span className="bg-[#f0f6ff] rounded-[8px] px-[8px] py-[4px] min-w-[32px] text-[#0f6beb] text-[16px] leading-[1.5] text-center whitespace-nowrap">
+                        {item.tag}
+                      </span>
                     </div>
-                    <span className="text-[16px] leading-[1.5] text-[#6e6e6e] whitespace-nowrap shrink-0">
-                      {trailingCount} 人
-                    </span>
+                    <div className="flex-1 min-w-0 flex items-center gap-[8px]">
+                      <div className="flex-1 min-w-0 bg-[#fafafa] rounded-[4px] overflow-hidden flex items-center">
+                        {segments.map((seg) =>
+                          seg.widthPct <= 0 ? null : (
+                            <div
+                              key={seg.idx}
+                              style={{
+                                width: `${seg.widthPct}%`,
+                                backgroundColor: seg.color,
+                              }}
+                              className="shrink-0 min-w-0 flex items-center justify-center text-white text-[16px] leading-[1.5] py-[10px] px-[4px] whitespace-nowrap overflow-hidden"
+                            >
+                              {seg.count}
+                            </div>
+                          ),
+                        )}
+                      </div>
+                      <span className="text-[16px] leading-[1.5] text-[#6e6e6e] whitespace-nowrap shrink-0">
+                        {trailingCount} 人
+                      </span>
+                    </div>
                   </div>
+                );
+              })}
+              {journeyTags.length > 10 && (
+                <div className="flex items-center justify-end pl-[16px] w-full">
+                  <button
+                    type="button"
+                    onClick={() => setIsJourneyExpanded((v) => !v)}
+                    className="flex items-center justify-center gap-[4px] p-[8px] rounded-[8px] bg-white hover:bg-[#F5F9FE] active:bg-[#F5F9FE] transition-colors cursor-pointer"
+                  >
+                    <span className="text-[#0f6beb] text-[16px] leading-[1.5] text-center whitespace-nowrap">
+                      {isJourneyExpanded ? "收合" : "查看全部"}
+                    </span>
+                  </button>
                 </div>
-              );
-            })
+              )}
+            </>
           )}
         </div>
       </div>
@@ -1001,7 +1084,13 @@ function TimeInsightsSection() {
                             ? "ring-2 ring-[#0f6beb] ring-inset z-10"
                             : ""
                         }`}
-                        style={{ backgroundColor: heatColor(colorMap[r]?.[c] ?? 0), minHeight: 64 }}
+                        style={{
+                          backgroundColor:
+                            maxHeatValue > 0 && value === maxHeatValue
+                              ? HEATMAP_MAX
+                              : heatColor(colorMap[r]?.[c] ?? 0),
+                          minHeight: 64,
+                        }}
                       >
                         <span className="relative">{value}</span>
                       </button>
@@ -1023,13 +1112,14 @@ function TimeInsightsSection() {
           </div>
         </div>
 
-        {/* 色階圖例（少 → 多） */}
+        {/* 色階圖例：單一連續漸層（黃 → 紅 → 紫紅），2px 圓角 */}
         <div className="flex items-center gap-[4px] pl-[44px]">
           <span className="text-[14px] leading-[1.5] text-[#6e6e6e]">少</span>
           <div
-            className="h-[8px] w-[100px] rounded-[2px]"
+            className="h-[8px] rounded-[2px]"
             style={{
-              backgroundImage: `linear-gradient(in oklch shorter hue 90deg, ${HEATMAP_LOW} 0%, ${HEATMAP_HIGH} 100%)`,
+              width: "110px",
+              background: `linear-gradient(90deg, ${HEATMAP_LOW} 0%, ${HEATMAP_HIGH} 90%, ${HEATMAP_MAX} 100%)`,
             }}
           />
           <span className="text-[14px] leading-[1.5] text-[#6e6e6e]">多</span>

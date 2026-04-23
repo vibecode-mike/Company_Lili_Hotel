@@ -51,7 +51,7 @@ export const getLatestMemberChatTimestamp = (member?: MemberLike): string | unde
  * - 10-60 分鐘：顯示「{x}分鐘前」
  * - 1-24 小時：顯示「{x}小時前」
  * - 1-30 天：顯示「{x}天前」
- * - ≥30 天：顯示「yyyy/mm/dd 前」
+ * - ≥30 天：顯示「yyyy/mm/dd」（不加「前」，絕對日期本身就是時間點）
  */
 export const formatUnansweredTime = (timestamp: string | null | undefined): string | null => {
   if (!timestamp) return null;
@@ -79,7 +79,7 @@ export const formatUnansweredTime = (timestamp: string | null | undefined): stri
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const day = String(date.getDate()).padStart(2, '0');
-      return `${year}/${month}/${day} 前`;
+      return `${year}/${month}/${day}`;
     }
   } catch {
     return null;
