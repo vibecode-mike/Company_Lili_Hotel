@@ -744,7 +744,6 @@ function TimeInsightsSection() {
   const [journeyTags, setJourneyTags] = useState<TimeSlotDetailTag[]>([]);
   const [loadingJourney, setLoadingJourney] = useState(false);
   const [journeyTab, setJourneyTab] = useState<JourneyTab>("overall");
-  const [isJourneyExpanded, setIsJourneyExpanded] = useState<boolean>(false);
   const journeyLabelRef = useRef<HTMLSpanElement>(null);
   const [journeyLeftCol, setJourneyLeftCol] = useState<number>(JOURNEY_LEFT_MIN);
 
@@ -815,10 +814,6 @@ function TimeInsightsSection() {
     if (cell && apiDates.length === 0) return;
     load();
   }, [channel, cell, apiDates]);
-
-  useEffect(() => {
-    setIsJourneyExpanded(false);
-  }, [journeyTags]);
 
   // 有 API 資料就用；沒有（初始化前）先用 hardcoded mock
   const dateLabels = apiDateLabels ?? getNext7DayLabels();
@@ -936,8 +931,7 @@ function TimeInsightsSection() {
               此範圍尚無標籤資料
             </div>
           ) : (
-            <>
-              {(isJourneyExpanded ? journeyTags : journeyTags.slice(0, 10)).map((item) => {
+            journeyTags.map((item) => {
                 const counts: [number, number, number] = [
                   item.conversation,
                   item.interaction,
@@ -995,21 +989,7 @@ function TimeInsightsSection() {
                     </div>
                   </div>
                 );
-              })}
-              {journeyTags.length > 10 && (
-                <div className="flex items-center justify-end pl-[16px] w-full">
-                  <button
-                    type="button"
-                    onClick={() => setIsJourneyExpanded((v) => !v)}
-                    className="flex items-center justify-center gap-[4px] p-[8px] rounded-[8px] bg-white hover:bg-[#F5F9FE] active:bg-[#F5F9FE] transition-colors cursor-pointer"
-                  >
-                    <span className="text-[#0f6beb] text-[16px] leading-[1.5] text-center whitespace-nowrap">
-                      {isJourneyExpanded ? "收合" : "查看全部"}
-                    </span>
-                  </button>
-                </div>
-              )}
-            </>
+            })
           )}
         </div>
       </div>
