@@ -206,7 +206,7 @@ type Channel = "line" | "facebook" | "nonMember";
 const CHANNELS: { key: Channel; label: string; total: number }[] = [
   { key: "line", label: "LINE 會員", total: 389 },
   { key: "facebook", label: "Facebook 會員", total: 79 },
-  { key: "nonMember", label: "非會員（官網）", total: 70 },
+  { key: "nonMember", label: "官網", total: 70 },
 ];
 
 // 每 4 小時為一個區間（6 列）x 7 天（欄）
@@ -806,115 +806,9 @@ function TimeInsightsSection() {
 
   return (
     <div className="bg-white rounded-[16px] flex flex-col w-full overflow-hidden">
-      {/* A. 標題 + 三個渠道 tab */}
-      <div className="flex items-stretch border-b border-solid border-[#ddd] flex-col md:flex-row">
-        <div className="flex-1 min-w-0 px-[20px] py-[16px] flex flex-col gap-[4px] self-stretch">
-          <div className="flex items-center gap-[4px]">
-            <span className="text-[16px] leading-[1.5] text-[#383838]">時段洞察</span>
-            <InfoIcon />
-          </div>
-          <span className="text-[16px] leading-[1.5] text-[#6e6e6e]">
-            描述描述
-          </span>
-        </div>
-        <div className="flex shrink-0 overflow-x-auto">
-          {CHANNELS.map((ch, idx) => {
-            const active = channel === ch.key;
-            return (
-              <button
-                key={ch.key}
-                type="button"
-                onClick={() => setChannel(ch.key)}
-                aria-pressed={active}
-                className={`${idx === 0 ? "md:border-l" : "border-l"} border-solid border-[#ddd] px-[24px] py-[16px] flex flex-col items-start justify-center min-w-[152px] cursor-pointer insights-channel-tab`}
-              >
-                <span className="text-[16px] leading-[1.5] text-[#6e6e6e] whitespace-nowrap">
-                  {ch.label}
-                </span>
-                <span className="text-[32px] leading-[1.5] font-medium text-[#383838] whitespace-nowrap">
-                  {totalByChannel[ch.key] ?? ch.total}人次
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* B. Heatmap：7 欄 x 6 列 + 時間/日期標籤 + 圖例 */}
-      <div className="bg-white border-b border-solid border-[#ddd] px-[20px] py-[16px] flex flex-col gap-[16px]">
-        <div className="overflow-x-auto">
-          <div className="min-w-[720px]">
-            <div
-              className="grid items-stretch"
-              style={{ gridTemplateColumns: "44px repeat(7, minmax(0, 1fr))" }}
-            >
-              {TIME_BLOCKS.map((label, r) => (
-                <Fragment key={`row-${r}`}>
-                  <div
-                    className="pr-[4px] flex flex-col"
-                    style={{ minHeight: 64 }}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className="h-px bg-[#dddddd] rounded-full"
-                    />
-                    <span className="text-left text-[14px] leading-[1.5] text-[#6e6e6e]">
-                      {label}
-                    </span>
-                  </div>
-                  {(heatmap[r] ?? []).map((value, c) => {
-                    const isSelected = cell?.r === r && cell?.c === c;
-                    return (
-                      <button
-                        key={`cell-${r}-${c}`}
-                        type="button"
-                        onClick={() => setCell({ r, c })}
-                        aria-pressed={isSelected}
-                        aria-label={`${dateLabels[c]} ${label} 時段：${value} 人`}
-                        className={`heatmap-cell relative flex items-center justify-center text-[16px] leading-[1.5] text-[#383838] p-[4px] transition-[filter,box-shadow] cursor-pointer focus:outline-none ${
-                          isSelected
-                            ? "ring-2 ring-[#0f6beb] ring-inset z-10"
-                            : ""
-                        }`}
-                        style={{ backgroundColor: heatColor(colorMap[r]?.[c] ?? 0), minHeight: 64 }}
-                      >
-                        <span className="relative">{value}</span>
-                      </button>
-                    );
-                  })}
-                </Fragment>
-              ))}
-              {/* 最底列：日期標籤 */}
-              <div />
-              {dateLabels.map((label, i) => (
-                <div
-                  key={`date-${i}`}
-                  className="pt-[12px] text-center text-[14px] leading-[1.5] text-[#6e6e6e] whitespace-nowrap"
-                >
-                  {label}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* 色階圖例（少 → 多） */}
-        <div className="flex items-center gap-[4px] pl-[44px]">
-          <span className="text-[14px] leading-[1.5] text-[#6e6e6e]">少</span>
-          <div
-            className="h-[8px] w-[100px] rounded-[2px]"
-            style={{
-              backgroundImage: `linear-gradient(in oklch shorter hue 90deg, ${HEATMAP_LOW} 0%, ${HEATMAP_HIGH} 100%)`,
-            }}
-          />
-          <span className="text-[14px] leading-[1.5] text-[#6e6e6e]">多</span>
-          <span className="text-[14px] leading-[1.5] text-[#6e6e6e]">（人）</span>
-        </div>
-      </div>
-
       {/* C. 互動旅程：標題 + 三個彩色底線 tab + stacked bar list */}
       <div
-        className="bg-white flex flex-col"
+        className="bg-white border-b border-solid border-[#ddd] flex flex-col"
         style={{ ["--journey-left-col" as string]: `${journeyLeftCol}px` }}
       >
         <div className="journey-header-row">
@@ -1036,6 +930,112 @@ function TimeInsightsSection() {
           )}
         </div>
       </div>
+
+      {/* A. 標題 + 三個渠道 tab */}
+      <div className="flex items-stretch border-b border-solid border-[#ddd] flex-col md:flex-row">
+        <div className="flex-1 min-w-0 px-[20px] py-[16px] flex flex-col gap-[4px] self-stretch">
+          <div className="flex items-center gap-[4px]">
+            <span className="text-[16px] leading-[1.5] text-[#383838]">時段洞察</span>
+            <InfoIcon />
+          </div>
+          <span className="text-[16px] leading-[1.5] text-[#6e6e6e]">
+            描述描述
+          </span>
+        </div>
+        <div className="flex shrink-0 overflow-x-auto">
+          {CHANNELS.filter((ch) => ch.key !== "facebook").map((ch, idx) => {
+            const active = channel === ch.key;
+            return (
+              <button
+                key={ch.key}
+                type="button"
+                onClick={() => setChannel(ch.key)}
+                aria-pressed={active}
+                className={`${idx === 0 ? "md:border-l" : "border-l"} border-solid border-[#ddd] px-[24px] py-[16px] flex flex-col items-start justify-center min-w-[152px] cursor-pointer insights-channel-tab`}
+              >
+                <span className="text-[16px] leading-[1.5] text-[#6e6e6e] whitespace-nowrap">
+                  {ch.label}
+                </span>
+                <span className="text-[32px] leading-[1.5] font-medium text-[#383838] whitespace-nowrap">
+                  {totalByChannel[ch.key] ?? ch.total}人次
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* B. Heatmap：7 欄 x 6 列 + 時間/日期標籤 + 圖例 */}
+      <div className="bg-white px-[20px] py-[16px] flex flex-col gap-[16px]">
+        <div className="overflow-x-auto">
+          <div className="min-w-[720px]">
+            <div
+              className="grid items-stretch"
+              style={{ gridTemplateColumns: "44px repeat(7, minmax(0, 1fr))" }}
+            >
+              {TIME_BLOCKS.map((label, r) => (
+                <Fragment key={`row-${r}`}>
+                  <div
+                    className="pr-[4px] flex flex-col"
+                    style={{ minHeight: 64 }}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="h-px bg-[#dddddd] rounded-full"
+                    />
+                    <span className="text-left text-[14px] leading-[1.5] text-[#6e6e6e]">
+                      {label}
+                    </span>
+                  </div>
+                  {(heatmap[r] ?? []).map((value, c) => {
+                    const isSelected = cell?.r === r && cell?.c === c;
+                    return (
+                      <button
+                        key={`cell-${r}-${c}`}
+                        type="button"
+                        onClick={() => setCell({ r, c })}
+                        aria-pressed={isSelected}
+                        aria-label={`${dateLabels[c]} ${label} 時段：${value} 人`}
+                        className={`heatmap-cell relative flex items-center justify-center text-[16px] leading-[1.5] text-[#383838] p-[4px] transition-[filter,box-shadow] cursor-pointer focus:outline-none ${
+                          isSelected
+                            ? "ring-2 ring-[#0f6beb] ring-inset z-10"
+                            : ""
+                        }`}
+                        style={{ backgroundColor: heatColor(colorMap[r]?.[c] ?? 0), minHeight: 64 }}
+                      >
+                        <span className="relative">{value}</span>
+                      </button>
+                    );
+                  })}
+                </Fragment>
+              ))}
+              {/* 最底列：日期標籤 */}
+              <div />
+              {dateLabels.map((label, i) => (
+                <div
+                  key={`date-${i}`}
+                  className="pt-[12px] text-center text-[14px] leading-[1.5] text-[#6e6e6e] whitespace-nowrap"
+                >
+                  {label}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* 色階圖例（少 → 多） */}
+        <div className="flex items-center gap-[4px] pl-[44px]">
+          <span className="text-[14px] leading-[1.5] text-[#6e6e6e]">少</span>
+          <div
+            className="h-[8px] w-[100px] rounded-[2px]"
+            style={{
+              backgroundImage: `linear-gradient(in oklch shorter hue 90deg, ${HEATMAP_LOW} 0%, ${HEATMAP_HIGH} 100%)`,
+            }}
+          />
+          <span className="text-[14px] leading-[1.5] text-[#6e6e6e]">多</span>
+          <span className="text-[14px] leading-[1.5] text-[#6e6e6e]">（人）</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1076,6 +1076,8 @@ export default function InsightsPanel({
   const [newMembersPrev, setNewMembersPrev] = useState<NewMembersResponse | null>(null);
   // 待回覆對話（不受 period 影響，是整體未處理的 snapshot）
   const [pending, setPending] = useState<PendingConversationsResponse | null>(null);
+  // 行動建議 - AI 未能回答快照（不受 period 影響，固定範圍載入一次，排序由後端做 created_at DESC）
+  const [unansweredSnapshot, setUnansweredSnapshot] = useState<AiCoverageResponse | null>(null);
 
   useEffect(() => {
     const curr = getPeriodRange(period, "current");
@@ -1130,6 +1132,21 @@ export default function InsightsPanel({
         setPending((await res.json()) as PendingConversationsResponse);
       })
       .catch((err) => console.error("[InsightsPanel] load pending conversations failed:", err));
+  }, []);
+
+  // 行動建議 - AI 未能回答：只載一次，用近 365 天固定範圍，與 period 脫鉤
+  // 後端已用 ORDER BY created_at DESC，直接符合「越新越前面」
+  useEffect(() => {
+    const today = new Date();
+    const startDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 364);
+    const endStr = fmtDate(today);
+    const startStr = fmtDate(startDay);
+    apiGet(`/api/v1/analytics/ai-coverage?start_date=${startStr}&end_date=${endStr}&top_n=50`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        setUnansweredSnapshot((await res.json()) as AiCoverageResponse);
+      })
+      .catch((err) => console.error("[InsightsPanel] load unanswered snapshot failed:", err));
   }, []);
 
   // KPI 卡顯示值（本期覆蓋率 + 相較上一期的趨勢）
@@ -1313,19 +1330,19 @@ export default function InsightsPanel({
                 </div>
               </div>
 
-              {/* 2. AI 未能回答的訊息（本月） */}
+              {/* 2. AI 未能回答的訊息（獨立於頂部 period，近 365 天快照） */}
               <div>
                 <p className="text-[14px] text-[#383838] mb-[12px]">
                   2. AI 未能回答
                   <span style={{ color: "#B71C1C" }}>
-                    {aiCoverage?.unanswered ?? 0}則
+                    {unansweredSnapshot?.unanswered ?? 0}則
                   </span>
                   訊息，建議加入知識庫
                 </p>
                 <div className="flex flex-col">
-                  {aiCoverage && aiCoverage.top_unanswered.length > 0 ? (
+                  {unansweredSnapshot && unansweredSnapshot.top_unanswered.length > 0 ? (
                     <>
-                      {aiCoverage.top_unanswered.slice(0, 10).map((q, idx, arr) => (
+                      {unansweredSnapshot.top_unanswered.slice(0, 10).map((q, idx, arr) => (
                       <div
                         key={q.message_id}
                         className={`flex items-center justify-between py-[10px] ${
@@ -1355,7 +1372,7 @@ export default function InsightsPanel({
                         </div>
                       </div>
                       ))}
-                      {aiCoverage.top_unanswered.length > 10 && (
+                      {unansweredSnapshot.top_unanswered.length > 10 && (
                         <div className="flex items-center justify-end pl-[16px] w-full">
                           <button
                             type="button"
@@ -1371,7 +1388,7 @@ export default function InsightsPanel({
                     </>
                   ) : (
                     <div className="py-[10px] text-[13px] text-[#a8a8a8]">
-                      目前本月沒有 AI 答不出的問題
+                      目前沒有 AI 答不出的問題
                     </div>
                   )}
                 </div>
