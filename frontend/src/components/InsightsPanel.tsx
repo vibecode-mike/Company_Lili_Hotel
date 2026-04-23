@@ -245,7 +245,7 @@ const FAKE_HEATMAP_MATRIX: Record<"line" | "facebook" | "nonMember", number[][]>
 };
 
 const CHANNELS: { key: Channel; label: string; total: number }[] = [
-  { key: "line", label: "LINE 會員", total: 389 },
+  { key: "line", label: "LINE", total: 389 },
   { key: "facebook", label: "Facebook 會員", total: 79 },
   { key: "nonMember", label: "官網", total: 70 },
 ];
@@ -830,6 +830,16 @@ function TimeInsightsSection() {
   const selectedValue = cell
     ? (heatmap[cell.r]?.[cell.c] ?? 0)
     : (totalByChannel[channel] ?? 0);
+  const journeySubtitle = (() => {
+    if (!cell) return "近 7 天的統計";
+    const dateStr = apiDates[cell.c];
+    if (!dateStr) return "近 7 天的統計";
+    const [, mm, dd] = dateStr.split("-");
+    const startHour = Number(TIME_BLOCKS[cell.r].split(":")[0]);
+    const endHour = startHour + 4;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${Number(mm)}/${Number(dd)} ${pad(startHour)}:00-${pad(endHour)}:00`;
+  })();
   const maxJourneyTotal = useMemo(
     () => Math.max(1, ...journeyTags.map((t) => t.conversation + t.interaction + t.conversion)),
     [journeyTags],
@@ -881,15 +891,22 @@ function TimeInsightsSection() {
             aria-pressed={journeyTab === "overall"}
             className="journey-label-col insights-channel-tab"
           >
-            <span
-              ref={journeyLabelRef}
-              className="text-[16px] leading-[1.5] text-[#6e6e6e] whitespace-nowrap"
-            >
-              此{" "}
-              <span className="font-medium text-[#383838]">{selectedValue}</span>{" "}
-              人次的互動旅程
-            </span>
-            <InfoIcon />
+            <div className="flex flex-col gap-[4px]">
+              <div className="flex items-center gap-[4px]">
+                <span
+                  ref={journeyLabelRef}
+                  className="text-[16px] leading-[1.5] text-[#6e6e6e] whitespace-nowrap"
+                >
+                  此{" "}
+                  <span className="font-medium text-[#383838]">{selectedValue}</span>{" "}
+                  人次的互動旅程
+                </span>
+                <InfoIcon />
+              </div>
+              <span className="text-[16px] leading-[1.5] text-[#6e6e6e] whitespace-nowrap">
+                {journeySubtitle}
+              </span>
+            </div>
           </button>
           <div className="journey-tabs-col">
             {(
@@ -1146,8 +1163,10 @@ export default function InsightsPanel({
   const [newMembersPrev, setNewMembersPrev] = useState<NewMembersResponse | null>(null);
   // 待回覆對話（不受 period 影響，是整體未處理的 snapshot）
   const [pending, setPending] = useState<PendingConversationsResponse | null>(null);
+  const [isPendingExpanded, setIsPendingExpanded] = useState<boolean>(false);
   // 行動建議 - AI 未能回答快照（不受 period 影響，固定範圍載入一次，排序由後端做 created_at DESC）
   const [unansweredSnapshot, setUnansweredSnapshot] = useState<AiCoverageResponse | null>(null);
+  const [isAiUnansweredExpanded, setIsAiUnansweredExpanded] = useState<boolean>(false);
 
   useEffect(() => {
     const curr = getPeriodRange(period, "current");
@@ -1326,13 +1345,13 @@ export default function InsightsPanel({
 
               {/* 1. 待回覆對話（含：使用者訊息無人回 + AI 被標 unanswered 的對話） */}
               <div>
-                <p className="text-[14px] text-[#383838] mb-[12px]">
+                <p className="text-[14px] leading-[1.5] text-[#383838] mb-[12px]">
                   1. <span style={{ color: "#B71C1C" }}>{pending?.total ?? 0}則</span>對話待回覆
                 </p>
                 <div className="flex flex-col gap-[8px]">
                   {pending && pending.items.length > 0 ? (
                     <>
-                      {pending.items.slice(0, 10).map((item, idx, arr) => (
+                      {(isPendingExpanded ? pending.items : pending.items.slice(0, 10)).map((item, idx, arr) => (
                       <div
                         key={item.thread_id}
                         className="flex items-center justify-between py-[8px] px-[12px] rounded-[8px]"
@@ -1350,15 +1369,15 @@ export default function InsightsPanel({
                               {item.display_name?.[0] ?? "?"}
                             </div>
                           )}
-                          <span className="text-[14px] text-[#0f6beb] font-medium shrink-0 max-w-[120px] truncate">
+                          <span className="text-[16px] leading-[1.5] text-[#0f6beb] font-medium shrink-0 max-w-[120px] truncate">
                             {item.display_name}
                           </span>
-                          <span className="text-[14px] text-[#383838] truncate" title={item.question}>
+                          <span className="text-[16px] leading-[1.5] text-[#383838] truncate" title={item.question}>
                             {item.question}
                           </span>
                         </div>
                         <div className="flex items-center gap-[16px] shrink-0 ml-[16px]">
-                          <span className="text-[12px] text-[#a8a8a8]">
+                          <span className="text-[16px] leading-[1.5] text-[#6e6e6e] text-right min-w-[120px]">
                             {formatUnansweredTime(item.question_at) || ""}
                           </span>
                           <button
@@ -1370,7 +1389,7 @@ export default function InsightsPanel({
                                 : item.thread_id;
                               navigate("chat-room", { memberId: mid, channel: "LINE" });
                             }}
-                            className="text-[#0f6beb] text-[14px] hover:underline cursor-pointer"
+                            className="text-[#0f6beb] text-[16px] leading-[1.5] text-center hover:underline cursor-pointer"
                           >
                             查看詳情
                           </button>
@@ -1378,14 +1397,14 @@ export default function InsightsPanel({
                       </div>
                       ))}
                       {pending.items.length > 10 && (
-                        <div className="flex items-center justify-end pl-[16px] w-full">
+                        <div className="flex items-center justify-end w-full">
                           <button
                             type="button"
-                            onClick={() => {}}
-                            className="flex items-center justify-center p-[8px] rounded-[8px] cursor-pointer hover:bg-[#f0f6ff] transition-colors"
+                            onClick={() => setIsPendingExpanded((v) => !v)}
+                            className="flex items-center justify-center w-[80px] p-[8px] rounded-[8px] cursor-pointer hover:bg-[#f0f6ff] transition-colors"
                           >
                             <span className="text-[#0f6beb] text-[16px] leading-[1.5] whitespace-nowrap">
-                              查看全部
+                              {isPendingExpanded ? "收合" : "查看全部"}
                             </span>
                           </button>
                         </div>
@@ -1401,7 +1420,7 @@ export default function InsightsPanel({
 
               {/* 2. AI 未能回答的訊息（獨立於頂部 period，近 365 天快照） */}
               <div>
-                <p className="text-[14px] text-[#383838] mb-[12px]">
+                <p className="text-[14px] leading-[1.5] text-[#383838] mb-[12px]">
                   2. AI 未能回答
                   <span style={{ color: "#B71C1C" }}>
                     {unansweredSnapshot?.unanswered ?? 0}則
@@ -1411,17 +1430,17 @@ export default function InsightsPanel({
                 <div className="flex flex-col gap-[8px]">
                   {unansweredSnapshot && unansweredSnapshot.top_unanswered.length > 0 ? (
                     <>
-                      {unansweredSnapshot.top_unanswered.slice(0, 10).map((q, idx, arr) => (
+                      {(isAiUnansweredExpanded ? unansweredSnapshot.top_unanswered : unansweredSnapshot.top_unanswered.slice(0, 10)).map((q, idx, arr) => (
                       <div
                         key={q.message_id}
                         className="flex items-center justify-between min-h-[48px] py-[8px] px-[12px] rounded-[8px]"
                         style={{ backgroundColor: idx % 2 === 0 ? "#FFFFFF" : "#FAFAFA" }}
                       >
-                        <span className="text-[14px] text-[#6e6e6e] truncate" title={q.question}>
+                        <span className="text-[16px] leading-[1.5] text-[#6e6e6e] truncate" title={q.question}>
                           {q.question || "(無對應提問)"}
                         </span>
                         <div className="flex items-center gap-[16px] shrink-0 ml-[16px]">
-                          <span className="text-[12px] text-[#a8a8a8]">
+                          <span className="text-[16px] leading-[1.5] text-[#6e6e6e] text-right min-w-[120px]">
                             {formatUnansweredTime(q.created_at) || ""}
                           </span>
                           <button
@@ -1433,7 +1452,7 @@ export default function InsightsPanel({
                                 replyType: "keyword",
                               });
                             }}
-                            className="text-[#0f6beb] text-[14px] hover:underline cursor-pointer"
+                            className="text-[#0f6beb] text-[16px] leading-[1.5] text-center hover:underline cursor-pointer"
                           >
                             加入知識庫
                           </button>
@@ -1441,14 +1460,14 @@ export default function InsightsPanel({
                       </div>
                       ))}
                       {unansweredSnapshot.top_unanswered.length > 10 && (
-                        <div className="flex items-center justify-end pl-[16px] w-full">
+                        <div className="flex items-center justify-end w-full">
                           <button
                             type="button"
-                            onClick={() => {}}
-                            className="flex items-center justify-center p-[8px] rounded-[8px] cursor-pointer hover:bg-[#f0f6ff] transition-colors"
+                            onClick={() => setIsAiUnansweredExpanded((v) => !v)}
+                            className="flex items-center justify-center w-[80px] p-[8px] rounded-[8px] cursor-pointer hover:bg-[#f0f6ff] transition-colors"
                           >
                             <span className="text-[#0f6beb] text-[16px] leading-[1.5] whitespace-nowrap">
-                              查看全部
+                              {isAiUnansweredExpanded ? "收合" : "查看全部"}
                             </span>
                           </button>
                         </div>
