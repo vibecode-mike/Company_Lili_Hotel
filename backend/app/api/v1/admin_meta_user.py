@@ -165,7 +165,7 @@ async def get_meta_user_profile(
         "line_uid": member.line_uid or "",
         "line_display_name": member.line_display_name or "",
         "line_avatar": member.line_avatar or "",
-        "channel_id": member.channel_id or "",
+        "channel_id": member.line_channel_id or "",
         # Facebook 渠道
         "fb_customer_id": member.fb_customer_id or "",
         "fb_customer_name": member.fb_customer_name or "",
