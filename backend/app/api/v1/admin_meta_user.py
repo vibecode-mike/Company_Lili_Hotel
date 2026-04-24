@@ -138,16 +138,20 @@ async def get_meta_user_profile(
             "tag_type": 1  # 會員標籤
         })
 
-    # 互動標籤 (tag_type: 2)
+    # 互動標籤 (tag_type: 2) / 轉單標籤 (tag_type: 3)
+    # 同一張表 member_interaction_tags，依 tag_source 區分：
+    #   tag_source='booking_conversion' → 轉單標籤
+    #   其他（CRM/訊息模板/問券模板/auto_click 等） → 互動標籤
     interaction_tags_result = await db.execute(
         select(MemberInteractionTag).where(MemberInteractionTag.member_id == member.id)
     )
     for tag in interaction_tags_result.scalars():
+        is_conversion = tag.tag_source == "booking_conversion"
         tags.append({
             "id": tag.id,
             "name": tag.tag_name,
             "tag": tag.tag_name,
-            "tag_type": 2  # 互動標籤
+            "tag_type": 3 if is_conversion else 2,
         })
 
     # 4. 返回完整會員資料（與 /api/v1/members/{id} 格式相容）

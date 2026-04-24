@@ -20,6 +20,7 @@ export interface MemberInfoPanelCompleteProps {
   member: Member;
   memberTags?: string[];
   interactionTags?: string[];
+  conversionTags?: string[];
   onEditTags?: () => void;
   /** 渠道名稱（粉專名/頻道名），優先使用此值 */
   channelName?: string | null;
@@ -45,7 +46,7 @@ const getMemberString = (member?: Member, keys: string[] = [], fallback = ''): s
   return fallback;
 };
 
-export default function MemberInfoPanelComplete({ member, memberTags, interactionTags, onEditTags, channelName: propChannelName }: MemberInfoPanelCompleteProps) {
+export default function MemberInfoPanelComplete({ member, memberTags, interactionTags, conversionTags, onEditTags, channelName: propChannelName }: MemberInfoPanelCompleteProps) {
   const [isEditing, setIsEditing] = React.useState(false);
   const [birthdayPopoverOpen, setBirthdayPopoverOpen] = React.useState(false);
   const [realName, setRealName] = React.useState(
@@ -70,7 +71,8 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
 
   const hasMemberTags = Boolean(memberTags && memberTags.length > 0);
   const hasInteractionTags = Boolean(interactionTags && interactionTags.length > 0);
-  const shouldShowTagSection = hasMemberTags || hasInteractionTags || Boolean(onEditTags);
+  const hasConversionTags = Boolean(conversionTags && conversionTags.length > 0);
+  const shouldShowTagSection = hasMemberTags || hasInteractionTags || hasConversionTags || Boolean(onEditTags);
 
   const createdTimeDisplay = formatMemberDateTime(
     member?.createTime || (member as any)?.created_at || (member as any)?.create_time || (member as any)?.createdAt
@@ -802,7 +804,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
             </div>
 
             {/* Interaction Tags */}
-            <div className="flex flex-col gap-[8px] w-full relative pb-[4px]">
+            <div className="flex flex-col gap-[8px] w-full">
               <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] text-[#383838]">
                 互動標籤
               </p>
@@ -819,6 +821,27 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
                 </div>
               ) : (
                 <p className="text-[#6e6e6e] text-[14px]">尚未設定互動標籤</p>
+              )}
+            </div>
+
+            {/* 轉單標籤（訂房成功後自動寫入，不提供編輯）— 編輯 icon 掛在這區底下對齊 */}
+            <div className="flex flex-col gap-[8px] w-full relative pb-[4px]">
+              <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] text-[#383838]">
+                轉單標籤
+              </p>
+              {hasConversionTags && conversionTags ? (
+                <div className="flex flex-wrap gap-[8px]">
+                  {conversionTags.map((tag, index) => (
+                    <span
+                      key={`conversion-${index}`}
+                      className="bg-[#f0f6ff] text-[#0f6beb] px-[12px] py-[4px] rounded-[8px] text-[14px] font-medium"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[#6e6e6e] text-[14px]">尚未有轉單紀錄</p>
               )}
               {onEditTags && (
                 <button

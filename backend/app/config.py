@@ -83,6 +83,9 @@ class Settings(BaseSettings):
     # 預設房型圖片 URL（KB 無圖時 fallback）
     DEFAULT_ROOM_IMAGE_URL: str = ""
 
+    # 測試用：啟用 1 元測試房 TT 的假庫存注入（PMS availability 回 data=[] 時補上）
+    TEST_ROOM_TT_ENABLED: str = "0"
+
     # 路由配置
     UPLOAD_ROUTE_PREFIX: str = "/uploads"
 

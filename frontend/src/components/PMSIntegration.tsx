@@ -1490,292 +1490,6 @@ const PMSDataTable = memo(function PMSDataTable({
   );
 });
 
-// ------- 串接設定 Tab -------
-const SYNC_OPTIONS = [
-  "每 1 分鐘",
-  "每 5 分鐘",
-  "每 10 分鐘",
-  "每 15 分鐘",
-  "每 30 分鐘",
-  "每 60 分鐘",
-];
-
-const EyeToggle = memo(function EyeToggle({
-  show,
-  onToggle,
-}: {
-  show: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      style={{ color: "#9E9E9E" }}
-      className="shrink-0 hover:text-[#383838] transition-colors cursor-pointer p-0 border-none bg-transparent"
-      tabIndex={-1}
-      aria-label={show ? "隱藏" : "顯示"}
-    >
-      <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
-        {show ? (
-          <>
-            <path
-              d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <circle
-              cx="12"
-              cy="12"
-              r="3"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            />
-          </>
-        ) : (
-          <>
-            <path
-              d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <line
-              x1="1"
-              y1="1"
-              x2="23"
-              y2="23"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-          </>
-        )}
-      </svg>
-    </button>
-  );
-});
-
-const PMSConnectionSettings = memo(function PMSConnectionSettings() {
-  const [pmsUrl, setPmsUrl] = useState("https://api.lilihotel.com/v2");
-  const [apiKey, setApiKey] = useState("");
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [syncFreq, setSyncFreq] = useState("每 5 分鐘");
-  const [webhookUrl, setWebhookUrl] = useState(
-    "https://starbit.io/webhook/pms/abc123",
-  );
-  const [testing, setTesting] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const { showToast } = useToast();
-
-  const runTest = useCallback(async () => {
-    setTesting(true);
-    try {
-      // 使用 FAQ PMS connection test endpoint (訂房 category)
-      const res = await apiPost("/api/v1/faq/categories/697/pms-connection/test", {});
-      const data = res as any;
-      showToast(data?.message || "連線測試成功", "success");
-      return true;
-    } catch (e: any) {
-      const detail = e?.detail || e?.message || "連線測試失敗";
-      showToast(String(detail), "error");
-      return false;
-    } finally {
-      setTesting(false);
-    }
-  }, [showToast]);
-
-  const handleSave = useCallback(async () => {
-    setSaving(true);
-    // 規格：先執行連線測試，成功才儲存
-    const ok = await runTest();
-    if (ok) {
-      try {
-        await apiPut("/api/v1/faq/categories/697/pms-connection/toggle", { status: "enabled" });
-        showToast("連線測試成功，PMS 已啟用", "success");
-      } catch {
-        showToast("PMS 啟用失敗", "error");
-      }
-    }
-    setSaving(false);
-  }, [runTest, showToast]);
-
-  const helperStyle: React.CSSProperties = { color: "#9E9E9E" };
-
-  return (
-    <div className="flex flex-col items-start px-[12px] py-[16px] w-full">
-      <div className="flex flex-col gap-[32px] items-start shrink-0 w-full">
-        {/* PMS Endpoint URL */}
-        <div className="pms-field-row">
-          <div className="pms-label-col">
-            <div className="pms-label-inner flex gap-[2px] items-center">
-              <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[24px] text-[#383838] shrink-0">
-                PMS Endpoint URL
-              </p>
-              <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[24px] text-[#f44336] shrink-0">
-                *
-              </p>
-            </div>
-            <p
-              style={helperStyle}
-              className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5]"
-            >
-              PMS 系統的 API 端點位址
-            </p>
-          </div>
-          <div className="pms-input-col">
-            <div className="bg-white flex items-center min-h-[56px] w-full p-[16px] rounded-[8px]">
-              <input
-                type="text"
-                value={pmsUrl}
-                onChange={(e) => setPmsUrl(e.target.value)}
-                placeholder="https://api.example.com/v2"
-                className="flex-1 min-w-0 font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[24px] text-[#383838] bg-transparent border-none outline-none"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* API Key */}
-        <div className="pms-field-row">
-          <div className="pms-label-col">
-            <div className="pms-label-inner flex gap-[2px] items-center">
-              <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[24px] text-[#383838] shrink-0">
-                API Key
-              </p>
-              <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[24px] text-[#f44336] shrink-0">
-                *
-              </p>
-            </div>
-            <p
-              style={helperStyle}
-              className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5]"
-            >
-              用於身份驗證的金鑰，請妥善保管
-            </p>
-          </div>
-          <div className="pms-input-col">
-            <div className="bg-white flex items-center min-h-[56px] w-full p-[16px] rounded-[8px] gap-[8px]">
-              <input
-                type={showApiKey ? "text" : "password"}
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-…"
-                className="flex-1 min-w-0 font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[24px] text-[#383838] bg-transparent border-none outline-none"
-              />
-              <EyeToggle
-                show={showApiKey}
-                onToggle={() => setShowApiKey((v) => !v)}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* 同步頻率 */}
-        <div className="pms-field-row">
-          <div className="pms-label-col">
-            <div className="pms-label-inner flex gap-[2px] items-center">
-              <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[24px] text-[#383838] shrink-0">
-                同步頻率
-              </p>
-              <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[24px] text-[#f44336] shrink-0">
-                *
-              </p>
-            </div>
-            <p
-              style={helperStyle}
-              className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5]"
-            >
-              資料自動同步的時間間隔
-            </p>
-          </div>
-          <div className="pms-input-col">
-            <div className="relative bg-white inline-flex items-center justify-center min-h-[56px] p-[16px] rounded-[8px] w-fit">
-              <div className="flex gap-[8px] items-center pointer-events-none select-none">
-                <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#383838] whitespace-nowrap">
-                  {syncFreq}
-                </p>
-                <ArrowDownIcon />
-              </div>
-              <select
-                value={syncFreq}
-                onChange={(e) => setSyncFreq(e.target.value)}
-                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-              >
-                {SYNC_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Webhook 回傳 URL */}
-        <div className="pms-field-row">
-          <div className="pms-label-col">
-            <div className="pms-label-inner flex gap-[2px] items-center">
-              <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[24px] text-[#383838] shrink-0">
-                Webhook 回傳 URL
-              </p>
-              <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[24px] text-[#f44336] shrink-0">
-                *
-              </p>
-            </div>
-            <p
-              style={helperStyle}
-              className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5]"
-            >
-              PMS 事件推送的接收位址
-            </p>
-          </div>
-          <div className="pms-input-col">
-            <div className="bg-white flex items-center min-h-[56px] w-full p-[16px] rounded-[8px]">
-              <input
-                type="text"
-                value={webhookUrl}
-                onChange={(e) => setWebhookUrl(e.target.value)}
-                placeholder="https://…"
-                className="flex-1 min-w-0 font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[24px] text-[#383838] bg-transparent border-none outline-none"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex gap-[8px] items-center justify-end shrink-0 w-full">
-          <div className="flex flex-row items-center self-stretch">
-            <button
-              type="button"
-              disabled={testing}
-              onClick={runTest}
-              className="flex gap-[2px] h-full items-center justify-center min-w-[72px] p-[8px] rounded-[12px] shrink-0 cursor-pointer hover:bg-[#f0f6ff] transition-colors disabled:opacity-50"
-            >
-              <span className="flex-[1_0_0] font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#0f6beb] text-center">
-                {testing ? "測試中…" : "測試"}
-              </span>
-            </button>
-          </div>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={handleSave}
-            className="bg-[#242424] flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] shrink-0 w-[88px] cursor-pointer hover:bg-[#383838] transition-colors disabled:opacity-50"
-          >
-            <span className="flex-[1_0_0] font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-white text-center">
-              {saving ? "儲存中…" : "儲存設定"}
-            </span>
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-});
-
 // ------- 資料來源 Tab -------
 type DataSourceRow = {
   type: string;
@@ -2132,9 +1846,7 @@ export default function PMSIntegration({
   onNavigateToAIChatbot,
 }: PMSIntegrationProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState<"data" | "sources" | "settings">(
-    "data",
-  );
+  const [activeTab, setActiveTab] = useState<"data" | "sources">("data");
   const [dataSources, setDataSources] = useState<DataSourceRow[]>(DATA_SOURCES_PMS_INIT);
   const [categoryActive, setCategoryActive] = useState(true);
   const [categoryName, setCategoryName] = useState("訂房");
@@ -2223,11 +1935,6 @@ export default function PMSIntegration({
             active={activeTab === "sources"}
             onClick={() => setActiveTab("sources")}
           />
-          <TabButton
-            label="串接設定"
-            active={activeTab === "settings"}
-            onClick={() => setActiveTab("settings")}
-          />
         </div>
 
         {/* Content area */}
@@ -2238,7 +1945,7 @@ export default function PMSIntegration({
           {activeTab === "data" && (
             <PMSDataTable
               onChangeSource={() => setActiveTab("sources")}
-              onNavigateToSettings={() => setActiveTab("settings")}
+              onNavigateToSettings={() => setActiveTab("sources")}
               sourceName={sourceName}
               categoryActive={categoryActive}
               categoryName={categoryName}
@@ -2253,7 +1960,6 @@ export default function PMSIntegration({
               categoryName={categoryName}
             />
           )}
-          {activeTab === "settings" && <PMSConnectionSettings />}
         </div>
       </main>
     </div>

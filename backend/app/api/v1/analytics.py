@@ -601,7 +601,8 @@ async def get_time_slot_detail(
     互動旅程明細：
     - 不傳 cell_date/cell_block → 整個 7 天範圍
     - 傳完整的 cell_date + cell_block → 單一格 4 小時範圍
-    每個 tag 計算 distinct member 數（依 trigger_source 拆三組：對話/互動/轉單）
+    每個 tag 計算「事件次數」（COUNT(*)），不對 member 去重，依 trigger_source 拆三組：對話/互動/轉單。
+    這與數據洞察「不去重、同房型訂 3 間算 3」的行為一致。
     排序：total desc，同 total 比 last_triggered_at desc
     只取「對話/互動/轉單」三種 trigger_source，MANUAL 不計
     """
@@ -630,11 +631,12 @@ async def get_time_slot_detail(
         scope_cell_date = None
         scope_cell_block = None
 
-    # 一次撈出三類 source 的 (tag_name, trigger_source, distinct_member_count, last_triggered_at)
+    # 一次撈出三類 source 的 (tag_name, trigger_source, event_count, last_triggered_at)
+    # 用 COUNT(*) 不去重 member，讓「同會員同房型訂 3 間 → conversion=3」符合規格
     sql = text(f"""
         SELECT t.tag_name AS tag,
                t.trigger_source AS src,
-               COUNT(DISTINCT t.member_id) AS n,
+               COUNT(*) AS n,
                MAX(t.triggered_at) AS last_at
         FROM tag_trigger_logs t
         JOIN members m ON m.id = t.member_id

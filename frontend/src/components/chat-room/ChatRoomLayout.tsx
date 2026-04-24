@@ -174,6 +174,9 @@ export default function ChatRoomLayout({
   const [interactionTags, setInteractionTags] = useState<string[]>(
     member?.interactionTags || [],
   ); // ✅ 使用真實互動標籤
+  const [conversionTags, setConversionTags] = useState<string[]>(
+    member?.conversionTags || [],
+  ); // ✅ 使用真實轉單標籤（訂房付款後寫入）
 
   // 平台切換狀態 (Figma v1087)
   const [currentPlatform, setCurrentPlatform] = useState<ChatPlatform>(
@@ -391,6 +394,7 @@ export default function ChatRoomLayout({
       setNote(member.internal_note || "");
       setMemberTags(member.memberTags || []);
       setInteractionTags(member.interactionTags || []);
+      setConversionTags(member.conversionTags || []);
     }
   }, [member]);
 
@@ -922,6 +926,7 @@ export default function ChatRoomLayout({
             setMember(refreshedMember);
             setMemberTags(refreshedMember.memberTags || []);
             setInteractionTags(refreshedMember.interactionTags || []);
+            setConversionTags(refreshedMember.conversionTags || []);
           }
         }
         return true;
@@ -950,6 +955,7 @@ export default function ChatRoomLayout({
           setMember(refreshedMember);
           setMemberTags(refreshedMember.memberTags || []);
           setInteractionTags(refreshedMember.interactionTags || []);
+          setConversionTags(refreshedMember.conversionTags || []);
           return true;
         }
       }
@@ -1096,6 +1102,7 @@ export default function ChatRoomLayout({
                     member={panelMember}
                     memberTags={memberTags}
                     interactionTags={interactionTags}
+                    conversionTags={conversionTags}
                     onEditTags={handleEditTags}
                     channelName={panelChannelName}
                   />

@@ -67,7 +67,7 @@ const transformBackendMember = (item: BackendMember): Member => {
   const tagDetails: (TagInfo & { source?: string })[] = (item.tags || []).map((tag: BackendTag & { source?: string }) => ({
     id: tag.id || 0,
     name: tag.name || tag.tag || '',
-    type: tag.type || (tag.tag_type === 1 ? 'member' : tag.tag_type === 2 ? 'interaction' : 'member'),
+    type: tag.type || (tag.tag_type === 1 ? 'member' : tag.tag_type === 2 ? 'interaction' : tag.tag_type === 3 ? 'conversion' : 'member'),
     source: tag.source,
   }));
 
@@ -77,7 +77,10 @@ const transformBackendMember = (item: BackendMember): Member => {
   const interactionTags = (item.tags || [])
     .filter((tag: BackendTag) => tag.type === 'interaction' || tag.tag_type === 2)
     .map((tag: BackendTag) => tag.name || tag.tag || '');
-  const combinedTags = Array.from(new Set([...(memberTags || []), ...(interactionTags || [])]));
+  const conversionTags = (item.tags || [])
+    .filter((tag: BackendTag) => tag.type === 'conversion' || tag.tag_type === 3)
+    .map((tag: BackendTag) => tag.name || tag.tag || '');
+  const combinedTags = Array.from(new Set([...(memberTags || []), ...(interactionTags || []), ...(conversionTags || [])]));
 
   const displayName = item.line_display_name || '';
 
@@ -88,6 +91,7 @@ const transformBackendMember = (item: BackendMember): Member => {
     tags: combinedTags,
     memberTags,
     interactionTags,
+    conversionTags,
     tagDetails,  // 新增完整標籤資訊
     phone: item.phone || '',
     email: item.email || '',

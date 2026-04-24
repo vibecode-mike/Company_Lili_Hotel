@@ -129,12 +129,64 @@ ROOMTYPE_NAME = {
     "WS": "森森系雙人房",
     "GS": "望空間尊親房",
     "V8": "銀河星語",
+    "TT": "1元測試房",
+    "KK": "KK房",
 }
 
 ROOMTYPE_MAX_OCCUPANCY = {
     "V7": 2, "V6": 2, "V5": 2, "V3": 2, "V2": 2,
     "V1": 4, "WS": 2, "GS": 2, "V8": 2,
+    "TT": 2, "KK": 2,
 }
+
+
+# 測試房型設定：TEST_ROOM_TT_ENABLED=1 時會補上這些房型的假庫存（remain=001, price=1;）
+# 閎運 availability API 對這些代碼回 data=[] 或完全沒列，但「下單」API 吃，所以做一段 hack 讓機器人 UX 走得通
+_TEST_INJECT_ROOMTYPES = ("TT", "KK")
+
+
+def _inject_tt_test_inventory(raw: Dict[str, Any], startdate: str, enddate: str) -> None:
+    """
+    測試用：當 settings.TEST_ROOM_TT_ENABLED=1 時，為 raw PMS 回應補上 _TEST_INJECT_ROOMTYPES 的假庫存資料，
+    讓聊天機器人房卡可以顯示測試房型。測完把 .env 的 flag 拿掉或改 0 即可恢復正常。
+    """
+    if settings.TEST_ROOM_TT_ENABLED != "1":
+        return
+    # 閎運 5 月份會回 {"raw_text": " Session halted."} 沒 room 欄位；
+    # 仍強制建出一個 room 列表並注入測試房型
+    rooms = raw.get("room")
+    if not isinstance(rooms, list):
+        rooms = []
+        raw["room"] = rooms
+    try:
+        start_d = date.fromisoformat(startdate)
+        end_d = date.fromisoformat(enddate)
+    except Exception:
+        return
+    fake_data = []
+    cursor = start_d
+    while cursor < end_d:
+        fake_data.append({
+            "odate": cursor.isoformat(),
+            "remain": "010",  # 與閎運實際開的測試房間數對齊，允許加到 10 間
+            "price": "1;",
+        })
+        cursor += timedelta(days=1)
+
+    for code in _TEST_INJECT_ROOMTYPES:
+        entry = next((r for r in rooms if r.get("roomtype") == code), None)
+        if entry is not None:
+            # 閎運已列此房型但 data=[] → 補上假資料（保留 image 與 housingcnt）
+            if not entry.get("data"):
+                entry["data"] = fake_data
+        else:
+            # 閎運完全沒列 → 自行塞一筆最小結構
+            rooms.append({
+                "roomtype": code,
+                "housingcnt": "2",
+                "image": "",
+                "data": fake_data,
+            })
 
 # ---------------------------------------------------------------------------
 # FAQ KB fallback — read room data from DB instead of hardcoded list
@@ -1282,6 +1334,7 @@ class ChatbotService:
                     f"[PMS] query result: {len(raw.get('room', []))} room types, "
                     f"startdate={startdate}, enddate={enddate}, housingcnt={housingcnt}"
                 )
+            _inject_tt_test_inventory(raw, startdate, enddate)
             availability = self._extract_availability(raw, startdate, enddate)
             cards = self._availability_to_room_cards(availability, sort_housingcnt)
             logger.info(f"[PMS] after extraction: {len(cards)} cards")
@@ -1291,6 +1344,7 @@ class ChatbotService:
             if housingcnt_specified and not cards and housingcnt == 1:
                 logger.info("[PMS] housingcnt=1 returned empty, retrying with housingcnt=2")
                 raw2 = await asyncio.to_thread(query_pms, startdate, enddate, roomtype, 2)
+                _inject_tt_test_inventory(raw2, startdate, enddate)
                 availability = self._extract_availability(raw2, startdate, enddate)
                 cards = self._availability_to_room_cards(availability, 2)
                 if cards:

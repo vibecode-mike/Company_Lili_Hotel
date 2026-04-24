@@ -5,16 +5,16 @@
 /**
  * 後端標籤物件
  * 支援兩種格式:
- * 1. 標準格式: { name, type: 'member' | 'interaction' }
- * 2. Meta 格式: { tag, tag_type: 1=會員標籤 | 2=互動標籤 }
+ * 1. 標準格式: { name, type: 'member' | 'interaction' | 'conversion' }
+ * 2. Meta 格式: { tag, tag_type: 1=會員標籤 | 2=互動標籤 | 3=轉單標籤 }
  */
 export interface BackendTag {
   id?: number;
   name?: string;
-  type?: 'member' | 'interaction';
+  type?: 'member' | 'interaction' | 'conversion';
   // Meta API 格式
   tag?: string;
-  tag_type?: 1 | 2;  // 1=會員標籤, 2=互動標籤
+  tag_type?: 1 | 2 | 3;  // 1=會員標籤, 2=互動標籤, 3=轉單標籤
   customer_id?: number;
 }
 

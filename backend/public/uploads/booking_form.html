@@ -124,6 +124,15 @@ body { font-family: 'Noto Sans TC', -apple-system, sans-serif; background: #f5f5
   var checkout = tokenData.checkout || "";
   var selectedCode = p.get("selected") || "";
 
+  // 使用者點房卡進來 → 寫 CLICK 標籤（同 token 內 1 小時去重）
+  if (selectedCode) {
+    fetch("/api/v1/booking/track-room-click", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: token, roomtype: selectedCode }),
+    }).catch(function(){});
+  }
+
   if (!rooms.length) {
     document.getElementById("loading").style.display = "none";
     document.getElementById("expiredPage").style.display = "block";

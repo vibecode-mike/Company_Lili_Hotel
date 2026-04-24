@@ -7,7 +7,7 @@ import type { MemberSourceType } from './channel';
 export interface TagInfo {
   id: number;
   name: string;
-  type: 'member' | 'interaction';
+  type: 'member' | 'interaction' | 'conversion';
 }
 
 /**
@@ -21,6 +21,7 @@ export interface Member {
   tags: string[];
   memberTags?: string[];      // 會員標籤（字串陣列，向後相容）
   interactionTags?: string[]; // 互動標籤（字串陣列，向後相容）
+  conversionTags?: string[];  // 轉單標籤（訂單完成後由 booking_conversion 來源寫入）
   tagDetails?: TagInfo[];     // 標籤詳細資訊
   phone: string;
   email: string;

@@ -5,7 +5,7 @@
 """
 import logging
 from datetime import datetime, date
-from typing import List, Optional
+from typing import Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 from pathlib import Path
@@ -68,6 +68,8 @@ ROOMTYPE_NAME = {
     "V7": "琴香古韻", "V6": "天地流動", "V5": "白色戀人",
     "V3": "竹影清境", "V2": "酥金迷霧", "V1": "特色家庭房玻光幻影",
     "WS": "森森系雙人房", "GS": "望空間尊親房", "V8": "銀河星語",
+    "TT": "1元測試房",
+    "KK": "KK房",
 }
 
 # ---------------------------------------------------------------------------
@@ -233,8 +235,13 @@ async def _persist_paid_booking(data: BookingCallbackRequest) -> bool:
     """
     status=paid 時寫入 bookings 表（INSERT IGNORE 以 order_id 去重）
     會嘗試依 line_uid 查 members.id 塞到 member_id 欄位，查不到就留 NULL
-    若解析得到 member_id，順便寫 tag_trigger_logs（每個房型一筆，trigger_source=CONVERSION）
-    供時段洞察「轉單」tab 統計使用
+
+    若解析得到 member_id，同時寫兩個地方：
+    1) tag_trigger_logs：每間房一筆（照 quantity 展開，不去重），trigger_source=CONVERSION
+       → 供時段洞察「轉單」tab 統計使用（同房型訂 3 間 = 3 筆，conversion=3）
+    2) member_interaction_tags：每房型 upsert 一筆，tag_source='booking_conversion'
+       click_count 累加 = 總房間數 → 供會員管理「轉單標籤」顯示（同房型只一個 tag chip）
+
     回傳 True=寫入成功或已存在；False=例外
     """
     try:
@@ -278,31 +285,77 @@ async def _persist_paid_booking(data: BookingCallbackRequest) -> bool:
                 },
             )
 
-            # 寫 tag_trigger_logs（每個房型一筆，trigger_source=CONVERSION）
-            # 房型代碼透過 ROOMTYPE_NAME 映射成中文名作為標籤
+            # 寫 tag_trigger_logs + upsert member_interaction_tags
             # member_id 為 NULL 時跳過（tag_trigger_logs.member_id NOT NULL）
             if member_id:
-                seen_roomtypes = set()
+                # 先算每個 roomtype 的總房間數（跨 rooms 條目累加 quantity）
+                roomtype_quantity: Dict[str, int] = {}
                 for r in data.rooms:
-                    if r.roomtype in seen_roomtypes:
-                        continue
-                    seen_roomtypes.add(r.roomtype)
-                    tag_name = ROOMTYPE_NAME.get(r.roomtype, r.roomtype)[:100]
-                    await db.execute(
+                    qty = max(1, int(r.quantity or 1))
+                    roomtype_quantity[r.roomtype] = roomtype_quantity.get(r.roomtype, 0) + qty
+
+                for roomtype, total_qty in roomtype_quantity.items():
+                    tag_name = ROOMTYPE_NAME.get(roomtype, roomtype)[:100]
+
+                    # 1) tag_trigger_logs：每間房一筆（不去重）
+                    for _ in range(total_qty):
+                        await db.execute(
+                            _text("""
+                                INSERT INTO tag_trigger_logs
+                                    (member_id, tag_id, tag_type, tag_name,
+                                     trigger_source, triggered_at, created_at)
+                                VALUES
+                                    (:mid, NULL, 'interaction', :tag_name,
+                                     'CONVERSION', :triggered_at, NOW())
+                            """),
+                            {
+                                "mid": member_id,
+                                "tag_name": tag_name,
+                                "triggered_at": paid_at,
+                            },
+                        )
+
+                    # 2) member_interaction_tags：upsert 同 (member, tag_name, tag_source='booking_conversion')
+                    #    MySQL 的 UniqueConstraint 對 message_id=NULL 不視為重複（SQL 標準的 NULL 行為），
+                    #    所以 ON DUPLICATE KEY 會重複新增；改用「先 SELECT 再決定 INSERT / UPDATE」
+                    short_name = tag_name[:20]
+                    existing = (await db.execute(
                         _text("""
-                            INSERT INTO tag_trigger_logs
-                                (member_id, tag_id, tag_type, tag_name,
-                                 trigger_source, triggered_at, created_at)
-                            VALUES
-                                (:mid, NULL, 'interaction', :tag_name,
-                                 'CONVERSION', :triggered_at, NOW())
+                            SELECT id, click_count FROM member_interaction_tags
+                            WHERE member_id = :mid
+                              AND tag_name = :tag_name
+                              AND tag_source = 'booking_conversion'
+                            LIMIT 1
                         """),
-                        {
-                            "mid": member_id,
-                            "tag_name": tag_name,
-                            "triggered_at": paid_at,
-                        },
-                    )
+                        {"mid": member_id, "tag_name": short_name},
+                    )).first()
+                    if existing:
+                        await db.execute(
+                            _text("""
+                                UPDATE member_interaction_tags
+                                SET click_count = click_count + :qty,
+                                    last_triggered_at = :triggered_at
+                                WHERE id = :eid
+                            """),
+                            {"qty": total_qty, "triggered_at": paid_at, "eid": existing.id},
+                        )
+                    else:
+                        await db.execute(
+                            _text("""
+                                INSERT INTO member_interaction_tags
+                                    (member_id, tag_name, tag_source, click_count,
+                                     last_triggered_at, message_id, tagged_at, created_at)
+                                VALUES
+                                    (:mid, :tag_name, 'booking_conversion', :qty,
+                                     :triggered_at, NULL, :triggered_at, NOW())
+                            """),
+                            {
+                                "mid": member_id,
+                                "tag_name": short_name,
+                                "qty": total_qty,
+                                "triggered_at": paid_at,
+                            },
+                        )
 
             await db.commit()
         return True
@@ -436,6 +489,123 @@ async def get_token_data(token: str = ""):
     if not entry:
         return {"ok": False, "message": "expired"}
     return {"ok": True, "data": entry["data"]}
+
+
+# ---------------------------------------------------------------------------
+# Room Card Click Tracking
+# ---------------------------------------------------------------------------
+
+class RoomClickTrackRequest(BaseModel):
+    token: str  # 同一張 booking token = 同一次房卡輪播 instance
+    roomtype: str  # 被點到的房型代碼
+
+
+@router.post("/track-room-click")
+async def track_room_click(data: RoomClickTrackRequest):
+    """
+    使用者在 LINE 點房卡 → 打開 LIFF 表單時觸發，
+    寫 1 筆 tag_trigger_logs (CLICK) + upsert member_interaction_tags
+    以 token 當 instance key：同一個 booking token 內點同房卡 → 只算 1 次（不累加）。
+
+    對照規格：「同一使用者點同一房卡多次 = 1，不同房卡（不同 token）= 累積」
+    """
+    if not data.token or not data.roomtype:
+        return {"ok": False, "message": "missing token or roomtype"}
+
+    entry = _resolve_booking_token(data.token, consume=False)
+    if not entry:
+        return {"ok": False, "message": "expired"}
+
+    line_uid = entry.get("line_uid") or ""
+    if not line_uid.startswith("U"):
+        return {"ok": False, "message": "invalid line_uid"}
+
+    # Dedup per-token：同一個 booking token（= 同一次房卡輪播 instance）
+    # 內再次點擊同一房型就不重複寫。跨 token 點同房型則會累加。
+    clicked_roomtypes = entry.setdefault("clicked_roomtypes", set())
+    if data.roomtype in clicked_roomtypes:
+        logger.info(
+            f"[track-room-click] skipped dup (same token): tag={data.roomtype}, "
+            f"token={data.token[:8]}..."
+        )
+        return {"ok": True, "deduped": True}
+
+    try:
+        from app.database import AsyncSessionLocal
+        from sqlalchemy import text as _text
+
+        tag_name = ROOMTYPE_NAME.get(data.roomtype, data.roomtype)[:20]
+        now_tpe = datetime.now(ZoneInfo("Asia/Taipei")).replace(tzinfo=None)
+
+        async with AsyncSessionLocal() as db:
+            row = (await db.execute(
+                _text("SELECT id FROM members WHERE line_uid = :uid LIMIT 1"),
+                {"uid": line_uid},
+            )).first()
+            if not row:
+                return {"ok": False, "message": "member not found"}
+            member_id = row.id
+
+            # 寫 tag_trigger_logs (CLICK)
+            await db.execute(
+                _text("""
+                    INSERT INTO tag_trigger_logs
+                        (member_id, tag_id, tag_type, tag_name,
+                         trigger_source, triggered_at, created_at)
+                    VALUES
+                        (:mid, NULL, 'interaction', :tag_name,
+                         'CLICK', :triggered_at, NOW())
+                """),
+                {"mid": member_id, "tag_name": tag_name, "triggered_at": now_tpe},
+            )
+
+            # upsert member_interaction_tags (tag_source='room_card_click')
+            # 用先 SELECT 再 INSERT/UPDATE（MySQL 對 message_id=NULL 不會視為 Unique 衝突）
+            existing = (await db.execute(
+                _text("""
+                    SELECT id FROM member_interaction_tags
+                    WHERE member_id = :mid
+                      AND tag_name = :tag_name
+                      AND tag_source = 'room_card_click'
+                    LIMIT 1
+                """),
+                {"mid": member_id, "tag_name": tag_name},
+            )).first()
+            if existing:
+                await db.execute(
+                    _text("""
+                        UPDATE member_interaction_tags
+                        SET click_count = click_count + 1,
+                            last_triggered_at = :triggered_at
+                        WHERE id = :eid
+                    """),
+                    {"triggered_at": now_tpe, "eid": existing.id},
+                )
+            else:
+                await db.execute(
+                    _text("""
+                        INSERT INTO member_interaction_tags
+                            (member_id, tag_name, tag_source, click_count,
+                             last_triggered_at, message_id, tagged_at, created_at)
+                        VALUES
+                            (:mid, :tag_name, 'room_card_click', 1,
+                             :triggered_at, NULL, :triggered_at, NOW())
+                    """),
+                    {"mid": member_id, "tag_name": tag_name, "triggered_at": now_tpe},
+                )
+            await db.commit()
+
+        # DB 寫入成功才把 roomtype 加進 token 的 clicked 集合（下次同 token 同房型就會去重）
+        clicked_roomtypes.add(data.roomtype)
+
+        logger.info(
+            f"[track-room-click] wrote: member_id={member_id}, "
+            f"tag={tag_name}, token={data.token[:8]}..."
+        )
+        return {"ok": True}
+    except Exception:
+        logger.exception("[track-room-click] failed")
+        return {"ok": False, "message": "internal error"}
 
 
 @router.post("/submit")

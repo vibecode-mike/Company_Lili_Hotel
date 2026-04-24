@@ -90,9 +90,12 @@ class TrackingService:
                 )
 
             # 4. 寫入 member_interaction_tags（如果有互動標籤）
+            #    以 campaign_id（訊息 ID）作為 instance 去重 key：同則訊息內重複點擊
+            #    只保留 1 筆；跨訊息才會新增 row，對應 schema UniqueConstraint
+            #    (member_id, tag_name, message_id)
             if interaction_tag_id:
                 await self._upsert_member_interaction_tag(
-                    db, line_uid, interaction_tag_id
+                    db, line_uid, interaction_tag_id, message_id=campaign_id
                 )
 
             # 5. 提交事務
@@ -205,17 +208,21 @@ class TrackingService:
         db: AsyncSession,
         line_uid: str,
         interaction_tag_id: int,
+        message_id: Optional[int] = None,
     ):
         """
-        創建或更新 member_interaction_tag 記錄
+        建立或更新 member_interaction_tag 記錄（per-instance 去重）
 
-        - 若存在: click_count += 1, 更新 last_triggered_at
-        - 若不存在: 創建新記錄
+        行為規則（對齊 schema UniqueConstraint (member_id, tag_name, message_id)）：
+        - 同一則訊息內重複點擊同一標籤 → 只保留 1 筆，click_count 固定 1、不累加
+        - 跨不同訊息點擊同一標籤 → 另開一筆 row（message_id 不同）
+        - 會員詳情顯示時，由 tag_name 聚合（同名標籤只出現一個 chip）
 
         Args:
             db: 資料庫 session
             line_uid: LINE 用戶 UID
             interaction_tag_id: 互動標籤 ID
+            message_id: 觸發來源訊息 ID，作為 per-instance 去重 key（通常是 campaign_id）
         """
         # 1. 解析 member_id
         member_id = await self._resolve_member_from_line_id(db, line_uid)
@@ -232,30 +239,37 @@ class TrackingService:
             logger.warning(f"InteractionTag not found: {interaction_tag_id}")
             return
 
-        # 3. 查詢是否已存在該會員的該標籤（基於 member_id + tag_name）
+        # 3. 依 (member_id, tag_name, message_id) 三元組查重
         existing_stmt = select(MemberInteractionTag).where(
             MemberInteractionTag.member_id == member_id,
             MemberInteractionTag.tag_name == tag.tag_name,
+            MemberInteractionTag.message_id == message_id,
         )
         existing_result = await db.execute(existing_stmt)
         existing_tag = existing_result.scalar_one_or_none()
 
         if existing_tag:
-            # 4a. 已存在：累加 click_count
-            existing_tag.click_count = (existing_tag.click_count or 1) + 1
+            # 同一訊息（instance）內再點擊：不累加 click_count，只更新 last_triggered_at
             existing_tag.last_triggered_at = datetime.now()
-            logger.debug(f"Updated member_interaction_tag: member_id={member_id}, tag={tag.tag_name}, click_count={existing_tag.click_count}")
+            logger.debug(
+                f"Duplicate click within same message: member_id={member_id}, tag={tag.tag_name}, "
+                f"message_id={message_id} → click_count stays at {existing_tag.click_count}"
+            )
         else:
-            # 4b. 不存在：創建新記錄
+            # 新訊息或首次點擊 → 新 row
             new_tag = MemberInteractionTag(
                 member_id=member_id,
                 tag_name=tag.tag_name,
                 tag_source=tag.tag_source,  # 保留原始來源（訊息模板/問券模板）
                 click_count=1,
                 last_triggered_at=datetime.now(),
+                message_id=message_id,
             )
             db.add(new_tag)
-            logger.info(f"Created member_interaction_tag: member_id={member_id}, tag={tag.tag_name}, source={tag.tag_source}")
+            logger.info(
+                f"Created member_interaction_tag: member_id={member_id}, tag={tag.tag_name}, "
+                f"source={tag.tag_source}, message_id={message_id}"
+            )
 
         # 寫 tag_trigger_logs（供時段洞察 heatmap 使用）— 新貼或重新觸發都記
         from app.services.tag_trigger_service import record_tag_trigger

@@ -49,7 +49,11 @@ const mapApiMemberToMemberData = (apiMember: BackendMember, fallback?: MemberDat
     rawTags
       .filter((tag: BackendTag) => tag?.type === 'interaction' || tag?.tag_type === 2)
       .map((tag: BackendTag) => tag.name || tag.tag || '') || [];
-  const combinedTags = Array.from(new Set([...(memberTags || []), ...(interactionTags || [])]));
+  const conversionTags =
+    rawTags
+      .filter((tag: BackendTag) => tag?.type === 'conversion' || tag?.tag_type === 3)
+      .map((tag: BackendTag) => tag.name || tag.tag || '') || [];
+  const combinedTags = Array.from(new Set([...(memberTags || []), ...(interactionTags || []), ...(conversionTags || [])]));
 
   const displayName = apiMember?.line_display_name;
 
@@ -60,6 +64,7 @@ const mapApiMemberToMemberData = (apiMember: BackendMember, fallback?: MemberDat
     tags: combinedTags,
     memberTags,
     interactionTags,
+    conversionTags,
     tagDetails: rawTags,
     phone: apiMember?.phone ?? fallback?.phone ?? '',
     email: apiMember?.email ?? fallback?.email ?? '',
@@ -86,6 +91,7 @@ const mapMemberToMemberData = (memberSource: Member, fallback?: MemberData): Mem
     tags: memberSource.tags,
     memberTags: memberSource.memberTags ?? fallback?.memberTags ?? [],
     interactionTags: memberSource.interactionTags ?? fallback?.interactionTags ?? [],
+    conversionTags: memberSource.conversionTags ?? fallback?.conversionTags ?? [],
     tagDetails: memberSource.tagDetails ?? fallback?.tagDetails ?? [],
     phone: memberSource.phone,
     email: memberSource.email,
@@ -1577,6 +1583,18 @@ function ModalTitleContent9() {
   );
 }
 
+function ModalTitleContentConversion() {
+  return (
+    <div className="content-stretch flex gap-[2px] items-center min-w-[120px] relative shrink-0" data-name="Modal/Title&Content">
+      <div className="content-stretch flex items-center relative shrink-0" data-name="Modal/Title&Content">
+        <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[16px] text-nowrap">
+          <p className="leading-[1.5] whitespace-pre">轉單標籤</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Container16() {
   return (
     <div className="flex flex-wrap gap-x-3 gap-y-2 items-start content-start relative min-w-0 max-w-full" data-name="Container">
@@ -1832,6 +1850,20 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
                         </div>
                       );
                     })}
+                </div>
+              </div>
+
+              {/* Conversion Tags Section（訂房付款完成後自動寫入，不提供編輯） */}
+              <div className="grid gap-y-4 lg:grid-cols-[auto,1fr] items-start w-full min-w-0" data-name="Container">
+                <ModalTitleContentConversion />
+                <div className="flex flex-wrap gap-x-3 gap-y-2 items-start content-start relative min-w-0 max-w-full" data-name="Container">
+                  {(member?.tagDetails || [])
+                    .filter(tag => tag.type === 'conversion' || (tag as any).tag_type === 3)
+                    .map((tag, index) => (
+                      <div key={index} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
+                        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-medium grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[14px] text-center">{tag.name || (tag as any).tag}</p>
+                      </div>
+                    ))}
                 </div>
               </div>
             </div>
