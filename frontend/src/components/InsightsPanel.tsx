@@ -517,6 +517,7 @@ function CoreInsightsCard({
           <div className="flex-1 min-w-0 px-[20px] flex flex-col gap-[4px] self-stretch">
             <div className="flex items-center gap-[4px] w-full">
               <span className="text-[16px] leading-[1.5] text-[#383838]">核心洞察</span>
+              <InfoIconWithTooltip tooltip="掌握 AI 本月的服務績效，了解它幫你處理了多少對話、促成多少訂單、帶來多少新會員" />
 
               {/* 比較期間 dropdown */}
               <div ref={wrapRef} className="relative">
@@ -587,9 +588,6 @@ function CoreInsightsCard({
                 )}
               </div>
             </div>
-            <div className="flex items-center w-full">
-              <span className="text-[16px] leading-[1.5] text-[#6e6e6e]">描述描述</span>
-            </div>
           </div>
         </div>
       </div>
@@ -597,7 +595,7 @@ function CoreInsightsCard({
       {/* Body：3 columns（桌機橫排、手機直排）
           divider：第一欄無線；2、3 欄桌機左側加 border-l，手機直排時改由上方 border-t 分隔 */}
       <div className="flex flex-col md:flex-row items-stretch w-full">
-        <KpiColumn label="AI 覆蓋率" {...aiCoverage} trendPrefix={trendPrefix} />
+        <KpiColumn label="AI 自動回覆率" {...aiCoverage} trendPrefix={trendPrefix} />
         <KpiColumn
           label="完成訂單"
           {...completedOrders}
@@ -681,6 +679,48 @@ function InfoIcon({ className = "" }: { className?: string }) {
   );
 }
 
+// 含 tooltip 的 InfoIcon：hover 顯示提示（樣式對齊 AI Chatbot 頁 PmsTooltip）
+// 使用 portal 輸出到 body，避免被外層 overflow-hidden 卡片裁切。
+function InfoIconWithTooltip({ tooltip }: { tooltip: string }) {
+  const [visible, setVisible] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (visible && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setPos({ top: rect.bottom + 6, left: rect.left });
+    }
+  }, [visible]);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        className="shrink-0 cursor-pointer bg-transparent border-none p-0 inline-flex items-center"
+        onMouseEnter={() => setVisible(true)}
+        onMouseLeave={() => setVisible(false)}
+        onFocus={() => setVisible(true)}
+        onBlur={() => setVisible(false)}
+        aria-label={tooltip}
+      >
+        <InfoIcon />
+      </button>
+      {visible &&
+        createPortal(
+          <div
+            className="fixed bg-[#383838] text-white text-[12px] leading-[1.5] font-['Noto_Sans_TC',sans-serif] font-normal rounded-[8px] p-[8px] pointer-events-none"
+            style={{ zIndex: 9999, top: pos.top, left: pos.left, maxWidth: 320 }}
+          >
+            {tooltip}
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
+
 // 時段洞察 + 互動旅程：一張卡三個區段
 type JourneyTab = "overall" | "conversation" | "interaction" | "conversion";
 
@@ -746,6 +786,10 @@ function TimeInsightsSection() {
   const [journeyTab, setJourneyTab] = useState<JourneyTab>("overall");
   const journeyLabelRef = useRef<HTMLSpanElement>(null);
   const [journeyLeftCol, setJourneyLeftCol] = useState<number>(JOURNEY_LEFT_MIN);
+
+  // 渠道 tab 等寬同步：量測兩顆 button 的自然寬度，取 max 套回兩顆 minWidth
+  const tabsContainerRef = useRef<HTMLDivElement>(null);
+  const [tabMinWidth, setTabMinWidth] = useState<number | null>(null);
 
   // 後端 channel key → 我們的 Channel 型別。nonMember 對應後端 webchat
   const apiChannelKey: Record<Channel, string> = { line: "line", facebook: "facebook", nonMember: "webchat" };
@@ -877,6 +921,21 @@ function TimeInsightsSection() {
     setJourneyLeftCol(Math.max(JOURNEY_LEFT_MIN, Math.ceil(required)));
   }, [selectedValue]);
 
+  // 渠道 tab 等寬同步：量測兩顆 button 的自然寬度，取 max 套回兩顆 minWidth
+  // 依賴 totalByChannel —— API 拉回新數字時要重新量測
+  useLayoutEffect(() => {
+    const root = tabsContainerRef.current;
+    if (!root) return;
+    const btns = Array.from(root.querySelectorAll<HTMLButtonElement>("button"));
+    if (btns.length === 0) return;
+    // 先清掉已套用的 minWidth，取得自然寬度（否則量到的會是上一輪結果）
+    btns.forEach((b) => {
+      b.style.minWidth = "";
+    });
+    const natural = Math.max(...btns.map((b) => b.getBoundingClientRect().width));
+    setTabMinWidth(Math.ceil(natural));
+  }, [totalByChannel]);
+
   return (
     <div className="bg-white rounded-[16px] flex flex-col w-full overflow-hidden">
       {/* C. 互動旅程：標題 + 三個彩色底線 tab + stacked bar list */}
@@ -901,7 +960,6 @@ function TimeInsightsSection() {
                   <span className="font-medium text-[#383838]">{selectedValue}</span>{" "}
                   人次的互動旅程
                 </span>
-                <InfoIcon />
               </div>
               <span className="text-[16px] leading-[1.5] text-[#6e6e6e] whitespace-nowrap">
                 {journeySubtitle}
@@ -923,8 +981,8 @@ function TimeInsightsSection() {
                   type="button"
                   onClick={() => setJourneyTab(t.key)}
                   aria-pressed={active}
-                  className={`insights-channel-tab journey-tab-btn ${i === 0 ? "" : "border-l border-solid border-[#ddd]"}`}
-                  style={{ borderBottom: `6px solid ${t.color}` }}
+                  className={`insights-channel-tab journey-tab-btn`}
+                  style={{ boxShadow: `inset 0 -6px 0 ${t.color}`, paddingBottom: 6 }}
                 >
                   <span className="text-[24px] leading-[1.5] text-[#383838] whitespace-nowrap">
                     {t.label}
@@ -1013,16 +1071,13 @@ function TimeInsightsSection() {
 
       {/* A. 標題 + 三個渠道 tab */}
       <div className="flex items-stretch border-b border-solid border-[#ddd] flex-col md:flex-row">
-        <div className="flex-1 min-w-0 px-[20px] py-[16px] flex flex-col gap-[4px] self-stretch">
+        <div className="flex-1 min-w-0 px-[20px] py-[16px] flex flex-col gap-[4px] self-stretch justify-center">
           <div className="flex items-center gap-[4px]">
             <span className="text-[16px] leading-[1.5] text-[#383838]">時段洞察</span>
-            <InfoIcon />
+            <InfoIconWithTooltip tooltip="找出用戶最活躍的詢問時段，掌握對話 → 互動 → 轉單的漏斗效益" />
           </div>
-          <span className="text-[16px] leading-[1.5] text-[#6e6e6e]">
-            描述描述
-          </span>
         </div>
-        <div className="flex shrink-0 overflow-x-auto">
+        <div ref={tabsContainerRef} className="flex shrink-0 overflow-x-auto">
           {CHANNELS.filter((ch) => ch.key !== "facebook").map((ch, idx) => {
             const active = channel === ch.key;
             return (
@@ -1031,7 +1086,8 @@ function TimeInsightsSection() {
                 type="button"
                 onClick={() => setChannel(ch.key)}
                 aria-pressed={active}
-                className={`${idx === 0 ? "md:border-l" : "border-l"} border-solid border-[#ddd] px-[24px] py-[16px] flex flex-col items-start justify-center min-w-[152px] cursor-pointer insights-channel-tab`}
+                className={`${idx === 0 ? "md:border-l" : "border-l"} border-solid border-[#ddd] px-[24px] py-[16px] flex flex-col items-start justify-center cursor-pointer insights-channel-tab`}
+                style={{ minWidth: tabMinWidth ?? 152 }}
               >
                 <span className="text-[16px] leading-[1.5] text-[#6e6e6e] whitespace-nowrap">
                   {ch.label}
@@ -1167,6 +1223,9 @@ export default function InsightsPanel({
   // 行動建議 - AI 未能回答快照（不受 period 影響，固定範圍載入一次，排序由後端做 created_at DESC）
   const [unansweredSnapshot, setUnansweredSnapshot] = useState<AiCoverageResponse | null>(null);
   const [isAiUnansweredExpanded, setIsAiUnansweredExpanded] = useState<boolean>(false);
+  // 行動建議兩個區塊的 accordion 狀態（預設收合）
+  const [isPendingOpen, setIsPendingOpen] = useState<boolean>(false);
+  const [isAiUnansweredOpen, setIsAiUnansweredOpen] = useState<boolean>(false);
 
   useEffect(() => {
     const curr = getPeriodRange(period, "current");
@@ -1319,7 +1378,7 @@ export default function InsightsPanel({
         <PageHeaderWithBreadcrumb
           breadcrumbItems={[{ label: "數據洞察", active: true }]}
           title="數據洞察"
-          description="讓AI幫助優化服務品質"
+          description="讓 AI 幫助優化服務品質"
         />
 
         <div className="px-[40px] pb-[40px] flex flex-col gap-[16px]">
@@ -1340,15 +1399,33 @@ export default function InsightsPanel({
                 <span className="text-[16px] text-[#383838] font-medium">
                   行動建議
                 </span>
-                <InfoIcon />
+                <InfoIconWithTooltip tooltip="根據 AI 的服務狀況，提供當下優先處理的建議" />
               </div>
 
               {/* 1. 待回覆對話（含：使用者訊息無人回 + AI 被標 unanswered 的對話） */}
               <div>
-                <p className="text-[14px] leading-[1.5] text-[#383838] mb-[12px]">
-                  1. <span style={{ color: "#B71C1C" }}>{pending?.total ?? 0}則</span>對話待回覆
-                </p>
-                <div className="flex flex-col gap-[8px]">
+                <button
+                  type="button"
+                  onClick={() => setIsPendingOpen((v) => !v)}
+                  aria-expanded={isPendingOpen}
+                  className="flex items-center gap-[2px] w-full bg-transparent border-none p-0 cursor-pointer text-left"
+                >
+                  <span className="flex-1 min-w-0 text-[14px] leading-[1.5] text-[#383838]">
+                    1. <span style={{ color: "#B71C1C" }}>{pending?.total ?? 0}則</span>對話待回覆
+                  </span>
+                  <span className="flex items-center justify-center p-[4px] rounded-[8px] shrink-0">
+                    <span className="inline-flex size-[24px] items-center justify-center">
+                      <ChevronDown
+                        size={20}
+                        color="#0f6beb"
+                        strokeWidth={2}
+                        className={`transition-transform ${isPendingOpen ? "rotate-180" : ""}`}
+                      />
+                    </span>
+                  </span>
+                </button>
+                {isPendingOpen && (
+                <div className="flex flex-col gap-[8px] mt-[12px]">
                   {pending && pending.items.length > 0 ? (
                     <>
                       {(isPendingExpanded ? pending.items : pending.items.slice(0, 10)).map((item, idx, arr) => (
@@ -1416,18 +1493,37 @@ export default function InsightsPanel({
                     </div>
                   )}
                 </div>
+                )}
               </div>
 
               {/* 2. AI 未能回答的訊息（獨立於頂部 period，近 365 天快照） */}
               <div>
-                <p className="text-[14px] leading-[1.5] text-[#383838] mb-[12px]">
-                  2. AI 未能回答
-                  <span style={{ color: "#B71C1C" }}>
-                    {unansweredSnapshot?.unanswered ?? 0}則
+                <button
+                  type="button"
+                  onClick={() => setIsAiUnansweredOpen((v) => !v)}
+                  aria-expanded={isAiUnansweredOpen}
+                  className="flex items-center gap-[2px] w-full bg-transparent border-none p-0 cursor-pointer text-left"
+                >
+                  <span className="flex-1 min-w-0 text-[14px] leading-[1.5] text-[#383838]">
+                    2. AI 未能回答
+                    <span style={{ color: "#B71C1C" }}>
+                      {unansweredSnapshot?.unanswered ?? 0}則
+                    </span>
+                    訊息，建議加入知識庫
                   </span>
-                  訊息，建議加入知識庫
-                </p>
-                <div className="flex flex-col gap-[8px]">
+                  <span className="flex items-center justify-center p-[4px] rounded-[8px] shrink-0">
+                    <span className="inline-flex size-[24px] items-center justify-center">
+                      <ChevronDown
+                        size={20}
+                        color="#0f6beb"
+                        strokeWidth={2}
+                        className={`transition-transform ${isAiUnansweredOpen ? "rotate-180" : ""}`}
+                      />
+                    </span>
+                  </span>
+                </button>
+                {isAiUnansweredOpen && (
+                <div className="flex flex-col gap-[8px] mt-[12px]">
                   {unansweredSnapshot && unansweredSnapshot.top_unanswered.length > 0 ? (
                     <>
                       {(isAiUnansweredExpanded ? unansweredSnapshot.top_unanswered : unansweredSnapshot.top_unanswered.slice(0, 10)).map((q, idx, arr) => (
@@ -1436,7 +1532,7 @@ export default function InsightsPanel({
                         className="flex items-center justify-between min-h-[48px] py-[8px] px-[12px] rounded-[8px]"
                         style={{ backgroundColor: idx % 2 === 0 ? "#FFFFFF" : "#FAFAFA" }}
                       >
-                        <span className="text-[16px] leading-[1.5] text-[#6e6e6e] truncate" title={q.question}>
+                        <span className="text-[16px] leading-[1.5] text-[#383838] truncate" title={q.question}>
                           {q.question || "(無對應提問)"}
                         </span>
                         <div className="flex items-center gap-[16px] shrink-0 ml-[16px]">
@@ -1479,6 +1575,7 @@ export default function InsightsPanel({
                     </div>
                   )}
                 </div>
+                )}
               </div>
 
             </div>
