@@ -1035,14 +1035,21 @@ function TimeInsightsSection() {
                 const trailingCount =
                   activeSegIdx === null ? total : counts[activeSegIdx] ?? 0;
                 return (
-                  <div key={item.tag} className="flex items-center gap-[4px] w-full">
+                  <div
+                    key={item.tag}
+                    className="flex items-center gap-[4px] w-full"
+                    style={{ minHeight: 44, height: 44 }}
+                  >
                     <div className="journey-bar-badge">
                       <span className="bg-[#f0f6ff] rounded-[8px] px-[8px] py-[4px] min-w-[32px] text-[#0f6beb] text-[16px] leading-[1.5] text-center whitespace-nowrap">
                         {item.tag}
                       </span>
                     </div>
-                    <div className="flex-1 min-w-0 flex items-center gap-[8px]">
-                      <div className="flex-1 min-w-0 bg-[#fafafa] rounded-[4px] overflow-hidden flex items-center">
+                    <div className="flex-1 min-w-0 flex items-center gap-[8px]" style={{ height: 44 }}>
+                      <div
+                        className="flex-1 min-w-0 bg-[#fafafa] rounded-[4px] overflow-hidden flex items-center"
+                        style={{ minHeight: 44, height: 44 }}
+                      >
                         {segments.map((seg) =>
                           seg.widthPct <= 0 ? null : (
                             <div
@@ -1396,7 +1403,7 @@ export default function InsightsPanel({
           <div className="bg-white relative rounded-[16px] w-full">
             <div className="relative py-[16px] px-[20px] flex flex-col gap-[24px]">
               <div className="flex items-center gap-[4px]">
-                <span className="text-[16px] text-[#383838] font-medium">
+                <span className="text-[16px] leading-[1.5] text-[#383838]">
                   行動建議
                 </span>
                 <InfoIconWithTooltip tooltip="根據 AI 的服務狀況，提供當下優先處理的建議" />
