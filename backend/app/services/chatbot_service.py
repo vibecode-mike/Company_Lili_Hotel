@@ -140,8 +140,9 @@ ROOMTYPE_MAX_OCCUPANCY = {
 }
 
 
-# 測試房型設定：TEST_ROOM_TT_ENABLED=1 時會補上這些房型的假庫存（remain=001, price=1;）
-# 閎運 availability API 對這些代碼回 data=[] 或完全沒列，但「下單」API 吃，所以做一段 hack 讓機器人 UX 走得通
+# 測試房型設定：TEST_ROOM_TT_ENABLED=1 時會補上這些房型的假庫存（remain=010, price=1;）
+# 只覆蓋閎運真的開的「1 元測試房」— TT / KK，其他房型完全跟閎運拿真實資料。
+# 閎運對 TT / KK 雖然列了代碼，但 availability API data 空的，所以我們補假庫存讓 bot 能顯示。
 _TEST_INJECT_ROOMTYPES = ("TT", "KK")
 
 
@@ -173,14 +174,15 @@ def _inject_tt_test_inventory(raw: Dict[str, Any], startdate: str, enddate: str)
         })
         cursor += timedelta(days=1)
 
+    # 閎運對 TT / KK 的圖片 URL（如 10_101thumb.jpg）實際是 404，
+    # 清空讓下游 _enrich_cards_with_kb 的通用 fallback 接手（→ DEFAULT_ROOM_IMAGE_URL）
     for code in _TEST_INJECT_ROOMTYPES:
         entry = next((r for r in rooms if r.get("roomtype") == code), None)
         if entry is not None:
-            # 閎運已列此房型但 data=[] → 補上假資料（保留 image 與 housingcnt）
             if not entry.get("data"):
                 entry["data"] = fake_data
+            entry["image"] = ""  # 清掉壞連結
         else:
-            # 閎運完全沒列 → 自行塞一筆最小結構
             rooms.append({
                 "roomtype": code,
                 "housingcnt": "2",
@@ -250,32 +252,40 @@ async def _kb_fallback_rooms(
 async def _enrich_cards_with_kb(
     cards: List[RoomCardSchema], db: Optional[AsyncSession]
 ) -> List[RoomCardSchema]:
-    """Spec: PMS 資料為主，FAQ_KB 資料補充房型圖片與特色描述。"""
-    if db is None or not cards:
+    """Spec: PMS 資料為主，FAQ_KB 資料補充房型圖片與特色描述。
+    圖片優先序：PMS image > KB image > settings.DEFAULT_ROOM_IMAGE_URL。
+    最後若仍空，則不補（由下游 line_app 的 dummyimage 接手）。
+    """
+    if not cards:
         return cards
-    result = await _kb_search(db, "booking_billing", "", top_k=20)
-    items = result.get("items") or []
-    # Build lookup by room name
     kb_by_name: Dict[str, dict] = {}
-    for item in items:
-        name = str(item.get("房型名稱") or "").strip()
-        if name:
-            kb_by_name[name] = item
+    if db is not None:
+        result = await _kb_search(db, "booking_billing", "", top_k=20)
+        items = result.get("items") or []
+        for item in items:
+            name = str(item.get("房型名稱") or "").strip()
+            if name:
+                kb_by_name[name] = item
+
+    default_image = settings.DEFAULT_ROOM_IMAGE_URL or None
     enriched: List[RoomCardSchema] = []
     for card in cards:
+        update: dict = {}
         kb = kb_by_name.get(card.room_type_name)
         if kb:
             features = str(kb.get("房型特色") or "")
-            update: dict = {}
             if features and not card.features:
                 update["features"] = features
             if not card.image_url:
                 raw_image = str(kb.get("image_url") or kb.get("url") or "").strip()
-                image = raw_image if raw_image else (settings.DEFAULT_ROOM_IMAGE_URL or None)
-                if image:
-                    update["image_url"] = image
-            if update:
-                card = card.model_copy(update=update)
+                if raw_image:
+                    update["image_url"] = raw_image
+        # 通用 fallback：任何房型只要到這裡還沒 image（PMS 空 + KB 也沒補）→ 用預設圖
+        final_image = update.get("image_url") or card.image_url
+        if not final_image and default_image:
+            update["image_url"] = default_image
+        if update:
+            card = card.model_copy(update=update)
         enriched.append(card)
     return enriched
 

@@ -123,12 +123,16 @@ async def get_pms_rooms():
             first = data[0] if data else {}
             price_str = str(first.get("price", "0")).rstrip(";").strip()
             remain_str = str(first.get("remain", "0")).strip()
+            remaining = int(remain_str) if remain_str.isdigit() else 0
+            # 剩餘 0 間的房型（閎運有登記代碼但今天沒放庫存）不顯示
+            if remaining <= 0:
+                continue
             rooms.append({
                 "room_type_code": code,
                 "room_type_name": ROOMTYPE_NAME.get(code, code),
                 "price": int(price_str) if price_str.isdigit() else 0,
                 "max_occupancy": ROOMTYPE_MAX_OCCUPANCY.get(code, 2),
-                "remaining": int(remain_str) if remain_str.isdigit() else 0,
+                "remaining": remaining,
                 "image": str(room.get("image") or "").strip() or None,
             })
         return {"rooms": rooms}
