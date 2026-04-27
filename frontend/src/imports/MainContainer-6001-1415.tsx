@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import svgPaths from "./svg-wbwsye31ry";
 import { SearchContainer } from "../components/common/SearchContainers";
+import DownloadConversationsModal from "../components/DownloadConversationsModal";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../components/ui/tooltip";
 import TooltipComponent from "./Tooltip";
 import { PageHeaderWithBreadcrumb } from "../components/common/Breadcrumb";
@@ -46,22 +47,94 @@ function Container1({ onAddMember }: { onAddMember?: () => void }) {
   );
 }
 
-function Container2({ searchValue, onSearchChange, onSearch, onClearSearch, onAddMember }: { 
-  searchValue: string; 
-  onSearchChange: (value: string) => void; 
+type MemberTypeFilter = 'all' | 'member' | 'guest';
+
+// 會員/非會員/所有 切換
+function MemberTypeSegmented({
+  value,
+  onChange,
+}: {
+  value: MemberTypeFilter;
+  onChange: (v: MemberTypeFilter) => void;
+}) {
+  const options: { key: MemberTypeFilter; label: string }[] = [
+    { key: 'member', label: '會員' },
+    { key: 'guest', label: '非會員' },
+    { key: 'all', label: '所有' },
+  ];
+  return (
+    <div className="bg-white box-border content-stretch flex items-center gap-[6px] rounded-[12px] shrink-0 h-[48px] p-[4px] border border-[#eef0f3]">
+      {options.map((opt) => {
+        const active = value === opt.key;
+        return (
+          <button
+            key={opt.key}
+            type="button"
+            onClick={() => onChange(opt.key)}
+            className={`px-[16px] h-[40px] rounded-[10px] text-[14px] font-['Noto_Sans_TC:Regular',sans-serif] transition-colors ${
+              active
+                ? 'bg-[#0f6beb] text-white'
+                : 'text-[#6e6e6e] hover:bg-[#f0f6ff]'
+            }`}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// 下載對話紀錄按鈕（外觀與 MemberTypeSegmented 一致：48px 高、4px padding、淺灰邊框、內部 40px 圓角項目）
+function DownloadConversationsButton({ onClick }: { onClick: () => void }) {
+  return (
+    <div className="bg-white box-border content-stretch flex items-center rounded-[12px] shrink-0 h-[48px] p-[4px] border border-[#eef0f3]">
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex items-center gap-[6px] px-[16px] h-[40px] rounded-[10px] text-[14px] font-['Noto_Sans_TC:Regular',sans-serif] text-[#0f6beb] hover:bg-[#f0f6ff] transition-colors"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+        <span>下載對話紀錄</span>
+      </button>
+    </div>
+  );
+}
+
+function Container2({
+  searchValue, onSearchChange, onSearch, onClearSearch, onAddMember,
+  memberType, onMemberTypeChange, onDownloadConversations,
+}: {
+  searchValue: string;
+  onSearchChange: (value: string) => void;
   onSearch: () => void;
   onClearSearch: () => void;
   onAddMember?: () => void;
+  memberType: MemberTypeFilter;
+  onMemberTypeChange: (v: MemberTypeFilter) => void;
+  onDownloadConversations: () => void;
 }) {
   return (
     <div className="content-stretch flex gap-[12px] items-center justify-end relative shrink-0 w-full" data-name="Container">
-      <SearchContainer 
-        value={searchValue}
-        onChange={onSearchChange}
-        onSearch={onSearch}
-        onClear={onClearSearch}
-      />
-      <Container1 onAddMember={onAddMember} />
+      {/* SearchContainer 內含 size-full，會吃光 flex 空間。
+          外面包一層 shrink-0 並用 ! 覆寫 size-full，讓它退回自然寬。 */}
+      <div className="shrink-0">
+        <SearchContainer
+          value={searchValue}
+          onChange={onSearchChange}
+          onSearch={onSearch}
+          onClear={onClearSearch}
+          className="!size-auto !w-auto !h-auto"
+        />
+      </div>
+      {/* 右側按鈕群：grow 取得剩餘空間、justify-end 推到右緣，
+          與下方表格 px-[40px] 容器右緣對齊 */}
+      <div className="basis-0 grow flex gap-[12px] items-center justify-end min-w-px">
+        <MemberTypeSegmented value={memberType} onChange={onMemberTypeChange} />
+        <DownloadConversationsButton onClick={onDownloadConversations} />
+      </div>
     </div>
   );
 }
@@ -576,6 +649,9 @@ function MainContent({
   isLoading,
   error,
   totalMembers,
+  memberType,
+  onMemberTypeChange,
+  onDownloadConversations,
 }: {
   searchValue: string;
   onSearchChange: (value: string) => void;
@@ -590,24 +666,30 @@ function MainContent({
   isLoading: boolean;
   error: string | null;
   totalMembers: number;
+  memberType: MemberTypeFilter;
+  onMemberTypeChange: (v: MemberTypeFilter) => void;
+  onDownloadConversations: () => void;
 }) {
   return (
     <div className="relative shrink-0 w-full" data-name="Main Content">
       <div className="size-full">
         <div className="box-border content-stretch flex flex-col items-start relative w-full">
           {/* Search and Add Button */}
-          <div className="px-[40px] pb-[16px]">
-            <Container2 
+          <div className="px-[40px] pb-[16px] w-full">
+            <Container2
               searchValue={searchValue}
               onSearchChange={onSearchChange}
               onSearch={onSearch}
               onClearSearch={onClearSearch}
               onAddMember={onAddMember}
+              memberType={memberType}
+              onMemberTypeChange={onMemberTypeChange}
+              onDownloadConversations={onDownloadConversations}
             />
           </div>
           
           {/* Count */}
-          <div className="px-[40px] pb-[12px]">
+          <div className="px-[40px] pb-[12px] w-full">
             <Container5 count={filteredMembers.length} totalMembers={totalMembers} />
           </div>
           
@@ -642,6 +724,8 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
   const { displayMembers, totalDisplayMembers, isLoading, error } = useMembers();
   const [searchValue, setSearchValue] = useState('');
   const [appliedSearchValue, setAppliedSearchValue] = useState('');
+  const [memberType, setMemberType] = useState<MemberTypeFilter>('all');
+  const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     field: 'lastChatTime',
     order: 'desc',
@@ -658,6 +742,13 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
   // Filter and sort display members
   const filteredMembers = useMemo(() => {
     let result = displayMembers;
+
+    // 會員/非會員 篩選
+    if (memberType === 'member') {
+      result = result.filter((m) => !m.isGuest);
+    } else if (memberType === 'guest') {
+      result = result.filter((m) => m.isGuest);
+    }
 
     // Apply search filter
     if (appliedSearchValue.trim()) {
@@ -700,7 +791,7 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
     });
 
     return sorted;
-  }, [displayMembers, appliedSearchValue, sortConfig]);
+  }, [displayMembers, appliedSearchValue, sortConfig, memberType]);
 
   const handleSearch = () => {
     setAppliedSearchValue(searchValue);
@@ -750,6 +841,14 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
         isLoading={isLoading}
         error={error}
         totalMembers={totalDisplayMembers}
+        memberType={memberType}
+        onMemberTypeChange={setMemberType}
+        onDownloadConversations={() => setDownloadModalOpen(true)}
+      />
+      <DownloadConversationsModal
+        open={downloadModalOpen}
+        onClose={() => setDownloadModalOpen(false)}
+        members={displayMembers}
       />
     </div>
   );

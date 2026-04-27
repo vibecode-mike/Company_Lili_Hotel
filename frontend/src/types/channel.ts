@@ -36,7 +36,7 @@ export type MessagePlatform = Extract<ChannelPlatform, 'LINE' | 'Facebook' | 'In
  * 會員來源類型
  * 包含渠道平台 + 其他來源（CRM, PMS, ERP, 系統）
  */
-export type MemberSourceType = ChannelPlatform | 'CRM' | 'PMS' | 'ERP' | '系統';
+export type MemberSourceType = ChannelPlatform | 'Webchat' | 'CRM' | 'PMS' | 'ERP' | '系統';
 
 // ============================================================================
 // 類型守衛函數
@@ -78,6 +78,7 @@ export function isMemberSourceType(value: unknown): value is MemberSourceType {
     (value === 'LINE' ||
       value === 'Facebook' ||
       value === 'Instagram' ||
+      value === 'Webchat' ||
       value === 'CRM' ||
       value === 'PMS' ||
       value === 'ERP' ||
@@ -119,6 +120,7 @@ export const MEMBER_SOURCES: readonly MemberSourceType[] = [
   'LINE',
   'Facebook',
   'Instagram',
+  'Webchat',
   'CRM',
   'PMS',
   'ERP',
@@ -204,6 +206,12 @@ export const MEMBER_SOURCE_CONFIGS: Record<MemberSourceType, MemberSourceConfig>
     emoji: '📷',
     description: '透過 Instagram 加入',
   },
+  Webchat: {
+    value: 'Webchat',
+    label: 'Web Chat',
+    emoji: '💬',
+    description: '透過官網彈窗加入',
+  },
   // 其他來源
   CRM: {
     value: 'CRM',
@@ -250,7 +258,8 @@ export function getChannelConfig(channel: ChannelPlatform): ChannelConfig {
  * @returns 會員來源配置對象
  */
 export function getMemberSourceConfig(source: MemberSourceType): MemberSourceConfig {
-  return MEMBER_SOURCE_CONFIGS[source];
+  // 防呆：未知來源 fallback 到「系統」，避免 undefined.label 直接讓畫面崩掉
+  return MEMBER_SOURCE_CONFIGS[source] || MEMBER_SOURCE_CONFIGS['系統'];
 }
 
 /**

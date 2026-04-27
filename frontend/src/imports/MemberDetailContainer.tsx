@@ -81,7 +81,12 @@ const mapApiMemberToMemberData = (apiMember: BackendMember, fallback?: MemberDat
     passport_number: apiMember?.passport_number ?? fallback?.passport_number,
     internal_note: apiMember?.internal_note ?? fallback?.internal_note,
     status: fallback?.status,
-  };
+    is_guest: (apiMember as any)?.is_guest ?? (fallback as any)?.is_guest ?? false,
+    guest_seq: (apiMember as any)?.guest_seq ?? (fallback as any)?.guest_seq ?? null,
+    webchat_uid: (apiMember as any)?.webchat_uid ?? (fallback as any)?.webchat_uid,
+    webchat_name: (apiMember as any)?.webchat_name ?? (fallback as any)?.webchat_name,
+    webchat_avatar: (apiMember as any)?.webchat_avatar ?? (fallback as any)?.webchat_avatar,
+  } as any;
 };
 
 const mapMemberToMemberData = (memberSource: Member, fallback?: MemberData): MemberData => ({
@@ -108,7 +113,12 @@ const mapMemberToMemberData = (memberSource: Member, fallback?: MemberData): Mem
     passport_number: memberSource.passport_number ?? fallback?.passport_number,
     internal_note: memberSource.internal_note ?? fallback?.internal_note,
     status: fallback?.status ?? 'active',
-  });
+    is_guest: (memberSource as any).is_guest ?? (fallback as any)?.is_guest ?? false,
+    guest_seq: (memberSource as any).guest_seq ?? (fallback as any)?.guest_seq ?? null,
+    webchat_uid: (memberSource as any).webchat_uid ?? (fallback as any)?.webchat_uid,
+    webchat_name: (memberSource as any).webchat_name ?? (fallback as any)?.webchat_name,
+    webchat_avatar: (memberSource as any).webchat_avatar ?? (fallback as any)?.webchat_avatar,
+  } as any);
 
 const extractMessageTimestamp = (message?: MessageWithTimestamp): string | undefined => {
   if (!message) return undefined;
@@ -1266,11 +1276,14 @@ function Container6({ member, onMemberUpdate }: { member?: MemberData; onMemberU
     }
   };
 
+  // 訪客模式：個資欄位全部唯讀＋灰色
+  const isGuest = !!(member as any)?.is_guest;
+
   return (
     <div
-      className="content-stretch flex flex-col gap-[20px] items-start relative shrink-0 w-full"
+      className={`content-stretch flex flex-col gap-[20px] items-start relative shrink-0 w-full ${isGuest ? 'opacity-60 pointer-events-none select-none' : ''}`}
       data-name="Container"
-      onClick={() => !isSaving && setIsEditing(true)}
+      onClick={() => !isGuest && !isSaving && setIsEditing(true)}
     >
       <DropdownItem1 value={realName} onChange={handleRealNameChange} error={errors.realName} />
       <DropdownItem3
@@ -1285,7 +1298,7 @@ function Container6({ member, onMemberUpdate }: { member?: MemberData; onMemberU
       <DropdownItem11 value={idNumber} onChange={handleIdNumberChange} error={errors.idNumber} />
       <DropdownItem13 value={passportNumber} onChange={handlePassportChange} error={errors.passportNumber} />
 
-      {isEditing && (
+      {isEditing && !isGuest && (
         <div className="content-stretch flex gap-[8px] items-center justify-end relative shrink-0 w-full" data-name="Modal Footer">
           <button
                 type="button"

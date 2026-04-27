@@ -55,6 +55,13 @@ export interface BackendMember {
   internal_note?: string;
   name?: string;
   gpt_enabled?: boolean;
+  // 訪客（webchat widget 匿名訪客）
+  is_guest?: boolean;
+  guest_seq?: number | null;
+  // 未回覆 / 渠道名稱
+  is_unanswered?: boolean;
+  unanswered_since?: string | null;
+  channel_name?: string;
   // Meta API 額外欄位
   channel?: {
     customer_id: number;

@@ -1,7 +1,7 @@
 """
 會員模型
 """
-from sqlalchemy import Column, String, Boolean, Date, DateTime, Text, BigInteger
+from sqlalchemy import Column, String, Boolean, Date, DateTime, Text, BigInteger, Integer
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.models.base import Base
@@ -51,6 +51,21 @@ class Member(Base):
     )
     receive_notification = Column(Boolean, default=True, comment="是否接收優惠通知")
     gpt_enabled = Column(Boolean, default=True, comment="是否啟用 GPT 自動回應")
+    # 訪客（未加入會員的 webchat widget 使用者）
+    is_guest = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="0",
+        comment="是否為匿名 webchat 訪客（未填寫資料）",
+        index=True,
+    )
+    guest_seq = Column(
+        Integer,
+        unique=True,
+        nullable=True,
+        comment="訪客流水號（顯示為 訪客{guest_seq:06d}）",
+    )
     human_override_until = Column(DateTime, nullable=True, comment="人工接管到期時間（UTC），非 NULL 且未過期時抑制所有自動回應")
     internal_note = Column(Text, comment="內部備註")
     last_interaction_at = Column(DateTime, index=True, comment="最後互動時間")

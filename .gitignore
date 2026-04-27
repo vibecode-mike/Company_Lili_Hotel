@@ -58,3 +58,6 @@ build/
 .coverage
 htmlcov/
 google-chrome-stable_current_amd64.deb
+
+# rollback marker（記錄訪客功能 commit 哈希，per-machine）
+deploy/.guest-feature-marker

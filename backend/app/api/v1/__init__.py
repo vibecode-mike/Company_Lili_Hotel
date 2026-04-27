@@ -37,6 +37,8 @@ from app.api.v1 import (
     sse,
     booking_callback,
     analytics,
+    conversations_export,
+    admin_retention,
 )
 
 api_router = APIRouter()
@@ -76,3 +78,5 @@ api_router.include_router(fb_ws_proxy.router, prefix="/fb-ws-proxy", tags=["Face
 api_router.include_router(sse.router, prefix="", tags=["SSE 即時通訊"])
 api_router.include_router(booking_callback.router, prefix="/booking", tags=["外部訂房 Callback"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["數據洞察"])
+api_router.include_router(conversations_export.router, prefix="", tags=["對話紀錄匯出"])
+api_router.include_router(admin_retention.router, prefix="/admin/retention", tags=["訪客資料保留"])

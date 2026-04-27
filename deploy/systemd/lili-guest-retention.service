@@ -1,0 +1,16 @@
+[Unit]
+Description=Lili Hotel - 訪客資料保留任務（呼叫 backend API 清理過期匿名訪客）
+After=network.target lili_backend.service
+Wants=lili_backend.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/data2/lili_hotel/backend/.env
+# 透過 backend API 觸發清理；token 由 .env 讀取
+ExecStart=/usr/bin/curl --fail --silent --show-error \
+    --max-time 60 \
+    -X POST \
+    -H "X-Cron-Token: ${CRON_TOKEN}" \
+    http://127.0.0.1:8700/api/v1/admin/retention/run-guest-cleanup
+StandardOutput=append:/data2/lili_hotel/guest-retention.log
+StandardError=append:/data2/lili_hotel/guest-retention.log

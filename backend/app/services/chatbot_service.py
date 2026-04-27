@@ -24,10 +24,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
-from app.models.conversation import ConversationMessage
-from app.models.faq import AiTokenUsage, FaqRuleTag, Industry
+from app.models.conversation import ConversationMessage, ConversationThread
+from app.models.faq import AiTokenUsage, FaqRule, FaqCategory, FaqRuleTag, Industry
 from app.models.member import Member
-from app.models.tag import MemberTag
+from app.models.tag import MemberTag, MemberInteractionTag
+from sqlalchemy import func as sa_func
 from app.schemas.chatbot import (
     BookingContextSchema,
     ChatbotMessageOutSchema,
@@ -1044,8 +1045,11 @@ class ChatbotService:
                 session.checkout_date = checkout_str
 
         # Build unified tool calling context
+        # collect_rule_ids=True 讓 _unified_tool_loop 在 kb_search 時記下引用到的 FAQ rule，
+        # 後續才能依規則標籤自動為（訪客 / 已加入會員的）webchat 使用者打標。
         ctx = ToolCallingContext(
             db=db, test_mode=test_mode,
+            collect_rule_ids=True,
             checkin_date=session.checkin_date,
             checkout_date=session.checkout_date,
             booking_adults=session.booking_adults,
@@ -1115,6 +1119,36 @@ class ChatbotService:
         reply_type = self._determine_reply_type(session, room_cards)
         session.ts = time.time()
 
+        # 把 widget 對話寫入 conversation_threads / conversation_messages
+        # 不論是否已加入會員都記錄；非會員會建一筆 is_guest=1 的 Member
+        # 失敗不阻擋使用者收訊（log warning 即可）
+        # 註：widget 預設帶 test_mode=true（用於跳過 token 扣減），但對話保存與 test_mode 無關
+        widget_member: Optional[Member] = None
+        if db is not None:
+            try:
+                widget_member = await self._persist_widget_conversation(
+                    db=db,
+                    browser_key=browser_key,
+                    user_message=message,
+                    bot_reply=reply,
+                    room_cards=room_cards,
+                )
+            except Exception as exc:
+                logger.warning(f"[chatbot] persist widget conversation failed: {exc}")
+
+        # 自動為 widget 使用者貼 FAQ 規則標籤（與 LINE/會員聊天室一致）
+        if db is not None and widget_member is not None and ctx.referenced_rule_ids:
+            try:
+                await self._auto_tag_member(
+                    db,
+                    line_uid=None,
+                    referenced_rule_ids=list(ctx.referenced_rule_ids),
+                    member=widget_member,
+                )
+                await db.commit()
+            except Exception as exc:
+                logger.warning(f"[chatbot] auto-tag widget user failed: {exc}")
+
         return ChatbotMessageOutSchema(
             session_id=session.session_id,
             intent_state=session.intent_state,
@@ -1127,6 +1161,119 @@ class ChatbotService:
             tokens_used=ctx.total_tokens_used,
             unanswered=ctx.unanswered,
         )
+
+    async def _persist_widget_conversation(
+        self,
+        *,
+        db: AsyncSession,
+        browser_key: str,
+        user_message: str,
+        bot_reply: str,
+        room_cards: List[RoomCardSchema],
+    ) -> Member:
+        """把 widget 一輪對話（user + bot）寫入 conversation_threads / messages，回傳對應的 Member。
+
+        - 第一次收到該 browser_key：建一筆 is_guest=1 的 Member（webchat_uid=browser_key）
+        - 已存在（不論已成會員或仍是訪客）：直接附加訊息
+        - thread_id 直接用 browser_key（與 ChatroomService 慣例一致）
+        - 房卡訊息：以 message_type='room_cards' 額外存一筆，方便 CSV 匯出時可讀
+        """
+        # 1. upsert Member by webchat_uid=browser_key
+        result = await db.execute(
+            select(Member).where(Member.webchat_uid == browser_key)
+        )
+        member = result.scalar_one_or_none()
+        if member is None:
+            # 取下一個訪客流水號（低流量足夠；未來流量大可改 SELECT ... FOR UPDATE）
+            seq_result = await db.execute(
+                select(sa_func.coalesce(sa_func.max(Member.guest_seq), 0))
+            )
+            next_seq = (seq_result.scalar() or 0) + 1
+            member = Member(
+                webchat_uid=browser_key,
+                webchat_name=f"訪客{next_seq:06d}",
+                name=f"訪客{next_seq:06d}",
+                join_source="Webchat",
+                is_guest=True,
+                guest_seq=next_seq,
+                last_interaction_at=datetime.now(),
+            )
+            db.add(member)
+            await db.flush()  # 取得 member.id
+        else:
+            member.last_interaction_at = datetime.now()
+
+        # 2. upsert ConversationThread (id = browser_key)
+        thread_result = await db.execute(
+            select(ConversationThread).where(ConversationThread.id == browser_key)
+        )
+        thread = thread_result.scalar_one_or_none()
+        now = datetime.now()
+        if thread is None:
+            thread = ConversationThread(
+                id=browser_key,
+                member_id=member.id,
+                platform="Webchat",
+                platform_uid=browser_key,
+                last_message_at=now,
+            )
+            db.add(thread)
+            await db.flush()
+        else:
+            thread.member_id = member.id
+            thread.platform = "Webchat"
+            thread.platform_uid = browser_key
+            thread.last_message_at = now
+
+        # 3. 寫入使用者訊息
+        db.add(ConversationMessage(
+            id=str(uuid4()),
+            thread_id=thread.id,
+            platform="Webchat",
+            direction="incoming",
+            role="user",
+            content=user_message,
+            message_source="webhook",
+            created_at=now,
+        ))
+
+        # 4. 寫入 bot 回覆（純文字）
+        if bot_reply:
+            db.add(ConversationMessage(
+                id=str(uuid4()),
+                thread_id=thread.id,
+                platform="Webchat",
+                direction="outgoing",
+                role="assistant",
+                content=bot_reply,
+                message_source="gpt",
+                created_at=now,
+            ))
+
+        # 5. 房卡（如有）：另存一筆 message_type='room_cards'
+        if room_cards:
+            try:
+                room_cards_payload = json.dumps(
+                    {"room_cards": [rc.model_dump() if hasattr(rc, "model_dump") else dict(rc) for rc in room_cards]},
+                    ensure_ascii=False,
+                    default=str,
+                )
+                db.add(ConversationMessage(
+                    id=str(uuid4()),
+                    thread_id=thread.id,
+                    platform="Webchat",
+                    direction="outgoing",
+                    role="assistant",
+                    message_type="room_cards",
+                    content=room_cards_payload,
+                    message_source="gpt",
+                    created_at=now,
+                ))
+            except Exception as exc:
+                logger.warning(f"[chatbot] serialize room_cards failed: {exc}")
+
+        await db.commit()
+        return member
 
     async def _deduct_tokens(self, db: AsyncSession, tokens_used: int) -> None:
         """扣除 AiTokenUsage 額度"""
@@ -1792,24 +1939,34 @@ class ChatbotService:
 
                 db: DbSession = SessionLocal()
                 try:
-                    # Upsert member
+                    # Upsert member：優先找 widget 對話建立的 guest Member（webchat_uid=browser_key），
+                    # 把它「升級」為正式會員以保留對話歷史；否則 fallback 到 phone+email 查詢
                     existing_member = db.query(Member).filter(
-                        Member.phone == phone,
-                        Member.email == email,
+                        Member.webchat_uid == browser_key
                     ).first()
+                    if existing_member is None:
+                        existing_member = db.query(Member).filter(
+                            Member.phone == phone,
+                            Member.email == email,
+                        ).first()
                     if existing_member:
                         existing_member.name = name
                         existing_member.phone = phone
                         existing_member.email = email
                         existing_member.last_interaction_at = datetime.now()
+                        # 從訪客升級為正式會員
+                        if getattr(existing_member, "is_guest", False):
+                            existing_member.is_guest = False
                         crm_member_id = existing_member.id
                     else:
                         new_member = Member(
                             name=name,
                             phone=phone,
                             email=email,
+                            webchat_uid=browser_key,
                             join_source="Webchat",
                             gpt_enabled=True,
+                            is_guest=False,
                             last_interaction_at=datetime.now(),
                         )
                         db.add(new_member)
@@ -2449,32 +2606,41 @@ class ChatbotService:
         ]
 
     async def _auto_tag_member(
-        self, db: AsyncSession, line_uid: Optional[str], referenced_rule_ids: List[int],
+        self,
+        db: AsyncSession,
+        line_uid: Optional[str],
+        referenced_rule_ids: List[int],
+        member: Optional[Member] = None,
     ) -> List[str]:
-        """自動為會員貼標籤（只貼 AI 當次引用的規則標籤）"""
-        if not line_uid or not referenced_rule_ids:
-            return []
+        """自動為會員貼標籤（只貼 AI 當次引用的規則標籤）。
 
-        member_result = await db.execute(
-            select(Member).where(Member.line_uid == line_uid)
-        )
-        member = member_result.scalar_one_or_none()
+        member 直接傳入（widget 訪客流程）時優先使用；
+        否則用 line_uid 查（既有 LINE/會員聊天室流程）。
+        """
+        if not referenced_rule_ids:
+            return []
+        if member is None:
+            if not line_uid:
+                return []
+            member_result = await db.execute(
+                select(Member).where(Member.line_uid == line_uid)
+            )
+            member = member_result.scalar_one_or_none()
         if not member:
             return []
 
+        # 1) 會員標籤：依 FaqRuleTag.tag_name 寫入
         tag_result = await db.execute(
             select(FaqRuleTag.tag_name)
             .where(FaqRuleTag.rule_id.in_(referenced_rule_ids))
             .distinct()
         )
         tag_names = {t for (t,) in tag_result.all()}
-        if not tag_names:
-            return []
 
         existing_result = await db.execute(
             select(MemberTag.tag_name).where(
                 MemberTag.member_id == member.id,
-                MemberTag.tag_name.in_(tag_names),
+                MemberTag.tag_name.in_(tag_names) if tag_names else MemberTag.tag_name == "",
                 MemberTag.message_id == None,  # noqa: E711
             )
         )
@@ -2487,6 +2653,39 @@ class ChatbotService:
         if tagged:
             await db.flush()
 
+        # 2) 互動標籤：依 FaqRule 對應的 FaqCategory.name 寫入
+        #    例如 AI 用「訂房」分類下的 FAQ 回答 → 該會員/訪客貼上「訂房」互動標籤
+        category_result = await db.execute(
+            select(FaqCategory.name)
+            .join(FaqRule, FaqRule.category_id == FaqCategory.id)
+            .where(FaqRule.id.in_(referenced_rule_ids))
+            .distinct()
+        )
+        category_names = {n for (n,) in category_result.all() if n}
+        for cat_name in category_names:
+            # message_id IS NULL 的同名既存記錄：累加 click_count、更新 last_triggered_at
+            existing_int_result = await db.execute(
+                select(MemberInteractionTag).where(
+                    MemberInteractionTag.member_id == member.id,
+                    MemberInteractionTag.tag_name == cat_name,
+                    MemberInteractionTag.message_id.is_(None),
+                )
+            )
+            existing_int = existing_int_result.scalar_one_or_none()
+            if existing_int:
+                existing_int.click_count = (existing_int.click_count or 1) + 1
+                existing_int.last_triggered_at = datetime.now()
+            else:
+                db.add(MemberInteractionTag(
+                    member_id=member.id,
+                    tag_name=cat_name,
+                    tag_source="AI_chatbot",
+                    click_count=1,
+                    last_triggered_at=datetime.now(),
+                ))
+        if category_names:
+            await db.flush()
+
         # 寫 tag_trigger_logs（供時段洞察 heatmap 使用）— 涵蓋新貼 + 既有重新觸發
         from app.services.tag_trigger_service import record_tag_trigger
         from app.models.tag_trigger_log import TagType, TriggerSource
@@ -2496,6 +2695,14 @@ class ChatbotService:
                 member_id=member.id,
                 tag_name=tag_name,
                 tag_type=TagType.MEMBER,
+                source=TriggerSource.INTERACTION,
+            )
+        for cat_name in category_names:
+            await record_tag_trigger(
+                db,
+                member_id=member.id,
+                tag_name=cat_name,
+                tag_type=TagType.INTERACTION,
                 source=TriggerSource.INTERACTION,
             )
         return tagged

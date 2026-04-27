@@ -6,6 +6,7 @@ import Login from "./components/auth/Login";
 import { Toaster } from "./components/ui/sonner";
 import { useLineChannelStatus } from "./contexts/LineChannelStatusContext";
 import ChatFAB from "./components/ChatFAB";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 // 頁面組件懶加載導入 - 優化首屏加載性能
 const MessageListPage = lazy(() => import("./pages/MessageListPage"));
@@ -139,18 +140,20 @@ function AppContent() {
 
   return (
     <>
-      <Suspense
-        fallback={
-          <div className="flex items-center justify-center min-h-screen">
-            <div className="text-center">
-              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" />
-              <p className="mt-4 text-sm text-muted-foreground">載入中...</p>
+      <ErrorBoundary>
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center min-h-screen">
+              <div className="text-center">
+                <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" />
+                <p className="mt-4 text-sm text-muted-foreground">載入中...</p>
+              </div>
             </div>
-          </div>
-        }
-      >
-        <PageComponent />
-      </Suspense>
+          }
+        >
+          <PageComponent />
+        </Suspense>
+      </ErrorBoundary>
       {showChatFab && <ChatFAB />}
     </>
   );

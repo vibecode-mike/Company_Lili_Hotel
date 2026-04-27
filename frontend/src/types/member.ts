@@ -49,6 +49,9 @@ export interface Member {
   passport_number?: string;   // 護照號碼
   internal_note?: string;     // 會員備註
   gpt_enabled?: boolean;      // GPT 自動回覆模式 (true=自動, false=手動)
+  // 訪客（未填寫資料的 webchat widget 使用者）
+  is_guest?: boolean;
+  guest_seq?: number | null;
 }
 
 /**
@@ -78,6 +81,9 @@ export interface DisplayMember {
   unansweredSince: string | null; // 未回覆訊息的時間戳
   // 渠道帳號名稱
   channelName: string | null;    // 渠道帳號名稱 (e.g., "下班解憂所")
+  // 訪客（未填寫資料的 webchat widget 使用者）
+  isGuest?: boolean;
+  guestSeq?: number | null;
 }
 
 /**

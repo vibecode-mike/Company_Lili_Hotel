@@ -154,11 +154,20 @@ async def get_meta_user_profile(
             "tag_type": 3 if is_conversion else 2,
         })
 
+    # 訪客模式：選定渠道強制為 Webchat、channel_info 也以 Webchat 呈現
+    is_guest = bool(getattr(member, "is_guest", False))
+    if is_guest:
+        channel_info = _build_channel_info(member, "Webchat", "Webchat")
+        guest_label = f"訪客{member.guest_seq:06d}" if member.guest_seq else (member.name or "訪客")
+        display_name = guest_label
+    else:
+        display_name = member.name or ""
+
     # 4. 返回完整會員資料（與 /api/v1/members/{id} 格式相容）
     return SuccessResponse(data={
         # 基本資訊
         "id": member.id,
-        "name": member.name or "",
+        "name": display_name,
         "email": member.email or "",
         "phone": member.phone or "",
         "gender": member.gender or "",
@@ -179,12 +188,15 @@ async def get_meta_user_profile(
         "webchat_name": member.webchat_name or "",
         "webchat_avatar": member.webchat_avatar or "",
         # 其他
-        "join_source": member.join_source or "",
+        "join_source": "Webchat" if is_guest else (member.join_source or ""),
         "id_number": member.id_number or "",
         "residence": member.residence or "",
         "passport_number": member.passport_number or "",
         "internal_note": member.internal_note or "",
         "gpt_enabled": member.gpt_enabled if member.gpt_enabled is not None else True,
+        # 訪客旗標：前端用此判斷個資欄位是否唯讀、右側聊天頂部固定 Web Chat
+        "is_guest": is_guest,
+        "guest_seq": member.guest_seq if is_guest else None,
         # 當前選擇的渠道資訊
         "channel": channel_info,
         # 標籤 (tag_type 格式)

@@ -119,7 +119,10 @@ const transformBackendMember = (item: BackendMember): Member => {
     passport_number: item.passport_number || '',
     internal_note: item.internal_note || '',
     gpt_enabled: item.gpt_enabled ?? true,  // 預設為 true (自動模式)
-  };
+    // 訪客
+    is_guest: !!(item as any).is_guest,
+    guest_seq: (item as any).guest_seq ?? null,
+  } as any;
 };
 
 /**
@@ -218,10 +221,11 @@ export function MembersProvider({ children }: MembersProviderProps) {
     const displayRows: DisplayMember[] = [];
 
     try {
-      // 1. 並行取得 LINE 會員 + FB 會員 + FB 粉專列表（先顯示，再同步）
+      // 1. 並行取得 LINE 會員 + Webchat 會員（含訪客）+ FB 會員 + FB 粉專列表（先顯示，再同步）
       // 使用 apiGet 自動處理 token 和 401 重試
-      const [lineMembersRes, fbMembersRes, fbChannelsRes] = await Promise.all([
+      const [lineMembersRes, webchatMembersRes, fbMembersRes, fbChannelsRes] = await Promise.all([
         apiGet('/api/v1/members?channel=line&page=1&page_size=200'),
+        apiGet('/api/v1/members?channel=webchat&page=1&page_size=200'),
         jwtToken
           ? fetch(`/api/v1/fb_channels/message-list?jwt_token=${encodeURIComponent(jwtToken)}`)
           : Promise.resolve({ ok: false } as Response),
@@ -271,6 +275,39 @@ export function MembersProvider({ children }: MembersProviderProps) {
           });
         }
         console.log('LINE 會員載入:', lineItems.length, '筆');
+      }
+
+      // 2.5 Webchat 會員 / 訪客 → 直接加入顯示列表
+      if (webchatMembersRes.ok) {
+        const webchatData = await webchatMembersRes.json();
+        const webchatItems = webchatData.data?.items || [];
+        for (const member of webchatItems) {
+          const isGuest = !!member.is_guest;
+          const seq = member.guest_seq;
+          const displayName = isGuest && seq
+            ? `訪客${String(seq).padStart(6, '0')}`
+            : (member.webchat_name || member.name || 'Webchat 用戶');
+          displayRows.push({
+            id: `webchat-${member.id}`,
+            odooMemberId: member.id,
+            channel: 'Webchat',
+            channelUid: member.webchat_uid || '',
+            displayName,
+            realName: isGuest ? null : (member.name || null),
+            avatar: member.webchat_avatar || null,
+            email: isGuest ? null : (member.email || null),
+            phone: isGuest ? null : (member.phone || null),
+            createTime: member.created_at || null,
+            lastChatTime: member.last_interaction_at || null,
+            tags: (member.tags || []).map((t: BackendTag) => t.name || t.tag || ''),
+            isUnanswered: member.is_unanswered || false,
+            unansweredSince: member.unanswered_since || null,
+            channelName: 'Web Chat',
+            isGuest,
+            guestSeq: seq ?? null,
+          });
+        }
+        console.log('Webchat 會員載入:', webchatItems.length, '筆');
       }
 
       // 3. FB 會員 → 直接加入顯示列表

@@ -91,6 +91,7 @@ async def get_members(
     params: MemberSearchParams = Depends(),
     page_params: PageParams = Depends(),
     channel: Optional[str] = None,
+    member_type: str = Query("all", pattern="^(all|member|guest)$", description="會員類型：all=全部 / member=已加入會員 / guest=訪客"),
     db: AsyncSession = Depends(get_db),
     # current_user: User = Depends(get_current_user),  # 暫時移除認證，開發階段使用
 ):
@@ -99,8 +100,15 @@ async def get_members(
 
     Args:
         channel: 篩選渠道 (line, facebook, webchat)，不指定則返回所有會員
+        member_type: 篩選會員類型 (all/member/guest)
     """
     query = select(Member)
+
+    # 會員 / 訪客 / 全部
+    if member_type == "member":
+        query = query.where(Member.is_guest == False)  # noqa: E712
+    elif member_type == "guest":
+        query = query.where(Member.is_guest == True)  # noqa: E712
 
     # 搜索條件（已在 Schema 層驗證和清理）
     if params.search:
@@ -200,18 +208,25 @@ async def get_members(
     last_chat_times = {}
     unanswered_members = {}  # 儲存未回覆的會員: {thread_id: unanswered_since}
 
-    if member_line_uids:
-        # 使用子查詢找出每個 thread_id (line_uid) 的最新聊天時間
-        # conversation_messages 的 thread_id = platform_uid (line_uid)
-        # 注意：platform 可能是 'LINE' 或 NULL，都需要包含
+    # 同步收集 webchat_uid，讓訪客 / 已加入會員的 webchat 也能顯示最後互動時間與紅點
+    member_webchat_uids = [m.webchat_uid for m in members if m.webchat_uid]
+    all_lookup_uids = list({*member_line_uids, *member_webchat_uids})
+
+    if all_lookup_uids:
+        # 使用子查詢找出每個 thread_id 的最新聊天時間
+        # conversation_messages 的 thread_id = platform_uid (line_uid 或 webchat_uid)
         subq = (
             select(
                 ConversationMessage.thread_id,
                 func.max(ConversationMessage.created_at).label('max_created_at')
             )
             .where(
-                ConversationMessage.thread_id.in_(member_line_uids),
-                or_(ConversationMessage.platform == 'LINE', ConversationMessage.platform.is_(None))
+                ConversationMessage.thread_id.in_(all_lookup_uids),
+                or_(
+                    ConversationMessage.platform == 'LINE',
+                    ConversationMessage.platform == 'Webchat',
+                    ConversationMessage.platform.is_(None),
+                )
             )
             .group_by(ConversationMessage.thread_id)
         ).subquery()
@@ -275,13 +290,15 @@ async def get_members(
         member_dict["channel_id"] = channel_id
 
         # 使用批量查詢的聊天時間（無需額外查詢）
-        if member.line_uid and member.line_uid in last_chat_times:
-            member_dict["last_interaction_at"] = last_chat_times[member.line_uid]
+        # 優先用 line_uid，沒有就用 webchat_uid（訪客 / 已加入會員的 webchat 使用者）
+        lookup_uid = member.line_uid or member.webchat_uid
+        if lookup_uid and lookup_uid in last_chat_times:
+            member_dict["last_interaction_at"] = last_chat_times[lookup_uid]
 
         # 添加未回覆狀態
-        if member.line_uid and member.line_uid in unanswered_members:
+        if lookup_uid and lookup_uid in unanswered_members:
             member_dict["is_unanswered"] = True
-            member_dict["unanswered_since"] = unanswered_members[member.line_uid]
+            member_dict["unanswered_since"] = unanswered_members[lookup_uid]
         else:
             member_dict["is_unanswered"] = False
             member_dict["unanswered_since"] = None
@@ -403,14 +420,18 @@ async def get_member(
         tags.append(TagInfo(id=tag_id, name=tag_name, type="interaction"))
 
     # 查詢該會員最後一條聊天訊息的時間
-    # 使用 conversation_messages，thread_id = platform_uid (line_uid)
+    # 使用 conversation_messages，thread_id = platform_uid (line_uid 或 webchat_uid)
     last_chat_time = member.last_interaction_at
-    if member.line_uid:
+    lookup_uid = member.line_uid or member.webchat_uid
+    if lookup_uid:
         last_chat_result = await db.execute(
             select(ConversationMessage.created_at)
             .where(
-                ConversationMessage.thread_id == member.line_uid,
-                ConversationMessage.platform == 'LINE'
+                ConversationMessage.thread_id == lookup_uid,
+                or_(
+                    ConversationMessage.platform == 'LINE',
+                    ConversationMessage.platform == 'Webchat',
+                ),
             )
             .order_by(ConversationMessage.created_at.desc())
             .limit(1)
@@ -419,6 +440,13 @@ async def get_member(
         if last_chat_row:
             last_chat_time = last_chat_row
 
+    is_guest = bool(getattr(member, "is_guest", False))
+    display_name = (
+        f"訪客{member.guest_seq:06d}"
+        if is_guest and member.guest_seq
+        else (member.name or "")
+    )
+
     # 處理 None 值的欄位
     member_data = {
         "id": member.id,
@@ -426,7 +454,10 @@ async def get_member(
         "line_display_name": member.line_display_name,
         "line_avatar": member.line_avatar,
         "channel_id": channel_id,
-        "name": member.name,
+        "webchat_uid": member.webchat_uid,
+        "webchat_name": member.webchat_name,
+        "webchat_avatar": member.webchat_avatar,
+        "name": display_name,
         "email": member.email,
         "phone": member.phone,
         "gender": member.gender,
@@ -434,12 +465,14 @@ async def get_member(
         "id_number": member.id_number,
         "passport_number": member.passport_number,
         "residence": member.residence,
-        "join_source": member.join_source,
+        "join_source": "Webchat" if is_guest else member.join_source,
         "receive_notification": member.receive_notification if member.receive_notification is not None else True,
         "internal_note": member.internal_note,
         "created_at": member.created_at,
         "last_interaction_at": last_chat_time,
         "tags": tags,
+        "is_guest": is_guest,
+        "guest_seq": member.guest_seq if is_guest else None,
     }
 
     return SuccessResponse(data=member_data)

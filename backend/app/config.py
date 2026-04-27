@@ -92,6 +92,13 @@ class Settings(BaseSettings):
     # CORS
     ALLOWED_ORIGINS: str = "*"
 
+    # 排程任務驗證 token（systemd timer / Cloud Scheduler 用 X-Cron-Token header 帶這個值）
+    # 預設用 SECRET_KEY 衍生，部署時可在 .env 用 CRON_TOKEN 覆寫
+    CRON_TOKEN: str = ""
+
+    # 訪客資料保留天數（webchat 匿名訪客最後訊息超過此天數則整組刪除）
+    GUEST_RETENTION_DAYS: int = 7
+
     @property
     def DATABASE_URL(self) -> str:
         """由共享的 DB_* 組合 backend 使用的連線字串。"""

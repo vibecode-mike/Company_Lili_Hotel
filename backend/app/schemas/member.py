@@ -74,6 +74,9 @@ class MemberListItem(BaseModel):
     unanswered_since: Optional[datetime] = None  # 未回覆訊息的時間戳
     # 渠道名稱
     channel_name: Optional[str] = None  # 渠道帳號名稱 (e.g., "下班解憂所")
+    # 訪客狀態
+    is_guest: bool = False  # True：未加入會員的 webchat 訪客
+    guest_seq: Optional[int] = None  # 訪客流水號（顯示為 訪客{guest_seq:06d}）
 
     class Config:
         from_attributes = True
