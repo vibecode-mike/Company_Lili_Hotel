@@ -1345,6 +1345,13 @@ function Container7({ member, platform }: { member?: MemberData; platform?: Chat
     // 根據當前選擇的 platform 決定顯示哪個渠道名稱
     const normalizedPlatform = displayPlatform?.toLowerCase() || 'line';
     const isFacebook = normalizedPlatform === 'facebook' || normalizedPlatform === 'fb';
+    const isWebchat = normalizedPlatform === 'webchat';
+
+    // Webchat 直接固定顯示「Web Chat」，不需打 API
+    if (isWebchat) {
+      setChannelName('Web Chat');
+      return;
+    }
 
     if (isFacebook && member?.id) {
       // FB 會員：嘗試從 displayMembers 獲取（可能需要 customer_id）

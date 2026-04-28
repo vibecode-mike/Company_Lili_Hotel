@@ -115,6 +115,8 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
   const lineUid = getMemberString(member, ['lineUid', 'line_uid'], '');
   const joinSource = getMemberString(member, ['join_source'], 'LINE');
   const lineName = getMemberString(member, ['lineDisplayName', 'line_display_name', 'lineName'], '');
+  // Webchat 訪客：所有個資欄位鎖定，不可進入編輯模式（標籤等仍可改）
+  const isGuest = (member as any)?.is_guest === true || joinSource?.toLowerCase() === 'webchat';
   const [channelName, setChannelName] = React.useState<string>(propChannelName || '');
 
   React.useEffect(() => {
@@ -124,13 +126,19 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
       return;
     }
 
+    // 根據 join_source 獲取對應的渠道名稱
+    const normalizedSource = joinSource?.toLowerCase() || 'line';
+
+    // Webchat：直接寫死「Web Chat」，不要打 LINE/FB 的 API（會抓到別的頻道名）
+    if (normalizedSource === 'webchat') {
+      setChannelName('Web Chat');
+      return;
+    }
+
     const fetchChannelInfo = async () => {
       try {
         const token = localStorage.getItem('auth_token');
         if (!token) return;
-
-        // 根據 join_source 獲取對應的渠道名稱
-        const normalizedSource = joinSource?.toLowerCase() || 'line';
 
         if (normalizedSource === 'facebook' || normalizedSource === 'fb') {
           // Facebook 渠道：獲取粉專名稱
@@ -178,7 +186,6 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
       } catch (error) {
         console.error('Failed to fetch channel info:', error);
         // 錯誤時使用預設名稱
-        const normalizedSource = joinSource?.toLowerCase() || 'line';
         setChannelName(normalizedSource === 'facebook' || normalizedSource === 'fb' ? 'Facebook' : 'LINE');
       }
     };
@@ -270,7 +277,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
   };
 
   return (
-    <div className="content-stretch flex flex-col gap-[20px] items-start relative shrink-0 w-full" onClick={() => !isEditing && setIsEditing(true)}>
+    <div className="content-stretch flex flex-col gap-[20px] items-start relative shrink-0 w-full" onClick={() => !isGuest && !isEditing && setIsEditing(true)}>
       {/* 姓名 */}
       <div className="content-stretch flex items-start relative shrink-0 w-full">
         <div className="content-stretch flex gap-[2px] items-center min-w-[120px] relative shrink-0">
@@ -351,47 +358,59 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
           </div>
         </div>
         <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0">
-          <Popover open={birthdayPopoverOpen} onOpenChange={setBirthdayPopoverOpen}>
-            <PopoverTrigger asChild>
-              <div 
-                className="bg-white cursor-pointer hover:border-[#0f6beb] box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center p-[8px] relative rounded-[8px] shrink-0 w-full"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!isEditing) {
-                    setIsEditing(true);
-                  }
-                  setBirthdayPopoverOpen(true);
-                }}
-              >
-                <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-[8px]" />
-                <div className="content-stretch flex items-center relative shrink-0 w-full">
-                  <div className="basis-0 content-stretch flex gap-[8px] grow items-center min-h-px min-w-0 relative shrink-0 pr-10">
-                    <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[16px] text-nowrap whitespace-pre" style={{ color: birthday ? '#383838' : '#a8a8a8' }}>
-                      {birthday ? format(birthday, "yyyy/MM/dd") : "選擇年/月/日"}
-                    </p>
-                  </div>
-                  <div className="content-stretch flex items-center justify-center min-h-[16px] min-w-[16px] absolute right-2 top-1/2 -translate-y-1/2 rounded-[8px] shrink-0 size-[28px]">
-                    <div className="relative shrink-0 size-[24px]">
-                      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
-                        <g id="Icon/Calendar">
-                          <path d={svgPathsInfo.p22990f00} fill="var(--fill-0, #0F6BEB)" id="Vector" />
-                        </g>
-                      </svg>
+          {isGuest ? (
+            // 訪客：純讀模式，整個 Popover 不掛載，避免 Radix Trigger 內部 onClick 繞過 guard
+            <div className="bg-white box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center p-[8px] relative rounded-[8px] shrink-0 w-full pointer-events-none select-none">
+              <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-[8px]" />
+              <div className="content-stretch flex items-center relative shrink-0 w-full">
+                <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[16px] text-nowrap whitespace-pre" style={{ color: birthday ? '#383838' : '#a8a8a8' }}>
+                  {birthday ? format(birthday, "yyyy/MM/dd") : "—"}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <Popover open={birthdayPopoverOpen} onOpenChange={setBirthdayPopoverOpen}>
+              <PopoverTrigger asChild>
+                <div
+                  className="bg-white cursor-pointer hover:border-[#0f6beb] box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center p-[8px] relative rounded-[8px] shrink-0 w-full"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!isEditing) {
+                      setIsEditing(true);
+                    }
+                    setBirthdayPopoverOpen(true);
+                  }}
+                >
+                  <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-[8px]" />
+                  <div className="content-stretch flex items-center relative shrink-0 w-full">
+                    <div className="basis-0 content-stretch flex gap-[8px] grow items-center min-h-px min-w-0 relative shrink-0 pr-10">
+                      <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[16px] text-nowrap whitespace-pre" style={{ color: birthday ? '#383838' : '#a8a8a8' }}>
+                        {birthday ? format(birthday, "yyyy/MM/dd") : "選擇年/月/日"}
+                      </p>
+                    </div>
+                    <div className="content-stretch flex items-center justify-center min-h-[16px] min-w-[16px] absolute right-2 top-1/2 -translate-y-1/2 rounded-[8px] shrink-0 size-[28px]">
+                      <div className="relative shrink-0 size-[24px]">
+                        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
+                          <g id="Icon/Calendar">
+                            <path d={svgPathsInfo.p22990f00} fill="var(--fill-0, #0F6BEB)" id="Vector" />
+                          </g>
+                        </svg>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={birthday}
-                onSelect={setBirthday}
-                disabled={(date) => date > new Date()}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={birthday}
+                  onSelect={setBirthday}
+                  disabled={(date) => date > new Date()}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+          )}
         </div>
       </div>
 
@@ -914,19 +933,21 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
           </div>
         </div>
 
-        {/* 會員 ID */}
-        <div className="content-stretch flex items-center relative shrink-0 w-full">
-          <div className="content-stretch flex items-center min-w-[120px] relative shrink-0">
-            <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px]">
-              <p className="leading-[1.5]">會員 ID</p>
+        {/* 會員 ID — Webchat 訪客沒有真正的會員 ID，整列隱藏 */}
+        {joinSource?.toLowerCase() !== 'webchat' && (
+          <div className="content-stretch flex items-center relative shrink-0 w-full">
+            <div className="content-stretch flex items-center min-w-[120px] relative shrink-0">
+              <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px]">
+                <p className="leading-[1.5]">會員 ID</p>
+              </div>
+            </div>
+            <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0">
+              <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
+                <p className="leading-[1.5] whitespace-pre">{member.id}</p>
+              </div>
             </div>
           </div>
-          <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0">
-            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">{member.id}</p>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

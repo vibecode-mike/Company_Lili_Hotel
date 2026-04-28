@@ -45,7 +45,7 @@ export interface ChatBubbleProps {
 /**
  * 用戶頭像組件（左側）
  * - LINE/Facebook: 優先使用會員頭像，找不到則顯示 OA
- * - WebChat: 顯示專用圖標
+ * - WebChat: 顯示人物剪影（訪客是真人，用 person icon）
  */
 function UserAvatar({
   avatar,
@@ -54,11 +54,22 @@ function UserAvatar({
   avatar?: string;
   platform?: ChatPlatform;
 }) {
-  // Webchat 平台：顯示專用圖標
+  // Webchat 平台：顯示人物剪影（訪客身分）
   if (platform === 'Webchat') {
     return (
       <div className="bg-white overflow-clip relative rounded-full shrink-0 size-[45px] flex items-center justify-center shadow-sm">
-        <img src={WebChatIcon} alt="WebChat" className="w-[16px] h-[16px]" />
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          className="shrink-0"
+        >
+          <path
+            d="M12 12C14.21 12 16 10.21 16 8C16 5.79 14.21 4 12 4C9.79 4 8 5.79 8 8C8 10.21 9.79 12 12 12ZM12 14C9.33 14 4 15.34 4 18V20H20V18C20 15.34 14.67 14 12 14Z"
+            fill="#6E6E6E"
+          />
+        </svg>
       </div>
     );
   }
@@ -88,10 +99,17 @@ function UserAvatar({
 
 /**
  * 官方頭像組件（右側）
- * Figma 3.png: 白色圓形 + 人物圖標
+ * - LINE/Facebook: 人物剪影 SVG（代表客服人員）
+ * - Webchat: WebChat icon（代表 AI/系統）
  * Hover 時顯示發送人員名稱（manual 顯示人員名稱，其他顯示「系統」）
  */
-function OfficialAvatar({ senderName }: { senderName?: string | null }) {
+function OfficialAvatar({
+  senderName,
+  platform = 'LINE',
+}: {
+  senderName?: string | null;
+  platform?: ChatPlatform;
+}) {
   const displayName = senderName || '系統';
 
   return (
@@ -99,19 +117,22 @@ function OfficialAvatar({ senderName }: { senderName?: string | null }) {
       <Tooltip>
         <TooltipTrigger asChild>
           <div className="bg-white overflow-clip relative rounded-full shrink-0 size-[45px] flex items-center justify-center shadow-sm cursor-default">
-            {/* 人物圖標 SVG */}
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              className="shrink-0"
-            >
-              <path
-                d="M12 12C14.21 12 16 10.21 16 8C16 5.79 14.21 4 12 4C9.79 4 8 5.79 8 8C8 10.21 9.79 12 12 12ZM12 14C9.33 14 4 15.34 4 18V20H20V18C20 15.34 14.67 14 12 14Z"
-                fill="#6E6E6E"
-              />
-            </svg>
+            {platform === 'Webchat' ? (
+              <img src={WebChatIcon} alt="WebChat AI" className="w-[16px] h-[16px]" />
+            ) : (
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                className="shrink-0"
+              >
+                <path
+                  d="M12 12C14.21 12 16 10.21 16 8C16 5.79 14.21 4 12 4C9.79 4 8 5.79 8 8C8 10.21 9.79 12 12 12ZM12 14C9.33 14 4 15.34 4 18V20H20V18C20 15.34 14.67 14 12 14Z"
+                  fill="#6E6E6E"
+                />
+              </svg>
+            )}
           </div>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={4}>
@@ -447,7 +468,7 @@ export function ChatBubble({
       </div>
 
       {/* 官方頭像（右側） */}
-      {isOfficial && <OfficialAvatar senderName={message.senderName} />}
+      {isOfficial && <OfficialAvatar senderName={message.senderName} platform={platform} />}
     </div>
   );
 }
