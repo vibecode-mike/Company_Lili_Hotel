@@ -72,15 +72,6 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     () => (import.meta.env.VITE_FB_API_URL?.trim() || 'https://api-youth-tycg.star-bit.io').replace(/\/+$/, ''),
     []
   );
-  const fbServiceAccount = useMemo(
-    () => import.meta.env.VITE_FB_FIRM_ACCOUNT?.trim() || 'tycg-admin',
-    []
-  );
-  const fbServicePassword = useMemo(
-    () => import.meta.env.VITE_FB_FIRM_PASSWORD?.trim() || '123456',
-    []
-  );
-
   const facebookLoginScope = 'public_profile,email,pages_show_list,pages_read_engagement,pages_manage_metadata';
 
 
@@ -135,17 +126,16 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     prepareFacebookSdk();
   }, [prepareFacebookSdk]);
 
-  // 執行 firm_login 取得 JWT token
+  // 執行 firm_login 取得 JWT token（透過自家 backend proxy，前端不持有 firm 密碼）
   const performFirmLogin = useCallback(async (): Promise<string> => {
-    const response = await fetch(`${fbApiBaseUrl}/api/v1/admin/firm_login`, {
+    const response = await fetch(`/api/v1/admin/fb-firm-login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ account: fbServiceAccount, password: fbServicePassword }),
     });
 
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
-      throw new Error(payload?.msg || `firm_login 失敗（HTTP ${response.status}）`);
+      throw new Error(payload?.msg || payload?.detail || `firm_login 失敗（HTTP ${response.status}）`);
     }
 
     const token = payload?.data?.access_token;
@@ -155,7 +145,7 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
 
     localStorage.setItem('jwt_token', token);
     return token;
-  }, [fbApiBaseUrl, fbServiceAccount, fbServicePassword]);
+  }, []);
 
   // 取得 JWT token，必要時執行 firm_login
   const ensureJwtToken = useCallback(async (): Promise<string> => {

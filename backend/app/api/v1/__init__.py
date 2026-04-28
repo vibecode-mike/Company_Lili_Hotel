@@ -39,6 +39,7 @@ from app.api.v1 import (
     analytics,
     conversations_export,
     admin_retention,
+    fb_admin,
 )
 
 api_router = APIRouter()
@@ -68,6 +69,7 @@ api_router.include_router(
     prefix="/admin/meta_user",
     tags=["Meta 會員管理"],
 )
+api_router.include_router(fb_admin.router, prefix="/admin", tags=["FB Admin"])
 api_router.include_router(websocket.router, prefix="", tags=["WebSocket 即時通訊"])
 api_router.include_router(line_notify.router, prefix="", tags=["LINE 訊息通知"])
 api_router.include_router(chat_session.router, prefix="", tags=["聊天 Session"])
