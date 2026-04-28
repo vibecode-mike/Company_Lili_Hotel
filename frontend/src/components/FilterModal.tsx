@@ -6,7 +6,7 @@ import { Tag as TagComponent } from './common';
 interface Tag {
   id: string;
   name: string;
-  type?: 'member' | 'interaction';
+  type?: 'member' | 'interaction' | 'conversion';
 }
 
 interface FilterModalProps {
@@ -22,7 +22,8 @@ const MAX_TAG_LENGTH = 20; // 标签名称字符数上限
 export default function FilterModal({ onClose, onConfirm, initialSelectedTags, initialIsInclude }: FilterModalProps) {
   const [memberTags, setMemberTags] = useState<Tag[]>([]);
   const [interactionTags, setInteractionTags] = useState<Tag[]>([]);
-  const [activeTab, setActiveTab] = useState<'member' | 'interaction'>('member');
+  const [conversionTags, setConversionTags] = useState<Tag[]>([]);
+  const [activeTab, setActiveTab] = useState<'member' | 'interaction' | 'conversion'>('member');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedTags, setSelectedTags] = useState<Tag[]>(initialSelectedTags || []);
   const [searchInput, setSearchInput] = useState('');
@@ -49,6 +50,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
           const result = await response.json();
           const memberTagsData = result.data?.memberTags || [];
           const interactionTagsData = result.data?.interactionTags || [];
+          const conversionTagsData = result.data?.conversionTags || [];
 
           setMemberTags(memberTagsData.map((name: string) => ({
             id: `member-${name}`,
@@ -59,6 +61,11 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
             id: `interaction-${name}`,
             name,
             type: 'interaction' as const
+          })));
+          setConversionTags(conversionTagsData.map((name: string) => ({
+            id: `conversion-${name}`,
+            name,
+            type: 'conversion' as const
           })));
         } else {
           console.error('Tags API error:', response.status, response.statusText);
@@ -74,8 +81,12 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
   }, []);
 
   // 根據當前 Tab 獲取顯示的標籤
-  const displayTags = activeTab === 'member' ? memberTags : interactionTags;
-  const availableTags = [...memberTags, ...interactionTags];
+  const displayTags = activeTab === 'member'
+    ? memberTags
+    : activeTab === 'interaction'
+      ? interactionTags
+      : conversionTags;
+  const availableTags = [...memberTags, ...interactionTags, ...conversionTags];
   
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollbarRef = useRef<HTMLDivElement>(null);
@@ -113,19 +124,18 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
         if (existingTag && !selectedTags.find(st => st.id === existingTag.id)) {
           setSelectedTags([...selectedTags, existingTag]);
         } else if (!existingTag) {
-          // Create new tag - add to current tab's type
-          const newTag: Tag = {
-            id: `${activeTab}-${Date.now()}`,
-            name: searchInput.trim(),
-            type: activeTab
-          };
-          // Add to both selected tags and corresponding tag list
-          setSelectedTags([...selectedTags, newTag]);
-          if (activeTab === 'member') {
-            setMemberTags([...memberTags, newTag]);
-          } else {
-            setInteractionTags([...interactionTags, newTag]);
+          // 只有「會員標籤」可以人工建立；互動 / 轉單不允許新增（系統自動產生）
+          if (activeTab !== 'member') {
+            alert('互動標籤與轉單標籤無法在此處新增');
+            return;
           }
+          const newTag: Tag = {
+            id: `member-${Date.now()}`,
+            name: searchInput.trim(),
+            type: 'member'
+          };
+          setSelectedTags([...selectedTags, newTag]);
+          setMemberTags([...memberTags, newTag]);
         }
         setSearchInput('');
       } else {
@@ -275,7 +285,10 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
     </div>
   );
 
-  const showNewTagCreation = searchInput.trim() && !displayTags.find(t => t.name.toLowerCase() === searchInput.toLowerCase());
+  // 「建立新標籤」提示只在會員標籤 tab 顯示（互動 / 轉單不允許人工新建）
+  const showNewTagCreation = activeTab === 'member'
+    && searchInput.trim()
+    && !displayTags.find(t => t.name.toLowerCase() === searchInput.toLowerCase());
 
   return (
     <div
@@ -366,7 +379,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
               <p className="leading-[1.5]">選擇或建立標籤</p>
             </div>
 
-            {/* Tab 切換 */}
+            {/* Tab 切換 — 三種標籤都能挑選，但只有「會員標籤」可以人工新建 */}
             <div className="flex gap-[24px] border-b border-[#e1ebf9] w-full">
               <button
                 type="button"
@@ -389,6 +402,17 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
                 onClick={() => setActiveTab('interaction')}
               >
                 互動標籤 ({interactionTags.length})
+              </button>
+              <button
+                type="button"
+                className={`pb-[8px] text-[14px] font-['Noto_Sans_TC:Regular',_sans-serif] transition-colors ${
+                  activeTab === 'conversion'
+                    ? 'text-[#0F6BEB] border-b-2 border-[#0F6BEB] -mb-[1px]'
+                    : 'text-[#6e6e6e] hover:text-[#383838]'
+                }`}
+                onClick={() => setActiveTab('conversion')}
+              >
+                轉單標籤 ({conversionTags.length})
               </button>
             </div>
           </div>
@@ -414,7 +438,11 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
               ) : displayTags.length === 0 && !searchInput.trim() ? (
                 // Blank state
                 <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#a8a8a8] text-[16px] text-center">
-                  尚無{activeTab === 'member' ? '會員' : '互動'}標籤，於上方輸入並開始建立
+                  {activeTab === 'member'
+                    ? '尚無會員標籤，於上方輸入並開始建立'
+                    : activeTab === 'interaction'
+                      ? '尚無互動標籤（系統會在使用者點擊房卡 / 圖片時自動產生）'
+                      : '尚無轉單標籤（訂單完成時系統自動產生）'}
                 </p>
               ) : (
                 <div className="flex flex-col gap-[12px] w-full">
@@ -437,7 +465,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
                         <div className="box-border content-stretch flex gap-[10px] items-center px-[8px] py-[6px] relative w-full">
                           <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[14px] text-center text-nowrap whitespace-pre">建立</p>
                           <TagComponent variant="blue">{searchInput}</TagComponent>
-                          <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[14px] text-center text-nowrap whitespace-pre">的{activeTab === 'member' ? '會員' : '互動'}標籤</p>
+                          <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[14px] text-center text-nowrap whitespace-pre">的會員標籤</p>
                         </div>
                       </div>
                     </div>

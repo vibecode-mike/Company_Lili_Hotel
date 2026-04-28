@@ -509,6 +509,8 @@ async def get_time_slot_insights(
     end_dt = datetime.combine(end + timedelta(days=1), datetime.min.time())
 
     # 每個（日期、4hr 時段）算 COUNT(DISTINCT member_id）
+    # 只算「用戶端真實互動」：對話 (INTERACTION) / 點擊 (CLICK) / 轉單 (CONVERSION)
+    # 管理員手動加標籤 (MANUAL) 排除，避免熱圖跟互動旅程明細數字對不起來
     sql = text(f"""
         SELECT DATE(t.triggered_at) AS d,
                FLOOR(HOUR(t.triggered_at) / 4) AS block,
@@ -516,6 +518,7 @@ async def get_time_slot_insights(
         FROM tag_trigger_logs t
         JOIN members m ON m.id = t.member_id
         WHERE t.triggered_at >= :start_dt AND t.triggered_at < :end_dt
+          AND t.trigger_source IN ('INTERACTION', 'CLICK', 'CONVERSION')
           AND ({where_clause})
         GROUP BY DATE(t.triggered_at), FLOOR(HOUR(t.triggered_at) / 4)
     """)
@@ -534,12 +537,13 @@ async def get_time_slot_insights(
         if col is not None and 0 <= block < 6:
             matrix[block][col] = int(row.n or 0)
 
-    # 7 天總不重複會員數（不論時段）
+    # 7 天總不重複會員數（不論時段）— 同樣只算真實互動
     total_sql = text(f"""
         SELECT COUNT(DISTINCT t.member_id) AS n
         FROM tag_trigger_logs t
         JOIN members m ON m.id = t.member_id
         WHERE t.triggered_at >= :start_dt AND t.triggered_at < :end_dt
+          AND t.trigger_source IN ('INTERACTION', 'CLICK', 'CONVERSION')
           AND ({where_clause})
     """)
     total_row = (await db.execute(total_sql, {"start_dt": start_dt, "end_dt": end_dt})).first()

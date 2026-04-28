@@ -150,28 +150,38 @@ async def get_available_tag_options(
     member_result = await db.execute(member_tags_query)
     member_tag_names = [row[0] for row in member_result.all()]
 
-    # 查詢互動標籤 - 合併雙來源（自動產生 + 手動新增）
+    # 互動標籤 / 轉單標籤：同一張 member_interaction_tags，靠 tag_source 區分
+    #   tag_source='booking_conversion' → 轉單標籤
+    #   其他（auto_click / AI_chatbot / CRM / 會員資訊表 等） → 互動標籤
     interaction_tag_names = set()
+    conversion_tag_names = set()
 
-    # 來源 1: 自動產生的互動標籤 (InteractionTag)
+    # 來源 1: 自動產生的互動標籤 (InteractionTag) — 全歸互動標籤
     auto_tags_query = select(InteractionTag.tag_name).distinct()
     auto_result = await db.execute(auto_tags_query)
     for row in auto_result.all():
-        interaction_tag_names.add(row[0])
+        if row[0]:
+            interaction_tag_names.add(row[0])
 
-    # 來源 2: 手動新增的互動標籤 (MemberInteractionTag)
-    manual_tags_query = select(MemberInteractionTag.tag_name).distinct()
-    manual_result = await db.execute(manual_tags_query)
-    for row in manual_result.all():
-        interaction_tag_names.add(row[0])
+    # 來源 2: MemberInteractionTag — 依 tag_source 拆兩組
+    mit_query = select(MemberInteractionTag.tag_name, MemberInteractionTag.tag_source).distinct()
+    mit_result = await db.execute(mit_query)
+    for tag_name, tag_source in mit_result.all():
+        if not tag_name:
+            continue
+        if tag_source == "booking_conversion":
+            conversion_tag_names.add(tag_name)
+        else:
+            interaction_tag_names.add(tag_name)
 
-    # 排序並轉換為列表
     interaction_tag_list = sorted(list(interaction_tag_names))
+    conversion_tag_list = sorted(list(conversion_tag_names))
 
     return SuccessResponse(
         data={
             "memberTags": member_tag_names,
             "interactionTags": interaction_tag_list,
+            "conversionTags": conversion_tag_list,
         }
     )
 

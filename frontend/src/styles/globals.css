@@ -528,6 +528,15 @@ html {
   color: #383838;
 }
 
+/* Tab 間的 1px 灰色分隔線：以 linear-gradient 畫於背景，避免 border-left 延伸
+   到底部 6px 色條區域切斷三顆 tab 的彩色底線，使藍色粗線視覺上接合。*/
+.journey-tabs-col .journey-tab-btn:not(:first-child) {
+  background-image: linear-gradient(to bottom, #ddd 0, #ddd calc(100% - 6px), transparent calc(100% - 6px));
+  background-size: 1px 100%;
+  background-repeat: no-repeat;
+  background-position: left top;
+}
+
 /* 互動旅程 stacked bar：badge 欄寬度 = --journey-left-col - 24（= 20 容器 px + 4 gap） */
 .journey-bar-badge {
   display: flex;

@@ -265,40 +265,19 @@ export default function MemberTagEditModal({
                   </div>
                 </div>
 
-                {/* Tabs and Selected Tags */}
+                {/* Tabs and Selected Tags — 互動標籤改由系統自動產生（點擊 / 訂單），不開放人工編輯 */}
                 <div className="content-stretch flex flex-col gap-[12px] items-start relative shrink-0 w-full" data-name="Container">
-                  {/* Tabs */}
+                  {/* Tabs：只剩「會員標籤」，保留 underline 樣式維持視覺一致 */}
                   <div className="content-stretch flex items-center relative shrink-0 w-full" data-name="Container">
                     <div aria-hidden="true" className="absolute border-[#e1ebf9] border-[0px_0px_1px] border-solid inset-0 pointer-events-none" />
-                    
-                    {/* Member Tags Tab */}
-                    <div 
-                      className="content-stretch flex gap-[4px] items-center relative shrink-0 cursor-pointer" 
+                    <div
+                      className="content-stretch flex gap-[4px] items-center relative shrink-0"
                       data-name="Button Container"
-                      onClick={() => setActiveTab('member')}
                     >
-                      {activeTab === 'member' && (
-                        <div aria-hidden="true" className="absolute border-[#0f6beb] border-[0px_0px_2px] border-solid inset-0 pointer-events-none" />
-                      )}
+                      <div aria-hidden="true" className="absolute border-[#0f6beb] border-[0px_0px_2px] border-solid inset-0 pointer-events-none" />
                       <div className="box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0" data-name="Button">
-                        <p className={`basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center ${activeTab === 'member' ? 'text-[#383838]' : 'text-[#6e6e6e]'}`}>
+                        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center text-[#383838]">
                           會員標籤
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Interaction Tags Tab */}
-                    <div 
-                      className="content-stretch flex gap-[4px] items-center relative shrink-0 cursor-pointer" 
-                      data-name="Container"
-                      onClick={() => setActiveTab('interaction')}
-                    >
-                      {activeTab === 'interaction' && (
-                        <div aria-hidden="true" className="absolute border-[#0f6beb] border-[0px_0px_2px] border-solid inset-0 pointer-events-none" />
-                      )}
-                      <div className="box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0" data-name="Button">
-                        <p className={`basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center ${activeTab === 'interaction' ? 'text-[#383838]' : 'text-[#6e6e6e]'}`}>
-                          互動標籤
                         </p>
                       </div>
                     </div>
