@@ -187,6 +187,8 @@ async def get_meta_user_profile(
         "webchat_uid": member.webchat_uid or "",
         "webchat_name": member.webchat_name or "",
         "webchat_avatar": member.webchat_avatar or "",
+        "webchat_site_id": member.webchat_site_id or "",
+        "webchat_site_name": member.webchat_site_name or "",
         # 其他
         "join_source": "Webchat" if is_guest else (member.join_source or ""),
         "id_number": member.id_number or "",

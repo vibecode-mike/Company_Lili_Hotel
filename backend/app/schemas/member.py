@@ -61,6 +61,8 @@ class MemberListItem(BaseModel):
     webchat_uid: Optional[str] = None
     webchat_name: Optional[str] = None
     webchat_avatar: Optional[str] = None
+    webchat_site_id: Optional[str] = None  # 嵌入站點英文代號（例：starbit-ryan）
+    webchat_site_name: Optional[str] = None  # 嵌入站點顯示名（例：思偉達飯店｜雷恩館）
     # 基本資訊
     name: Optional[str] = None
     email: Optional[EmailStr] = None

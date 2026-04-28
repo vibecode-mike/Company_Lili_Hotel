@@ -21,6 +21,8 @@ from app.schemas.chatbot import (
     ConfirmRoomOutSchema,
     SessionResetInSchema,
     SessionResetOutSchema,
+    TrackClickInSchema,
+    TrackClickOutSchema,
 )
 import logging
 
@@ -191,6 +193,8 @@ async def chatbot_message(
             hotel_id=payload.hotel_id,
             db=db,
             test_mode=payload.test_mode,
+            site_id=payload.site_id,
+            site_name=payload.site_name,
         )
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -272,3 +276,31 @@ async def chatbot_booking_save(payload: BookingSaveInSchema) -> BookingSaveOutSc
         checkin_date=payload.checkin_date,
         checkout_date=payload.checkout_date,
     )
+
+
+@router.post("/track-click", response_model=TrackClickOutSchema)
+async def chatbot_track_click(
+    payload: TrackClickInSchema,
+    db: AsyncSession = Depends(get_db),
+) -> TrackClickOutSchema:
+    """Widget 點擊事件追蹤 → 寫互動標籤（tag_source='auto_click'）。
+
+    - 對等 LINE 的 /__track 端點
+    - 房卡 +、確認選房按鈕、未來的 suggestion / 圖片放大都打這支
+    - 訪客還沒透過 /message 建立 Member 時靜默忽略（tagged=False）
+    - fire-and-forget — 任何失敗都不影響主流程
+    """
+    try:
+        tagged = await chatbot_service.track_widget_click(
+            db=db,
+            browser_key=payload.browser_key,
+            event_type=payload.event_type,
+            category_name=payload.category_name,
+            rule_id=payload.rule_id,
+            room_type_code=payload.room_type_code,
+        )
+        return TrackClickOutSchema(ok=True, tagged=tagged)
+    except Exception as exc:
+        # 點擊追蹤失敗絕對不能擋住使用者 → 吞例外、記 log
+        logger.warning(f"[track-click] failed: {exc}")
+        return TrackClickOutSchema(ok=True, tagged=False)

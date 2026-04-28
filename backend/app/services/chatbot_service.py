@@ -1005,6 +1005,8 @@ class ChatbotService:
         hotel_id: Optional[int] = None,
         db: Optional[AsyncSession] = None,
         test_mode: bool = False,
+        site_id: Optional[str] = None,
+        site_name: Optional[str] = None,
     ) -> ChatbotMessageOutSchema:
         session = self.get_or_create_session(browser_key, hotel_id)
 
@@ -1132,6 +1134,8 @@ class ChatbotService:
                     user_message=message,
                     bot_reply=reply,
                     room_cards=room_cards,
+                    site_id=site_id,
+                    site_name=site_name,
                 )
             except Exception as exc:
                 logger.warning(f"[chatbot] persist widget conversation failed: {exc}")
@@ -1170,6 +1174,8 @@ class ChatbotService:
         user_message: str,
         bot_reply: str,
         room_cards: List[RoomCardSchema],
+        site_id: Optional[str] = None,
+        site_name: Optional[str] = None,
     ) -> Member:
         """把 widget 一輪對話（user + bot）寫入 conversation_threads / messages，回傳對應的 Member。
 
@@ -1177,7 +1183,12 @@ class ChatbotService:
         - 已存在（不論已成會員或仍是訪客）：直接附加訊息
         - thread_id 直接用 browser_key（與 ChatroomService 慣例一致）
         - 房卡訊息：以 message_type='room_cards' 額外存一筆，方便 CSV 匯出時可讀
+        - site_id / site_name：widget 嵌入站點識別。新訪客直接寫入；既有訪客若為空會補上
         """
+        # 規範化 site 欄位（過濾空字串、限長度，避免攻擊面擴大）
+        site_id = (site_id or "").strip()[:50] or None
+        site_name = (site_name or "").strip()[:100] or None
+
         # 1. upsert Member by webchat_uid=browser_key
         result = await db.execute(
             select(Member).where(Member.webchat_uid == browser_key)
@@ -1197,11 +1208,18 @@ class ChatbotService:
                 is_guest=True,
                 guest_seq=next_seq,
                 last_interaction_at=datetime.now(),
+                webchat_site_id=site_id,
+                webchat_site_name=site_name,
             )
             db.add(member)
             await db.flush()  # 取得 member.id
         else:
             member.last_interaction_at = datetime.now()
+            # 既有訪客若沒有 site 資訊就補上（不覆蓋已存在的，避免訪客在不同站之間切換時亂跳）
+            if site_id and not member.webchat_site_id:
+                member.webchat_site_id = site_id
+            if site_name and not member.webchat_site_name:
+                member.webchat_site_name = site_name
 
         # 2. upsert ConversationThread (id = browser_key)
         thread_result = await db.execute(
@@ -1226,6 +1244,9 @@ class ChatbotService:
             thread.last_message_at = now
 
         # 3. 寫入使用者訊息
+        # 三筆訊息（user / bot 文字 / room_cards）原本共用同一個 now，
+        # MySQL 同 timestamp 排序非決定性 → 畫面順序會亂跳。
+        # 解法：三筆各偏移毫秒，保證 user → bot → room_cards 嚴格遞增。
         db.add(ConversationMessage(
             id=str(uuid4()),
             thread_id=thread.id,
@@ -1237,7 +1258,7 @@ class ChatbotService:
             created_at=now,
         ))
 
-        # 4. 寫入 bot 回覆（純文字）
+        # 4. 寫入 bot 回覆（純文字）— +1ms 確保排在使用者訊息後
         if bot_reply:
             db.add(ConversationMessage(
                 id=str(uuid4()),
@@ -1247,10 +1268,10 @@ class ChatbotService:
                 role="assistant",
                 content=bot_reply,
                 message_source="gpt",
-                created_at=now,
+                created_at=now + timedelta(milliseconds=1),
             ))
 
-        # 5. 房卡（如有）：另存一筆 message_type='room_cards'
+        # 5. 房卡（如有）：另存一筆 message_type='room_cards'，+2ms 排在文字回覆後
         if room_cards:
             try:
                 room_cards_payload = json.dumps(
@@ -1267,7 +1288,7 @@ class ChatbotService:
                     message_type="room_cards",
                     content=room_cards_payload,
                     message_source="gpt",
-                    created_at=now,
+                    created_at=now + timedelta(milliseconds=2),
                 ))
             except Exception as exc:
                 logger.warning(f"[chatbot] serialize room_cards failed: {exc}")
@@ -2653,40 +2674,11 @@ class ChatbotService:
         if tagged:
             await db.flush()
 
-        # 2) 互動標籤：依 FaqRule 對應的 FaqCategory.name 寫入
-        #    例如 AI 用「訂房」分類下的 FAQ 回答 → 該會員/訪客貼上「訂房」互動標籤
-        category_result = await db.execute(
-            select(FaqCategory.name)
-            .join(FaqRule, FaqRule.category_id == FaqCategory.id)
-            .where(FaqRule.id.in_(referenced_rule_ids))
-            .distinct()
-        )
-        category_names = {n for (n,) in category_result.all() if n}
-        for cat_name in category_names:
-            # message_id IS NULL 的同名既存記錄：累加 click_count、更新 last_triggered_at
-            existing_int_result = await db.execute(
-                select(MemberInteractionTag).where(
-                    MemberInteractionTag.member_id == member.id,
-                    MemberInteractionTag.tag_name == cat_name,
-                    MemberInteractionTag.message_id.is_(None),
-                )
-            )
-            existing_int = existing_int_result.scalar_one_or_none()
-            if existing_int:
-                existing_int.click_count = (existing_int.click_count or 1) + 1
-                existing_int.last_triggered_at = datetime.now()
-            else:
-                db.add(MemberInteractionTag(
-                    member_id=member.id,
-                    tag_name=cat_name,
-                    tag_source="AI_chatbot",
-                    click_count=1,
-                    last_triggered_at=datetime.now(),
-                ))
-        if category_names:
-            await db.flush()
+        # 2) 互動標籤：純聊天**不寫**互動標籤
+        #    語意校正：互動標籤＝點擊行為（房卡 +、選圖片、確認房型）才產生
+        #    純聊天命中 FAQ 只寫會員標籤；互動標籤交由 track_widget_click + LINE 點擊事件獨佔
 
-        # 寫 tag_trigger_logs（供時段洞察 heatmap 使用）— 涵蓋新貼 + 既有重新觸發
+        # 寫 tag_trigger_logs（供時段洞察 heatmap 使用）— 只記會員標籤觸發
         from app.services.tag_trigger_service import record_tag_trigger
         from app.models.tag_trigger_log import TagType, TriggerSource
         for tag_name in tag_names:
@@ -2697,15 +2689,92 @@ class ChatbotService:
                 tag_type=TagType.MEMBER,
                 source=TriggerSource.INTERACTION,
             )
-        for cat_name in category_names:
-            await record_tag_trigger(
-                db,
-                member_id=member.id,
-                tag_name=cat_name,
-                tag_type=TagType.INTERACTION,
-                source=TriggerSource.INTERACTION,
-            )
         return tagged
+
+    async def track_widget_click(
+        self,
+        *,
+        db: AsyncSession,
+        browser_key: str,
+        event_type: str,
+        category_name: Optional[str] = None,
+        rule_id: Optional[int] = None,
+        room_type_code: Optional[str] = None,
+    ) -> bool:
+        """處理 widget 點擊事件 → 寫互動標籤（tag_source='auto_click'）。
+
+        - 房卡 +、確認選房等 click 事件呼叫本方法
+        - 找 Member by webchat_uid=browser_key，找不到視為訪客還沒講過話 → 直接 return False
+        - rule_id 優先：對應 FaqRule.category_id 的 FaqCategory.name 即互動標籤
+        - 無 rule_id 才用 category_name（前端硬編，例如「訂房」）
+        """
+        from app.services.tag_trigger_service import record_tag_trigger
+        from app.models.tag_trigger_log import TagType, TriggerSource
+
+        result = await db.execute(
+            select(Member).where(Member.webchat_uid == browser_key)
+        )
+        member = result.scalar_one_or_none()
+        if member is None:
+            return False
+
+        # 推導要寫的 category 名稱
+        target_category: Optional[str] = None
+        if rule_id is not None:
+            cat_result = await db.execute(
+                select(FaqCategory.name)
+                .join(FaqRule, FaqRule.category_id == FaqCategory.id)
+                .where(FaqRule.id == rule_id)
+            )
+            row = cat_result.first()
+            if row and row[0]:
+                target_category = row[0]
+        if target_category is None and category_name:
+            target_category = category_name.strip() or None
+        if not target_category:
+            return False
+
+        # upsert MemberInteractionTag（message_id IS NULL 的「彙總」記錄）
+        existing_result = await db.execute(
+            select(MemberInteractionTag).where(
+                MemberInteractionTag.member_id == member.id,
+                MemberInteractionTag.tag_name == target_category,
+                MemberInteractionTag.message_id.is_(None),
+            )
+        )
+        existing = existing_result.scalar_one_or_none()
+        now = datetime.now()
+        if existing:
+            existing.click_count = (existing.click_count or 1) + 1
+            existing.last_triggered_at = now
+            # 既有來源若為 AI_chatbot，保留；只在新建時標 auto_click
+        else:
+            db.add(MemberInteractionTag(
+                member_id=member.id,
+                tag_name=target_category,
+                tag_source="auto_click",
+                click_count=1,
+                last_triggered_at=now,
+            ))
+
+        # 同步更新 last_interaction_at（避免訪客在 7 天 retention 期間被誤刪）
+        member.last_interaction_at = now
+
+        # 寫 tag_trigger_logs 供時段熱圖使用
+        await record_tag_trigger(
+            db,
+            member_id=member.id,
+            tag_name=target_category,
+            tag_type=TagType.INTERACTION,
+            source=TriggerSource.INTERACTION,
+        )
+
+        await db.commit()
+        logger.info(
+            f"[widget_click] member_id={member.id} event={event_type} "
+            f"tag={target_category} room={room_type_code}"
+        )
+        return True
 
     @staticmethod
     def _chat_error(message: str, token_exhausted: bool = False) -> ChatbotMessageOutSchema:

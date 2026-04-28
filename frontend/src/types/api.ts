@@ -47,6 +47,8 @@ export interface BackendMember {
   webchat_uid?: string;
   webchat_name?: string;
   webchat_avatar?: string;
+  webchat_site_id?: string;       // 嵌入站點英文代號（例：starbit-ryan）
+  webchat_site_name?: string;     // 嵌入站點顯示名（例：思偉達飯店｜雷恩館）
   // 其他
   join_source?: string;
   id_number?: string;

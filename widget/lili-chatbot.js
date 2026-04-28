@@ -18,9 +18,19 @@
   var POSITION = scriptTag.getAttribute("data-position") || "right";
   var PRIMARY = scriptTag.getAttribute("data-color") || "#4A7FFF";
 
+  // 站點識別：嵌入方在 <script> 上加 data-site-id="代號" / data-site-name="顯示名"
+  // 沒設就傳空字串；後端不會寫 site 資訊，UI 上顯示純「Web Chat」
+  // （刻意不 fallback 到 hostname，避免 demo / 預覽頁誤抓到 domain）
+  var SITE_ID = scriptTag.getAttribute("data-site-id") || "";
+  var SITE_NAME = scriptTag.getAttribute("data-site-name") || "";
+
   // iframe src is same origin as the script (crmpoc.star-bit.io)
   var scriptSrc = scriptTag.src;
-  var FRAME_URL = scriptSrc.replace(/lili-chatbot\.js.*$/, "chatbot-frame.html");
+  var FRAME_BASE = scriptSrc.replace(/lili-chatbot\.js.*$/, "chatbot-frame.html");
+  var FRAME_URL = FRAME_BASE
+    + (FRAME_BASE.indexOf("?") >= 0 ? "&" : "?")
+    + "site_id=" + encodeURIComponent(SITE_ID)
+    + "&site_name=" + encodeURIComponent(SITE_NAME);
 
   var WIDGET_ID = "lili-chatbot-widget";
 

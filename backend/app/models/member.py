@@ -29,6 +29,8 @@ class Member(Base):
     webchat_uid = Column(String(100), unique=True, index=True, comment="Webchat 訪客 ID，系統自動生成或透過 OAuth 關聯取得")
     webchat_avatar = Column(String(500), comment="Webchat 會員頭像 URL")
     webchat_name = Column(String(100), comment="Webchat 顯示名稱")
+    webchat_site_id = Column(String(50), index=True, comment="Webchat widget 嵌入站點英文代號（例：starbit-ryan）")
+    webchat_site_name = Column(String(100), comment="Webchat widget 嵌入站點顯示名（例：思偉達飯店｜雷恩館）")
 
     # 基本資訊
     name = Column(String(32), comment="會員姓名（統一單欄位）")

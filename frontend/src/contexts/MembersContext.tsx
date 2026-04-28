@@ -302,7 +302,9 @@ export function MembersProvider({ children }: MembersProviderProps) {
             tags: (member.tags || []).map((t: BackendTag) => t.name || t.tag || ''),
             isUnanswered: member.is_unanswered || false,
             unansweredSince: member.unanswered_since || null,
-            channelName: 'Web Chat',
+            // Web Chat 顯示名：優先用 widget 帶來的 site_name（如「思偉達飯店｜雷恩館」），
+            // 沒設站點就 fallback 到「Web Chat」
+            channelName: member.webchat_site_name || 'Web Chat',
             isGuest,
             guestSeq: seq ?? null,
           });

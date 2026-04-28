@@ -33,6 +33,9 @@ class ChatbotMessageInSchema(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000)
     hotel_id: Optional[int] = None
     test_mode: bool = False
+    # Widget 嵌入站點識別（讓會員管理能分辨同一個 widget JS 嵌在不同網站時的來源）
+    site_id: Optional[str] = Field(None, max_length=50)  # 英文代號（穩定 key）
+    site_name: Optional[str] = Field(None, max_length=100)  # 中文顯示名（UI 顯示）
 
 
 ReplyType = Literal["text", "room_cards", "member_form", "booking_confirm"]
@@ -139,3 +142,18 @@ class BookingSaveOutSchema(BaseModel):
     reservation_id: str
     cart_url: Optional[str] = None
     saved: BookingSavedDetailSchema
+
+
+class TrackClickInSchema(BaseModel):
+    """Widget 點擊事件追蹤輸入。
+    用於房卡 +、確認選房等 click 事件 → 自動打互動標籤。"""
+    browser_key: str = Field(..., min_length=1, max_length=100)
+    event_type: str = Field(..., max_length=50)  # room_select / room_confirm / suggestion / image
+    category_name: Optional[str] = None  # FaqCategory.name 互動標籤名（如「訂房」）
+    rule_id: Optional[int] = None  # 若可對應到 FaqRule，伺服器自動推導 tag + category
+    room_type_code: Optional[str] = None  # 純 metadata，方便後續分析
+
+
+class TrackClickOutSchema(BaseModel):
+    ok: bool = True
+    tagged: bool = False  # 是否成功寫入互動標籤（會員不存在時為 False）

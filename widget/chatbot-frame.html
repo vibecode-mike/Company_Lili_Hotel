@@ -297,6 +297,16 @@ html,body{height:100%;background:var(--bg2);overflow:hidden;color:var(--white)}
   }
   var browserKey = getBrowserKey();
 
+  /* site identification — 由 lili-chatbot.js 透過 URL query 傳進來 */
+  function getQueryParam(name) {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      return params.get(name) || "";
+    } catch (_) { return ""; }
+  }
+  var siteId = getQueryParam("site_id");
+  var siteName = getQueryParam("site_name");
+
   /* state */
   var sessionId = "";
   var sending = false;
@@ -311,6 +321,7 @@ html,body{height:100%;background:var(--bg2);overflow:hidden;color:var(--white)}
   var errorMsg = "";
   var showChips = true;
   var inputLocked = false;
+  var clickedRoomCodes = {}; // 追蹤本 session 已打標的房型，避免重複 fire
 
   function lockInput(lock) {
     inputLocked = lock;
@@ -320,6 +331,25 @@ html,body{height:100%;background:var(--bg2);overflow:hidden;color:var(--white)}
   }
 
   function esc(s) { var d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+  /* fire-and-forget click tracking — 任何錯誤靜默忽略，絕不擋主流程 */
+  function trackClick(eventType, opts) {
+    try {
+      var payload = {
+        browser_key: browserKey,
+        event_type: eventType,
+        category_name: (opts && opts.category) || null,
+        rule_id: (opts && opts.ruleId) || null,
+        room_type_code: (opts && opts.roomTypeCode) || null,
+      };
+      fetch(API_BASE + "/api/v1/chatbot/track-click", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      }).catch(function(){});
+    } catch (_) {}
+  }
 
   async function api(method, path, body) {
     var url = API_BASE + path;
@@ -438,6 +468,11 @@ html,body{height:100%;background:var(--bg2);overflow:hidden;color:var(--white)}
         var v = Math.min(maxQty, (roomCounts[card.room_type_code] || 0) + 1);
         roomCounts[card.room_type_code] = v;
         updateStepper(card.room_type_code, v, maxQty);
+        // 第一次對該房型按 + → 打互動標籤「訂房」（每房型每 session 只觸發一次）
+        if (v > 0 && !clickedRoomCodes[card.room_type_code]) {
+          clickedRoomCodes[card.room_type_code] = true;
+          trackClick("room_select", { category: "訂房", roomTypeCode: card.room_type_code });
+        }
       };
     });
 
@@ -618,7 +653,13 @@ html,body{height:100%;background:var(--bg2);overflow:hidden;color:var(--white)}
     showTyping();
 
     try {
-      var res = await api("POST", "/api/v1/chatbot/message", { browser_key: browserKey, message: text, test_mode: true });
+      var res = await api("POST", "/api/v1/chatbot/message", {
+        browser_key: browserKey,
+        message: text,
+        test_mode: true,
+        site_id: siteId,
+        site_name: siteName,
+      });
       removeTyping();
       sessionId = res.session_id;
 
@@ -655,6 +696,9 @@ html,body{height:100%;background:var(--bg2);overflow:hidden;color:var(--white)}
       }
     });
     if (rooms.length === 0) return;
+
+    // 確認選房 = 強訂房意願 → 不論之前 + 過幾次都打一次
+    trackClick("room_confirm", { category: "訂房" });
 
     var confirmBtn = document.getElementById("confirm-rooms-btn");
     if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = "確認中..."; }
@@ -763,6 +807,7 @@ html,body{height:100%;background:var(--bg2);overflow:hidden;color:var(--white)}
     roomCards = []; roomCounts = {}; selectedRooms = [];
     memberForm = null; guestDraft = { guest_name: "", guest_phone: "", guest_email: "" };
     reservationId = ""; bookingUrl = ""; errorMsg = ""; showChips = true; sending = false; savingBooking = false;
+    clickedRoomCodes = {};
     lockInput(false);
     init();
   }
