@@ -2049,6 +2049,83 @@ class ChatbotService:
         except Exception:
             pass  # DB unavailable → JSON fallback
 
+        # --- 寫轉單互動標籤（booking_conversion，對齊 LINE booking_callback）---
+        # 訂單實際成立才寫；DB 儲存失敗就跳過。每個 selected_room 對應一筆，
+        # tag_name=房型名稱、tag_source='booking_conversion'，落在會員管理「轉單」tab
+        if db_saved and crm_member_id and selected_rooms:
+            try:
+                from app.database import SessionLocal
+                from sqlalchemy import text as _text
+                conv_db = SessionLocal()
+                try:
+                    now_dt = datetime.now()
+                    for room in selected_rooms:
+                        raw_name = (room.get("room_type_name") or room.get("room_type_code") or "").strip()
+                        if not raw_name:
+                            continue
+                        tag_name = raw_name[:20]  # 與 LINE booking_callback 對齊（截 20）
+                        room_qty = max(1, int(room.get("room_count") or 1))
+
+                        # tag_trigger_logs：每次訂單都新增一筆 CONVERSION
+                        conv_db.execute(
+                            _text("""
+                                INSERT INTO tag_trigger_logs
+                                    (member_id, tag_id, tag_type, tag_name,
+                                     trigger_source, triggered_at, created_at)
+                                VALUES
+                                    (:mid, NULL, 'interaction', :tag_name,
+                                     'CONVERSION', :triggered_at, NOW())
+                            """),
+                            {"mid": crm_member_id, "tag_name": tag_name, "triggered_at": now_dt},
+                        )
+
+                        # member_interaction_tags：upsert 同 (member, tag_name, tag_source='booking_conversion')
+                        existing_row = conv_db.execute(
+                            _text("""
+                                SELECT id FROM member_interaction_tags
+                                WHERE member_id = :mid
+                                  AND tag_name = :tag_name
+                                  AND tag_source = 'booking_conversion'
+                                LIMIT 1
+                            """),
+                            {"mid": crm_member_id, "tag_name": tag_name},
+                        ).first()
+                        if existing_row:
+                            conv_db.execute(
+                                _text("""
+                                    UPDATE member_interaction_tags
+                                    SET click_count = click_count + :qty,
+                                        last_triggered_at = :triggered_at
+                                    WHERE id = :eid
+                                """),
+                                {"qty": room_qty, "triggered_at": now_dt, "eid": existing_row.id},
+                            )
+                        else:
+                            conv_db.execute(
+                                _text("""
+                                    INSERT INTO member_interaction_tags
+                                        (member_id, tag_name, tag_source, click_count,
+                                         last_triggered_at, message_id, tagged_at, created_at)
+                                    VALUES
+                                        (:mid, :tag_name, 'booking_conversion', :qty,
+                                         :triggered_at, NULL, :triggered_at, NOW())
+                                """),
+                                {"mid": crm_member_id, "tag_name": tag_name,
+                                 "qty": room_qty, "triggered_at": now_dt},
+                            )
+                    conv_db.commit()
+                    logger.info(
+                        f"[booking_conversion] member_id={crm_member_id} "
+                        f"rooms={[r.get('room_type_name') for r in selected_rooms]}"
+                    )
+                except Exception:
+                    conv_db.rollback()
+                    logger.exception("[booking_conversion] write failed (booking still saved)")
+                finally:
+                    conv_db.close()
+            except Exception:
+                logger.exception("[booking_conversion] outer failure")
+
         # 訂房完成，清掉訂房狀態（下次對話重新收集）
         session.checkin_date = None
         session.checkout_date = None
@@ -2701,12 +2778,14 @@ class ChatbotService:
         rule_id: Optional[int] = None,
         room_type_code: Optional[str] = None,
     ) -> bool:
-        """處理 widget 點擊事件 → 寫互動標籤（tag_source='auto_click'）。
+        """處理 widget 點擊事件 → 寫互動標籤。
 
-        - 房卡 +、確認選房等 click 事件呼叫本方法
+        - tag_source 依 event_type 切換，與 LINE 對齊：
+            * room_select（房卡按 +）→ 'room_card_click'
+            * 其餘事件（FAQ 規則、未來的 suggestion / image 點擊）→ 'auto_click'
         - 找 Member by webchat_uid=browser_key，找不到視為訪客還沒講過話 → 直接 return False
         - rule_id 優先：對應 FaqRule.category_id 的 FaqCategory.name 即互動標籤
-        - 無 rule_id 才用 category_name（前端硬編，例如「訂房」）
+        - 無 rule_id 才用 category_name（房卡情境傳房型名稱，FAQ 情境傳分類名稱）
         """
         from app.services.tag_trigger_service import record_tag_trigger
         from app.models.tag_trigger_log import TagType, TriggerSource
@@ -2734,11 +2813,15 @@ class ChatbotService:
         if not target_category:
             return False
 
-        # upsert MemberInteractionTag（message_id IS NULL 的「彙總」記錄）
+        # 對齊 LINE：房卡 + 點擊用 room_card_click，其他事件維持 auto_click
+        tag_source = "room_card_click" if event_type == "room_select" else "auto_click"
+
+        # upsert MemberInteractionTag（同 tag_source + tag_name + message_id IS NULL 視為同一筆彙總）
         existing_result = await db.execute(
             select(MemberInteractionTag).where(
                 MemberInteractionTag.member_id == member.id,
                 MemberInteractionTag.tag_name == target_category,
+                MemberInteractionTag.tag_source == tag_source,
                 MemberInteractionTag.message_id.is_(None),
             )
         )
@@ -2747,12 +2830,11 @@ class ChatbotService:
         if existing:
             existing.click_count = (existing.click_count or 1) + 1
             existing.last_triggered_at = now
-            # 既有來源若為 AI_chatbot，保留；只在新建時標 auto_click
         else:
             db.add(MemberInteractionTag(
                 member_id=member.id,
                 tag_name=target_category,
-                tag_source="auto_click",
+                tag_source=tag_source,
                 click_count=1,
                 last_triggered_at=now,
             ))
@@ -2761,12 +2843,15 @@ class ChatbotService:
         member.last_interaction_at = now
 
         # 寫 tag_trigger_logs 供時段熱圖使用
+        # room_select 屬於按鈕點擊事件 → CLICK（與 LINE 房卡點擊一致，落在「互動」tab）
+        # 其他事件視為對話衍生標籤 → INTERACTION
+        trigger_source = TriggerSource.CLICK if event_type == "room_select" else TriggerSource.INTERACTION
         await record_tag_trigger(
             db,
             member_id=member.id,
             tag_name=target_category,
             tag_type=TagType.INTERACTION,
-            source=TriggerSource.INTERACTION,
+            source=trigger_source,
         )
 
         await db.commit()

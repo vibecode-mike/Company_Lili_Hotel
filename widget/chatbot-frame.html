@@ -468,10 +468,11 @@ html,body{height:100%;background:var(--bg2);overflow:hidden;color:var(--white)}
         var v = Math.min(maxQty, (roomCounts[card.room_type_code] || 0) + 1);
         roomCounts[card.room_type_code] = v;
         updateStepper(card.room_type_code, v, maxQty);
-        // 第一次對該房型按 + → 打互動標籤「訂房」（每房型每 session 只觸發一次）
+        // 第一次對該房型按 + → 打互動標籤（房型名稱，對齊 LINE room_card_click）
+        // 每房型每 session 只觸發一次；後端會以 tag_source='room_card_click' 寫入
         if (v > 0 && !clickedRoomCodes[card.room_type_code]) {
           clickedRoomCodes[card.room_type_code] = true;
-          trackClick("room_select", { category: "訂房", roomTypeCode: card.room_type_code });
+          trackClick("room_select", { category: card.room_type_name, roomTypeCode: card.room_type_code });
         }
       };
     });
@@ -697,9 +698,8 @@ html,body{height:100%;background:var(--bg2);overflow:hidden;color:var(--white)}
     });
     if (rooms.length === 0) return;
 
-    // 確認選房 = 強訂房意願 → 不論之前 + 過幾次都打一次
-    trackClick("room_confirm", { category: "訂房" });
-
+    // 確認選房不再額外打標：每個房型按 + 時已寫 room_card_click，
+    // 訂單成立時後端 booking_save 會再寫 booking_conversion，與 LINE 行為一致
     var confirmBtn = document.getElementById("confirm-rooms-btn");
     if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = "確認中..."; }
 
