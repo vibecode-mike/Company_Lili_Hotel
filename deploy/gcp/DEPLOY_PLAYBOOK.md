@@ -359,9 +359,11 @@ sudo systemctl daemon-reload
 
 ---
 
-## 3. Day 2c（後端硬化部分）— 不碰前端
+## 3. Day 2c — 完整版（後端硬化 + 前端切靜態）
 
-**目標**：backend 和 linebot 改 production-grade（listen 127.0.0.1、gunicorn、nginx 多 location）。保留 Vite dev 服務前端不動（前端切換是 FB 擱置範圍）。**單次 10-20 秒 downtime**。
+**目標**：backend 和 linebot 改 production-grade（listen 127.0.0.1、gunicorn、nginx 多 location）+ 前端切靜態 build + 拔 Vite dev。**兩個階段、兩次小 downtime**。
+
+> **歷史**：原本分成「3a 後端硬化（不碰前端）」和「3b 前端切換（待 FB 部門 ready）」。後者於 2026-04-28 完成（精簡版方案 C：FB firm_login 改後端代理，前端 bundle 不再有密碼）。本章節已合併為完整版。
 
 ### 3.1 安裝 gunicorn 到 miniconda
 
@@ -434,16 +436,18 @@ server {
         alias /home/Company_Lili_Hotel/backend/public/uploads/;
     }
 
-    # 暫留 Vite dev（FB 擱置結束後改 root + try_files 到 frontend/build/）
+    # 前端 hashed assets（檔名含 content hash，可永久 cache）
+    location /assets/ {
+        root /home/Company_Lili_Hotel/frontend/build;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+
+    # 前端（靜態 build，SPA fallback 到 index.html）
     location / {
-        proxy_pass http://127.0.0.1:5173;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        root /home/Company_Lili_Hotel/frontend/build;
+        try_files $uri $uri/ /index.html;
     }
 
     listen 443 ssl; # managed by Certbot
@@ -715,17 +719,22 @@ journalctl -u lili-linebot -n 50 --no-pager
 
 **長期**：refactor 掉 `settings.LINE_CHANNEL_*` 的使用，降 required 為 optional。
 
-### 8.2 擱置中 — 前端切換 + FB 相關
+### 8.2 FB 整合的後端代理 firm_login（精簡版方案 C，2026-04-28 完成）
 
-**擱置範圍**：
-- Day 2b 前端 `npm run build`
-- Day 2c 完整版 nginx `/ → frontend/build/` 切換
-- 拔掉 Vite dev server
-- FB 密碼處理（`VITE_FB_FIRM_PASSWORD`）
+**現況**：
+- Backend `/api/v1/admin/fb-firm-login` 由後端用 `settings.FB_FIRM_PASSWORD` 代打 `api-youth-tycg/firm_login`
+- 前端（`BasicSettings.tsx`）改打自家 backend，不再帶 credential
+- `frontend/.env.production` 已拿掉 `VITE_FB_FIRM_PASSWORD`
+- Bundle 完全沒有 `123456` / `tycg-admin`
 
-**原因**：FB 整合呼叫另一部門 `api-youth-tycg.star-bit.io`，對方正在改 binding。兩邊平行改會 contract mismatch。
+**為什麼可以做了（不用等對方）**：對方部門已確認 `firm_login` API 不會變動，所以這個代理不會白寫。
 
-**殘留風險**：Vite dev 透過 `https://console.star-bit.io/src/...` 暴露 `VITE_FB_FIRM_PASSWORD=123456`、`VITE_FB_FIRM_ACCOUNT=tycg-admin` 給任何訪客。staging 低流量，可接受到對方 ready。
+**仍由前端直打 api-youth-tycg 的端點**（這些 endpoint 都帶 JWT，不再帶密碼，可接受）：
+- `/api/v1/admin/meta_page/*`（FB Page 操作）
+- `/api/v1/admin/meta_page/message/*`（訊息）
+- `/api/v1/admin/meta_page/customer/*`（客戶 / tag）
+
+**未來如要也走後端代理**，照同樣 pattern：在 backend 加 endpoint、frontend 改打 backend、拔掉前端原本的 fbApiBaseUrl。但目前不急（沒密碼洩漏）。
 
 ### 8.3 已知 code bugs（非 deploy 問題）
 
@@ -753,13 +762,13 @@ journalctl -u lili-linebot -n 50 --no-pager
 | 項目 | 優先級 | 說明 |
 |---|---|---|
 | Member model 補 `is_following`（+全面 drift audit） | 🔴 高 | 見 8.4。建議跑 `alembic check` 或 autogenerate diff，找出全部 model 漏定義的欄位 |
-| MySQL timezone | 🟡 中 | 從 UTC 改 Asia/Taipei（`SET GLOBAL time_zone='+08:00'` + mysqld.cnf）。staging DB 資料量小，改 TZ 風險低 |
-| LINE webhook URL 對齊 | 🟡 中 | 需先盤點 `line_channels.channel_id=2009678311` 是 staging 專用還是跟 prod 共用，共用不能改 |
-| 舊 DB 資料遷移 | 🟢 低 | staging 目前 `members=1` 幾乎空。需與團隊決定 staging 是否需要真實資料 |
+| MySQL timezone | 🟡 中 | UTC → Asia/Taipei（`SET GLOBAL time_zone='+08:00'` + mysqld.cnf）。**注意**：dev 早先用「前端 +8 hr」workaround 對齊台灣時間；如改 DB timezone 要同步審視程式碼，避免雙重偏移 |
+| LINE webhook URL 對齊（staging 子網域） | 🟡 中 | dev / staging / prod 規劃為三個子網域，需個別產生 LINE channel + webhook。需先確認對方 channel_id 是否已 staging 專用 |
 | systemd unit + nginx config 入 repo | 🟡 中 | 目前只存 `/etc/`，新環境無法照抄。應做成 template 存 `deploy/gcp/` |
 | MySQL root 密碼輪換 | 🟢 低 | 應用已改用 `lili_app`，root 可獨立輪換 |
 | CI/CD 升級到 self-hosted runner 或 IAP+WIF | 🟢 低 | 見章節 11；現用傳統 SSH 對 staging 夠，prod 上線前再升級 |
-| Day 2c 完整版（前端切換） | ⏸️ 擱置 | 見 8.2 |
+| 舊 DB 資料遷移 | 🟢 低 | **使用者已決定不遷移**，staging 從零開始（2026-04-28 確認） |
+| 其他 FB endpoints 後端代理化 | 🟢 低 | 見 8.2。目前其他 FB 呼叫帶 JWT 不帶密碼，可接受 |
 
 ---
 
@@ -885,5 +894,5 @@ push 後 GitHub 不會再觸發 staging deploy。
 
 ---
 
-_最後更新：2026-04-27_
-_涵蓋：Day 1（firewall 止血）、Day 2a（Secret Manager + IAM + .env）、Day 2c 後端部分（gunicorn + listen 127.0.0.1 + nginx）、Alembic 重接、CI/CD 復活（fail2ban + workflow alembic 修正）_
+_最後更新：2026-04-28_
+_涵蓋：Day 1（firewall 止血）、Day 2a（Secret Manager + IAM + .env）、Day 2c 完整版（gunicorn + listen 127.0.0.1 + nginx + 前端切靜態 + Vite dev 拔除 + FB firm_login 後端代理）、Alembic 重接、CI/CD 復活_
