@@ -334,6 +334,13 @@ export default function ChatRoomLayout({
       return getDisplayMemberById(`fb-${fbCustomerId}`)?.channelName ?? null;
     }
 
+    // Webchat 訪客：直接讀 widget 嵌入站點名稱（例：思偉達飯店｜雷恩館），
+    // 對齊會員管理列表「平台」欄。沒設站點才退回「Web Chat」
+    if (joinSource === "webchat") {
+      const siteName = memberAny?.webchat_site_name;
+      return (typeof siteName === "string" && siteName.trim()) ? siteName : "Web Chat";
+    }
+
     // LINE 會員：顯示 LINE 頻道名稱
     if (joinSource === "line" || !joinSource) {
       return getDisplayMemberById(`line-${targetId}`)?.channelName ?? null;

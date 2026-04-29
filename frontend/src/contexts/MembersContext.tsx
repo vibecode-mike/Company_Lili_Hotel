@@ -112,6 +112,9 @@ const transformBackendMember = (item: BackendMember): Member => {
     webchat_uid: item.webchat_uid || '',
     webchat_name: item.webchat_name || '',
     webchat_avatar: item.webchat_avatar || '',
+    // Widget 嵌入站點識別（會員管理「加入來源」/「平台」欄顯示用）
+    webchat_site_id: (item as any).webchat_site_id || '',
+    webchat_site_name: (item as any).webchat_site_name || '',
     // 其他
     join_source: item.join_source || '',
     id_number: item.id_number || '',

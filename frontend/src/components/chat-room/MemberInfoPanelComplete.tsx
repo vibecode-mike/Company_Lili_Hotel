@@ -129,9 +129,11 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
     // 根據 join_source 獲取對應的渠道名稱
     const normalizedSource = joinSource?.toLowerCase() || 'line';
 
-    // Webchat：直接寫死「Web Chat」，不要打 LINE/FB 的 API（會抓到別的頻道名）
+    // Webchat：優先用 widget 站點名（webchat_site_name，例：思偉達飯店｜雷恩館），
+    // 沒設站點才退回「Web Chat」。不要打 LINE/FB 的 API（會抓到別的頻道名）
     if (normalizedSource === 'webchat') {
-      setChannelName('Web Chat');
+      const siteName = (member as any)?.webchat_site_name;
+      setChannelName(typeof siteName === 'string' && siteName.trim() ? siteName : 'Web Chat');
       return;
     }
 
@@ -191,7 +193,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
     };
 
     fetchChannelInfo();
-  }, [joinSource, propChannelName]);
+  }, [joinSource, propChannelName, (member as any)?.webchat_site_name]);
 
   React.useEffect(() => {
     if (member) {

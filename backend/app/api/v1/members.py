@@ -457,6 +457,9 @@ async def get_member(
         "webchat_uid": member.webchat_uid,
         "webchat_name": member.webchat_name,
         "webchat_avatar": member.webchat_avatar,
+        # widget 嵌入站點識別（會員管理「加入來源」/「平台」欄顯示用）
+        "webchat_site_id": member.webchat_site_id,
+        "webchat_site_name": member.webchat_site_name,
         "name": display_name,
         "email": member.email,
         "phone": member.phone,
