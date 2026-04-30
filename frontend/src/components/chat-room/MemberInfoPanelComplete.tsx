@@ -810,7 +810,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
               <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] text-[#383838]">
                 會員標籤
               </p>
-              {hasMemberTags && memberTags && (
+              {hasMemberTags && memberTags ? (
                 <div className="flex flex-wrap gap-[8px]">
                   {memberTags.map((tag, index) => (
                     <span
@@ -821,6 +821,8 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
                     </span>
                   ))}
                 </div>
+              ) : (
+                <p className="text-[#6e6e6e] text-[14px]">可設定會員標籤</p>
               )}
             </div>
 
@@ -841,7 +843,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
                   ))}
                 </div>
               ) : (
-                <p className="text-[#6e6e6e] text-[14px]">尚未設定互動標籤</p>
+                <p className="text-[#6e6e6e] text-[14px]">尚無互動標籤</p>
               )}
             </div>
 
@@ -862,7 +864,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
                   ))}
                 </div>
               ) : (
-                <p className="text-[#6e6e6e] text-[14px]">尚未有轉單紀錄</p>
+                <p className="text-[#6e6e6e] text-[14px]">尚無轉單標籤</p>
               )}
               {onEditTags && (
                 <button

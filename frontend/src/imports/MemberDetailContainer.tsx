@@ -1844,13 +1844,20 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
               <div className="grid gap-y-4 lg:grid-cols-[auto,1fr] items-start w-full min-w-0" data-name="Container">
                 <ModalTitleContent8 />
                 <div className="flex flex-wrap gap-x-3 gap-y-2 items-start content-start relative min-w-0 max-w-full" data-name="Container">
-                  {(member?.tagDetails || [])
-                    .filter(tag => tag.type === 'member' || (tag as any).tag_type === 1)
-                    .map((tag, index) => (
+                  {(() => {
+                    const tags = (member?.tagDetails || [])
+                      .filter(tag => tag.type === 'member' || (tag as any).tag_type === 1);
+                    if (tags.length === 0) {
+                      return (
+                        <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[#6e6e6e] text-[14px]">可設定會員標籤</p>
+                      );
+                    }
+                    return tags.map((tag, index) => (
                       <div key={index} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
                         <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-medium grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[14px] text-center">{tag.name || (tag as any).tag}</p>
                       </div>
-                    ))}
+                    ));
+                  })()}
                 </div>
               </div>
 
@@ -1858,9 +1865,15 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
               <div className="grid gap-y-4 lg:grid-cols-[auto,1fr] items-start w-full min-w-0" data-name="Container">
                 <ModalTitleContent9 />
                 <div className="flex flex-wrap gap-x-3 gap-y-2 items-start content-start relative min-w-0 max-w-full" data-name="Container">
-                  {(member?.tagDetails || [])
-                    .filter(tag => tag.type === 'interaction' || (tag as any).tag_type === 2)
-                    .map((tag, index) => {
+                  {(() => {
+                    const tags = (member?.tagDetails || [])
+                      .filter(tag => tag.type === 'interaction' || (tag as any).tag_type === 2);
+                    if (tags.length === 0) {
+                      return (
+                        <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[#6e6e6e] text-[14px]">尚無互動標籤</p>
+                      );
+                    }
+                    return tags.map((tag, index) => {
                       // 互動標籤統一使用藍色
                       const bgColor = 'bg-[#f0f6ff]';
                       const textColor = 'text-[#0f6beb]';
@@ -1869,7 +1882,8 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
                           <p className={`basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-medium grow leading-[1.5] min-h-px min-w-px relative shrink-0 ${textColor} text-[14px] text-center`}>{tag.name || (tag as any).tag}</p>
                         </div>
                       );
-                    })}
+                    });
+                  })()}
                 </div>
               </div>
 
@@ -1877,13 +1891,20 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
               <div className="grid gap-y-4 lg:grid-cols-[auto,1fr] items-start w-full min-w-0" data-name="Container">
                 <ModalTitleContentConversion />
                 <div className="flex flex-wrap gap-x-3 gap-y-2 items-start content-start relative min-w-0 max-w-full" data-name="Container">
-                  {(member?.tagDetails || [])
-                    .filter(tag => tag.type === 'conversion' || (tag as any).tag_type === 3)
-                    .map((tag, index) => (
+                  {(() => {
+                    const tags = (member?.tagDetails || [])
+                      .filter(tag => tag.type === 'conversion' || (tag as any).tag_type === 3);
+                    if (tags.length === 0) {
+                      return (
+                        <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[#6e6e6e] text-[14px]">尚無轉單標籤</p>
+                      );
+                    }
+                    return tags.map((tag, index) => (
                       <div key={index} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
                         <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-medium grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[14px] text-center">{tag.name || (tag as any).tag}</p>
                       </div>
-                    ))}
+                    ));
+                  })()}
                 </div>
               </div>
             </div>
