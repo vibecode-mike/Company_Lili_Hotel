@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import svgPaths from "./svg-wbwsye31ry";
 import { SearchContainer } from "../components/common/SearchContainers";
 import DownloadConversationsModal from "../components/DownloadConversationsModal";
@@ -58,9 +59,9 @@ function MemberTypeSegmented({
   onChange: (v: MemberTypeFilter) => void;
 }) {
   const options: { key: MemberTypeFilter; label: string }[] = [
+    { key: 'all', label: '全部' },
     { key: 'member', label: '會員' },
     { key: 'guest', label: '非會員' },
-    { key: 'all', label: '所有' },
   ];
   return (
     <div className="bg-white box-border content-stretch flex items-center gap-[6px] rounded-[12px] shrink-0 h-[48px] p-[4px] border border-[#eef0f3]">
@@ -187,12 +188,74 @@ function SortingIcon({ active, order }: { active: boolean; order: SortOrder }) {
   );
 }
 
-function Container6({ 
-  sortConfig, 
-  onSortChange 
-}: { 
-  sortConfig: SortConfig; 
+// 說明用 info icon（與 InsightsPanel 之 InfoIcon 規格一致：20×20、#9CA3AF）
+function InfoIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      className={`shrink-0 size-[20px] ${className}`}
+      fill="none"
+      viewBox="0 0 16 16"
+      aria-hidden
+    >
+      <g transform="translate(2 2) scale(1.125)">
+        <path
+          fill="#9CA3AF"
+          d="M5.33333 10.6667C2.38773 10.6667 0 8.27893 0 5.33333C0 2.38773 2.38773 0 5.33333 0C8.27893 0 10.6667 2.38773 10.6667 5.33333C10.6667 8.27893 8.27893 10.6667 5.33333 10.6667ZM5.33333 9.6C6.46492 9.6 7.55017 9.15048 8.35032 8.35032C9.15048 7.55017 9.6 6.46492 9.6 5.33333C9.6 4.20174 9.15048 3.1165 8.35032 2.31634C7.55017 1.51619 6.46492 1.06667 5.33333 1.06667C4.20174 1.06667 3.1165 1.51619 2.31634 2.31634C1.51619 3.1165 1.06667 4.20174 1.06667 5.33333C1.06667 6.46492 1.51619 7.55017 2.31634 8.35032C3.1165 9.15048 4.20174 9.6 5.33333 9.6ZM4.8 2.66667H5.86667V3.73333H4.8V2.66667ZM4.8 4.8H5.86667V8H4.8V4.8Z"
+        />
+      </g>
+    </svg>
+  );
+}
+
+// hover 顯示 tooltip 的 info button（樣式與 InsightsPanel 相同：#383838 底、白字、12px、Noto Sans TC、8px 圓角）
+function InfoIconWithTooltip({ tooltip }: { tooltip: string }) {
+  const [visible, setVisible] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (visible && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setPos({ top: rect.bottom + 6, left: rect.left });
+    }
+  }, [visible]);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        className="shrink-0 cursor-pointer bg-transparent border-none p-0 inline-flex items-center"
+        onMouseEnter={() => setVisible(true)}
+        onMouseLeave={() => setVisible(false)}
+        onFocus={() => setVisible(true)}
+        onBlur={() => setVisible(false)}
+        aria-label={tooltip}
+      >
+        <InfoIcon />
+      </button>
+      {visible &&
+        createPortal(
+          <div
+            className="fixed bg-[#383838] text-white text-[12px] leading-[1.5] font-['Noto_Sans_TC',sans-serif] font-normal rounded-[8px] p-[8px] pointer-events-none"
+            style={{ zIndex: 9999, top: pos.top, left: pos.left, maxWidth: 320 }}
+          >
+            {tooltip}
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
+
+function Container6({
+  sortConfig,
+  onSortChange,
+  memberType,
+}: {
+  sortConfig: SortConfig;
   onSortChange: (field: SortField) => void;
+  memberType: MemberTypeFilter;
 }) {
   const isActive = (field: SortField) => sortConfig.field === field;
   return (
@@ -200,8 +263,11 @@ function Container6({
       <div className="flex flex-row items-center size-full border-b border-[#dddddd]">
         <div className="box-border content-stretch flex items-center pb-[12px] pt-[16px] px-[12px] relative w-full">
           <div className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[260px]" data-name="Table/Title-atomic">
-            <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[1.5]">會員</p>
+            <div className="basis-0 flex items-center gap-[4px] font-['Noto_Sans_TC:Regular',sans-serif] grow leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
+              <p className="leading-[1.5]">
+                {memberType === 'guest' ? '非會員' : memberType === 'all' ? '全部人員' : '會員'}
+              </p>
+              {memberType === 'guest' && <InfoIconWithTooltip tooltip="保留近 7 天的匿名資料" />}
             </div>
           </div>
           <div className="h-[12px] relative shrink-0 w-0" data-name="Divier">
@@ -236,24 +302,7 @@ function Container6({
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">標籤</p>
             </div>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="overflow-clip relative shrink-0 size-[24px] hover:opacity-70 transition-opacity cursor-help" data-name="Icon">
-                  <div className="absolute inset-[16.667%]" data-name="Vector">
-                    <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 16 16">
-                      <path d={svgPaths.p2d577a80} fill="var(--fill-0, #0F6BEB)" id="Vector" />
-                    </svg>
-                  </div>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent 
-                className="p-0 border-0 shadow-lg max-w-[400px]" 
-                sideOffset={8}
-                side="top"
-              >
-                <TooltipComponent />
-              </TooltipContent>
-            </Tooltip>
+            <InfoIconWithTooltip tooltip="依據用戶在訊息或按鈕上的互動行為自動生成，或是自行設定" />
             <SortingIcon active={isActive('tags')} order={sortConfig.order} />
           </div>
           <div className="h-[12px] relative shrink-0 w-0" data-name="Divier">
@@ -599,13 +648,15 @@ function Table8Columns3Actions({
   sortConfig,
   onSortChange,
   onOpenChat,
-  onViewDetail
+  onViewDetail,
+  memberType,
 }: {
   members: DisplayMember[];
   sortConfig: SortConfig;
   onSortChange: (field: SortField) => void;
   onOpenChat?: (member: DisplayMember) => void;
   onViewDetail?: (member: DisplayMember) => void;
+  memberType: MemberTypeFilter;
 }) {
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-name="Table/8 Columns+3 Actions">
@@ -614,7 +665,7 @@ function Table8Columns3Actions({
         {/* 內層容器 - 最小寬度確保欄位對齊 */}
         <div className="min-w-[1160px]">
           {/* 表頭 - 固定在滾動區域外 */}
-          <Container6 sortConfig={sortConfig} onSortChange={onSortChange} />
+          <Container6 sortConfig={sortConfig} onSortChange={onSortChange} memberType={memberType} />
 
           {/* 垂直滾動容器 - 只有資料列滾動 */}
           <div className="max-h-[600px] overflow-y-auto table-scroll">
@@ -707,7 +758,7 @@ function MainContent({
                 {error}
               </div>
             ) : filteredMembers.length > 0 ? (
-              <Table8Columns3Actions members={filteredMembers} sortConfig={sortConfig} onSortChange={onSortChange} onOpenChat={onOpenChat} onViewDetail={onViewDetail} />
+              <Table8Columns3Actions members={filteredMembers} sortConfig={sortConfig} onSortChange={onSortChange} onOpenChat={onOpenChat} onViewDetail={onViewDetail} memberType={memberType} />
             ) : (
               <div className="flex h-[240px] items-center justify-center rounded-[16px] border border-dashed border-[#dddddd] bg-white text-[#6e6e6e]">
                 尚無會員資料
