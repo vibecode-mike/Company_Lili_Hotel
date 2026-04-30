@@ -50,7 +50,7 @@ function Container1({ onAddMember }: { onAddMember?: () => void }) {
 
 type MemberTypeFilter = 'all' | 'member' | 'guest';
 
-// 會員/非會員/所有 切換
+// 會員/非會員/全部 切換（樣式對齊 AI Chatbot 頁的 PMS/FAQ pill switch）
 function MemberTypeSegmented({
   value,
   onChange,
@@ -64,22 +64,53 @@ function MemberTypeSegmented({
     { key: 'guest', label: '非會員' },
   ];
   return (
-    <div className="bg-white box-border content-stretch flex items-center gap-[6px] rounded-[12px] shrink-0 h-[48px] p-[4px] border border-[#eef0f3]">
+    <div
+      style={{
+        display: "flex",
+        gap: 4,
+        alignItems: "center",
+        padding: 4,
+        borderRadius: 16,
+        backgroundColor: "#fff",
+        flexShrink: 0,
+        cursor: "pointer",
+      }}
+    >
       {options.map((opt) => {
         const active = value === opt.key;
         return (
-          <button
+          <div
             key={opt.key}
-            type="button"
             onClick={() => onChange(opt.key)}
-            className={`px-[16px] h-[40px] rounded-[10px] text-[14px] font-['Noto_Sans_TC:Regular',sans-serif] transition-colors ${
-              active
-                ? 'bg-[#0f6beb] text-white'
-                : 'text-[#6e6e6e] hover:bg-[#f0f6ff]'
-            }`}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === "Enter" && onChange(opt.key)}
+            style={{
+              flex: "1 0 0",
+              minWidth: 84,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 4,
+              borderRadius: 12,
+              backgroundColor: active ? "#f6f9fd" : "#fff",
+              transition: "background-color 0.2s",
+            }}
           >
-            {opt.label}
-          </button>
+            <span
+              style={{
+                fontFamily: "'Noto Sans TC', sans-serif",
+                fontWeight: 400,
+                fontSize: 16,
+                lineHeight: 1.5,
+                color: "#383838",
+                textAlign: "center",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {opt.label}
+            </span>
+          </div>
         );
       })}
     </div>
@@ -133,7 +164,6 @@ function Container2({
       {/* 右側按鈕群：grow 取得剩餘空間、justify-end 推到右緣，
           與下方表格 px-[40px] 容器右緣對齊 */}
       <div className="basis-0 grow flex gap-[12px] items-center justify-end min-w-px">
-        <MemberTypeSegmented value={memberType} onChange={onMemberTypeChange} />
         <DownloadConversationsButton onClick={onDownloadConversations} />
       </div>
     </div>
@@ -192,7 +222,7 @@ function SortingIcon({ active, order }: { active: boolean; order: SortOrder }) {
 function InfoIcon({ className = "" }: { className?: string }) {
   return (
     <svg
-      className={`shrink-0 size-[20px] ${className}`}
+      className={`block shrink-0 size-[20px] ${className}`}
       fill="none"
       viewBox="0 0 16 16"
       aria-hidden
@@ -225,7 +255,7 @@ function InfoIconWithTooltip({ tooltip }: { tooltip: string }) {
       <button
         ref={btnRef}
         type="button"
-        className="shrink-0 cursor-pointer bg-transparent border-none p-0 inline-flex items-center"
+        className="shrink-0 cursor-pointer bg-transparent border-none p-0 m-0 leading-none inline-flex items-center self-center -translate-y-px"
         onMouseEnter={() => setVisible(true)}
         onMouseLeave={() => setVisible(false)}
         onFocus={() => setVisible(true)}
@@ -263,10 +293,10 @@ function Container6({
       <div className="flex flex-row items-center size-full border-b border-[#dddddd]">
         <div className="box-border content-stretch flex items-center pb-[12px] pt-[16px] px-[12px] relative w-full">
           <div className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[260px]" data-name="Table/Title-atomic">
-            <div className="basis-0 flex items-center gap-[4px] font-['Noto_Sans_TC:Regular',sans-serif] grow leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-              <p className="leading-[1.5]">
+            <div className="basis-0 flex items-center gap-[4px] font-['Noto_Sans_TC:Regular',sans-serif] grow min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
+              <span className="leading-[1.5]">
                 {memberType === 'guest' ? '非會員' : memberType === 'all' ? '全部人員' : '會員'}
-              </p>
+              </span>
               {memberType === 'guest' && <InfoIconWithTooltip tooltip="保留近 7 天的匿名資料" />}
             </div>
           </div>
@@ -299,9 +329,7 @@ function Container6({
             data-name="Table/Title-atomic"
             onClick={() => onSortChange('tags')}
           >
-            <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">標籤</p>
-            </div>
+            <span className="font-['Noto_Sans_TC:Regular',sans-serif] leading-[1.5] relative shrink-0 text-[#383838] text-[14px] text-nowrap whitespace-pre">標籤</span>
             <InfoIconWithTooltip tooltip="依據用戶在訊息或按鈕上的互動行為自動生成，或是自行設定" />
             <SortingIcon active={isActive('tags')} order={sortConfig.order} />
           </div>
@@ -739,9 +767,14 @@ function MainContent({
             />
           </div>
           
-          {/* Count */}
+          {/* Toggle + Count（toggle 擺放於列表計數左側，間距 12px，對齊 PMS/FAQ 版型） */}
           <div className="px-[40px] pb-[12px] w-full">
-            <Container5 count={filteredMembers.length} totalMembers={totalMembers} />
+            <div className="flex gap-[12px] items-center w-full">
+              <MemberTypeSegmented value={memberType} onChange={onMemberTypeChange} />
+              <div className="flex flex-[1_0_0] items-center min-h-px min-w-px">
+                <Container5 count={filteredMembers.length} totalMembers={totalMembers} />
+              </div>
+            </div>
           </div>
           
           {/* Table */}
