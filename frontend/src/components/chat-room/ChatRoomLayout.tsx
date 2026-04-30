@@ -408,6 +408,12 @@ export default function ChatRoomLayout({
   // 先計算 threadId，再用於 SSE 與推播過濾
   const currentThreadId = threadsMap[currentPlatform];
 
+  // Webchat 對話結束狀態
+  // TODO: 與後端對齊判斷依據（thread 旗標 / 時間 heuristic 皆可），
+  // 目前先以 false stub UI 已就緒，把下方 false 換成實際判斷即可全部生效
+  const isWebchatConversationEnded =
+    currentPlatform === "Webchat" && false;
+
   // SSE 監聽新訊息（thread 維度）
   const handleNewMessage = useCallback(
     (sseMessage: any) => {
@@ -1303,6 +1309,13 @@ export default function ChatRoomLayout({
                   />
                 </div>
               ))}
+
+              {/* Webchat 對話結束分隔列（沿用「沒有更多訊息了」樣式） */}
+              {isWebchatConversationEnded && messages.length > 0 && (
+                <div className="w-full text-center py-2 text-gray-400 text-sm">
+                  ─── 對話已結束 ───
+                </div>
+              )}
             </div>
 
             {/* Input Area (Fixed at Bottom) */}
@@ -1333,8 +1346,13 @@ export default function ChatRoomLayout({
                           }}
                           onCompositionStart={() => setIsComposing(true)}
                           onCompositionEnd={() => setIsComposing(false)}
-                          placeholder="輸入訊息文字"
-                          className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow h-full leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] placeholder:text-[#a8a8a8] bg-transparent border-0 outline-none resize-none [&::-webkit-scrollbar]:w-[8px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/60 [&::-webkit-scrollbar-thumb]:rounded-full"
+                          disabled={isWebchatConversationEnded}
+                          placeholder={
+                            isWebchatConversationEnded
+                              ? "官網對話已結束，無法回覆訪客訊息"
+                              : "輸入訊息文字"
+                          }
+                          className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow h-full leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] placeholder:text-[#a8a8a8] bg-transparent border-0 outline-none resize-none disabled:cursor-not-allowed [&::-webkit-scrollbar]:w-[8px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/60 [&::-webkit-scrollbar-thumb]:rounded-full"
                         />
                       </div>
 
@@ -1348,7 +1366,7 @@ export default function ChatRoomLayout({
                         {/* 傳送按鈕 (右側) */}
                         <button
                           onClick={handleSendMessage}
-                          disabled={!messageInput.trim() || isSending}
+                          disabled={!messageInput.trim() || isSending || isWebchatConversationEnded}
                           className="bg-[#242424] disabled:opacity-50 relative rounded-[16px] min-h-[48px] min-w-[72px] shrink-0 transition-opacity disabled:cursor-not-allowed"
                         >
                           <div className="flex flex-row items-center justify-center min-h-inherit min-w-inherit size-full">
