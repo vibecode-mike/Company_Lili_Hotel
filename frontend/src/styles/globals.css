@@ -566,3 +566,13 @@ html {
   opacity: 0.15;
 }
 
+/* 編輯會員標籤 modal 內可滾動區：隱藏原生 scrollbar（用 React CustomScrollbar 自繪取代，
+   避免 macOS overlay scrollbar / 系統設定造成 scrollbar 不可見的問題） */
+.no-native-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge legacy */
+}
+.no-native-scrollbar::-webkit-scrollbar {
+  display: none; /* WebKit (Chrome / Safari / Edge) */
+}
+

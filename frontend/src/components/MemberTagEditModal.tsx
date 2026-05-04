@@ -1,7 +1,93 @@
-import { useState, useEffect, useMemo, useRef, KeyboardEvent } from 'react';
+import { useState, useEffect, useMemo, useRef, useLayoutEffect, KeyboardEvent, RefObject } from 'react';
 import svgPaths from '../imports/svg-pen3bccldb';
 import { useToast } from './ToastProvider';
 import { Tag } from './common';
+
+/**
+ * Custom scrollbar：以 absolute div 自繪 scrollbar，避免依賴瀏覽器/作業系統原生 scrollbar 的可見性。
+ * 跟著傳入的 scrollRef 計算 thumb top/height，並在內容未溢出時自動隱藏。
+ * 純視覺呈現（pointer-events-none），不接管捲動行為。
+ */
+function CustomScrollbar({ scrollRef }: { scrollRef: RefObject<HTMLDivElement | null> }) {
+  // 永遠渲染 track；thumb 高度固定為 track 的 1/3，位置跟著 scroll 同步
+  const [thumb, setThumb] = useState<{ top: number; height: string }>({ top: 0, height: '100%' });
+
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const update = () => {
+      const { scrollTop, scrollHeight, clientHeight } = el;
+      if (clientHeight === 0) return;
+      const trackH = clientHeight;
+      const thumbH = trackH / 3;
+      const maxScroll = Math.max(0, scrollHeight - clientHeight);
+      const thumbTop = maxScroll > 0 ? (scrollTop / maxScroll) * (trackH - thumbH) : 0;
+      setThumb({ top: thumbTop, height: `${thumbH}px` });
+    };
+
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    const mo = new MutationObserver(update);
+    mo.observe(el, { childList: true, subtree: true, characterData: true });
+
+    return () => {
+      el.removeEventListener('scroll', update);
+      ro.disconnect();
+      mo.disconnect();
+    };
+  }, [scrollRef]);
+
+  // Drag thumb：mouseDown 起算 delta，mouseMove 換算成 scrollTop，mouseUp 解除
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const el = scrollRef.current;
+    if (!el) return;
+    const startY = e.clientY;
+    const startScrollTop = el.scrollTop;
+    const trackH = el.clientHeight;
+    const thumbH = trackH / 3;
+    const maxScroll = el.scrollHeight - el.clientHeight;
+    if (maxScroll <= 0) return; // 無 overflow 不可拖
+    const ratio = maxScroll / (trackH - thumbH);
+
+    const onMove = (ev: MouseEvent) => {
+      const delta = ev.clientY - startY;
+      el.scrollTop = startScrollTop + delta * ratio;
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      document.body.style.userSelect = '';
+    };
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  return (
+    // track 不接管事件（避免擋到底層 chip 點擊），thumb 自己 pointer-events-auto 才能拖
+    <div
+      className="absolute top-0 right-0 bottom-0"
+      style={{ width: '4px', zIndex: 10, pointerEvents: 'none' }}
+    >
+      <div
+        className="absolute right-0 rounded-[4px] cursor-grab active:cursor-grabbing"
+        style={{
+          top: `${thumb.top}px`,
+          height: thumb.height,
+          width: '4px',
+          background: '#dddddd',
+          pointerEvents: 'auto',
+        }}
+        onMouseDown={handleMouseDown}
+      />
+    </div>
+  );
+}
 
 interface MemberTagEditModalProps {
   isOpen: boolean;
@@ -90,6 +176,19 @@ export default function MemberTagEditModal({
     const alreadySelected = selectedMemberTags.some(t => t.toLowerCase() === lower);
     return !existsInPool && !alreadySelected;
   }, [searchInput, allMemberTags, selectedMemberTags]);
+
+  // 共用 scroll 容器 ref（Selected + Pool + CTA 合併成單一可滾動區，由 CustomScrollbar 自繪 thumb）
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // 背景 scroll lock：modal 開啟時禁用 body 滾動
+  useEffect(() => {
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isOpen]);
 
   const handleSelectTag = (tag: string) => {
     if (selectedMemberTags.some(t => t.toLowerCase() === tag.toLowerCase())) {
@@ -183,12 +282,22 @@ export default function MemberTagEditModal({
 
       {/* Modal */}
       {/* 預設 800×625；視窗不夠時兩軸都跟著縮（各保留 16px 邊距）。
-          inline style 取代 Tailwind arbitrary，因為 Tailwind v4 對 min(..,calc(..)) 的 arbitrary class 不會編出 CSS。 */}
+          inline style 取代 Tailwind arbitrary，因為 Tailwind v4 對 min(..,calc(..)) 的 arbitrary class 不會編出 CSS。
+          onWheel：補強 wheel 行為，無論游標在 modal 任何位置（Header/Search/Footer/scroll 區）都能滾。 */}
       <div
         className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[9999] flex flex-col"
         style={{
           width: 'min(800px, calc(100vw - 32px))',
           height: 'min(625px, calc(100vh - 32px))',
+        }}
+        onWheel={(e) => {
+          const el = scrollRef.current;
+          if (!el) return;
+          const maxScroll = el.scrollHeight - el.clientHeight;
+          if (maxScroll <= 0) return;
+          // 若游標已在 scroll 區內，瀏覽器會原生處理；這裡只補強 scroll 區外的情況
+          if (el.contains(e.target as Node)) return;
+          el.scrollTop = Math.max(0, Math.min(maxScroll, el.scrollTop + e.deltaY));
         }}
       >
         <div className="bg-white relative rounded-[16px] flex flex-col h-full overflow-hidden" data-name="Member Tag#Modal">
@@ -236,81 +345,94 @@ export default function MemberTagEditModal({
                 />
               </div>
 
-              {/* Selected / 單一 section（State A 顯示「選擇或建立標籤」、其餘顯示「已選擇的標籤」） */}
-              <div className="flex flex-col gap-[12px] w-full">
-                <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#6e6e6e] text-[14px] leading-[1.5]">
-                  {sectionLabel}
-                </p>
-                {selectedMemberTags.length === 0 ? (
-                  <div className="flex items-center justify-center min-h-[104px] w-full">
-                    <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#a8a8a8] text-[16px] leading-[1.5] text-center">
-                      {emptyPlaceholderText}
+              {/* 共用 scroll 容器：Selected + Pool + CTA 同一個 scroll。
+                  flex-1 + maxHeight 320px：撐滿剩餘空間但不超過 320px，確保 chip 多時就會 overflow → 可拉動。 */}
+              <div
+                className="relative w-full"
+                style={{ flex: '1 1 0%', minHeight: 0, maxHeight: '320px' }}
+              >
+                <div
+                  ref={scrollRef}
+                  className="flex flex-col gap-[24px] w-full h-full overflow-y-auto pr-[8px] no-native-scrollbar"
+                >
+                  {/* Selected / 單一 section（State A 顯示「選擇或建立標籤」、其餘顯示「已選擇的標籤」） */}
+                  <div className="flex flex-col gap-[12px] w-full">
+                    <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#6e6e6e] text-[14px] leading-[1.5]">
+                      {sectionLabel}
                     </p>
-                  </div>
-                ) : (
-                  <div
-                    className="flex flex-wrap gap-[4px] w-full max-h-[120px] overflow-y-auto"
-                    style={{ scrollbarWidth: 'thin', scrollbarColor: '#dddddd transparent' }}
-                  >
-                    {selectedMemberTags.map((tag, index) => (
-                      <Tag key={index} variant="blue" onRemove={() => handleRemoveTag(tag)}>
-                        {tag}
-                      </Tag>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Pool section — 只有 State B/C/D 才出現 */}
-              {!isStateA && (
-                <div className="flex flex-col gap-[12px] w-full flex-1 min-h-0">
-                  <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#6e6e6e] text-[14px] leading-[1.5] shrink-0">
-                    選擇或建立標籤
-                  </p>
-                  <div className="relative w-full flex-1 min-h-0">
-                    <div
-                      className="flex flex-wrap gap-[4px] h-full overflow-y-auto pr-[8px]"
-                      style={{ scrollbarWidth: 'thin', scrollbarColor: '#dddddd transparent' }}
-                    >
-                      {availableTags.map((tag, index) => (
-                        <div
-                          key={index}
-                          onClick={() => handleSelectTag(tag)}
-                          className="cursor-pointer"
-                        >
-                          <Tag variant="blue">{tag}</Tag>
-                        </div>
-                      ))}
-                      {availableTags.length === 0 && !showCreateOption && (
-                        <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#a8a8a8] text-[14px] leading-[1.5] py-[8px]">
-                          {searchInput ? '沒有符合的標籤' : '所有標籤已選擇'}
+                    {selectedMemberTags.length === 0 ? (
+                      <div className="flex items-center justify-center min-h-[104px] w-full">
+                        <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#a8a8a8] text-[16px] leading-[1.5] text-center">
+                          {emptyPlaceholderText}
                         </p>
-                      )}
-                    </div>
-                    {/* 底部 mask 漸層：暗示下方還有內容（純視覺） */}
-                    <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-[24px] bg-gradient-to-t from-white to-transparent" />
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-[4px] w-full">
+                        {selectedMemberTags.map((tag, index) => (
+                          <Tag key={index} variant="blue" onRemove={() => handleRemoveTag(tag)}>
+                            {tag}
+                          </Tag>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
-                  {/* 建立 CTA：只有 showCreateOption=true 才顯示。flex-wrap 讓窄螢幕下 chip 可換行 */}
-                  {showCreateOption && (
-                    <div
-                      onClick={handleCreateTag}
-                      className="flex flex-wrap items-center gap-[4px] bg-[#fafafa] rounded-[8px] px-[8px] py-[4px] cursor-pointer hover:bg-slate-100 transition-colors min-w-0"
-                      data-name="Create Tag CTA"
-                    >
-                      <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#383838] text-[16px] leading-[1.5] shrink-0">
-                        建立
+                  {/* Pool section — 只有 State B/C/D 才出現，內含 chips + 條件 CTA */}
+                  {!isStateA && (
+                    <div className="flex flex-col gap-[12px] w-full">
+                      <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#6e6e6e] text-[14px] leading-[1.5]">
+                        選擇或建立標籤
                       </p>
-                      <div className="min-w-0 max-w-full">
-                        <Tag variant="blue">{searchInput.trim()}</Tag>
+                      <div className="flex flex-wrap gap-[4px] w-full">
+                        {availableTags.map((tag, index) => (
+                          <div
+                            key={index}
+                            onClick={() => handleSelectTag(tag)}
+                            className="cursor-pointer"
+                          >
+                            <Tag variant="blue">{tag}</Tag>
+                          </div>
+                        ))}
+                        {availableTags.length === 0 && !showCreateOption && (
+                          <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#a8a8a8] text-[14px] leading-[1.5] py-[8px]">
+                            {searchInput ? '沒有符合的標籤' : '所有標籤已選擇'}
+                          </p>
+                        )}
                       </div>
-                      <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#383838] text-[16px] leading-[1.5] shrink-0">
-                        的會員標籤
-                      </p>
+
+                      {/* 建立 CTA：只有 showCreateOption=true 才顯示 */}
+                      {showCreateOption && (
+                        <div
+                          onClick={handleCreateTag}
+                          className="flex flex-wrap items-center gap-[4px] bg-[#fafafa] rounded-[8px] px-[8px] py-[4px] cursor-pointer hover:bg-slate-100 transition-colors min-w-0"
+                          data-name="Create Tag CTA"
+                        >
+                          <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#383838] text-[16px] leading-[1.5] shrink-0">
+                            建立
+                          </p>
+                          <div className="min-w-0 max-w-full">
+                            <Tag variant="blue">{searchInput.trim()}</Tag>
+                          </div>
+                          <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#383838] text-[16px] leading-[1.5] shrink-0">
+                            的會員標籤
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              )}
+                <CustomScrollbar scrollRef={scrollRef} />
+                {/* 底部 mask 漸層：依 Figma 1819:30575；底部 30% 純白、再往上 fade，加強視覺收邊與「下方還有內容」的暗示 */}
+                <div
+                  className="pointer-events-none absolute bottom-0 left-0 right-0"
+                  style={{
+                    height: '24px',
+                    background:
+                      'linear-gradient(to top, #ffffff 0%, #ffffff 30%, rgba(255,255,255,0) 100%)',
+                    zIndex: 5,
+                  }}
+                />
+              </div>
             </div>
 
             {/* Footer：取消 + 確認；mt-auto 釘到 modal 底部 */}
