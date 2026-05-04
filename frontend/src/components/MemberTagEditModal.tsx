@@ -437,13 +437,16 @@ export default function MemberTagEditModal({
                   )}
                 </div>
                 <CustomScrollbar scrollRef={scrollRef} />
-                {/* 底部 mask 漸層：依 Figma 1819:30575。48px 高，180deg 由上而下：上半 50.48% 全透明，下半 49.52% 漸層至底部 #fff。 */}
+                {/* 底部 mask 漸層：48px 高，180deg 由上而下。
+                    上 70%（≈33.6px）漸層 transparent→#fff，下 30%（≈14.4px）純白吃尾。
+                    漸層跨度 33.6px > chip 高度 32px → chip 整顆都落在漸層內（無 crisp 上半），
+                    底部 14.4px 純白確保 scrollRef clip 線完全隱藏。 */}
                 <div
                   className="pointer-events-none absolute bottom-0 left-0 right-0"
                   style={{
                     height: '48px',
                     background:
-                      'linear-gradient(180deg, rgba(255, 255, 255, 0.00) 50.48%, #FFF 100%)',
+                      'linear-gradient(180deg, rgba(255, 255, 255, 0.00) 0%, #FFF 70%, #FFF 100%)',
                     zIndex: 5,
                   }}
                 />
