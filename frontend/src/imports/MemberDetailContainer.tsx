@@ -1718,15 +1718,15 @@ function ModeEdit() {
 
 function Container19({ onClick, isEditing }: { onClick?: () => void; isEditing?: boolean }) {
   if (isEditing) return null;
-  
+
+  // 編輯按鈕內嵌於「會員標籤」列右側，與 placeholder / 標籤同一行
   return (
-    <div className="absolute bottom-[28px] right-[28px]" data-name="Container">
-      <div 
-        onClick={onClick}
-        className="relative shrink-0 size-[28px] cursor-pointer hover:opacity-80 transition-opacity"
-      >
-        <ButtonEdit />
-      </div>
+    <div
+      onClick={onClick}
+      className="shrink-0 size-[28px] cursor-pointer hover:opacity-80 transition-opacity"
+      data-name="Container"
+    >
+      <ButtonEdit />
     </div>
   );
 }
@@ -1839,25 +1839,32 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
         <div aria-hidden="true" className="absolute border border-[#e1ebf9] border-solid inset-0 pointer-events-none rounded-[20px]" />
         <div className="size-full">
           <div className="box-border content-stretch flex flex-col h-auto items-start p-[28px] relative w-full">
-            <div className="basis-0 content-stretch flex flex-col gap-[20px] grow h-auto items-start min-w-0 relative shrink-0" data-name="Container">
+            <div className="basis-0 content-stretch flex flex-col gap-[20px] grow h-auto items-start min-w-0 relative shrink-0 w-full" data-name="Container">
               {/* Member Tags Section */}
               <div className="grid gap-y-4 lg:grid-cols-[auto,1fr] items-start w-full min-w-0" data-name="Container">
                 <ModalTitleContent8 />
-                <div className="flex flex-wrap gap-x-3 gap-y-2 items-start content-start relative min-w-0 max-w-full" data-name="Container">
-                  {(() => {
-                    const tags = (member?.tagDetails || [])
-                      .filter(tag => tag.type === 'member' || (tag as any).tag_type === 1);
-                    if (tags.length === 0) {
-                      return (
-                        <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[#6e6e6e] text-[14px]">可設定會員標籤</p>
-                      );
-                    }
-                    return tags.map((tag, index) => (
-                      <div key={index} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-                        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-medium grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[14px] text-center">{tag.name || (tag as any).tag}</p>
-                      </div>
-                    ));
-                  })()}
+                {/* 標籤列：placeholder/標籤 + 編輯按鈕（按鈕吸附最右側並與標籤/placeholder 垂直置中；
+                    wrapper 撐到 28px 與按鈕等高，避免 placeholder line-box 太矮造成按鈕視覺下墜） */}
+                <div className="flex items-center justify-between gap-[8px] min-w-0 w-full">
+                  <div className="flex flex-wrap gap-x-3 gap-y-2 items-center content-center relative min-w-0 max-w-full flex-1 min-h-[28px]" data-name="Container">
+                    {(() => {
+                      const tags = (member?.tagDetails || [])
+                        .filter(tag => tag.type === 'member' || (tag as any).tag_type === 1);
+                      if (tags.length === 0) {
+                        return (
+                          <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[#6e6e6e] text-[14px] leading-[28px]">可設定會員標籤</p>
+                        );
+                      }
+                      return tags.map((tag, index) => (
+                        <div key={index} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
+                          <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-medium grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[14px] text-center">{tag.name || (tag as any).tag}</p>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                  <div className="ml-auto shrink-0">
+                    <Container19 onClick={handleEdit} isEditing={false} />
+                  </div>
                 </div>
               </div>
 
@@ -1908,11 +1915,10 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
                 </div>
               </div>
             </div>
-            <Container19 onClick={handleEdit} isEditing={false} />
           </div>
         </div>
       </div>
-      
+
       <MemberTagEditModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}

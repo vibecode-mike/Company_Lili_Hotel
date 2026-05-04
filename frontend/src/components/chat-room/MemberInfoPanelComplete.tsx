@@ -810,20 +810,36 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
               <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] text-[#383838]">
                 會員標籤
               </p>
-              {hasMemberTags && memberTags ? (
-                <div className="flex flex-wrap gap-[8px]">
-                  {memberTags.map((tag, index) => (
-                    <span
-                      key={`member-${index}`}
-                      className="bg-[#f0f6ff] text-[#0f6beb] px-[12px] py-[4px] rounded-[8px] text-[14px] font-medium"
-                    >
-                      {tag}
-                    </span>
-                  ))}
+              {/* 標籤列：placeholder/標籤 + 編輯按鈕（按鈕吸附最右側並與標籤/placeholder 垂直置中；
+                  wrapper 撐到 28px 與按鈕等高，避免 placeholder line-box 太矮造成按鈕視覺下墜） */}
+              <div className="flex items-center justify-between gap-[8px] w-full min-w-0">
+                <div className="flex-1 min-w-0 flex items-center min-h-[28px]">
+                  {hasMemberTags && memberTags ? (
+                    <div className="flex flex-wrap gap-[8px]">
+                      {memberTags.map((tag, index) => (
+                        <span
+                          key={`member-${index}`}
+                          className="bg-[#f0f6ff] text-[#0f6beb] px-[12px] py-[4px] rounded-[8px] text-[14px] font-medium"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[#6e6e6e] text-[14px] leading-[28px]">可設定會員標籤</p>
+                  )}
                 </div>
-              ) : (
-                <p className="text-[#6e6e6e] text-[14px]">可設定會員標籤</p>
-              )}
+                {onEditTags && (
+                  <button
+                    type="button"
+                    onClick={onEditTags}
+                    aria-label="編輯會員標籤"
+                    className="shrink-0 size-[28px] ml-auto cursor-pointer hover:opacity-80 transition-opacity"
+                  >
+                    <ButtonEdit />
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Interaction Tags */}
@@ -847,8 +863,8 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
               )}
             </div>
 
-            {/* 轉單標籤（訂房成功後自動寫入，不提供編輯）— 編輯 icon 掛在這區底下對齊 */}
-            <div className="flex flex-col gap-[8px] w-full relative pb-[4px]">
+            {/* 轉單標籤（訂房成功後自動寫入，不提供編輯） */}
+            <div className="flex flex-col gap-[8px] w-full">
               <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] text-[#383838]">
                 轉單標籤
               </p>
@@ -865,16 +881,6 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
                 </div>
               ) : (
                 <p className="text-[#6e6e6e] text-[14px]">尚無轉單標籤</p>
-              )}
-              {onEditTags && (
-                <button
-                  type="button"
-                  onClick={onEditTags}
-                  aria-label="編輯會員標籤"
-                  className="absolute bottom-0 right-0 translate-y-[50%] shrink-0 size-[28px] cursor-pointer hover:opacity-80 transition-opacity"
-                >
-                  <ButtonEdit />
-                </button>
               )}
             </div>
           </div>
