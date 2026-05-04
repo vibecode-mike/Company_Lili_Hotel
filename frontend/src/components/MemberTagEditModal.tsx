@@ -22,10 +22,16 @@ function CustomScrollbar({ scrollRef }: { scrollRef: RefObject<HTMLDivElement | 
     const apply = () => {
       const { scrollTop, scrollHeight, clientHeight } = el;
       if (clientHeight === 0) return;
+      const maxScroll = Math.max(0, scrollHeight - clientHeight);
+      // 內容未溢出（無可捲動空間）時隱藏 thumb；溢出時才顯示
+      if (maxScroll <= 0) {
+        thumb.style.display = 'none';
+        return;
+      }
+      thumb.style.display = '';
       const trackH = clientHeight;
       const thumbH = trackH / 3;
-      const maxScroll = Math.max(0, scrollHeight - clientHeight);
-      const thumbTop = maxScroll > 0 ? (scrollTop / maxScroll) * (trackH - thumbH) : 0;
+      const thumbTop = (scrollTop / maxScroll) * (trackH - thumbH);
       // 直接寫 DOM style 跳過 React reconciliation
       thumb.style.transform = `translateY(${thumbTop}px)`;
       thumb.style.height = `${thumbH}px`;
@@ -437,16 +443,17 @@ export default function MemberTagEditModal({
                   )}
                 </div>
                 <CustomScrollbar scrollRef={scrollRef} />
-                {/* 底部 mask 漸層：48px 高，180deg 由上而下。
-                    上 70%（≈33.6px）漸層 transparent→#fff，下 30%（≈14.4px）純白吃尾。
-                    漸層跨度 33.6px > chip 高度 32px → chip 整顆都落在漸層內（無 crisp 上半），
-                    底部 14.4px 純白確保 scrollRef clip 線完全隱藏。 */}
+                {/* 底部 mask 漸層：48px 高，180deg 多 stop 仿 cubic ease-in。
+                    線性漸層在 chip 邊界附近會顯現 chip 自己 rounded-rect 的硬邊（橫切感），
+                    改成 ease-in：上半幾乎看不出 fade（≤5% solid），主要變化集中在下半，
+                    讓 chip top border 進入 mask 時 fade 幾近不可察覺，到 chip 中下才明顯白化。
+                    曲線參考 cubic-bezier(0.55, 0, 1, 0.45) 的 sample 點。 */}
                 <div
                   className="pointer-events-none absolute bottom-0 left-0 right-0"
                   style={{
                     height: '48px',
                     background:
-                      'linear-gradient(180deg, rgba(255, 255, 255, 0.00) 0%, #FFF 70%, #FFF 100%)',
+                      'linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.02) 30%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.35) 70%, rgba(255,255,255,0.75) 85%, #FFF 100%)',
                     zIndex: 5,
                   }}
                 />
