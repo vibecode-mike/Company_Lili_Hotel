@@ -71,6 +71,13 @@ class Member(Base):
     human_override_until = Column(DateTime, nullable=True, comment="人工接管到期時間（UTC），非 NULL 且未過期時抑制所有自動回應")
     internal_note = Column(Text, comment="內部備註")
     last_interaction_at = Column(DateTime, index=True, comment="最後互動時間")
+    is_following = Column(
+        Boolean,
+        nullable=True,
+        default=True,
+        server_default="1",
+        comment="是否正在關注 LINE OA（從 line_friends 同步）",
+    )
 
     created_at = Column(DateTime, server_default=func.now(), comment="建立時間")
     updated_at = Column(DateTime, onupdate=func.now(), comment="更新時間")

@@ -79,6 +79,8 @@ class MemberListItem(BaseModel):
     # 訪客狀態
     is_guest: bool = False  # True：未加入會員的 webchat 訪客
     guest_seq: Optional[int] = None  # 訪客流水號（顯示為 訪客{guest_seq:06d}）
+    # LINE 關注狀態（由 line_friends 同步而來；line_friends 不存在時保持預設 True）
+    is_following: Optional[bool] = None
 
     class Config:
         from_attributes = True
