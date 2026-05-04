@@ -5,42 +5,56 @@ import { Tag } from './common';
 
 /**
  * Custom scrollbar：以 absolute div 自繪 scrollbar，避免依賴瀏覽器/作業系統原生 scrollbar 的可見性。
- * 跟著傳入的 scrollRef 計算 thumb top/height，並在內容未溢出時自動隱藏。
- * 純視覺呈現（pointer-events-none），不接管捲動行為。
+ * thumb 位置走 ref + 直接寫 style + requestAnimationFrame，避免 React 每幀 reconciliation
+ * 造成的 thumb 跟不上 native scroll，視覺上能 1:1 同步 60fps。
+ * 純視覺呈現（track 為 pointer-events-none，thumb 接管 mouseDown 才能拖）。
  */
 function CustomScrollbar({ scrollRef }: { scrollRef: RefObject<HTMLDivElement | null> }) {
-  // 永遠渲染 track；thumb 高度固定為 track 的 1/3，位置跟著 scroll 同步
-  const [thumb, setThumb] = useState<{ top: number; height: string }>({ top: 0, height: '100%' });
+  const thumbRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
-    if (!el) return;
+    const thumb = thumbRef.current;
+    if (!el || !thumb) return;
 
-    const update = () => {
+    let rafId = 0;
+
+    const apply = () => {
       const { scrollTop, scrollHeight, clientHeight } = el;
       if (clientHeight === 0) return;
       const trackH = clientHeight;
       const thumbH = trackH / 3;
       const maxScroll = Math.max(0, scrollHeight - clientHeight);
       const thumbTop = maxScroll > 0 ? (scrollTop / maxScroll) * (trackH - thumbH) : 0;
-      setThumb({ top: thumbTop, height: `${thumbH}px` });
+      // 直接寫 DOM style 跳過 React reconciliation
+      thumb.style.transform = `translateY(${thumbTop}px)`;
+      thumb.style.height = `${thumbH}px`;
     };
 
-    update();
-    el.addEventListener('scroll', update, { passive: true });
-    const ro = new ResizeObserver(update);
+    const schedule = () => {
+      if (rafId) return; // 同一幀內多次 scroll event 合併成一次寫
+      rafId = requestAnimationFrame(() => {
+        rafId = 0;
+        apply();
+      });
+    };
+
+    apply();
+    el.addEventListener('scroll', schedule, { passive: true });
+    const ro = new ResizeObserver(apply);
     ro.observe(el);
-    const mo = new MutationObserver(update);
+    const mo = new MutationObserver(apply);
     mo.observe(el, { childList: true, subtree: true, characterData: true });
 
     return () => {
-      el.removeEventListener('scroll', update);
+      el.removeEventListener('scroll', schedule);
       ro.disconnect();
       mo.disconnect();
+      if (rafId) cancelAnimationFrame(rafId);
     };
   }, [scrollRef]);
 
-  // Drag thumb：mouseDown 起算 delta，mouseMove 換算成 scrollTop，mouseUp 解除
+  // Drag thumb：mouseDown 起算 delta，mouseMove 即時改 scrollTop，scroll 事件再驅動 thumb 視覺更新
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -75,13 +89,14 @@ function CustomScrollbar({ scrollRef }: { scrollRef: RefObject<HTMLDivElement | 
       style={{ width: '4px', zIndex: 10, pointerEvents: 'none' }}
     >
       <div
-        className="absolute right-0 rounded-[4px] cursor-grab active:cursor-grabbing"
+        ref={thumbRef}
+        className="absolute right-0 top-0 rounded-[4px] cursor-grab active:cursor-grabbing"
         style={{
-          top: `${thumb.top}px`,
-          height: thumb.height,
+          height: '100%',
           width: '4px',
           background: '#dddddd',
           pointerEvents: 'auto',
+          willChange: 'transform',
         }}
         onMouseDown={handleMouseDown}
       />
@@ -422,13 +437,13 @@ export default function MemberTagEditModal({
                   )}
                 </div>
                 <CustomScrollbar scrollRef={scrollRef} />
-                {/* 底部 mask 漸層：依 Figma 1819:30575；底部 30% 純白、再往上 fade，加強視覺收邊與「下方還有內容」的暗示 */}
+                {/* 底部 mask 漸層：依 Figma 1819:30575。48px 高，180deg 由上而下：上半 50.48% 全透明，下半 49.52% 漸層至底部 #fff。 */}
                 <div
                   className="pointer-events-none absolute bottom-0 left-0 right-0"
                   style={{
-                    height: '24px',
+                    height: '48px',
                     background:
-                      'linear-gradient(to top, #ffffff 0%, #ffffff 30%, rgba(255,255,255,0) 100%)',
+                      'linear-gradient(180deg, rgba(255, 255, 255, 0.00) 50.48%, #FFF 100%)',
                     zIndex: 5,
                   }}
                 />
