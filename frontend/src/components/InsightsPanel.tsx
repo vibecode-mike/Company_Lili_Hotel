@@ -782,6 +782,8 @@ function TimeInsightsSection() {
   // 設定後不可回到 null（依需求：刷新或離開頁再回來才重置）
   const [cell, setCell] = useState<{ r: number; c: number } | null>(null);
   const [journeyTags, setJourneyTags] = useState<TimeSlotDetailTag[]>([]);
+  // 互動旅程「查看全部 / 收合」展開狀態：超過 10 項時顯示按鈕、預設收合（只看前 10）
+  const [isJourneyExpanded, setIsJourneyExpanded] = useState<boolean>(false);
   const [loadingJourney, setLoadingJourney] = useState(false);
   const [journeyTab, setJourneyTab] = useState<JourneyTab>("overall");
   const journeyLabelRef = useRef<HTMLSpanElement>(null);
@@ -1006,7 +1008,8 @@ function TimeInsightsSection() {
               此範圍尚無標籤資料
             </div>
           ) : (
-            journeyTags.map((item) => {
+            <>
+            {(isJourneyExpanded ? journeyTags : journeyTags.slice(0, 10)).map((item) => {
                 const counts: [number, number, number] = [
                   item.conversation,
                   item.interaction,
@@ -1071,7 +1074,14 @@ function TimeInsightsSection() {
                     </div>
                   </div>
                 );
-            })
+            })}
+            {journeyTags.length > 10 && (
+              <ExpandToggleButton
+                isExpanded={isJourneyExpanded}
+                onClick={() => setIsJourneyExpanded((v) => !v)}
+              />
+            )}
+            </>
           )}
         </div>
       </div>
@@ -1197,6 +1207,30 @@ interface InsightsPanelProps {
   onNavigateToAutoReply?: () => void;
   onNavigateToMembers?: () => void;
   onNavigateToSettings?: () => void;
+}
+
+// 「查看全部 / 收合」toggle 按鈕。整 section 內 3 處共用（行動建議 2 處、互動旅程 1 處）。
+// 樣式 + state 表現與重構前 inline 寫法 1:1 一致。
+function ExpandToggleButton({
+  isExpanded,
+  onClick,
+}: {
+  isExpanded: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-end w-full">
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex items-center justify-center w-[80px] p-[8px] rounded-[8px] cursor-pointer hover:bg-[#f0f6ff] transition-colors"
+      >
+        <span className="text-[#0f6beb] text-[16px] leading-[1.5] whitespace-nowrap">
+          {isExpanded ? "收合" : "查看全部"}
+        </span>
+      </button>
+    </div>
+  );
 }
 
 export default function InsightsPanel({
@@ -1481,17 +1515,10 @@ export default function InsightsPanel({
                       </div>
                       ))}
                       {pending.items.length > 10 && (
-                        <div className="flex items-center justify-end w-full">
-                          <button
-                            type="button"
-                            onClick={() => setIsPendingExpanded((v) => !v)}
-                            className="flex items-center justify-center w-[80px] p-[8px] rounded-[8px] cursor-pointer hover:bg-[#f0f6ff] transition-colors"
-                          >
-                            <span className="text-[#0f6beb] text-[16px] leading-[1.5] whitespace-nowrap">
-                              {isPendingExpanded ? "收合" : "查看全部"}
-                            </span>
-                          </button>
-                        </div>
+                        <ExpandToggleButton
+                          isExpanded={isPendingExpanded}
+                          onClick={() => setIsPendingExpanded((v) => !v)}
+                        />
                       )}
                     </>
                   ) : (
@@ -1563,17 +1590,10 @@ export default function InsightsPanel({
                       </div>
                       ))}
                       {unansweredSnapshot.top_unanswered.length > 10 && (
-                        <div className="flex items-center justify-end w-full">
-                          <button
-                            type="button"
-                            onClick={() => setIsAiUnansweredExpanded((v) => !v)}
-                            className="flex items-center justify-center w-[80px] p-[8px] rounded-[8px] cursor-pointer hover:bg-[#f0f6ff] transition-colors"
-                          >
-                            <span className="text-[#0f6beb] text-[16px] leading-[1.5] whitespace-nowrap">
-                              {isAiUnansweredExpanded ? "收合" : "查看全部"}
-                            </span>
-                          </button>
-                        </div>
+                        <ExpandToggleButton
+                          isExpanded={isAiUnansweredExpanded}
+                          onClick={() => setIsAiUnansweredExpanded((v) => !v)}
+                        />
                       )}
                     </>
                   ) : (
