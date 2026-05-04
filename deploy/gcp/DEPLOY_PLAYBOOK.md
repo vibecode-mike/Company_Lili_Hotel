@@ -742,18 +742,89 @@ journalctl -u lili-linebot -n 50 --no-pager
 
 ✅ **已修復（commit `a5ccc7a6`，2026-04-22）**：`/api/v1/analytics/time-slot-insights` route 已實作於 `analytics.py:489`
 
-### 8.4 Schema drift — Member model 未跟上 migration
+### 8.4 Schema drift 清單（model vs DB 不一致）
 
-**現況**：Migration `fa40436b732e_add_is_following_to_members_and_sync_.py` 加了 `members.is_following` 欄位、`line_app/app.py` 群發 SQL 也用，**但 `Member` model 沒同步定義這個欄位**。
+下列是跑 `alembic revision --autogenerate` 後會「冒出來但其實不該真的套用」的 spurious diff。每次新增 migration 時要**手動篩掉**這幾條。
+
+#### 已修復
+
+✅ **`members.is_following`**（commit `6d688534`，2026-05-04）：Member model 已補定義，跟 DB 對齊。
+
+#### 仍存在的 drift（按嚴重度）
+
+##### 🔴 結構性 drift（model 跟 DB 真的不同）
+
+1. **`bookings` 表 PK 設計衝突**
+   - Migration `933134539669` 建表用 `order_id` 當 PK、沒 `id` 沒 `updated_at`
+   - Model `Booking` 繼承 `Base`（自動加 `id` PK + `updated_at`）
+   - autogenerate 會建議 `add_column('bookings', 'id', ...)` → 但實際套用會撞「multiple primary keys」
+   - **要修**：要嘛 model 用 `id = None` override 掉 Base 的 id；要嘛 migration 改設計
+
+2. **`tag_trigger_logs` 的 FK 指向不一致**
+   - DB 舊 FK `tag_trigger_logs_ibfk_2` 推測指向 `tags`
+   - Model 預期 FK 指向 `campaigns`（欄位名 `campaign_id`）
+   - autogenerate 會建議 drop 舊 FK + add 新 FK
+   - **要修**：寫一支正規 migration 做 FK 切換
+
+##### 🟡 索引缺失
+
+3. **`conversation_messages` 缺 index `ix_conversation_messages_unanswered_created`**
+   - Model 有定義，DB 沒建
+   - 影響：相關查詢可能變慢（沒索引 full scan）
+   - **要修**：寫 migration `op.create_index(...)` 補上
+
+##### 🟢 純 comment 文字差異（功能無影響）
+
+4. **`bookings.rooms` 註解差異**
+   - Model: `訂房房型清單：[{roomtype, quantity}]`
+   - DB: `訂房房型清單，格式：[{"roomtype": "WS", "quantity": 1}, ...]`
+
+5. **`conversation_messages.unanswered` 註解差一個「時」字**
+   - Model: `...message_source=gpt 有意義`
+   - DB: `...message_source=gpt 時有意義`
+
+6. **`tag_trigger_logs.tag_id` 註解差異**
+
+7. **`tag_trigger_logs.tag_type` 註解差異**
+   - Model: `標籤類型：member / interaction`
+   - DB: `標籤類型：member（會員標籤）/ interaction（互動標籤）`
+
+#### 修法策略
+
+- **🔴 結構性**：必修，但需要產品 / 業務面決策（PK 用什麼、FK 指誰），不是 deploy 單側能決
+- **🟡 索引**：建議補（性能影響）
+- **🟢 註解**：可一次性寫一支 `chore: align column comments` migration 全部統一，工作量小
+
+未做之前的影響：每次 alembic autogenerate 都會把這幾條一起列出，Reviewer 要記得篩掉，否則會破壞 schema。
+
+### 8.5 Schema drift — `line_friends` 表在新環境不存在
+
+**現況**：
+- `line_app/services/member_service.py` 用 raw SQL 操作 `line_friends` 表（upsert / select / backfill）
+- `line_app/app.py` 群發 SQL 也 `JOIN line_friends`
+- Migration `fa40436b732e` / `1f9c8e7c2c2a` 都假設 `line_friends` 存在（建 trigger 用）
+- **但 repo 裡找不到任何建立這張表的程式碼**：
+  - 沒 alembic migration `op.create_table('line_friends', ...)`
+  - 沒 SQLAlchemy `class LineFriend(Base)`
+  - 沒 SQL init 腳本
+  - line_app/db.py 純 helper，不建表
+
+**意味著**：
+- Dev DB 的 `line_friends` 是**前 alembic 時代**手動建的 legacy table
+- Staging DB（從 `create_all()` + 我們的 alembic 套用）→ 沒這張表
+- 未來 prod DB → 同樣會缺
+
+**目前 staging 的具體狀況**：
+- 沒 `line_friends` 表
+- 沒 line_friends ↔ members 同步 trigger（trigger 建立會失敗，因 line_friends 不存在）
+- `members.is_following` 永遠停在 `DEFAULT 1`（無 trigger 同步）
+- line_app 啟動的 `backfill_line_friends_on_startup` 撞 SQL error，但因 LINE token 是 `PLACEHOLDER_SEE_DB`、實際沒進到那段，所以**目前沒曝光**
 
 **衝擊**：
-- `create_all()` 建出的 DB 沒這欄位（因為 model 不知道）
-- 跑 `alembic upgrade head` 時若 stamp 過了 fa40436b732e，這支 migration 被跳過 → DB 永遠缺欄位
-- 結果：群發 SQL 撞 `Unknown column 'is_following'`
+- 任何接真實 LINE webhook 的環境 → line_app 寫 line_friends 會 crash
+- Prod 上線會踩同樣的雷
 
-**workaround（已套用 staging）**：手動 `ALTER TABLE members ADD COLUMN is_following ...`
-
-**長期修**：把 `is_following = Column(Boolean, default=True, ...)` 加進 `backend/app/models/member.py` Member class。同時搜整個 `migrations/versions/` 還有沒有類似漏掉的欄位。
+**修法**：見章節 12（line_friends 補表 SOP）— 從 dev DB dump schema → 寫 `IF NOT EXISTS` 的 baseline migration → 各環境 `alembic upgrade head` 自動補上。
 
 ---
 
@@ -761,7 +832,8 @@ journalctl -u lili-linebot -n 50 --no-pager
 
 | 項目 | 優先級 | 說明 |
 |---|---|---|
-| Member model 補 `is_following`（+全面 drift audit） | 🔴 高 | 見 8.4。建議跑 `alembic check` 或 autogenerate diff，找出全部 model 漏定義的欄位 |
+| **`line_friends` baseline migration**（新建） | 🔴 高 | 見 8.5。寫 `IF NOT EXISTS` 守衛的 migration，dev 跳過、staging/prod 自動補表 |
+| Schema drift 7 條清理 | 🟡 中 | 見 8.4。3 條結構性（bookings PK + tag_trigger_logs FK）+ 1 條索引 + 4 條 comment。可分批處理 |
 | MySQL timezone | 🟡 中 | UTC → Asia/Taipei（`SET GLOBAL time_zone='+08:00'` + mysqld.cnf）。**注意**：dev 早先用「前端 +8 hr」workaround 對齊台灣時間；如改 DB timezone 要同步審視程式碼，避免雙重偏移 |
 | LINE webhook URL 對齊（staging 子網域） | 🟡 中 | dev / staging / prod 規劃為三個子網域，需個別產生 LINE channel + webhook。需先確認對方 channel_id 是否已 staging 專用 |
 | systemd unit + nginx config 入 repo | 🟡 中 | 目前只存 `/etc/`，新環境無法照抄。應做成 template 存 `deploy/gcp/` |
