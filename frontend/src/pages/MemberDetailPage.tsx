@@ -112,6 +112,8 @@ export default function MemberDetailPage() {
     residence: member.residence,             // ✅ 添加居住地
     passport_number: member.passport_number, // ✅ 添加護照號碼
     internal_note: member.internal_note,     // ✅ 添加會員備註
+    join_source: member.join_source,         // ✅ 加入來源（webchat 訪客以此鎖定編輯）
+    is_guest: (member as any).is_guest,      // ✅ 訪客旗標（鎖定 profile 編輯）
     status: 'active' as const,
   } : undefined;
 

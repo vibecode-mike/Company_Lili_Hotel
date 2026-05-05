@@ -1277,8 +1277,8 @@ function Container6({ member, onMemberUpdate }: { member?: MemberData; onMemberU
     }
   };
 
-  // 訪客模式：個資欄位全部唯讀＋灰色
-  const isGuest = !!(member as any)?.is_guest;
+  // 訪客模式：個資欄位全部唯讀＋灰色（與 chat-room MemberInfoPanelComplete 同一條件：is_guest 或 webchat 來源）
+  const isGuest = (member as any)?.is_guest === true || ((member as any)?.join_source?.toString().toLowerCase() === 'webchat');
 
   return (
     <div
