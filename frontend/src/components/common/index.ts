@@ -47,11 +47,13 @@ export type {
 export {
   TextIconButton,
   SecondaryButton,
+  CancelButton,
 } from './buttons';
 
 export type {
   TextIconButtonProps,
   SecondaryButtonProps,
+  CancelButtonProps,
 } from './buttons';
 
 // ========== 刪除組件 ==========

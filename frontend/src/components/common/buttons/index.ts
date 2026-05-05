@@ -9,3 +9,6 @@ export type { TextIconButtonProps } from './TextIconButton';
 
 export { SecondaryButton } from '../SecondaryButton';
 export type { SecondaryButtonProps } from '../SecondaryButton';
+
+export { CancelButton } from './CancelButton';
+export type { CancelButtonProps } from './CancelButton';

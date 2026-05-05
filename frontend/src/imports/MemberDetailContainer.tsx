@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { useToast } from "../components/ToastProvider";
 import MemberTagEditModal from "../components/MemberTagEditModal";
 import { TitleContainer as SharedTitleContainer, HeaderContainer as SharedHeaderContainer } from "../components/common/Containers";
+import { CancelButton } from "../components/common/buttons";
 import { SimpleBreadcrumb } from "../components/common/Breadcrumb";
 import { MemberSourceIconSmall } from "../components/common/icons";
 import { useMembers } from "../contexts/MembersContext";
@@ -1300,19 +1301,14 @@ function Container6({ member, onMemberUpdate }: { member?: MemberData; onMemberU
 
       {isEditing && !isGuest && (
         <div className="content-stretch flex gap-[8px] items-center justify-end relative shrink-0 w-full" data-name="Modal Footer">
-          <button
-                type="button"
-            className="bg-[#f0f6ff] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer hover:opacity-80 transition-opacity disabled:opacity-60"
-            data-name="Modal Button"
+          <CancelButton
+            disabled={isSaving}
             onClick={(e) => {
               e.stopPropagation();
               if (isSaving) return;
               handleCancel();
             }}
-            disabled={isSaving}
-          >
-            <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">取消</p>
-          </button>
+          />
           <button
                 type="button"
             className="bg-[#242424] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer hover:opacity-80 transition-opacity disabled:opacity-60"

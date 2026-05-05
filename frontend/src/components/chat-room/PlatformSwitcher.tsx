@@ -143,7 +143,7 @@ export function PlatformSwitcher({
       {/* 下拉選單 */}
       {isOpen && (
         <div
-          className="absolute top-[calc(100%+8px)] right-0 bg-white rounded-[12px] overflow-hidden z-50 min-w-[140px]"
+          className="absolute top-[calc(100%+8px)] left-0 bg-white rounded-[12px] overflow-hidden z-50 min-w-[140px]"
           style={{ boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.12)' }}
         >
           <div className="flex flex-col gap-[8px] py-[8px]">

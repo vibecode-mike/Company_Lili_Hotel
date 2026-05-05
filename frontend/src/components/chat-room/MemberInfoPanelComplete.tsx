@@ -13,6 +13,7 @@ import { format } from 'date-fns';
 import svgPathsInfo from '../../imports/svg-k0rlkn3s4y';
 import { useToast } from '../ToastProvider';
 import { MemberSourceIconSmall } from '../common/icons';
+import { CancelButton } from '../common/buttons';
 import ButtonEdit from '../../imports/ButtonEdit';
 import { formatMemberDateTime, getLatestMemberChatTimestamp } from '../../utils/memberTime';
 
@@ -281,7 +282,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
   return (
     <div className="content-stretch flex flex-col gap-[20px] items-start relative shrink-0 w-full" onClick={() => !isGuest && !isEditing && setIsEditing(true)}>
       {/* 姓名 */}
-      <div className="content-stretch flex items-start relative shrink-0 w-full">
+      <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[8px] 2xl:gap-x-2 2xl:gap-y-0 relative shrink-0 w-full">
         <div className="content-stretch flex gap-[2px] items-center min-w-[120px] relative shrink-0">
           <div className="content-stretch flex items-center relative shrink-0">
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[16px] text-nowrap">
@@ -331,7 +332,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
                       onClick={(e) => e.stopPropagation()}
                     />
                   ) : (
-                    <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px]">{realName}</p>
+                    <p className={`basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] ${realName ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>{realName || '輸入姓名'}</p>
                   )}
                 </div>
               </div>
@@ -344,7 +345,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
       </div>
 
       {/* 生日 */}
-      <div className="content-stretch flex items-start relative shrink-0 w-full">
+      <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[8px] 2xl:gap-x-2 2xl:gap-y-0 relative shrink-0 w-full">
         <div className="content-stretch flex gap-[2px] items-center min-w-[120px] relative shrink-0">
           <div className="content-stretch flex items-center relative shrink-0">
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[16px] text-nowrap">
@@ -366,7 +367,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
               <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-[8px]" />
               <div className="content-stretch flex items-center relative shrink-0 w-full">
                 <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[16px] text-nowrap whitespace-pre" style={{ color: birthday ? '#383838' : '#a8a8a8' }}>
-                  {birthday ? format(birthday, "yyyy/MM/dd") : "—"}
+                  {birthday ? format(birthday, "yyyy/MM/dd") : "選擇年/月/日"}
                 </p>
               </div>
             </div>
@@ -417,7 +418,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
       </div>
 
       {/* 生理性別 */}
-      <div className="content-stretch flex items-start relative shrink-0 w-full">
+      <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[8px] 2xl:gap-x-2 2xl:gap-y-0 relative shrink-0 w-full">
         <div className="content-stretch flex gap-[2px] items-center min-w-[120px] relative shrink-0">
           <div className="content-stretch flex items-center relative shrink-0">
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[16px] text-nowrap">
@@ -471,7 +472,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
       </div>
 
       {/* 居住地 */}
-      <div className="content-stretch flex items-start relative shrink-0 w-full">
+      <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[8px] 2xl:gap-x-2 2xl:gap-y-0 relative shrink-0 w-full">
         <div className="content-stretch flex gap-[2px] items-center min-w-[120px] relative shrink-0">
           <div className="content-stretch flex items-center relative shrink-0">
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[16px] text-nowrap">
@@ -516,7 +517,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
                       onClick={(e) => e.stopPropagation()}
                     />
                   ) : (
-                    <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px]">{location}</p>
+                    <p className={`basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] ${location ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>{location || '輸入居住地'}</p>
                   )}
                 </div>
               </div>
@@ -529,7 +530,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
       </div>
 
       {/* 手機號碼 */}
-      <div className="content-stretch flex items-start relative shrink-0 w-full">
+      <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[8px] 2xl:gap-x-2 2xl:gap-y-0 relative shrink-0 w-full">
         <div className="content-stretch flex gap-[2px] items-center min-w-[120px] relative shrink-0">
           <div className="content-stretch flex items-center relative shrink-0">
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[16px] text-nowrap">
@@ -579,7 +580,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
                       onClick={(e) => e.stopPropagation()}
                     />
                   ) : (
-                    <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px]">{phone}</p>
+                    <p className={`basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] ${phone ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>{phone || '輸入手機號碼'}</p>
                   )}
                 </div>
               </div>
@@ -592,7 +593,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
       </div>
 
       {/* Email */}
-      <div className="content-stretch flex items-start relative shrink-0 w-full">
+      <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[8px] 2xl:gap-x-2 2xl:gap-y-0 relative shrink-0 w-full">
         <div className="content-stretch flex gap-[2px] items-center min-w-[120px] relative shrink-0">
           <div className="content-stretch flex items-center relative shrink-0">
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[16px] text-nowrap">
@@ -642,7 +643,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
                       onClick={(e) => e.stopPropagation()}
                     />
                   ) : (
-                    <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] overflow-hidden text-ellipsis whitespace-nowrap">{email}</p>
+                    <p className={`basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] overflow-hidden text-ellipsis whitespace-nowrap ${email ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>{email || 'example@mail.com'}</p>
                   )}
                 </div>
               </div>
@@ -655,7 +656,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
       </div>
 
       {/* 身分證字號 */}
-      <div className="content-stretch flex items-start relative shrink-0 w-full">
+      <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[8px] 2xl:gap-x-2 2xl:gap-y-0 relative shrink-0 w-full">
         <div className="content-stretch flex gap-[2px] items-center min-w-[120px] relative shrink-0">
           <div className="content-stretch flex items-center relative shrink-0">
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[16px] text-nowrap">
@@ -698,7 +699,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
                       onClick={(e) => e.stopPropagation()}
                     />
                   ) : (
-                    <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px]">{idNumber}</p>
+                    <p className={`basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] ${idNumber ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>{idNumber || '輸入身分證字號'}</p>
                   )}
                 </div>
               </div>
@@ -711,7 +712,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
       </div>
 
       {/* 護照號碼 */}
-      <div className="content-stretch flex items-start relative shrink-0 w-full">
+      <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[8px] 2xl:gap-x-2 2xl:gap-y-0 relative shrink-0 w-full">
         <div className="content-stretch flex gap-[2px] items-center min-w-[120px] relative shrink-0">
           <div className="content-stretch flex items-center relative shrink-0">
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[16px] text-nowrap">
@@ -754,7 +755,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
                       onClick={(e) => e.stopPropagation()}
                     />
                   ) : (
-                    <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px]">{passportNumber}</p>
+                    <p className={`basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] ${passportNumber ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>{passportNumber || '輸入外籍人士護照號碼'}</p>
                   )}
                 </div>
               </div>
@@ -769,16 +770,12 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
       {/* Edit buttons - only show when editing */}
       {isEditing && (
         <div className="content-stretch flex gap-[8px] items-center justify-end relative shrink-0 w-full" data-name="Modal Footer">
-          <div 
-            className="bg-[#f0f6ff] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer hover:opacity-80 transition-opacity" 
-            data-name="Modal Button"
+          <CancelButton
             onClick={(e) => {
               e.stopPropagation();
               handleCancel();
             }}
-          >
-            <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">取消</p>
-          </div>
+          />
           <div 
             className="bg-[#242424] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer hover:opacity-80 transition-opacity" 
             data-name="Modal Button"
