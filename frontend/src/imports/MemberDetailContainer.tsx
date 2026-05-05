@@ -1426,20 +1426,20 @@ function Container7({ member, platform }: { member?: MemberData; platform?: Chat
   }, [displayPlatform, member?.id, getDisplayMemberById]);
 
   return (
-    <div className="content-stretch flex items-center relative shrink-0 w-full" data-name="Container">
+    <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[4px] 2xl:gap-x-2 2xl:gap-y-0 relative shrink-0 w-full min-w-0" data-name="Container">
       <div className="content-stretch flex items-center min-w-[120px] relative shrink-0" data-name="Modal/Title&Content">
         <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px]">
           <p className="leading-[1.5]">加入來源</p>
         </div>
       </div>
-      <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0" data-name="Modal/Title&Content">
-        <div className="flex items-center gap-2 font-['Noto_Sans_TC:Regular',sans-serif] font-normal relative flex-wrap">
+      <div className="content-stretch flex items-center min-w-0 relative shrink-0" data-name="Modal/Title&Content">
+        <div className="flex items-center gap-2 font-['Noto_Sans_TC:Regular',sans-serif] font-normal relative flex-wrap min-w-0 max-w-full">
           <MemberSourceIconSmall source={displayPlatform} />
-          <span className="text-[14px] text-[#383838]">
+          <span className="text-[14px] text-[#383838] break-all">
             {channelName}
           </span>
           {member?.lineUid && (
-            <span className="text-[12px] text-[#6E6E6E]">
+            <span className="text-[12px] text-[#6E6E6E] break-all">
               (LINE UID: {member.lineUid})
             </span>
           )}
@@ -1451,15 +1451,15 @@ function Container7({ member, platform }: { member?: MemberData; platform?: Chat
 
 function Container8({ member }: { member?: MemberData }) {
   return (
-    <div className="content-stretch flex items-center relative shrink-0 w-full" data-name="Container">
+    <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[4px] 2xl:gap-x-2 2xl:gap-y-0 relative shrink-0 w-full min-w-0" data-name="Container">
       <div className="content-stretch flex items-center min-w-[120px] relative shrink-0" data-name="Modal/Title&Content">
         <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px]">
           <p className="leading-[1.5]">建立時間</p>
         </div>
       </div>
-      <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0" data-name="Modal/Title&Content">
-        <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-          <p className="leading-[1.5] whitespace-pre">{formatMemberDateTime(member?.createTime)}</p>
+      <div className="content-stretch flex items-center min-w-0 relative shrink-0" data-name="Modal/Title&Content">
+        <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] min-w-0 max-w-full">
+          <p className="leading-[1.5] break-words">{formatMemberDateTime(member?.createTime)}</p>
         </div>
       </div>
     </div>
@@ -1468,15 +1468,15 @@ function Container8({ member }: { member?: MemberData }) {
 
 function Container9({ member }: { member?: MemberData }) {
   return (
-    <div className="content-stretch flex items-center relative shrink-0 w-full" data-name="Container">
+    <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[4px] 2xl:gap-x-2 2xl:gap-y-0 relative shrink-0 w-full min-w-0" data-name="Container">
       <div className="content-stretch flex items-center min-w-[120px] relative shrink-0" data-name="Modal/Title&Content">
         <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px]">
           <p className="leading-[1.5]">最近聊天時間</p>
         </div>
       </div>
-      <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0" data-name="Modal/Title&Content">
-        <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-          <p className="leading-[1.5] whitespace-pre">{formatMemberDateTime(getLatestMemberChatTimestamp(member))}</p>
+      <div className="content-stretch flex items-center min-w-0 relative shrink-0" data-name="Modal/Title&Content">
+        <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] min-w-0 max-w-full">
+          <p className="leading-[1.5] break-words">{formatMemberDateTime(getLatestMemberChatTimestamp(member))}</p>
         </div>
       </div>
     </div>
@@ -1485,15 +1485,15 @@ function Container9({ member }: { member?: MemberData }) {
 
 function Container10({ member }: { member?: MemberData }) {
   return (
-    <div className="content-stretch flex items-center relative shrink-0 w-full" data-name="Container">
+    <div className="grid grid-cols-1 2xl:grid-cols-[auto_1fr] gap-[4px] 2xl:gap-x-2 2xl:gap-y-0 relative shrink-0 w-full min-w-0" data-name="Container">
       <div className="content-stretch flex items-center min-w-[120px] relative shrink-0" data-name="Modal/Title&Content">
         <div className="basis-0 flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow justify-center leading-[0] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px]">
           <p className="leading-[1.5]">會員 ID</p>
         </div>
       </div>
-      <div className="basis-0 content-stretch flex grow items-center min-h-px min-w-px relative shrink-0" data-name="Modal/Title&Content">
-        <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-          <p className="leading-[1.5] whitespace-pre">{member?.id || '未提供'}</p>
+      <div className="content-stretch flex items-center min-w-0 relative shrink-0" data-name="Modal/Title&Content">
+        <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] min-w-0 max-w-full">
+          <p className="leading-[1.5] break-all">{member?.id || '未提供'}</p>
         </div>
       </div>
     </div>
