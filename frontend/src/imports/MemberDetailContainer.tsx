@@ -14,6 +14,7 @@ import { useToast } from "../components/ToastProvider";
 import MemberTagEditModal from "../components/MemberTagEditModal";
 import { TitleContainer as SharedTitleContainer, HeaderContainer as SharedHeaderContainer } from "../components/common/Containers";
 import { CancelButton } from "../components/common/buttons";
+import { TagList } from "../components/common/TagList";
 import { SimpleBreadcrumb } from "../components/common/Breadcrumb";
 import { MemberSourceIconSmall } from "../components/common/icons";
 import { useMembers } from "../contexts/MembersContext";
@@ -1842,7 +1843,7 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
                 {/* 標籤列：placeholder/標籤 + 編輯按鈕（按鈕吸附最右側並與標籤/placeholder 垂直置中；
                     wrapper 撐到 28px 與按鈕等高，避免 placeholder line-box 太矮造成按鈕視覺下墜） */}
                 <div className="flex items-center justify-between gap-[8px] min-w-0 w-full">
-                  <div className="flex flex-wrap gap-x-3 gap-y-2 items-center content-center relative min-w-0 max-w-full flex-1 min-h-[28px]" data-name="Container">
+                  <div className="flex items-center min-w-0 max-w-full flex-1 min-h-[28px]" data-name="Container">
                     {(() => {
                       const tags = (member?.tagDetails || [])
                         .filter(tag => tag.type === 'member' || (tag as any).tag_type === 1);
@@ -1851,11 +1852,8 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
                           <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[#6e6e6e] text-[14px] leading-[28px]">可設定會員標籤</p>
                         );
                       }
-                      return tags.map((tag, index) => (
-                        <div key={index} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-                          <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-medium grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[14px] text-center">{tag.name || (tag as any).tag}</p>
-                        </div>
-                      ));
+                      const labels = tags.map(tag => tag.name || (tag as any).tag);
+                      return <TagList tags={labels} />;
                     })()}
                   </div>
                   <div className="ml-auto shrink-0">
@@ -1867,7 +1865,7 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
               {/* Interaction Tags Section */}
               <div className="grid gap-y-4 lg:grid-cols-[auto,1fr] items-start w-full min-w-0" data-name="Container">
                 <ModalTitleContent9 />
-                <div className="flex flex-wrap gap-x-3 gap-y-2 items-start content-start relative min-w-0 max-w-full" data-name="Container">
+                <div className="min-w-0 max-w-full" data-name="Container">
                   {(() => {
                     const tags = (member?.tagDetails || [])
                       .filter(tag => tag.type === 'interaction' || (tag as any).tag_type === 2);
@@ -1876,16 +1874,8 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
                         <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[#6e6e6e] text-[14px]">尚無互動標籤</p>
                       );
                     }
-                    return tags.map((tag, index) => {
-                      // 互動標籤統一使用藍色
-                      const bgColor = 'bg-[#f0f6ff]';
-                      const textColor = 'text-[#0f6beb]';
-                      return (
-                        <div key={index} className={`${bgColor} box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0`} data-name="Tag">
-                          <p className={`basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-medium grow leading-[1.5] min-h-px min-w-px relative shrink-0 ${textColor} text-[14px] text-center`}>{tag.name || (tag as any).tag}</p>
-                        </div>
-                      );
-                    });
+                    const labels = tags.map(tag => tag.name || (tag as any).tag);
+                    return <TagList tags={labels} />;
                   })()}
                 </div>
               </div>
@@ -1893,7 +1883,7 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
               {/* Conversion Tags Section（訂房付款完成後自動寫入，不提供編輯） */}
               <div className="grid gap-y-4 lg:grid-cols-[auto,1fr] items-start w-full min-w-0" data-name="Container">
                 <ModalTitleContentConversion />
-                <div className="flex flex-wrap gap-x-3 gap-y-2 items-start content-start relative min-w-0 max-w-full" data-name="Container">
+                <div className="min-w-0 max-w-full" data-name="Container">
                   {(() => {
                     const tags = (member?.tagDetails || [])
                       .filter(tag => tag.type === 'conversion' || (tag as any).tag_type === 3);
@@ -1902,11 +1892,8 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
                         <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[#6e6e6e] text-[14px]">尚無轉單標籤</p>
                       );
                     }
-                    return tags.map((tag, index) => (
-                      <div key={index} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
-                        <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-medium grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[14px] text-center">{tag.name || (tag as any).tag}</p>
-                      </div>
-                    ));
+                    const labels = tags.map(tag => tag.name || (tag as any).tag);
+                    return <TagList tags={labels} />;
                   })()}
                 </div>
               </div>

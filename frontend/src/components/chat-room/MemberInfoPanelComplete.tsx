@@ -14,6 +14,7 @@ import svgPathsInfo from '../../imports/svg-k0rlkn3s4y';
 import { useToast } from '../ToastProvider';
 import { MemberSourceIconSmall } from '../common/icons';
 import { CancelButton } from '../common/buttons';
+import { TagList } from '../common/TagList';
 import ButtonEdit from '../../imports/ButtonEdit';
 import { formatMemberDateTime, getLatestMemberChatTimestamp } from '../../utils/memberTime';
 
@@ -812,16 +813,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
               <div className="flex items-center justify-between gap-[8px] w-full min-w-0">
                 <div className="flex-1 min-w-0 flex items-center min-h-[28px]">
                   {hasMemberTags && memberTags ? (
-                    <div className="flex flex-wrap gap-[8px]">
-                      {memberTags.map((tag, index) => (
-                        <span
-                          key={`member-${index}`}
-                          className="bg-[#f0f6ff] text-[#0f6beb] px-[12px] py-[4px] rounded-[8px] text-[14px] font-medium"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
+                    <TagList tags={memberTags} />
                   ) : (
                     <p className="text-[#6e6e6e] text-[14px] leading-[28px]">可設定會員標籤</p>
                   )}
@@ -845,16 +837,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
                 互動標籤
               </p>
               {hasInteractionTags && interactionTags ? (
-                <div className="flex flex-wrap gap-[8px]">
-                  {interactionTags.map((tag, index) => (
-                    <span
-                      key={`interaction-${index}`}
-                      className="bg-[#f0f6ff] text-[#0f6beb] px-[12px] py-[4px] rounded-[8px] text-[14px] font-medium"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
+                <TagList tags={interactionTags} />
               ) : (
                 <p className="text-[#6e6e6e] text-[14px]">尚無互動標籤</p>
               )}
@@ -866,16 +849,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
                 轉單標籤
               </p>
               {hasConversionTags && conversionTags ? (
-                <div className="flex flex-wrap gap-[8px]">
-                  {conversionTags.map((tag, index) => (
-                    <span
-                      key={`conversion-${index}`}
-                      className="bg-[#f0f6ff] text-[#0f6beb] px-[12px] py-[4px] rounded-[8px] text-[14px] font-medium"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
+                <TagList tags={conversionTags} />
               ) : (
                 <p className="text-[#6e6e6e] text-[14px]">尚無轉單標籤</p>
               )}

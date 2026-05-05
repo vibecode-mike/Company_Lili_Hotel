@@ -80,6 +80,9 @@ export type {
 export { default as Tag } from './Tag';
 export type { TagProps } from './Tag';
 
+export { TagList } from './TagList';
+export type { TagListProps } from './TagList';
+
 // ========== 圖片上傳組件 ==========
 export { default as ImageUploadField } from './ImageUploadField';
 export type { ImageUploadFieldProps } from './ImageUploadField';
