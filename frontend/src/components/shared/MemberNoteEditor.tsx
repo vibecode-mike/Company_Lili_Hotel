@@ -17,6 +17,7 @@
 import { useEffect, useState } from 'react';
 import ButtonEdit from '../../imports/ButtonEdit';
 import { useToast } from '../ToastProvider';
+import { CancelButton } from '../common/buttons';
 
 interface MemberNoteEditorProps {
   initialValue?: string;
@@ -97,13 +98,8 @@ export default function MemberNoteEditor({
           {isEditing && (
             <div className={saveButtonPosition}>
               <div className="content-stretch flex gap-[8px] items-end relative shrink-0">
-                {/* Cancel Button - Pixel Perfect from Figma */}
-                <div 
-                  onClick={handleCancel}
-                  className="bg-[#f0f6ff] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
-                >
-                  <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">取消</p>
-                </div>
+                {/* Cancel Button — UI 復用 MemberTagEditModal footer 取消鈕（CancelButton component） */}
+                <CancelButton onClick={handleCancel} />
                 {/* Save Button - Pixel Perfect from Figma */}
                 <div 
                   onClick={handleSave}
