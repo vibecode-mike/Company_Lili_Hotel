@@ -15,6 +15,7 @@ import MemberTagEditModal from "../components/MemberTagEditModal";
 import { TitleContainer as SharedTitleContainer, HeaderContainer as SharedHeaderContainer } from "../components/common/Containers";
 import { CancelButton } from "../components/common/buttons";
 import { TagList } from "../components/common/TagList";
+import { RadioOption } from "../components/common/RadioOption";
 import { SimpleBreadcrumb } from "../components/common/Breadcrumb";
 import { MemberSourceIconSmall } from "../components/common/icons";
 import { useMembers } from "../contexts/MembersContext";
@@ -532,60 +533,22 @@ function ModalTitleContent2() {
   );
 }
 
-function Option({ selected, onClick, label }: { selected: boolean; onClick: () => void; label: string }) {
-  return (
-    <div 
-      className="content-stretch flex gap-[8px] items-center relative shrink-0 cursor-pointer hover:opacity-80 transition-opacity" 
-      data-name="Option"
-      onClick={onClick}
-    >
-      <div className="overflow-clip relative shrink-0 size-[24px]" data-name="Radio Button">
-        {selected ? (
-          <>
-            <div className="absolute inset-0" data-name="Vector">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="11" stroke="#0F6BEB" strokeWidth="2" fill="none" />
-              </svg>
-            </div>
-            <div className="absolute inset-0" data-name="Vector">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="6" fill="#0F6BEB" />
-              </svg>
-            </div>
-          </>
-        ) : (
-          <div className="absolute inset-0" data-name="Vector">
-            <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="11" stroke="#D1D1D1" strokeWidth="2" fill="none" />
-            </svg>
-          </div>
-        )}
-      </div>
-      <div className="content-stretch flex items-center relative shrink-0" data-name="Modal/Title&Content">
-        <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#383838] text-[16px] text-nowrap">
-          <p className="leading-[1.5] whitespace-pre">{label}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function Container4({ value, onChange }: { value?: string | null; onChange: (value: string) => void }) {
   const normalized = value ?? 'undisclosed';
 
   return (
-    <div className="flex flex-wrap gap-[16px] items-center content-center justify-start relative min-w-0 max-w-full" data-name="Container">
-      <Option
+    <div className="flex flex-wrap gap-[16px] items-center content-center justify-start relative min-w-0 max-w-full" role="radiogroup" data-name="Container">
+      <RadioOption
         selected={normalized === 'male'}
         onClick={() => onChange('male')}
         label="男性"
       />
-      <Option
+      <RadioOption
         selected={normalized === 'female'}
         onClick={() => onChange('female')}
         label="女性"
       />
-      <Option
+      <RadioOption
         selected={normalized === 'undisclosed'}
         onClick={() => onChange('undisclosed')}
         label="不透露"

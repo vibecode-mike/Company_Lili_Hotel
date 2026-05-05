@@ -7,8 +7,7 @@ import React, { useState, useEffect } from 'react';
 import type { Member } from '../../types/member';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
-import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
-import { Label } from '../ui/label';
+import { RadioOption } from '../common/RadioOption';
 import { format } from 'date-fns';
 import svgPathsInfo from '../../imports/svg-k0rlkn3s4y';
 import { useToast } from '../ToastProvider';
@@ -435,40 +434,31 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
           </div>
         </div>
         <div className="basis-0 content-stretch flex gap-[20px] grow items-center min-h-px min-w-px relative self-stretch shrink-0">
-          <RadioGroup 
-            value={gender} 
-            onValueChange={(value) => isEditing && setGender(value as 'male' | 'female' | 'undisclosed')}
+          {/* 不掛 stopPropagation：點擊讓事件冒泡到外層 setIsEditing(true)，與詳細頁行為一致；
+              isGuest 時 disable，外層 onClick 也已被 isGuest 守門，不會進編輯 */}
+          <div
             className="flex flex-wrap gap-[16px]"
-            onClick={(e) => e.stopPropagation()}
+            role="radiogroup"
           >
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="male" id="gender-male" disabled={!isEditing} />
-              <Label 
-                htmlFor="gender-male" 
-                className="cursor-pointer text-[16px] text-[#383838] font-['Noto_Sans_TC:Regular',sans-serif] font-normal"
-              >
-                男性
-              </Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="female" id="gender-female" disabled={!isEditing} />
-              <Label 
-                htmlFor="gender-female" 
-                className="cursor-pointer text-[16px] text-[#383838] font-['Noto_Sans_TC:Regular',sans-serif] font-normal"
-              >
-                女性
-              </Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="undisclosed" id="gender-undisclosed" disabled={!isEditing} />
-              <Label 
-                htmlFor="gender-undisclosed" 
-                className="cursor-pointer text-[16px] text-[#383838] font-['Noto_Sans_TC:Regular',sans-serif] font-normal"
-              >
-                不透露
-              </Label>
-            </div>
-          </RadioGroup>
+            <RadioOption
+              selected={gender === 'male'}
+              onClick={() => setGender('male')}
+              label="男性"
+              disabled={isGuest}
+            />
+            <RadioOption
+              selected={gender === 'female'}
+              onClick={() => setGender('female')}
+              label="女性"
+              disabled={isGuest}
+            />
+            <RadioOption
+              selected={gender === 'undisclosed'}
+              onClick={() => setGender('undisclosed')}
+              label="不透露"
+              disabled={isGuest}
+            />
+          </div>
         </div>
       </div>
 
