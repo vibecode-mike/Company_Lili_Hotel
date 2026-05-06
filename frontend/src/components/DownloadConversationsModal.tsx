@@ -34,6 +34,17 @@ export default function DownloadConversationsModal({
   const [dateTo, setDateTo] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // 日期上限：今日（依使用者本地時區，台灣使用者即為台北時間），避免選到未來日期
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }, [open]);
+  // 若使用者手動鍵入大於今日的值，截斷為今日
+  const clampToToday = (v: string) => (v && v > todayStr ? todayStr : v);
+
   // 每次開啟 Modal 時，將平台篩選同步為外層列表當前的值
   useEffect(() => {
     if (open) setPlatformFilter(initialPlatformFilter);
@@ -156,14 +167,15 @@ export default function DownloadConversationsModal({
           </div>
         </div>
 
-        {/* 日期區間（不更動） */}
+        {/* 日期區間：max 限制為今日，避免選到未來日期 */}
         <div className="mb-[16px] flex gap-[8px]">
           <div className="flex-1">
             <label className="block text-[14px] text-[#6e6e6e] mb-[6px]">起始日期</label>
             <input
               type="date"
               value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
+              max={todayStr}
+              onChange={(e) => setDateFrom(clampToToday(e.target.value))}
               className="w-full px-[12px] h-[40px] border border-[#dddddd] rounded-[10px] text-[14px] outline-none focus:border-[#0f6beb]"
             />
           </div>
@@ -172,7 +184,8 @@ export default function DownloadConversationsModal({
             <input
               type="date"
               value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
+              max={todayStr}
+              onChange={(e) => setDateTo(clampToToday(e.target.value))}
               className="w-full px-[12px] h-[40px] border border-[#dddddd] rounded-[10px] text-[14px] outline-none focus:border-[#0f6beb]"
             />
           </div>
