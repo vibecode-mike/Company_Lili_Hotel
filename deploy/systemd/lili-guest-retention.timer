@@ -1,10 +1,10 @@
 [Unit]
-Description=Lili Hotel - 每日 03:00 觸發訪客資料保留任務
+Description=Lili Hotel - 每日 00:00 觸發訪客資料保留任務
 Requires=lili-guest-retention.service
 
 [Timer]
-# 每天台北時間 03:00 執行；OnCalendar 用系統時區
-OnCalendar=*-*-* 03:00:00
+# 每天台北時間 00:00（午夜）執行，符合「保留 7 天」以日為單位的語意；OnCalendar 用系統時區
+OnCalendar=*-*-* 00:00:00
 # 系統開機後若錯過時間，仍補跑一次
 Persistent=true
 Unit=lili-guest-retention.service
