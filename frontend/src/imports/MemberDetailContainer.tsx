@@ -20,7 +20,7 @@ import { SimpleBreadcrumb } from "../components/common/Breadcrumb";
 import { MemberSourceIconSmall } from "../components/common/icons";
 import { useMembers } from "../contexts/MembersContext";
 import { useAuth } from "../components/auth/AuthContext";
-import type { Member, MemberData } from "../types/member";
+import type { Member, MemberData, TagInfo } from "../types/member";
 import type { ChatPlatform } from "../components/chat-room/types";
 export type { MemberData } from "../types/member";
 import type { BackendMember, BackendTag } from "../types/api";
@@ -1716,14 +1716,20 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [memberTags, setMemberTags] = useState<string[]>(member?.memberTags || []); // ✅ 使用真實數據
   const [interactionTags, setInteractionTags] = useState<string[]>(member?.interactionTags || []); // ✅ 使用真實數據
+  // 本地 tagDetails state：渲染標籤時直接讀這個，避免依賴外層 props 鏈導致畫面延遲更新
+  const [localTagDetails, setLocalTagDetails] = useState<TagInfo[]>(member?.tagDetails || []);
   const { showToast } = useToast();
   const { logout } = useAuth();
   const { fetchMemberById } = useMembers();
 
+  // 只在「切換會員」時從 props 同步初始值；
+  // 同一會員後續的標籤變動由 handleSave 內部直接控制 local state，
+  // 避免被外部 props 鏈（onMemberUpdate → setCurrentMember → 新 member prop）的非同步資料覆蓋。
   React.useEffect(() => {
     setMemberTags(member?.memberTags || []);
     setInteractionTags(member?.interactionTags || []);
-  }, [member?.memberTags, member?.interactionTags]);
+    setLocalTagDetails(member?.tagDetails || []);
+  }, [member?.id]);
 
   const handleEdit = () => {
     setIsModalOpen(true);
@@ -1772,18 +1778,30 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
         return false;
       }
 
-      // 保存成功後，重新獲取最新的會員資料（同步列表/內頁/聊天室）
-      const refreshedMember = await fetchMemberById(member.id);
-      if (refreshedMember) {
-        const transformedMember = mapMemberToMemberData(refreshedMember, member);
-        setMemberTags(transformedMember.memberTags || []);
-        setInteractionTags(transformedMember.interactionTags || []);
-        onMemberUpdate?.(transformedMember);
-      } else {
-        // 如果獲取失敗，至少更新本地狀態
-        setMemberTags(newMemberTags);
-        setInteractionTags(newInteractionTags);
-      }
+      // 即時更新本地 state，使畫面立刻反映新標籤（不等 API refresh）
+      setMemberTags(newMemberTags);
+      setInteractionTags(newInteractionTags);
+      // tagDetails：保留現有 conversion 標籤（後端寫入、使用者不可改），重組 member/interaction
+      const conversionTagDetails = (localTagDetails || []).filter(
+        (t) => t.type === 'conversion' || (t as any).tag_type === 3
+      );
+      const optimisticTagDetails: TagInfo[] = [
+        ...newMemberTags.map((name) => ({ id: 0, name, type: 'member' as const })),
+        ...newInteractionTags.map((name) => ({ id: 0, name, type: 'interaction' as const })),
+        ...conversionTagDetails,
+      ];
+      setLocalTagDetails(optimisticTagDetails);
+
+      // 背景重抓最新資料只是為了通知外層（會員列表 / 聊天室）同步，
+      // 不再覆蓋本地 state，避免後端 read-replica 延遲時拿到舊資料把新標籤蓋掉。
+      fetchMemberById(member.id).then((refreshedMember) => {
+        if (refreshedMember) {
+          const transformedMember = mapMemberToMemberData(refreshedMember, member);
+          onMemberUpdate?.(transformedMember);
+        }
+      }).catch((err) => {
+        console.error('[Container20] background refresh failed:', err);
+      });
 
       return true;
     } catch (error) {
@@ -1808,7 +1826,7 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
                 <div className="flex items-center justify-between gap-[8px] min-w-0 w-full">
                   <div className="flex items-center min-w-0 max-w-full flex-1 min-h-[28px]" data-name="Container">
                     {(() => {
-                      const tags = (member?.tagDetails || [])
+                      const tags = (localTagDetails || [])
                         .filter(tag => tag.type === 'member' || (tag as any).tag_type === 1);
                       if (tags.length === 0) {
                         return (
@@ -1830,7 +1848,7 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
                 <ModalTitleContent9 />
                 <div className="min-w-0 max-w-full" data-name="Container">
                   {(() => {
-                    const tags = (member?.tagDetails || [])
+                    const tags = (localTagDetails || [])
                       .filter(tag => tag.type === 'interaction' || (tag as any).tag_type === 2);
                     if (tags.length === 0) {
                       return (
@@ -1848,7 +1866,7 @@ function Container20({ member, onMemberUpdate }: { member?: MemberData; onMember
                 <ModalTitleContentConversion />
                 <div className="min-w-0 max-w-full" data-name="Container">
                   {(() => {
-                    const tags = (member?.tagDetails || [])
+                    const tags = (localTagDetails || [])
                       .filter(tag => tag.type === 'conversion' || (tag as any).tag_type === 3);
                     if (tags.length === 0) {
                       return (
