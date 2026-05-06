@@ -22,6 +22,7 @@ from app.models.tracking import (
     ClickTrackingDemo,
 )
 from app.models.line_channel import LineChannel
+from app.models.line_friend import LineFriend
 from app.models.fb_channel import FbChannel
 from app.models.conversation import ConversationThread, ConversationMessage
 from app.models.chatbot_booking import ChatbotSession, FaqPmsConnection, BookingRecord
@@ -64,6 +65,7 @@ __all__ = [
     "InteractionType",
     "ClickTrackingDemo",
     "LineChannel",
+    "LineFriend",
     "FbChannel",
     "ConversationThread",
     "ConversationMessage",
