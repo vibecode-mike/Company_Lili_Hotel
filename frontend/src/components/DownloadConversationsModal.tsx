@@ -17,14 +17,27 @@ interface Props {
   onClose: () => void;
   members: DisplayMember[];
   boundChannels: BoundChannel[];
+  // 外層會員列表的平台篩選值，開啟 Modal 時帶入作為初始值（內外對齊）
+  initialPlatformFilter?: string;
 }
 
-export default function DownloadConversationsModal({ open, onClose, members, boundChannels }: Props) {
+export default function DownloadConversationsModal({
+  open,
+  onClose,
+  members,
+  boundChannels,
+  initialPlatformFilter = 'all',
+}: Props) {
   // 平台篩選：'all' = 所有平台；其餘為 `${channel}|${channelName}`
-  const [platformFilter, setPlatformFilter] = useState<string>('all');
+  const [platformFilter, setPlatformFilter] = useState<string>(initialPlatformFilter);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // 每次開啟 Modal 時，將平台篩選同步為外層列表當前的值
+  useEffect(() => {
+    if (open) setPlatformFilter(initialPlatformFilter);
+  }, [open, initialPlatformFilter]);
 
   // ESC 關閉
   useEffect(() => {

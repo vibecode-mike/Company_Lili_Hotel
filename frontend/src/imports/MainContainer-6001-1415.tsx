@@ -1109,6 +1109,7 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
         onClose={() => setDownloadModalOpen(false)}
         members={displayMembers}
         boundChannels={boundChannels}
+        initialPlatformFilter={platformFilter}
       />
     </div>
   );
