@@ -408,12 +408,6 @@ export default function ChatRoomLayout({
   // 先計算 threadId，再用於 SSE 與推播過濾
   const currentThreadId = threadsMap[currentPlatform];
 
-  // Webchat 對話結束狀態
-  // TODO: 與後端對齊判斷依據（thread 旗標 / 時間 heuristic 皆可），
-  // 目前先以 false stub UI 已就緒，把下方 false 換成實際判斷即可全部生效
-  const isWebchatConversationEnded =
-    currentPlatform === "Webchat" && false;
-
   // SSE 監聽新訊息（thread 維度）
   const handleNewMessage = useCallback(
     (sseMessage: any) => {
@@ -1310,12 +1304,6 @@ export default function ChatRoomLayout({
                 </div>
               ))}
 
-              {/* Webchat 對話結束分隔列（沿用「沒有更多訊息了」樣式） */}
-              {isWebchatConversationEnded && messages.length > 0 && (
-                <div className="w-full text-center py-2 text-gray-400 text-sm">
-                  ─── 對話已結束 ───
-                </div>
-              )}
             </div>
 
             {/* Input Area (Fixed at Bottom) */}
@@ -1346,38 +1334,41 @@ export default function ChatRoomLayout({
                           }}
                           onCompositionStart={() => setIsComposing(true)}
                           onCompositionEnd={() => setIsComposing(false)}
-                          disabled={isWebchatConversationEnded}
+                          disabled={currentPlatform === "Webchat"}
                           placeholder={
-                            isWebchatConversationEnded
-                              ? "官網對話已結束，無法回覆訪客訊息"
+                            currentPlatform === "Webchat"
+                              ? "官網無法使用手動回覆功能"
                               : "輸入訊息文字"
                           }
                           className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow h-full leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] placeholder:text-[#a8a8a8] bg-transparent border-0 outline-none resize-none disabled:cursor-not-allowed [&::-webkit-scrollbar]:w-[8px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/60 [&::-webkit-scrollbar-thumb]:rounded-full"
                         />
                       </div>
 
-                      {/* 底部列：回覆模式指示 + 傳送按鈕 (同一列) - Figma v1087 */}
-                      <div className="content-stretch flex gap-[12px] items-center justify-between relative shrink-0 w-full">
-                        {/* 回覆模式指示 (左側) - 保留原有 GPT 計時器邏輯 */}
-                        <ResponseModeIndicator
-                          mode={isHumanOverrideActive ? "manual" : "ai_auto"}
-                        />
+                      {/* 底部列：回覆模式指示 + 傳送按鈕 (同一列) - Figma v1087
+                          官網（Webchat）不支援手動回覆，整列隱藏 */}
+                      {currentPlatform !== "Webchat" && (
+                        <div className="content-stretch flex gap-[12px] items-center justify-between relative shrink-0 w-full">
+                          {/* 回覆模式指示 (左側) - 保留原有 GPT 計時器邏輯 */}
+                          <ResponseModeIndicator
+                            mode={isHumanOverrideActive ? "manual" : "ai_auto"}
+                          />
 
-                        {/* 傳送按鈕 (右側) */}
-                        <button
-                          onClick={handleSendMessage}
-                          disabled={!messageInput.trim() || isSending || isWebchatConversationEnded}
-                          className="bg-[#242424] disabled:opacity-50 relative rounded-[16px] min-h-[48px] min-w-[72px] shrink-0 transition-opacity disabled:cursor-not-allowed"
-                        >
-                          <div className="flex flex-row items-center justify-center min-h-inherit min-w-inherit size-full">
-                            <div className="box-border content-stretch flex items-center justify-center min-h-inherit min-w-inherit px-[12px] py-[8px] relative size-full">
-                              <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center text-white">
-                                {isSending ? "發送中..." : "傳送"}
-                              </p>
+                          {/* 傳送按鈕 (右側) */}
+                          <button
+                            onClick={handleSendMessage}
+                            disabled={!messageInput.trim() || isSending}
+                            className="bg-[#242424] disabled:opacity-50 relative rounded-[16px] min-h-[48px] min-w-[72px] shrink-0 transition-opacity disabled:cursor-not-allowed"
+                          >
+                            <div className="flex flex-row items-center justify-center min-h-inherit min-w-inherit size-full">
+                              <div className="box-border content-stretch flex items-center justify-center min-h-inherit min-w-inherit px-[12px] py-[8px] relative size-full">
+                                <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center text-white">
+                                  {isSending ? "發送中..." : "傳送"}
+                                </p>
+                              </div>
                             </div>
-                          </div>
-                        </button>
-                      </div>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
