@@ -1,5 +1,6 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { Filter, Check } from "lucide-react";
 import svgPaths from "./svg-wbwsye31ry";
 import { SearchContainer } from "../components/common/SearchContainers";
 import DownloadConversationsModal from "../components/DownloadConversationsModal";
@@ -10,6 +11,7 @@ import { TextIconButton, ArrowRightIcon, Tag } from "../components/common";
 import { MemberSourceIconLarge, ChannelIcon as CommonChannelIcon } from "../components/common/icons";
 import { useMembers } from "../contexts/MembersContext";
 import { formatMemberDateTime, getLatestMemberChatTimestamp, formatUnansweredTime } from "../utils/memberTime";
+import { apiGet } from "../utils/apiClient";
 
 /**
  * 會員管理列表頁面組件
@@ -48,76 +50,7 @@ function Container1({ onAddMember }: { onAddMember?: () => void }) {
   );
 }
 
-type MemberTypeFilter = 'all' | 'member' | 'guest';
-
-// 會員/非會員/全部 切換（樣式對齊 AI Chatbot 頁的 PMS/FAQ pill switch）
-function MemberTypeSegmented({
-  value,
-  onChange,
-}: {
-  value: MemberTypeFilter;
-  onChange: (v: MemberTypeFilter) => void;
-}) {
-  const options: { key: MemberTypeFilter; label: string }[] = [
-    { key: 'all', label: '全部' },
-    { key: 'member', label: '會員' },
-    { key: 'guest', label: '非會員' },
-  ];
-  return (
-    <div
-      style={{
-        display: "flex",
-        gap: 4,
-        alignItems: "center",
-        padding: 4,
-        borderRadius: 16,
-        backgroundColor: "#fff",
-        flexShrink: 0,
-        cursor: "pointer",
-      }}
-    >
-      {options.map((opt) => {
-        const active = value === opt.key;
-        return (
-          <div
-            key={opt.key}
-            onClick={() => onChange(opt.key)}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => e.key === "Enter" && onChange(opt.key)}
-            style={{
-              flex: "1 0 0",
-              minWidth: 84,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: 4,
-              borderRadius: 12,
-              backgroundColor: active ? "#f6f9fd" : "#fff",
-              transition: "background-color 0.2s",
-            }}
-          >
-            <span
-              style={{
-                fontFamily: "'Noto Sans TC', sans-serif",
-                fontWeight: 400,
-                fontSize: 16,
-                lineHeight: 1.5,
-                color: "#383838",
-                textAlign: "center",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {opt.label}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// 下載對話紀錄按鈕（外觀與 MemberTypeSegmented 一致：48px 高、4px padding、淺灰邊框、內部 40px 圓角項目）
+// 下載對話紀錄按鈕
 function DownloadConversationsButton({ onClick }: { onClick: () => void }) {
   return (
     <div className="bg-white box-border content-stretch flex items-center rounded-[12px] shrink-0 h-[48px] p-[4px] border border-[#eef0f3]">
@@ -136,16 +69,13 @@ function DownloadConversationsButton({ onClick }: { onClick: () => void }) {
 }
 
 function Container2({
-  searchValue, onSearchChange, onSearch, onClearSearch, onAddMember,
-  memberType, onMemberTypeChange, onDownloadConversations,
+  searchValue, onSearchChange, onSearch, onClearSearch, onDownloadConversations,
 }: {
   searchValue: string;
   onSearchChange: (value: string) => void;
   onSearch: () => void;
   onClearSearch: () => void;
   onAddMember?: () => void;
-  memberType: MemberTypeFilter;
-  onMemberTypeChange: (v: MemberTypeFilter) => void;
   onDownloadConversations: () => void;
 }) {
   return (
@@ -170,32 +100,44 @@ function Container2({
   );
 }
 
-function Container3({ count, totalMembers }: { count: number; totalMembers?: number }) {
+// 計數文字依平台篩選決定：
+// - 所有平台：共 OO 位會員（Web Chat 保留近 7 天的匿名資料）
+// - Webchat：共 OO 位會員（保留近 7 天的匿名資料）
+// - LINE / Facebook：共 OO 位會員
+function buildCountText(count: number, platformFilter: string, boundChannels: BoundChannel[]): string {
+  if (platformFilter === 'all') {
+    return `共 ${count} 位會員（Web Chat 保留近 7 天的匿名資料）`;
+  }
+  const found = boundChannels.find((c) => c.key === platformFilter);
+  if (found?.channel === 'Webchat') {
+    return `共 ${count} 位會員（保留近 7 天的匿名資料）`;
+  }
+  // LINE / Facebook：未補註解
+  return `共 ${count} 位會員`;
+}
+
+function Container3({ count, platformFilter, boundChannels }: { count: number; platformFilter: string; boundChannels: BoundChannel[] }) {
   return (
     <div className="content-stretch flex gap-[10px] items-center relative shrink-0" data-name="Container">
       <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#6e6e6e] text-[12px]">
-        {totalMembers !== undefined ? (
-          <>共 {totalMembers} 位會員（{count} 筆渠道記錄）</>
-        ) : (
-          <>共 {count} 筆</>
-        )}
+        {buildCountText(count, platformFilter, boundChannels)}
       </p>
     </div>
   );
 }
 
-function Container4({ count, totalMembers }: { count: number; totalMembers?: number }) {
+function Container4({ count, platformFilter, boundChannels }: { count: number; platformFilter: string; boundChannels: BoundChannel[] }) {
   return (
     <div className="box-border content-stretch flex items-center pl-[4px] pr-0 py-0 relative shrink-0" data-name="Container">
-      <Container3 count={count} totalMembers={totalMembers} />
+      <Container3 count={count} platformFilter={platformFilter} boundChannels={boundChannels} />
     </div>
   );
 }
 
-function Container5({ count, totalMembers }: { count: number; totalMembers?: number }) {
+function Container5({ count, platformFilter, boundChannels }: { count: number; platformFilter: string; boundChannels: BoundChannel[] }) {
   return (
     <div className="content-stretch flex gap-[12px] items-center relative shrink-0 w-full" data-name="Container">
-      <Container4 count={count} totalMembers={totalMembers} />
+      <Container4 count={count} platformFilter={platformFilter} boundChannels={boundChannels} />
     </div>
   );
 }
@@ -215,6 +157,132 @@ function SortingIcon({ active, order }: { active: boolean; order: SortOrder }) {
         <path d="M9.32514 8.39067V0.666667C9.32514 0.489856 9.39538 0.320287 9.5204 0.195262C9.64543 0.070238 9.815 0 9.99181 0C10.1686 0 10.3382 0.070238 10.4632 0.195262C10.5882 0.320287 10.6585 0.489856 10.6585 0.666667V8.39067L12.1871 6.862C12.3129 6.74056 12.4813 6.67337 12.6561 6.67488C12.8309 6.6764 12.9981 6.74652 13.1217 6.87012C13.2453 6.99373 13.3154 7.16094 13.3169 7.33573C13.3184 7.51053 13.2512 7.67893 13.1298 7.80467L10.4631 10.4713C10.3381 10.5963 10.1686 10.6665 9.99181 10.6665C9.81503 10.6665 9.64549 10.5963 9.52047 10.4713L6.85381 7.80467C6.73237 7.67893 6.66517 7.51053 6.66669 7.33573C6.66821 7.16094 6.73832 6.99373 6.86193 6.87012C6.98553 6.74652 7.15274 6.6764 7.32754 6.67488C7.50234 6.67337 7.67074 6.74056 7.79647 6.862L9.32514 8.39067Z" fill={active && order === "desc" ? "#0f6beb" : "#9CA3AF"} />
       </g>
     </svg>
+  );
+}
+
+// 平台篩選用：每筆代表「基本設定已綁定的一個帳號」
+// key 用 `${channel}|${channelName}` 作為唯一識別，方便和會員資料比對
+export interface BoundChannel {
+  key: string;
+  channel: ChannelType | null;
+  channelName: string | null;
+  label: string;
+}
+
+// 平台 filter dropdown（樣式對齊 InsightsPanel 核心洞察 duration 篩選）
+export function PlatformFilterDropdown({
+  selected,
+  onChange,
+  boundChannels,
+}: {
+  selected: string;
+  onChange: (key: string) => void;
+  boundChannels: BoundChannel[];
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+
+  // 量測觸發按鈕位置（viewport 座標，搭配 fixed 定位避免被表頭裁切）
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+  }, [open]);
+
+  // 外部點擊 / 滾動 / 視窗大小改變時自動關閉
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Node;
+      const insideWrap = wrapRef.current?.contains(target);
+      const insideList = listRef.current?.contains(target);
+      if (!insideWrap && !insideList) setOpen(false);
+    };
+    const close = () => setOpen(false);
+    document.addEventListener("mousedown", handler);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true); // capture：抓得到可滾動祖先
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [open]);
+
+  // 「所有平台」永遠排第一，作為預設選項
+  const allOption: BoundChannel = { key: "all", channel: null, channelName: null, label: "所有平台" };
+  const options: BoundChannel[] = [allOption, ...boundChannels];
+  const isFilterActive = selected !== "all";
+
+  return (
+    <div ref={wrapRef} className="relative inline-flex items-center shrink-0">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        className="inline-flex items-center justify-center size-[16px] cursor-pointer bg-transparent border-none p-0 m-0"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="篩選平台"
+      >
+        <Filter
+          size={16}
+          color={isFilterActive ? "#0f6beb" : "#9CA3AF"}
+          strokeWidth={2}
+        />
+      </button>
+
+      {open && createPortal(
+        <ul
+          ref={listRef}
+          role="listbox"
+          className="fixed min-w-[180px] max-w-[320px] bg-white border border-solid rounded-[12px] flex flex-col gap-[4px] p-[4px]"
+          style={{
+            top: dropdownPos.top,
+            left: dropdownPos.left,
+            zIndex: 1000,
+            borderColor: "rgba(221, 221, 221, 0.55)",
+            boxShadow:
+              "0px 2px 2px 0px rgba(221, 221, 221, 0.32), 0px 5px 15px 0px rgba(221, 221, 221, 0.2)",
+          }}
+        >
+          {options.map((opt) => {
+            const active = opt.key === selected;
+            return (
+              <li key={opt.key} role="option" aria-selected={active} className="w-full">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onChange(opt.key);
+                    setOpen(false);
+                  }}
+                  className={`flex w-full items-center gap-[4px] min-h-[48px] p-[8px] rounded-[8px] text-[16px] leading-[1.5] text-[#383838] text-left cursor-pointer transition-colors hover:bg-[#f0f6ff] ${
+                    active ? "bg-[#f0f6ff]" : "bg-white"
+                  }`}
+                >
+                  <span className="flex-1 min-w-0 truncate">{opt.label}</span>
+                  {active && (
+                    <Check
+                      size={24}
+                      className="shrink-0 text-[#0f6beb]"
+                      strokeWidth={2}
+                    />
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>,
+        document.body,
+      )}
+    </div>
   );
 }
 
@@ -281,11 +349,15 @@ function InfoIconWithTooltip({ tooltip }: { tooltip: string }) {
 function Container6({
   sortConfig,
   onSortChange,
-  memberType,
+  platformFilter,
+  onPlatformFilterChange,
+  boundChannels,
 }: {
   sortConfig: SortConfig;
   onSortChange: (field: SortField) => void;
-  memberType: MemberTypeFilter;
+  platformFilter: string;
+  onPlatformFilterChange: (key: string) => void;
+  boundChannels: BoundChannel[];
 }) {
   const isActive = (field: SortField) => sortConfig.field === field;
   return (
@@ -294,10 +366,7 @@ function Container6({
         <div className="box-border content-stretch flex items-center pb-[12px] pt-[16px] px-[12px] relative w-full">
           <div className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[260px]" data-name="Table/Title-atomic">
             <div className="basis-0 flex items-center gap-[4px] font-['Noto_Sans_TC:Regular',sans-serif] grow min-h-px min-w-px relative shrink-0 text-[#383838] text-[14px]">
-              <span className="leading-[1.5]">
-                {memberType === 'guest' ? '非會員' : memberType === 'all' ? '全部人員' : '會員'}
-              </span>
-              {memberType === 'guest' && <InfoIconWithTooltip tooltip="保留近 7 天的匿名資料" />}
+              <span className="leading-[1.5]">會員</span>
             </div>
           </div>
           <div className="h-[12px] relative shrink-0 w-0" data-name="Divier">
@@ -381,7 +450,7 @@ function Container6({
               </svg>
             </div>
           </div>
-          {/* 平台欄位表頭 */}
+          {/* 平台欄位表頭：右側 filter icon button 與「最近聊天時間」的 sort icon 規格一致（16×16、gap 4px） */}
           <div
             className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[200px]"
             data-name="Table/Title-atomic"
@@ -389,6 +458,11 @@ function Container6({
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
               <p className="leading-[1.5] whitespace-pre">平台</p>
             </div>
+            <PlatformFilterDropdown
+              selected={platformFilter}
+              onChange={onPlatformFilterChange}
+              boundChannels={boundChannels}
+            />
           </div>
           <div className="h-[12px] relative shrink-0 w-0" data-name="Divier">
             <div className="absolute inset-[-3.33%_-0.4px]">
@@ -677,14 +751,18 @@ function Table8Columns3Actions({
   onSortChange,
   onOpenChat,
   onViewDetail,
-  memberType,
+  platformFilter,
+  onPlatformFilterChange,
+  boundChannels,
 }: {
   members: DisplayMember[];
   sortConfig: SortConfig;
   onSortChange: (field: SortField) => void;
   onOpenChat?: (member: DisplayMember) => void;
   onViewDetail?: (member: DisplayMember) => void;
-  memberType: MemberTypeFilter;
+  platformFilter: string;
+  onPlatformFilterChange: (key: string) => void;
+  boundChannels: BoundChannel[];
 }) {
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-name="Table/8 Columns+3 Actions">
@@ -693,7 +771,13 @@ function Table8Columns3Actions({
         {/* 內層容器 - 最小寬度確保欄位對齊 */}
         <div className="min-w-[1160px]">
           {/* 表頭 - 固定在滾動區域外 */}
-          <Container6 sortConfig={sortConfig} onSortChange={onSortChange} memberType={memberType} />
+          <Container6
+            sortConfig={sortConfig}
+            onSortChange={onSortChange}
+            platformFilter={platformFilter}
+            onPlatformFilterChange={onPlatformFilterChange}
+            boundChannels={boundChannels}
+          />
 
           {/* 垂直滾動容器 - 只有資料列滾動 */}
           <div className="max-h-[600px] overflow-y-auto table-scroll">
@@ -727,10 +811,10 @@ function MainContent({
   onViewDetail,
   isLoading,
   error,
-  totalMembers,
-  memberType,
-  onMemberTypeChange,
   onDownloadConversations,
+  platformFilter,
+  onPlatformFilterChange,
+  boundChannels,
 }: {
   searchValue: string;
   onSearchChange: (value: string) => void;
@@ -744,10 +828,10 @@ function MainContent({
   onViewDetail?: (member: DisplayMember) => void;
   isLoading: boolean;
   error: string | null;
-  totalMembers: number;
-  memberType: MemberTypeFilter;
-  onMemberTypeChange: (v: MemberTypeFilter) => void;
   onDownloadConversations: () => void;
+  platformFilter: string;
+  onPlatformFilterChange: (key: string) => void;
+  boundChannels: BoundChannel[];
 }) {
   return (
     <div className="relative shrink-0 w-full" data-name="Main Content">
@@ -761,22 +845,19 @@ function MainContent({
               onSearch={onSearch}
               onClearSearch={onClearSearch}
               onAddMember={onAddMember}
-              memberType={memberType}
-              onMemberTypeChange={onMemberTypeChange}
               onDownloadConversations={onDownloadConversations}
             />
           </div>
-          
-          {/* Toggle + Count（toggle 擺放於列表計數左側，間距 12px，對齊 PMS/FAQ 版型） */}
+
+          {/* 計數欄位（已移除 全部/會員/非會員 toggle，身份篩選改由「平台」處理） */}
           <div className="px-[40px] pb-[12px] w-full">
-            <div className="flex gap-[12px] items-center w-full">
-              <MemberTypeSegmented value={memberType} onChange={onMemberTypeChange} />
-              <div className="flex flex-[1_0_0] items-center min-h-px min-w-px">
-                <Container5 count={filteredMembers.length} totalMembers={totalMembers} />
-              </div>
-            </div>
+            <Container5
+              count={filteredMembers.length}
+              platformFilter={platformFilter}
+              boundChannels={boundChannels}
+            />
           </div>
-          
+
           {/* Table */}
           <div className="px-[40px] pb-[40px] w-full">
             {isLoading ? (
@@ -791,7 +872,16 @@ function MainContent({
                 {error}
               </div>
             ) : filteredMembers.length > 0 ? (
-              <Table8Columns3Actions members={filteredMembers} sortConfig={sortConfig} onSortChange={onSortChange} onOpenChat={onOpenChat} onViewDetail={onViewDetail} memberType={memberType} />
+              <Table8Columns3Actions
+                members={filteredMembers}
+                sortConfig={sortConfig}
+                onSortChange={onSortChange}
+                onOpenChat={onOpenChat}
+                onViewDetail={onViewDetail}
+                platformFilter={platformFilter}
+                onPlatformFilterChange={onPlatformFilterChange}
+                boundChannels={boundChannels}
+              />
             ) : (
               <div className="flex h-[240px] items-center justify-center rounded-[16px] border border-dashed border-[#dddddd] bg-white text-[#6e6e6e]">
                 尚無會員資料
@@ -805,15 +895,97 @@ function MainContent({
 }
 
 export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }: MemberMainContainerProps = {}) {
-  const { displayMembers, totalDisplayMembers, isLoading, error } = useMembers();
+  const { displayMembers, isLoading, error } = useMembers();
   const [searchValue, setSearchValue] = useState('');
   const [appliedSearchValue, setAppliedSearchValue] = useState('');
-  const [memberType, setMemberType] = useState<MemberTypeFilter>('all');
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     field: 'lastChatTime',
     order: 'desc',
   });
+
+  // 平台篩選：'all' = 所有平台；其餘為 `${channel}|${channelName}` 對應某個已綁定帳號
+  const [platformFilter, setPlatformFilter] = useState<string>('all');
+  // 從基本設定（LINE / FB）API 取得的已綁定帳號
+  const [apiBoundChannels, setApiBoundChannels] = useState<BoundChannel[]>([]);
+
+  // 載入 LINE / FB 已綁定帳號（資料來源同基本設定頁）
+  // Webchat 沒有獨立綁定設定 API，於下方 useMemo 從會員資料反推
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadBoundChannels() {
+      const list: BoundChannel[] = [];
+
+      // LINE：取得目前綁定的官方帳號
+      try {
+        const res = await apiGet('/api/v1/line_channels/current');
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.channel_id) {
+            const name = data.channel_name || 'LINE 官方帳號';
+            list.push({
+              key: `LINE|${name}`,
+              channel: 'LINE',
+              channelName: name,
+              label: `LINE｜${name}`,
+            });
+          }
+        }
+      } catch (err) {
+        console.error('[MemberList] 取得 LINE 綁定帳號失敗:', err);
+      }
+
+      // Facebook：取得本地 DB 已綁定的粉專列表
+      try {
+        const res = await apiGet('/api/v1/fb_channels');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            for (const ch of data) {
+              const name = ch.channel_name || 'Facebook 粉專';
+              list.push({
+                key: `Facebook|${name}`,
+                channel: 'Facebook',
+                channelName: name,
+                label: `Facebook｜${name}`,
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[MemberList] 取得 FB 綁定帳號失敗:', err);
+      }
+
+      if (!cancelled) setApiBoundChannels(list);
+    }
+
+    loadBoundChannels();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 合併 API 綁定帳號 + 從會員資料反推的 Webchat 站點
+  const boundChannels = useMemo<BoundChannel[]>(() => {
+    const list = [...apiBoundChannels];
+    const seen = new Set(list.map((c) => c.key));
+    for (const m of displayMembers) {
+      if (m.channel !== 'Webchat') continue;
+      const name = m.channelName || 'Web Chat';
+      const key = `Webchat|${name}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        list.push({
+          key,
+          channel: 'Webchat',
+          channelName: name,
+          label: `官網｜${name}`,
+        });
+      }
+    }
+    return list;
+  }, [apiBoundChannels, displayMembers]);
 
   // Helper function to parse date strings
   const parseDateTime = (dateStr?: string): number => {
@@ -827,11 +999,14 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
   const filteredMembers = useMemo(() => {
     let result = displayMembers;
 
-    // 會員/非會員 篩選
-    if (memberType === 'member') {
-      result = result.filter((m) => !m.isGuest);
-    } else if (memberType === 'guest') {
-      result = result.filter((m) => m.isGuest);
+    // 平台篩選：依使用者選擇的綁定帳號 (channel + channelName) 過濾
+    if (platformFilter !== 'all') {
+      const sepIdx = platformFilter.indexOf('|');
+      const filterChannel = sepIdx >= 0 ? platformFilter.slice(0, sepIdx) : platformFilter;
+      const filterName = sepIdx >= 0 ? platformFilter.slice(sepIdx + 1) : '';
+      result = result.filter(
+        (m) => m.channel === filterChannel && (m.channelName || '') === filterName,
+      );
     }
 
     // Apply search filter
@@ -875,7 +1050,7 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
     });
 
     return sorted;
-  }, [displayMembers, appliedSearchValue, sortConfig, memberType]);
+  }, [displayMembers, appliedSearchValue, sortConfig, platformFilter]);
 
   const handleSearch = () => {
     setAppliedSearchValue(searchValue);
@@ -924,15 +1099,16 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
         onViewDetail={onViewDetail}
         isLoading={isLoading}
         error={error}
-        totalMembers={totalDisplayMembers}
-        memberType={memberType}
-        onMemberTypeChange={setMemberType}
         onDownloadConversations={() => setDownloadModalOpen(true)}
+        platformFilter={platformFilter}
+        onPlatformFilterChange={setPlatformFilter}
+        boundChannels={boundChannels}
       />
       <DownloadConversationsModal
         open={downloadModalOpen}
         onClose={() => setDownloadModalOpen(false)}
         members={displayMembers}
+        boundChannels={boundChannels}
       />
     </div>
   );
