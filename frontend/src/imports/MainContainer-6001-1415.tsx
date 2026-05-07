@@ -101,19 +101,19 @@ function Container2({
 }
 
 // 計數文字依平台篩選決定：
-// - 所有平台：共 OO 位會員（Web Chat 保留近 7 天的匿名資料）
-// - Webchat：共 OO 位會員（保留近 7 天的匿名資料）
-// - LINE / Facebook：共 OO 位會員
+// - 所有平台：共 OO 位（Web Chat 保留近 7 天的匿名資料）
+// - Webchat：共 OO 位（保留近 7 天的匿名資料）
+// - LINE / Facebook：共 OO 位
 function buildCountText(count: number, platformFilter: string, boundChannels: BoundChannel[]): string {
   if (platformFilter === 'all') {
-    return `共 ${count} 位會員（Web Chat 保留近 7 天的匿名資料）`;
+    return `共 ${count} 位（Web Chat 保留近 7 天的匿名資料）`;
   }
   const found = boundChannels.find((c) => c.key === platformFilter);
   if (found?.channel === 'Webchat') {
-    return `共 ${count} 位會員（保留近 7 天的匿名資料）`;
+    return `共 ${count} 位（保留近 7 天的匿名資料）`;
   }
   // LINE / Facebook：未補註解
-  return `共 ${count} 位會員`;
+  return `共 ${count} 位`;
 }
 
 function Container3({ count, platformFilter, boundChannels }: { count: number; platformFilter: string; boundChannels: BoundChannel[] }) {
