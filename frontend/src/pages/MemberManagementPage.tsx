@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import MemberManagement from '../imports/MemberListContainer';
 import MainLayout from '../components/layouts/MainLayout';
 import { useNavigation } from '../contexts/NavigationContext';
@@ -19,7 +19,8 @@ export default function MemberManagementPage() {
 
   // 由其他頁面（例如數據洞察的互動旅程 stacked bar）帶入的初始篩選
   // tagFilter 以 JSON 序列化字串傳遞，這裡解回陣列
-  const initialTagFilter = useMemo<string[] | undefined>(() => {
+  // 用 useState 鎖定首次 mount 的值，後續 URL 被清掉也不會被覆寫
+  const [initialTagFilter] = useState<string[] | undefined>(() => {
     if (!params.tagFilter) return undefined;
     try {
       const parsed = JSON.parse(params.tagFilter);
@@ -27,8 +28,17 @@ export default function MemberManagementPage() {
     } catch {
       return undefined;
     }
-  }, [params.tagFilter]);
-  const initialPlatformChannel = params.platformChannel;
+  });
+  const [initialPlatformChannel] = useState<string | undefined>(() => params.platformChannel);
+
+  // mount 後立刻清掉 URL 上的篩選參數，確保「重整頁面」回到預設
+  // （初始值已被上方 useState 鎖定，清掉 URL 不影響當下顯示）
+  useEffect(() => {
+    if (params.tagFilter || params.platformChannel) {
+      navigate('member-management', {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <MainLayout

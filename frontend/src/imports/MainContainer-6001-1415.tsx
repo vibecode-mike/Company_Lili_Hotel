@@ -74,12 +74,13 @@ function DownloadConversationsButton({ onClick }: { onClick: () => void }) {
 }
 
 function Container2({
-  searchValue, onSearchChange, onSearch, onClearSearch, onDownloadConversations,
+  searchValue, onSearchChange, onSearch, onClearSearch, onClearAll, onDownloadConversations,
 }: {
   searchValue: string;
   onSearchChange: (value: string) => void;
   onSearch: () => void;
   onClearSearch: () => void;
+  onClearAll: () => void;
   onAddMember?: () => void;
   onDownloadConversations: () => void;
 }) {
@@ -93,6 +94,7 @@ function Container2({
           onChange={onSearchChange}
           onSearch={onSearch}
           onClear={onClearSearch}
+          onClearAll={onClearAll}
           className="!size-auto !w-auto !h-auto"
         />
       </div>
@@ -1013,6 +1015,7 @@ function MainContent({
   onSearchChange,
   onSearch,
   onClearSearch,
+  onClearAll,
   filteredMembers,
   sortConfig,
   onSortChange,
@@ -1033,6 +1036,7 @@ function MainContent({
   onSearchChange: (value: string) => void;
   onSearch: () => void;
   onClearSearch: () => void;
+  onClearAll: () => void;
   filteredMembers: DisplayMember[];
   sortConfig: SortConfig;
   onSortChange: (field: SortField) => void;
@@ -1060,6 +1064,7 @@ function MainContent({
               onSearchChange={onSearchChange}
               onSearch={onSearch}
               onClearSearch={onClearSearch}
+              onClearAll={onClearAll}
               onAddMember={onAddMember}
               onDownloadConversations={onDownloadConversations}
             />
@@ -1333,10 +1338,19 @@ export default function MainContainer({
     setAppliedSearchValue(searchValue);
   };
 
+  // 搜尋框內的 X：只清搜尋字串（不動排序與篩選器，使用者選的 platform/tag 應保留）
   const handleClearSearch = () => {
     setSearchValue('');
     setAppliedSearchValue('');
-    setSortConfig({ field: 'lastChatTime', order: 'desc' }); // Reset to default sort
+  };
+
+  // 「清除全部條件」按鈕：把搜尋、排序、平臺、標籤全部 reset 回預設
+  const handleClearAll = () => {
+    setSearchValue('');
+    setAppliedSearchValue('');
+    setSortConfig({ field: 'lastChatTime', order: 'desc' });
+    setPlatformFilter('all');
+    setTagFilter([]);
   };
 
   const handleSortChange = (field: SortField) => {
@@ -1368,6 +1382,7 @@ export default function MainContainer({
         onSearchChange={setSearchValue}
         onSearch={handleSearch}
         onClearSearch={handleClearSearch}
+        onClearAll={handleClearAll}
         filteredMembers={filteredMembers}
         sortConfig={sortConfig}
         onSortChange={handleSortChange}

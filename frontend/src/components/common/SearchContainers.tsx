@@ -1,23 +1,26 @@
 /**
- * 搜索容器组件库
- * 统一管理所有搜索相关的容器组件
+ * 搜索容器組件庫
+ * 統一管理所有搜索相關的容器組件
  */
 
 import React from 'react';
 import svgPaths from '../../imports/svg-2wnb18j5t0';
 
-// ========== 类型定义 ==========
+// ========== 類型定義 ==========
 
 export interface SearchContainerProps {
   value: string;
   onChange: (value: string) => void;
   onSearch: () => void;
+  // 搜尋框內的 X 按鈕（只清搜尋字串）
   onClear: () => void;
+  // 「清除全部條件」按鈕（清掉搜尋＋所有篩選器）；未提供時退回 onClear
+  onClearAll?: () => void;
   placeholder?: string;
   className?: string;
 }
 
-// ========== 搜索输入框 ==========
+// ========== 搜索輸入框 ==========
 
 function SearchInput({ 
   value, 
@@ -38,7 +41,7 @@ function SearchInput({
 
   return (
     <div className="basis-0 content-stretch flex gap-[4px] grow items-center min-h-px min-w-px relative shrink-0">
-      {/* 搜索图标 */}
+      {/* 搜索圖標 */}
       <div className="overflow-clip relative shrink-0 size-[32px]" data-name="Icon/Search">
         <div className="absolute h-[17.575px] left-[calc(50%-0.2px)] top-[calc(50%-0.212px)] translate-x-[-50%] translate-y-[-50%] w-[17.6px]">
           <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 18 18">
@@ -47,7 +50,7 @@ function SearchInput({
         </div>
       </div>
       
-      {/* 输入框 */}
+      {/* 輸入框 */}
       <input
         type="text"
         value={value}
@@ -60,7 +63,7 @@ function SearchInput({
   );
 }
 
-// ========== 清除按钮 ==========
+// ========== 清除按鈕 ==========
 
 function ClearButton({ onClick }: { onClick: () => void }) {
   return (
@@ -86,33 +89,36 @@ function ClearButton({ onClick }: { onClick: () => void }) {
 // ========== 主搜索容器 ==========
 
 /**
- * 搜索容器组件
- * 包含搜索输入框和清除条件按钮
+ * 搜索容器組件
+ * 包含搜索輸入框和清除條件按鈕
  */
-export function SearchContainer({ 
-  value, 
-  onChange, 
-  onSearch, 
+export function SearchContainer({
+  value,
+  onChange,
+  onSearch,
   onClear,
+  onClearAll,
   placeholder,
-  className = '' 
+  className = ''
 }: SearchContainerProps) {
+  // 「清除全部條件」未提供 onClearAll 時退回 onClear，維持舊行為
+  const handleClearAll = onClearAll ?? onClear;
   return (
     <div className={`content-stretch flex gap-[4px] items-center relative size-full ${className}`}>
-      {/* 搜索栏 */}
+      {/* 搜索欄 */}
       <div className="bg-white box-border content-stretch flex gap-[28px] items-center min-w-[292px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 w-[292px]">
-        <SearchInput 
-          value={value} 
-          onChange={onChange} 
+        <SearchInput
+          value={value}
+          onChange={onChange}
           onSearch={onSearch}
           placeholder={placeholder}
         />
         {value && <ClearButton onClick={onClear} />}
       </div>
-      
-      {/* 清除全部条件按钮 */}
-      <div 
-        onClick={onClear}
+
+      {/* 清除全部條件按鈕 */}
+      <div
+        onClick={handleClearAll}
         className="box-border content-stretch flex gap-[2px] items-center justify-center min-w-[72px] px-[8px] py-[12px] relative rounded-[12px] shrink-0 cursor-pointer hover:bg-[#f0f6ff] transition-colors h-[48px]"
       >
         <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">
@@ -123,10 +129,10 @@ export function SearchContainer({
   );
 }
 
-// ========== 简化搜索栏 ==========
+// ========== 簡化搜索欄 ==========
 
 /**
- * 简化搜索栏 - 只包含输入框和内部清除按钮
+ * 簡化搜索欄 - 只包含輸入框和內部清除按鈕
  */
 export function SimpleSearchBar({ 
   value, 
