@@ -576,3 +576,64 @@ html {
   display: none; /* WebKit (Chrome / Safari / Edge) */
 }
 
+/* ─── 數據洞察進場動畫（互動旅程 + 時段洞察） ───
+   只動 transform / opacity；進場用 IntersectionObserver 觸發容器加上
+   data-anim-active="true" 後啟用，每個 session 只跑一次 */
+
+@keyframes journeyRowEnter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes journeySegEnter {
+  from { transform: scaleX(0); opacity: 0; }
+  to { transform: scaleX(1); opacity: 1; }
+}
+
+@keyframes heatmapCellEnter {
+  from { transform: scale(0.85); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* 互動旅程 row：預設可見；僅在 anim-phase=enter（首次進場視窗內）才跑 keyframe，
+   展開「查看全部」後才 mount 的 row 不會被 opacity:0 + 大 delay 凍結 */
+.journey-row { opacity: 1; }
+[data-anim-phase="enter"] .journey-row {
+  opacity: 0;
+  animation: journeyRowEnter 600ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: var(--row-delay, 0ms);
+}
+
+/* 互動旅程 segment：tab 切換用 transform: scaleX(var(--seg-scale)) + 300ms transition；
+   進場時（data-anim-phase="enter"）由 keyframe 取代 transition，避免兩者打架 */
+.journey-seg {
+  transform-origin: left;
+  transform: scaleX(var(--seg-scale, 1));
+  transition: transform 300ms ease-out;
+}
+[data-anim-active="true"][data-anim-phase="enter"] .journey-seg {
+  animation: journeySegEnter 600ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: var(--row-delay, 0ms);
+}
+
+/* 時段洞察 heatmap cell：欄間 stagger 80ms，每欄 6 cell 同時進 */
+.heatmap-cell-anim { opacity: 1; }
+[data-anim-active="true"] .heatmap-cell-anim {
+  opacity: 0;
+  transform-origin: center;
+  animation: heatmapCellEnter 350ms ease-out both;
+  animation-delay: calc(var(--col, 0) * 80ms);
+}
+
+/* 雙重保險：使用者偏好減少動畫時全部禁掉 */
+@media (prefers-reduced-motion: reduce) {
+  .journey-row,
+  .journey-seg,
+  .heatmap-cell-anim {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+}
+

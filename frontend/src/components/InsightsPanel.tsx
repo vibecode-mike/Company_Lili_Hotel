@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useLayoutEffect, useRef, Fragment } from "react";
+import { useState, useMemo, useEffect, useLayoutEffect, useRef, useDeferredValue, Fragment } from "react";
 import { createPortal } from "react-dom";
 import Sidebar from "./Sidebar";
 import { PageHeaderWithBreadcrumb } from "./common/Breadcrumb";
@@ -7,6 +7,9 @@ import { useLineChannelStatus } from "../contexts/LineChannelStatusContext";
 import { ChevronDown, ChevronUp, Check } from "lucide-react";
 import { apiGet } from "../utils/apiClient";
 import { formatUnansweredTime } from "../utils/memberTime";
+import { Odometer } from "./Odometer";
+import { useInViewOnce } from "../hooks/useInViewOnce";
+import { useReducedMotion } from "../hooks/useReducedMotion";
 
 // ─── 比較期間設定 ──────────────────────────────────
 
@@ -301,7 +304,7 @@ function heatColor(t: number): string {
 
 // 對 42 格計算色階 t：rank 百分位 × log-scale 幅度感知 的混合。
 //  - rank 成分：ties 取平均 rank，確保 42 格均勻鋪滿色階（小差異看得到）。
-//  - log 成分：以 log(v) 正規化至 [0,1]，讓離群值（如 line 的 89）與
+//  - log 成分：以 log(v) 正規化至 [0,1]，讓離羣值（如 line 的 89）與
 //    次高值（17）之間保持實際幅度差，避免全部擠在色階頂端。
 const RANK_WEIGHT = 0.5;
 const LOG_WEIGHT = 0.5;
@@ -408,6 +411,9 @@ function KpiColumn({
   up,
   trendPrefix,
   className = "",
+  inView = false,
+  reducedMotion = false,
+  staggerDelay = 0,
 }: {
   label: string;
   value: number | string;
@@ -416,6 +422,11 @@ function KpiColumn({
   up: boolean;
   trendPrefix: string;
   className?: string;
+  // 進場觸發旗標：父層的 IntersectionObserver 命中後傳入 true
+  inView?: boolean;
+  reducedMotion?: boolean;
+  // 三張卡之間的進場 stagger（0 / 80 / 160 ms）
+  staggerDelay?: number;
 }) {
   return (
     <div
@@ -424,8 +435,13 @@ function KpiColumn({
       <div className="text-[16px] leading-[1.5] text-[#6e6e6e]">{label}</div>
       <div className="flex items-center gap-[12px]">
         <span className="text-[32px] leading-[1.5] font-medium text-[#383838] whitespace-nowrap">
-          {value}
-          {unit}
+          <Odometer
+            value={value}
+            unit={unit}
+            active={inView}
+            reducedMotion={reducedMotion}
+            delay={staggerDelay}
+          />
         </span>
       </div>
       <div
@@ -450,8 +466,20 @@ function KpiColumn({
             />
           )}
         </svg>
-        <span className="whitespace-nowrap">
-          {trendPrefix}{up ? "提升" : "下降"} {trend} %
+        <span className="whitespace-nowrap inline-flex items-baseline gap-[4px]">
+          <span>
+            {trendPrefix}
+            {up ? "提升" : "下降"}
+          </span>
+          <Odometer
+            value={trend}
+            unit="%"
+            active={inView}
+            reducedMotion={reducedMotion}
+            baseDuration={800}
+            perDigitOffset={100}
+            delay={staggerDelay}
+          />
         </span>
       </div>
     </div>
@@ -465,13 +493,17 @@ function CoreInsightsCard({
   aiCoverage,
   completedOrders,
   newMembers,
+  reducedMotion,
 }: {
   period: Period;
   onPeriodChange: (p: Period) => void;
   aiCoverage: { value: number | string; unit: string; trend: number; up: boolean };
   completedOrders: { value: number | string; unit: string; trend: number; up: boolean };
   newMembers: { value: number | string; unit: string; trend: number; up: boolean };
+  reducedMotion: boolean;
 }) {
+  // 卡片進場：第一次進視窗才觸發 odometer 老虎機
+  const [coreRef, coreInView] = useInViewOnce<HTMLDivElement>({ reducedMotion });
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -510,7 +542,7 @@ function CoreInsightsCard({
   const { name: periodName, trendPrefix } = PERIOD_MAP[period];
 
   return (
-    <div className="bg-white rounded-[16px] flex flex-col w-full overflow-hidden">
+    <div ref={coreRef} className="bg-white rounded-[16px] flex flex-col w-full overflow-hidden">
       {/* Header：核心洞察 + 期間 dropdown + 描述（自帶 border-b #ddd，對應 Figma Dimesion 1744:33108） */}
       <div className="bg-white border-b border-solid border-[#ddd] py-[16px]">
         <div className="flex items-start">
@@ -595,18 +627,31 @@ function CoreInsightsCard({
       {/* Body：3 columns（桌機橫排、手機直排）
           divider：第一欄無線；2、3 欄桌機左側加 border-l，手機直排時改由上方 border-t 分隔 */}
       <div className="flex flex-col md:flex-row items-stretch w-full">
-        <KpiColumn label="AI 自動回覆率" {...aiCoverage} trendPrefix={trendPrefix} />
+        <KpiColumn
+          label="AI 自動回覆率"
+          {...aiCoverage}
+          trendPrefix={trendPrefix}
+          inView={coreInView}
+          reducedMotion={reducedMotion}
+          staggerDelay={0}
+        />
         <KpiColumn
           label="完成訂單"
           {...completedOrders}
           trendPrefix={trendPrefix}
           className="border-t md:border-t-0 md:border-l border-solid border-[#ddd]"
+          inView={coreInView}
+          reducedMotion={reducedMotion}
+          staggerDelay={80}
         />
         <KpiColumn
           label="新增會員"
           {...newMembers}
           trendPrefix={trendPrefix}
           className="border-t md:border-t-0 md:border-l border-solid border-[#ddd]"
+          inView={coreInView}
+          reducedMotion={reducedMotion}
+          staggerDelay={160}
         />
       </div>
     </div>
@@ -767,8 +812,14 @@ interface TimeSlotDetailResponse {
   tags: TimeSlotDetailTag[];
 }
 
-function TimeInsightsSection() {
+function TimeInsightsSection({ reducedMotion }: { reducedMotion: boolean }) {
   const { navigate } = useNavigation();
+  // 兩個區塊各自的進場 ref：journey 與 heatmap 分開觸發，互不干擾
+  const [journeyRef, journeyInView] = useInViewOnce<HTMLDivElement>({ reducedMotion });
+  const [heatmapRef, heatmapInView] = useInViewOnce<HTMLDivElement>({ reducedMotion });
+  // journey row 進場 phase：enter 階段才套 keyframe；結束後切回 idle 讓 segment 走 transition
+  const [journeyAnimPhase, setJourneyAnimPhase] = useState<"idle" | "enter">("idle");
+  const journeyEnteredRef = useRef(false);
   const [channel, setChannel] = useState<Channel>("line");
   // 先放 mock 當 fallback，API 成功就覆蓋
   const [matrixByChannel, setMatrixByChannel] = useState<Record<Channel, number[][]>>(HEATMAP_BY_CHANNEL);
@@ -785,6 +836,9 @@ function TimeInsightsSection() {
   const [journeyTags, setJourneyTags] = useState<TimeSlotDetailTag[]>([]);
   // 互動旅程「查看全部 / 收合」展開狀態：超過 10 項時顯示按鈕、預設收合（只看前 10）
   const [isJourneyExpanded, setIsJourneyExpanded] = useState<boolean>(false);
+  // 把展開狀態 defer 到 concurrent 低優先級 lane：點擊瞬間按鈕已切換（高優先級），
+  // 大量新 row 的 mount 工作交給 React 在 idle frame 排程，不阻塞點擊回饋
+  const deferredJourneyExpanded = useDeferredValue(isJourneyExpanded);
   const [loadingJourney, setLoadingJourney] = useState(false);
   const [journeyTab, setJourneyTab] = useState<JourneyTab>("overall");
   const journeyLabelRef = useRef<HTMLSpanElement>(null);
@@ -861,6 +915,23 @@ function TimeInsightsSection() {
     if (cell && apiDates.length === 0) return;
     load();
   }, [channel, cell, apiDates]);
+
+  // 互動旅程進場：journey 第一次有資料且容器在視窗內才開 enter phase；只跑一次
+  useEffect(() => {
+    if (!journeyInView || reducedMotion) return;
+    if (journeyEnteredRef.current) return;
+    if (loadingJourney) return;
+    if (journeyTags.length === 0) return;
+    journeyEnteredRef.current = true;
+    const raf = requestAnimationFrame(() => setJourneyAnimPhase("enter"));
+    // 預估最後一個 row 動畫結束時間：60ms stagger × N + 600ms keyframe + 100ms 緩衝
+    const maxDelay = Math.max(0, journeyTags.length - 1) * 60;
+    const timer = setTimeout(() => setJourneyAnimPhase("idle"), maxDelay + 600 + 100);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+    };
+  }, [journeyInView, reducedMotion, loadingJourney, journeyTags.length]);
 
   // 有 API 資料就用；沒有（初始化前）先用 hardcoded mock
   const dateLabels = apiDateLabels ?? getNext7DayLabels();
@@ -943,8 +1014,11 @@ function TimeInsightsSection() {
     <div className="bg-white rounded-[16px] flex flex-col w-full overflow-hidden">
       {/* C. 互動旅程：標題 + 三個彩色底線 tab + stacked bar list */}
       <div
+        ref={journeyRef}
         className="bg-white border-b border-solid border-[#ddd] flex flex-col"
         style={{ ["--journey-left-col" as string]: `${journeyLeftCol}px` }}
+        data-anim-active={journeyInView && !reducedMotion ? "true" : "false"}
+        data-anim-phase={journeyAnimPhase}
       >
         <div className="journey-header-row">
           <button
@@ -1010,13 +1084,16 @@ function TimeInsightsSection() {
             </div>
           ) : (
             <>
-            {(isJourneyExpanded ? journeyTags : journeyTags.slice(0, 10)).map((item) => {
+            {(deferredJourneyExpanded ? journeyTags : journeyTags.slice(0, 10)).map((item, rowIndex) => {
                 const counts: [number, number, number] = [
                   item.conversation,
                   item.interaction,
                   item.conversion,
                 ];
                 const total = counts.reduce((a, b) => a + b, 0);
+                // 永遠輸出 3 段，搭配 visible 旗標：tab 切換時透過 CSS --seg-scale 控制收/展，
+                // 不重 mount 才能跑 transition。未選中段的 widthPct 沿用 overall 模式算法、
+                // 維持 layout 穩定；選中段切到單段模式時改用 maxSegmentCount 作基準（同現行行為）。
                 const segments =
                   activeSegIdx === null
                     ? counts.map((count, idx) => ({
@@ -1024,25 +1101,32 @@ function TimeInsightsSection() {
                         count,
                         color: JOURNEY_SEG_COLORS[idx],
                         widthPct: (count / maxJourneyTotal) * 100,
+                        visible: true,
                       }))
-                    : [
-                        {
-                          idx: activeSegIdx,
-                          count: counts[activeSegIdx] ?? 0,
-                          color: JOURNEY_SEG_COLORS[activeSegIdx],
-                          widthPct:
-                            ((counts[activeSegIdx] ?? 0) /
-                              maxSegmentCount[activeSegIdx]) *
-                            100,
-                        },
-                      ];
+                    : counts.map((count, idx) => {
+                        const isActive = idx === activeSegIdx;
+                        const widthPct = isActive
+                          ? (count / maxSegmentCount[idx]) * 100
+                          : (count / maxJourneyTotal) * 100;
+                        return {
+                          idx,
+                          count,
+                          color: JOURNEY_SEG_COLORS[idx],
+                          widthPct,
+                          visible: isActive,
+                        };
+                      });
                 const trailingCount =
                   activeSegIdx === null ? total : counts[activeSegIdx] ?? 0;
                 return (
                   <div
                     key={item.tag}
-                    className="flex items-center gap-[4px] w-full"
-                    style={{ minHeight: 44, height: 44 }}
+                    className="journey-row flex items-center gap-[4px] w-full"
+                    style={{
+                      minHeight: 44,
+                      height: 44,
+                      ["--row-delay" as string]: `${rowIndex * 60}ms`,
+                    }}
                   >
                     <div className="journey-bar-badge">
                       {/* 點擊標籤帶入會員列表的標籤篩選；同時把平臺釘到當下互動旅程的渠道 */}
@@ -1079,16 +1163,29 @@ function TimeInsightsSection() {
                               style={{
                                 width: `${seg.widthPct}%`,
                                 backgroundColor: seg.color,
+                                ["--seg-scale" as string]: seg.visible ? 1 : 0,
                               }}
-                              className="shrink-0 min-w-0 flex items-center justify-center text-white text-[16px] leading-[1.5] py-[10px] px-[4px] whitespace-nowrap overflow-hidden"
+                              className="journey-seg shrink-0 min-w-0 flex items-center justify-center text-white text-[16px] leading-[1.5] py-[10px] px-[4px] whitespace-nowrap overflow-hidden"
                             >
                               {seg.count}
                             </div>
                           ),
                         )}
                       </div>
-                      <span className="text-[16px] leading-[1.5] text-[#6e6e6e] whitespace-nowrap shrink-0">
-                        {trailingCount} 人
+                      <span className="text-[16px] leading-[1.5] text-[#6e6e6e] whitespace-nowrap shrink-0 inline-flex items-baseline gap-[4px]">
+                        <Odometer
+                          value={trailingCount}
+                          unit=""
+                          active={journeyInView}
+                          reducedMotion={reducedMotion}
+                          baseDuration={500}
+                          perDigitOffset={80}
+                          // 只有首次進場 phase 內才套 stagger delay；展開後 mount 的新 row
+                          // 應立即顯示，避免帶到 660–1800ms 的舊 stagger 而看起來卡頓
+                          delay={journeyAnimPhase === "enter" ? rowIndex * 60 : 0}
+                          playEntry={journeyAnimPhase === "enter"}
+                        />
+                        <span>人</span>
                       </span>
                     </div>
                   </div>
@@ -1138,11 +1235,12 @@ function TimeInsightsSection() {
       </div>
 
       {/* B. Heatmap：7 欄 x 6 列 + 時間/日期標籤 + 圖例 */}
-      <div className="bg-white px-[20px] py-[16px] flex flex-col gap-[16px]">
+      <div ref={heatmapRef} className="bg-white px-[20px] py-[16px] flex flex-col gap-[16px]">
         <div className="overflow-x-auto">
           <div className="min-w-[720px]">
             <div
               className="grid items-stretch"
+              data-anim-active={heatmapInView && !reducedMotion ? "true" : "false"}
               style={{ gridTemplateColumns: "44px repeat(7, minmax(0, 1fr))" }}
             >
               {TIME_BLOCKS.map((label, r) => (
@@ -1168,7 +1266,7 @@ function TimeInsightsSection() {
                         onClick={() => setCell({ r, c })}
                         aria-pressed={isSelected}
                         aria-label={`${dateLabels[c]} ${label} 時段：${value} 人`}
-                        className={`heatmap-cell relative flex items-center justify-center text-[16px] leading-[1.5] text-[#383838] p-[4px] transition-[filter,box-shadow] cursor-pointer focus:outline-none ${
+                        className={`heatmap-cell heatmap-cell-anim relative flex items-center justify-center text-[16px] leading-[1.5] text-[#383838] p-[4px] transition-[filter,box-shadow] cursor-pointer focus:outline-none ${
                           isSelected
                             ? "ring-2 ring-[#0f6beb] ring-inset z-10"
                             : ""
@@ -1179,6 +1277,7 @@ function TimeInsightsSection() {
                               ? HEATMAP_MAX
                               : heatColor(colorMap[r]?.[c] ?? 0),
                           minHeight: 64,
+                          ["--col" as string]: c,
                         }}
                       >
                         <span className="relative">{value}</span>
@@ -1262,6 +1361,8 @@ export default function InsightsPanel({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const { isConfigured } = useLineChannelStatus();
   const navigationLocked = !isConfigured;
+  // 使用者「減少動畫」偏好；下傳到子元件統一決策
+  const reducedMotion = useReducedMotion();
 
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
 
@@ -1450,6 +1551,7 @@ export default function InsightsPanel({
             aiCoverage={aiCoverageKpi}
             completedOrders={completedOrdersKpi}
             newMembers={newMembersKpi}
+            reducedMotion={reducedMotion}
           />
 
           {/* 行動建議區塊 */}
@@ -1628,7 +1730,7 @@ export default function InsightsPanel({
           </div>
 
           {/* 時段洞察 + 互動旅程 */}
-          <TimeInsightsSection />
+          <TimeInsightsSection reducedMotion={reducedMotion} />
         </div>
       </main>
     </div>
