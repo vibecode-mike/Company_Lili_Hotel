@@ -24,7 +24,7 @@ const PERIOD_MAP: Record<Period, { name: string; trendPrefix: string }> = Object
   PERIOD_OPTIONS.map((p) => [p.value, { name: p.name, trendPrefix: p.trendPrefix }]),
 ) as Record<Period, { name: string; trendPrefix: string }>;
 
-// 格式化為 YYYY-MM-DD（台灣時區）
+// 格式化為 YYYY-MM-DD（臺灣時區）
 function fmtDate(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -178,7 +178,7 @@ const MOCK_FAQ: FaqItem[] = [
     badgeColor: "bg-green-100 text-green-700",
     date: "2026-04-10 08:00",
     aiAnswer:
-      "入住時間為下午 15:00，退房時間為上午 11:00。如需提前入住或延遲退房，請提前與櫃台聯繫。",
+      "入住時間為下午 15:00，退房時間為上午 11:00。如需提前入住或延遲退房，請提前與櫃臺聯繫。",
   },
   {
     id: 3,
@@ -517,7 +517,7 @@ function CoreInsightsCard({
           <div className="flex-1 min-w-0 px-[20px] flex flex-col gap-[4px] self-stretch">
             <div className="flex items-center gap-[4px] w-full">
               <span className="text-[16px] leading-[1.5] text-[#383838]">核心洞察</span>
-              <InfoIconWithTooltip tooltip="掌握 AI 本月的服務績效，了解它幫你處理了多少對話、促成多少訂單、帶來多少新會員" />
+              <InfoIconWithTooltip tooltip="掌握 AI 本月的服務績效，瞭解它幫你處理了多少對話、促成多少訂單、帶來多少新會員" />
 
               {/* 比較期間 dropdown */}
               <div ref={wrapRef} className="relative">
@@ -768,6 +768,7 @@ interface TimeSlotDetailResponse {
 }
 
 function TimeInsightsSection() {
+  const { navigate } = useNavigation();
   const [channel, setChannel] = useState<Channel>("line");
   // 先放 mock 當 fallback，API 成功就覆蓋
   const [matrixByChannel, setMatrixByChannel] = useState<Record<Channel, number[][]>>(HEATMAP_BY_CHANNEL);
@@ -1044,9 +1045,27 @@ function TimeInsightsSection() {
                     style={{ minHeight: 44, height: 44 }}
                   >
                     <div className="journey-bar-badge">
-                      <span className="bg-[#f0f6ff] rounded-[8px] px-[8px] py-[4px] min-w-[32px] text-[#0f6beb] text-[16px] leading-[1.5] text-center whitespace-nowrap">
+                      {/* 點擊標籤帶入會員列表的標籤篩選；同時把平臺釘到當下互動旅程的渠道 */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // 互動旅程的 channel：line / facebook / nonMember
+                          // 對應會員列表 ChannelType：LINE / Facebook / Webchat
+                          const channelMap: Record<Channel, string> = {
+                            line: "LINE",
+                            facebook: "Facebook",
+                            nonMember: "Webchat",
+                          };
+                          navigate("member-management", {
+                            tagFilter: JSON.stringify([item.tag]),
+                            platformChannel: channelMap[channel],
+                          });
+                        }}
+                        className="bg-[#f0f6ff] rounded-[8px] px-[8px] py-[4px] min-w-[32px] text-[#0f6beb] text-[16px] leading-[1.5] text-center whitespace-nowrap cursor-pointer border-none transition-colors hover:bg-[#dde9ff]"
+                        aria-label={`在會員列表查看標籤「${item.tag}」`}
+                      >
                         {item.tag}
-                      </span>
+                      </button>
                     </div>
                     <div className="flex-1 min-w-0 flex items-center gap-[8px]" style={{ height: 44 }}>
                       <div

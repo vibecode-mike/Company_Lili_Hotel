@@ -30,6 +30,11 @@ interface MemberMainContainerProps {
   onAddMember?: () => void;
   onOpenChat?: (member: DisplayMember) => void;
   onViewDetail?: (member: DisplayMember) => void;
+  // 由外部（例如數據洞察頁的互動旅程 stacked bar）帶入的初始篩選
+  initialTagFilter?: string[];
+  // ChannelType 字串：'LINE' | 'Facebook' | 'Webchat'
+  // boundChannels 載入完成後解析成第一個符合的 BoundChannel.key 套用到 platformFilter
+  initialPlatformChannel?: string;
 }
 
 
@@ -100,8 +105,8 @@ function Container2({
   );
 }
 
-// 計數文字依平台篩選決定：
-// - 所有平台：共 OO 位（Web Chat 保留近 7 天的匿名資料）
+// 計數文字依平臺篩選決定：
+// - 所有平臺：共 OO 位（Web Chat 保留近 7 天的匿名資料）
 // - Webchat：共 OO 位（保留近 7 天的匿名資料）
 // - LINE / Facebook：共 OO 位
 function buildCountText(count: number, platformFilter: string, boundChannels: BoundChannel[]): string {
@@ -142,7 +147,7 @@ function Container5({ count, platformFilter, boundChannels }: { count: number; p
   );
 }
 
-type SortField = 'realName' | 'tags' | 'phone' | 'email' | 'lastChatTime';
+type SortField = 'realName' | 'phone' | 'email' | 'lastChatTime';
 type SortOrder = 'asc' | 'desc';
 interface SortConfig {
   field: SortField;
@@ -160,7 +165,7 @@ function SortingIcon({ active, order }: { active: boolean; order: SortOrder }) {
   );
 }
 
-// 平台篩選用：每筆代表「基本設定已綁定的一個帳號」
+// 平臺篩選用：每筆代表「基本設定已綁定的一個帳號」
 // key 用 `${channel}|${channelName}` 作為唯一識別，方便和會員資料比對
 export interface BoundChannel {
   key: string;
@@ -169,7 +174,7 @@ export interface BoundChannel {
   label: string;
 }
 
-// 平台 filter dropdown（樣式對齊 InsightsPanel 核心洞察 duration 篩選）
+// 平臺 filter dropdown（樣式對齊 InsightsPanel 核心洞察 duration 篩選）
 export function PlatformFilterDropdown({
   selected,
   onChange,
@@ -212,8 +217,8 @@ export function PlatformFilterDropdown({
     };
   }, [open]);
 
-  // 「所有平台」永遠排第一，作為預設選項
-  const allOption: BoundChannel = { key: "all", channel: null, channelName: null, label: "所有平台" };
+  // 「所有平臺」永遠排第一，作為預設選項
+  const allOption: BoundChannel = { key: "all", channel: null, channelName: null, label: "所有平臺" };
   const options: BoundChannel[] = [allOption, ...boundChannels];
   const isFilterActive = selected !== "all";
 
@@ -229,7 +234,7 @@ export function PlatformFilterDropdown({
         className="inline-flex items-center justify-center size-[16px] cursor-pointer bg-transparent border-none p-0 m-0"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label="篩選平台"
+        aria-label="篩選平臺"
       >
         <Filter
           size={16}
@@ -280,6 +285,192 @@ export function PlatformFilterDropdown({
             );
           })}
         </ul>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
+// 標籤 filter dropdown（多選 + 搜尋 + 已選 chips + 可滾動列表）
+// trigger 視覺與 PlatformFilterDropdown 對齊；isFilterActive 條件改成「有任一已選」。
+export function TagFilterDropdown({
+  selected,
+  onChange,
+  tagPool,
+}: {
+  selected: string[];
+  onChange: (tags: string[]) => void;
+  tagPool: string[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+
+  // 量測觸發按鈕位置（fixed 定位，避免被表頭裁切）
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+  }, [open]);
+
+  // 外部點擊 / 滾動 / 視窗大小改變時自動關閉
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Node;
+      const insideWrap = wrapRef.current?.contains(target);
+      const insidePanel = panelRef.current?.contains(target);
+      if (!insideWrap && !insidePanel) setOpen(false);
+    };
+    const close = () => setOpen(false);
+    document.addEventListener("mousedown", handler);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [open]);
+
+  // 關閉時把搜尋字串清掉，下次開啟回到初始狀態
+  useEffect(() => {
+    if (!open) setSearch("");
+  }, [open]);
+
+  const isFilterActive = selected.length > 0;
+
+  // 列表用：依搜尋字串模糊比對（case-insensitive 子字串）
+  const filteredPool = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return tagPool;
+    return tagPool.filter((t) => t.toLowerCase().includes(q));
+  }, [tagPool, search]);
+
+  const toggle = (tag: string) => {
+    if (selected.includes(tag)) {
+      onChange(selected.filter((t) => t !== tag));
+    } else {
+      onChange([...selected, tag]);
+    }
+  };
+
+  const removeTag = (tag: string) => {
+    onChange(selected.filter((t) => t !== tag));
+  };
+
+  return (
+    <div ref={wrapRef} className="relative inline-flex items-center shrink-0">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        className="inline-flex items-center justify-center size-[16px] cursor-pointer bg-transparent border-none p-0 m-0"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label="篩選標籤"
+      >
+        <Filter
+          size={16}
+          color={isFilterActive ? "#0f6beb" : "#9CA3AF"}
+          strokeWidth={2}
+        />
+      </button>
+
+      {open && createPortal(
+        <div
+          ref={panelRef}
+          className="fixed min-w-[260px] max-w-[360px] bg-white border border-solid rounded-[12px] flex flex-col p-[8px] gap-[8px]"
+          style={{
+            top: dropdownPos.top,
+            left: dropdownPos.left,
+            zIndex: 1000,
+            borderColor: "rgba(221, 221, 221, 0.55)",
+            boxShadow:
+              "0px 2px 2px 0px rgba(221, 221, 221, 0.32), 0px 5px 15px 0px rgba(221, 221, 221, 0.2)",
+          }}
+        >
+          {/* 1. Search bar */}
+          <div className="flex items-center gap-[6px] px-[8px] py-[6px] rounded-[8px] border border-solid border-[#dddddd]">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path
+                d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm10 2-4.35-4.35"
+                stroke="#9CA3AF"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="輸入標籤名稱搜尋"
+              className="flex-1 min-w-0 bg-transparent border-none outline-none text-[14px] leading-[1.5] text-[#383838] placeholder:text-[#9CA3AF] font-['Noto_Sans_TC:Regular',sans-serif]"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+
+          {/* 2. 已選區：未選顯示「全部」、已選顯示帶 close button 的 chip */}
+          <div className="flex flex-wrap gap-[4px] min-h-[28px] items-center px-[4px]">
+            {selected.length === 0 ? (
+              <span className="text-[14px] leading-[1.5] text-[#6e6e6e] font-['Noto_Sans_TC:Regular',sans-serif]">
+                全部
+              </span>
+            ) : (
+              selected.map((t) => (
+                <Tag key={t} variant="blue" onRemove={() => removeTag(t)}>
+                  {t}
+                </Tag>
+              ))
+            )}
+          </div>
+
+          {/* 分隔線 */}
+          <div className="h-px bg-[#eef0f3]" />
+
+          {/* 3. 標籤列表（可滾動，多選 toggle） */}
+          <ul
+            role="listbox"
+            aria-multiselectable="true"
+            className="flex flex-col gap-[2px] max-h-[280px] overflow-y-auto"
+          >
+            {filteredPool.length === 0 ? (
+              <li className="px-[8px] py-[12px] text-[14px] text-[#6e6e6e] text-center">
+                沒有符合的標籤
+              </li>
+            ) : (
+              filteredPool.map((tag) => {
+                const active = selected.includes(tag);
+                return (
+                  <li key={tag} role="option" aria-selected={active} className="w-full">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggle(tag);
+                      }}
+                      className={`flex w-full items-center gap-[4px] min-h-[40px] p-[8px] rounded-[8px] text-[16px] leading-[1.5] text-[#383838] text-left cursor-pointer transition-colors hover:bg-[#f0f6ff] ${
+                        active ? "bg-[#f0f6ff]" : "bg-white"
+                      }`}
+                    >
+                      <span className="flex-1 min-w-0 truncate">{tag}</span>
+                      {active && (
+                        <Check size={20} className="shrink-0 text-[#0f6beb]" strokeWidth={2} />
+                      )}
+                    </button>
+                  </li>
+                );
+              })
+            )}
+          </ul>
+        </div>,
         document.body,
       )}
     </div>
@@ -352,12 +543,18 @@ function Container6({
   platformFilter,
   onPlatformFilterChange,
   boundChannels,
+  tagFilter,
+  onTagFilterChange,
+  tagPool,
 }: {
   sortConfig: SortConfig;
   onSortChange: (field: SortField) => void;
   platformFilter: string;
   onPlatformFilterChange: (key: string) => void;
   boundChannels: BoundChannel[];
+  tagFilter: string[];
+  onTagFilterChange: (tags: string[]) => void;
+  tagPool: string[];
 }) {
   const isActive = (field: SortField) => sortConfig.field === field;
   return (
@@ -393,14 +590,18 @@ function Container6({
               </svg>
             </div>
           </div>
-          <div 
-            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[260px] cursor-pointer" 
+          {/* 標籤欄位表頭：右側 filter button 取代原排序 icon，採與「平臺」欄位相同的 dropdown 樣式（多選 + 搜尋 + 已選 chips） */}
+          <div
+            className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[260px]"
             data-name="Table/Title-atomic"
-            onClick={() => onSortChange('tags')}
           >
             <span className="font-['Noto_Sans_TC:Regular',sans-serif] leading-[1.5] relative shrink-0 text-[#383838] text-[14px] text-nowrap whitespace-pre">標籤</span>
             <InfoIconWithTooltip tooltip="依據用戶在訊息或按鈕上的互動行為自動生成，或是自行設定" />
-            <SortingIcon active={isActive('tags')} order={sortConfig.order} />
+            <TagFilterDropdown
+              selected={tagFilter}
+              onChange={onTagFilterChange}
+              tagPool={tagPool}
+            />
           </div>
           <div className="h-[12px] relative shrink-0 w-0" data-name="Divier">
             <div className="absolute inset-[-3.33%_-0.4px]">
@@ -450,13 +651,13 @@ function Container6({
               </svg>
             </div>
           </div>
-          {/* 平台欄位表頭：右側 filter icon button 與「最近聊天時間」的 sort icon 規格一致（16×16、gap 4px） */}
+          {/* 平臺欄位表頭：右側 filter icon button 與「最近聊天時間」的 sort icon 規格一致（16×16、gap 4px） */}
           <div
             className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[200px]"
             data-name="Table/Title-atomic"
           >
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">平台</p>
+              <p className="leading-[1.5] whitespace-pre">平臺</p>
             </div>
             <PlatformFilterDropdown
               selected={platformFilter}
@@ -710,7 +911,7 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Displ
               <p className="leading-[1.5]">{member.email || '-'}</p>
             </div>
           </div>
-          {/* 平台欄位內容 */}
+          {/* 平臺欄位內容 */}
           <div className="box-border flex items-center justify-start px-[12px] py-0 relative shrink-0 w-[200px]" data-name="Table/List-atomic">
             <ChannelIcon channel={member.channel} channelName={member.channelName} />
           </div>
@@ -754,6 +955,9 @@ function Table8Columns3Actions({
   platformFilter,
   onPlatformFilterChange,
   boundChannels,
+  tagFilter,
+  onTagFilterChange,
+  tagPool,
 }: {
   members: DisplayMember[];
   sortConfig: SortConfig;
@@ -763,6 +967,9 @@ function Table8Columns3Actions({
   platformFilter: string;
   onPlatformFilterChange: (key: string) => void;
   boundChannels: BoundChannel[];
+  tagFilter: string[];
+  onTagFilterChange: (tags: string[]) => void;
+  tagPool: string[];
 }) {
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-name="Table/8 Columns+3 Actions">
@@ -777,6 +984,9 @@ function Table8Columns3Actions({
             platformFilter={platformFilter}
             onPlatformFilterChange={onPlatformFilterChange}
             boundChannels={boundChannels}
+            tagFilter={tagFilter}
+            onTagFilterChange={onTagFilterChange}
+            tagPool={tagPool}
           />
 
           {/* 垂直滾動容器 - 只有資料列滾動 */}
@@ -815,6 +1025,9 @@ function MainContent({
   platformFilter,
   onPlatformFilterChange,
   boundChannels,
+  tagFilter,
+  onTagFilterChange,
+  tagPool,
 }: {
   searchValue: string;
   onSearchChange: (value: string) => void;
@@ -832,6 +1045,9 @@ function MainContent({
   platformFilter: string;
   onPlatformFilterChange: (key: string) => void;
   boundChannels: BoundChannel[];
+  tagFilter: string[];
+  onTagFilterChange: (tags: string[]) => void;
+  tagPool: string[];
 }) {
   return (
     <div className="relative shrink-0 w-full" data-name="Main Content">
@@ -849,7 +1065,7 @@ function MainContent({
             />
           </div>
 
-          {/* 計數欄位（已移除 全部/會員/非會員 toggle，身份篩選改由「平台」處理） */}
+          {/* 計數欄位（已移除 全部/會員/非會員 toggle，身份篩選改由「平臺」處理） */}
           <div className="px-[40px] pb-[12px] w-full">
             <Container5
               count={filteredMembers.length}
@@ -881,6 +1097,9 @@ function MainContent({
                 platformFilter={platformFilter}
                 onPlatformFilterChange={onPlatformFilterChange}
                 boundChannels={boundChannels}
+                tagFilter={tagFilter}
+                onTagFilterChange={onTagFilterChange}
+                tagPool={tagPool}
               />
             ) : (
               <div className="flex h-[240px] items-center justify-center rounded-[16px] border border-dashed border-[#dddddd] bg-white text-[#6e6e6e]">
@@ -894,7 +1113,13 @@ function MainContent({
   );
 }
 
-export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }: MemberMainContainerProps = {}) {
+export default function MainContainer({
+  onAddMember,
+  onOpenChat,
+  onViewDetail,
+  initialTagFilter,
+  initialPlatformChannel,
+}: MemberMainContainerProps = {}) {
   const { displayMembers, isLoading, error } = useMembers();
   const [searchValue, setSearchValue] = useState('');
   const [appliedSearchValue, setAppliedSearchValue] = useState('');
@@ -904,10 +1129,15 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
     order: 'desc',
   });
 
-  // 平台篩選：'all' = 所有平台；其餘為 `${channel}|${channelName}` 對應某個已綁定帳號
+  // 平臺篩選：'all' = 所有平臺；其餘為 `${channel}|${channelName}` 對應某個已綁定帳號
   const [platformFilter, setPlatformFilter] = useState<string>('all');
   // 從基本設定（LINE / FB）API 取得的已綁定帳號
   const [apiBoundChannels, setApiBoundChannels] = useState<BoundChannel[]>([]);
+
+  // 標籤篩選：多選，OR 語意（會員標籤命中任一即顯示）
+  const [tagFilter, setTagFilter] = useState<string[]>(initialTagFilter ?? []);
+  // 標籤池：合併 memberTags + interactionTags + conversionTags 後去重排序
+  const [tagPool, setTagPool] = useState<string[]>([]);
 
   // 載入 LINE / FB 已綁定帳號（資料來源同基本設定頁）
   // Webchat 沒有獨立綁定設定 API，於下方 useMemo 從會員資料反推
@@ -966,6 +1196,35 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
     };
   }, []);
 
+  // 拉標籤池：合併會員 + 互動 + 轉單三類後去重排序
+  useEffect(() => {
+    let cancelled = false;
+    async function loadTagPool() {
+      try {
+        const res = await apiGet('/api/v1/tags/available-options');
+        if (!res.ok) return;
+        const json = await res.json();
+        const data = json?.data ?? {};
+        const merged = Array.from(
+          new Set<string>([
+            ...(data.memberTags ?? []),
+            ...(data.interactionTags ?? []),
+            ...(data.conversionTags ?? []),
+          ])
+        )
+          .filter(Boolean)
+          .sort((a, b) => a.localeCompare(b));
+        if (!cancelled) setTagPool(merged);
+      } catch (err) {
+        console.error('[MemberList] 取得標籤池失敗:', err);
+      }
+    }
+    loadTagPool();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // 合併 API 綁定帳號 + 從會員資料反推的 Webchat 站點
   const boundChannels = useMemo<BoundChannel[]>(() => {
     const list = [...apiBoundChannels];
@@ -987,6 +1246,19 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
     return list;
   }, [apiBoundChannels, displayMembers]);
 
+  // 由外部帶入的初始平臺渠道：boundChannels 載入後解析成第一個符合的 key 套用一次
+  const appliedInitialChannelRef = useRef(false);
+  useEffect(() => {
+    if (appliedInitialChannelRef.current) return;
+    if (!initialPlatformChannel) return;
+    if (boundChannels.length === 0) return;
+    const found = boundChannels.find((c) => c.channel === initialPlatformChannel);
+    if (found) {
+      setPlatformFilter(found.key);
+      appliedInitialChannelRef.current = true;
+    }
+  }, [initialPlatformChannel, boundChannels]);
+
   // Helper function to parse date strings
   const parseDateTime = (dateStr?: string): number => {
     if (!dateStr) return 0;
@@ -999,7 +1271,7 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
   const filteredMembers = useMemo(() => {
     let result = displayMembers;
 
-    // 平台篩選：依使用者選擇的綁定帳號 (channel + channelName) 過濾
+    // 平臺篩選：依使用者選擇的綁定帳號 (channel + channelName) 過濾
     if (platformFilter !== 'all') {
       const sepIdx = platformFilter.indexOf('|');
       const filterChannel = sepIdx >= 0 ? platformFilter.slice(0, sepIdx) : platformFilter;
@@ -1007,6 +1279,14 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
       result = result.filter(
         (m) => m.channel === filterChannel && (m.channelName || '') === filterName,
       );
+    }
+
+    // 標籤篩選（AND）：會員必須同時命中所有已選標籤才顯示
+    if (tagFilter.length > 0) {
+      result = result.filter((m) => {
+        const memberTags = new Set(m.tags || []);
+        return tagFilter.every((t) => memberTags.has(t));
+      });
     }
 
     // Apply search filter
@@ -1031,9 +1311,6 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
         case 'realName':
           comparison = (a.realName || '').localeCompare(b.realName || '');
           break;
-        case 'tags':
-          comparison = (a.tags?.[0] || '').localeCompare(b.tags?.[0] || '');
-          break;
         case 'phone':
           comparison = (a.phone || '').localeCompare(b.phone || '');
           break;
@@ -1050,7 +1327,7 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
     });
 
     return sorted;
-  }, [displayMembers, appliedSearchValue, sortConfig, platformFilter]);
+  }, [displayMembers, appliedSearchValue, sortConfig, platformFilter, tagFilter]);
 
   const handleSearch = () => {
     setAppliedSearchValue(searchValue);
@@ -1103,6 +1380,9 @@ export default function MainContainer({ onAddMember, onOpenChat, onViewDetail }:
         platformFilter={platformFilter}
         onPlatformFilterChange={setPlatformFilter}
         boundChannels={boundChannels}
+        tagFilter={tagFilter}
+        onTagFilterChange={setTagFilter}
+        tagPool={tagPool}
       />
       <DownloadConversationsModal
         open={downloadModalOpen}

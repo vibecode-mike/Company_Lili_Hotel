@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import MemberManagement from '../imports/MemberListContainer';
 import MainLayout from '../components/layouts/MainLayout';
 import { useNavigation } from '../contexts/NavigationContext';
@@ -9,13 +9,26 @@ import type { DisplayMember } from '../types/member';
  * 會員管理頁面
  */
 export default function MemberManagementPage() {
-  const { navigate } = useNavigation();
+  const { navigate, params } = useNavigation();
   const { fetchMembers } = useMembers();
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   useEffect(() => {
     fetchMembers();
   }, [fetchMembers]);
+
+  // 由其他頁面（例如數據洞察的互動旅程 stacked bar）帶入的初始篩選
+  // tagFilter 以 JSON 序列化字串傳遞，這裡解回陣列
+  const initialTagFilter = useMemo<string[] | undefined>(() => {
+    if (!params.tagFilter) return undefined;
+    try {
+      const parsed = JSON.parse(params.tagFilter);
+      return Array.isArray(parsed) ? parsed.filter((v) => typeof v === 'string') : undefined;
+    } catch {
+      return undefined;
+    }
+  }, [params.tagFilter]);
+  const initialPlatformChannel = params.platformChannel;
 
   return (
     <MainLayout
@@ -24,6 +37,8 @@ export default function MemberManagementPage() {
       onToggleSidebar={setSidebarOpen}
     >
       <MemberManagement
+        initialTagFilter={initialTagFilter}
+        initialPlatformChannel={initialPlatformChannel}
         onAddMember={() => {
           // TODO: 打開新增會員模態框
         }}
