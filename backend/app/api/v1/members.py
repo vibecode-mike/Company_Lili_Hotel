@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 from app.services.chatroom_service import ChatroomService
 from app.api.v1.chat_messages import _extract_fb_template_text
 
-# 台北時區
+# 臺北時區
 TAIPEI_TZ = pytz.timezone('Asia/Taipei')
 from app.websocket_manager import manager
 router = APIRouter()
@@ -47,7 +47,7 @@ router = APIRouter()
 
 def format_taipei_time(dt: datetime) -> str:
     """
-    將 UTC datetime 轉換為台北時間格式字串
+    將 UTC datetime 轉換為臺北時間格式字串
 
     Args:
         dt: UTC datetime (naive 或 aware)
@@ -61,7 +61,7 @@ def format_taipei_time(dt: datetime) -> str:
     else:
         utc_dt = dt
 
-    # 轉換為台北時間
+    # 轉換為臺北時間
     local_dt = utc_dt.astimezone(TAIPEI_TZ)
     hour = local_dt.hour
     minute = local_dt.minute
@@ -269,9 +269,10 @@ async def get_members(
     # 組裝響應數據
     items = []
     for member in members:
-        tags = []
-
         # 會員標籤 + 互動標籤混合，按最近互動時間排序（新的在前）
+        # 去重：同 (tag_name, type) 只保留時間最新一筆
+        # （DB 同 tag_name 可能因 message_id=NULL 在 unique 約束失效而有多筆，
+        #   或互動標籤同 tag_name 跨 tag_source 也會有多筆，這裡一律收斂為單一 chip）
         from datetime import datetime
         all_tag_items = []
         for tag in member.member_tags:
@@ -281,7 +282,14 @@ async def get_members(
             latest = tag.last_triggered_at or tag.updated_at or tag.created_at or datetime.min
             all_tag_items.append((latest, TagInfo(id=tag.id, name=tag.tag_name, type="interaction")))
         all_tag_items.sort(key=lambda x: x[0], reverse=True)
-        tags = [item[1] for item in all_tag_items]
+        seen = set()
+        tags = []
+        for _, tag_info in all_tag_items:
+            key = (tag_info.name, tag_info.type)
+            if key in seen:
+                continue
+            seen.add(key)
+            tags.append(tag_info)
 
         member_dict = MemberListItem.model_validate(member).model_dump()
         member_dict["tags"] = tags
@@ -352,7 +360,7 @@ def _validate_platform(platform: Optional[str]) -> Optional[str]:
         return None
     normalized = platform.strip()
     if normalized not in {"LINE", "Facebook", "Webchat"}:
-        raise HTTPException(status_code=400, detail="不支援的渠道平台")
+        raise HTTPException(status_code=400, detail="不支援的渠道平臺")
     return normalized
 
 
@@ -398,7 +406,10 @@ async def get_member(
     channel_id = channel_result.scalar()
 
     # 獲取標籤 - 簡化為兩表查詢
+    # 去重：同 (tag_name, type) 只保留首筆，避免 DB 因 message_id=NULL 在
+    # unique 約束失效而累積的重複 row 直接灌到前端
     tags = []
+    seen_tag_keys = set()
 
     # 查詢 1：會員標籤 - 使用 member_id 索引
     member_tags_result = await db.execute(
@@ -407,6 +418,10 @@ async def get_member(
         .order_by(MemberTag.tag_name)
     )
     for tag_id, tag_name in member_tags_result.all():
+        key = (tag_name, "member")
+        if key in seen_tag_keys:
+            continue
+        seen_tag_keys.add(key)
         tags.append(TagInfo(id=tag_id, name=tag_name, type="member"))
 
     # 查詢 2：互動標籤 - 統一從 MemberInteractionTag 表查詢（自動+手動）
@@ -417,6 +432,10 @@ async def get_member(
         .order_by(MemberInteractionTag.click_count.desc(), MemberInteractionTag.tag_name)
     )
     for tag_id, tag_name in interaction_tags_result.all():
+        key = (tag_name, "interaction")
+        if key in seen_tag_keys:
+            continue
+        seen_tag_keys.add(key)
         tags.append(TagInfo(id=tag_id, name=tag_name, type="interaction"))
 
     # 查詢該會員最後一條聊天訊息的時間
@@ -457,7 +476,7 @@ async def get_member(
         "webchat_uid": member.webchat_uid,
         "webchat_name": member.webchat_name,
         "webchat_avatar": member.webchat_avatar,
-        # widget 嵌入站點識別（會員管理「加入來源」/「平台」欄顯示用）
+        # widget 嵌入站點識別（會員管理「加入來源」/「平臺」欄顯示用）
         "webchat_site_id": member.webchat_site_id,
         "webchat_site_name": member.webchat_site_name,
         "name": display_name,
@@ -1144,7 +1163,7 @@ async def send_member_chat_message(
         if member:
             msg = await chatroom_service.append_message(member, "Facebook", "outgoing", text, message_source="manual", sender_id=current_user.id)
 
-            # WebSocket 推送通知前端即時更新 - 將 UTC 轉為台北時間顯示
+            # WebSocket 推送通知前端即時更新 - 將 UTC 轉為臺北時間顯示
             time_str = format_taipei_time(msg.created_at) if msg.created_at else ""
 
             await manager.send_new_message(msg.thread_id, {
@@ -1214,7 +1233,7 @@ async def send_member_chat_message(
         try:
             msg = await chatroom_service.append_message(member, platform_stripped, "outgoing", text, message_source="manual", sender_id=current_user.id)
 
-            # WebSocket 推送通知前端即時更新 - 將 UTC 轉為台北時間顯示
+            # WebSocket 推送通知前端即時更新 - 將 UTC 轉為臺北時間顯示
             time_str = format_taipei_time(msg.created_at) if msg.created_at else ""
 
             await manager.send_new_message(msg.thread_id, {
@@ -1241,7 +1260,7 @@ async def send_member_chat_message(
             raise HTTPException(status_code=500, detail=f"發送訊息失敗: {str(e)}")
 
     else:
-        raise HTTPException(status_code=400, detail="不支援的渠道平台")
+        raise HTTPException(status_code=400, detail="不支援的渠道平臺")
 
 
 @router.put("/{member_id}/chat/mark-read")

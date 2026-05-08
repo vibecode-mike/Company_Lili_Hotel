@@ -124,13 +124,20 @@ async def get_meta_user_profile(
         channel_info = _build_channel_info(member, "Webchat", "Webchat")
 
     # 3. 查詢標籤 (使用 tag_type 格式)
+    # 去重：同 (tag_name, tag_type) 只保留首筆，避免 DB 因 message_id=NULL
+    # 在 unique 約束失效而累積的重複 row 直接灌到前端
     tags = []
+    seen_tag_keys = set()
 
     # 會員標籤 (tag_type: 1)
     member_tags_result = await db.execute(
         select(MemberTag).where(MemberTag.member_id == member.id)
     )
     for tag in member_tags_result.scalars():
+        key = (tag.tag_name, 1)
+        if key in seen_tag_keys:
+            continue
+        seen_tag_keys.add(key)
         tags.append({
             "id": tag.id,
             "name": tag.tag_name,
@@ -147,11 +154,16 @@ async def get_meta_user_profile(
     )
     for tag in interaction_tags_result.scalars():
         is_conversion = tag.tag_source == "booking_conversion"
+        tag_type = 3 if is_conversion else 2
+        key = (tag.tag_name, tag_type)
+        if key in seen_tag_keys:
+            continue
+        seen_tag_keys.add(key)
         tags.append({
             "id": tag.id,
             "name": tag.tag_name,
             "tag": tag.tag_name,
-            "tag_type": 3 if is_conversion else 2,
+            "tag_type": tag_type,
         })
 
     # 訪客模式：選定渠道強制為 Webchat、channel_info 也以 Webchat 呈現
