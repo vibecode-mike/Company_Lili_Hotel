@@ -637,3 +637,8 @@ html {
   }
 }
 
+/* 日期 input 內建 calendar 圖示著色：#0F6BEB（下載對話紀錄 modal 使用）*/
+.date-input-blue-icon::-webkit-calendar-picker-indicator {
+  filter: brightness(0) saturate(100%) invert(33%) sepia(91%) saturate(2842%) hue-rotate(208deg) brightness(94%) contrast(91%);
+  cursor: pointer;
+}

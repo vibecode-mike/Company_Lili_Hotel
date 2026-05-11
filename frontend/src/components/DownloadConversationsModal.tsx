@@ -61,6 +61,14 @@ export default function DownloadConversationsModal({
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
+  // 關閉 modal 後重置日期選取，下次開啟回到預設空值（與 platformFilter 在 open=true 時的同步行為並列）
+  useEffect(() => {
+    if (!open) {
+      setDateFrom('');
+      setDateTo('');
+    }
+  }, [open]);
+
   // 平台篩選顯示名稱（給 UI 即時看到目前選了哪個帳號）
   const selectedPlatformLabel = useMemo(() => {
     if (platformFilter === 'all') return '所有平台';
@@ -146,7 +154,12 @@ export default function DownloadConversationsModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-[16px] w-[480px] max-w-[92vw] p-[32px] flex flex-col gap-[24px]"
+        className="bg-white rounded-[16px] p-[32px] flex flex-col gap-[24px]"
+        style={{
+          // 仿 MemberTagEditModal：鎖固定寬高，小視窗時兩軸各保留 16px 邊距避免溢出
+          width: 'min(480px, calc(100vw - 32px))',
+          height: 'min(440px, calc(100vh - 32px))',
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -197,7 +210,7 @@ export default function DownloadConversationsModal({
                 value={dateFrom}
                 max={todayStr}
                 onChange={(e) => setDateFrom(clampToToday(e.target.value))}
-                className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] flex-1 bg-transparent text-[#383838] text-[16px] outline-none placeholder:text-[#a8a8a8] min-w-0"
+                className="date-input-blue-icon font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] flex-1 bg-transparent text-[#383838] text-[16px] outline-none placeholder:text-[#a8a8a8] min-w-0"
               />
             </div>
           </div>
@@ -211,7 +224,7 @@ export default function DownloadConversationsModal({
                 value={dateTo}
                 max={todayStr}
                 onChange={(e) => setDateTo(clampToToday(e.target.value))}
-                className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] flex-1 bg-transparent text-[#383838] text-[16px] outline-none placeholder:text-[#a8a8a8] min-w-0"
+                className="date-input-blue-icon font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] flex-1 bg-transparent text-[#383838] text-[16px] outline-none placeholder:text-[#a8a8a8] min-w-0"
               />
             </div>
           </div>
@@ -224,8 +237,8 @@ export default function DownloadConversationsModal({
           </p>
         </div>
 
-        {/* Footer（動作按鈕，flow 不更動） */}
-        <div className="flex items-center justify-end gap-[8px] w-full">
+        {/* Footer（動作按鈕，flow 不更動）— mt-auto 把上方剩餘空間吃掉，footer 貼齊 modal 內容區底部，modal p-[32px] 自然成為下緣 padding */}
+        <div className="mt-auto flex items-center justify-end gap-[8px] w-full">
           <button
             type="button"
             onClick={onClose}
