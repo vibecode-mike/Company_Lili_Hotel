@@ -58,18 +58,16 @@ function Container1({ onAddMember }: { onAddMember?: () => void }) {
 // 下載對話紀錄按鈕
 function DownloadConversationsButton({ onClick }: { onClick: () => void }) {
   return (
-    <div className="bg-white box-border content-stretch flex items-center rounded-[12px] shrink-0 h-[48px] p-[4px] border border-[#eef0f3]">
-      <button
-        type="button"
-        onClick={onClick}
-        className="flex items-center gap-[6px] px-[16px] h-[40px] rounded-[10px] text-[14px] font-['Noto_Sans_TC:Regular',sans-serif] text-[#0f6beb] hover:bg-[#f0f6ff] transition-colors"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-        <span>下載對話紀錄</span>
-      </button>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className="box-border content-stretch flex gap-[6px] items-center rounded-[12px] shrink-0 h-[48px] px-[8px] py-[12px] text-[16px] font-['Noto_Sans_TC:Regular',sans-serif] text-[#0f6beb] hover:bg-[#f0f6ff] transition-colors cursor-pointer"
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+      <span>下載對話紀錄</span>
+    </button>
   );
 }
 
