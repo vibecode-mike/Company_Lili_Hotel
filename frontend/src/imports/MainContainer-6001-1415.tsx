@@ -83,7 +83,7 @@ function Container2({
   onDownloadConversations: () => void;
 }) {
   return (
-    <div className="content-stretch flex gap-[12px] items-center justify-end relative shrink-0 w-full" data-name="Container">
+    <div className="content-stretch flex flex-wrap gap-[12px] items-center justify-end relative shrink-0 w-full" data-name="Container">
       {/* SearchContainer 內含 size-full，會吃光 flex 空間。
           外面包一層 shrink-0 並用 ! 覆寫 size-full，讓它退回自然寬。 */}
       <div className="shrink-0">
