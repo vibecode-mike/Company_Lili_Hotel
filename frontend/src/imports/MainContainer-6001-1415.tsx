@@ -412,23 +412,29 @@ export function TagFilterDropdown({
               "0px 2px 2px 0px rgba(221, 221, 221, 0.32), 0px 5px 15px 0px rgba(221, 221, 221, 0.2)",
           }}
         >
-          {/* 1. Search bar */}
-          <div className="flex items-center gap-[6px] px-[8px] py-[6px] rounded-[8px] border border-solid border-[#dddddd]">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path
-                d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm10 2-4.35-4.35"
-                stroke="#9CA3AF"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+          {/* 1. Search bar — UI 樣式對齊「編輯會員標籤」modal 的 Search Bar */}
+          <div
+            className="bg-[#f6f9fd] rounded-[8px] w-full min-h-[48px] flex items-center gap-[4px] p-[8px]"
+            data-name="Search Bar"
+          >
+            {/* 24×24 frame，內含 17.6×17.575 放大鏡，flex 置中 */}
+            <div className="shrink-0 flex items-center justify-center size-[24px]" data-name="Search Icon">
+              <svg
+                className="block w-[17.6px] h-[17.575px]"
+                fill="none"
+                preserveAspectRatio="xMidYMid meet"
+                viewBox="0 0 18 18"
+                data-name="Vector"
+              >
+                <path d={svgPaths.p29b263c0} fill="#A8A8A8" />
+              </svg>
+            </div>
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="輸入標籤名稱搜尋"
-              className="flex-1 min-w-0 bg-transparent border-none outline-none text-[14px] leading-[1.5] text-[#383838] placeholder:text-[#9CA3AF] font-['Noto_Sans_TC:Regular',sans-serif]"
+              className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] flex-1 bg-transparent text-[#383838] text-[16px] outline-none placeholder:text-[#a8a8a8] min-w-0"
               onClick={(e) => e.stopPropagation()}
             />
           </div>
