@@ -176,7 +176,7 @@ export interface BoundChannel {
 
 // 平臺 dropdown 內單一渠道圖標：尺寸/樣式與會員列表平臺欄一致（20px）
 // LINE / Facebook 走統一 SVG；Webchat 沿用列表平臺欄同款 chat bubble + 星星 icon
-function ChannelOptionIcon({ channel }: { channel: ChannelType }) {
+export function ChannelOptionIcon({ channel }: { channel: ChannelType }) {
   if (channel === 'LINE' || channel === 'Facebook') {
     return <CommonChannelIcon channel={channel} size={20} />;
   }
@@ -233,7 +233,8 @@ export function PlatformFilterDropdown({
   // 「所有平臺」永遠排第一，作為預設選項
   const allOption: BoundChannel = { key: "all", channel: null, channelName: null, label: "所有平臺" };
   const options: BoundChannel[] = [allOption, ...boundChannels];
-  const isFilterActive = selected !== "all";
+  // 平臺 filter trigger icon 永遠呈藍色 active 狀態（含「所有平臺」），不再以 selected 是否為 all 來切換灰/藍
+  const isFilterActive = true;
 
   return (
     <div ref={wrapRef} className="relative inline-flex items-center shrink-0">

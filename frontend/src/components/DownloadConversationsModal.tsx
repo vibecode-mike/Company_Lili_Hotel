@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { DisplayMember } from '../types/member';
 import {
+  ChannelOptionIcon,
   PlatformFilterDropdown,
   type BoundChannel,
 } from '../imports/MainContainer-6001-1415';
@@ -65,6 +66,12 @@ export default function DownloadConversationsModal({
     if (platformFilter === 'all') return '所有平台';
     const found = boundChannels.find((c) => c.key === platformFilter);
     return found?.label || '所有平台';
+  }, [platformFilter, boundChannels]);
+
+  // 已選平台對應的 BoundChannel：給 selected 區用來渲染與 dropdown options 一致的 icon+渠道名稱
+  const selectedBoundChannel = useMemo(() => {
+    if (platformFilter === 'all') return null;
+    return boundChannels.find((c) => c.key === platformFilter) ?? null;
   }, [platformFilter, boundChannels]);
 
   // 預計下載人數：依「平台 + 起始/結束日期」過濾 displayMembers
@@ -135,7 +142,7 @@ export default function DownloadConversationsModal({
 
   return (
     <div
-      className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       onClick={onClose}
     >
       <div
@@ -163,8 +170,12 @@ export default function DownloadConversationsModal({
             平台
           </p>
           <div className="flex items-center gap-[8px]">
+            {/* 已選渠道 icon：直接復用 dropdown options 用的 ChannelOptionIcon（20px、gap-[8px] 與 options 一致）*/}
+            {selectedBoundChannel?.channel && (
+              <ChannelOptionIcon channel={selectedBoundChannel.channel} />
+            )}
             <span className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#383838] text-[16px] leading-[1.5] truncate">
-              {selectedPlatformLabel}
+              {selectedBoundChannel?.channelName ?? selectedPlatformLabel}
             </span>
             <PlatformFilterDropdown
               selected={platformFilter}
