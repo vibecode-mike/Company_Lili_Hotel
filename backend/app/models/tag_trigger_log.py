@@ -43,18 +43,18 @@ class TagTriggerLog(Base):
         index=True,
         comment="會員ID",
     )
+    # 原有 FK→interaction_tags 已放寬（migration 7810b55a4479），tag_id 可填 null
     tag_id = Column(
         BigInteger,
         nullable=True,
         index=True,
-        comment="標籤ID（interaction_tags.id 或 null；原有 FK 已放寬）",
     )
     tag_type = Column(
         SQLEnum(TagType),
         nullable=False,
         default=TagType.INTERACTION,
         server_default="interaction",
-        comment="標籤類型：member / interaction",
+        comment="標籤類型：member（會員標籤）/ interaction（互動標籤）",
     )
     tag_name = Column(
         String(100),

@@ -19,6 +19,11 @@ class Booking(Base):
         Index("ix_bookings_member_id", "member_id"),
     )
 
+    # 此表用 order_id（閎運訂單編號）作為 PK，明確跳過繼承自 Base 的 id
+    # 訂單成立後 immutable（order_id 去重 + insert-only），不需要 updated_at
+    id = None
+    updated_at = None
+
     order_id = Column(String(64), primary_key=True, comment="閎運訂單編號，去重用")
     line_uid = Column(String(100), nullable=True, comment="LINE 使用者 UID")
     member_id = Column(
@@ -28,7 +33,7 @@ class Booking(Base):
         comment="關聯會員 ID（lookup 失敗可為 NULL）",
     )
     checkin_date = Column(Date, nullable=True, comment="入住日期")
-    rooms = Column(JSON, nullable=True, comment="訂房房型清單：[{roomtype, quantity}]")
+    rooms = Column(JSON, nullable=True, comment='訂房房型清單，格式：[{"roomtype": "WS", "quantity": 1}, ...]')
     source = Column(
         String(20),
         nullable=False,

@@ -87,6 +87,7 @@ class ConversationMessage(Base):
         Index("ix_conversation_messages_platform", "platform"),
         Index("ix_conversation_messages_created_at", "created_at"),
         Index("ix_conversation_messages_thread_created", "thread_id", "created_at"),
+        Index("ix_conversation_messages_unanswered_created", "unanswered", "created_at"),
     )
 
     id = Column(String(100), primary_key=True, comment="訊息ID")
@@ -123,7 +124,7 @@ class ConversationMessage(Base):
         nullable=False,
         default=False,
         server_default="0",
-        comment="AI 是否答不出此訊息（mark_unanswerable tool 標記），僅 message_source=gpt 有意義",
+        comment="AI 是否答不出此訊息（mark_unanswerable tool 標記），僅 message_source=gpt 時有意義",
     )
     created_at = Column(
         DateTime, server_default=func.now(), nullable=True, comment="建立時間"
