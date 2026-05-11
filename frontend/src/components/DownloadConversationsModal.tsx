@@ -135,19 +135,22 @@ export default function DownloadConversationsModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/50"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-[16px] w-[480px] max-w-[92vw] p-[24px] shadow-xl"
+        className="bg-white rounded-[16px] w-[480px] max-w-[92vw] p-[32px] flex flex-col gap-[24px]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between mb-[20px]">
-          <h2 className="text-[18px] font-medium text-[#242424]">下載對話紀錄</h2>
+        {/* Header */}
+        <div className="flex items-center w-full">
+          <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#383838] text-[24px] leading-[1.5] flex-1">
+            下載對話紀錄
+          </p>
           <button
             type="button"
             onClick={onClose}
-            className="text-[#6e6e6e] hover:text-[#242424] text-[24px] leading-none"
+            className="text-[#6e6e6e] hover:text-[#383838] text-[24px] leading-none"
             aria-label="關閉"
           >
             ×
@@ -155,10 +158,14 @@ export default function DownloadConversationsModal({
         </div>
 
         {/* 平台：dropdown options 與 UI 對齊會員列表表頭的「平台」欄位 */}
-        <div className="mb-[16px]">
-          <label className="block text-[14px] text-[#6e6e6e] mb-[6px]">平台</label>
+        <div className="flex flex-col gap-[12px] w-full">
+          <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#6e6e6e] text-[14px] leading-[1.5]">
+            平台
+          </p>
           <div className="flex items-center gap-[8px]">
-            <span className="text-[14px] text-[#383838] truncate">{selectedPlatformLabel}</span>
+            <span className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#383838] text-[16px] leading-[1.5] truncate">
+              {selectedPlatformLabel}
+            </span>
             <PlatformFilterDropdown
               selected={platformFilter}
               onChange={setPlatformFilter}
@@ -168,52 +175,64 @@ export default function DownloadConversationsModal({
         </div>
 
         {/* 日期區間：max 限制為今日，避免選到未來日期 */}
-        <div className="mb-[16px] flex gap-[8px]">
-          <div className="flex-1">
-            <label className="block text-[14px] text-[#6e6e6e] mb-[6px]">起始日期</label>
-            <input
-              type="date"
-              value={dateFrom}
-              max={todayStr}
-              onChange={(e) => setDateFrom(clampToToday(e.target.value))}
-              className="w-full px-[12px] h-[40px] border border-[#dddddd] rounded-[10px] text-[14px] outline-none focus:border-[#0f6beb]"
-            />
+        <div className="flex gap-[8px] w-full">
+          <div className="flex-1 flex flex-col gap-[12px]">
+            <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#6e6e6e] text-[14px] leading-[1.5]">
+              起始日期
+            </p>
+            <div className="bg-[#f6f9fd] rounded-[8px] w-full min-h-[48px] flex items-center px-[12px]">
+              <input
+                type="date"
+                value={dateFrom}
+                max={todayStr}
+                onChange={(e) => setDateFrom(clampToToday(e.target.value))}
+                className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] flex-1 bg-transparent text-[#383838] text-[16px] outline-none placeholder:text-[#a8a8a8] min-w-0"
+              />
+            </div>
           </div>
-          <div className="flex-1">
-            <label className="block text-[14px] text-[#6e6e6e] mb-[6px]">結束日期</label>
-            <input
-              type="date"
-              value={dateTo}
-              max={todayStr}
-              onChange={(e) => setDateTo(clampToToday(e.target.value))}
-              className="w-full px-[12px] h-[40px] border border-[#dddddd] rounded-[10px] text-[14px] outline-none focus:border-[#0f6beb]"
-            />
+          <div className="flex-1 flex flex-col gap-[12px]">
+            <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#6e6e6e] text-[14px] leading-[1.5]">
+              結束日期
+            </p>
+            <div className="bg-[#f6f9fd] rounded-[8px] w-full min-h-[48px] flex items-center px-[12px]">
+              <input
+                type="date"
+                value={dateTo}
+                max={todayStr}
+                onChange={(e) => setDateTo(clampToToday(e.target.value))}
+                className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] flex-1 bg-transparent text-[#383838] text-[16px] outline-none placeholder:text-[#a8a8a8] min-w-0"
+              />
+            </div>
           </div>
         </div>
 
         {/* 預計下載：依平台 + 日期範圍計算 */}
-        <div className="mb-[20px]">
-          <p className="text-[14px] text-[#6e6e6e]">
+        <div className="w-full">
+          <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#6e6e6e] text-[14px] leading-[1.5]">
             預計下載：共 <span className="text-[#0f6beb] font-medium">{expectedCount}</span> 位會員
           </p>
         </div>
 
-        {/* 動作按鈕（不更動） */}
-        <div className="flex justify-end gap-[8px]">
+        {/* Footer（動作按鈕，flow 不更動） */}
+        <div className="flex items-center justify-end gap-[8px] w-full">
           <button
             type="button"
             onClick={onClose}
-            className="px-[16px] h-[40px] rounded-[10px] border border-[#dddddd] text-[#6e6e6e] hover:bg-[#f5f5f5] text-[14px]"
+            className="box-border flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] cursor-pointer hover:bg-neutral-100 transition-colors bg-transparent border-0"
           >
-            取消
+            <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#383838] text-[16px] leading-[1.5] text-center">
+              取消
+            </p>
           </button>
           <button
             type="button"
             onClick={handleDownload}
             disabled={submitting}
-            className="px-[16px] h-[40px] rounded-[10px] bg-[#0f6beb] text-white hover:bg-[#0d5bcc] disabled:opacity-50 text-[14px]"
+            className="bg-[#242424] box-border flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] cursor-pointer hover:bg-[#383838] disabled:opacity-50 transition-colors border-0"
           >
-            {submitting ? '下載中…' : '下載 CSV'}
+            <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-white text-[16px] leading-[1.5] text-center">
+              {submitting ? '下載中…' : '下載 CSV'}
+            </p>
           </button>
         </div>
       </div>
