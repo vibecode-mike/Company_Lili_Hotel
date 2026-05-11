@@ -470,7 +470,11 @@ export function TagFilterDropdown({
             <div
               ref={scrollRef}
               className="w-full overflow-y-auto pr-[8px] no-native-scrollbar"
-              style={{ maxHeight: 'min(280px, calc(100vh - 200px))' }}
+              style={{
+                // 上限 280px；同時確保 popover 底部與瀏覽器底部至少保留 60px：
+                // popover 從 dropdownPos.top 起算，list 上方還有 search bar / 已選 chip / 分隔線 / paddings / gaps（約 120px）
+                maxHeight: `min(280px, calc(100vh - ${dropdownPos.top}px - 120px - 60px))`,
+              }}
             >
               <ul
                 role="listbox"
