@@ -2042,7 +2042,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
               <svg className="size-[12px]" fill="none" viewBox="0 0 12 12">
                 <line stroke="#6E6E6E" strokeLinecap="round" x1="7.32102" x2="5.00339" y1="3.13004" y2="10.263" />
               </svg>
-              <p className="text-[14px] text-[#383838]">{title || '未命名的群發訊息'}</p>
+              <p className="text-[14px] text-[#383838]">{title || '未命名的\u7FA4發訊息'}</p>
             </div>
           </div>
 
@@ -2050,7 +2050,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
           <div className="box-border flex flex-col gap-[32px] items-start p-[40px]">
             <div className="flex items-start w-full justify-between">
               <div className="flex gap-1 grow items-center">
-                <p className="text-[32px] text-[#383838]">群發訊息類型</p>
+                <p className="text-[32px] text-[#383838]">{'\u7FA4發訊息類型'}</p>
               </div>
               <div className="flex gap-[8px] items-center">
                 {/* 刪除按鈕：僅在編輯已排程或草稿時顯示 */}
@@ -2401,7 +2401,16 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                   </div>
                   <div className="content-stretch flex flex-col gap-[8px] items-start">
                     <div className="content-stretch flex gap-[12px] items-center shrink-0">
-                      <div className="content-stretch flex gap-[8px] items-center shrink-0">
+                      {/* 點擊 radio 圈或文字標籤都會切到「篩選目標對象」並展開篩選視窗 */}
+                      <div
+                        className="content-stretch flex gap-[8px] items-center shrink-0 cursor-pointer"
+                        onClick={() => {
+                          if (targetType !== 'filtered') {
+                            setTargetType('filtered');
+                          }
+                          setModalOpen(true);
+                        }}
+                      >
                         <RadioGroupItem value="filtered" id="filtered" />
                         <Label htmlFor="filtered" className="cursor-pointer flex flex-col font-normal justify-center leading-[0] shrink-0 text-[#383838] text-[16px] text-nowrap">
                           <p className="leading-[1.5] whitespace-pre">篩選目標對象</p>
@@ -2410,7 +2419,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                     </div>
                     <div
                       className={`bg-white max-w-[600px] min-w-[300px] rounded-[8px] shrink-0 w-full border border-neutral-100 ${
-                        targetType !== 'filtered' ? 'opacity-60 pointer-events-none select-none' : ''
+                        targetType !== 'filtered' ? 'opacity-60 select-none' : ''
                       }`}
                       aria-disabled={targetType !== 'filtered'}
                     >
@@ -2443,15 +2452,19 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                             </>
                           )}
                           <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-                            <DialogTrigger asChild>
-                              <button
-                                type="button"
-                                disabled={targetType !== 'filtered'}
-                                className="box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0 hover:bg-neutral-50 transition-colors disabled:cursor-not-allowed"
-                              >
-                                <p className="basis-0 font-normal grow leading-[1.5] min-h-px min-w-px shrink-0 text-[#a8a8a8] text-[16px] text-center">＋ 新增標籤</p>
-                              </button>
-                            </DialogTrigger>
+                            {/* 直接以受控 state 開啟視窗，避免 DialogTrigger asChild 與自訂 onClick 合成失敗 */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (targetType !== 'filtered') {
+                                  setTargetType('filtered');
+                                }
+                                setModalOpen(true);
+                              }}
+                              className="box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0 hover:bg-neutral-50 transition-colors"
+                            >
+                              <p className="basis-0 font-normal grow leading-[1.5] min-h-px min-w-px shrink-0 text-[#a8a8a8] text-[16px] text-center">＋ 新增標籤</p>
+                            </button>
                             <DialogContentNoClose className="p-0 bg-transparent border-0 !w-auto !max-w-none !h-auto">
                               <DialogTitle className="sr-only">篩選目標對象</DialogTitle>
                               <DialogDescription className="sr-only">選擇或建立標籤來篩選目標對象</DialogDescription>
