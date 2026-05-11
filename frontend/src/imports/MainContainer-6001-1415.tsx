@@ -9,6 +9,7 @@ import TooltipComponent from "./Tooltip";
 import { PageHeaderWithBreadcrumb } from "../components/common/Breadcrumb";
 import { TextIconButton, ArrowRightIcon, Tag } from "../components/common";
 import { MemberSourceIconLarge, ChannelIcon as CommonChannelIcon } from "../components/common/icons";
+import { CustomScrollbar } from "../components/MemberTagEditModal";
 import { useMembers } from "../contexts/MembersContext";
 import { formatMemberDateTime, getLatestMemberChatTimestamp, formatUnansweredTime } from "../utils/memberTime";
 import { apiGet } from "../utils/apiClient";
@@ -323,6 +324,7 @@ export function TagFilterDropdown({
   const wrapRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
   // 量測觸發按鈕位置（fixed 定位，避免被表頭裁切）
@@ -341,14 +343,20 @@ export function TagFilterDropdown({
       const insidePanel = panelRef.current?.contains(target);
       if (!insideWrap && !insidePanel) setOpen(false);
     };
-    const close = () => setOpen(false);
+    // 頁面捲動（外面會員列表）才關閉；panel 內部 scroll div 觸發的 scroll event（含 CustomScrollbar drag）忽略
+    const onPageScroll = (e: Event) => {
+      const target = e.target as Node | null;
+      if (target && panelRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onResize = () => setOpen(false);
     document.addEventListener("mousedown", handler);
-    window.addEventListener("resize", close);
-    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", onResize);
+    window.addEventListener("scroll", onPageScroll, true);
     return () => {
       document.removeEventListener("mousedown", handler);
-      window.removeEventListener("resize", close);
-      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", onPageScroll, true);
     };
   }, [open]);
 
@@ -457,41 +465,60 @@ export function TagFilterDropdown({
           {/* 分隔線 */}
           <div className="h-px bg-[#eef0f3]" />
 
-          {/* 3. 標籤列表（可滾動，多選 toggle） */}
-          <ul
-            role="listbox"
-            aria-multiselectable="true"
-            className="flex flex-col gap-[2px] max-h-[280px] overflow-y-auto"
-          >
-            {filteredPool.length === 0 ? (
-              <li className="px-[8px] py-[12px] text-[14px] text-[#6e6e6e] text-center">
-                沒有符合的標籤
-              </li>
-            ) : (
-              filteredPool.map((tag) => {
-                const active = selected.includes(tag);
-                return (
-                  <li key={tag} role="option" aria-selected={active} className="w-full">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggle(tag);
-                      }}
-                      className={`flex w-full items-center gap-[4px] min-h-[40px] p-[8px] rounded-[8px] text-[16px] leading-[1.5] text-[#383838] text-left cursor-pointer transition-colors hover:bg-[#f0f6ff] ${
-                        active ? "bg-[#f0f6ff]" : "bg-white"
-                      }`}
-                    >
-                      <span className="flex-1 min-w-0 truncate">{tag}</span>
-                      {active && (
-                        <Check size={20} className="shrink-0 text-[#0f6beb]" strokeWidth={2} />
-                      )}
-                    </button>
+          {/* 3. 標籤列表：scroll wrapper + CustomScrollbar + 底部漸層 mask 全部復用「編輯會員標籤」modal 同款 */}
+          <div className="relative w-full">
+            <div
+              ref={scrollRef}
+              className="w-full overflow-y-auto pr-[8px] no-native-scrollbar"
+              style={{ maxHeight: 'min(280px, calc(100vh - 200px))' }}
+            >
+              <ul
+                role="listbox"
+                aria-multiselectable="true"
+                className="flex flex-col gap-[2px]"
+              >
+                {filteredPool.length === 0 ? (
+                  <li className="px-[8px] py-[12px] text-[14px] text-[#6e6e6e] text-center">
+                    沒有符合的標籤
                   </li>
-                );
-              })
-            )}
-          </ul>
+                ) : (
+                  filteredPool.map((tag) => {
+                    const active = selected.includes(tag);
+                    return (
+                      <li key={tag} role="option" aria-selected={active} className="w-full">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggle(tag);
+                          }}
+                          className={`flex w-full items-center gap-[4px] min-h-[40px] p-[8px] rounded-[8px] text-[16px] leading-[1.5] text-[#383838] text-left cursor-pointer transition-colors hover:bg-[#f0f6ff] ${
+                            active ? "bg-[#f0f6ff]" : "bg-white"
+                          }`}
+                        >
+                          <span className="flex-1 min-w-0 truncate">{tag}</span>
+                          {active && (
+                            <Check size={20} className="shrink-0 text-[#0f6beb]" strokeWidth={2} />
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })
+                )}
+              </ul>
+            </div>
+            <CustomScrollbar scrollRef={scrollRef} />
+            {/* 底部漸層 mask：跟 MemberTagEditModal 完全相同的 48px ease-in 多 stop 漸層 */}
+            <div
+              className="pointer-events-none absolute bottom-0 left-0 right-0"
+              style={{
+                height: '48px',
+                background:
+                  'linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.02) 30%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.35) 70%, rgba(255,255,255,0.75) 85%, #FFF 100%)',
+                zIndex: 5,
+              }}
+            />
+          </div>
         </div>,
         document.body,
       )}

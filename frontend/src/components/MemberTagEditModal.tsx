@@ -9,7 +9,7 @@ import { Tag } from './common';
  * 造成的 thumb 跟不上 native scroll，視覺上能 1:1 同步 60fps。
  * 純視覺呈現（track 為 pointer-events-none，thumb 接管 mouseDown 才能拖）。
  */
-function CustomScrollbar({ scrollRef }: { scrollRef: RefObject<HTMLDivElement | null> }) {
+export function CustomScrollbar({ scrollRef }: { scrollRef: RefObject<HTMLDivElement | null> }) {
   const thumbRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
