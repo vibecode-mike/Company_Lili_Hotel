@@ -1129,7 +1129,7 @@ function TimeInsightsSection({ reducedMotion }: { reducedMotion: boolean }) {
                     }}
                   >
                     <div className="journey-bar-badge">
-                      {/* 點擊標籤帶入會員列表的標籤篩選；同時把平臺釘到當下互動旅程的渠道 */}
+                      {/* 點擊標籤帶入會員列表的標籤篩選；同時把平台釘到當下互動旅程的渠道 */}
                       <button
                         type="button"
                         onClick={() => {

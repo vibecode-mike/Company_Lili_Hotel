@@ -105,8 +105,8 @@ function Container2({
   );
 }
 
-// 計數文字依平臺篩選決定：
-// - 所有平臺：共 OO 位（Web Chat 保留近 7 天的匿名資料）
+// 計數文字依平台篩選決定：
+// - 所有平台：共 OO 位（Web Chat 保留近 7 天的匿名資料）
 // - Webchat：共 OO 位（保留近 7 天的匿名資料）
 // - LINE / Facebook：共 OO 位
 function buildCountText(count: number, platformFilter: string, boundChannels: BoundChannel[]): string {
@@ -165,7 +165,7 @@ function SortingIcon({ active, order }: { active: boolean; order: SortOrder }) {
   );
 }
 
-// 平臺篩選用：每筆代表「基本設定已綁定的一個帳號」
+// 平台篩選用：每筆代表「基本設定已綁定的一個帳號」
 // key 用 `${channel}|${channelName}` 作為唯一識別，方便和會員資料比對
 export interface BoundChannel {
   key: string;
@@ -174,8 +174,8 @@ export interface BoundChannel {
   label: string;
 }
 
-// 平臺 dropdown 內單一渠道圖標：尺寸/樣式與會員列表平臺欄一致（20px）
-// LINE / Facebook 走統一 SVG；Webchat 沿用列表平臺欄同款 chat bubble + 星星 icon
+// 平台 dropdown 內單一渠道圖標：尺寸/樣式與會員列表平台欄一致（20px）
+// LINE / Facebook 走統一 SVG；Webchat 沿用列表平台欄同款 chat bubble + 星星 icon
 export function ChannelOptionIcon({ channel }: { channel: ChannelType }) {
   if (channel === 'LINE' || channel === 'Facebook') {
     return <CommonChannelIcon channel={channel} size={20} />;
@@ -187,7 +187,7 @@ export function ChannelOptionIcon({ channel }: { channel: ChannelType }) {
   );
 }
 
-// 平臺 filter dropdown（樣式對齊 InsightsPanel 核心洞察 duration 篩選）
+// 平台 filter dropdown（樣式對齊 InsightsPanel 核心洞察 duration 篩選）
 export function PlatformFilterDropdown({
   selected,
   onChange,
@@ -230,10 +230,10 @@ export function PlatformFilterDropdown({
     };
   }, [open]);
 
-  // 「所有平臺」永遠排第一，作為預設選項
-  const allOption: BoundChannel = { key: "all", channel: null, channelName: null, label: "所有平臺" };
+  // 「所有平台」永遠排第一，作為預設選項
+  const allOption: BoundChannel = { key: "all", channel: null, channelName: null, label: "所有平台" };
   const options: BoundChannel[] = [allOption, ...boundChannels];
-  // 平臺 filter trigger icon 永遠呈藍色 active 狀態（含「所有平臺」），不再以 selected 是否為 all 來切換灰/藍
+  // 平台 filter trigger icon 永遠呈藍色 active 狀態（含「所有平台」），不再以 selected 是否為 all 來切換灰/藍
   const isFilterActive = true;
 
   return (
@@ -248,7 +248,7 @@ export function PlatformFilterDropdown({
         className="inline-flex items-center justify-center size-[16px] cursor-pointer bg-transparent border-none p-0 m-0"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label="篩選平臺"
+        aria-label="篩選平台"
       >
         <Filter
           size={16}
@@ -286,7 +286,7 @@ export function PlatformFilterDropdown({
                     active ? "bg-[#f0f6ff]" : "bg-white"
                   }`}
                 >
-                  {/* 非「所有平臺」才顯示渠道 icon（icon 樣式/大小對齊會員列表平臺欄）*/}
+                  {/* 非「所有平台」才顯示渠道 icon（icon 樣式/大小對齊會員列表平台欄）*/}
                   {opt.channel && <ChannelOptionIcon channel={opt.channel} />}
                   <span className="flex-1 min-w-0 truncate">{opt.channel ? (opt.channelName ?? opt.label) : opt.label}</span>
                   {active && (
@@ -606,7 +606,7 @@ function Container6({
               </svg>
             </div>
           </div>
-          {/* 標籤欄位表頭：右側 filter button 取代原排序 icon，採與「平臺」欄位相同的 dropdown 樣式（多選 + 搜尋 + 已選 chips） */}
+          {/* 標籤欄位表頭：右側 filter button 取代原排序 icon，採與「平台」欄位相同的 dropdown 樣式（多選 + 搜尋 + 已選 chips） */}
           <div
             className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[260px]"
             data-name="Table/Title-atomic"
@@ -667,13 +667,13 @@ function Container6({
               </svg>
             </div>
           </div>
-          {/* 平臺欄位表頭：右側 filter icon button 與「最近聊天時間」的 sort icon 規格一致（16×16、gap 4px） */}
+          {/* 平台欄位表頭：右側 filter icon button 與「最近聊天時間」的 sort icon 規格一致（16×16、gap 4px） */}
           <div
             className="box-border content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 w-[200px]"
             data-name="Table/Title-atomic"
           >
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',sans-serif] justify-center leading-[0] relative shrink-0 text-[#383838] text-[14px] text-nowrap">
-              <p className="leading-[1.5] whitespace-pre">平臺</p>
+              <p className="leading-[1.5] whitespace-pre">平台</p>
             </div>
             <PlatformFilterDropdown
               selected={platformFilter}
@@ -927,7 +927,7 @@ function MemberRow({ member, isLast, onOpenChat, onViewDetail }: { member: Displ
               <p className="leading-[1.5]">{member.email || '-'}</p>
             </div>
           </div>
-          {/* 平臺欄位內容 */}
+          {/* 平台欄位內容 */}
           <div className="box-border flex items-center justify-start px-[12px] py-0 relative shrink-0 w-[200px]" data-name="Table/List-atomic">
             <ChannelIcon channel={member.channel} channelName={member.channelName} />
           </div>
@@ -1084,7 +1084,7 @@ function MainContent({
             />
           </div>
 
-          {/* 計數欄位（已移除 全部/會員/非會員 toggle，身份篩選改由「平臺」處理） */}
+          {/* 計數欄位（已移除 全部/會員/非會員 toggle，身份篩選改由「平台」處理） */}
           <div className="px-[40px] pb-[12px] w-full">
             <Container5
               count={filteredMembers.length}
@@ -1148,7 +1148,7 @@ export default function MainContainer({
     order: 'desc',
   });
 
-  // 平臺篩選：'all' = 所有平臺；其餘為 `${channel}|${channelName}` 對應某個已綁定帳號
+  // 平台篩選：'all' = 所有平台；其餘為 `${channel}|${channelName}` 對應某個已綁定帳號
   const [platformFilter, setPlatformFilter] = useState<string>('all');
   // 從基本設定（LINE / FB）API 取得的已綁定帳號
   const [apiBoundChannels, setApiBoundChannels] = useState<BoundChannel[]>([]);
@@ -1265,7 +1265,7 @@ export default function MainContainer({
     return list;
   }, [apiBoundChannels, displayMembers]);
 
-  // 由外部帶入的初始平臺渠道：boundChannels 載入後解析成第一個符合的 key 套用一次
+  // 由外部帶入的初始平台渠道：boundChannels 載入後解析成第一個符合的 key 套用一次
   const appliedInitialChannelRef = useRef(false);
   useEffect(() => {
     if (appliedInitialChannelRef.current) return;
@@ -1290,7 +1290,7 @@ export default function MainContainer({
   const filteredMembers = useMemo(() => {
     let result = displayMembers;
 
-    // 平臺篩選：依使用者選擇的綁定帳號 (channel + channelName) 過濾
+    // 平台篩選：依使用者選擇的綁定帳號 (channel + channelName) 過濾
     if (platformFilter !== 'all') {
       const sepIdx = platformFilter.indexOf('|');
       const filterChannel = sepIdx >= 0 ? platformFilter.slice(0, sepIdx) : platformFilter;
@@ -1358,7 +1358,7 @@ export default function MainContainer({
     setAppliedSearchValue('');
   };
 
-  // 「清除全部條件」按鈕：把搜尋、排序、平臺、標籤全部 reset 回預設
+  // 「清除全部條件」按鈕：把搜尋、排序、平台、標籤全部 reset 回預設
   const handleClearAll = () => {
     setSearchValue('');
     setAppliedSearchValue('');

@@ -360,7 +360,7 @@ def _validate_platform(platform: Optional[str]) -> Optional[str]:
         return None
     normalized = platform.strip()
     if normalized not in {"LINE", "Facebook", "Webchat"}:
-        raise HTTPException(status_code=400, detail="不支援的渠道平臺")
+        raise HTTPException(status_code=400, detail="不支援的渠道平台")
     return normalized
 
 
@@ -476,7 +476,7 @@ async def get_member(
         "webchat_uid": member.webchat_uid,
         "webchat_name": member.webchat_name,
         "webchat_avatar": member.webchat_avatar,
-        # widget 嵌入站點識別（會員管理「加入來源」/「平臺」欄顯示用）
+        # widget 嵌入站點識別（會員管理「加入來源」/「平台」欄顯示用）
         "webchat_site_id": member.webchat_site_id,
         "webchat_site_name": member.webchat_site_name,
         "name": display_name,
@@ -1260,7 +1260,7 @@ async def send_member_chat_message(
             raise HTTPException(status_code=500, detail=f"發送訊息失敗: {str(e)}")
 
     else:
-        raise HTTPException(status_code=400, detail="不支援的渠道平臺")
+        raise HTTPException(status_code=400, detail="不支援的渠道平台")
 
 
 @router.put("/{member_id}/chat/mark-read")
