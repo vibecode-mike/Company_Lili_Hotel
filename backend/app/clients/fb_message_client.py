@@ -1,5 +1,5 @@
 """
-Facebook Message HTTP 客户端
+Facebook Message HTTP 客戶端
 用於 Backend 通過 HTTP 調用外部 Meta Page 服務
 """
 import httpx
@@ -11,11 +11,11 @@ logger = logging.getLogger(__name__)
 
 
 class FbMessageClient:
-    """Facebook Message HTTP 客户端"""
+    """Facebook Message HTTP 客戶端"""
 
     def __init__(self, base_url: str = None):
         """
-        初始化 Facebook Message HTTP 客户端
+        初始化 Facebook Message HTTP 客戶端
 
         Args:
             base_url: FB API 服務地址 (默認從 settings 讀取)

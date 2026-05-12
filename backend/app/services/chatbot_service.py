@@ -2367,8 +2367,8 @@ class ChatbotService:
         # --- 相對日期：今天、明天、後天、大後天 ---
         relative_map = {"今天": 0, "今晚": 0, "今日": 0,
                         "明天": 1, "明日": 1,
-                        "後天": 2, "后天": 2,
-                        "大後天": 3, "大后天": 3}
+                        "後天": 2, "後天": 2,
+                        "大後天": 3, "大後天": 3}
         for keyword, delta in relative_map.items():
             if keyword in message:
                 checkin = today + timedelta(days=delta)
@@ -2377,7 +2377,7 @@ class ChatbotService:
 
         # --- Pattern: M月D號到M月D號 ---
         m = re.search(
-            r"(\d{1,2})月(\d{1,2})[號号日](?:.*?)(?:住到|退房|到|至|～|~)(?:(\d{1,2})月)?(\d{1,2})[號号日]",
+            r"(\d{1,2})月(\d{1,2})[號號日](?:.*?)(?:住到|退房|到|至|～|~)(?:(\d{1,2})月)?(\d{1,2})[號號日]",
             message,
         )
         if m:
@@ -2417,14 +2417,14 @@ class ChatbotService:
             return checkin.isoformat(), checkout.isoformat()
 
         # --- Pattern: M月D號 or M月D日（單一日期）---
-        m4 = re.search(r"(\d{1,2})月(\d{1,2})[號号日]?", message)
+        m4 = re.search(r"(\d{1,2})月(\d{1,2})[號號日]?", message)
         if m4:
             checkin = date(current_year, int(m4.group(1)), int(m4.group(2)))
             checkout = checkin + timedelta(days=nights)
             return checkin.isoformat(), checkout.isoformat()
 
         # --- Pattern: 中文數字「三月十八」「三月十八號」---
-        m5 = re.search(r"([一二三四五六七八九十]+)月([一二三四五六七八九十零〇]+)[號号日]?", message)
+        m5 = re.search(r"([一二三四五六七八九十]+)月([一二三四五六七八九十零〇]+)[號號日]?", message)
         if m5:
             month = _cn_to_int(m5.group(1))
             day = _cn_to_int(m5.group(2))

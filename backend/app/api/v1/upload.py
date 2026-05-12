@@ -1,6 +1,6 @@
 """
 Image Upload API Endpoint
-上传图片接口
+上傳圖片接口
 """
 import uuid
 from datetime import datetime, timezone
@@ -20,7 +20,7 @@ ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif"}
 
 
 def get_file_extension(filename: str) -> str:
-    """获取文件扩展名"""
+    """獲取文件擴展名"""
     return Path(filename).suffix.lower()
 
 
@@ -34,18 +34,18 @@ def generate_unique_filename(original_filename: str) -> str:
 
 
 
-@router.post("", summary="上传图片", description="上传图片文件，返回图片URL")
+@router.post("", summary="上傳圖片", description="上傳圖片文件，返回圖片URL")
 async def upload_image(file: UploadFile = File(...)):
     """
-    上传图片接口（前端已裁切）
+    上傳圖片接口（前端已裁切）
 
     Args:
-        file: 上传的文件对象（已由前端裁切）
+        file: 上傳的文件對象（已由前端裁切）
 
     Returns:
         {
             "code": 200,
-            "message": "上传成功",
+            "message": "上傳成功",
             "data": {
                 "url": "{PUBLIC_BASE}/uploads/20250128_abc12345.jpg",
                 "filename": "20250128_abc12345.jpg",
@@ -54,30 +54,30 @@ async def upload_image(file: UploadFile = File(...)):
         }
     """
     try:
-        # 1. 检查文件是否存在
+        # 1. 檢查文件是否存在
         if not file:
-            raise HTTPException(status_code=400, detail="未选择文件")
+            raise HTTPException(status_code=400, detail="未選擇文件")
 
-        # 2. 检查文件扩展名
+        # 2. 檢查文件擴展名
         file_ext = get_file_extension(file.filename)
         if file_ext not in ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=400,
-                detail=f"不支持的文件格式。允许的格式: {', '.join(ALLOWED_EXTENSIONS)}"
+                detail=f"不支持的文件格式。允許的格式: {', '.join(ALLOWED_EXTENSIONS)}"
             )
 
-        # 3. 读取文件内容并检查大小
+        # 3. 讀取文件內容並檢查大小
         contents = await file.read()
         file_size = len(contents)
 
         if file_size > MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=400,
-                detail=f"文件大小超过限制。最大允许: {MAX_FILE_SIZE / 1024 / 1024}MB"
+                detail=f"文件大小超過限制。最大允許: {MAX_FILE_SIZE / 1024 / 1024}MB"
             )
 
         if file_size == 0:
-            raise HTTPException(status_code=400, detail="文件为空")
+            raise HTTPException(status_code=400, detail="文件爲空")
 
         # 4. 圖片處理
         try:
@@ -111,17 +111,17 @@ async def upload_image(file: UploadFile = File(...)):
         unique_filename = f"{timestamp}_{unique_id}.jpg"
         file_path = settings.upload_dir_path / unique_filename
 
-        # 6. 确保上传目录存在
+        # 6. 確保上傳目錄存在
         settings.upload_dir_path.mkdir(parents=True, exist_ok=True)
 
         # 7. 保存文件
         with open(file_path, "wb") as f:
             f.write(contents)
 
-        # 8. 生成访问URL
+        # 8. 生成訪問URL
         file_url = settings.get_public_url(unique_filename)
 
-        # 9. 返回成功响应
+        # 9. 返回成功響應
         return JSONResponse(
             status_code=200,
             content={
@@ -141,16 +141,16 @@ async def upload_image(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"上傳失敗：{str(e)}")
 
 
-@router.delete("/{filename}", summary="删除图片", description="删除已上传的图片")
+@router.delete("/{filename}", summary="刪除圖片", description="刪除已上傳的圖片")
 async def delete_image(filename: str):
     """
-    删除图片接口（可选）
+    刪除圖片接口（可選）
 
     Args:
         filename: 文件名
 
     Returns:
-        {"code": 200, "message": "删除成功"}
+        {"code": 200, "message": "刪除成功"}
     """
     try:
         file_path = settings.upload_dir_path / filename
@@ -158,7 +158,7 @@ async def delete_image(filename: str):
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="檔案不存在")
 
-        # 删除文件
+        # 刪除文件
         file_path.unlink()
 
         return JSONResponse(

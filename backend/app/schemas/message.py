@@ -220,14 +220,14 @@ class MessageUpdate(MessageBase):
 class TemplateInfo(BaseModel):
     """模板信息
 
-    Note: MessageTemplate 模型使用 template_type 字段，此 schema 序列化为 type
+    Note: MessageTemplate 模型使用 template_type 字段，此 schema 序列化爲 type
     """
 
     id: int
     template_type: str = Field(
         ...,
-        serialization_alias="type",  # 序列化时输出为 "type"
-        description="模板类型"
+        serialization_alias="type",  # 序列化時輸出爲 "type"
+        description="模板類型"
     )
     name: Optional[str] = None
 

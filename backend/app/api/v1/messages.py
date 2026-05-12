@@ -1,12 +1,12 @@
 """
-群发消息 API (Broadcast Messages)
-专门用于前后端接通的群发消息功能
+群發消息 API (Broadcast Messages)
+專門用于前後端接通的群發消息功能
 
 主要功能：
-1. 配额查询（真实数据）
-2. 创建/更新消息
-3. 发送消息
-4. 获取消息详情
+1. 配額查詢（真實數據）
+2. 創建/更新消息
+3. 發送消息
+4. 獲取消息詳情
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,7 +32,7 @@ from app.models.user import User
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# 创建服务实例
+# 創建服務實例
 message_service = MessageService()
 
 
@@ -64,26 +64,26 @@ async def list_messages(
 @router.post("/quota", response_model=QuotaStatusResponse)
 async def get_quota_status(
     data: QuotaStatusRequest,
-    channel_id: Optional[str] = Query(None, description="LINE 频道 ID（多租户支持）"),
+    channel_id: Optional[str] = Query(None, description="LINE 頻道 ID（多租戶支持）"),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    获取配额状态（真实数据）
+    獲取配額狀態（真實數據）
 
-    调用 LINE API 获取实际的配额信息，并计算预计发送人数
+    調用 LINE API 獲取實際的配額信息，並計算預計發送人數
 
     Returns:
         QuotaStatusResponse: {
-            estimated_send_count: 预计发送人数,
-            available_quota: 可用配额,
-            is_sufficient: 配额是否充足,
-            quota_type: 配额类型,
-            monthly_limit: 月度限额,
-            used: 已使用配额
+            estimated_send_count: 預計發送人數,
+            available_quota: 可用配額,
+            is_sufficient: 配額是否充足,
+            quota_type: 配額類型,
+            monthly_limit: 月度限額,
+            used: 已使用配額
         }
     """
     try:
-        logger.info(f"📊 查询配额状态: target_type={data.target_type}")
+        logger.info(f"📊 查詢配額狀態: target_type={data.target_type}")
 
         result = await message_service.get_quota_status(
             db,
@@ -93,14 +93,14 @@ async def get_quota_status(
         )
 
         logger.info(
-            f"✅ 配额查询成功: 预计发送 {result['estimated_send_count']} 人, "
-            f"可用配额 {result['available_quota']} 则"
+            f"✅ 配額查詢成功: 預計發送 {result['estimated_send_count']} 人, "
+            f"可用配額 {result['available_quota']} 則"
         )
 
         return QuotaStatusResponse(**result)
 
     except Exception as e:
-        logger.error(f"❌ 配额查询失败: {e}", exc_info=True)
+        logger.error(f"❌ 配額查詢失敗: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"配額查詢失敗：{str(e)}")
 
 
@@ -111,23 +111,23 @@ async def create_message(
     current_user: User = Depends(get_current_user),
 ):
     """
-    创建群发消息
+    創建群發消息
 
     Request Body:
-        - draft_id: 来源草稿 ID（可选，有值时复制草稿发布，原草稿保留）
+        - draft_id: 來源草稿 ID（可選，有值時複製草稿發布，原草稿保留）
         - flex_message_json: 前端生成的 Flex Message JSON（必填）
-        - target_type: 发送对象类型 ("all_friends" | "filtered")
-        - target_filter: 筛选条件（可选）
-        - schedule_type: 发送方式 ("immediate" | "scheduled" | "draft")
-        - scheduled_at: 排程时间（可选）
+        - target_type: 發送對象類型 ("all_friends" | "filtered")
+        - target_filter: 篩選條件（可選）
+        - schedule_type: 發送方式 ("immediate" | "scheduled" | "draft")
+        - scheduled_at: 排程時間（可選）
         - ...其他字段
 
-    行为说明:
-        - 无 draft_id: 直接创建新消息
-        - 有 draft_id: 复制草稿内容到新记录，原草稿保留在草稿列表中
+    行爲說明:
+        - 無 draft_id: 直接創建新消息
+        - 有 draft_id: 複製草稿內容到新記錄，原草稿保留在草稿列表中
 
     Returns:
-        创建的消息对象详情
+        創建的消息對象詳情
     """
     try:
         # 根據平台驗證必填欄位
@@ -142,16 +142,16 @@ async def create_message(
 
         channel_id = getattr(data, 'channel_id', None)
         if data.draft_id:
-            logger.info(f"📤 从草稿发布: draft_id={data.draft_id}, schedule_type={data.schedule_type}, platform={platform}, channel_id={channel_id}")
+            logger.info(f"📤 從草稿發布: draft_id={data.draft_id}, schedule_type={data.schedule_type}, platform={platform}, channel_id={channel_id}")
         else:
-            logger.info(f"📤 创建群发消息: schedule_type={data.schedule_type}, platform={platform}, channel_id={channel_id}")
+            logger.info(f"📤 創建群發消息: schedule_type={data.schedule_type}, platform={platform}, channel_id={channel_id}")
 
         message = await message_service.create_message(
             db=db,
             flex_message_json=data.flex_message_json,
             target_type=data.target_type,
             schedule_type=data.schedule_type,
-            template_name=None,  # 由 service 自动生成模板名称
+            template_name=None,  # 由 service 自動生成模板名稱
             target_filter=data.target_filter,
             scheduled_at=data.scheduled_at,
             campaign_id=data.campaign_id,
@@ -159,7 +159,7 @@ async def create_message(
             thumbnail=data.thumbnail,
             interaction_tags=data.interaction_tags,
             message_title=data.message_title,
-            draft_id=data.draft_id,  # 来源草稿 ID
+            draft_id=data.draft_id,  # 來源草稿 ID
             platform=platform,  # 發送平台
             channel_id=getattr(data, 'channel_id', None),  # 渠道 ID（LINE channel_id 或 FB page_id）
             fb_message_json=getattr(data, 'fb_message_json', None),  # Facebook JSON
@@ -167,14 +167,14 @@ async def create_message(
             created_by=current_user.id,  # 發送人員（當前登入者）
         )
 
-        logger.info(f"✅ 消息创建成功: ID={message.id}")
+        logger.info(f"✅ 消息創建成功: ID={message.id}")
 
         return message
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"❌ 创建消息失败: {e}", exc_info=True)
+        logger.error(f"❌ 創建消息失敗: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"建立訊息失敗：{str(e)}")
 
 
@@ -185,16 +185,16 @@ async def update_message(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    更新消息（草稿编辑）
+    更新消息（草稿編輯）
 
-    只有状态为"草稿"的消息才能更新
+    只有狀態爲"草稿"的消息才能更新
     """
     try:
         logger.info(f"📝 更新消息: ID={message_id}")
 
-        # 准备更新数据
+        # 準備更新數據
         update_data = data.model_dump(exclude_unset=True)
-        logger.info(f"📝 更新数据: channel_id={update_data.get('channel_id')}, platform={update_data.get('platform')}")
+        logger.info(f"📝 更新數據: channel_id={update_data.get('channel_id')}, platform={update_data.get('platform')}")
 
         message = await message_service.update_message(
             db,
@@ -209,7 +209,7 @@ async def update_message(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        logger.error(f"❌ 更新消息失败: {e}", exc_info=True)
+        logger.error(f"❌ 更新消息失敗: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"更新訊息失敗：{str(e)}")
 
 
@@ -220,26 +220,26 @@ async def send_message(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    发送群发消息
+    發送群發消息
 
-    实际调用 line_app/app.py 的 push_campaign 函数
+    實際調用 line_app/app.py 的 push_campaign 函數
 
     Steps:
-    1. 获取消息和模板
-    2. 构建 line_app payload
-    3. 预检配额
-    4. 调用 line_app 发送
-    5. 更新消息状态
+    1. 獲取消息和模板
+    2. 構建 line_app payload
+    3. 預檢配額
+    4. 調用 line_app 發送
+    5. 更新消息狀態
 
     Returns:
         MessageSendResponse: {
             message: 提示消息,
-            sent_count: 成功发送数量,
-            failed_count: 失败数量
+            sent_count: 成功發送數量,
+            failed_count: 失敗數量
         }
     """
     try:
-        logger.info(f"📤 发送消息: ID={message_id}")
+        logger.info(f"📤 發送消息: ID={message_id}")
 
         channel_id = request.channel_id if request else None
         jwt_token = request.jwt_token if request else None
@@ -410,24 +410,24 @@ async def get_message(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    获取消息详情
+    獲取消息詳情
 
     Returns:
-        消息对象详情，包括关联的模板信息和点击次数
+        消息對象詳情，包括關聯的模板信息和點擊次數
     """
     try:
-        logger.info(f"📖 获取消息详情: ID={message_id}")
+        logger.info(f"📖 獲取消息詳情: ID={message_id}")
 
         message = await message_service.get_message(db, message_id)
 
         if not message:
             raise HTTPException(status_code=404, detail=f"消息不存在: ID={message_id}")
 
-        # 获取点击次数
+        # 獲取點擊次數
         click_count = await message_service.get_message_click_count(db, message_id)
 
-        # 将 Message 对象转换为字典，添加 click_count 和 flex_message_json
-        # 处理可能为 None 的字段，使用默认值
+        # 將 Message 對象轉換爲字典，添加 click_count 和 flex_message_json
+        # 處理可能爲 None 的字段，使用默認值
         message_dict = {
             "id": message.id,
             "message_title": message.message_title,
@@ -448,7 +448,7 @@ async def get_message(
             "click_rate": None,
             "scheduled_at": message.scheduled_datetime_utc,
             "send_time": message.send_time,
-            "source_draft_id": message.source_draft_id,  # 来源草稿 ID
+            "source_draft_id": message.source_draft_id,  # 來源草稿 ID
             "created_at": message.created_at,
             "updated_at": message.updated_at,
             "template_id": message.template_id,
@@ -465,14 +465,14 @@ async def get_message(
             "fb_message_json": message.fb_message_json,
         }
 
-        logger.info(f"✅ 消息详情获取成功: ID={message_id}, 点击次数={click_count}")
+        logger.info(f"✅ 消息詳情獲取成功: ID={message_id}, 點擊次數={click_count}")
 
         return message_dict
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ 获取消息详情失败: {e}", exc_info=True)
+        logger.error(f"❌ 獲取消息詳情失敗: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"取得訊息詳情失敗：{str(e)}")
 
 

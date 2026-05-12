@@ -1,6 +1,6 @@
 """
-line_app HTTP 客户端
-用于 Backend 通过 HTTP 调用 line_app 服务
+line_app HTTP 客戶端
+用于 Backend 通過 HTTP 調用 line_app 服務
 """
 import httpx
 from typing import Dict, List, Optional, Any
@@ -10,22 +10,22 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 class LineAppClient:
-    """line_app HTTP 客户端"""
+    """line_app HTTP 客戶端"""
 
     def __init__(self, base_url: str = None):
         """
-        初始化 line_app HTTP 客户端
+        初始化 line_app HTTP 客戶端
 
         Args:
-            base_url: line_app 服务地址 (默认从 settings 读取)
+            base_url: line_app 服務地址 (默認從 settings 讀取)
         """
         self.base_url = base_url or settings.LINE_APP_URL
-        self.timeout = httpx.Timeout(300.0)  # 5分钟超时
+        self.timeout = httpx.Timeout(300.0)  # 5分鍾超時
         logger.info(f"LineAppClient initialized with base_url: {base_url}")
 
     async def health_check(self) -> Dict[str, Any]:
         """
-        健康检查
+        健康檢查
 
         Returns:
             {"status": "ok", "service": "line_app"}
@@ -49,19 +49,19 @@ class LineAppClient:
         channel_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        群发消息
+        群發消息
 
         Args:
             flex_message_json: Flex Message JSON
             target_audience: "all" | "filtered"
-            include_tags: 包含标签列表（发送给拥有这些标签的会员）
-            exclude_tags: 排除标签列表（不发送给拥有这些标签的会员）
+            include_tags: 包含標籤列表（發送給擁有這些標籤的會員）
+            exclude_tags: 排除標籤列表（不發送給擁有這些標籤的會員）
             alt_text: 替代文字
             notification_message: 推播通知文字
-            campaign_id: 活动 ID
-            title: 消息标题
-            interaction_tags: 互动标签列表
-            channel_id: LINE 频道 ID（多租户支持）
+            campaign_id: 活動 ID
+            title: 消息標題
+            interaction_tags: 互動標籤列表
+            channel_id: LINE 頻道 ID（多租戶支持）
 
         Returns:
             {
@@ -76,7 +76,7 @@ class LineAppClient:
                 "flex_message_json": flex_message_json,
                 "target_audience": target_audience,
                 "alt_text": alt_text,
-                "type": "FlexMessage",  # 添加类型字段，line_app 需要用此字段查找模板
+                "type": "FlexMessage",  # 添加類型字段，line_app 需要用此字段查找模板
             }
 
             if include_tags:
@@ -113,7 +113,7 @@ class LineAppClient:
         messages: List[dict]
     ) -> Dict[str, Any]:
         """
-        单发消息
+        單發消息
 
         Args:
             user_id: LINE User ID
@@ -140,7 +140,7 @@ class LineAppClient:
 
     async def get_quota_status(self) -> Dict[str, Any]:
         """
-        查询配额状态
+        查詢配額狀態
 
         Returns:
             {
@@ -162,10 +162,10 @@ class LineAppClient:
         estimated_count: int
     ) -> Dict[str, Any]:
         """
-        发送预检
+        發送預檢
 
         Args:
-            estimated_count: 预估接收人数
+            estimated_count: 預估接收人數
 
         Returns:
             {
@@ -194,7 +194,7 @@ class LineAppClient:
         text: str
     ) -> Dict[str, Any]:
         """
-        发送 1:1 聊天消息
+        發送 1:1 聊天消息
 
         Args:
             line_uid: LINE User ID
@@ -225,7 +225,7 @@ class LineAppClient:
         line_uid: str
     ) -> Dict[str, Any]:
         """
-        标记聊天消息为已读
+        標記聊天消息爲已讀
 
         Args:
             line_uid: LINE User ID

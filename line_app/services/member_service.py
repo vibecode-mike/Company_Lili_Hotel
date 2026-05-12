@@ -332,7 +332,7 @@ def is_human_override_active(line_uid: str) -> bool:
 # 顯示名稱模板替換
 # -------------------------------------------------
 DISPLAY_NAME_TOKEN = "{好友的顯示名稱}"
-DISPLAY_NAME_TOKEN_SIMPLE = "{好友的显示名称}"
+DISPLAY_NAME_TOKEN_SIMPLE = "{好友的顯示名稱}"
 
 
 def _get_display_name_for_uid(line_uid: str, line_channel_id: Optional[str] = None) -> Optional[str]:
