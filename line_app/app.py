@@ -984,20 +984,27 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
     include_tags = payload.get("include_tags", [])
     exclude_tags = payload.get("exclude_tags", [])
 
+    # 多帳號模式：必須先依推播 channel 過濾 members.line_channel_id，否則會把別的 OA 好友撈出來
+    line_cid = (payload or {}).get("line_channel_id") or (payload or {}).get("channel_id")
+    channel_filter_sql = " AND m.line_channel_id = :line_channel_id" if line_cid else ""
+    channel_param = {"line_channel_id": line_cid} if line_cid else {}
+
     logging.info(f"=== [Broadcast Start] ===")
     logging.info(f"Target audience: {target_audience}")
     logging.info(f"Include tags: {include_tags}")
     logging.info(f"Exclude tags: {exclude_tags}")
+    logging.info(f"Line channel: {line_cid}")
 
     if target_audience == "all":
         # 情境 A: 發送給所有會員（只發給正在關注的）
-        rs = fetchall("""
+        rs = fetchall(f"""
             SELECT m.line_uid, m.id
             FROM members m
             WHERE m.line_uid IS NOT NULL
               AND m.line_uid != ''
               AND m.is_following = 1
-        """)
+              {channel_filter_sql}
+        """, channel_param)
     elif target_audience == "filtered":
         # 根據 include 和 exclude 標籤進行篩選
         if include_tags and exclude_tags:
@@ -1008,6 +1015,7 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
             params = {}
             params.update({f"inc{i}": tag for i, tag in enumerate(include_tags)})
             params.update({f"exc{i}": tag for i, tag in enumerate(exclude_tags)})
+            params.update(channel_param)
 
             rs = fetchall(f"""
                 SELECT DISTINCT m.line_uid, m.id
@@ -1016,6 +1024,7 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
                 WHERE m.line_uid IS NOT NULL
                   AND m.line_uid != ''
                   AND m.is_following = 1
+                  {channel_filter_sql}
                   AND mt.tag_name IN ({include_placeholders})
                   AND m.id NOT IN (
                       SELECT DISTINCT m2.id
@@ -1029,6 +1038,7 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
             # 情境 C: 僅包含標籤
             include_placeholders = ", ".join([f":inc{i}" for i in range(len(include_tags))])
             params = {f"inc{i}": tag for i, tag in enumerate(include_tags)}
+            params.update(channel_param)
 
             rs = fetchall(f"""
                 SELECT DISTINCT m.line_uid, m.id
@@ -1037,6 +1047,7 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
                 WHERE m.line_uid IS NOT NULL
                   AND m.line_uid != ''
                   AND m.is_following = 1
+                  {channel_filter_sql}
                   AND mt.tag_name IN ({include_placeholders})
             """, params)
 
@@ -1044,6 +1055,7 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
             # 情境 D: 僅排除標籤
             exclude_placeholders = ", ".join([f":exc{i}" for i in range(len(exclude_tags))])
             params = {f"exc{i}": tag for i, tag in enumerate(exclude_tags)}
+            params.update(channel_param)
 
             rs = fetchall(f"""
                 SELECT DISTINCT m.line_uid, m.id
@@ -1051,6 +1063,7 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
                 WHERE m.line_uid IS NOT NULL
                   AND m.line_uid != ''
                   AND m.is_following = 1
+                  {channel_filter_sql}
                   AND m.id NOT IN (
                       SELECT DISTINCT m2.id
                       FROM members m2
@@ -1060,22 +1073,24 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
             """, params)
         else:
             # 沒有指定標籤，發送給所有會員（只發給正在關注的）
-            rs = fetchall("""
+            rs = fetchall(f"""
                 SELECT m.line_uid, m.id
                 FROM members m
                 WHERE m.line_uid IS NOT NULL
                   AND m.line_uid != ''
                   AND m.is_following = 1
-            """)
+                  {channel_filter_sql}
+            """, channel_param)
     else:
         # 預設發送給所有會員（只發給正在關注的）
-        rs = fetchall("""
+        rs = fetchall(f"""
             SELECT m.line_uid, m.id
             FROM members m
             WHERE m.line_uid IS NOT NULL
               AND m.line_uid != ''
               AND m.is_following = 1
-        """)
+              {channel_filter_sql}
+        """, channel_param)
 
     logging.info(f"Found {len(rs)} members with line_uid")
     if rs:
@@ -1113,14 +1128,13 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
 
         logging.error(f"[Broadcast Error] {error_msg}")
         execute(
-            "UPDATE messages SET send_status='发送失败', failure_reason=:reason, updated_at=:now WHERE id=:cid",
+            "UPDATE messages SET send_status='發送失敗', failure_reason=:reason, updated_at=:now WHERE id=:cid",
             {"cid": cid, "reason": error_msg, "now": utcnow()},
         )
         return {"ok": False, "campaign_id": cid, "sent": 0, "error": error_msg}
 
     # 在迴圈外先決定要用哪個 Messaging API（避免重複 new client）
-    # channel_id 和 line_channel_id 都是 LINE 官方的 Channel ID，統一用 get_messaging_api_by_line_id()
-    line_cid = (payload or {}).get("line_channel_id") or (payload or {}).get("channel_id")
+    # line_cid 已在上面 target 查詢前取得，這裡直接用
     api = get_messaging_api_by_line_id(line_cid)
 
     sent = 0
@@ -2726,19 +2740,19 @@ def on_follow(event: FollowEvent):
 
 
 def on_unfollow(event: UnfollowEvent):
-    """处理用户取消关注事件"""
+    """處理用戶取消關注事件"""
     if getattr(event.source, "user_id", None):
         try:
             uid = event.source.user_id
-            logging.info(f"用户取消关注: {uid}")
+            logging.info(f"用戶取消關注: {uid}")
 
-            # 更新 LINE 好友状态为未关注
+            # 更新 LINE 好友狀態爲未關注
             upsert_line_friend(
                 line_uid=uid,
                 is_following=False
             )
 
-            logging.info(f"已标记用户 {uid} 为未关注状态")
+            logging.info(f"已標記用戶 {uid} 爲未關注狀態")
         except Exception:
             logging.exception("on_unfollow error")
 

@@ -1,6 +1,6 @@
 """
-群发消息服务
-负责消息的数据管理和业务逻辑
+群發消息服務
+負責消息的數據管理和業務邏輯
 """
 from typing import Dict, Any, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,9 +27,9 @@ logger = logging.getLogger(__name__)
 
 
 class MessageService:
-    """群发消息服务
+    """群發消息服務
 
-    负责群发消息的创建、更新、发送和配额管理
+    負責群發消息的創建、更新、發送和配額管理
     """
 
     @staticmethod
@@ -324,32 +324,32 @@ class MessageService:
         created_by: Optional[int] = None,
         channel_id: Optional[str] = None,
     ) -> Message:
-        """创建群发消息
+        """創建群發消息
 
         Args:
-            db: 数据库 session
+            db: 數據庫 session
             flex_message_json: LINE Flex Message JSON 字符串
-            target_type: 发送对象类型 ("all_friends" | "filtered")
-            schedule_type: 发送方式 ("immediate" | "scheduled" | "draft")
-            template_name: 模板名称（可选）
-            target_filter: 筛选条件（可选）
-            scheduled_at: 排程时间（可选）
-            campaign_id: 关联活动 ID（可选）
-            notification_message: 推送通知文字（可选）
-            thumbnail: 缩略图 URL（可选）
-            interaction_tags: 互动标签列表（可选）
-            admin_id: 创建者 ID（可选）
-            message_title: 消息标题（可选，用于列表显示）
-            draft_id: 来源草稿 ID（可选，有值时复制草稿发布，原草稿保留）
-            platform: 发送平台 ("LINE" | "Facebook" | "Instagram")
-            fb_message_json: Facebook Messenger JSON 字符串（可选）
-            estimated_send_count: 預計發送人數（可选，FB 渠道由前端傳入）
+            target_type: 發送對象類型 ("all_friends" | "filtered")
+            schedule_type: 發送方式 ("immediate" | "scheduled" | "draft")
+            template_name: 模板名稱（可選）
+            target_filter: 篩選條件（可選）
+            scheduled_at: 排程時間（可選）
+            campaign_id: 關聯活動 ID（可選）
+            notification_message: 推送通知文字（可選）
+            thumbnail: 縮略圖 URL（可選）
+            interaction_tags: 互動標籤列表（可選）
+            admin_id: 創建者 ID（可選）
+            message_title: 消息標題（可選，用于列表顯示）
+            draft_id: 來源草稿 ID（可選，有值時複製草稿發布，原草稿保留）
+            platform: 發送平台 ("LINE" | "Facebook" | "Instagram")
+            fb_message_json: Facebook Messenger JSON 字符串（可選）
+            estimated_send_count: 預計發送人數（可選，FB 渠道由前端傳入）
             channel_id: 渠道 ID（LINE channel_id 或 FB page_id）
 
         Returns:
-            创建的消息对象
+            創建的消息對象
         """
-        # 如果有 draft_id，使用复制草稿发布逻辑
+        # 如果有 draft_id，使用複製草稿發布邏輯
         if draft_id:
             return await self._publish_from_draft(
                 db=db,
@@ -370,21 +370,21 @@ class MessageService:
                 channel_id=channel_id,
             )
 
-        # 1. 创建基础模板（仅用于关联，实际内容存储在 Message.flex_message_json）
+        # 1. 創建基礎模板（僅用于關聯，實際內容存儲在 Message.flex_message_json）
         if not template_name:
             template_name = f"消息_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
         template = MessageTemplate(
             name=template_name,
-            template_type="FlexMessage",  # 标记为 Flex Message 类型
+            template_type="FlexMessage",  # 標記爲 Flex Message 類型
         )
         db.add(template)
-        await db.flush()  # 获取 template.id
+        await db.flush()  # 獲取 template.id
 
-        logger.info(f"✅ 创建模板: ID={template.id}, Name={template_name}")
+        logger.info(f"✅ 創建模板: ID={template.id}, Name={template_name}")
 
-        # 2. 创建消息记录
-        # 确定发送状态
+        # 2. 創建消息記錄
+        # 確定發送狀態
         if schedule_type == "draft":
             send_status = "草稿"
         elif schedule_type == "scheduled":
@@ -409,7 +409,7 @@ class MessageService:
             channel_id=channel_id,  # 渠道 ID（LINE channel_id 或 FB page_id）
             flex_message_json=flex_message_json,  # LINE Flex Message JSON
             fb_message_json=fb_message_json,  # Facebook Messenger JSON
-            message_title=message_title or notification_message or thumbnail,  # 优先使用前端传入的 message_title（訊息標題）
+            message_title=message_title or notification_message or thumbnail,  # 優先使用前端傳入的 message_title（訊息標題）
             notification_message=notification_message,  # 保存通知推播文字
             thumbnail=thumbnail,
             interaction_tags=normalized_tags,
@@ -432,8 +432,9 @@ class MessageService:
                     db,
                     target_type,
                     target_filter or {},
+                    channel_id=channel_id,
                 )
-                logger.info(f"📊 本地計算預計發送人數: {estimated_count} (platform={platform})")
+                logger.info(f"📊 本地計算預計發送人數: {estimated_count} (platform={platform}, channel_id={channel_id})")
             except Exception as e:
                 logger.error(f"❌ 計算預計發送人數失敗: {e}")
                 estimated_count = 0
@@ -442,14 +443,14 @@ class MessageService:
         db.add(message)
         await db.commit()
 
-        # 重新加载 message 及其 template 关系（避免 lazy loading 错误）
+        # 重新加載 message 及其 template 關系（避免 lazy loading 錯誤）
         stmt = select(Message).where(Message.id == message.id).options(
             selectinload(Message.template)
         )
         result = await db.execute(stmt)
         message = result.scalar_one()
 
-        logger.info(f"✅ 创建消息: ID={message.id}, Status={send_status}")
+        logger.info(f"✅ 創建消息: ID={message.id}, Status={send_status}")
 
         await self._sync_scheduler_job(message)
 
@@ -461,15 +462,15 @@ class MessageService:
         message_id: int,
         **kwargs
     ) -> Message:
-        """更新消息（草稿编辑）
+        """更新消息（草稿編輯）
 
         Args:
-            db: 数据库 session
+            db: 數據庫 session
             message_id: 消息 ID
             **kwargs: 要更新的字段
 
         Returns:
-            更新后的消息对象
+            更新後的消息對象
         """
         message = await db.get(Message, message_id)
         if not message:
@@ -494,7 +495,7 @@ class MessageService:
             # ✅ 重要：移除 scheduled_at，避免嘗試設置 read-only 屬性
             del kwargs['scheduled_at']
 
-        # 更新字段（flex_message_json 直接存储在 Message 对象中）
+        # 更新字段（flex_message_json 直接存儲在 Message 對象中）
         for key, value in kwargs.items():
             if hasattr(message, key):
                 setattr(message, key, value)
@@ -505,7 +506,7 @@ class MessageService:
 
         await db.commit()
 
-        # 重新加载 message 及其 template 关系（避免 lazy loading 错误）
+        # 重新加載 message 及其 template 關系（避免 lazy loading 錯誤）
         stmt = select(Message).where(Message.id == message_id).options(
             selectinload(Message.template)
         )
@@ -582,37 +583,37 @@ class MessageService:
         created_by: Optional[int] = None,
         channel_id: Optional[str] = None,
     ) -> Message:
-        """从草稿发布 - 复制成新记录，原草稿保留
+        """從草稿發布 - 複製成新記錄，原草稿保留
 
         Args:
-            db: 数据库 session
-            draft_id: 来源草稿 ID
-            flex_message_json: LINE Flex Message JSON（可覆盖草稿内容）
-            target_type: 发送对象类型
-            schedule_type: 发送方式 ("immediate" | "scheduled")
-            target_filter: 筛选条件
-            scheduled_at: 排程时间
+            db: 數據庫 session
+            draft_id: 來源草稿 ID
+            flex_message_json: LINE Flex Message JSON（可覆蓋草稿內容）
+            target_type: 發送對象類型
+            schedule_type: 發送方式 ("immediate" | "scheduled")
+            target_filter: 篩選條件
+            scheduled_at: 排程時間
             notification_message: 推送通知文字
-            thumbnail: 缩略图 URL
-            interaction_tags: 互动标签列表
-            message_title: 消息标题
-            platform: 发送平台
-            fb_message_json: Facebook Messenger JSON（可覆盖草稿内容）
-            estimated_send_count: 預計發送人數（可选，FB 渠道由前端傳入）
+            thumbnail: 縮略圖 URL
+            interaction_tags: 互動標籤列表
+            message_title: 消息標題
+            platform: 發送平台
+            fb_message_json: Facebook Messenger JSON（可覆蓋草稿內容）
+            estimated_send_count: 預計發送人數（可選，FB 渠道由前端傳入）
 
         Returns:
-            新创建的消息对象（原草稿保持不变）
+            新創建的消息對象（原草稿保持不變）
         """
         # 1. 取得原草稿
         draft = await db.get(Message, draft_id)
         if not draft:
             raise ValueError(f"草稿不存在: ID={draft_id}")
         if draft.send_status != '草稿':
-            raise ValueError(f"只能从草稿状态发布，当前状态: {draft.send_status}")
+            raise ValueError(f"只能從草稿狀態發布，當前狀態: {draft.send_status}")
 
-        logger.info(f"📋 从草稿发布: draft_id={draft_id}")
+        logger.info(f"📋 從草稿發布: draft_id={draft_id}")
 
-        # 2. 创建新模板（复制草稿的模板信息）
+        # 2. 創建新模板（複製草稿的模板信息）
         template_name = f"消息_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         template = MessageTemplate(
             name=template_name,
@@ -621,13 +622,13 @@ class MessageService:
         db.add(template)
         await db.flush()
 
-        # 3. 确定发送状态
+        # 3. 確定發送狀態
         if schedule_type == "scheduled":
             send_status = "已排程"
         else:  # immediate
             send_status = "待發送"
 
-        # 4. 复制草稿内容到新记录（使用传入参数覆盖，否则使用草稿原值）
+        # 4. 複製草稿內容到新記錄（使用傳入參數覆蓋，否則使用草稿原值）
         normalized_tags = self._normalize_interaction_tags(
             interaction_tags if interaction_tags is not None else draft.interaction_tags
         )
@@ -651,7 +652,7 @@ class MessageService:
             notification_message=notification_message or draft.notification_message,
             thumbnail=thumbnail or draft.thumbnail,
             interaction_tags=normalized_tags,
-            source_draft_id=draft_id,  # 记录来源草稿
+            source_draft_id=draft_id,  # 記錄來源草稿
             created_by=created_by,  # 發送人員（當前登入者 ID）
             channel_id=resolved_channel_id,  # 渠道 ID（優先用傳入值，fallback 草稿值，最後查表）
         )
@@ -659,7 +660,7 @@ class MessageService:
         if scheduled_at and schedule_type == "scheduled":
             new_message.scheduled_datetime_utc = scheduled_at
 
-        # 5. 计算预计发送人数
+        # 5. 計算預計發送人數
         # FB 渠道：使用前端傳入的值（來自外部 FB API）
         # LINE 渠道：使用本地計算
         actual_platform = new_message.platform or "LINE"
@@ -674,8 +675,9 @@ class MessageService:
                     db,
                     new_message.target_type,
                     new_message.target_filter or {},
+                    channel_id=new_message.channel_id,
                 )
-                logger.info(f"📊 本地計算預計發送人數: {estimated_count} (platform={actual_platform})")
+                logger.info(f"📊 本地計算預計發送人數: {estimated_count} (platform={actual_platform}, channel_id={new_message.channel_id})")
             except Exception as e:
                 logger.error(f"❌ 計算預計發送人數失敗: {e}")
                 estimated_count = 0
@@ -685,7 +687,7 @@ class MessageService:
         db.add(new_message)
         await db.commit()
 
-        # 6. 重新加载 message 及其 template 关系
+        # 6. 重新加載 message 及其 template 關系
         stmt = select(Message).where(Message.id == new_message.id).options(
             selectinload(Message.template)
         )
@@ -693,8 +695,8 @@ class MessageService:
         new_message = result.scalar_one()
 
         logger.info(
-            f"✅ 从草稿发布成功: 新消息 ID={new_message.id}, "
-            f"来源草稿 ID={draft_id}, 状态={send_status}"
+            f"✅ 從草稿發布成功: 新消息 ID={new_message.id}, "
+            f"來源草稿 ID={draft_id}, 狀態={send_status}"
         )
 
         await self._sync_scheduler_job(new_message)
@@ -852,19 +854,19 @@ class MessageService:
                         # 若 admin_account 也沒有，才使用默認 Admin
                         created_by = default_creator_info
 
-                    # ✅ 提取受众筛选标签（从 FB API 的 keywords 字段）
+                    # ✅ 提取受衆篩選標籤（從 FB API 的 keywords 字段）
                     keywords = item.get("keywords", [])
                     interaction_tags = []
                     if keywords and isinstance(keywords, list):
-                        # 提取所有标签名称
+                        # 提取所有標籤名稱
                         interaction_tags = [
                             k.get("name", "").strip()
                             for k in keywords
                             if isinstance(k, dict) and k.get("name")
                         ]
-                        # 去重和过滤空值
+                        # 去重和過濾空值
                         interaction_tags = list(set(filter(None, interaction_tags)))
-                        logger.debug(f"📝 FB 消息 {item.get('id')} 提取到标签: {interaction_tags}")
+                        logger.debug(f"📝 FB 消息 {item.get('id')} 提取到標籤: {interaction_tags}")
 
                     message_item = MessageListItem(
                         id=f"fb-{item.get('id')}",  # ✅ 加上 fb- 前綴，讓前端識別為 FB 訊息
@@ -880,7 +882,7 @@ class MessageService:
                         scheduled_datetime_utc=None,
                         channel_id=None,
                         channel_name=item.get("channel_name"),  # ✅ 使用 FB API 返回的粉專名稱
-                        interaction_tags=interaction_tags or [],  # ✅ 使用提取的标签
+                        interaction_tags=interaction_tags or [],  # ✅ 使用提取的標籤
                         created_by=created_by,  # ✅ 設置發送人員
                     )
                     message_items.append(message_item)
@@ -1071,41 +1073,43 @@ class MessageService:
         target_filter: Optional[Dict] = None,
         channel_id: Optional[str] = None
     ) -> Dict[str, Any]:
-        """获取配额状态（真实数据）
+        """獲取配額狀態（真實數據）
 
         Args:
-            db: 数据库 session
-            target_type: 发送对象类型
-            target_filter: 筛选条件
-            channel_id: LINE 频道 ID
+            db: 數據庫 session
+            target_type: 發送對象類型
+            target_filter: 篩選條件
+            channel_id: LINE 頻道 ID
 
         Returns:
             {
-                "estimated_send_count": int,    # 预计发送人数
-                "available_quota": int,          # 可用配额
-                "is_sufficient": bool,           # 配额是否充足
-                "quota_type": str,               # 配额类型
-                "monthly_limit": int,            # 月度限额
+                "estimated_send_count": int,    # 預計發送人數
+                "available_quota": int,          # 可用配額
+                "is_sufficient": bool,           # 配額是否充足
+                "quota_type": str,               # 配額類型
+                "monthly_limit": int,            # 月度限額
                 "used": int                      # 已使用
             }
         """
-        # 1. 计算预计发送人数
+        # 1. 計算預計發送人數
         try:
-            estimated_count = await self._calculate_target_count(db, target_type, target_filter)
+            estimated_count = await self._calculate_target_count(
+                db, target_type, target_filter, channel_id=channel_id
+            )
         except Exception as e:
-            # 容错：若目标人数统计失败（例如资料表尚未建立），仍回传配额资讯避免前端卡在「载入中」
-            logger.error(f"❌ 预计发送人数统计失败: {e}", exc_info=True)
+            # 容錯：若目標人數統計失敗（例如資料表尚未建立），仍回傳配額資訊避免前端卡在「載入中」
+            logger.error(f"❌ 預計發送人數統計失敗: {e}", exc_info=True)
             estimated_count = 0
 
-        logger.info(f"📊 预计发送人数: {estimated_count}")
+        logger.info(f"📊 預計發送人數: {estimated_count}, channel_id={channel_id}")
 
-        # 2. 调用 line_app 获取配额（真实数据）
+        # 2. 調用 line_app 獲取配額（真實數據）
         try:
             quota_info = await LineAppAdapter.get_quota(channel_id)
-            logger.info(f"📊 配额信息: {quota_info}")
+            logger.info(f"📊 配額信息: {quota_info}")
         except Exception as e:
-            logger.error(f"❌ 获取配额失败: {e}")
-            # 返回默认值，避免阻塞流程
+            logger.error(f"❌ 獲取配額失敗: {e}")
+            # 返回默認值，避免阻塞流程
             quota_info = {
                 "type": "none",
                 "monthly_limit": 0,
@@ -1125,26 +1129,28 @@ class MessageService:
             "quota_type": quota_info.get("type", "none"),
             "monthly_limit": monthly_limit,
             "used": used,
-            "quota_consumption": estimated_count  # 本次将消耗的配额
+            "quota_consumption": estimated_count  # 本次將消耗的配額
         }
 
     async def _calculate_target_count(
         self,
         db: AsyncSession,
         target_type: str,
-        target_filter: Optional[Dict] = None
+        target_filter: Optional[Dict] = None,
+        channel_id: Optional[str] = None,
     ) -> int:
-        """计算符合条件的會員數量（使用 members 表，配合 is_following、member_tags 和 member_interaction_tags）
+        """計算符合條件的會員數量（使用 members 表，配合 is_following、member_tags 和 member_interaction_tags）
 
         Args:
-            db: 数据库 session
-            target_type: 发送对象类型
-            target_filter: 筛选条件 {"include": [...], "exclude": [...]}
+            db: 數據庫 session
+            target_type: 發送對象類型
+            target_filter: 篩選條件 {"include": [...], "exclude": [...]}
+            channel_id: LINE 多帳號 channel_id；有值時只計算該 channel 的 followers
 
         Returns:
-            符合条件的會員數量
+            符合條件的會員數量
         """
-        # 容错处理：filtered 但没有 filter 时，视为 all_friends
+        # 容錯處理：filtered 但沒有 filter 時，視爲 all_friends
         if target_type == "filtered":
             if not target_filter or (
                 not target_filter.get("include") and
@@ -1152,30 +1158,37 @@ class MessageService:
             ):
                 target_type = "all_friends"
 
+        # 多帳號：依 channel_id 過濾 members.line_channel_id
+        channel_filter = " AND m.line_channel_id = :line_channel_id" if channel_id else ""
+        channel_param = {"line_channel_id": channel_id} if channel_id else {}
+
         if target_type == "all_friends":
-            # 查询所有正在关注的會員
+            # 查詢所有正在關注的會員
             result = await db.execute(
-                text("""
+                text(f"""
                     SELECT COUNT(*)
-                    FROM members
-                    WHERE line_uid IS NOT NULL
-                      AND line_uid != ''
-                      AND is_following = 1
-                """)
+                    FROM members m
+                    WHERE m.line_uid IS NOT NULL
+                      AND m.line_uid != ''
+                      AND m.is_following = 1
+                      {channel_filter}
+                """),
+                channel_param,
             )
             count = result.scalar() or 0
-            logger.debug(f"📊 所有正在關注的會員數量: {count}")
+            logger.debug(f"📊 所有正在關注的會員數量: {count}, channel_id={channel_id}")
             return count
 
         elif target_type == "filtered" and target_filter:
-            # 根据标签筛选會員（同時查詢 member_tags 和 member_interaction_tags）
+            # 根據標籤篩選會員（同時查詢 member_tags 和 member_interaction_tags）
             include_tags = target_filter.get("include", [])
             exclude_tags = target_filter.get("exclude", [])
 
             if include_tags:
-                # 包含指定标签的會員（查詢會員標籤和互動標籤兩個表）
+                # 包含指定標籤的會員（查詢會員標籤和互動標籤兩個表）
                 tag_placeholders = ", ".join([f":tag{i}" for i in range(len(include_tags))])
                 tag_params = {f"tag{i}": tag for i, tag in enumerate(include_tags)}
+                tag_params.update(channel_param)
 
                 query_str = f"""
                     SELECT COUNT(DISTINCT m.id)
@@ -1183,6 +1196,7 @@ class MessageService:
                     WHERE m.line_uid IS NOT NULL
                       AND m.line_uid != ''
                       AND m.is_following = 1
+                      {channel_filter}
                       AND (
                           m.id IN (
                               SELECT member_id FROM member_tags
@@ -1196,7 +1210,7 @@ class MessageService:
                       )
                 """
 
-                # 如果同時有排除标签，添加排除条件（同時排除兩個表的標籤）
+                # 如果同時有排除標籤，添加排除條件（同時排除兩個表的標籤）
                 if exclude_tags:
                     exclude_placeholders = ", ".join([f":exclude_tag{i}" for i in range(len(exclude_tags))])
                     exclude_params = {f"exclude_tag{i}": tag for i, tag in enumerate(exclude_tags)}
@@ -1215,13 +1229,14 @@ class MessageService:
 
                 result = await db.execute(text(query_str), tag_params)
                 count = result.scalar() or 0
-                logger.debug(f"📊 篩選後的會員數量: {count}, filter={target_filter}")
+                logger.debug(f"📊 篩選後的會員數量: {count}, filter={target_filter}, channel_id={channel_id}")
                 return count
 
             elif exclude_tags:
-                # 只有排除标签的情况（同時排除兩個表的標籤）
+                # 只有排除標籤的情況（同時排除兩個表的標籤）
                 exclude_placeholders = ", ".join([f":exclude_tag{i}" for i in range(len(exclude_tags))])
                 exclude_params = {f"exclude_tag{i}": tag for i, tag in enumerate(exclude_tags)}
+                exclude_params.update(channel_param)
 
                 query_str = f"""
                     SELECT COUNT(DISTINCT m.id)
@@ -1229,6 +1244,7 @@ class MessageService:
                     WHERE m.line_uid IS NOT NULL
                       AND m.line_uid != ''
                       AND m.is_following = 1
+                      {channel_filter}
                       AND m.id NOT IN (
                           SELECT member_id FROM member_tags
                           WHERE tag_name IN ({exclude_placeholders})
@@ -1241,7 +1257,7 @@ class MessageService:
 
                 result = await db.execute(text(query_str), exclude_params)
                 count = result.scalar() or 0
-                logger.debug(f"📊 排除標籤後的會員數量: {count}, filter={target_filter}")
+                logger.debug(f"📊 排除標籤後的會員數量: {count}, filter={target_filter}, channel_id={channel_id}")
                 return count
 
         return 0
@@ -1298,12 +1314,12 @@ class MessageService:
         jwt_token: Optional[str] = None,
         page_id: Optional[str] = None
     ) -> Dict[str, Any]:
-        """发送群发消息
+        """發送群發消息
 
         Args:
-            db: 数据库 session
+            db: 數據庫 session
             message_id: 消息 ID
-            channel_id: LINE 频道 ID
+            channel_id: LINE 頻道 ID
             jwt_token: FB 渠道需要的 JWT token
             page_id: FB 粉絲專頁 ID
 
@@ -1315,19 +1331,19 @@ class MessageService:
                 "errors": [...]
             }
         """
-        # 1. 获取消息
+        # 1. 獲取消息
         message = await db.get(Message, message_id)
         if not message:
             raise ValueError(f"消息不存在: ID={message_id}")
 
         # 2. 根據平台路由發送
         platform = message.platform or "LINE"
-        logger.info(f"📤 准备发送消息: ID={message_id}, Platform={platform}")
+        logger.info(f"📤 準備發送消息: ID={message_id}, Platform={platform}")
 
         if platform == "Facebook":
             # Facebook 發送
             if not message.fb_message_json:
-                raise ValueError("消息缺少 Facebook Messenger JSON 内容")
+                raise ValueError("消息缺少 Facebook Messenger JSON 內容")
 
             if not jwt_token:
                 raise ValueError("Facebook 發送需要 jwt_token")
@@ -1388,7 +1404,7 @@ class MessageService:
         else:
             # LINE 發送（現有邏輯）
             if not message.flex_message_json:
-                raise ValueError(f"消息缺少 Flex Message JSON 内容")
+                raise ValueError(f"消息缺少 Flex Message JSON 內容")
 
             if self._is_scheduled(message):
                 await self._cancel_message_job(message_id)
@@ -1403,12 +1419,12 @@ class MessageService:
         message: Message,
         channel_id: Optional[str] = None
     ) -> Dict[str, Any]:
-        """通过 HTTP 调用 line_app 发送消息
+        """通過 HTTP 調用 line_app 發送消息
 
         Args:
-            db: 数据库 session
-            message: 消息对象
-            channel_id: LINE 频道 ID
+            db: 數據庫 session
+            message: 消息對象
+            channel_id: LINE 頻道 ID
 
         Returns:
             {
@@ -1421,10 +1437,10 @@ class MessageService:
         try:
             flex_message_json = json.loads(message.flex_message_json)
         except json.JSONDecodeError as e:
-            logger.error(f"❌ Flex Message JSON 格式错误: {e}")
-            raise ValueError(f"Flex Message JSON 格式错误: {e}")
+            logger.error(f"❌ Flex Message JSON 格式錯誤: {e}")
+            raise ValueError(f"Flex Message JSON 格式錯誤: {e}")
 
-        # 2. 处理目标筛选
+        # 2. 處理目標篩選
         target_audience = "all"
         include_tags = []
         exclude_tags = []
@@ -1437,7 +1453,7 @@ class MessageService:
             logger.info(f"🏷️  Include tags: {include_tags}")
             logger.info(f"🚫 Exclude tags: {exclude_tags}")
 
-        # 3. 创建 HTTP 客户端
+        # 3. 創建 HTTP 客戶端
         line_app_url = os.getenv("LINE_APP_URL", self.LINE_APP_URL)
         client = LineAppClient(base_url=line_app_url)
 
@@ -1447,6 +1463,7 @@ class MessageService:
                 db,
                 message.target_type,
                 message.target_filter,
+                channel_id=message.channel_id,
             )
         except Exception as e:
             logger.error(f"❌ 計算目標受眾失敗，改用 line_app 結果: {e}")
@@ -1456,7 +1473,7 @@ class MessageService:
             f"🎯 將以 line_friends.is_following=1 做為發送人數基準: {target_recipient_count}"
         )
 
-        # 5. 调用 line_app API
+        # 5. 調用 line_app API
         try:
             result = await client.broadcast_message(
                 flex_message_json=flex_message_json,
@@ -1469,17 +1486,17 @@ class MessageService:
                 channel_id=channel_id
             )
             logger.info(
-                f"✅ 发送完成: 成功 {result.get('sent', 0)}, "
-                f"失败 {result.get('failed', 0)}"
+                f"✅ 發送完成: 成功 {result.get('sent', 0)}, "
+                f"失敗 {result.get('failed', 0)}"
             )
         except Exception as e:
-            logger.error(f"❌ 发送失败: {e}")
-            # 更新状态为发送失败
+            logger.error(f"❌ 發送失敗: {e}")
+            # 更新狀態爲發送失敗
             message.send_status = "發送失敗"
             await db.commit()
             raise
 
-        # 6. 更新消息状态與發送統計
+        # 6. 更新消息狀態與發送統計
         success = bool(result.get("ok"))
         actual_sent = result.get("sent", 0) or 0
         actual_failed = result.get("failed", 0) or 0
@@ -1515,16 +1532,16 @@ class MessageService:
         db: AsyncSession,
         message_id: int
     ) -> Optional[Message]:
-        """获取消息详情
+        """獲取消息詳情
 
         Args:
-            db: 数据库 session
+            db: 數據庫 session
             message_id: 消息 ID
 
         Returns:
-            消息对象或 None
+            消息對象或 None
         """
-        # 使用 selectinload 预加载 template 关系（避免 lazy loading 错误）
+        # 使用 selectinload 預加載 template 關系（避免 lazy loading 錯誤）
         stmt = select(Message).where(Message.id == message_id).options(
             selectinload(Message.template)
         )
@@ -1536,10 +1553,10 @@ class MessageService:
         db: AsyncSession,
         message_id: int
     ) -> int:
-        """获取消息的点击次数（依規格：從 ComponentInteractionLog 統計）
+        """獲取消息的點擊次數（依規格：從 ComponentInteractionLog 統計）
 
         Args:
-            db: 数据库 session
+            db: 數據庫 session
             message_id: 消息 ID
 
         Returns:
@@ -1553,7 +1570,7 @@ class MessageService:
         db: AsyncSession,
         message_ids: List[int],
     ) -> Dict[int, int]:
-        """批量获取消息点击次数（依規格：從 ComponentInteractionLog 統計）"""
+        """批量獲取消息點擊次數（依規格：從 ComponentInteractionLog 統計）"""
         normalized_ids = [int(mid) for mid in message_ids if mid is not None]
         if not normalized_ids:
             return {}
@@ -1586,7 +1603,7 @@ class MessageService:
         """刪除消息（僅限草稿和已排程狀態）
 
         Args:
-            db: 数据库 session
+            db: 數據庫 session
             message_id: 消息 ID
 
         Returns:
