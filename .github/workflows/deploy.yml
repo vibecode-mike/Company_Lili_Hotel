@@ -50,8 +50,16 @@ jobs:
             sudo systemctl restart lili-linebot
 
             echo "=== Health check ==="
-            sleep 3
-            curl -sf http://127.0.0.1:8700/health > /dev/null && echo "Backend OK" || echo "Backend FAIL"
+            for i in {1..30}; do
+              if curl -sf http://127.0.0.1:8700/health > /dev/null 2>&1; then
+                echo "Backend OK (took ${i}s)"
+                break
+              fi
+              if [ $i -eq 30 ]; then
+                echo "Backend FAIL (timeout 30s)"
+              fi
+              sleep 1
+            done
             sudo systemctl is-active lili-linebot > /dev/null && echo "LINE Bot OK" || echo "LINE Bot FAIL"
 
   deploy-prod:
@@ -99,6 +107,14 @@ jobs:
             sudo systemctl restart lili-linebot
 
             echo "=== Health check ==="
-            sleep 3
-            curl -sf http://127.0.0.1:8700/health > /dev/null && echo "Backend OK" || echo "Backend FAIL"
+            for i in {1..30}; do
+              if curl -sf http://127.0.0.1:8700/health > /dev/null 2>&1; then
+                echo "Backend OK (took ${i}s)"
+                break
+              fi
+              if [ $i -eq 30 ]; then
+                echo "Backend FAIL (timeout 30s)"
+              fi
+              sleep 1
+            done
             sudo systemctl is-active lili-linebot > /dev/null && echo "LINE Bot OK" || echo "LINE Bot FAIL"
