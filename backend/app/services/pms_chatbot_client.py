@@ -91,26 +91,50 @@ def query_pms(
 
 
 def query_pms_all_roomtypes(startdate: str, enddate: str) -> dict:
+    # 閎運 PMS 行為怪：
+    #   - 不送 housingcnt（依官方 post.php 範例）→ 回所有 11 個房型（含 TT/KK），但近期日期會回 "Session halted."
+    #   - 送 housingcnt=N → 只回 N 人房，但任何日期都穩
+    # 所以三招都打、合併去重：不送 + housingcnt=2 + housingcnt=4。任一招失敗不影響其他招。
     _ensure_pms_settings()
 
-    ts = taipei_timestamp()
-    password = md5_hex(f"{_pms_secret()}{ts}")
-    payload = {
+    merged: dict[str, dict] = {}
+    hotelcode = None
+    base_payload = {
         "account": _pms_account(),
-        "password": password,
-        "timestamp": ts,
         "hotelcode": _pms_hotelcode(),
         "startdate": startdate,
         "enddate": enddate,
-        "housingcnt": "",
         "roomtype": "",
     }
-    response = requests.post(_pms_api_url(), json=payload, timeout=20, verify=True)
-    response.raise_for_status()
-    try:
-        return response.json()
-    except Exception:
-        return {"raw_text": response.text}
+    variants: list[dict] = [{}, {"housingcnt": 2}, {"housingcnt": 4}]
+    for extra in variants:
+        ts = taipei_timestamp()
+        payload = {
+            **base_payload,
+            "password": md5_hex(f"{_pms_secret()}{ts}"),
+            "timestamp": ts,
+            **extra,
+        }
+        try:
+            response = requests.post(_pms_api_url(), json=payload, timeout=20, verify=True)
+            response.raise_for_status()
+            data = response.json()
+        except Exception:
+            continue
+        if hotelcode is None:
+            hotelcode = data.get("hotelcode")
+        for room in data.get("room") or []:
+            code = room.get("roomtype")
+            if not code:
+                continue
+            existing = merged.get(code)
+            # 偏好「有 data 庫存資料」的版本（housingcnt=N 撈到的會有 remain/price）
+            new_has_data = bool(room.get("data"))
+            existing_has_data = bool(existing and existing.get("data"))
+            if existing is None or (new_has_data and not existing_has_data):
+                merged[code] = room
+
+    return {"hotelcode": hotelcode, "room": list(merged.values())}
 
 
 def build_booking_url(

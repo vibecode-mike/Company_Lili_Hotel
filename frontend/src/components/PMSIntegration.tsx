@@ -1238,8 +1238,6 @@ const PMSDataTable = memo(function PMSDataTable({
         <BlankStateContainer>
           <BlankStateCard
             title="同步房況、房型與訂房相關資訊，讓 AI 可引用最新資料"
-            actionLabel="串接 PMS"
-            onAction={onNavigateToSettings}
           />
           <BlankStateCard
             title="批次匯入常見問答，補充 AI 回覆內容"
@@ -1256,8 +1254,6 @@ const PMSDataTable = memo(function PMSDataTable({
           <BlankStateCard
             title="此來源目前無資料"
             description="同步房況、房型與訂房相關資訊，讓 AI 可引用最新資料"
-            actionLabel="串接 PMS"
-            onAction={onNavigateToSettings}
           />
         </BlankStateContainer>
       )}
