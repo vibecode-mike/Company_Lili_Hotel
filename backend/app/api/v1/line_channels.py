@@ -207,18 +207,7 @@ async def create_channel(
         LineChannelResponse: 創建的頻道設定
     """
     try:
-        # 檢查是否已有設定
-        stmt = select(LineChannel).where(LineChannel.is_active == True).limit(1)
-        result = await db.execute(stmt)
-        existing = result.scalar_one_or_none()
-
-        if existing:
-            raise HTTPException(
-                status_code=400,
-                detail="已存在 LINE 頻道設定，請使用更新功能"
-            )
-
-        # 創建新設定
+        # 多帳號模式：允許建立多筆 LINE 頻道；channel_id 由 DB unique constraint 把關
         channel = LineChannel(**data.model_dump())
 
         # 🆕 自動獲取 Basic ID + Channel Name
