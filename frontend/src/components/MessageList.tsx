@@ -423,6 +423,8 @@ const MainContent = memo(function MainContent({
   quotaLoading,
   quotaError,
   channelHeaderSlot,
+  noChannelsConfigured,
+  onNavigateToSettings,
 }: {
   onCreateMessage: () => void;
   searchValue: string;
