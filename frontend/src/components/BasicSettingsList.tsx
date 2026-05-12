@@ -14,6 +14,8 @@ interface BasicSettingsListProps {
   accounts: ChannelAccount[];
   onAddAccount: () => void;
   onReauthorize?: (account: ChannelAccount) => void;
+  onEdit?: (account: ChannelAccount) => void;
+  onDelete?: (account: ChannelAccount) => void;
 }
 
 // LINE Icon Component
@@ -85,7 +87,9 @@ const SortIcon = memo(function SortIcon({ order }: { order: SortOrder }) {
 export const BasicSettingsList = memo(function BasicSettingsList({
   accounts,
   onAddAccount,
-  onReauthorize
+  onReauthorize,
+  onEdit,
+  onDelete,
 }: BasicSettingsListProps) {
   // Sort state - default to descending (newest first)
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
@@ -199,7 +203,7 @@ export const BasicSettingsList = memo(function BasicSettingsList({
                 <div className="h-[12px] w-[1px] bg-[#ddd]" />
 
                 {/* Column: Actions (Spacer) */}
-                <div className="content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[100px]" />
+                <div className="content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[180px]" />
               </div>
             </div>
           </div>
@@ -258,14 +262,35 @@ export const BasicSettingsList = memo(function BasicSettingsList({
                   </div>
 
                   {/* Actions Column */}
-                  <div className="content-stretch flex items-center px-[12px] py-0 relative shrink-0 w-[100px]">
+                  <div className="content-stretch flex items-center gap-[8px] px-[12px] py-0 relative shrink-0 w-[180px]">
                     {account.status === 'expired' && onReauthorize && (
                       <button
                         onClick={() => onReauthorize(account)}
-                        className="btn-reauthorize content-stretch flex gap-[4px] items-center px-[12px] py-0 relative shrink-0 hover:opacity-80 transition-opacity"
+                        className="btn-reauthorize content-stretch flex gap-[4px] items-center px-[8px] py-0 relative shrink-0 hover:opacity-80 transition-opacity"
                       >
                         <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[14px] whitespace-nowrap">
                           重新授權
+                        </p>
+                      </button>
+                    )}
+                    {/* LINE 才顯示編輯/刪除（FB 仍走重新授權的流程） */}
+                    {account.platform === 'line' && onEdit && (
+                      <button
+                        onClick={() => onEdit(account)}
+                        className="content-stretch flex gap-[4px] items-center px-[8px] py-0 relative shrink-0 hover:opacity-80 transition-opacity"
+                      >
+                        <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[14px] text-[#0f6beb] whitespace-nowrap">
+                          編輯
+                        </p>
+                      </button>
+                    )}
+                    {account.platform === 'line' && onDelete && (
+                      <button
+                        onClick={() => onDelete(account)}
+                        className="content-stretch flex gap-[4px] items-center px-[8px] py-0 relative shrink-0 hover:opacity-80 transition-opacity"
+                      >
+                        <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[14px] text-[#d33] whitespace-nowrap">
+                          刪除
                         </p>
                       </button>
                     )}

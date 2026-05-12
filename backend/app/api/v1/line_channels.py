@@ -103,6 +103,29 @@ def _collect_missing_fields(channel: LineChannel) -> List[str]:
     return missing
 
 
+@router.get("/list", response_model=List[LineChannelResponse])
+async def list_line_channels(db: AsyncSession = Depends(get_db)):
+    """
+    取得所有啟用中的 LINE 頻道（多帳號模式）
+
+    供前端訊息推播頁 / 切換器 / 基本設定清單頁使用。
+    依 id 由小到大排序，第一筆即為前端切換器的預設選項。
+    """
+    try:
+        stmt = (
+            select(LineChannel)
+            .where(LineChannel.is_active == True)
+            .order_by(LineChannel.id.asc())
+        )
+        result = await db.execute(stmt)
+        channels = result.scalars().all()
+        logger.info(f"✅ 取得 LINE 頻道清單: 共 {len(channels)} 筆")
+        return list(channels)
+    except Exception as e:
+        logger.error(f"❌ 取得 LINE 頻道清單失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"取得清單失敗: {str(e)}")
+
+
 @router.get("/current", response_model=Optional[LineChannelResponse])
 async def get_current_channel(db: AsyncSession = Depends(get_db)):
     """

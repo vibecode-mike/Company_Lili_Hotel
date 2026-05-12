@@ -60,13 +60,13 @@ interface MessagesContextType {
   getMessageById: (id: string) => Message | undefined;
   totalMessages: number;
   isLoading: boolean;
-  fetchMessages: () => Promise<void>;
+  fetchMessages: (channelId?: string) => Promise<void>;
   statusCounts: { sent: number; scheduled: number; draft: number };
   quotaStatus: QuotaStatus | null;
   quotaLoading: boolean;
   quotaError: string | null;
-  fetchQuota: () => Promise<void>;
-  refreshAll: () => Promise<void>;
+  fetchQuota: (channelId?: string) => Promise<void>;
+  refreshAll: (channelId?: string) => Promise<void>;
 }
 
 // 創建 Context
@@ -151,14 +151,17 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
   const { isAuthenticated } = useAuth();
   const hasFetchedRef = useRef(false);
 
-  const fetchMessages = useCallback(async () => {
-    console.log('🔄 開始載入訊息...');
-    console.log('🔄 API URL:', '/api/v1/messages?page=1&page_size=100');
+  const fetchMessages = useCallback(async (channelId?: string) => {
+    console.log('🔄 開始載入訊息...', channelId ? `channel_id=${channelId}` : '(無 channel 篩選)');
+    const params = new URLSearchParams({ page: '1', page_size: '500' });
+    if (channelId) params.set('channel_id', channelId);
+    const url = `/api/v1/messages?${params.toString()}`;
+    console.log('🔄 API URL:', url);
     setIsLoading(true);
     try {
       // ✅ 方案 B：只調用一個 API，後端自動合併本地 DB + FB 外部 API 數據
       // 增加 page_size 到 500 以包含所有草稿消息
-      const response = await apiGet('/api/v1/messages?page=1&page_size=500');
+      const response = await apiGet(url);
       console.log('✅ API Response 對象:', response);
 
       // ⚠️ 修復：apiGet 返回 Response 對象，需要解析 JSON
@@ -190,7 +193,7 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
     }
   }, []);
 
-  const fetchQuota = useCallback(async () => {
+  const fetchQuota = useCallback(async (channelId?: string) => {
     const token = getAuthToken();
     if (!token) {
       console.warn('未登入，無法獲取配額狀態');
@@ -203,7 +206,10 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
     setQuotaError(null);
     try {
       // 使用 apiPost 自動處理 token 和 401 重試
-      const response = await apiPost('/api/v1/messages/quota', {
+      const quotaUrl = channelId
+        ? `/api/v1/messages/quota?channel_id=${encodeURIComponent(channelId)}`
+        : '/api/v1/messages/quota';
+      const response = await apiPost(quotaUrl, {
         target_type: 'all_friends'
       });
 
@@ -230,10 +236,10 @@ export function MessagesProvider({ children }: MessagesProviderProps) {
   }, []);
 
   // 刷新所有數據（訊息列表 + 配額狀態）
-  const refreshAll = useCallback(async () => {
+  const refreshAll = useCallback(async (channelId?: string) => {
     await Promise.all([
-      fetchMessages(),
-      fetchQuota()
+      fetchMessages(channelId),
+      fetchQuota(channelId)
     ]);
   }, [fetchMessages, fetchQuota]);
 

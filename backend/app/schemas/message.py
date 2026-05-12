@@ -329,6 +329,7 @@ class MessageSearchParams(BaseModel):
     send_status: Optional[str] = None  # 已排程/已發送/草稿/發送失敗
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
+    channel_id: Optional[str] = None  # LINE channel_id 篩選（多帳號支援）
     page: int = 1
     page_size: int = 20
 

@@ -1,4 +1,4 @@
-import { useMemo, useState, memo } from 'react';
+import { useMemo, useState, memo, type ReactNode } from 'react';
 import { TextIconButton } from './common/buttons';
 import { ArrowRightIcon } from './common/icons/ArrowIcon';
 import ButtonEdit from '../imports/ButtonEdit';
@@ -26,6 +26,9 @@ interface InteractiveMessageTableProps {
   onEdit: (id: string) => void;
   onViewDetails: (id: string) => void;
   statusFilter: string;
+  // 「平台」欄位表頭的自訂 slot：傳入時取代原本的「平台」文字 + 排序 icon，
+  // 訊息推播頁透過此 slot 嵌入 LINE OA 切換器。
+  channelHeaderSlot?: ReactNode;
 }
 
 type SortField = 'title' | 'tags' | 'platform' | 'status' | 'sentCount' | 'sender' | 'clickCount' | 'sendTime';
@@ -70,11 +73,13 @@ const SortIcon = memo(function SortIcon({ active, order }: { active: boolean; or
 const TableHeader = memo(function TableHeader({
   sortConfig,
   onSortChange,
-  statusFilter
+  statusFilter,
+  channelHeaderSlot,
 }: {
   sortConfig: SortConfig;
   onSortChange: (field: SortField) => void;
   statusFilter: string;
+  channelHeaderSlot?: ReactNode;
 }) {
   const isActive = (field: SortField) => sortConfig.field === field;
   const isSortDisabled = statusFilter === '已發送' || statusFilter === '已排程' || statusFilter === '草稿';
@@ -142,14 +147,20 @@ const TableHeader = memo(function TableHeader({
             <SortIcon active={isActive('clickCount')} order={sortConfig.order} />
           </div>
 
-          {/* 平台 */}
-          <div
-            className={`${CELL_BASE} ${COL_PLATFORM} gap-[4px] cursor-pointer`}
-            onClick={() => onSortChange('platform')}
-          >
-            <span className={`${CELL_TEXT} whitespace-nowrap`}>平台</span>
-            <SortIcon active={isActive('platform')} order={sortConfig.order} />
-          </div>
+          {/* 平台：訊息推播頁傳入 channelHeaderSlot 取代為 LINE OA 切換器；其他情境保留原欄位 */}
+          {channelHeaderSlot ? (
+            <div className={`${CELL_BASE} ${COL_PLATFORM} gap-[4px]`}>
+              {channelHeaderSlot}
+            </div>
+          ) : (
+            <div
+              className={`${CELL_BASE} ${COL_PLATFORM} gap-[4px] cursor-pointer`}
+              onClick={() => onSortChange('platform')}
+            >
+              <span className={`${CELL_TEXT} whitespace-nowrap`}>平台</span>
+              <SortIcon active={isActive('platform')} order={sortConfig.order} />
+            </div>
+          )}
 
           {/* 時間欄位 - 使用 grow 填滿剩餘空間 */}
           <div className="basis-0 grow min-h-px min-w-[180px] relative shrink-0">
@@ -282,7 +293,7 @@ const EmptyStateRow = memo(function EmptyStateRow() {
 });
 
 // 主表格組件
-export default function InteractiveMessageTable({ messages, onEdit, onViewDetails, statusFilter }: InteractiveMessageTableProps) {
+export default function InteractiveMessageTable({ messages, onEdit, onViewDetails, statusFilter, channelHeaderSlot }: InteractiveMessageTableProps) {
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     field: 'sendTime',
     order: 'desc',
@@ -356,7 +367,12 @@ export default function InteractiveMessageTable({ messages, onEdit, onViewDetail
         {/* 內層容器 - 最小寬度確保欄位對齊 */}
         <div className="min-w-[1060px]">
           {/* 表頭 - 固定在滾動區域外 */}
-          <TableHeader sortConfig={sortConfig} onSortChange={handleSort} statusFilter={statusFilter} />
+          <TableHeader
+            sortConfig={sortConfig}
+            onSortChange={handleSort}
+            statusFilter={statusFilter}
+            channelHeaderSlot={channelHeaderSlot}
+          />
 
           {/* 垂直滾動容器 - 只有資料列滾動 */}
           <div className="max-h-[600px] overflow-y-auto table-scroll">

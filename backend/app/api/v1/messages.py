@@ -51,6 +51,7 @@ async def list_messages(
             search=params.search,
             start_date=params.start_date,
             end_date=params.end_date,
+            channel_id=params.channel_id,
             page=params.page,
             page_size=params.page_size,
         )

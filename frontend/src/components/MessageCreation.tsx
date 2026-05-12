@@ -99,9 +99,11 @@ interface MessageCreationProps {
   };
   /** 刪除訊息回調（僅在編輯已排程或草稿時顯示刪除按鈕） */
   onDelete?: () => Promise<void> | void;
+  /** 從訊息推播頁切換器帶入的預設 LINE channel_id（新建訊息時） */
+  initialChannelId?: string;
 }
 
-export default function MessageCreation({ onBack, onNavigate, onNavigateToSettings, editMessageId, editMessageData, onDelete }: MessageCreationProps = {}) {
+export default function MessageCreation({ onBack, onNavigate, onNavigateToSettings, editMessageId, editMessageData, onDelete, initialChannelId }: MessageCreationProps = {}) {
   // Get quota status and refreshAll from MessagesContext
   const { quotaStatus, quotaLoading, quotaError, refreshAll } = useMessages();
 
@@ -154,28 +156,32 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
   const cardRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
   const carouselEditorRef = useRef<CarouselEditorHandle>(null);
 
-  // 獲取可用渠道列表
+  // 獲取可用渠道列表（多 LINE OA + FB 粉專）
   useEffect(() => {
     const fetchChannels = async () => {
       const options: ChannelOption[] = [];
 
-      // 獲取 LINE 頻道
+      // 獲取所有啟用中的 LINE OA
       try {
-        const lineRes = await apiGet('/api/v1/line_channels/current');
+        const lineRes = await apiGet('/api/v1/line_channels/list');
         if (lineRes.ok) {
-          const lineChannel = await lineRes.json();
-          if (lineChannel?.channel_id) {
-            options.push({
-              value: `LINE_${lineChannel.channel_id}`,
-              platform: 'LINE',
-              channelId: lineChannel.channel_id,
-              label: lineChannel.channel_name || 'LINE 官方帳號',
-              disabled: false
-            });
+          const list = await lineRes.json();
+          if (Array.isArray(list)) {
+            for (const c of list) {
+              if (c?.channel_id) {
+                options.push({
+                  value: `LINE_${c.channel_id}`,
+                  platform: 'LINE',
+                  channelId: c.channel_id,
+                  label: c.channel_name || `LINE 官方帳號 (${c.channel_id})`,
+                  disabled: false,
+                });
+              }
+            }
           }
         }
       } catch (error) {
-        console.error('Failed to fetch LINE channel:', error);
+        console.error('Failed to fetch LINE channels:', error);
       }
 
       // 獲取 Facebook 粉專
@@ -201,16 +207,19 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
       setChannelOptions(options);
 
-      // 預設選中第一個渠道（僅在新建時，非編輯模式）
-      // 編輯模式會由渠道還原 useEffect 處理
+      // 預設選中（編輯模式由還原 useEffect 處理；其餘優先 initialChannelId、否則第一個）
       if (options.length > 0 && !selectedChannel && !editMessageData?.channelId) {
-        setSelectedChannel(options[0].value);
-        setSelectedPlatform(options[0].platform);
+        const matched = initialChannelId
+          ? options.find((o) => o.channelId === initialChannelId)
+          : null;
+        const fallback = matched || options[0];
+        setSelectedChannel(fallback.value);
+        setSelectedPlatform(fallback.platform);
       }
     };
 
     fetchChannels();
-  }, [editMessageData?.channelId]);
+  }, [editMessageData?.channelId, initialChannelId]);
 
   // Monitor flexMessageJson changes
   useEffect(() => {
@@ -386,14 +395,69 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     setSelectedPlatform(newPlatform);
   };
 
-  // Handle channel selection change
-  const handleChannelChange = (value: string) => {
+  // 切換 LINE OA / FB 帳號時，若已有編輯內容跳警告（避免內容跨帳號錯亂）
+  const [pendingChannelValue, setPendingChannelValue] = useState<string | null>(null);
+
+  const applyChannelChange = (value: string) => {
     const selected = channelOptions.find(opt => opt.value === value);
     if (selected) {
       setSelectedChannel(value);
       handlePlatformChange(selected.platform);
     }
   };
+
+  const clearComposerContent = () => {
+    setTitle('');
+    setNotificationMsg('');
+    setSelectedFilterTags([]);
+    setTargetType('all');
+    setScheduledDate(undefined);
+    setScheduledTime(undefined);
+    setFlexMessageJson(null);
+    // 卡片陣列重置到只剩一張空卡（保留 schema，僅清內容）
+    setCards((prev) => {
+      if (!prev.length) return prev;
+      const first = prev[0];
+      return [{
+        ...first,
+        title: '',
+        description: '',
+        priceLabel: '',
+        price: '',
+        unit: '',
+        imageUrl: '',
+        button1Text: '',
+        button1Url: '',
+        button2Text: '',
+        button2Url: '',
+      }];
+    });
+  };
+
+  const hasComposerContent = () => Boolean(
+    title.trim() || notificationMsg.trim() || selectedFilterTags.length > 0 ||
+    cards.some((c) => c.title || c.description || c.imageUrl || c.button1Url || c.button2Url),
+  );
+
+  // Handle channel selection change
+  const handleChannelChange = (value: string) => {
+    if (value === selectedChannel) return;
+    if (hasComposerContent()) {
+      setPendingChannelValue(value);
+      return;
+    }
+    applyChannelChange(value);
+  };
+
+  const confirmChannelChange = () => {
+    if (pendingChannelValue) {
+      clearComposerContent();
+      applyChannelChange(pendingChannelValue);
+    }
+    setPendingChannelValue(null);
+  };
+
+  const cancelChannelChange = () => setPendingChannelValue(null);
 
   const updateCard = (updates: Partial<CarouselCard>) => {
     setCards(prevCards => {
@@ -2585,6 +2649,27 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
             <AlertDialogCancel onClick={handleCancelLeave}>取消</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmLeave} className="bg-[#f44336] hover:bg-[#d32f2f]">
               確認離開
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 切換 LINE OA / FB 帳號的清空確認 Dialog */}
+      <AlertDialog
+        open={pendingChannelValue !== null}
+        onOpenChange={(open) => { if (!open) cancelChannelChange(); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>切換帳號將清空目前內容</AlertDialogTitle>
+            <AlertDialogDescription>
+              已編輯的訊息標題、通知訊息、目標受眾與卡片內容會被清空。確定要切換到「{channelOptions.find((o) => o.value === pendingChannelValue)?.label ?? ''}」嗎？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelChannelChange}>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmChannelChange} className="bg-[#f44336] hover:bg-[#d32f2f]">
+              確認切換
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -22,6 +22,12 @@ interface LineApiSettingsContentProps {
   onComplete?: () => void;
   /** 返回上一頁的回調，若提供則顯示返回按鈕 */
   onBack?: () => void;
+  /**
+   * 編輯既有 LINE OA 的 DB id；
+   *  - undefined / null  → 新增模式（POST 建立新帳號）
+   *  - number            → 編輯模式（載入該帳號資料、PATCH 更新）
+   */
+  editingChannelId?: number;
 }
 
 // 欄位格式驗證規則（LINE Developers Console 規範）
@@ -49,7 +55,7 @@ const FIELD_LABEL = {
 
 const DRAFT_STORAGE_KEY = 'line_setup_draft';
 
-export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSettingsContentProps = {}) {
+export default function LineApiSettingsContent({ onComplete, onBack, editingChannelId }: LineApiSettingsContentProps = {}) {
   const [expandedCard, setExpandedCard] = useState<number>(1);
   const [channelId, setChannelId] = useState<string>('');
   const [channelSecret, setChannelSecret] = useState<string>('');
@@ -80,36 +86,39 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
   const card8Ref = useRef<HTMLDivElement>(null);
   const card9Ref = useRef<HTMLDivElement>(null);
 
-  // 載入現有設定：優先用 DB，DB 無資料時從 localStorage 恢復草稿
+  // 載入現有設定：
+  //  - 編輯模式（editingChannelId 有值）→ 抓 /line_channels/{id}
+  //  - 新增模式 → 不抓 DB（避免拉到第一筆 active 帳號），完全用 localStorage 草稿
   useEffect(() => {
     const loadSettings = async () => {
       let hasDbData = false;
-      try {
-        const response = await fetch('/api/v1/line_channels/current');
-        if (response.ok) {
-          const data = await response.json();
-          if (data && data.id) {
-            setLineChannelDbId(data.id);
-            setChannelId(data.channel_id || '');
-            setChannelSecret(data.channel_secret || '');
-            setChannelAccessToken(data.channel_access_token || '');
-            setLoginChannelId(data.login_channel_id || '');
-            setLoginChannelSecret(data.login_channel_secret || '');
-            setBasicId(data.basic_id || '');
-            hasDbData = true;
+      if (editingChannelId) {
+        try {
+          const response = await fetch(`/api/v1/line_channels/${editingChannelId}`);
+          if (response.ok) {
+            const data = await response.json();
+            if (data && data.id) {
+              setLineChannelDbId(data.id);
+              setChannelId(data.channel_id || '');
+              setChannelSecret(data.channel_secret || '');
+              setChannelAccessToken(data.channel_access_token || '');
+              setLoginChannelId(data.login_channel_id || '');
+              setLoginChannelSecret(data.login_channel_secret || '');
+              setBasicId(data.basic_id || '');
+              hasDbData = true;
 
-            // 如果所有必填欄位都有值，顯示完成頁面
-            if (data.channel_id && data.channel_secret && data.channel_access_token &&
-                data.login_channel_id && data.login_channel_secret) {
-              setIsSetupComplete(true);
+              if (data.channel_id && data.channel_secret && data.channel_access_token &&
+                  data.login_channel_id && data.login_channel_secret) {
+                setIsSetupComplete(true);
+              }
             }
           }
+        } catch (error) {
+          console.error('載入 LINE 頻道設定失敗:', error);
         }
-      } catch (error) {
-        console.error('載入 LINE 頻道設定失敗:', error);
       }
 
-      // DB 無資料 → 從 localStorage 恢復草稿
+      // DB 無資料（新增模式或編輯模式 fetch 失敗）→ 從 localStorage 恢復草稿
       if (!hasDbData) {
         try {
           const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
@@ -179,21 +188,8 @@ export default function LineApiSettingsContent({ onComplete, onBack }: LineApiSe
         });
       }
 
-      // POST 失敗（可能已存在），查詢現有記錄改用 PATCH
-      if (!response.ok && !lineChannelDbId) {
-        const currentRes = await fetch('/api/v1/line_channels/current');
-        if (currentRes.ok) {
-          const current = await currentRes.json();
-          if (current?.id) {
-            setLineChannelDbId(current.id);
-            response = await fetch(`/api/v1/line_channels/${current.id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(data)
-            });
-          }
-        }
-      }
+      // 多帳號模式下，POST 失敗一律報錯，不再隱式 PATCH 現有第一筆
+      // （舊版單帳號邏輯會在這裡 fallback 到 /current 改 PATCH，會誤覆蓋其他帳號）
 
       if (!response.ok) {
         throw new Error('保存失敗');

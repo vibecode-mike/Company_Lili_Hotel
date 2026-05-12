@@ -1,5 +1,11 @@
-import { useState, useMemo, memo, useCallback, useEffect } from "react";
+import { useState, useMemo, memo, useCallback, useEffect, type ReactNode } from "react";
 import svgPaths from "../imports/svg-icons-common";
+import { useLineChannels } from "../hooks/useLineChannels";
+import ChannelSwitcher, {
+  channelItemsFromLineChannels,
+} from "./common/ChannelSwitcher";
+import { ChannelIcon as CommonChannelIcon } from "./common/icons";
+import { BlankStateCard, BlankStateContainer } from "./common/BlankStateCard";
 import {
   imgGroup,
   imgGroup1,
@@ -21,7 +27,7 @@ import { MessageDetailDrawer } from "./MessageDetailDrawer";
 import { useMessages } from "../contexts/MessagesContext";
 
 interface MessageListProps {
-  onCreateMessage: () => void;
+  onCreateMessage: (channelId?: string) => void;
   onEditMessage?: (messageId: string) => void;
   onNavigateToAutoReply?: () => void;
   onNavigateToMembers?: () => void;
@@ -416,6 +422,7 @@ const MainContent = memo(function MainContent({
   quotaStatus,
   quotaLoading,
   quotaError,
+  channelHeaderSlot,
 }: {
   onCreateMessage: () => void;
   searchValue: string;
@@ -437,6 +444,9 @@ const MainContent = memo(function MainContent({
   } | null;
   quotaLoading: boolean;
   quotaError: string | null;
+  channelHeaderSlot?: ReactNode;
+  noChannelsConfigured?: boolean;
+  onNavigateToSettings?: () => void;
 }) {
   const quotaText = useMemo(() => {
     if (quotaLoading) return "載入中...";
@@ -467,6 +477,21 @@ const MainContent = memo(function MainContent({
         />
       </div>
 
+      {/* 沒設定任何 LINE OA：顯示空狀態並導引到基本設定 */}
+      {noChannelsConfigured && (
+        <div className="px-[40px] pb-[40px] w-full">
+          <BlankStateContainer>
+            <BlankStateCard
+              title="尚未設定 LINE 官方帳號"
+              description="請先在基本設定新增至少一個 LINE OA 才能建立與發送訊息"
+              actionLabel="前往基本設定"
+              onAction={onNavigateToSettings}
+            />
+          </BlankStateContainer>
+        </div>
+      )}
+
+      {!noChannelsConfigured && (<>
       {/* Description Container - Message Usage */}
       <div className="px-[40px] pb-[20px] w-full">
         <div
@@ -552,8 +577,10 @@ const MainContent = memo(function MainContent({
           onEdit={onEditMessage}
           onViewDetails={onViewDetails}
           statusFilter={statusFilter}
+          channelHeaderSlot={channelHeaderSlot}
         />
       </div>
+      </>)}
     </div>
   );
 });
@@ -592,12 +619,29 @@ export default function MessageList({
     fetchQuota,
   } = useMessages();
 
+  // LINE OA 切換器：拉清單、預設選第一個、不記住跨頁狀態
+  const { channels: lineChannels, loading: channelsLoading } = useLineChannels();
+  const [selectedChannelId, setSelectedChannelId] = useState<string>("");
+
   useEffect(() => {
-    if (currentPage === "messages") {
-      fetchMessages();
-      fetchQuota();
+    if (!selectedChannelId && lineChannels.length > 0) {
+      setSelectedChannelId(lineChannels[0].channel_id);
     }
-  }, [currentPage, fetchMessages, fetchQuota]);
+  }, [lineChannels, selectedChannelId]);
+
+  const selectedChannelName = useMemo(() => {
+    const found = lineChannels.find((c) => c.channel_id === selectedChannelId);
+    return found?.channel_name || "";
+  }, [lineChannels, selectedChannelId]);
+
+  useEffect(() => {
+    if (currentPage !== "messages") return;
+    if (channelsLoading) return;
+    // 還沒解析出 selectedChannelId 時，先不拉（避免拉到全部後再被切換到某 channel 又拉一次）
+    if (lineChannels.length > 0 && !selectedChannelId) return;
+    fetchMessages(selectedChannelId || undefined);
+    fetchQuota(selectedChannelId || undefined);
+  }, [currentPage, channelsLoading, lineChannels.length, selectedChannelId, fetchMessages, fetchQuota]);
 
   // Transform context messages to match InteractiveMessageTable format
   const formatDateTime = (value?: string | null) => {
@@ -740,7 +784,7 @@ export default function MessageList({
             />
 
             <MainContent
-              onCreateMessage={onCreateMessage}
+              onCreateMessage={() => onCreateMessage(selectedChannelId || undefined)}
               searchValue={searchValue}
               onSearchChange={setSearchValue}
               onClearAll={handleClearAll}
@@ -755,6 +799,23 @@ export default function MessageList({
               quotaStatus={quotaStatus}
               quotaLoading={quotaLoading}
               quotaError={quotaError}
+              noChannelsConfigured={!channelsLoading && lineChannels.length === 0}
+              onNavigateToSettings={onNavigateToSettings}
+              channelHeaderSlot={
+                lineChannels.length > 0 ? (
+                  <div className="inline-flex items-center gap-[4px]">
+                    <CommonChannelIcon channel="LINE" size={20} />
+                    <span className="text-[#383838] text-[14px] leading-[1.5] truncate max-w-[140px]">
+                      {selectedChannelName || "LINE 官方帳號"}
+                    </span>
+                    <ChannelSwitcher
+                      items={channelItemsFromLineChannels(lineChannels)}
+                      selectedKey={selectedChannelId}
+                      onChange={setSelectedChannelId}
+                    />
+                  </div>
+                ) : undefined
+              }
             />
           </div>
         ) : memberView === "list" ? (

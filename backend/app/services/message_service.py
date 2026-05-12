@@ -902,10 +902,14 @@ class MessageService:
         search: Optional[str] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
+        channel_id: Optional[str] = None,
         page: int = 1,
         page_size: int = 20,
     ) -> Dict[str, Any]:
-        """獲取群發訊息列表（自動合併本地 DB + FB 外部 API）"""
+        """獲取群發訊息列表（自動合併本地 DB + FB 外部 API）
+
+        channel_id：LINE 多帳號切換器傳入，僅顯示對應 channel 的訊息。
+        """
 
         def apply_filters(query):
             if filters:
@@ -932,6 +936,9 @@ class MessageService:
         if end_date:
             filters.append(Message.created_at <= end_date)
 
+        if channel_id:
+            filters.append(Message.channel_id == channel_id)
+
         # 狀態統計（不含 send_status 篩選，方便前端顯示各狀態總數）
         status_query = select(
             Message.send_status,
@@ -945,14 +952,15 @@ class MessageService:
             status, count = row
             status_counts[str(status)] = int(count or 0)
 
-        # ✅ 全局狀態統計：始終包含 FB 已發送數量（即使當前查詢其他狀態）
-        # 為了避免重複調用 FB API，這裡只獲取計數
-        try:
-            fb_sent_count = await self._get_fb_sent_count_from_api()
-            status_counts["已發送"] = status_counts.get("已發送", 0) + fb_sent_count
-            logger.info(f"✅ 全局狀態統計已包含 FB 已發送數量: {fb_sent_count}")
-        except Exception as e:
-            logger.error(f"❌ 獲取 FB 已發送計數失敗: {e}")
+        # ✅ 全局狀態統計：包含 FB 已發送數量
+        # 切換器選了特定 LINE channel_id 時不混入 FB 數量（FB 跟 LINE 是兩個獨立帳號）
+        if not channel_id:
+            try:
+                fb_sent_count = await self._get_fb_sent_count_from_api()
+                status_counts["已發送"] = status_counts.get("已發送", 0) + fb_sent_count
+                logger.info(f"✅ 全局狀態統計已包含 FB 已發送數量: {fb_sent_count}")
+            except Exception as e:
+                logger.error(f"❌ 獲取 FB 已發送計數失敗: {e}")
 
         # 主查詢
         base_query = select(Message).options(
@@ -1019,7 +1027,8 @@ class MessageService:
 
         # ✅ 方案 A：智能判斷是否需要合併 FB 外部 API 數據
         # 只有在查詢"已發送"或未指定狀態時，才調用 FB API
-        should_merge_fb = (send_status == "已發送" or send_status is None)
+        # 切換器選了特定 LINE channel_id 時不混入 FB 訊息（FB 跟 LINE 是兩個獨立帳號）
+        should_merge_fb = (send_status == "已發送" or send_status is None) and not channel_id
 
         if should_merge_fb:
             logger.info(f"✅ 查詢狀態: {send_status or '全部'}, 需要合併 FB 外部 API 數據")

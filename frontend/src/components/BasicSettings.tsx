@@ -179,20 +179,24 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     const nextAccounts: ChannelAccount[] = [];
 
     // 1. 取得 LINE 資料（獨立 try-catch）
-    // 必須 5 個必填欄位齊全（isConfigured）才視為已連結，避免半成品被誤判
+    // 改用 /list 支援多 OA；每筆只要 channel_id 齊全就列出（單筆完整性由 LineApiSettingsContent 自己判斷）
     try {
-      const lineRes = await fetch('/api/v1/line_channels/current');
+      const lineRes = await fetch('/api/v1/line_channels/list');
       if (lineRes.ok) {
-        const data = await lineRes.json();
-        if (data?.channel_id && isConfigured) {
-          nextAccounts.push({
-            id: data.id?.toString() || 'line-1',
-            platform: 'line',
-            name: data.channel_name || '官方帳號',
-            channelId: data.channel_id,
-            status: 'connected',
-            lastVerified: '-',
-          });
+        const list = await lineRes.json();
+        if (Array.isArray(list)) {
+          for (const data of list) {
+            if (data?.channel_id) {
+              nextAccounts.push({
+                id: data.id?.toString() ?? `line-${data.channel_id}`,
+                platform: 'line',
+                name: data.channel_name || '官方帳號',
+                channelId: data.channel_id,
+                status: 'connected',
+                lastVerified: '-',
+              });
+            }
+          }
         }
       }
     } catch (lineError) {
@@ -295,16 +299,41 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     onSetupComplete?.();
   }, [refreshStatus, reloadAccounts, showToast, onSetupComplete]);
 
-  // 點擊 LINE 卡片
+  // 編輯中的 LINE channel DB id（null = 新增）
+  const [editingLineChannelId, setEditingLineChannelId] = useState<number | null>(null);
+
+  // 點擊 LINE 卡片（新增）
   const handleLineClick = useCallback(() => {
-    // 檢查是否已有 LINE 帳號
-    const hasLine = accounts.some(a => a.platform === 'line');
-    if (hasLine) {
-      showToast('目前只能綁定一組 LINE 官方帳號', 'error');
-      return;
-    }
+    setEditingLineChannelId(null);
     setViewState('line-setup');
-  }, [accounts, showToast]);
+  }, []);
+
+  // 編輯既有 LINE OA
+  const handleLineEdit = useCallback((account: ChannelAccount) => {
+    const dbId = Number(account.id);
+    if (Number.isFinite(dbId)) {
+      setEditingLineChannelId(dbId);
+      setViewState('line-setup');
+    }
+  }, []);
+
+  // 刪除 LINE OA
+  const handleLineDelete = useCallback(async (account: ChannelAccount) => {
+    const dbId = Number(account.id);
+    if (!Number.isFinite(dbId)) return;
+    const ok = window.confirm(`確定要刪除「${account.name}」嗎？此操作不可復原。`);
+    if (!ok) return;
+    try {
+      const res = await fetch(`/api/v1/line_channels/${dbId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await refreshStatus();
+      await reloadAccounts();
+      showToast(`已刪除「${account.name}」`, 'success');
+    } catch (err) {
+      console.error('[BasicSettings] 刪除 LINE 帳號失敗:', err);
+      showToast('刪除失敗，請稍後再試', 'error');
+    }
+  }, [refreshStatus, reloadAccounts, showToast]);
 
   // 呼叫 meta_login 綁定 FB token 並處理 401 重試
   const requestMetaLogin = useCallback(async (facebookAccessToken: string): Promise<string> => {
@@ -493,11 +522,18 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
       <LineApiSettingsContent
         onComplete={handleLineSetupComplete}
         onBack={handleBackToList}
+        editingChannelId={editingLineChannelId ?? undefined}
       />
     );
   }
 
   return (
-    <BasicSettingsList accounts={accounts} onAddAccount={handleAddAccount} onReauthorize={handleReauthorize} />
+    <BasicSettingsList
+      accounts={accounts}
+      onAddAccount={handleAddAccount}
+      onReauthorize={handleReauthorize}
+      onEdit={handleLineEdit}
+      onDelete={handleLineDelete}
+    />
   );
 }

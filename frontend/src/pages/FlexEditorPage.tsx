@@ -15,6 +15,8 @@ export default function FlexEditorPage() {
 
   // Get message data if editing
   const editMessageId = params.messageId;
+  // 由訊息推播頁切換器帶入的預設 LINE channel_id（新建訊息時用）
+  const initialChannelId = params.channelId as string | undefined;
 
   // 刪除訊息處理函數
   const handleDeleteMessage = async () => {
@@ -185,6 +187,7 @@ export default function FlexEditorPage() {
       editMessageId={editMessageId}
       editMessageData={messageData}
       onDelete={editMessageId ? handleDeleteMessage : undefined}
+      initialChannelId={initialChannelId}
     />
   );
 }

@@ -9,7 +9,10 @@ export default function MessageListPage() {
 
   return (
     <MessageList
-      onCreateMessage={() => navigate("flex-editor")}
+      onCreateMessage={(channelId?: string) => navigate(
+        "flex-editor",
+        channelId ? { channelId } : {},
+      )}
       onEditMessage={(messageId) => navigate("flex-editor", { messageId })}
       onNavigateToAutoReply={() => navigate("auto-reply")}
       onNavigateToMembers={() => navigate("member-management")}
