@@ -65,7 +65,7 @@ function SearchInput({
 
 // ========== 清除按鈕 ==========
 
-function ClearButton({ onClick }: { onClick: () => void }) {
+export function ClearButton({ onClick }: { onClick: () => void }) {
   return (
     <div 
       onClick={onClick}

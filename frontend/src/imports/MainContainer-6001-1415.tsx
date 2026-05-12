@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Filter, Check } from "lucide-react";
 import svgPaths from "./svg-wbwsye31ry";
-import { SearchContainer } from "../components/common/SearchContainers";
+import { SearchContainer, ClearButton } from "../components/common/SearchContainers";
 import DownloadConversationsModal from "../components/DownloadConversationsModal";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../components/ui/tooltip";
 import TooltipComponent from "./Tooltip";
@@ -445,6 +445,7 @@ export function TagFilterDropdown({
               className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] flex-1 bg-transparent text-[#383838] text-[16px] outline-none placeholder:text-[#a8a8a8] min-w-0"
               onClick={(e) => e.stopPropagation()}
             />
+            {search && <ClearButton onClick={() => setSearch("")} />}
           </div>
 
           {/* 2. 已選區：未選顯示「全部」、已選顯示帶 close button 的 chip */}
