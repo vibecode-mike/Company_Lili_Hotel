@@ -36,6 +36,8 @@ async def get_tags(
     search: Optional[str] = Query(None, max_length=50, description="標籤名稱搜索"),
     sort_by: Optional[str] = Query(None, pattern="^(trigger_count|member_count|last_triggered_at|created_at)$"),
     sort_order: Optional[str] = Query("desc", pattern="^(asc|desc)$"),
+    platform: Optional[str] = Query(None, description="按平台過濾：LINE / Facebook / Webchat"),
+    channel_id: Optional[str] = Query(None, description="按頻道過濾：LINE channel_id / FB page_id / Webchat site_id"),
     page_params: PageParams = Depends(),
     db: AsyncSession = Depends(get_db),
     # current_user: User = Depends(get_current_user),  # 暫時移除認證，開發階段使用
@@ -45,6 +47,11 @@ async def get_tags(
 
     支持搜索、篩選和排序功能
     輸入已進行安全驗證，防止注入攻擊
+
+    多平台/多 OA 隔離：
+    - 帶 channel_id 時，會員標籤直接以 MemberTag.channel_id 過濾
+    - 互動標籤（InteractionTag）為全局定義表，會回傳「曾在該頻道被觸發」的標籤
+    - 不帶 channel_id 時，行為與舊版一致（全域）
     """
     # 驗證並清理搜索輸入
     if search:
@@ -61,6 +68,10 @@ async def get_tags(
             query = query.where(MemberTag.tag_name.like(f"%{escaped_search}%", escape='\\'))
         if source:
             query = query.where(MemberTag.tag_source == source)
+        if platform:
+            query = query.where(MemberTag.platform == platform)
+        if channel_id:
+            query = query.where(MemberTag.channel_id == channel_id)
 
         # 排序
         if sort_by == "member_count":
@@ -96,6 +107,14 @@ async def get_tags(
             # 使用轉義的 LIKE 模式
             escaped_search = InputValidator.escape_like_pattern(search)
             query = query.where(InteractionTag.tag_name.like(f"%{escaped_search}%", escape='\\'))
+        # 帶 channel_id 時：互動標籤定義為全局，但只回傳「在該頻道被會員觸發過」的
+        if channel_id or platform:
+            subq = select(MemberInteractionTag.tag_name)
+            if platform:
+                subq = subq.where(MemberInteractionTag.platform == platform)
+            if channel_id:
+                subq = subq.where(MemberInteractionTag.channel_id == channel_id)
+            query = query.where(InteractionTag.tag_name.in_(subq))
 
         # 排序
         if sort_by == "trigger_count":
@@ -137,6 +156,8 @@ async def get_tags(
 
 @router.get("/available-options", response_model=SuccessResponse)
 async def get_available_tag_options(
+    platform: Optional[str] = Query(None, description="按平台過濾：LINE / Facebook / Webchat"),
+    channel_id: Optional[str] = Query(None, description="按頻道過濾：LINE channel_id / FB page_id / Webchat site_id"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -144,9 +165,16 @@ async def get_available_tag_options(
 
     返回所有資料庫中出現過的不重複標籤名稱，
     用於標籤編輯器的選項池
+
+    多平台/多 OA 隔離：帶 channel_id 時只回傳該頻道下實際被使用過的標籤
+    （InteractionTag 雖為全局定義，仍需有 MemberInteractionTag 在該頻道出現才回傳）
     """
     # 查詢會員標籤 - 獲取所有不重複的標籤名稱
     member_tags_query = select(MemberTag.tag_name).distinct().order_by(MemberTag.tag_name)
+    if platform:
+        member_tags_query = member_tags_query.where(MemberTag.platform == platform)
+    if channel_id:
+        member_tags_query = member_tags_query.where(MemberTag.channel_id == channel_id)
     member_result = await db.execute(member_tags_query)
     member_tag_names = [row[0] for row in member_result.all()]
 
@@ -157,7 +185,15 @@ async def get_available_tag_options(
     conversion_tag_names = set()
 
     # 來源 1: 自動產生的互動標籤 (InteractionTag) — 全歸互動標籤
+    # 若帶 channel_id，僅顯示「在該頻道被會員觸發過」的定義
     auto_tags_query = select(InteractionTag.tag_name).distinct()
+    if platform or channel_id:
+        subq = select(MemberInteractionTag.tag_name)
+        if platform:
+            subq = subq.where(MemberInteractionTag.platform == platform)
+        if channel_id:
+            subq = subq.where(MemberInteractionTag.channel_id == channel_id)
+        auto_tags_query = auto_tags_query.where(InteractionTag.tag_name.in_(subq))
     auto_result = await db.execute(auto_tags_query)
     for row in auto_result.all():
         if row[0]:
@@ -165,6 +201,10 @@ async def get_available_tag_options(
 
     # 來源 2: MemberInteractionTag — 依 tag_source 拆兩組
     mit_query = select(MemberInteractionTag.tag_name, MemberInteractionTag.tag_source).distinct()
+    if platform:
+        mit_query = mit_query.where(MemberInteractionTag.platform == platform)
+    if channel_id:
+        mit_query = mit_query.where(MemberInteractionTag.channel_id == channel_id)
     mit_result = await db.execute(mit_query)
     for tag_name, tag_source in mit_result.all():
         if not tag_name:

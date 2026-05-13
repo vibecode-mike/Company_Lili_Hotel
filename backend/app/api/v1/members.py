@@ -91,6 +91,7 @@ async def get_members(
     params: MemberSearchParams = Depends(),
     page_params: PageParams = Depends(),
     channel: Optional[str] = None,
+    line_channel_id: Optional[str] = Query(None, description="特定 LINE OA channel_id（多分館隔離用）"),
     member_type: str = Query("all", pattern="^(all|member|guest)$", description="會員類型：all=全部 / member=已加入會員 / guest=訪客"),
     db: AsyncSession = Depends(get_db),
     # current_user: User = Depends(get_current_user),  # 暫時移除認證，開發階段使用
@@ -100,6 +101,7 @@ async def get_members(
 
     Args:
         channel: 篩選渠道 (line, facebook, webchat)，不指定則返回所有會員
+        line_channel_id: 特定 LINE OA 隔離篩選；提供時，會員與標籤都只看該分館
         member_type: 篩選會員類型 (all/member/guest)
     """
     query = select(Member)
@@ -136,9 +138,15 @@ async def get_members(
     # 標籤篩選 - 使用新的單表設計
     if params.tags:
         tag_names = params.tags.split(",")  # 現在使用標籤名稱而非ID
-        query = query.join(MemberTag).where(
-            MemberTag.tag_name.in_(tag_names)
-        )
+        tag_conditions = [MemberTag.tag_name.in_(tag_names)]
+        # 帶 line_channel_id 時：只看該 OA 下的標籤
+        if line_channel_id:
+            tag_conditions.append(MemberTag.channel_id == line_channel_id)
+        query = query.join(MemberTag).where(and_(*tag_conditions))
+
+    # 多 OA 隔離：line_channel_id 提供時，限制為該分館的 LINE 會員
+    if line_channel_id:
+        query = query.where(Member.line_channel_id == line_channel_id)
 
     # 取得所有啟用中的 LINE channel_id
     active_line_channel_ids_result = await db.execute(
@@ -330,23 +338,38 @@ async def get_members(
 async def get_member_count(
     target_audience: str = "all",
     tag_ids: str = None,
+    line_channel_id: Optional[str] = Query(None, description="特定 LINE OA channel_id；提供時只算該分館的會員/標籤"),
     db: AsyncSession = Depends(get_db),
     # current_user: User = Depends(get_current_user),  # 暫時移除認證，開發階段使用
 ):
-    """獲取符合條件的會員數量"""
+    """獲取符合條件的會員數量
+
+    Args:
+        line_channel_id: 多 OA 隔離時提供；標籤條件會限制在該分館下，
+            並且會員本身也限制為該分館成員
+    """
     query = select(func.count(Member.id))
 
     # 如果是篩選目標對象且有標籤條件
     if target_audience == "filtered" and tag_ids:
         tag_name_list = tag_ids.split(",")  # 現在使用標籤名稱
 
+        tag_conditions = [MemberTag.tag_name.in_(tag_name_list)]
+        if line_channel_id:
+            tag_conditions.append(MemberTag.channel_id == line_channel_id)
+
         # 使用新的單表設計篩選
         query = (
             select(func.count(func.distinct(Member.id)))
             .select_from(Member)
             .join(MemberTag, Member.id == MemberTag.member_id)
-            .where(MemberTag.tag_name.in_(tag_name_list))
+            .where(and_(*tag_conditions))
         )
+        if line_channel_id:
+            query = query.where(Member.line_channel_id == line_channel_id)
+    elif line_channel_id:
+        # target_audience='all' 但有 channel_id：算該 OA 全部會員
+        query = query.where(Member.line_channel_id == line_channel_id)
 
     result = await db.execute(query)
     count = result.scalar()
@@ -594,13 +617,17 @@ async def update_member_tags(
 
     # 2. 新增新的標籤
     from app.services.tag_trigger_service import record_tag_trigger
+    from app.services.platform_channel_resolver import resolve_for_member
     from app.models.tag_trigger_log import TagType, TriggerSource
+    platform, channel_id = resolve_for_member(member)
     for tag_name in request.tag_names:
         member_tag = MemberTag(
             member_id=member_id,
             tag_name=tag_name,
             tag_source="CRM",  # 手動添加的標籤來源為 CRM
             click_count=1,  # 初始點擊次數為 1
+            platform=platform,
+            channel_id=channel_id,
         )
         db.add(member_tag)
         await record_tag_trigger(
@@ -609,6 +636,8 @@ async def update_member_tags(
             tag_name=tag_name,
             tag_type=TagType.MEMBER,
             source=TriggerSource.MANUAL,
+            platform=platform,
+            channel_id=channel_id,
         )
 
     await db.commit()
@@ -641,7 +670,9 @@ async def update_member_interaction_tags(
 
     # 2. 新增新的互動標籤
     from app.services.tag_trigger_service import record_tag_trigger
+    from app.services.platform_channel_resolver import resolve_for_member
     from app.models.tag_trigger_log import TagType, TriggerSource
+    platform, channel_id = resolve_for_member(member)
     for tag_name in request.tag_names:
         interaction_tag = MemberInteractionTag(
             member_id=member_id,
@@ -649,6 +680,8 @@ async def update_member_interaction_tags(
             tag_source="CRM",  # 手動添加的標籤來源為 CRM
             click_count=1,  # 手動標籤固定為 1
             tagged_at=datetime.now(),
+            platform=platform,
+            channel_id=channel_id,
         )
         db.add(interaction_tag)
         await record_tag_trigger(
@@ -657,6 +690,8 @@ async def update_member_interaction_tags(
             tag_name=tag_name,
             tag_type=TagType.INTERACTION,
             source=TriggerSource.MANUAL,
+            platform=platform,
+            channel_id=channel_id,
         )
 
     await db.commit()
@@ -739,7 +774,9 @@ async def batch_update_member_tags(
         existing_tag_names = {tag_name for tag_name, _ in current_member_tags}
 
         from app.services.tag_trigger_service import record_tag_trigger
+        from app.services.platform_channel_resolver import resolve_for_member
         from app.models.tag_trigger_log import TagType, TriggerSource
+        platform, channel_id = resolve_for_member(member)
         for tag_name in request.member_tags:
             if tag_name not in existing_tag_names:
                 # 只有標籤不存在時才插入
@@ -750,6 +787,8 @@ async def batch_update_member_tags(
                     message_id=None,
                     click_count=1,
                     tagged_at=datetime.now(),
+                    platform=platform,
+                    channel_id=channel_id,
                 )
                 db.add(new_tag)
                 member_tags_updated += 1
@@ -763,6 +802,8 @@ async def batch_update_member_tags(
                 tag_name=tag_name,
                 tag_type=TagType.MEMBER,
                 source=TriggerSource.MANUAL,
+                platform=platform,
+                channel_id=channel_id,
             )
 
         # === 處理互動標籤 (MemberInteractionTag) ===
@@ -821,6 +862,8 @@ async def batch_update_member_tags(
                     message_id=None,
                     click_count=1,
                     tagged_at=datetime.now(),
+                    platform=platform,
+                    channel_id=channel_id,
                 )
                 db.add(new_tag)
                 interaction_tags_updated += 1
@@ -833,6 +876,8 @@ async def batch_update_member_tags(
                 tag_name=tag_name,
                 tag_type=TagType.INTERACTION,
                 source=TriggerSource.MANUAL,
+                platform=platform,
+                channel_id=channel_id,
             )
 
         # 提交事務
@@ -934,6 +979,9 @@ async def add_member_interaction_tag(
     if existing.scalar_one_or_none():
         return SuccessResponse(message="互動標籤已存在（手動標籤不累加）")
 
+    from app.services.platform_channel_resolver import resolve_for_member
+    platform, channel_id = resolve_for_member(member)
+
     # 新增互動標籤
     interaction_tag = MemberInteractionTag(
         member_id=member_id,
@@ -942,6 +990,8 @@ async def add_member_interaction_tag(
         message_id=message_id,
         click_count=1,  # 手動標籤固定為 1
         tagged_at=datetime.now(),
+        platform=platform,
+        channel_id=channel_id,
     )
     db.add(interaction_tag)
 
@@ -954,6 +1004,8 @@ async def add_member_interaction_tag(
         tag_type=TagType.INTERACTION,
         source=TriggerSource.MANUAL,
         message_id=message_id,
+        platform=platform,
+        channel_id=channel_id,
     )
 
     await db.commit()

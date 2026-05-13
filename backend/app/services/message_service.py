@@ -1184,6 +1184,9 @@ class MessageService:
             include_tags = target_filter.get("include", [])
             exclude_tags = target_filter.get("exclude", [])
 
+            # 多 OA 隔離：標籤 subquery 也按 channel 過濾，避免 multi-platform 會員的他頻道標籤命中
+            tag_channel_filter = " AND channel_id = :line_channel_id" if channel_id else ""
+
             if include_tags:
                 # 包含指定標籤的會員（查詢會員標籤和互動標籤兩個表）
                 tag_placeholders = ", ".join([f":tag{i}" for i in range(len(include_tags))])
@@ -1201,11 +1204,13 @@ class MessageService:
                           m.id IN (
                               SELECT member_id FROM member_tags
                               WHERE tag_name IN ({tag_placeholders})
+                                {tag_channel_filter}
                           )
                           OR
                           m.id IN (
                               SELECT member_id FROM member_interaction_tags
                               WHERE tag_name IN ({tag_placeholders})
+                                {tag_channel_filter}
                           )
                       )
                 """
@@ -1220,10 +1225,12 @@ class MessageService:
                       AND m.id NOT IN (
                           SELECT member_id FROM member_tags
                           WHERE tag_name IN ({exclude_placeholders})
+                            {tag_channel_filter}
                       )
                       AND m.id NOT IN (
                           SELECT member_id FROM member_interaction_tags
                           WHERE tag_name IN ({exclude_placeholders})
+                            {tag_channel_filter}
                       )
                     """
 
@@ -1248,10 +1255,12 @@ class MessageService:
                       AND m.id NOT IN (
                           SELECT member_id FROM member_tags
                           WHERE tag_name IN ({exclude_placeholders})
+                            {tag_channel_filter}
                       )
                       AND m.id NOT IN (
                           SELECT member_id FROM member_interaction_tags
                           WHERE tag_name IN ({exclude_placeholders})
+                            {tag_channel_filter}
                       )
                 """
 
