@@ -55,6 +55,10 @@ const FIELD_LABEL = {
 
 const DRAFT_STORAGE_KEY = 'line_setup_draft';
 
+const webhookBaseUrl = (
+  import.meta.env.VITE_WEBHOOK_BASE_URL?.trim() || 'https://console.star-bit.io'
+).replace(/\/+$/, '');
+
 export default function LineApiSettingsContent({ onComplete, onBack, editingChannelId }: LineApiSettingsContentProps = {}) {
   const [expandedCard, setExpandedCard] = useState<number>(1);
   const [channelId, setChannelId] = useState<string>('');
@@ -733,7 +737,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                     type="text"
                     placeholder="請輸入 Channel ID"
                     value={channelId}
-                    onChange={(e) => setChannelId(e.target.value)}
+                    onChange={(e) => setChannelId(e.target.value.trim())}
                     className="bg-[#f3f3f5] h-[36px] px-[12px] py-[4px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] border-none outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
                   />
                 </div>
@@ -1094,11 +1098,11 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                   {channelId.trim() ? (
                     <div className="flex items-center gap-[8px]">
                       <code className="flex-1 bg-[#f3f3f5] px-[12px] py-[8px] rounded-[8px] text-[14px] text-[#383838] break-all">
-                        {`https://console.star-bit.io/callback/${channelId}`}
+                        {`${webhookBaseUrl}/callback/${channelId.trim()}`}
                       </code>
                       <button
                         onClick={() => {
-                          const url = `https://console.star-bit.io/callback/${channelId}`;
+                          const url = `${webhookBaseUrl}/callback/${channelId.trim()}`;
                           navigator.clipboard.writeText(url);
                           showToast('已複製 Webhook 網址', 'success');
                         }}
