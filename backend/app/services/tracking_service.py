@@ -60,6 +60,11 @@ class TrackingService:
             except ValueError as exc:
                 raise ValueError(f"Unsupported interaction type: {interaction_type}") from exc
 
+            # 0. 從 line_uid 反查 member，取得 line_channel_id 用於 channel 隔離
+            member_stmt = select(Member).where(Member.line_uid == line_uid)
+            member_obj = (await db.execute(member_stmt)).scalar_one_or_none()
+            channel_id_value = member_obj.line_channel_id if member_obj else None
+
             # 1. 創建互動記錄
             interaction_log = ComponentInteractionLog(
                 line_id=line_uid,
@@ -73,6 +78,8 @@ class TrackingService:
                 triggered_at=datetime.now(),
                 line_event_type=line_event_type,
                 user_agent=user_agent,
+                platform="LINE",
+                channel_id=channel_id_value,
             )
             db.add(interaction_log)
             await db.flush()
@@ -224,11 +231,14 @@ class TrackingService:
             interaction_tag_id: 互動標籤 ID
             message_id: 觸發來源訊息 ID，作為 per-instance 去重 key（通常是 campaign_id）
         """
-        # 1. 解析 member_id
-        member_id = await self._resolve_member_from_line_id(db, line_uid)
-        if not member_id:
+        # 1. 解析 member 物件（同時拿到 line_channel_id 用於 channel 隔離）
+        member_stmt = select(Member).where(Member.line_uid == line_uid)
+        member_obj = (await db.execute(member_stmt)).scalar_one_or_none()
+        if not member_obj:
             logger.debug(f"Skipping member_interaction_tag: member not found for line_uid={line_uid}")
             return
+        member_id = member_obj.id
+        member_channel_id = member_obj.line_channel_id
 
         # 2. 獲取互動標籤資訊
         stmt = select(InteractionTag).where(InteractionTag.id == interaction_tag_id)
@@ -264,11 +274,13 @@ class TrackingService:
                 click_count=1,
                 last_triggered_at=datetime.now(),
                 message_id=message_id,
+                platform="LINE",
+                channel_id=member_channel_id,
             )
             db.add(new_tag)
             logger.info(
                 f"Created member_interaction_tag: member_id={member_id}, tag={tag.tag_name}, "
-                f"source={tag.tag_source}, message_id={message_id}"
+                f"source={tag.tag_source}, message_id={message_id}, channel={member_channel_id}"
             )
 
         # 寫 tag_trigger_logs（供時段洞察 heatmap 使用）— 新貼或重新觸發都記
@@ -281,6 +293,8 @@ class TrackingService:
             tag_type=TagType.INTERACTION,
             source=TriggerSource.CLICK,
             tag_id=interaction_tag_id,
+            platform="LINE",
+            channel_id=member_channel_id,
         )
 
     async def get_campaign_statistics(

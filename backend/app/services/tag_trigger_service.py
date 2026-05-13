@@ -22,6 +22,8 @@ async def record_tag_trigger(
     tag_id: Optional[int] = None,
     message_id: Optional[int] = None,
     campaign_id: Optional[int] = None,
+    platform: Optional[str] = None,
+    channel_id: Optional[str] = None,
 ) -> None:
     """
     寫一筆 tag_trigger_logs。呼叫端不需要 commit，由外層 session 統一處理。
@@ -34,8 +36,20 @@ async def record_tag_trigger(
         source: click / interaction / manual
         tag_id: 對應 interaction_tags.id（member 標籤可留空）
         message_id / campaign_id: 若來源於群發則填入
+        platform / channel_id: 標籤所屬平台與頻道，給 channel 隔離統計用；
+            呼叫端未帶時嘗試從 member 推導，多平台會員可能留 NULL
     """
     try:
+        # 若呼叫端沒帶 platform/channel_id，嘗試從 member 推導
+        if platform is None or channel_id is None:
+            from app.services.platform_channel_resolver import resolve_for_member
+            from app.models.member import Member
+            from sqlalchemy import select
+            mem = (await db.execute(select(Member).where(Member.id == member_id))).scalar_one_or_none()
+            resolved_platform, resolved_channel = resolve_for_member(mem)
+            platform = platform or resolved_platform
+            channel_id = channel_id or resolved_channel
+
         log = TagTriggerLog(
             member_id=member_id,
             tag_id=tag_id,
@@ -45,6 +59,8 @@ async def record_tag_trigger(
             campaign_id=campaign_id,
             trigger_source=source,
             triggered_at=datetime.now(ZoneInfo("Asia/Taipei")).replace(tzinfo=None),
+            platform=platform,
+            channel_id=channel_id,
         )
         db.add(log)
         await db.flush()

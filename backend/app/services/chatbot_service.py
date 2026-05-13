@@ -2744,9 +2744,18 @@ class ChatbotService:
         )
         existing_tags = {t for (t,) in existing_result.all()}
 
+        from app.services.platform_channel_resolver import resolve_for_member
+        platform, channel_id = resolve_for_member(member)
+
         tagged: List[str] = []
         for tag_name in tag_names - existing_tags:
-            db.add(MemberTag(member_id=member.id, tag_name=tag_name, tag_source="AI_chatbot"))
+            db.add(MemberTag(
+                member_id=member.id,
+                tag_name=tag_name,
+                tag_source="AI_chatbot",
+                platform=platform,
+                channel_id=channel_id,
+            ))
             tagged.append(tag_name)
         if tagged:
             await db.flush()
@@ -2765,6 +2774,8 @@ class ChatbotService:
                 tag_name=tag_name,
                 tag_type=TagType.MEMBER,
                 source=TriggerSource.INTERACTION,
+                platform=platform,
+                channel_id=channel_id,
             )
         return tagged
 
@@ -2827,9 +2838,16 @@ class ChatbotService:
         )
         existing = existing_result.scalar_one_or_none()
         now = datetime.now()
+        # widget 流程 = Webchat 平台
+        webchat_channel = member.webchat_site_id
         if existing:
             existing.click_count = (existing.click_count or 1) + 1
             existing.last_triggered_at = now
+            # 補上既有列遺漏的平台/channel（idempotent）
+            if existing.platform is None:
+                existing.platform = "Webchat"
+            if existing.channel_id is None:
+                existing.channel_id = webchat_channel
         else:
             db.add(MemberInteractionTag(
                 member_id=member.id,
@@ -2837,6 +2855,8 @@ class ChatbotService:
                 tag_source=tag_source,
                 click_count=1,
                 last_triggered_at=now,
+                platform="Webchat",
+                channel_id=webchat_channel,
             ))
 
         # 同步更新 last_interaction_at（避免訪客在 7 天 retention 期間被誤刪）
@@ -2852,6 +2872,8 @@ class ChatbotService:
             tag_name=target_category,
             tag_type=TagType.INTERACTION,
             source=trigger_source,
+            platform="Webchat",
+            channel_id=webchat_channel,
         )
 
         await db.commit()
