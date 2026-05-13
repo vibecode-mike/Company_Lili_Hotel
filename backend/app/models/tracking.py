@@ -12,6 +12,7 @@ from sqlalchemy import (
     Text,
     Boolean,
     UniqueConstraint,
+    Index,
 )
 from sqlalchemy.orm import relationship
 from app.models.base import Base
@@ -33,6 +34,9 @@ class ComponentInteractionLog(Base):
     """元件互動記錄表"""
 
     __tablename__ = "component_interaction_logs"
+    __table_args__ = (
+        Index("ix_component_interaction_logs_platform_channel", "platform", "channel_id"),
+    )
 
     # 關聯維度
     line_id = Column(
@@ -98,6 +102,8 @@ class ComponentInteractionLog(Base):
     )
     line_event_type = Column(String(50), comment="LINE事件類型")
     user_agent = Column(Text, comment="用戶代理")
+    platform = Column(String(20), nullable=True, comment="平台：LINE / Facebook / Webchat")
+    channel_id = Column(String(100), nullable=True, comment="頻道識別：LINE channel_id / FB page_id / Webchat site_id")
 
     # 關聯關係
     message = relationship("Message", back_populates="interaction_logs")

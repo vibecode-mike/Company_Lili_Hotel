@@ -33,6 +33,7 @@ class TagTriggerLog(Base):
     __tablename__ = "tag_trigger_logs"
     __table_args__ = (
         Index("ix_tag_trigger_logs_member_triggered", "member_id", "triggered_at"),
+        Index("ix_tag_trigger_logs_platform_channel", "platform", "channel_id"),
     )
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -78,6 +79,8 @@ class TagTriggerLog(Base):
     )
     trigger_source = Column(SQLEnum(TriggerSource), nullable=False, comment="觸發來源")
     triggered_at = Column(DateTime, default=datetime.now, nullable=False, comment="觸發時間")
+    platform = Column(String(20), nullable=True, comment="平台：LINE / Facebook / Webchat")
+    channel_id = Column(String(100), nullable=True, comment="頻道識別：LINE channel_id / FB page_id / Webchat site_id")
 
     # 關聯關係（tag_id 不再硬連 FK）
     member = relationship("Member")
