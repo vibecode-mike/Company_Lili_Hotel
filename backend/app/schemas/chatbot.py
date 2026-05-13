@@ -33,6 +33,9 @@ class ChatbotMessageInSchema(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000)
     hotel_id: Optional[int] = None
     test_mode: bool = False
+    # CRM 後台 ChatFAB 試聊框專用：不建立會員 / 不寫對話紀錄
+    # （test_mode=true 是給公開 widget 跳過 token 扣減用的，跟這個不一樣）
+    admin_test: bool = False
     # Widget 嵌入站點識別（讓會員管理能分辨同一個 widget JS 嵌在不同網站時的來源）
     site_id: Optional[str] = Field(None, max_length=50)  # 英文代號（穩定 key）
     site_name: Optional[str] = Field(None, max_length=100)  # 中文顯示名（UI 顯示）

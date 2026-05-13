@@ -1007,6 +1007,7 @@ class ChatbotService:
         test_mode: bool = False,
         site_id: Optional[str] = None,
         site_name: Optional[str] = None,
+        admin_test: bool = False,
     ) -> ChatbotMessageOutSchema:
         session = self.get_or_create_session(browser_key, hotel_id)
 
@@ -1125,8 +1126,9 @@ class ChatbotService:
         # 不論是否已加入會員都記錄；非會員會建一筆 is_guest=1 的 Member
         # 失敗不阻擋使用者收訊（log warning 即可）
         # 註：widget 預設帶 test_mode=true（用於跳過 token 扣減），但對話保存與 test_mode 無關
+        # admin_test=true：CRM 後台 ChatFAB 試聊框專用，**完全跳過**會員建立與對話寫入
         widget_member: Optional[Member] = None
-        if db is not None:
+        if db is not None and not admin_test:
             try:
                 widget_member = await self._persist_widget_conversation(
                     db=db,

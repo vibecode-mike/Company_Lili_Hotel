@@ -980,6 +980,7 @@ export default function ChatFAB() {
         browser_key: browserKey,
         message: text,
         test_mode: true,
+        admin_test: true,  // CRM 後台試聊框：不建立會員、不寫對話紀錄
       });
 
       if (res.reply_type === "room_cards" && res.room_cards.length > 0) {

@@ -71,6 +71,8 @@ export async function sendChatbotMessage(payload: {
   message: string;
   hotel_id?: number | null;
   test_mode?: boolean;
+  /** CRM 後台 ChatFAB 試聊框專用：true 時不建立會員、不寫對話紀錄 */
+  admin_test?: boolean;
 }): Promise<ChatbotMessageResponse> {
   const response = await apiPost("/api/v1/chatbot/message", payload, {
     skipAuth: true,

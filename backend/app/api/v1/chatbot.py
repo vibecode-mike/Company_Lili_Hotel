@@ -195,6 +195,7 @@ async def chatbot_message(
             test_mode=payload.test_mode,
             site_id=payload.site_id,
             site_name=payload.site_name,
+            admin_test=payload.admin_test,
         )
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
