@@ -7,6 +7,7 @@ import { AutoRepliesProvider } from './AutoRepliesContext';
 import { TagsProvider } from './TagsContext';
 import { ToastProvider } from '../components/ToastProvider';
 import { LineChannelStatusProvider } from './LineChannelStatusContext';
+import { ChannelProvider } from './ChannelContext';
 
 /**
  * 统一的应用 Provider 组合
@@ -34,19 +35,21 @@ export function AppProviders({ children }: AppProvidersProps) {
   return (
     <NavigationProvider>
       <LineChannelStatusProvider>
-        <AppStateProvider>
-          <MembersProvider>
-            <MessagesProvider>
-              <AutoRepliesProvider>
-                <TagsProvider>
-                  <ToastProvider>
-                    {children}
-                  </ToastProvider>
-                </TagsProvider>
-              </AutoRepliesProvider>
-            </MessagesProvider>
-          </MembersProvider>
-        </AppStateProvider>
+        <ChannelProvider>
+          <AppStateProvider>
+            <MembersProvider>
+              <MessagesProvider>
+                <AutoRepliesProvider>
+                  <TagsProvider>
+                    <ToastProvider>
+                      {children}
+                    </ToastProvider>
+                  </TagsProvider>
+                </AutoRepliesProvider>
+              </MessagesProvider>
+            </MembersProvider>
+          </AppStateProvider>
+        </ChannelProvider>
       </LineChannelStatusProvider>
     </NavigationProvider>
   );

@@ -58,6 +58,12 @@ export function clearAllAuthData(): void {
   removeUserRole();
   removeFaqPerms();
   removeLoginMethod();
+  // 同時清掉全站館別切換器選擇（登出後下次登入回預設）
+  try {
+    sessionStorage.removeItem('selected_channel_id');
+  } catch {
+    // sessionStorage 可能被禁用，忽略
+  }
 }
 
 /**
