@@ -433,6 +433,9 @@ async def _get_fb_auto_responses_from_api(jwt_token: str, db: AsyncSession) -> L
 async def get_auto_responses(
     trigger_type: Optional[TriggerType] = None,
     is_active: Optional[bool] = None,
+    line_channel_id: Optional[str] = Query(
+        None, description="特定 LINE OA channel_id；提供時只回傳該分館的自動回應"
+    ),
     jwt_token: Optional[str] = Query(None, description="FB JWT token for fetching FB auto-responses"),
     db: AsyncSession = Depends(get_db),
 ):
@@ -444,6 +447,9 @@ async def get_auto_responses(
     - Step 2: 獲取 FB 自動回應（外部 API）
     - Step 3: 合併兩個數據源
     - Step 4: 排序並返回
+
+    多 OA 隔離：line_channel_id 提供時，AutoResponse.channel_id 須完全相等才回傳
+    （channel_id 可以存 LINE channel_id 或 basic_id，所以同時比對兩種）。
     """
     # Step 1: 獲取 LINE 自動回應（本地 DB）
     query = (
@@ -458,6 +464,19 @@ async def get_auto_responses(
         query = query.where(AutoResponse.trigger_type == trigger_type)
     if is_active is not None:
         query = query.where(AutoResponse.is_active == is_active)
+
+    # 多 OA 隔離：篩出該分館的自動回應
+    # 由於 AutoResponse.channel_id 可能存 LINE channel_id 或 basic_id（@ 開頭），
+    # 同一個 LINE OA 的兩種識別碼都要比對
+    if line_channel_id:
+        ch_row = await db.execute(
+            select(LineChannel).where(LineChannel.channel_id == line_channel_id)
+        )
+        ch = ch_row.scalar_one_or_none()
+        candidate_ids = [line_channel_id]
+        if ch and ch.basic_id:
+            candidate_ids.append(ch.basic_id)
+        query = query.where(AutoResponse.channel_id.in_(candidate_ids))
 
     query = query.order_by(AutoResponse.created_at.desc())
     result = await db.execute(query)
