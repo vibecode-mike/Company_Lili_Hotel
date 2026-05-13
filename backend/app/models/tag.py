@@ -62,6 +62,8 @@ class MemberTag(Base):
         comment="觸發來源訊息ID（用於去重）",
     )
     click_count = Column(Integer, nullable=False, server_default="1", comment="點擊次數，>= 1。預設值：1（首次點擊）。重複點擊同一組合時執行 UPDATE click_count = click_count + 1，累計點擊次數不去重")
+    platform = Column(String(20), nullable=True, comment="平台：LINE / Facebook / Webchat。Step 3 backfill 後再評估是否收緊 NOT NULL")
+    channel_id = Column(String(100), nullable=True, comment="頻道識別：LINE channel_id / FB page_id / Webchat site_id")
     tagged_at = Column(DateTime, server_default=func.now(), comment="標記時間")
     created_at = Column(DateTime, server_default=func.now(), comment="建立時間")
     updated_at = Column(DateTime, onupdate=func.now(), comment="更新時間")
@@ -78,6 +80,7 @@ class MemberTag(Base):
             name="uq_member_tag_message",
         ),
         Index("ix_member_tags_tag_name", "tag_name"),
+        Index("ix_member_tags_platform_channel", "platform", "channel_id"),
     )
 
 
@@ -129,6 +132,8 @@ class MemberInteractionTag(Base):
         comment="觸發來源訊息ID（用於去重）",
     )
     click_count = Column(Integer, nullable=False, server_default="1", comment="點擊次數，>= 1。預設值：1（首次點擊）。重複點擊同一組合時執行 UPDATE click_count = click_count + 1，累計點擊次數不去重。手動標籤此欄位固定為 1")
+    platform = Column(String(20), nullable=True, comment="平台：LINE / Facebook / Webchat。Step 3 backfill 後再評估是否收緊 NOT NULL")
+    channel_id = Column(String(100), nullable=True, comment="頻道識別：LINE channel_id / FB page_id / Webchat site_id")
     tagged_at = Column(DateTime, server_default=func.now(), comment="標記時間")
     created_at = Column(DateTime, server_default=func.now(), comment="建立時間")
     updated_at = Column(DateTime, onupdate=func.now(), comment="更新時間")
@@ -144,4 +149,5 @@ class MemberInteractionTag(Base):
             "message_id",
             name="uq_member_interaction_tag_message",
         ),
+        Index("ix_member_interaction_tags_platform_channel", "platform", "channel_id"),
     )
