@@ -205,13 +205,21 @@ export function PlatformFilterDropdown({
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
   // 量測觸發按鈕位置（viewport 座標，搭配 fixed 定位避免被表頭裁切）
+  // 視窗 resize 時重新量測，讓 dropdown 持續黏著篩選按鈕，不會脫離（含下載對話紀錄 modal 內的平台欄位）。
   useLayoutEffect(() => {
-    if (!open || !triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
-    setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+    if (!open) return;
+    const measure = () => {
+      if (!triggerRef.current) return;
+      const rect = triggerRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
   }, [open]);
 
-  // 外部點擊 / 滾動 / 視窗大小改變時自動關閉
+  // 僅在「點到 wrap / list 外」時關閉；視窗 resize、頁面捲動皆不關閉，避免使用者誤觸。
+  // 互斥（同時只能展開一個 dropdown）：點到另一個 filter 按鈕也算「外部 mousedown」，會由本 handler 關閉自身。
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -220,14 +228,9 @@ export function PlatformFilterDropdown({
       const insideList = listRef.current?.contains(target);
       if (!insideWrap && !insideList) setOpen(false);
     };
-    const close = () => setOpen(false);
     document.addEventListener("mousedown", handler);
-    window.addEventListener("resize", close);
-    window.addEventListener("scroll", close, true); // capture：抓得到可滾動祖先
     return () => {
       document.removeEventListener("mousedown", handler);
-      window.removeEventListener("resize", close);
-      window.removeEventListener("scroll", close, true);
     };
   }, [open]);
 
@@ -334,7 +337,8 @@ export function TagFilterDropdown({
     setDropdownPos({ top: rect.bottom + 4, left: rect.left });
   }, [open]);
 
-  // 外部點擊 / 滾動 / 視窗大小改變時自動關閉
+  // 僅在「點到 wrap / panel 外」時關閉；視窗 resize、頁面捲動皆不關閉，避免使用者誤觸。
+  // 互斥（同時只能展開一個 dropdown）：點到另一個 filter 按鈕也算「外部 mousedown」，會由本 handler 關閉自身。
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -343,20 +347,9 @@ export function TagFilterDropdown({
       const insidePanel = panelRef.current?.contains(target);
       if (!insideWrap && !insidePanel) setOpen(false);
     };
-    // 頁面捲動（外面會員列表）才關閉；panel 內部 scroll div 觸發的 scroll event（含 CustomScrollbar drag）忽略
-    const onPageScroll = (e: Event) => {
-      const target = e.target as Node | null;
-      if (target && panelRef.current?.contains(target)) return;
-      setOpen(false);
-    };
-    const onResize = () => setOpen(false);
     document.addEventListener("mousedown", handler);
-    window.addEventListener("resize", onResize);
-    window.addEventListener("scroll", onPageScroll, true);
     return () => {
       document.removeEventListener("mousedown", handler);
-      window.removeEventListener("resize", onResize);
-      window.removeEventListener("scroll", onPageScroll, true);
     };
   }, [open]);
 
