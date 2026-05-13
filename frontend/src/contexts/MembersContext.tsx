@@ -4,6 +4,7 @@ import type { Member, TagInfo, ChannelType, DisplayMember } from '../types/membe
 import type { ChatPlatform } from '../components/chat-room/types';
 import type { BackendMember, BackendTag } from '../types/api';
 import { useAuth } from '../components/auth/AuthContext';
+import { useChannel } from './ChannelContext';
 import { apiGet, apiPost } from '../utils/apiClient';
 import { getAuthToken, getJwtToken } from '../utils/token';
 
@@ -208,6 +209,9 @@ export function MembersProvider({ children }: MembersProviderProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { isAuthenticated } = useAuth();
+  // 全站館別切換：選定 LINE OA 時，LINE 會員清單以該 channel_id 過濾
+  const { selectedChannel } = useChannel();
+  const selectedLineChannelId = selectedChannel?.channel_id ?? '';
   const hasFetchedRef = useRef(false);
 
   const fetchMembers = useCallback(async () => {
@@ -226,8 +230,12 @@ export function MembersProvider({ children }: MembersProviderProps) {
     try {
       // 1. 並行取得 LINE 會員 + Webchat 會員（含訪客）+ FB 會員 + FB 粉專列表（先顯示，再同步）
       // 使用 apiGet 自動處理 token 和 401 重試
+      // 全站館別切換：LINE 會員清單帶上 line_channel_id（後端 Phase 1+2 已支援）
+      const lineChannelParam = selectedLineChannelId
+        ? `&line_channel_id=${encodeURIComponent(selectedLineChannelId)}`
+        : '';
       const [lineMembersRes, webchatMembersRes, fbMembersRes, fbChannelsRes] = await Promise.all([
-        apiGet('/api/v1/members?channel=line&page=1&page_size=200'),
+        apiGet(`/api/v1/members?channel=line&page=1&page_size=200${lineChannelParam}`),
         apiGet('/api/v1/members?channel=webchat&page=1&page_size=200'),
         jwtToken
           ? fetch(`/api/v1/fb_channels/message-list?jwt_token=${encodeURIComponent(jwtToken)}`)
@@ -371,7 +379,7 @@ export function MembersProvider({ children }: MembersProviderProps) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [selectedLineChannelId]);
 
   useEffect(() => {
     if (isAuthenticated && !hasFetchedRef.current) {
@@ -385,6 +393,14 @@ export function MembersProvider({ children }: MembersProviderProps) {
       setError(null);
     }
   }, [isAuthenticated, fetchMembers]);
+
+  // 全站館別切換時：重新抓 LINE 會員清單（不影響 webchat/fb）
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (!hasFetchedRef.current) return;  // 首次載入由上一個 useEffect 處理
+    fetchMembers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLineChannelId]);
 
   const addMember = useCallback((member: Member) => {
     setMembers(prev => [...prev, member]);

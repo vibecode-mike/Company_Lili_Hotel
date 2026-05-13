@@ -31,6 +31,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { ScheduleSettings, TargetAudienceSelector, PreviewPanel } from './message-creation';
 import type { Tag } from './message-creation';
 import { useMessages } from '../contexts/MessagesContext';
+import { useChannel } from '../contexts/ChannelContext';
 import { CAROUSEL_STRUCTURE_FIELDS } from './carouselStructure';
 import type { FlexMessage, FlexBubble } from '../types/api';
 import type { MessagePlatform } from '../types/channel';
@@ -106,6 +107,9 @@ interface MessageCreationProps {
 export default function MessageCreation({ onBack, onNavigate, onNavigateToSettings, editMessageId, editMessageData, onDelete, initialChannelId }: MessageCreationProps = {}) {
   // Get quota status and refreshAll from MessagesContext
   const { quotaStatus, quotaLoading, quotaError, refreshAll } = useMessages();
+  // 全站館別切換器選的 channel：當 prop initialChannelId 未帶（例如直接開 /flex-editor）時當 fallback
+  const { selectedChannel: globalSelectedChannel } = useChannel();
+  const effectiveInitialChannelId = initialChannelId ?? globalSelectedChannel?.channel_id;
 
   const [isPublishing, setIsPublishing] = useState(false);
   const isPublishingRef = useRef(false);
@@ -207,10 +211,10 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
       setChannelOptions(options);
 
-      // 預設選中（編輯模式由還原 useEffect 處理；其餘優先 initialChannelId、否則第一個）
+      // 預設選中（編輯模式由還原 useEffect 處理；其餘優先 global ChannelContext、否則第一個）
       if (options.length > 0 && !selectedChannel && !editMessageData?.channelId) {
-        const matched = initialChannelId
-          ? options.find((o) => o.channelId === initialChannelId)
+        const matched = effectiveInitialChannelId
+          ? options.find((o) => o.channelId === effectiveInitialChannelId)
           : null;
         const fallback = matched || options[0];
         setSelectedChannel(fallback.value);
@@ -219,7 +223,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
     };
 
     fetchChannels();
-  }, [editMessageData?.channelId, initialChannelId]);
+  }, [editMessageData?.channelId, effectiveInitialChannelId]);
 
   // Monitor flexMessageJson changes
   useEffect(() => {

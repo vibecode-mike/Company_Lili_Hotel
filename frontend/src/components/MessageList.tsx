@@ -1,9 +1,6 @@
 import { useState, useMemo, memo, useCallback, useEffect, type ReactNode } from "react";
 import svgPaths from "../imports/svg-icons-common";
-import { useLineChannels } from "../hooks/useLineChannels";
-import ChannelSwitcher, {
-  channelItemsFromLineChannels,
-} from "./common/ChannelSwitcher";
+import { useChannel } from "../contexts/ChannelContext";
 import { ChannelIcon as CommonChannelIcon } from "./common/icons";
 import { BlankStateCard, BlankStateContainer } from "./common/BlankStateCard";
 import {
@@ -621,20 +618,14 @@ export default function MessageList({
     fetchQuota,
   } = useMessages();
 
-  // LINE OA 切換器：拉清單、預設選第一個、不記住跨頁狀態
-  const { channels: lineChannels, loading: channelsLoading } = useLineChannels();
-  const [selectedChannelId, setSelectedChannelId] = useState<string>("");
-
-  useEffect(() => {
-    if (!selectedChannelId && lineChannels.length > 0) {
-      setSelectedChannelId(lineChannels[0].channel_id);
-    }
-  }, [lineChannels, selectedChannelId]);
-
-  const selectedChannelName = useMemo(() => {
-    const found = lineChannels.find((c) => c.channel_id === selectedChannelId);
-    return found?.channel_name || "";
-  }, [lineChannels, selectedChannelId]);
+  // 改讀全站 ChannelContext（sidebar 上的切換器是唯一入口）
+  const {
+    selectedChannel,
+    availableChannels: lineChannels,
+    loading: channelsLoading,
+  } = useChannel();
+  const selectedChannelId = selectedChannel?.channel_id ?? "";
+  const selectedChannelName = selectedChannel?.channel_name ?? "";
 
   useEffect(() => {
     if (currentPage !== "messages") return;
@@ -810,11 +801,6 @@ export default function MessageList({
                     <span className="text-[#383838] text-[14px] leading-[1.5] truncate max-w-[140px]">
                       {selectedChannelName || "LINE 官方帳號"}
                     </span>
-                    <ChannelSwitcher
-                      items={channelItemsFromLineChannels(lineChannels)}
-                      selectedKey={selectedChannelId}
-                      onChange={setSelectedChannelId}
-                    />
                   </div>
                 ) : undefined
               }

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, ReactNode, useCallback, use
 import { toast } from 'sonner';
 import type { BackendAutoReply, BackendKeyword, BackendReplyMessage, FbAutoReply } from '../types/api';
 import { useAuth } from '../components/auth/AuthContext';
+import { useChannel } from './ChannelContext';
 import type { AutoReplyChannel } from '../types/channel';
 import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from '../utils/apiClient';
 import { getAuthToken, getJwtToken } from '../utils/token';
@@ -316,6 +317,8 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { isAuthenticated } = useAuth();
+  const { selectedChannel } = useChannel();
+  const selectedLineChannelId = selectedChannel?.channel_id ?? '';
   const hasFetchedRef = useRef(false);
 
   const addAutoReply = useCallback((reply: AutoReply) => {
@@ -347,9 +350,14 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
     setError(null);
     try {
       // ✅ 新架構：一次 API 調用，後端已合併 LINE DB + FB API 數據
+      // 多 OA 隔離：帶上全站館別切換選中的 channel_id
       const jwtToken = getJwtToken();
-      const url = jwtToken
-        ? `/api/v1/auto_responses?jwt_token=${encodeURIComponent(jwtToken)}`
+      const params = new URLSearchParams();
+      if (jwtToken) params.set('jwt_token', jwtToken);
+      if (selectedLineChannelId) params.set('line_channel_id', selectedLineChannelId);
+      const queryString = params.toString();
+      const url = queryString
+        ? `/api/v1/auto_responses?${queryString}`
         : '/api/v1/auto_responses';
 
       const response = await apiGet(url);
@@ -378,7 +386,7 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [selectedLineChannelId]);
 
   const fetchAutoReplyById = useCallback(async (id: string): Promise<AutoReply | undefined> => {
     try {

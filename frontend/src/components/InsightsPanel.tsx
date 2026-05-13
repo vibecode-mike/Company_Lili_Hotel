@@ -4,6 +4,7 @@ import Sidebar from "./Sidebar";
 import { PageHeaderWithBreadcrumb } from "./common/Breadcrumb";
 import { useNavigation } from "../contexts/NavigationContext";
 import { useLineChannelStatus } from "../contexts/LineChannelStatusContext";
+import { useChannel } from "../contexts/ChannelContext";
 import { ChevronDown, ChevronUp, Check } from "lucide-react";
 import { apiGet } from "../utils/apiClient";
 import { formatUnansweredTime } from "../utils/memberTime";
@@ -813,6 +814,11 @@ interface TimeSlotDetailResponse {
 }
 
 function TimeInsightsSection({ reducedMotion }: { reducedMotion: boolean }) {
+  // 全站館別切換：時段熱圖 + 互動旅程明細都按選中 LINE OA 過濾
+  const { selectedChannel } = useChannel();
+  const lineChannelQuery = selectedChannel?.channel_id
+    ? `&line_channel_id=${encodeURIComponent(selectedChannel.channel_id)}`
+    : '';
   const { navigate } = useNavigation();
   // 兩個區塊各自的進場 ref：journey 與 heatmap 分開觸發，互不干擾
   const [journeyRef, journeyInView] = useInViewOnce<HTMLDivElement>({ reducedMotion });
@@ -851,12 +857,12 @@ function TimeInsightsSection({ reducedMotion }: { reducedMotion: boolean }) {
   // 後端 channel key → 我們的 Channel 型別。nonMember 對應後端 webchat
   const apiChannelKey: Record<Channel, string> = { line: "line", facebook: "facebook", nonMember: "webchat" };
 
-  // heatmap 載入（隨 channel 切換）
+  // heatmap 載入（隨 channel 切換 / 館別切換）
   useEffect(() => {
     const load = async (ch: Channel) => {
       try {
         const res = await apiGet(
-          `/api/v1/analytics/time-slot-insights?channel=${apiChannelKey[ch]}`,
+          `/api/v1/analytics/time-slot-insights?channel=${apiChannelKey[ch]}${lineChannelQuery}`,
         );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as TimeSlotInsightsResponse;
@@ -888,9 +894,9 @@ function TimeInsightsSection({ reducedMotion }: { reducedMotion: boolean }) {
       }
     };
     load(channel);
-  }, [channel]);
+  }, [channel, lineChannelQuery]);
 
-  // 互動旅程明細載入（隨 channel + cell 切換）
+  // 互動旅程明細載入（隨 channel + cell + 館別 切換）
   useEffect(() => {
     const load = async () => {
       setLoadingJourney(true);
@@ -899,6 +905,9 @@ function TimeInsightsSection({ reducedMotion }: { reducedMotion: boolean }) {
         if (cell && apiDates[cell.c]) {
           params.set("cell_date", apiDates[cell.c]);
           params.set("cell_block", String(cell.r));
+        }
+        if (selectedChannel?.channel_id) {
+          params.set("line_channel_id", selectedChannel.channel_id);
         }
         const res = await apiGet(`/api/v1/analytics/time-slot-detail?${params.toString()}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -914,7 +923,7 @@ function TimeInsightsSection({ reducedMotion }: { reducedMotion: boolean }) {
     // cell 模式需要 apiDates 對齊；apiDates 沒載入時跳過 cell 請求避免錯位
     if (cell && apiDates.length === 0) return;
     load();
-  }, [channel, cell, apiDates]);
+  }, [channel, cell, apiDates, lineChannelQuery]);
 
   // 互動旅程進場：journey 第一次有資料且容器在視窗內才開 enter phase；只跑一次
   useEffect(() => {
@@ -1363,6 +1372,11 @@ export default function InsightsPanel({
   const navigationLocked = !isConfigured;
   // 使用者「減少動畫」偏好；下傳到子元件統一決策
   const reducedMotion = useReducedMotion();
+  // 全站館別切換：所有 analytics endpoint 都附 line_channel_id
+  const { selectedChannel } = useChannel();
+  const lineChannelQuery = selectedChannel?.channel_id
+    ? `&line_channel_id=${encodeURIComponent(selectedChannel.channel_id)}`
+    : '';
 
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
 
@@ -1393,12 +1407,12 @@ export default function InsightsPanel({
     const prev = getPeriodRange(period, "previous");
 
     const loadCoverage = async (start: string, end: string, topN: number) => {
-      const res = await apiGet(`/api/v1/analytics/ai-coverage?start_date=${start}&end_date=${end}&top_n=${topN}`);
+      const res = await apiGet(`/api/v1/analytics/ai-coverage?start_date=${start}&end_date=${end}&top_n=${topN}${lineChannelQuery}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return (await res.json()) as AiCoverageResponse;
     };
     const loadOrders = async (start: string, end: string) => {
-      const res = await apiGet(`/api/v1/analytics/completed-orders?start_date=${start}&end_date=${end}`);
+      const res = await apiGet(`/api/v1/analytics/completed-orders?start_date=${start}&end_date=${end}${lineChannelQuery}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return (await res.json()) as CompletedOrdersResponse;
     };
@@ -1420,7 +1434,7 @@ export default function InsightsPanel({
     // 新增會員（預設 source=line；未來要展開 fb/webchat/all 時直接加 query 即可）
     const loadMembers = async (start: string, end: string) => {
       const res = await apiGet(
-        `/api/v1/analytics/new-members?start_date=${start}&end_date=${end}&source=line`,
+        `/api/v1/analytics/new-members?start_date=${start}&end_date=${end}&source=line${lineChannelQuery}`,
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return (await res.json()) as NewMembersResponse;
@@ -1431,32 +1445,32 @@ export default function InsightsPanel({
     loadMembers(prev.start, prev.end)
       .then(setNewMembersPrev)
       .catch((err) => console.error("[InsightsPanel] load previous new-members failed:", err));
-  }, [period]);
+  }, [period, lineChannelQuery]);
 
-  // 待回覆對話：只在第一次載入，不跟 period 綁定（是 snapshot）
+  // 待回覆對話：切換館別時重抓
   useEffect(() => {
-    apiGet(`/api/v1/analytics/pending-conversations?limit=50`)
+    apiGet(`/api/v1/analytics/pending-conversations?limit=50${lineChannelQuery}`)
       .then(async (res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         setPending((await res.json()) as PendingConversationsResponse);
       })
       .catch((err) => console.error("[InsightsPanel] load pending conversations failed:", err));
-  }, []);
+  }, [lineChannelQuery]);
 
-  // 行動建議 - AI 未能回答：只載一次，用近 365 天固定範圍，與 period 脫鉤
+  // 行動建議 - AI 未能回答：切換館別時重抓，用近 365 天固定範圍，與 period 脫鉤
   // 後端已用 ORDER BY created_at DESC，直接符合「越新越前面」
   useEffect(() => {
     const today = new Date();
     const startDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 364);
     const endStr = fmtDate(today);
     const startStr = fmtDate(startDay);
-    apiGet(`/api/v1/analytics/ai-coverage?start_date=${startStr}&end_date=${endStr}&top_n=50`)
+    apiGet(`/api/v1/analytics/ai-coverage?start_date=${startStr}&end_date=${endStr}&top_n=50${lineChannelQuery}`)
       .then(async (res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         setUnansweredSnapshot((await res.json()) as AiCoverageResponse);
       })
       .catch((err) => console.error("[InsightsPanel] load unanswered snapshot failed:", err));
-  }, []);
+  }, [lineChannelQuery]);
 
   // KPI 卡顯示值（本期覆蓋率 + 相較上一期的趨勢）
   const aiCoverageKpi = useMemo(() => {
