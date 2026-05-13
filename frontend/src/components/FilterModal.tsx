@@ -14,12 +14,14 @@ interface FilterModalProps {
   onConfirm?: (selectedTags: Tag[], isInclude: boolean) => void;
   initialSelectedTags?: Tag[];
   initialIsInclude?: boolean;
+  /** 多 OA 隔離：當前選中的 LINE channel_id / FB page_id，傳入後只顯示該頻道下的標籤 */
+  channelId?: string;
 }
 
 const MAX_TAGS = 20; // 标签数量上限
 const MAX_TAG_LENGTH = 20; // 标签名称字符数上限
 
-export default function FilterModal({ onClose, onConfirm, initialSelectedTags, initialIsInclude }: FilterModalProps) {
+export default function FilterModal({ onClose, onConfirm, initialSelectedTags, initialIsInclude, channelId }: FilterModalProps) {
   const [memberTags, setMemberTags] = useState<Tag[]>([]);
   const [interactionTags, setInteractionTags] = useState<Tag[]>([]);
   const [conversionTags, setConversionTags] = useState<Tag[]>([]);
@@ -39,7 +41,10 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
       setIsLoading(true);
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch('/api/v1/tags/available-options', {
+        const url = channelId
+          ? `/api/v1/tags/available-options?channel_id=${encodeURIComponent(channelId)}`
+          : '/api/v1/tags/available-options';
+        const response = await fetch(url, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -78,7 +83,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
     };
 
     fetchAvailableTags();
-  }, []);
+  }, [channelId]);
 
   // 根據當前 Tab 獲取顯示的標籤
   const displayTags = activeTab === 'member'

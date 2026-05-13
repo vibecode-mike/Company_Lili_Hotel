@@ -245,7 +245,14 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
             };
           }
 
-          const response = await apiPost('/api/v1/messages/quota', requestBody);
+          // 多 OA 隔離：帶當前選中 LINE OA 的 channel_id，避免算到別館的好友
+          const lineSelectedOption = channelOptions.find(opt => opt.value === selectedChannel);
+          const lineChannelId = lineSelectedOption?.channelId;
+          const quotaUrl = lineChannelId
+            ? `/api/v1/messages/quota?channel_id=${encodeURIComponent(lineChannelId)}`
+            : '/api/v1/messages/quota';
+
+          const response = await apiPost(quotaUrl, requestBody);
 
           if (!isActive) return;
 
@@ -2537,6 +2544,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                                 onConfirm={handleFilterConfirm}
                                 initialSelectedTags={selectedFilterTags}
                                 initialIsInclude={filterCondition === 'include'}
+                                channelId={channelOptions.find(opt => opt.value === selectedChannel)?.channelId}
                               />
                             </DialogContentNoClose>
                           </Dialog>
