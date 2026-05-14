@@ -76,6 +76,13 @@ async def get_categories(
             ],
             "rule_count": getattr(cat, "rule_count", 0),
             "published_count": getattr(cat, "published_count", 0),
+            # 該 OA 下此分類的最後更新時間（沒規則就是 null，前端顯示「—」）
+            "last_rule_updated_at": (
+                cat.last_rule_updated_at.isoformat()
+                if getattr(cat, "last_rule_updated_at", None)
+                else None
+            ),
+            # 保留原本 category 級別的 updated_at 以維持相容
             "updated_at": cat.updated_at.isoformat() if cat.updated_at else None,
             "pms_connection": None,
         }
@@ -767,15 +774,16 @@ async def test_chat(
 
 @router.get("/token-usage", response_model=dict)
 async def get_token_usage(
+    line_channel_id: Optional[str] = Query(None, description="LINE OA channel_id（必填，未提供時回傳 0）"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """查詢 Token 用量"""
+    """查詢 Token 用量（依當前 LINE 館別）"""
     industry = await faq_service.get_default_industry(db)
     if not industry:
         raise HTTPException(status_code=404, detail="尚未設定產業資料")
 
-    usage = await faq_service.get_token_usage(db, industry.id)
+    usage = await faq_service.get_token_usage(db, industry.id, line_channel_id)
     if not usage:
         return {
             "code": 200,
@@ -792,6 +800,7 @@ async def get_token_usage(
         "data": {
             "id": usage.id,
             "industry_id": usage.industry_id,
+            "channel_id": usage.channel_id,
             "total_quota": usage.total_quota,
             "used_amount": usage.used_amount,
             "remaining": remaining,
@@ -806,16 +815,21 @@ async def update_token_quota(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """設定 Token 額度"""
+    """設定 Token 額度（依當前 LINE 館別）"""
     industry = await faq_service.get_default_industry(db)
     if not industry:
         raise HTTPException(status_code=404, detail="尚未設定產業資料")
 
-    usage = await faq_service.update_token_quota(db, industry.id, data.total_quota)
+    if not data.line_channel_id:
+        raise HTTPException(status_code=400, detail="必須指定 LINE 館別（line_channel_id）")
+
+    usage = await faq_service.update_token_quota(
+        db, industry.id, data.total_quota, data.line_channel_id
+    )
     return {
         "code": 200,
         "message": "Token 額度設定成功",
-        "data": {"total_quota": usage.total_quota},
+        "data": {"total_quota": usage.total_quota, "channel_id": usage.channel_id},
     }
 
 

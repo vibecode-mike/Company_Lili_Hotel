@@ -273,10 +273,7 @@ export default function StaffUsersManagement({
     >
       <div className="bg-slate-50 content-stretch flex flex-col items-start relative w-full">
         <PageHeaderWithBreadcrumb
-          breadcrumbItems={[
-            { label: "設定" },
-            { label: "帳號管理", active: true },
-          ]}
+          breadcrumbItems={[{ label: "帳號管理", active: true }]}
           title="帳號管理"
           description="新增、編輯員工帳號，並指派每個帳號可看到的 LINE 館別"
         />

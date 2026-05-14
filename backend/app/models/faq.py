@@ -199,9 +199,13 @@ class FaqRuleTag(Base):
 
 
 class AiTokenUsage(Base):
-    """AI Token 用量追蹤表"""
+    """AI Token 用量追蹤表（多 OA：每個 LINE OA 一筆獨立 quota）"""
 
     __tablename__ = "ai_token_usages"
+    __table_args__ = (
+        UniqueConstraint("industry_id", "channel_id", name="uq_ai_token_industry_channel"),
+        Index("ix_ai_token_channel_id", "channel_id"),
+    )
 
     industry_id = Column(
         BigInteger,
@@ -209,6 +213,12 @@ class AiTokenUsage(Base):
         nullable=False,
         index=True,
         comment="所屬產業 ID",
+    )
+    channel_id = Column(
+        String(100),
+        ForeignKey("line_channels.channel_id", ondelete="CASCADE"),
+        nullable=False,
+        comment="所屬 LINE OA channel_id（多 OA 隔離）",
     )
     total_quota = Column(
         BigInteger, nullable=False, default=0, comment="Token 總額度"

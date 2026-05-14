@@ -133,6 +133,7 @@ class AiTokenUsageUpdateSchema(BaseModel):
     """設定 Token 額度"""
 
     total_quota: int = Field(..., ge=0)
+    line_channel_id: str = Field(..., description="所屬 LINE OA channel_id（必填）")
 
 
 # === AiToneConfig ===

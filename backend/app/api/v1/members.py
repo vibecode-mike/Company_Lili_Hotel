@@ -29,7 +29,7 @@ from app.api.v1.auth import get_current_user
 from app.clients.line_app_client import LineAppClient
 from app.clients.fb_message_client import FbMessageClient
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Optional, Dict
 import os
 import pytz
 import logging
@@ -267,12 +267,13 @@ async def get_members(
             if is_user_waiting or is_ai_failed:
                 unanswered_members[thread_id] = created_at
 
-    # 查詢 LINE 渠道名稱
-    line_channel_name = None
-    line_channel_result = await db.execute(
-        select(LineChannel.channel_name).where(LineChannel.is_active == True).limit(1)
+    # 多 OA：建立 channel_id -> channel_name 映射，依會員實際所屬 OA 顯示
+    line_channels_map_res = await db.execute(
+        select(LineChannel.channel_id, LineChannel.channel_name).where(LineChannel.is_active == True)  # noqa: E712
     )
-    line_channel_name = line_channel_result.scalar()
+    line_channel_name_map: Dict[str, Optional[str]] = {
+        row[0]: row[1] for row in line_channels_map_res.fetchall() if row[0]
+    }
 
     # 組裝響應數據
     items = []
@@ -319,8 +320,12 @@ async def get_members(
             member_dict["is_unanswered"] = False
             member_dict["unanswered_since"] = None
 
-        # 添加渠道名稱
-        member_dict["channel_name"] = line_channel_name
+        # 添加渠道名稱（多 OA：依該會員的 line_channel_id 對應）
+        member_dict["channel_name"] = (
+            line_channel_name_map.get(member.line_channel_id)
+            if member.line_channel_id
+            else None
+        )
 
         items.append(member_dict)
 

@@ -317,9 +317,11 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { isAuthenticated } = useAuth();
-  const { selectedChannel } = useChannel();
+  const { selectedChannel, loading: channelLoading } = useChannel();
   const selectedLineChannelId = selectedChannel?.channel_id ?? '';
   const hasFetchedRef = useRef(false);
+  // 多 OA 切換時的競態保護：只讓最新一筆 fetch 寫回 state，避免舊請求晚到蓋掉新結果
+  const fetchIdRef = useRef(0);
 
   const addAutoReply = useCallback((reply: AutoReply) => {
     setAutoReplies(prev => sortByCreatedAt([...prev, reply]));
@@ -346,6 +348,7 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
       return;
     }
 
+    const myFetchId = ++fetchIdRef.current;
     setIsLoading(true);
     setError(null);
     try {
@@ -362,12 +365,16 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
 
       const response = await apiGet(url);
 
+      // race guard：這個 fetch 已被新的 fetch 取代 → 丟棄結果
+      if (myFetchId !== fetchIdRef.current) return;
+
       if (!response.ok) {
         const errData = await response.json().catch(() => null);
         throw new Error(errData?.detail || errData?.message || '獲取自動回應失敗');
       }
 
       const result = await response.json();
+      if (myFetchId !== fetchIdRef.current) return;
       const allReplies = Array.isArray(result?.data)
         ? result.data.map(mapAutoResponse)
         : [];
@@ -380,11 +387,14 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
         fb: allReplies.filter(r => r.channels?.includes('Facebook')).length,
       });
     } catch (err) {
+      if (myFetchId !== fetchIdRef.current) return;
       console.error('獲取自動回應錯誤:', err);
       setError(err instanceof Error ? err.message : '獲取自動回應失敗');
       toast.error(err instanceof Error ? err.message : '獲取自動回應失敗');
     } finally {
-      setIsLoading(false);
+      if (myFetchId === fetchIdRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [selectedLineChannelId]);
 
@@ -698,7 +708,8 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
   );
 
   useEffect(() => {
-    if (isAuthenticated && !hasFetchedRef.current) {
+    // 等 ChannelContext 抓完 my-channels，避免先用空 channel_id 抓回全部
+    if (isAuthenticated && !channelLoading && !hasFetchedRef.current) {
       hasFetchedRef.current = true;
       fetchAutoReplies();
     }
@@ -707,7 +718,7 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
       setAutoReplies([]);
       setError(null);
     }
-  }, [isAuthenticated, fetchAutoReplies]);
+  }, [isAuthenticated, channelLoading, fetchAutoReplies]);
 
   // 全站館別切換時：重新抓自動回應清單
   useEffect(() => {

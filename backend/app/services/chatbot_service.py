@@ -1054,12 +1054,18 @@ class ChatbotService:
                 session.checkin_date = checkin_str
                 session.checkout_date = checkout_str
 
+        # 多 OA 路由：依 site_id 查 webchat_site_channels 取得綁定的 LINE channel_id
+        webchat_line_channel_id = (
+            await self._resolve_webchat_channel_id(db, site_id) if db else None
+        )
+
         # Build unified tool calling context
         # collect_rule_ids=True 讓 _unified_tool_loop 在 kb_search 時記下引用到的 FAQ rule，
         # 後續才能依規則標籤自動為（訪客 / 已加入會員的）webchat 使用者打標。
         ctx = ToolCallingContext(
             db=db, test_mode=test_mode,
             collect_rule_ids=True,
+            line_channel_id=webchat_line_channel_id,
             checkin_date=session.checkin_date,
             checkout_date=session.checkout_date,
             booking_adults=session.booking_adults,
@@ -1175,6 +1181,20 @@ class ChatbotService:
             unanswered=ctx.unanswered,
         )
 
+    async def _resolve_webchat_channel_id(
+        self, db: AsyncSession, site_id: Optional[str]
+    ) -> Optional[str]:
+        """依 site_id 查 webchat_site_channels 找到綁定的 LINE channel_id"""
+        if not site_id:
+            return None
+        from app.models.webchat_site import WebchatSiteChannel
+        res = await db.execute(
+            select(WebchatSiteChannel.line_channel_id).where(
+                WebchatSiteChannel.site_id == site_id
+            )
+        )
+        return res.scalar_one_or_none()
+
     async def _persist_widget_conversation(
         self,
         *,
@@ -1197,6 +1217,8 @@ class ChatbotService:
         # 規範化 site 欄位（過濾空字串、限長度，避免攻擊面擴大）
         site_id = (site_id or "").strip()[:50] or None
         site_name = (site_name or "").strip()[:100] or None
+        # 多 OA：依 site_id 查出綁定的 LINE channel_id，寫進 member.line_channel_id
+        line_channel_id = await self._resolve_webchat_channel_id(db, site_id)
 
         # 1. upsert Member by webchat_uid=browser_key
         result = await db.execute(
@@ -1219,6 +1241,7 @@ class ChatbotService:
                 last_interaction_at=datetime.now(),
                 webchat_site_id=site_id,
                 webchat_site_name=site_name,
+                line_channel_id=line_channel_id,
             )
             db.add(member)
             await db.flush()  # 取得 member.id
@@ -1229,6 +1252,8 @@ class ChatbotService:
                 member.webchat_site_id = site_id
             if site_name and not member.webchat_site_name:
                 member.webchat_site_name = site_name
+            if line_channel_id and not member.line_channel_id:
+                member.line_channel_id = line_channel_id
 
         # 2. upsert ConversationThread (id = browser_key)
         thread_result = await db.execute(
@@ -1305,8 +1330,13 @@ class ChatbotService:
         await db.commit()
         return member
 
-    async def _deduct_tokens(self, db: AsyncSession, tokens_used: int) -> None:
-        """扣除 AiTokenUsage 額度"""
+    async def _deduct_tokens(
+        self,
+        db: AsyncSession,
+        tokens_used: int,
+        line_channel_id: Optional[str] = None,
+    ) -> None:
+        """扣除 AiTokenUsage 額度（多 OA：按 channel_id 扣）"""
         ind_result = await db.execute(
             select(Industry).where(Industry.is_active == True).limit(1)  # noqa: E712
         )
@@ -1314,9 +1344,23 @@ class ChatbotService:
         if not industry:
             return
 
-        usage_result = await db.execute(
-            select(AiTokenUsage).where(AiTokenUsage.industry_id == industry.id)
+        # 未指定 channel_id 時用第一筆 LineChannel 作為 fallback（官網 chatbot 用）
+        if not line_channel_id:
+            from app.models.line_channel import LineChannel
+            lc_res = await db.execute(
+                select(LineChannel).where(LineChannel.is_active == True).order_by(LineChannel.id.asc()).limit(1)  # noqa: E712
+            )
+            lc = lc_res.scalar_one_or_none()
+            if lc and lc.channel_id:
+                line_channel_id = lc.channel_id
+            else:
+                return  # 沒有任何 LineChannel → 不扣
+
+        usage_query = select(AiTokenUsage).where(
+            AiTokenUsage.industry_id == industry.id,
+            AiTokenUsage.channel_id == line_channel_id,
         )
+        usage_result = await db.execute(usage_query)
         token_usage = usage_result.scalar_one_or_none()
         if token_usage:
             token_usage.used_amount += tokens_used
@@ -2496,8 +2540,10 @@ class ChatbotService:
         - Token 耗盡時降級為自動回應
         - 用 line_uid 作為 session key 追蹤訂房狀態
         """
-        # 1. Token 額度檢查（保留）
-        token_usage = await self._get_token_usage(db, industry_id)
+        # 1. Token 額度檢查（多 OA：依當前 LINE channel_id 取對應 quota）
+        token_usage = await self._get_token_usage(
+            db, industry_id, line_channel_id=line_channel_id
+        )
         if token_usage is None:
             return self._chat_error("系統尚未設定產業資料")
         if isinstance(token_usage, ChatbotMessageOutSchema):
@@ -2664,7 +2710,11 @@ class ChatbotService:
         }
 
     async def _get_token_usage(
-        self, db: AsyncSession, industry_id: Optional[int] = None, check_exhausted: bool = True,
+        self,
+        db: AsyncSession,
+        industry_id: Optional[int] = None,
+        check_exhausted: bool = True,
+        line_channel_id: Optional[str] = None,
     ) -> Any:
         """取得 token 額度。回傳 AiTokenUsage | None（無產業）| dict（額度用完 error）"""
         if not industry_id:
@@ -2676,9 +2726,20 @@ class ChatbotService:
                 return None
             industry_id = industry.id
 
-        usage_result = await db.execute(
-            select(AiTokenUsage).where(AiTokenUsage.industry_id == industry_id)
-        )
+        # 未指定 channel_id 時用第一筆 LineChannel 作為 fallback（官網 chatbot）
+        if not line_channel_id:
+            from app.models.line_channel import LineChannel
+            lc_res = await db.execute(
+                select(LineChannel).where(LineChannel.is_active == True).order_by(LineChannel.id.asc()).limit(1)  # noqa: E712
+            )
+            lc = lc_res.scalar_one_or_none()
+            if lc and lc.channel_id:
+                line_channel_id = lc.channel_id
+
+        usage_query = select(AiTokenUsage).where(AiTokenUsage.industry_id == industry_id)
+        if line_channel_id:
+            usage_query = usage_query.where(AiTokenUsage.channel_id == line_channel_id)
+        usage_result = await db.execute(usage_query)
         token_usage = usage_result.scalar_one_or_none()
 
         if check_exhausted and token_usage and token_usage.total_quota > 0:

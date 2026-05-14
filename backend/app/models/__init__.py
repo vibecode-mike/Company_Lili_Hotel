@@ -24,6 +24,7 @@ from app.models.tracking import (
 from app.models.line_channel import LineChannel
 from app.models.line_friend import LineFriend
 from app.models.user_channel import UserChannel
+from app.models.webchat_site import WebchatSiteChannel
 from app.models.fb_channel import FbChannel
 from app.models.conversation import ConversationThread, ConversationMessage
 from app.models.chatbot_booking import ChatbotSession, FaqPmsConnection, BookingRecord
@@ -68,6 +69,7 @@ __all__ = [
     "LineChannel",
     "LineFriend",
     "UserChannel",
+    "WebchatSiteChannel",
     "FbChannel",
     "ConversationThread",
     "ConversationMessage",

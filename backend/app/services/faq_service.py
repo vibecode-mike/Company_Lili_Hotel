@@ -60,7 +60,7 @@ class FaqService:
         result = await db.execute(stmt)
         categories = result.scalars().all()
 
-        # 一次查詢取得所有分類的規則數量與已發佈數量
+        # 一次查詢取得所有分類的規則數量、已發佈數量、最後更新時間
         from sqlalchemy import case
         counts_stmt = (
             select(
@@ -69,6 +69,7 @@ class FaqService:
                 func.count(case((
                     (FaqRule.status == "active") & (FaqRule.is_enabled == True), 1  # noqa: E712
                 ))).label("published_count"),
+                func.max(FaqRule.updated_at).label("last_rule_updated_at"),
             )
             .select_from(FaqRule)
             .group_by(FaqRule.category_id)
@@ -76,12 +77,17 @@ class FaqService:
         if line_channel_id:
             counts_stmt = counts_stmt.where(FaqRule.channel_id == line_channel_id)
         counts_result = await db.execute(counts_stmt)
-        counts_map = {row.category_id: (row.rule_count, row.published_count) for row in counts_result}
+        counts_map = {
+            row.category_id: (row.rule_count, row.published_count, row.last_rule_updated_at)
+            for row in counts_result
+        }
 
         for cat in categories:
-            rc, pc = counts_map.get(cat.id, (0, 0))
+            rc, pc, last_dt = counts_map.get(cat.id, (0, 0, None))
             cat.rule_count = rc
             cat.published_count = pc
+            # 此 OA 下該分類的最後更新時間（沒規則就是 None）
+            cat.last_rule_updated_at = last_dt
 
         return list(categories)
 
@@ -294,23 +300,35 @@ class FaqService:
     # === Token 用量 ===
 
     async def get_token_usage(
-        self, db: AsyncSession, industry_id: int
+        self,
+        db: AsyncSession,
+        industry_id: int,
+        line_channel_id: Optional[str] = None,
     ) -> Optional[AiTokenUsage]:
-        """查詢 Token 用量"""
+        """查詢 Token 用量（多 OA：每個 channel 一筆）"""
         stmt = select(AiTokenUsage).where(
             AiTokenUsage.industry_id == industry_id
         )
+        if line_channel_id:
+            stmt = stmt.where(AiTokenUsage.channel_id == line_channel_id)
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
     async def update_token_quota(
-        self, db: AsyncSession, industry_id: int, total_quota: int
+        self,
+        db: AsyncSession,
+        industry_id: int,
+        total_quota: int,
+        line_channel_id: str,
     ) -> Optional[AiTokenUsage]:
-        """設定 Token 額度"""
-        usage = await self.get_token_usage(db, industry_id)
+        """設定 Token 額度（要求指定 line_channel_id）"""
+        if not line_channel_id:
+            raise ValueError("必須指定 LINE 館別（line_channel_id）")
+        usage = await self.get_token_usage(db, industry_id, line_channel_id)
         if not usage:
             usage = AiTokenUsage(
                 industry_id=industry_id,
+                channel_id=line_channel_id,
                 total_quota=total_quota,
                 used_amount=0,
             )

@@ -52,6 +52,8 @@ interface FaqCategoryApi {
   published_count?: number;
   data_source_type?: string;
   updated_at?: string | null;
+  /** 該 OA 下此分類最後更新時間（沒規則就是 null）*/
+  last_rule_updated_at?: string | null;
   pms_connection?: { status: string; last_synced_at: string | null } | null;
 }
 
@@ -69,9 +71,9 @@ function mapApiCategory(cat: FaqCategoryApi): CategoryRecord {
     pmsStatus = cat.pms_connection.status === "enabled" ? "normal" : "error";
   }
 
-  // Format last updated time from category updated_at
+  // Format last updated time — 用該 OA 下最後改的規則時間（沒規則就 "—"）
   let lastUpdated = "—";
-  const ts = cat.updated_at;
+  const ts = cat.last_rule_updated_at;
   if (ts) {
     const d = new Date(ts);
     lastUpdated = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -340,13 +342,16 @@ export default function AIChatbotOverview({
   }, [selectedLineChannelId]);
 
   useEffect(() => {
-    apiGet("/api/v1/faq/token-usage")
+    const url = selectedLineChannelId
+      ? `/api/v1/faq/token-usage?line_channel_id=${encodeURIComponent(selectedLineChannelId)}`
+      : "/api/v1/faq/token-usage";
+    apiGet(url)
       .then((res) => res.json())
       .then((json) => {
         if (json.data) setTokenUsage(json.data as TokenUsage);
       })
       .catch(() => {});
-  }, []);
+  }, [selectedLineChannelId]);
 
   // 監聽發佈事件，即時更新發佈狀態
   useEffect(() => {
