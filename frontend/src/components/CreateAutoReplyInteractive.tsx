@@ -7,6 +7,7 @@ import TriggerTimeOptions, { TriggerTimeType, ScheduleModeType } from './Trigger
 import { SimpleBreadcrumb, DeleteButton } from './common';
 import { ChannelIcon } from './common/icons/ChannelIcon';
 import { useAutoReplies, type AutoReply as AutoReplyRecord, type AutoReplyPayload, type AutoReplyConflict, type FbKeywordPayload, type FbMessagePayload, type AutoReplyKeyword } from '../contexts/AutoRepliesContext';
+import { useChannel } from '../contexts/ChannelContext';
 
 // 渠道選項介面（與群發訊息頁面一致）
 interface ChannelOption {
@@ -82,6 +83,7 @@ export default function CreateAutoReplyInteractive({
   initialReplyType,
 }: CreateAutoReplyProps) {
   const { saveAutoReply, removeAutoReply, getAutoReplyById, fetchAutoReplyById, deleteFbKeyword, deleteFbMessage, deleteFbAutoReply } = useAutoReplies();
+  const { selectedChannel: sidebarChannel } = useChannel();
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isHydrating, setIsHydrating] = useState<boolean>(Boolean(autoReplyId));
@@ -124,7 +126,7 @@ export default function CreateAutoReplyInteractive({
     setScheduleMode('time');
   }, [initialReplyType]);
 
-  // 獲取渠道列表（動態構建選項，與群發訊息頁面一致）
+  // 獲取渠道列表：LINE 拉全部 OA、FB 拉所有粉專，建立模式下預設帶 sidebar 全站館別切換器選的那個
   useEffect(() => {
     const fetchChannels = async () => {
       const options: ChannelOption[] = [];
@@ -136,18 +138,22 @@ export default function CreateAutoReplyInteractive({
 
       try {
         const [lineRes, fbRes] = await Promise.all([
-          fetch('/api/v1/line_channels/current', { headers }),
+          fetch('/api/v1/line_channels/list', { headers }),
           fetch('/api/v1/fb_channels', { headers })
         ]);
 
         if (lineRes.ok) {
-          const lineChannel = await lineRes.json();
-          if (lineChannel?.channel_id) {
-            options.push({
-              value: `LINE_${lineChannel.channel_id}`,
-              platform: 'LINE',
-              channelId: lineChannel.channel_id,
-              label: lineChannel.channel_name || 'LINE 官方帳號',
+          const lineChannels = await lineRes.json();
+          if (Array.isArray(lineChannels)) {
+            lineChannels.forEach((c: { channel_id: string; channel_name: string }) => {
+              if (c.channel_id) {
+                options.push({
+                  value: `LINE_${c.channel_id}`,
+                  platform: 'LINE',
+                  channelId: c.channel_id,
+                  label: c.channel_name || `LINE OA (${c.channel_id})`,
+                });
+              }
             });
           }
         }
@@ -173,17 +179,20 @@ export default function CreateAutoReplyInteractive({
 
       setChannelOptions(options);
 
-      // 只有在非編輯模式且無已選擇值時，才自動選擇第一個選項
-      // 編輯模式下由 hydrateFromRecord 設定正確的渠道
+      // 非編輯模式：預設選擇 sidebar 當前 LINE 館別，找不到就 fallback 第一個
       if (options.length > 0 && !selectedChannelValue && !isEditing) {
-        setSelectedChannelValue(options[0].value);
-        setSelectedChannel(options[0].platform);
+        const sidebarMatch = sidebarChannel?.channel_id
+          ? options.find((o) => o.platform === 'LINE' && o.channelId === sidebarChannel.channel_id)
+          : undefined;
+        const picked = sidebarMatch ?? options[0];
+        setSelectedChannelValue(picked.value);
+        setSelectedChannel(picked.platform);
       }
     };
 
     fetchChannels();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEditing]);
+  }, [isEditing, sidebarChannel?.channel_id]);
 
   // 處理日期/時間模式切換，清空另一模式的值
   const handleScheduleModeChange = useCallback((mode: ScheduleModeType) => {

@@ -709,6 +709,14 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
     }
   }, [isAuthenticated, fetchAutoReplies]);
 
+  // 全站館別切換時：重新抓自動回應清單
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (!hasFetchedRef.current) return; // 首次載入由上一個 useEffect 處理
+    fetchAutoReplies();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLineChannelId]);
+
   const value = useMemo<AutoRepliesContextType>(() => ({
     autoReplies,
     setAutoReplies,
