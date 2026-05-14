@@ -21,7 +21,8 @@ interface SidebarChannelSwitcherProps {
  * 這支元件不用改動。
  */
 export function SidebarChannelSwitcher({ isOpen }: SidebarChannelSwitcherProps) {
-  const { selectedChannel, availableChannels, setSelectedChannel, loading } = useChannel();
+  const { selectedChannel, availableChannels, setSelectedChannel, loading, hasNoChannels } =
+    useChannel();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
 
@@ -70,6 +71,8 @@ export function SidebarChannelSwitcher({ isOpen }: SidebarChannelSwitcherProps) 
                   </p>
                 )}
               </>
+            ) : hasNoChannels ? (
+              <p className="text-[14px] text-[#c43d3d]">未指派館別</p>
             ) : (
               <p className="text-[14px] text-[#717182]">尚未設定館別</p>
             )}

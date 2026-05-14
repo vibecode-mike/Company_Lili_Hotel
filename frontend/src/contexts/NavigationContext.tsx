@@ -20,7 +20,8 @@ export type Page =
   | "pms" // PMS 串接 (訂房)
   | "facilities" // 設施 內頁
   | "ai-chatbot" // AI Chatbot 總覽
-  | "insights"; // 數據洞察
+  | "insights" // 數據洞察
+  | "staff-users"; // 帳號管理（admin only）
 
 // URL 路徑映射
 const pageToPath: Record<Page, string> = {
@@ -35,6 +36,7 @@ const pageToPath: Record<Page, string> = {
   facilities: "/facilities",
   "ai-chatbot": "/ai-chatbot",
   insights: "/insights",
+  "staff-users": "/staff/users",
 };
 
 // 路徑到頁面的反向映射
@@ -50,6 +52,7 @@ const pathToPage: Record<string, Page> = {
   "/facilities": "facilities",
   "/ai-chatbot": "ai-chatbot",
   "/insights": "insights",
+  "/staff/users": "staff-users",
 };
 
 // 导航参数类型

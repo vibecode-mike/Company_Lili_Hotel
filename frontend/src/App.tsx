@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from "./components/auth/AuthContext";
 import Login from "./components/auth/Login";
 import { Toaster } from "./components/ui/sonner";
 import { useLineChannelStatus } from "./contexts/LineChannelStatusContext";
+import { useChannel } from "./contexts/ChannelContext";
 import ChatFAB from "./components/ChatFAB";
 import ErrorBoundary from "./components/ErrorBoundary";
 
@@ -20,6 +21,7 @@ const PMSPage = lazy(() => import("./pages/PMSPage"));
 const FacilitiesPage = lazy(() => import("./pages/FacilitiesPage"));
 const AIChatbotPage = lazy(() => import("./pages/AIChatbotPage"));
 const InsightsPage = lazy(() => import("./pages/InsightsPage"));
+const StaffUsersPage = lazy(() => import("./pages/StaffUsersPage"));
 
 /**
  * 路由配置對象
@@ -37,6 +39,7 @@ const routes: Record<Page, React.ComponentType> = {
   facilities: FacilitiesPage,
   "ai-chatbot": AIChatbotPage,
   insights: InsightsPage,
+  "staff-users": StaffUsersPage,
 };
 
 /**
@@ -55,6 +58,7 @@ const pageTitles: Record<Page, string> = {
   facilities: "AI Chatbot",
   "ai-chatbot": "AI Chatbot",
   insights: "數據洞察",
+  "staff-users": "帳號管理",
 };
 
 /**
@@ -63,12 +67,13 @@ const pageTitles: Record<Page, string> = {
  */
 function AppContent() {
   const { currentPage, navigate } = useNavigation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const {
     isLoading: isStatusLoading,
     isConfigured,
     hasFetchedOnce,
   } = useLineChannelStatus();
+  const { hasNoChannels: noChannelsAssigned } = useChannel();
   const hasRoutedAfterUnlockRef = useRef(false);
   const hasLockedStateRef = useRef(true);
 
@@ -138,8 +143,18 @@ function AppContent() {
   const chatFabPages: Page[] = ["ai-chatbot", "pms", "facilities"];
   const showChatFab = chatFabPages.includes(currentPage);
 
+  // 一般 user 沒被指派任何 LINE OA → 顯示 banner 提示去找 admin
+  // admin 自己不會走到這個狀態（migration 自動指派）
+  const showNoChannelsBanner =
+    noChannelsAssigned && user?.role !== "admin" && currentPage !== "staff-users";
+
   return (
     <>
+      {showNoChannelsBanner && (
+        <div className="fixed top-0 left-0 right-0 z-[120] bg-amber-50 border-b border-amber-300 px-6 py-2 text-[13px] text-amber-900">
+          您的帳號尚未被指派任何 LINE 館別，部分功能可能無資料。請聯絡管理員指派可用館別。
+        </div>
+      )}
       <ErrorBoundary>
         <Suspense
           fallback={

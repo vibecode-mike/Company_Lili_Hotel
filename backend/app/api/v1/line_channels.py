@@ -11,6 +11,8 @@ import requests
 
 from app.database import get_db
 from app.models.line_channel import LineChannel
+from app.models.user import User, UserRole
+from app.models.user_channel import UserChannel
 from app.schemas.line_channel import (
     LineChannelCreate,
     LineChannelUpdate,
@@ -219,10 +221,21 @@ async def create_channel(
                 channel.channel_name = bot_info["display_name"]
 
         db.add(channel)
+        await db.flush()
+        await db.refresh(channel)
+
+        # 自動把新建 LINE OA 加給所有現存 ADMIN，避免 admin 看不到自己剛建的館別
+        if channel.channel_id:
+            admins = await db.execute(
+                select(User.id).where(User.role == UserRole.ADMIN)
+            )
+            for admin_id in admins.scalars().all():
+                db.add(UserChannel(user_id=admin_id, line_channel_id=channel.channel_id))
+
         await db.commit()
         await db.refresh(channel)
 
-        logger.info(f"✅ 創建 LINE 頻道設定: ID={channel.id}")
+        logger.info(f"✅ 創建 LINE 頻道設定: ID={channel.id}（已自動指派給所有 ADMIN）")
         return channel
 
     except HTTPException:
