@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { Check } from "lucide-react";
 import { PageWithSidebar } from "./Sidebar";
 import { PageHeaderWithBreadcrumb } from "./common/Breadcrumb";
+import { Tag } from "./common";
 import { apiGet, apiPost, apiPatch, apiDelete } from "../utils/apiClient";
 import { useToast } from "./ToastProvider";
 import { useAuth } from "./auth/AuthContext";
@@ -180,24 +182,30 @@ export default function StaffUsersManagement({
         }
         showToast("帳號已建立", "success");
       } else if (modalMode === "edit" && editingUser) {
+        // 一般使用者：只能改自己的 email / full_name / password
         const patchBody: Record<string, unknown> = {
           email: form.email.trim(),
           full_name: form.full_name.trim() || null,
-          role: form.role,
-          is_active: form.is_active,
         };
+        if (isAdmin) {
+          patchBody.role = form.role;
+          patchBody.is_active = form.is_active;
+        }
         if (form.password) patchBody.password = form.password;
         const r1 = await apiPatch(`/api/v1/staff/users/${editingUser.id}`, patchBody);
         if (!r1.ok) {
           const err = await r1.json().catch(() => ({}));
           throw new Error(err.detail || `HTTP ${r1.status}`);
         }
-        const r2 = await apiPatch(`/api/v1/staff/users/${editingUser.id}/channels`, {
-          channel_ids: form.channel_ids,
-        });
-        if (!r2.ok) {
-          const err = await r2.json().catch(() => ({}));
-          throw new Error(err.detail || `HTTP ${r2.status}`);
+        // 館別只有 admin 能改
+        if (isAdmin) {
+          const r2 = await apiPatch(`/api/v1/staff/users/${editingUser.id}/channels`, {
+            channel_ids: form.channel_ids,
+          });
+          if (!r2.ok) {
+            const err = await r2.json().catch(() => ({}));
+            throw new Error(err.detail || `HTTP ${r2.status}`);
+          }
         }
         showToast("帳號已更新", "success");
         if (currentUser && editingUser.email === currentUser.email) {
@@ -239,9 +247,20 @@ export default function StaffUsersManagement({
     );
   };
 
-  const isSelf = (u: StaffUser) => currentUser?.email === u.email;
+  const isSelf = (u: StaffUser) =>
+    Boolean(
+      currentUser &&
+        ((currentUser.email && currentUser.email === u.email) ||
+          (currentUser.email && currentUser.email === u.username) ||
+          (currentUser.name && currentUser.name === u.username))
+    );
   const isLastAdmin = (u: StaffUser) =>
     u.role === "admin" && u.is_active && activeAdminCount <= 1;
+
+  const isAdmin = currentUser?.role === "admin";
+  const canEditUser = (u: StaffUser) => isAdmin || isSelf(u);
+  const canDeleteUser = (u: StaffUser) =>
+    isAdmin && !isSelf(u) && !isLastAdmin(u);
 
   return (
     <PageWithSidebar
@@ -262,6 +281,7 @@ export default function StaffUsersManagement({
           description="新增、編輯員工帳號，並指派每個帳號可看到的 LINE 館別"
         />
 
+
         {/* Top bar */}
         <div className="px-[40px] pb-[16px] w-full">
           <div className="flex gap-[12px] items-center w-full">
@@ -270,12 +290,14 @@ export default function StaffUsersManagement({
               {activeAdminCount > 0 && `（其中 ${activeAdminCount} 位系統管理員）`}
             </p>
             <div className="flex-1" />
-            <button
-              onClick={openCreate}
-              className="bg-[#242424] hover:bg-[#383838] text-white rounded-[16px] h-[48px] px-[20px] transition-colors flex items-center justify-center text-[16px]"
-            >
-              + 新增帳號
-            </button>
+            {isAdmin && (
+              <button
+                onClick={openCreate}
+                className="bg-[#242424] hover:bg-[#383838] text-white rounded-[16px] h-[48px] px-[20px] transition-colors flex items-center justify-center text-[16px]"
+              >
+                + 新增帳號
+              </button>
+            )}
           </div>
         </div>
 
@@ -332,65 +354,71 @@ export default function StaffUsersManagement({
                       }`}
                     >
                       <td className="px-[24px] py-[20px]">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[15px] text-[#383838]">{u.username}</span>
-                          {isSelf(u) && (
-                            <span className="px-[8px] py-[2px] rounded-[8px] bg-[#e1ebf9] text-[#0f6beb] text-[12px]">
-                              自己
-                            </span>
-                          )}
-                        </div>
+                        <span
+                          className={`text-[15px] ${
+                            isSelf(u) ? "text-red-500" : "text-[#383838]"
+                          }`}
+                        >
+                          {u.username}
+                        </span>
                       </td>
                       <td className="px-[24px] py-[20px] text-[14px] text-[#6e6e6e]">
                         {u.email}
                       </td>
                       <td className="px-[24px] py-[20px]">
-                        <span className="inline-block px-[10px] py-[4px] rounded-[8px] text-[13px] bg-[#f0f6ff] text-[#0f6beb]">
-                          {roleLabel(u.role)}
-                        </span>
+                        <div className="inline-flex">
+                          <Tag variant="blue">{roleLabel(u.role)}</Tag>
+                        </div>
                       </td>
                       <td className="px-[24px] py-[20px]">
                         {u.channels.length === 0 ? (
-                          <span className="text-[13px] text-[#a1a1a1]">未指派</span>
+                          <span className="text-[14px] text-gray-500">未指派</span>
                         ) : (
                           <div className="flex flex-wrap gap-[6px]">
                             {u.channels.map((c) => (
-                              <span
-                                key={c.channel_id}
-                                className="px-[10px] py-[4px] rounded-[8px] bg-[#f0f6ff] text-[13px] text-[#383838]"
-                              >
+                              <Tag key={c.channel_id} variant="blue">
                                 {c.channel_name || c.channel_id}
-                              </span>
+                              </Tag>
                             ))}
                           </div>
                         )}
                       </td>
-                      <td className="px-[24px] py-[20px] text-center">
-                        {u.is_active ? (
-                          <span className="inline-block w-[10px] h-[10px] rounded-full bg-[#22c55e]" />
-                        ) : (
-                          <span className="inline-block w-[10px] h-[10px] rounded-full bg-[#dddddd]" />
-                        )}
+                      <td className="px-[24px] py-[20px]">
+                        <div className="flex justify-center">
+                          {u.is_active ? (
+                            <span className="inline-flex items-center justify-center w-[24px] h-[24px] rounded-[6px] bg-[#0f6beb]">
+                              <Check className="w-[16px] h-[16px] text-white" strokeWidth={3} />
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center justify-center w-[24px] h-[24px] rounded-[6px] border border-[#dddddd] bg-white" />
+                          )}
+                        </div>
                       </td>
                       <td className="px-[24px] py-[20px]">
                         <div className="flex items-center justify-end gap-[28px]">
                           <button
                             onClick={() => openEdit(u)}
-                            className="text-[#0f6beb] hover:underline text-[14px]"
+                            disabled={!canEditUser(u)}
+                            title={
+                              !canEditUser(u) ? "僅能編輯自己的帳號" : undefined
+                            }
+                            className="text-[#0f6beb] hover:underline text-[14px] disabled:text-[#dddddd] disabled:no-underline disabled:cursor-not-allowed"
                           >
                             編輯
                           </button>
                           <button
                             onClick={() => setDeleteConfirm(u)}
-                            disabled={isSelf(u) || isLastAdmin(u)}
+                            disabled={!canDeleteUser(u)}
                             title={
-                              isSelf(u)
-                                ? "不能刪除自己"
-                                : isLastAdmin(u)
-                                  ? "至少保留 1 位系統管理員"
-                                  : undefined
+                              !isAdmin
+                                ? "僅系統管理員可刪除帳號"
+                                : isSelf(u)
+                                  ? "不能刪除自己"
+                                  : isLastAdmin(u)
+                                    ? "至少保留 1 位系統管理員"
+                                    : undefined
                             }
-                            className="text-[#ef4444] hover:underline text-[14px] disabled:text-[#dddddd] disabled:no-underline disabled:cursor-not-allowed"
+                            className="text-red-500 hover:underline text-[14px] disabled:text-[#dddddd] disabled:no-underline disabled:cursor-not-allowed"
                           >
                             刪除
                           </button>
@@ -461,71 +489,99 @@ export default function StaffUsersManagement({
               />
             </Field>
 
-            <Field label="角色">
-              <div className="flex gap-[12px]">
-                <RoleRadio
-                  value="admin"
-                  current={form.role}
-                  label="系統管理員"
-                  desc="可管理所有帳號與所有館別"
-                  onChange={() => setForm({ ...form, role: "admin" })}
-                />
-                <RoleRadio
-                  value="customer_service"
-                  current={form.role}
-                  label="使用者"
-                  desc="僅能使用被指派的館別"
-                  onChange={() => setForm({ ...form, role: "customer_service" })}
-                />
-              </div>
-            </Field>
+            {isAdmin ? (
+              <>
+                <Field label="角色">
+                  <div className="flex gap-[12px]">
+                    <RoleRadio
+                      value="admin"
+                      current={form.role}
+                      label="系統管理員"
+                      desc="可管理所有帳號與所有館別"
+                      onChange={() => setForm({ ...form, role: "admin" })}
+                    />
+                    <RoleRadio
+                      value="customer_service"
+                      current={form.role}
+                      label="使用者"
+                      desc="僅能使用被指派的館別"
+                      onChange={() => setForm({ ...form, role: "customer_service" })}
+                    />
+                  </div>
+                </Field>
 
-            <Field label="狀態">
-              <label className="flex items-center gap-[8px] cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.is_active}
-                  onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
-                  className="w-[18px] h-[18px] accent-[#0f6beb]"
-                />
-                <span className="text-[14px] text-[#383838]">啟用此帳號</span>
-              </label>
-            </Field>
+                <Field label="狀態">
+                  <label className="flex items-center gap-[8px] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.is_active}
+                      onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
+                      className="w-[18px] h-[18px] accent-[#0f6beb]"
+                    />
+                    <span className="text-[14px] text-[#383838]">啟用此帳號</span>
+                  </label>
+                </Field>
 
-            <Field
-              label="可用 LINE 館別"
-              hint={
-                form.role === "admin"
-                  ? "系統管理員預設可看所有館別，仍可在此調整"
-                  : undefined
-              }
-            >
-              {allChannels.length === 0 ? (
-                <p className="text-[13px] text-[#a1a1a1]">尚未建立任何 LINE OA</p>
-              ) : (
-                <div className="space-y-[8px] max-h-[180px] overflow-y-auto border border-[#dddddd] rounded-[12px] p-[12px]">
-                  {allChannels.map((c: LineChannelInfo) => (
-                    <label
-                      key={c.channel_id}
-                      className="flex items-center gap-[10px] cursor-pointer hover:bg-[#F8FAFC] px-[8px] py-[6px] rounded-[8px] transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={form.channel_ids.includes(c.channel_id)}
-                        onChange={() => toggleChannel(c.channel_id)}
-                        className="w-[18px] h-[18px] accent-[#0f6beb]"
-                      />
-                      <span className="text-[14px] text-[#383838]">
-                        {c.channel_name || c.channel_id}
-                      </span>
-                      {c.basic_id && (
-                        <span className="text-[12px] text-[#a1a1a1]">{c.basic_id}</span>
-                      )}
-                    </label>
-                  ))}
-                </div>
-              )}
-            </Field>
+                <Field
+                  label="可用 LINE 館別"
+                  hint={
+                    form.role === "admin"
+                      ? "系統管理員預設可看所有館別，仍可在此調整"
+                      : undefined
+                  }
+                >
+                  {allChannels.length === 0 ? (
+                    <p className="text-[13px] text-gray-500">尚未建立任何 LINE OA</p>
+                  ) : (
+                    <div className="space-y-[8px] max-h-[180px] overflow-y-auto border border-[#dddddd] rounded-[12px] p-[12px]">
+                      {allChannels.map((c: LineChannelInfo) => (
+                        <label
+                          key={c.channel_id}
+                          className="flex items-center gap-[10px] cursor-pointer hover:bg-[#F8FAFC] px-[8px] py-[6px] rounded-[8px] transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={form.channel_ids.includes(c.channel_id)}
+                            onChange={() => toggleChannel(c.channel_id)}
+                            className="w-[18px] h-[18px] accent-[#0f6beb]"
+                          />
+                          <span className="text-[14px] text-[#383838]">
+                            {c.channel_name || c.channel_id}
+                          </span>
+                          {c.basic_id && (
+                            <span className="text-[12px] text-gray-500">{c.basic_id}</span>
+                          )}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </Field>
+              </>
+            ) : (
+              <>
+                <Field label="角色" hint="如需調整請聯絡系統管理員">
+                  <div className="px-[16px] py-[10px] rounded-[12px] bg-[#f5f5f5] text-[14px] text-[#6e6e6e]">
+                    {form.role === "admin" ? "系統管理員" : "使用者"}
+                  </div>
+                </Field>
+
+                <Field label="可用 LINE 館別" hint="如需調整請聯絡系統管理員">
+                  {editingUser && editingUser.channels.length === 0 ? (
+                    <div className="px-[16px] py-[10px] rounded-[12px] bg-[#f5f5f5] text-[14px] text-gray-500">
+                      未指派
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-[6px] px-[16px] py-[10px] rounded-[12px] bg-[#f5f5f5]">
+                      {editingUser?.channels.map((c) => (
+                        <Tag key={c.channel_id} variant="blue">
+                          {c.channel_name || c.channel_id}
+                        </Tag>
+                      ))}
+                    </div>
+                  )}
+                </Field>
+              </>
+            )}
           </div>
 
           <DialogFooter>
@@ -571,7 +627,7 @@ export default function StaffUsersManagement({
             </button>
             <button
               onClick={handleDelete}
-              className="h-[44px] px-[20px] rounded-[12px] bg-[#ef4444] hover:bg-[#dc2626] text-white text-[14px] transition-colors"
+              className="h-[44px] px-[20px] rounded-[12px] bg-[#e7000b] hover:bg-[#c70009] text-white text-[14px] transition-colors"
             >
               確認刪除
             </button>
@@ -597,8 +653,8 @@ function Field({
     <div>
       <div className="flex items-baseline gap-[6px] mb-[8px]">
         <label className="text-[14px] text-[#383838]">{label}</label>
-        {required && <span className="text-[#ef4444] text-[14px]">*</span>}
-        {hint && <span className="text-[12px] text-[#a1a1a1]">{hint}</span>}
+        {required && <span className="text-red-500 text-[14px]">*</span>}
+        {hint && <span className="text-[12px] text-gray-500">{hint}</span>}
       </div>
       {children}
     </div>

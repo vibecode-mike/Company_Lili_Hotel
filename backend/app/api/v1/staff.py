@@ -142,8 +142,7 @@ async def list_staff_users(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """列出所有帳號 + 各自的館別（admin only）"""
-    await _require_admin(current_user)
+    """列出所有帳號 + 各自的館別。任何登入帳號都看得到，但編輯權限不同。"""
     result = await db.execute(select(User).order_by(User.id.asc()))
     users = list(result.scalars().all())
     return [await _to_response(db, u) for u in users]
@@ -195,16 +194,25 @@ async def update_staff_user(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """更新帳號（admin only）"""
-    await _require_admin(current_user)
-
+    """更新帳號。
+    - ADMIN：可改任何帳號的所有欄位。
+    - 一般使用者：只能改自己的 email / full_name / password。
+    """
     user = await db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="帳號不存在")
 
+    is_admin = current_user.role == UserRole.ADMIN
     update_dict = data.model_dump(exclude_unset=True)
 
-    # 不能改自己 role / is_active 為非 admin / disabled
+    # 一般使用者：限自己編輯，且不能改 role / is_active
+    if not is_admin:
+        if user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="僅能編輯自己的帳號")
+        if "role" in update_dict or "is_active" in update_dict:
+            raise HTTPException(status_code=403, detail="無權限調整角色或啟用狀態")
+
+    # 不能改自己 role / is_active 為非 admin / disabled（admin 對自己也不行）
     if current_user.id == user_id:
         if "role" in update_dict and update_dict["role"] != UserRole.ADMIN:
             raise HTTPException(status_code=400, detail="不能把自己降為非 ADMIN")

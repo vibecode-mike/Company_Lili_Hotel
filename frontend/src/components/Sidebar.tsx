@@ -218,13 +218,11 @@ const Sidebar = memo(
                   label="基本設定"
                   onClick={onNavigateToSettings}
                 />
-                {user?.role === "admin" && (
-                  <MenuItem
-                    isActive={currentPage === "staff-users"}
-                    label="帳號管理"
-                    onClick={() => navigate("staff-users")}
-                  />
-                )}
+                <MenuItem
+                  isActive={currentPage === "staff-users"}
+                  label="帳號管理"
+                  onClick={() => navigate("staff-users")}
+                />
                 <button
                   className="box-border flex items-center px-[28px] py-[8px] rounded-[8px] w-full hover:bg-slate-200 transition-colors"
                   hidden
