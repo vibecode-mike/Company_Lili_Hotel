@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from "../utils/apiClient";
 import { getAuthToken } from "../utils/token";
 import { useToast } from "./ToastProvider";
+import { useChannel } from "../contexts/ChannelContext";
 import Sidebar from "./Sidebar";
 import {
   RoomEditModal,
@@ -625,19 +626,27 @@ const PMSDataTable = memo(function PMSDataTable({
   const [editingRoom, setEditingRoom] = useState<RoomRecord | null>(null);
   const [editDraft, setEditDraft] = useState<RoomFaqDraft | null>(null);
   const savedRuleIdRef = useRef<string | null>(null);
+  const { selectedChannel } = useChannel();
+  const selectedLineChannelId = selectedChannel?.channel_id ?? "";
 
-  // Load FAQ rules from API
+  // Load FAQ rules from API（依當前 sidebar 館別過濾）
   useEffect(() => {
     setLoadingRooms(true);
-    apiGet("/api/v1/faq/categories")
+    const catUrl = selectedLineChannelId
+      ? `/api/v1/faq/categories?line_channel_id=${encodeURIComponent(selectedLineChannelId)}`
+      : "/api/v1/faq/categories";
+    apiGet(catUrl)
       .then((res) => res.json())
       .then(async (json) => {
         const cats: Array<{ id: number; name: string; is_active: boolean }> = json.data ?? [];
         const booking = cats.find((c) => c.name === "訂房") ?? cats[0];
         if (!booking) return;
         setCategoryId(booking.id);
+        const channelQs = selectedLineChannelId
+          ? `&line_channel_id=${encodeURIComponent(selectedLineChannelId)}`
+          : "";
         const rulesRes = await apiGet(
-          `/api/v1/faq/categories/${booking.id}/rules?page_size=50`,
+          `/api/v1/faq/categories/${booking.id}/rules?page_size=50${channelQs}`,
         );
         const rulesJson = await rulesRes.json();
         const items: FaqRuleRaw[] = rulesJson.data?.items ?? [];
@@ -645,7 +654,7 @@ const PMSDataTable = memo(function PMSDataTable({
       })
       .catch(() => {})
       .finally(() => setLoadingRooms(false));
-  }, []);
+  }, [selectedLineChannelId]);
 
   // 監聽發佈事件，即時更新發佈狀態
   useEffect(() => {
@@ -683,7 +692,12 @@ const PMSDataTable = memo(function PMSDataTable({
     if (!categoryId) return;
     setLoadingRooms(true);
     try {
-      const res = await apiGet(`/api/v1/faq/categories/${categoryId}/rules?page_size=50`);
+      const channelQs = selectedLineChannelId
+        ? `&line_channel_id=${encodeURIComponent(selectedLineChannelId)}`
+        : "";
+      const res = await apiGet(
+        `/api/v1/faq/categories/${categoryId}/rules?page_size=50${channelQs}`,
+      );
       const json = await res.json();
       const items: FaqRuleRaw[] = json.data?.items ?? [];
       setRooms(items.map(mapRuleToRoom));
@@ -692,7 +706,7 @@ const PMSDataTable = memo(function PMSDataTable({
     } finally {
       setLoadingRooms(false);
     }
-  }, [categoryId]);
+  }, [categoryId, selectedLineChannelId]);
 
   const handleImport = useCallback(async (file: File) => {
     if (!categoryId) return;
@@ -863,9 +877,17 @@ const PMSDataTable = memo(function PMSDataTable({
         // New item: add to list only after save succeeds
         try {
           if (categoryId) {
+            if (!selectedLineChannelId) {
+              showToast("請先選擇 LINE 館別", "error");
+              return;
+            }
             const res = await apiPost(
               `/api/v1/faq/categories/${categoryId}/rules`,
-              { content_json, tag_names: draft.memberTags },
+              {
+                content_json,
+                tag_names: draft.memberTags,
+                line_channel_id: selectedLineChannelId,
+              },
             );
             const json = await res.json();
             const newId = String(json.data?.id ?? id);
@@ -911,7 +933,7 @@ const PMSDataTable = memo(function PMSDataTable({
         }
       }
     },
-    [rooms, categoryId],
+    [rooms, categoryId, selectedLineChannelId, showToast],
   );
 
   const handleClearFilters = useCallback(() => {
@@ -1846,12 +1868,17 @@ export default function PMSIntegration({
   const [dataSources, setDataSources] = useState<DataSourceRow[]>(DATA_SOURCES_PMS_INIT);
   const [categoryActive, setCategoryActive] = useState(true);
   const [categoryName, setCategoryName] = useState("訂房");
+  const { selectedChannel } = useChannel();
+  const selectedLineChannelId = selectedChannel?.channel_id ?? "";
 
   // Fetch PMS status + category info on mount, then set published for both rows
   useEffect(() => {
+    const catUrl = selectedLineChannelId
+      ? `/api/v1/faq/categories?line_channel_id=${encodeURIComponent(selectedLineChannelId)}`
+      : "/api/v1/faq/categories";
     Promise.all([
       apiGet("/api/v1/chatbot/pms-status").then((res) => res.json()).catch(() => null),
-      apiGet("/api/v1/faq/categories").then((res) => res.json()).catch(() => null),
+      apiGet(catUrl).then((res) => res.json()).catch(() => null),
     ]).then(([pmsData, catData]) => {
       const pmsEnabled = !!pmsData?.enabled;
       const lastSync = pmsData?.last_synced_at || "—";
@@ -1884,7 +1911,7 @@ export default function PMSIntegration({
         }),
       );
     });
-  }, []);
+  }, [selectedLineChannelId]);
 
   const pmsEnabled = dataSources.find((s) => s.type === "PMS")?.enabled ?? false;
   const sourceName = pmsEnabled ? "PMS" : "自訂 FAQ";

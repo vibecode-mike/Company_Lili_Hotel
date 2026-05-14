@@ -42,6 +42,7 @@ faq_service = FaqService()
 
 @router.get("/categories", response_model=dict)
 async def get_categories(
+    line_channel_id: Optional[str] = Query(None, description="LINE OA channel_id，rule_count 只算該 OA"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -50,7 +51,7 @@ async def get_categories(
     if not industry:
         raise HTTPException(status_code=404, detail="尚未設定產業資料")
 
-    categories = await faq_service.get_categories(db, industry.id)
+    categories = await faq_service.get_categories(db, industry.id, line_channel_id)
 
     # Build response with PMS connection status for each category
     result = []
@@ -124,11 +125,14 @@ async def get_rules(
     status: Optional[str] = Query(None, description="狀態篩選：draft/active/disabled"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    line_channel_id: Optional[str] = Query(None, description="LINE OA channel_id，提供時只回該 OA 的規則"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """取得分類下規則清單"""
-    result = await faq_service.get_rules(db, category_id, status, page, page_size)
+    result = await faq_service.get_rules(
+        db, category_id, status, page, page_size, line_channel_id
+    )
 
     items = []
     for rule in result["items"]:
@@ -177,7 +181,12 @@ async def create_rule(
             raise HTTPException(status_code=400, detail=f"{missing}為必填欄位")
 
         rule = await faq_service.create_rule(
-            db, category_id, data.content_json, data.tag_names, current_user.id
+            db,
+            category_id,
+            data.content_json,
+            data.tag_names,
+            current_user.id,
+            data.line_channel_id,
         )
         _bump_rule_modified()
         return {

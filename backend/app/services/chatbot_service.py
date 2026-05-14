@@ -323,7 +323,7 @@ _ROOM_FIELDS = ["房型名稱", "房型特色", "房價", "人數", "間數", "u
 
 async def _kb_search(
     db: AsyncSession, category: str, query: str, top_k: int = 6,
-    test_mode: bool = False,
+    test_mode: bool = False, line_channel_id: Optional[str] = None,
 ) -> dict:
     from app.models.faq import FaqCategory, FaqRule
 
@@ -346,15 +346,20 @@ async def _kb_search(
     # 測試模式：讀 draft + active；正式模式：只讀 active
     allowed_statuses = ["draft", "active"] if test_mode else ["active"]
 
-    rule_result = await db.execute(
+    rule_query = (
         select(FaqRule)
         .where(
             FaqRule.category_id == cat.id,
             FaqRule.status.in_(allowed_statuses),
             FaqRule.is_enabled_filter(),
         )
-        .options(selectinload(FaqRule.tags))
-        .order_by(FaqRule.created_at)
+    )
+    # 多 OA 隔離：訊息來自特定 LINE OA 時，只用該 OA 的規則
+    if line_channel_id:
+        rule_query = rule_query.where(FaqRule.channel_id == line_channel_id)
+
+    rule_result = await db.execute(
+        rule_query.options(selectinload(FaqRule.tags)).order_by(FaqRule.created_at)
     )
     rules = rule_result.scalars().all()
 
@@ -921,6 +926,8 @@ class ToolCallingContext:
     db: Optional[AsyncSession] = None
     test_mode: bool = False
     collect_rule_ids: bool = False
+    # 多 OA 隔離：當訊息來自特定 LINE OA 時帶上 channel_id，FAQ 查詢只用該 OA 的規則
+    line_channel_id: Optional[str] = None
     # 訂房狀態（PMS tool 會修改）
     checkin_date: Optional[str] = None
     checkout_date: Optional[str] = None
@@ -1381,6 +1388,7 @@ class ChatbotService:
                 result = await _kb_search(
                     ctx.db, args.get("category", ""), args.get("query", ""),
                     test_mode=ctx.test_mode,
+                    line_channel_id=ctx.line_channel_id,
                 )
             else:
                 result = {"ok": False, "error": "database session not available", "items": []}
@@ -2476,6 +2484,7 @@ class ChatbotService:
         message: str,
         line_uid: Optional[str] = None,
         industry_id: Optional[int] = None,
+        line_channel_id: Optional[str] = None,
     ) -> ChatbotMessageOutSchema:
         """
         會員聊天室 AI 入口（LINE / Facebook / Webchat）
@@ -2538,6 +2547,7 @@ class ChatbotService:
             db=db,
             collect_rule_ids=True,
             _session=session,
+            line_channel_id=line_channel_id,
             checkin_date=session.checkin_date,
             checkout_date=session.checkout_date,
             booking_adults=session.booking_adults,

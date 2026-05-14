@@ -115,6 +115,13 @@ class FaqRule(Base):
         index=True,
         comment="所屬大分類 ID",
     )
+    channel_id = Column(
+        String(100),
+        ForeignKey("line_channels.channel_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="所屬 LINE OA channel_id（多 OA 隔離）",
+    )
     content_json = Column(Text, nullable=False, comment="規則內容 JSON")
     status = Column(
         String(20),

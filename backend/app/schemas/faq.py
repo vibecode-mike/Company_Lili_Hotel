@@ -66,6 +66,7 @@ class FaqRuleCreateSchema(BaseModel):
 
     content_json: Dict[str, Any]
     tag_names: List[str] = []
+    line_channel_id: str = Field(..., description="所屬 LINE OA channel_id（必填）")
 
 
 class FaqRuleUpdateSchema(BaseModel):
@@ -192,6 +193,9 @@ class AiChatRequestSchema(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000)
     line_uid: Optional[str] = None
     channel_type: str = "line"
+    line_channel_id: Optional[str] = Field(
+        None, description="LINE OA channel_id — 用於多 OA FAQ 隔離"
+    )
 
 
 class AiChatResponseSchema(BaseModel):

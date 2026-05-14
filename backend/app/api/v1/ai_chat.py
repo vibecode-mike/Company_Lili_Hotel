@@ -66,6 +66,7 @@ async def ai_chat(
             db=db,
             message=data.message,
             line_uid=data.line_uid,
+            line_channel_id=data.line_channel_id,
         )
         return {
             "code": 200,

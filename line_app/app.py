@@ -2605,16 +2605,20 @@ def _notify_backend(*, line_uid: str, message_text: str, timestamp, message_id: 
         logging.error(f"[{handler_name}] Failed to notify backend ({direction}): {e}")
 
 
-def _call_backend_ai(line_uid: str, message: str) -> dict | None:
+def _call_backend_ai(line_uid: str, message: str, line_channel_id: Optional[str] = None) -> dict | None:
     """
     呼叫 Backend AI 聊天 API。
     Returns: {"reply": str, "token_exhausted": bool, ...} or None on failure
     """
     backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8700")
+    payload: dict = {"message": message, "line_uid": line_uid}
+    if line_channel_id:
+        # 多 OA 隔離：帶上來源 LINE OA 的 channel_id，Backend 用此過濾 FAQ
+        payload["line_channel_id"] = line_channel_id
     try:
         resp = requests.post(
             f"{backend_url}/api/v1/ai/chat",
-            json={"message": message, "line_uid": line_uid},
+            json=payload,
             timeout=15,
         )
         if resp.status_code == 200:
@@ -3009,7 +3013,9 @@ def on_text(event: MessageEvent):
         # 4.1 優先：Backend AI（需 gpt_enabled）
         if gpt_enabled:
             try:
-                ai_result = _call_backend_ai(uid, text_in)
+                # 多 OA 隔離：帶上 webhook 來源的 line_channel_id（由 callback_by_line_id 設定到 Flask g）
+                src_channel_id = getattr(g, "line_channel_id", None)
+                ai_result = _call_backend_ai(uid, text_in, line_channel_id=src_channel_id)
                 if ai_result:
                     if ai_result.get("token_exhausted"):
                         logging.info(f"[on_text] Token exhausted, falling back for uid={uid}")

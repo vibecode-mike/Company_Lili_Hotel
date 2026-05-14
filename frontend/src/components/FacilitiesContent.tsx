@@ -2,6 +2,7 @@ import React, { useState, useRef, memo, useCallback, useMemo, useEffect } from "
 import { createPortal } from "react-dom";
 import Sidebar from "./Sidebar";
 import { useToast } from "./ToastProvider";
+import { useChannel } from "../contexts/ChannelContext";
 import { PageHeaderWithBreadcrumb } from "./common/Breadcrumb";
 import { BlankStateCard, BlankStateContainer } from "./common/BlankStateCard";
 import CategoryTitleDropdown from "./common/CategoryTitleDropdown";
@@ -495,10 +496,16 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
   const [editDraft, setEditDraft] = useState<FacilityFaqDraft | null>(null);
   const savedRuleIdRef = useRef<string | null>(null);
 
-  // Load FAQ rules from API
+  const { selectedChannel } = useChannel();
+  const selectedLineChannelId = selectedChannel?.channel_id ?? "";
+
+  // Load FAQ rules from API（依當前 sidebar 館別過濾）
   useEffect(() => {
     setLoadingFacilities(true);
-    apiGet("/api/v1/faq/categories")
+    const catUrl = selectedLineChannelId
+      ? `/api/v1/faq/categories?line_channel_id=${encodeURIComponent(selectedLineChannelId)}`
+      : "/api/v1/faq/categories";
+    apiGet(catUrl)
       .then((res) => res.json())
       .then(async (json) => {
         const cats: Array<{ id: number; name: string; is_active: boolean }> = json.data ?? [];
@@ -507,8 +514,11 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
         setCategoryId(facilityCat.id);
         setCategoryActive(facilityCat.is_active ?? true);
         setCategoryName(facilityCat.name);
+        const channelQs = selectedLineChannelId
+          ? `&line_channel_id=${encodeURIComponent(selectedLineChannelId)}`
+          : "";
         const rulesRes = await apiGet(
-          `/api/v1/faq/categories/${facilityCat.id}/rules?page_size=50`,
+          `/api/v1/faq/categories/${facilityCat.id}/rules?page_size=50${channelQs}`,
         );
         const rulesJson = await rulesRes.json();
         const items: FaqRuleRaw[] = rulesJson.data?.items ?? [];
@@ -516,7 +526,7 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
       })
       .catch(() => {})
       .finally(() => setLoadingFacilities(false));
-  }, []);
+  }, [selectedLineChannelId]);
 
   // 監聽發佈事件，即時更新發佈狀態
   useEffect(() => {
@@ -556,7 +566,12 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
     if (!categoryId) return;
     setLoadingFacilities(true);
     try {
-      const res = await apiGet(`/api/v1/faq/categories/${categoryId}/rules?page_size=50`);
+      const channelQs = selectedLineChannelId
+        ? `&line_channel_id=${encodeURIComponent(selectedLineChannelId)}`
+        : "";
+      const res = await apiGet(
+        `/api/v1/faq/categories/${categoryId}/rules?page_size=50${channelQs}`,
+      );
       const json = await res.json();
       const items: FaqRuleRaw[] = json.data?.items ?? [];
       setFacilities(items.map(mapRuleToFacility));
@@ -565,7 +580,7 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
     } finally {
       setLoadingFacilities(false);
     }
-  }, [categoryId]);
+  }, [categoryId, selectedLineChannelId]);
 
   const handleImport = useCallback(async (file: File) => {
     if (!categoryId) return;
@@ -1046,9 +1061,17 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
             };
             const isNew = editingFacility.id.startsWith("new-");
             if (isNew && categoryId) {
+              if (!selectedLineChannelId) {
+                showToast("請先選擇 LINE 館別", "error");
+                return;
+              }
               const res = await apiPost(
                 `/api/v1/faq/categories/${categoryId}/rules`,
-                { content_json, tag_names: draft.memberTags },
+                {
+                  content_json,
+                  tag_names: draft.memberTags,
+                  line_channel_id: selectedLineChannelId,
+                },
               );
               const json = await res.json();
               const newId = String(json.data?.id ?? editingFacility.id);

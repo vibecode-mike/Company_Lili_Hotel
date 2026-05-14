@@ -3,6 +3,7 @@ import { useState, useRef, memo, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { apiGet, apiPut, apiPatch } from "../utils/apiClient";
 import { useToast } from "./ToastProvider";
+import { useChannel } from "../contexts/ChannelContext";
 import TestEnvHeaderLabel from "./common/TestEnvHeaderLabel";
 
 interface TokenUsage {
@@ -318,9 +319,16 @@ export default function AIChatbotOverview({
   const [loading, setLoading] = useState(true);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
   const { showToast } = useToast();
+  const { selectedChannel } = useChannel();
+  const selectedLineChannelId = selectedChannel?.channel_id ?? "";
 
   useEffect(() => {
-    apiGet("/api/v1/faq/categories")
+    setLoading(true);
+    // 多 OA 隔離：rule_count 只算當前 sidebar 館別下的規則
+    const url = selectedLineChannelId
+      ? `/api/v1/faq/categories?line_channel_id=${encodeURIComponent(selectedLineChannelId)}`
+      : "/api/v1/faq/categories";
+    apiGet(url)
       .then((res) => res.json())
       .then((json) => {
         if (json.data) {
@@ -329,7 +337,7 @@ export default function AIChatbotOverview({
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [selectedLineChannelId]);
 
   useEffect(() => {
     apiGet("/api/v1/faq/token-usage")
