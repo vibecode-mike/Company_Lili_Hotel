@@ -20,10 +20,27 @@ class LineChannelBase(BaseModel):
 
 
 class LineChannelCreate(LineChannelBase):
-    """創建 LINE 頻道設定"""
+    """創建 LINE 頻道設定（含 Phase E 一條龍選填欄位）"""
 
     channel_access_token: str = Field(..., max_length=500, description="頻道存取權杖（必填）")
     channel_secret: str = Field(..., max_length=100, description="頻道密鑰（必填）")
+
+    # Phase E 一條龍：以下選填，提供時系統同時建立對應的 row
+    site_id: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="Webchat 嵌入站點代號（例：starbit-ryan）。提供時自動建立 webchat_site_channels 綁定",
+    )
+    site_name: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="Webchat 站點顯示名稱（例：思偉達飯店｜雷恩館）",
+    )
+    hotelcode: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="閎運 PMS hotelcode（例：ZH01）。提供時自動建立 faq_pms_connections（status='disabled'），admin 之後可在 PMS 頁啟用",
+    )
 
 
 class LineChannelUpdate(BaseModel):

@@ -695,7 +695,10 @@ class FaqService:
 
             tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
             day_after = (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d")
-            raw = await asyncio.to_thread(query_pms, tomorrow, day_after, None, 2)
+            # 用該 connection 的 hotelcode 打 PMS（per channel）；空時 fallback env
+            raw = await asyncio.to_thread(
+                query_pms, tomorrow, day_after, None, 2, conn.hotelcode
+            )
 
             rooms = raw.get("room", []) if isinstance(raw, dict) else []
             if not rooms:

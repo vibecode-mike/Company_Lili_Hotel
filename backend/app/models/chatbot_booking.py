@@ -121,6 +121,11 @@ class FaqPmsConnection(Base):
         nullable=False,
         comment="所屬 LINE OA channel_id（多 OA 隔離）",
     )
+    hotelcode = Column(
+        String(50),
+        nullable=True,
+        comment="閎運 PMS hotelcode（例：ZH01）。NULL = 該 OA 暫不接 PMS",
+    )
     api_endpoint = Column(
         String(500), nullable=False, comment="PMS 即時房況 API 端點 URL"
     )

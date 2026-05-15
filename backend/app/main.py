@@ -70,20 +70,25 @@ async def startup_event():
     except Exception as e:
         logger.error(f"❌ Failed to start scheduler: {e}")
 
-    # 初始化 PMS 啟用狀態（避免重啟後 PMS 未載入走 FAQ fallback）
+    # 初始化 PMS per-channel 啟用狀態（Phase E-3：所有 channel 一次載入）
     try:
+        from sqlalchemy import select
+
         from app.database import AsyncSessionLocal
         from app.models.chatbot_booking import FaqPmsConnection
-        from app.services.chatbot_service import init_pms_from_db
-        from sqlalchemy import select
+        from app.services.chatbot_service import init_pms_from_db_all
+
         async with AsyncSessionLocal() as db:
-            result = await db.execute(select(FaqPmsConnection).limit(1))
-            conn = result.scalar_one_or_none()
-            if conn:
-                init_pms_from_db(conn.status)
-                logger.info(f"✅ PMS status initialized from DB: {conn.status}")
-            else:
-                logger.info("⚠️ No PMS connection record found")
+            result = await db.execute(
+                select(FaqPmsConnection.channel_id, FaqPmsConnection.status)
+            )
+            rows = result.fetchall()
+            init_pms_from_db_all([(r[0], r[1]) for r in rows])
+            enabled_count = sum(1 for r in rows if r[1] == "enabled")
+            logger.info(
+                f"✅ PMS per-channel status initialized: "
+                f"{len(rows)} channels, {enabled_count} enabled"
+            )
     except Exception as e:
         logger.error(f"❌ Failed to init PMS status: {e}")
 

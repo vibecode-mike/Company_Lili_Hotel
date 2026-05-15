@@ -685,9 +685,14 @@ async def _test_pms_connection_impl(
     db: AsyncSession,
     category_id: int,
     channel_id: Optional[str] = None,
+    test_hotelcode: Optional[str] = None,
 ):
     """
     執行 PMS 即時連線測試。
+
+    test_hotelcode：admin 還沒儲存就要先試的 hotelcode（從 Card 10 輸入框送來）；
+                    為 None 時 fallback 到該 channel 已儲存的 connection.hotelcode 或 env。
+
     成功: 回傳 (True, message, room_count)
     失敗: raise HTTPException with 具體錯誤分類
     """
@@ -697,11 +702,22 @@ async def _test_pms_connection_impl(
     if not pms_configured():
         raise HTTPException(
             status_code=400,
-            detail="PMS 環境變數未設定（PMS_API_URL / PMS_ACCOUNT / PMS_SECRET / PMS_HOTELCODE）",
+            detail="PMS 環境變數未設定（PMS_API_URL / PMS_ACCOUNT / PMS_SECRET）",
         )
+
+    # 決定要用哪個 hotelcode：明確指定 > DB 已存 > env fallback
+    effective_hotelcode = (test_hotelcode or "").strip() or None
+    if not effective_hotelcode and channel_id:
+        existing = await faq_service.get_pms_connection(db, category_id, channel_id)
+        if existing and existing.hotelcode:
+            effective_hotelcode = existing.hotelcode
+
     try:
         result = await asyncio.get_event_loop().run_in_executor(
-            None, lambda: query_pms("2026-01-01", "2026-01-02")
+            None,
+            lambda: query_pms(
+                "2026-01-01", "2026-01-02", None, 2, effective_hotelcode
+            ),
         )
         room_count = len(result.get("room", []))
         return True, f"連線成功，取得 {room_count} 種房型資料", room_count
@@ -734,12 +750,18 @@ async def test_pms_connection(
     line_channel_id: Optional[str] = Query(
         None, description="LINE OA channel_id（多 OA 隔離）"
     ),
+    body: Optional[dict] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """測試 PMS 連線（不儲存設定）"""
+    """測試 PMS 連線（不儲存設定）。
+
+    Body 可選 `hotelcode` 欄位 — admin 在 UI 還沒儲存就要先試的值。
+    沒帶就用該 channel 已儲存的 hotelcode 或 env fallback。
+    """
+    test_hotelcode = (body or {}).get("hotelcode") if body else None
     success, message, room_count = await _test_pms_connection_impl(
-        db, category_id, line_channel_id
+        db, category_id, line_channel_id, test_hotelcode=test_hotelcode
     )
     # 更新 last_synced_at（依當前 channel 的連線）
     conn = await faq_service.get_pms_connection(db, category_id, line_channel_id)

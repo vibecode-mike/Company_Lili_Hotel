@@ -97,7 +97,7 @@ async def get_pms_status(
 ):
     """取得指定 LINE OA 的 PMS 串接啟用狀態"""
     conn = await _get_or_create_pms_conn(db, line_channel_id)
-    init_pms_from_db(conn.status)
+    init_pms_from_db(conn.status, line_channel_id)
     return {
         "enabled": conn.status == "enabled",
         "configured": pms_configured(),
@@ -127,26 +127,42 @@ async def update_pms_status(
     conn.status = new_status
     await db.commit()
 
-    set_pms_enabled(bool(enabled))
+    set_pms_enabled(line_channel_id, bool(enabled))
     return {"enabled": conn.status == "enabled"}
 
 
 @router.get("/pms-rooms")
-async def get_pms_rooms():
-    """取得 PMS 即時房型列表（供管理後台顯示）"""
+async def get_pms_rooms(
+    line_channel_id: Optional[str] = Query(
+        None, description="LINE OA channel_id（多 OA 隔離，決定使用哪個 hotelcode）"
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """取得 PMS 即時房型列表（供管理後台顯示，依當前 LINE OA 對應的 hotelcode 查詢）"""
     from datetime import date, timedelta
 
-    from app.services.chatbot_service import (ROOMTYPE_MAX_OCCUPANCY,
-                                              ROOMTYPE_NAME)
+    from app.services.chatbot_service import (
+        ROOMTYPE_MAX_OCCUPANCY,
+        ROOMTYPE_NAME,
+        chatbot_service,
+    )
 
     if not pms_configured():
         return {"rooms": [], "error": "PMS 未串接"}
+
+    # 依當前 LINE OA 查 hotelcode（未啟用 / 無 hotelcode 該 OA 視為「無 PMS」）
+    hotelcode = await chatbot_service._resolve_hotelcode(db, line_channel_id)
+    if not hotelcode:
+        return {"rooms": [], "error": "此 LINE 館別尚未串接 PMS"}
+
     try:
         today = date.today()
         tomorrow = today + timedelta(days=1)
         result = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: query_pms_all_roomtypes(today.isoformat(), tomorrow.isoformat()),
+            lambda: query_pms_all_roomtypes(
+                today.isoformat(), tomorrow.isoformat(), hotelcode
+            ),
         )
         rooms = []
         for room in result.get("room", []):
@@ -176,17 +192,31 @@ async def get_pms_rooms():
 
 
 @router.post("/pms-validate-room")
-async def validate_pms_room_code(body: dict):
-    """檢核房型代碼在 PMS 中是否仍有效"""
+async def validate_pms_room_code(
+    body: dict,
+    line_channel_id: Optional[str] = Query(
+        None, description="LINE OA channel_id（多 OA 隔離，決定使用哪個 hotelcode）"
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """檢核房型代碼在 PMS 中是否仍有效（依當前 LINE OA 對應的 hotelcode 查詢）"""
     room_code = body.get("room_code", "")
     if not room_code:
         raise HTTPException(status_code=422, detail="需提供 room_code")
     if not pms_configured():
         # PMS 未串接，跳過檢核
         return {"valid": True, "message": "PMS 未串接，略過檢核"}
+
+    from app.services.chatbot_service import chatbot_service
+
+    hotelcode = await chatbot_service._resolve_hotelcode(db, line_channel_id)
+    if not hotelcode:
+        # 該 LINE OA 沒接 PMS，無法驗證但也不擋
+        return {"valid": True, "message": "此 LINE 館別未接 PMS，跳過檢核"}
+
     try:
         result = await asyncio.get_event_loop().run_in_executor(
-            None, lambda: query_pms("2026-01-01", "2026-01-02")
+            None, lambda: query_pms("2026-01-01", "2026-01-02", None, 2, hotelcode)
         )
         pms_codes = {r["roomtype"] for r in result.get("room", [])}
         if room_code in pms_codes:

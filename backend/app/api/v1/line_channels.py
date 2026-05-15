@@ -200,19 +200,28 @@ async def create_channel(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    創建 LINE 頻道設定
+    創建 LINE 頻道設定（Phase E 一條龍）
 
-    Args:
-        data: 頻道設定資料
+    主表（line_channels）必建；以下選填 row 視 payload 內容自動 seed：
+    - `site_id` / `site_name` 提供 → `webchat_site_channels` 綁定該 LINE OA
+    - `hotelcode` 提供 → `faq_pms_connections` 帶 hotelcode、status='disabled'（admin 之後啟用）
+    - 不論如何 → `ai_token_usages` 預設 10M quota（讓該 OA 立刻能跑 AI）
 
-    Returns:
-        LineChannelResponse: 創建的頻道設定
+    整筆交易，任一失敗 rollback。
     """
     try:
-        # 多帳號模式：允許建立多筆 LINE 頻道；channel_id 由 DB unique constraint 把關
-        channel = LineChannel(**data.model_dump())
+        # 拆出 Phase E 額外欄位（不寫進 LineChannel 主表）
+        site_id = (data.site_id or "").strip() or None
+        site_name = (data.site_name or "").strip() or None
+        hotelcode = (data.hotelcode or "").strip() or None
 
-        # 🆕 自動獲取 Basic ID + Channel Name
+        # 主表 line_channels（只塞 LineChannel 認識的欄位）
+        channel_payload = data.model_dump(
+            exclude={"site_id", "site_name", "hotelcode"}
+        )
+        channel = LineChannel(**channel_payload)
+
+        # 自動獲取 Basic ID + Channel Name
         if data.channel_access_token:
             bot_info = fetch_bot_info_from_line(data.channel_access_token)
             if bot_info["basic_id"]:
@@ -224,7 +233,8 @@ async def create_channel(
         await db.flush()
         await db.refresh(channel)
 
-        # 自動把新建 LINE OA 加給所有現存 ADMIN，避免 admin 看不到自己剛建的館別
+        # 自動把新建 LINE OA 加給所有現存 ADMIN
+        seeded_rows: list[str] = []
         if channel.channel_id:
             admins = await db.execute(
                 select(User.id).where(User.role == UserRole.ADMIN)
@@ -232,10 +242,70 @@ async def create_channel(
             for admin_id in admins.scalars().all():
                 db.add(UserChannel(user_id=admin_id, line_channel_id=channel.channel_id))
 
+            # === Phase E 一條龍 seed ===
+            from app.models.faq import AiTokenUsage, FaqCategory, Industry
+            from app.models.chatbot_booking import FaqPmsConnection
+            from app.models.webchat_site import WebchatSiteChannel
+
+            # (1) Webchat 站點綁定
+            if site_id:
+                db.add(
+                    WebchatSiteChannel(
+                        site_id=site_id,
+                        line_channel_id=channel.channel_id,
+                        site_name=site_name,
+                    )
+                )
+                seeded_rows.append(f"webchat_site_channels(site_id={site_id})")
+
+            # (2) Token quota（預設 10M）
+            ind_res = await db.execute(
+                select(Industry).where(Industry.is_active == True).limit(1)  # noqa: E712
+            )
+            industry = ind_res.scalar_one_or_none()
+            if industry:
+                db.add(
+                    AiTokenUsage(
+                        industry_id=industry.id,
+                        channel_id=channel.channel_id,
+                        total_quota=10_000_000,
+                        used_amount=0,
+                    )
+                )
+                seeded_rows.append("ai_token_usages(10M)")
+
+                # (3) FAQ PMS 連線 row（hotelcode 有給就帶；沒給也建一筆讓 admin 之後啟用）
+                cat_res = await db.execute(
+                    select(FaqCategory).where(
+                        FaqCategory.industry_id == industry.id,
+                        FaqCategory.name == "訂房",
+                    )
+                )
+                booking_category = cat_res.scalar_one_or_none()
+                if booking_category:
+                    db.add(
+                        FaqPmsConnection(
+                            faq_category_id=booking_category.id,
+                            channel_id=channel.channel_id,
+                            hotelcode=hotelcode,
+                            api_endpoint="",
+                            api_key_encrypted="",
+                            auth_type="api_key",
+                            status="disabled",
+                            snapshot_completed=False,
+                        )
+                    )
+                    seeded_rows.append(
+                        f"faq_pms_connections(hotelcode={hotelcode or 'NULL'})"
+                    )
+
         await db.commit()
         await db.refresh(channel)
 
-        logger.info(f"✅ 創建 LINE 頻道設定: ID={channel.id}（已自動指派給所有 ADMIN）")
+        logger.info(
+            f"✅ 創建 LINE 頻道設定: ID={channel.id}, channel_id={channel.channel_id}, "
+            f"seeded={seeded_rows}（已自動指派給所有 ADMIN）"
+        )
         return channel
 
     except HTTPException:
@@ -330,6 +400,55 @@ async def delete_channel(
         await db.rollback()
         logger.error(f"❌ 刪除 LINE 頻道設定失敗: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"刪除設定失敗: {str(e)}")
+
+
+@router.get("/{channel_db_id}/embed-code")
+async def get_embed_code(
+    channel_db_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    取得該 LINE OA 對應官網的 widget 嵌入碼（Phase E-5）。
+
+    URL 用 `settings.PUBLIC_BASE`，依環境自動生成：
+    - 地端 dev → https://crmpoc.star-bit.io
+    - GCP staging → https://console.star-bit.io
+    - GCP prod 之後 → 對應域名
+
+    若該 channel 尚未綁定 webchat site → 回 404 提示先綁站點。
+    """
+    from app.config import settings
+    from app.models.webchat_site import WebchatSiteChannel
+
+    channel = await db.get(LineChannel, channel_db_id)
+    if not channel or not channel.channel_id:
+        raise HTTPException(status_code=404, detail="LINE 頻道不存在")
+
+    # 查該 channel 綁定的 webchat site
+    res = await db.execute(
+        select(WebchatSiteChannel).where(
+            WebchatSiteChannel.line_channel_id == channel.channel_id
+        )
+    )
+    site = res.scalar_one_or_none()
+    if not site:
+        raise HTTPException(
+            status_code=404,
+            detail="此 LINE 頻道尚未綁定官網站點，請先在 Card 10 填寫 Site ID",
+        )
+
+    public_base = (settings.PUBLIC_BASE or "").rstrip("/")
+    embed_code = (
+        f'<script src="{public_base}/widget/loader.js'
+        f'?site_id={site.site_id}" async></script>'
+    )
+    return {
+        "embed_code": embed_code,
+        "public_base": public_base,
+        "site_id": site.site_id,
+        "site_name": site.site_name,
+        "line_channel_id": channel.channel_id,
+    }
 
 
 @router.post("/basic-id")

@@ -42,7 +42,13 @@ def md5_hex(value: str) -> str:
     return hashlib.md5(value.encode("utf-8")).hexdigest()
 
 
-def _ensure_pms_settings() -> None:
+def _ensure_pms_settings(hotelcode: str | None = None) -> str:
+    """檢查 PMS 必要設定，回傳 effective hotelcode。
+
+    hotelcode 為 None 時 fallback 到 env PMS_HOTELCODE（向下相容 / 沒帶 channel 時用）。
+    回傳值是要實際用來呼叫 PMS 的 hotelcode（**不會** mutate env）。
+    """
+    effective = (hotelcode or _pms_hotelcode() or "").strip()
     missing = []
     if not _pms_api_url():
         missing.append("PMS_API_URL")
@@ -50,15 +56,16 @@ def _ensure_pms_settings() -> None:
         missing.append("PMS_ACCOUNT")
     if not _pms_secret():
         missing.append("PMS_SECRET")
-    if not _pms_hotelcode():
-        missing.append("PMS_HOTELCODE")
+    if not effective:
+        missing.append("hotelcode (該 LINE OA 未設定 + env 也空)")
     if missing:
         raise ValueError(f"PMS 缺少必要設定：{', '.join(missing)}")
+    return effective
 
 
 def pms_enabled() -> bool:
-    """Check if PMS is configured."""
-    return bool(_pms_api_url() and _pms_account() and _pms_secret() and _pms_hotelcode())
+    """Check if PMS env credentials are configured (env vars only — hotelcode 改成 per channel 後僅供 fallback)."""
+    return bool(_pms_api_url() and _pms_account() and _pms_secret())
 
 
 def query_pms(
@@ -66,8 +73,10 @@ def query_pms(
     enddate: str,
     roomtype: str | None = None,
     housingcnt: int = 2,
+    hotelcode: str | None = None,
 ) -> dict:
-    _ensure_pms_settings()
+    """查 PMS 房況。hotelcode 為 None 時 fallback 到 env PMS_HOTELCODE。"""
+    effective_hotelcode = _ensure_pms_settings(hotelcode)
 
     housingcnt = int(housingcnt or 2)
     ts = taipei_timestamp()
@@ -76,7 +85,7 @@ def query_pms(
         "account": _pms_account(),
         "password": password,
         "timestamp": ts,
-        "hotelcode": _pms_hotelcode(),
+        "hotelcode": effective_hotelcode,
         "startdate": startdate,
         "enddate": enddate,
         "housingcnt": housingcnt,
@@ -90,18 +99,22 @@ def query_pms(
         return {"raw_text": response.text}
 
 
-def query_pms_all_roomtypes(startdate: str, enddate: str) -> dict:
+def query_pms_all_roomtypes(
+    startdate: str,
+    enddate: str,
+    hotelcode: str | None = None,
+) -> dict:
     # 閎運 PMS 行為怪：
     #   - 不送 housingcnt（依官方 post.php 範例）→ 回所有 11 個房型（含 TT/KK），但近期日期會回 "Session halted."
     #   - 送 housingcnt=N → 只回 N 人房，但任何日期都穩
     # 所以三招都打、合併去重：不送 + housingcnt=2 + housingcnt=4。任一招失敗不影響其他招。
-    _ensure_pms_settings()
+    effective_hotelcode = _ensure_pms_settings(hotelcode)
 
     merged: dict[str, dict] = {}
-    hotelcode = None
+    resp_hotelcode = None
     base_payload = {
         "account": _pms_account(),
-        "hotelcode": _pms_hotelcode(),
+        "hotelcode": effective_hotelcode,
         "startdate": startdate,
         "enddate": enddate,
         "roomtype": "",
@@ -121,8 +134,8 @@ def query_pms_all_roomtypes(startdate: str, enddate: str) -> dict:
             data = response.json()
         except Exception:
             continue
-        if hotelcode is None:
-            hotelcode = data.get("hotelcode")
+        if resp_hotelcode is None:
+            resp_hotelcode = data.get("hotelcode")
         for room in data.get("room") or []:
             code = room.get("roomtype")
             if not code:
@@ -134,7 +147,7 @@ def query_pms_all_roomtypes(startdate: str, enddate: str) -> dict:
             if existing is None or (new_has_data and not existing_has_data):
                 merged[code] = room
 
-    return {"hotelcode": hotelcode, "room": list(merged.values())}
+    return {"hotelcode": resp_hotelcode, "room": list(merged.values())}
 
 
 def build_booking_url(

@@ -380,7 +380,8 @@ async def _kb_search(
         return {"ok": False, "error": "unknown category", "items": []}
 
     # PMS 啟用時，訂房類別由 PMS 提供，FAQ 不回傳避免資料衝突
-    if category == "booking_billing" and is_pms_enabled():
+    # PMS 啟用時，訂房類別由 PMS 提供，FAQ 不回傳避免資料衝突（per channel）
+    if category == "booking_billing" and is_pms_enabled(line_channel_id):
         return {"ok": True, "category": category, "query": query, "items": []}
 
     # 查詢啟用中的分類
@@ -786,8 +787,9 @@ _MIXED_AVAIL_TOOL = {
 
 # PMS config check — env vars must be present to allow enabling
 _PMS_CONFIGURED: bool = pms_enabled()
-# Runtime toggle — loaded from DB on first access, defaults to False (disabled)
-_pms_runtime_enabled: Optional[bool] = None  # None = not yet loaded from DB
+# Runtime toggle per LINE OA：channel_id → bool
+# 空 dict 表示尚未從 DB 載入；caller 帶 channel_id 但 dict 沒該 key → 視為 False
+_pms_runtime_enabled: Dict[str, bool] = {}
 
 _MARK_UNANSWERABLE_TOOL = {
     "type": "function",
@@ -851,46 +853,77 @@ def _contains_unanswerable_phrase(reply: str) -> bool:
     return any(kw in reply for kw in _UNANSWERABLE_PHRASES)
 
 
-def is_pms_enabled() -> bool:
-    """Runtime check: PMS configured AND toggled on."""
-    if _pms_runtime_enabled is None:
-        return False  # not yet loaded from DB
-    return _PMS_CONFIGURED and _pms_runtime_enabled
+def is_pms_enabled(channel_id: Optional[str] = None) -> bool:
+    """Runtime check: PMS configured AND toggled on for given channel.
+
+    channel_id 為 None 時（向下相容 / startup health check）：
+      回「至少一個 channel 啟用」的 OR 結果。
+    帶 channel_id 時：嚴格檢查該 channel 是否啟用。
+    """
+    if not _PMS_CONFIGURED:
+        return False
+    if channel_id is None:
+        return any(_pms_runtime_enabled.values())
+    return _pms_runtime_enabled.get(channel_id, False)
 
 
-def set_pms_enabled(value: bool) -> None:
-    """Update in-memory flag (caller is responsible for DB persistence)."""
-    global _pms_runtime_enabled
-    _pms_runtime_enabled = value if _PMS_CONFIGURED else False
+def set_pms_enabled(channel_id: str, value: bool) -> None:
+    """Update in-memory flag for given channel (caller responsible for DB persistence)."""
+    if not channel_id:
+        return  # 沒帶 channel_id → 不知道要更新誰，忽略
+    _pms_runtime_enabled[channel_id] = bool(value) and _PMS_CONFIGURED
     _prompt_cache.clear()
 
 
-def init_pms_from_db(status: str) -> None:
-    """Called once at startup or on first API request to sync from DB."""
-    global _pms_runtime_enabled
-    _pms_runtime_enabled = (status == "enabled") and _PMS_CONFIGURED
+def init_pms_from_db(status: str, channel_id: Optional[str] = None) -> None:
+    """Sync single channel's PMS status from DB.
+
+    舊呼叫（沒帶 channel_id）保持向下相容但無效（會被忽略）。
+    """
+    if not channel_id:
+        return
+    _pms_runtime_enabled[channel_id] = (status == "enabled") and _PMS_CONFIGURED
     _prompt_cache.clear()
 
 
-def _get_tools() -> list:
-    return _TOOLS_WITH_PMS if is_pms_enabled() else _TOOLS_WITHOUT_PMS
+def init_pms_from_db_all(rows: List[tuple]) -> None:
+    """Bootstrap：startup 時把所有 channel 的 PMS 狀態一次載入。
+
+    rows: List[(channel_id, status)] from SELECT channel_id, status FROM faq_pms_connections
+    """
+    global _pms_runtime_enabled
+    _pms_runtime_enabled = {
+        ch_id: (status == "enabled") and _PMS_CONFIGURED
+        for ch_id, status in rows
+        if ch_id
+    }
+    _prompt_cache.clear()
 
 
-# System prompt cached by date — regenerated only at midnight
-_prompt_cache: Dict[date, str] = {}
+def _get_tools(channel_id: Optional[str] = None) -> list:
+    return (
+        _TOOLS_WITH_PMS if is_pms_enabled(channel_id) else _TOOLS_WITHOUT_PMS
+    )
 
 
-def _build_system_prompt() -> str:
+# System prompt cached by (channel_id, date) — regenerated at midnight or on toggle
+# key=(channel_id_or_None, date) — None 代表「PMS-disabled 通用版本」
+_prompt_cache: Dict[tuple, str] = {}
+
+
+def _build_system_prompt(channel_id: Optional[str] = None) -> str:
     today = datetime.now(ZoneInfo("Asia/Taipei")).date()
-    if today not in _prompt_cache:
-        _prompt_cache.clear()  # at most 1 entry
-        _prompt_cache[today] = _build_system_prompt_for(today)
-    return _prompt_cache[today]
+    # 用 (channel_pms_enabled, date) 當 key — 同樣 PMS 狀態的 channel 共用 prompt
+    pms_on = is_pms_enabled(channel_id)
+    cache_key = (pms_on, today)
+    if cache_key not in _prompt_cache:
+        _prompt_cache[cache_key] = _build_system_prompt_for(today, pms_on)
+    return _prompt_cache[cache_key]
 
 
-def _build_system_prompt_for(today: date) -> str:
+def _build_system_prompt_for(today: date, pms_on: bool) -> str:
     today_str = today.strftime("%Y-%m-%d")
-    if is_pms_enabled():
+    if pms_on:
         pms_rule = (
             "- 能推斷出入住日與住幾晚就可以呼叫 query_pms_availability（不需要人數，系統會回傳所有房型依人數由小到大排序）\n"
             "- 若入住日期嚴格早於今天（不含今天），不要查詢房況，直接提醒旅客「您提供的日期已過，請重新提供入住日期」；今天當天是有效入住日\n"
@@ -1221,7 +1254,8 @@ class ChatbotService:
             room_cards: List[RoomCardSchema] = []
         else:
             # 組裝 system prompt，附加已知的訂房狀態讓 AI 不重複追問
-            sys_prompt = _build_system_prompt()
+            # PMS 啟用版本與停用版本不同，依當前 channel 決定
+            sys_prompt = _build_system_prompt(webchat_line_channel_id)
             known_parts = []
             missing_parts = []
             if session.checkin_date:
@@ -1345,6 +1379,39 @@ class ChatbotService:
             )
         )
         return res.scalar_one_or_none()
+
+    async def _resolve_hotelcode(
+        self,
+        db: Optional[AsyncSession],
+        line_channel_id: Optional[str],
+    ) -> Optional[str]:
+        """查該 LINE OA 的 PMS hotelcode。
+
+        Phase E-2：每個 LINE OA 對應一個閎運 hotelcode（DB 存）。
+        - 有 channel_id + 該 channel `status='enabled'` + `hotelcode` 非空 → 回該 hotelcode
+        - 該 channel 不存在 / `status='disabled'` / `hotelcode` 空 → 回 None
+          （caller 拿到 None 表示「此 OA 不接 PMS」，要走 FAQ KB fallback）
+        - 沒帶 channel_id（向下相容，例如 LINE bot 路徑還沒接上）→ fallback env PMS_HOTELCODE
+        """
+        if db is None:
+            return settings.PMS_HOTELCODE or None
+        if not line_channel_id:
+            return settings.PMS_HOTELCODE or None
+
+        from app.models.chatbot_booking import FaqPmsConnection
+
+        res = await db.execute(
+            select(FaqPmsConnection.hotelcode, FaqPmsConnection.status)
+            .where(FaqPmsConnection.channel_id == line_channel_id)
+            .limit(1)
+        )
+        row = res.first()
+        if not row:
+            return None
+        hotelcode, status = row
+        if status != "enabled" or not hotelcode:
+            return None
+        return hotelcode
 
     async def _persist_widget_conversation(
         self,
@@ -1547,7 +1614,7 @@ class ChatbotService:
             resp = await client.chat.completions.create(
                 model=settings.OPENAI_MODEL,
                 messages=messages,
-                tools=_get_tools(),
+                tools=_get_tools(ctx.line_channel_id),
                 tool_choice="auto",
                 timeout=30,
             )
@@ -1708,8 +1775,13 @@ class ChatbotService:
         # 未指定人數時傳 None 給 _availability_to_room_cards，讓其以人數由小到大排序不過濾
         sort_housingcnt: Optional[int] = housingcnt if housingcnt_specified else None
 
-        # PMS disabled → FAQ KB fallback (spec: _kb_search("booking_billing"))
-        if not is_pms_enabled():
+        # 解析該 LINE OA 的 hotelcode：
+        #   - None 代表「此 OA 不接 PMS」（disabled / hotelcode 空 / 沒對應 row）→ 走 KB fallback
+        #   - 有值才實際打 PMS API
+        hotelcode = await self._resolve_hotelcode(db, ctx.line_channel_id)
+
+        # PMS disabled（env 沒設好 / 該 channel 沒啟用 / 此 OA 無 hotelcode）→ FAQ KB fallback
+        if not is_pms_enabled(ctx.line_channel_id) or not hotelcode:
             cards = await _kb_fallback_rooms(
                 db,
                 housingcnt if housingcnt_specified else None,
@@ -1739,22 +1811,28 @@ class ChatbotService:
 
         try:
             # 未指定人數且未指定房型 → 用 query_pms_all_roomtypes（housingcnt 空字串）取全部房型；
-            # 否則用 query_pms（會依 housingcnt 過濾）
+            # 否則用 query_pms（會依 housingcnt 過濾）。hotelcode 已由上方 _resolve_hotelcode 取得。
             if not housingcnt_specified and not roomtype:
                 raw = await asyncio.to_thread(
-                    query_pms_all_roomtypes, startdate, enddate
+                    query_pms_all_roomtypes, startdate, enddate, hotelcode
                 )
                 logger.info(
                     f"[PMS] all-roomtypes query: {len(raw.get('room', []))} room types, "
-                    f"startdate={startdate}, enddate={enddate}"
+                    f"startdate={startdate}, enddate={enddate}, hotelcode={hotelcode}"
                 )
             else:
                 raw = await asyncio.to_thread(
-                    query_pms, startdate, enddate, roomtype, housingcnt
+                    query_pms,
+                    startdate,
+                    enddate,
+                    roomtype,
+                    housingcnt,
+                    hotelcode,
                 )
                 logger.info(
                     f"[PMS] query result: {len(raw.get('room', []))} room types, "
-                    f"startdate={startdate}, enddate={enddate}, housingcnt={housingcnt}"
+                    f"startdate={startdate}, enddate={enddate}, "
+                    f"housingcnt={housingcnt}, hotelcode={hotelcode}"
                 )
             _inject_tt_test_inventory(raw, startdate, enddate)
             availability = self._extract_availability(raw, startdate, enddate)
@@ -1768,7 +1846,7 @@ class ChatbotService:
                     "[PMS] housingcnt=1 returned empty, retrying with housingcnt=2"
                 )
                 raw2 = await asyncio.to_thread(
-                    query_pms, startdate, enddate, roomtype, 2
+                    query_pms, startdate, enddate, roomtype, 2, hotelcode
                 )
                 _inject_tt_test_inventory(raw2, startdate, enddate)
                 availability = self._extract_availability(raw2, startdate, enddate)
@@ -1889,11 +1967,17 @@ class ChatbotService:
             if occ > 0:
                 candidates_occ.add(occ)
 
+        # 解析當前 LINE OA 的 hotelcode（per-channel PMS routing）
+        hotelcode = await self._resolve_hotelcode(
+            ctx.db if ctx else None,
+            ctx.line_channel_id if ctx else None,
+        )
+
         inventory_cards: List[Dict[str, Any]] = []
         for housingcnt in sorted(candidates_occ):
             try:
                 raw = await asyncio.to_thread(
-                    query_pms, startdate, enddate, None, housingcnt
+                    query_pms, startdate, enddate, None, housingcnt, hotelcode
                 )
                 inventory_cards.extend(
                     _inventory_cards_from_pms_raw(
@@ -2970,7 +3054,7 @@ class ChatbotService:
         # 3. 對話歷史用記憶體 session（與 handle_message 統一，不從 DB 讀）
         session.history.append({"role": "user", "content": message})
         messages: List[Dict[str, Any]] = [
-            {"role": "system", "content": _build_system_prompt()},
+            {"role": "system", "content": _build_system_prompt(line_channel_id)},
             *session.history,
         ]
 
@@ -3115,7 +3199,7 @@ class ChatbotService:
         )
 
         messages: List[Dict[str, Any]] = [
-            {"role": "system", "content": _build_system_prompt()},
+            {"role": "system", "content": _build_system_prompt(line_channel_id)},
             {"role": "user", "content": message},
         ]
 
@@ -3182,6 +3266,21 @@ class ChatbotService:
             usage_query = usage_query.where(AiTokenUsage.channel_id == line_channel_id)
         usage_result = await db.execute(usage_query)
         token_usage = usage_result.scalar_one_or_none()
+
+        # Lazy seed：新 LINE OA 第一次互動時自動建立 quota row（預設 10M）
+        # Phase E：讓 admin 不用先手動配置就能讓新 channel 即時運作
+        if token_usage is None and line_channel_id:
+            token_usage = AiTokenUsage(
+                industry_id=industry_id,
+                channel_id=line_channel_id,
+                total_quota=10_000_000,
+                used_amount=0,
+            )
+            db.add(token_usage)
+            await db.flush()
+            logger.info(
+                f"[token-usage] auto-seeded default 10M quota for new channel: {line_channel_id}"
+            )
 
         if check_exhausted and token_usage and token_usage.total_quota > 0:
             if token_usage.used_amount >= token_usage.total_quota:
