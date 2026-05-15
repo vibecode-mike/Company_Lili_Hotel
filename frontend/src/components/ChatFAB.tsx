@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, type MouseEvent as ReactMouse
 import { createPortal } from "react-dom";
 import { useToast } from "./ToastProvider";
 import { useAuth } from "./auth/AuthContext";
+import { useChannel } from "../contexts/ChannelContext";
 import {
   sendChatbotMessage,
   confirmChatbotRooms,
@@ -862,6 +863,8 @@ export default function ChatFAB() {
   const [chatOpen, setChatOpen] = useState(() => sessionStorage.getItem("chatfab-open") === "1");
   const { showToast } = useToast();
   const { user } = useAuth();
+  const { selectedChannel } = useChannel();
+  const selectedLineChannelId = selectedChannel?.channel_id ?? "";
   const canPublish = user?.faq_can_publish === true || user?.role === "admin";
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [publishTooltipVisible, setPublishTooltipVisible] = useState(false);
@@ -981,6 +984,7 @@ export default function ChatFAB() {
         message: text,
         test_mode: true,
         admin_test: true,  // CRM 後台試聊框：不建立會員、不寫對話紀錄
+        line_channel_id: selectedLineChannelId || null,  // 多 OA 隔離：限定當前 sidebar 館別
       });
 
       if (res.reply_type === "room_cards" && res.room_cards.length > 0) {

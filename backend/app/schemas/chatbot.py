@@ -39,6 +39,8 @@ class ChatbotMessageInSchema(BaseModel):
     # Widget 嵌入站點識別（讓會員管理能分辨同一個 widget JS 嵌在不同網站時的來源）
     site_id: Optional[str] = Field(None, max_length=50)  # 英文代號（穩定 key）
     site_name: Optional[str] = Field(None, max_length=100)  # 中文顯示名（UI 顯示）
+    # 多 OA 隔離：admin_test 時由 CRM sidebar 選定，限定該館的 FAQ + token quota
+    line_channel_id: Optional[str] = Field(None, max_length=100)
 
 
 ReplyType = Literal["text", "room_cards", "member_form", "booking_confirm"]
@@ -150,8 +152,11 @@ class BookingSaveOutSchema(BaseModel):
 class TrackClickInSchema(BaseModel):
     """Widget 點擊事件追蹤輸入。
     用於房卡 +、確認選房等 click 事件 → 自動打互動標籤。"""
+
     browser_key: str = Field(..., min_length=1, max_length=100)
-    event_type: str = Field(..., max_length=50)  # room_select / room_confirm / suggestion / image
+    event_type: str = Field(
+        ..., max_length=50
+    )  # room_select / room_confirm / suggestion / image
     category_name: Optional[str] = None  # FaqCategory.name 互動標籤名（如「訂房」）
     rule_id: Optional[int] = None  # 若可對應到 FaqRule，伺服器自動推導 tag + category
     room_type_code: Optional[str] = None  # 純 metadata，方便後續分析

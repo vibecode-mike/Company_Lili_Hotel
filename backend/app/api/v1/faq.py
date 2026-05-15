@@ -1,36 +1,33 @@
 """
 FAQ 知識庫管理 API
 """
+
 import asyncio
-import json
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.database import get_db
-from app.api.v1.auth import get_current_user, oauth2_scheme
-from app.core.security import decode_access_token
-from app.models.user import User
-from app.services.faq_service import FaqService
-from app.services.chatbot_service import chatbot_service as ai_chatbot
-from app.schemas.faq import (
-    FaqCategoryToggleSchema,
-    FaqRuleCreateSchema,
-    FaqRuleUpdateSchema,
-    FaqRuleToggleSchema,
-    AiTokenUsageUpdateSchema,
-    FaqModuleAuthUpdateSchema,
-    AiTestChatRequestSchema,
-)
-from fastapi import UploadFile, File
-from fastapi.responses import StreamingResponse
-from typing import Optional
 import csv
 import io
+import json
 import logging
 import time
+from typing import Optional
+
 import openpyxl
 import xlrd
 import xlwt
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import StreamingResponse
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.v1.auth import get_current_user, oauth2_scheme
+from app.core.security import decode_access_token
+from app.database import get_db
+from app.models.user import User
+from app.schemas.faq import (AiTestChatRequestSchema, AiTokenUsageUpdateSchema,
+                             FaqCategoryToggleSchema,
+                             FaqModuleAuthUpdateSchema, FaqRuleCreateSchema,
+                             FaqRuleToggleSchema, FaqRuleUpdateSchema)
+from app.services.chatbot_service import chatbot_service as ai_chatbot
+from app.services.faq_service import FaqService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -42,7 +39,9 @@ faq_service = FaqService()
 
 @router.get("/categories", response_model=dict)
 async def get_categories(
-    line_channel_id: Optional[str] = Query(None, description="LINE OA channel_id，rule_count 只算該 OA"),
+    line_channel_id: Optional[str] = Query(
+        None, description="LINE OA channel_id，rule_count 與 PMS 連線狀態只算該 OA"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -86,13 +85,17 @@ async def get_categories(
             "updated_at": cat.updated_at.isoformat() if cat.updated_at else None,
             "pms_connection": None,
         }
-        # Attach PMS connection info if data_source_type is pms
+        # Attach PMS connection info if data_source_type is pms（依當前 LINE OA 篩選）
         if cat.data_source_type == "pms":
-            pms_conn = await faq_service.get_pms_connection(db, cat.id)
+            pms_conn = await faq_service.get_pms_connection(db, cat.id, line_channel_id)
             if pms_conn:
                 cat_data["pms_connection"] = {
                     "status": pms_conn.status,
-                    "last_synced_at": pms_conn.last_synced_at.isoformat() if pms_conn.last_synced_at else None,
+                    "last_synced_at": (
+                        pms_conn.last_synced_at.isoformat()
+                        if pms_conn.last_synced_at
+                        else None
+                    ),
                 }
         result.append(cat_data)
 
@@ -132,7 +135,9 @@ async def get_rules(
     status: Optional[str] = Query(None, description="狀態篩選：draft/active/disabled"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    line_channel_id: Optional[str] = Query(None, description="LINE OA channel_id，提供時只回該 OA 的規則"),
+    line_channel_id: Optional[str] = Query(
+        None, description="LINE OA channel_id，提供時只回該 OA 的規則"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -149,17 +154,23 @@ async def get_rules(
                 content = json.loads(content)
             except (json.JSONDecodeError, TypeError):
                 pass
-        items.append({
-            "id": rule.id,
-            "category_id": rule.category_id,
-            "content_json": content,
-            "status": rule.status,
-            "is_enabled": rule.is_enabled,
-            "published_at": rule.published_at.isoformat() if rule.published_at else None,
-            "tags": [{"id": t.id, "tag_name": t.tag_name} for t in (rule.tags or [])],
-            "created_at": rule.created_at.isoformat() if rule.created_at else None,
-            "updated_at": rule.updated_at.isoformat() if rule.updated_at else None,
-        })
+        items.append(
+            {
+                "id": rule.id,
+                "category_id": rule.category_id,
+                "content_json": content,
+                "status": rule.status,
+                "is_enabled": rule.is_enabled,
+                "published_at": (
+                    rule.published_at.isoformat() if rule.published_at else None
+                ),
+                "tags": [
+                    {"id": t.id, "tag_name": t.tag_name} for t in (rule.tags or [])
+                ],
+                "created_at": rule.created_at.isoformat() if rule.created_at else None,
+                "updated_at": rule.updated_at.isoformat() if rule.updated_at else None,
+            }
+        )
 
     return {
         "code": 200,
@@ -183,7 +194,9 @@ async def create_rule(
     """建立規則"""
     try:
         # 驗證必填欄位
-        missing = await faq_service.validate_required_fields(db, category_id, data.content_json)
+        missing = await faq_service.validate_required_fields(
+            db, category_id, data.content_json
+        )
         if missing:
             raise HTTPException(status_code=400, detail=f"{missing}為必填欄位")
 
@@ -223,10 +236,15 @@ async def get_rule(
         except (json.JSONDecodeError, TypeError):
             pass
 
-    # 檢查 PMS 唯讀欄位
+    # 檢查 PMS 唯讀欄位（依規則所屬 channel 查連線）
     from app.services.faq_service import PMS_READONLY_FIELDS
-    pms_conn = await faq_service.get_pms_connection(db, rule.category_id)
-    pms_readonly = list(PMS_READONLY_FIELDS) if (pms_conn and pms_conn.status == "enabled") else []
+
+    pms_conn = await faq_service.get_pms_connection(
+        db, rule.category_id, rule.channel_id
+    )
+    pms_readonly = (
+        list(PMS_READONLY_FIELDS) if (pms_conn and pms_conn.status == "enabled") else []
+    )
 
     return {
         "code": 200,
@@ -238,7 +256,9 @@ async def get_rule(
             "status": rule.status,
             "created_by": rule.created_by,
             "updated_by": rule.updated_by,
-            "published_at": rule.published_at.isoformat() if rule.published_at else None,
+            "published_at": (
+                rule.published_at.isoformat() if rule.published_at else None
+            ),
             "published_by": rule.published_by,
             "tags": [{"id": t.id, "tag_name": t.tag_name} for t in (rule.tags or [])],
             "created_at": rule.created_at.isoformat() if rule.created_at else None,
@@ -313,7 +333,6 @@ async def publish_rule(
     }
 
 
-
 # === 規則狀態切換 ===
 
 
@@ -362,7 +381,10 @@ async def publish_all(
         raise HTTPException(status_code=403, detail="無發佈權限")
 
     # 檢查 faq_can_publish 權限（admin 或明確授權的用戶）
-    if not getattr(current_user, "faq_can_publish", False) and current_user.role.value != "admin":
+    if (
+        not getattr(current_user, "faq_can_publish", False)
+        and current_user.role.value != "admin"
+    ):
         raise HTTPException(status_code=403, detail="無發佈權限")
 
     count = await faq_service.publish_all_draft(db, current_user.id)
@@ -370,10 +392,14 @@ async def publish_all(
     # 廣播「規則已更新」通知至所有聊天室
     if count > 0:
         from app.websocket_manager import manager
-        await manager.broadcast("rule_updated", {
-            "message": "規則已更新",
-            "published_count": count,
-        })
+
+        await manager.broadcast(
+            "rule_updated",
+            {
+                "message": "規則已更新",
+                "published_count": count,
+            },
+        )
 
     _bump_rule_modified()
     return {
@@ -387,10 +413,12 @@ async def publish_all(
 
 _last_rule_modified: float = 0.0  # in-memory epoch timestamp
 
+
 def _bump_rule_modified():
     """更新規則修改時間戳（供 ChatFAB polling 偵測）"""
     global _last_rule_modified
     _last_rule_modified = time.time()
+
 
 @router.get("/last-modified")
 async def get_rules_last_modified():
@@ -401,8 +429,26 @@ async def get_rules_last_modified():
 # === 匯入 / 匯出 ===
 
 
-EXPORT_HEADERS = ["房型圖片", "房型名稱", "房價", "可入住人數", "剩餘間數", "房型特色", "會員標籤", "訂房 URL"]
-EXPORT_DB_KEYS = ["image_url", "房型名稱", "房價", "人數", "間數", "房型特色", None, "url"]
+EXPORT_HEADERS = [
+    "房型圖片",
+    "房型名稱",
+    "房價",
+    "可入住人數",
+    "剩餘間數",
+    "房型特色",
+    "會員標籤",
+    "訂房 URL",
+]
+EXPORT_DB_KEYS = [
+    "image_url",
+    "房型名稱",
+    "房價",
+    "人數",
+    "間數",
+    "房型特色",
+    None,
+    "url",
+]
 
 
 def _build_export_rows(rules) -> list[list[str]]:
@@ -481,8 +527,14 @@ async def export_rules(
 
 
 FIELD_MAPPING = [
-    "image_url", "房型名稱", "房價", "人數",
-    "間數", "房型特色", "會員標籤", "url",
+    "image_url",
+    "房型名稱",
+    "房價",
+    "人數",
+    "間數",
+    "房型特色",
+    "會員標籤",
+    "url",
 ]
 REQUIRED_FIELD_INDICES = {0, 1, 2, 3, 4, 5, 7}  # index 6（會員標籤）允許空值
 EXPECTED_FIELD_COUNT = len(FIELD_MAPPING)  # 8
@@ -573,7 +625,9 @@ def _parse_xls(content: bytes) -> list[dict[str, str]]:
     # 跳過標題列（row 0），從 row 1 開始
     raw_rows = []
     for r in range(1, ws.nrows):
-        raw_rows.append([_clean_excel_value(ws.cell_value(r, c)) for c in range(ws.ncols)])
+        raw_rows.append(
+            [_clean_excel_value(ws.cell_value(r, c)) for c in range(ws.ncols)]
+        )
 
     return _validate_and_build_rows(raw_rows)
 
@@ -608,7 +662,9 @@ async def import_rules(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.warning(f"匯入檔案解析失敗: {e}")
-        raise HTTPException(status_code=400, detail="檔案解析失敗，請確認檔案內容格式正確")
+        raise HTTPException(
+            status_code=400, detail="檔案解析失敗，請確認檔案內容格式正確"
+        )
 
     if not rows:
         raise HTTPException(status_code=400, detail="檔案中無有效資料")
@@ -625,13 +681,18 @@ async def import_rules(
 # === PMS 串接 ===
 
 
-async def _test_pms_connection_impl(db: AsyncSession, category_id: int):
+async def _test_pms_connection_impl(
+    db: AsyncSession,
+    category_id: int,
+    channel_id: Optional[str] = None,
+):
     """
     執行 PMS 即時連線測試。
     成功: 回傳 (True, message, room_count)
     失敗: raise HTTPException with 具體錯誤分類
     """
-    from app.services.pms_chatbot_client import pms_enabled as pms_configured, query_pms
+    from app.services.pms_chatbot_client import pms_enabled as pms_configured
+    from app.services.pms_chatbot_client import query_pms
 
     if not pms_configured():
         raise HTTPException(
@@ -645,34 +706,46 @@ async def _test_pms_connection_impl(db: AsyncSession, category_id: int):
         room_count = len(result.get("room", []))
         return True, f"連線成功，取得 {room_count} 種房型資料", room_count
     except Exception as e:
-        # 記錄錯誤到 DB
-        conn = await faq_service.get_pms_connection(db, category_id)
+        # 記錄錯誤到 DB（依當前 channel 的連線）
+        conn = await faq_service.get_pms_connection(db, category_id, channel_id)
         if conn:
             conn.error_message = str(e)[:500]
             await db.flush()
 
         msg = str(e)
         if "401" in msg or "Unauthorized" in msg:
-            raise HTTPException(status_code=400, detail="連線失敗：API Key 無效（401 Unauthorized）")
+            raise HTTPException(
+                status_code=400, detail="連線失敗：API Key 無效（401 Unauthorized）"
+            )
         if "403" in msg or "Forbidden" in msg or "whitelist" in msg.lower():
-            raise HTTPException(status_code=400, detail="連線失敗：IP 未在白名單，請聯繫 PMS 廠商開通")
+            raise HTTPException(
+                status_code=400, detail="連線失敗：IP 未在白名單，請聯繫 PMS 廠商開通"
+            )
         if "timeout" in msg.lower() or "timed out" in msg.lower():
-            raise HTTPException(status_code=400, detail="連線失敗：連線逾時，請確認 PMS 端點是否正確")
+            raise HTTPException(
+                status_code=400, detail="連線失敗：連線逾時，請確認 PMS 端點是否正確"
+            )
         raise HTTPException(status_code=400, detail=f"連線失敗：{msg}")
 
 
 @router.post("/categories/{category_id}/pms-connection/test", response_model=dict)
 async def test_pms_connection(
     category_id: int,
+    line_channel_id: Optional[str] = Query(
+        None, description="LINE OA channel_id（多 OA 隔離）"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """測試 PMS 連線（不儲存設定）"""
-    success, message, room_count = await _test_pms_connection_impl(db, category_id)
-    # 更新 last_synced_at
-    conn = await faq_service.get_pms_connection(db, category_id)
+    success, message, room_count = await _test_pms_connection_impl(
+        db, category_id, line_channel_id
+    )
+    # 更新 last_synced_at（依當前 channel 的連線）
+    conn = await faq_service.get_pms_connection(db, category_id, line_channel_id)
     if conn:
         from datetime import datetime
+
         conn.last_synced_at = datetime.now()
         conn.error_message = None
         await db.flush()
@@ -683,16 +756,24 @@ async def test_pms_connection(
 async def create_pms_connection(
     category_id: int,
     data: dict,
+    line_channel_id: Optional[str] = Query(
+        None, description="LINE OA channel_id（多 OA 隔離）"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """建立 PMS 串接設定（先測試連線，成功才儲存）"""
-    existing = await faq_service.get_pms_connection(db, category_id)
+    if not line_channel_id:
+        raise HTTPException(
+            status_code=400, detail="必須指定 LINE 館別（line_channel_id）"
+        )
+
+    existing = await faq_service.get_pms_connection(db, category_id, line_channel_id)
     if existing:
-        raise HTTPException(status_code=400, detail="該大分類已有 PMS 串接設定")
+        raise HTTPException(status_code=400, detail="該 LINE 館別的 PMS 串接設定已存在")
 
     # 先執行即時連線測試
-    await _test_pms_connection_impl(db, category_id)
+    await _test_pms_connection_impl(db, category_id, line_channel_id)
 
     conn = await faq_service.create_pms_connection(
         db,
@@ -700,13 +781,16 @@ async def create_pms_connection(
         data.get("api_endpoint", ""),
         data.get("api_key", ""),
         data.get("auth_type", "api_key"),
+        channel_id=line_channel_id,
     )
     return {
         "code": 200,
         "message": "連線測試成功，PMS 串接設定已建立",
         "status": conn.status,
         "auth_type": conn.auth_type,
-        "last_synced_at": conn.last_synced_at.isoformat() if conn.last_synced_at else None,
+        "last_synced_at": (
+            conn.last_synced_at.isoformat() if conn.last_synced_at else None
+        ),
         "snapshot_completed": conn.snapshot_completed,
     }
 
@@ -715,11 +799,16 @@ async def create_pms_connection(
 async def toggle_pms_connection(
     category_id: int,
     data: dict,
+    line_channel_id: Optional[str] = Query(
+        None, description="LINE OA channel_id（多 OA 隔離）"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """切換 PMS 串接狀態"""
-    conn = await faq_service.toggle_pms_connection(db, category_id, data.get("status", "disabled"))
+    conn = await faq_service.toggle_pms_connection(
+        db, category_id, data.get("status", "disabled"), line_channel_id
+    )
     if not conn:
         raise HTTPException(status_code=404, detail="PMS 串接設定不存在")
 
@@ -734,11 +823,14 @@ async def toggle_pms_connection(
 @router.get("/categories/{category_id}/pms-connection", response_model=dict)
 async def get_pms_connection(
     category_id: int,
+    line_channel_id: Optional[str] = Query(
+        None, description="LINE OA channel_id（多 OA 隔離）"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """查詢 PMS 串接設定"""
-    conn = await faq_service.get_pms_connection(db, category_id)
+    conn = await faq_service.get_pms_connection(db, category_id, line_channel_id)
     if not conn:
         raise HTTPException(status_code=404, detail="PMS 串接設定不存在")
 
@@ -746,7 +838,9 @@ async def get_pms_connection(
         "status": conn.status,
         "auth_type": conn.auth_type,
         "api_endpoint": conn.api_endpoint,
-        "last_synced_at": conn.last_synced_at.isoformat() if conn.last_synced_at else None,
+        "last_synced_at": (
+            conn.last_synced_at.isoformat() if conn.last_synced_at else None
+        ),
         "snapshot_completed": conn.snapshot_completed,
     }
 
@@ -760,8 +854,10 @@ async def test_chat(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """測試聊天（不計 token、不貼 tag）"""
-    result = await ai_chatbot.test_chat(db, data.message)
+    """測試聊天（依當前 LINE OA 篩選 FAQ + 扣該館 token quota）"""
+    result = await ai_chatbot.test_chat(
+        db, data.message, line_channel_id=data.line_channel_id
+    )
     return {
         "code": 200,
         "message": "測試完成",
@@ -774,7 +870,9 @@ async def test_chat(
 
 @router.get("/token-usage", response_model=dict)
 async def get_token_usage(
-    line_channel_id: Optional[str] = Query(None, description="LINE OA channel_id（必填，未提供時回傳 0）"),
+    line_channel_id: Optional[str] = Query(
+        None, description="LINE OA channel_id（必填，未提供時回傳 0）"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -788,11 +886,20 @@ async def get_token_usage(
         return {
             "code": 200,
             "message": "查詢成功",
-            "data": {"total_quota": 0, "used_amount": 0, "remaining": 0, "usage_percent": 0},
+            "data": {
+                "total_quota": 0,
+                "used_amount": 0,
+                "remaining": 0,
+                "usage_percent": 0,
+            },
         }
 
     remaining = max(0, usage.total_quota - usage.used_amount)
-    usage_percent = round(usage.used_amount / usage.total_quota * 100, 1) if usage.total_quota > 0 else 0
+    usage_percent = (
+        round(usage.used_amount / usage.total_quota * 100, 1)
+        if usage.total_quota > 0
+        else 0
+    )
 
     return {
         "code": 200,
@@ -821,7 +928,9 @@ async def update_token_quota(
         raise HTTPException(status_code=404, detail="尚未設定產業資料")
 
     if not data.line_channel_id:
-        raise HTTPException(status_code=400, detail="必須指定 LINE 館別（line_channel_id）")
+        raise HTTPException(
+            status_code=400, detail="必須指定 LINE 館別（line_channel_id）"
+        )
 
     usage = await faq_service.update_token_quota(
         db, industry.id, data.total_quota, data.line_channel_id
@@ -858,7 +967,9 @@ async def get_module_auth(
             "id": auth.id,
             "client_id": auth.client_id,
             "is_authorized": auth.is_authorized,
-            "authorized_at": auth.authorized_at.isoformat() if auth.authorized_at else None,
+            "authorized_at": (
+                auth.authorized_at.isoformat() if auth.authorized_at else None
+            ),
             "authorized_by": auth.authorized_by,
         },
     }
@@ -872,7 +983,14 @@ async def update_module_auth(
 ):
     """設定模組授權"""
     auth = await faq_service.update_module_auth(
-        db, data.client_id, data.is_authorized, current_user.username if hasattr(current_user, 'username') else str(current_user.id)
+        db,
+        data.client_id,
+        data.is_authorized,
+        (
+            current_user.username
+            if hasattr(current_user, "username")
+            else str(current_user.id)
+        ),
     )
     return {
         "code": 200,

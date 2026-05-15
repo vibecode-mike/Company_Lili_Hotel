@@ -2,22 +2,22 @@
 PMS 系統整合 API
 職責：處理 PMS 系統資料匹配與會員綁定
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_
-from app.database import get_db
-from app.models.pms_integration import PMSIntegration
-from app.models.member import Member
-from app.schemas.pms_integration import (
-    PMSIntegrationCreate,
-    PMSIntegrationUpdate,
-    PMSIntegrationListItem,
-    PMSIntegrationDetail,
-    PMSMatchRequest,
-    PMSSearchParams
-)
-from typing import List, Optional
+
 import logging
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_db
+from app.models.member import Member
+from app.models.pms_integration import PMSIntegration
+from app.schemas.pms_integration import (PMSIntegrationCreate,
+                                         PMSIntegrationDetail,
+                                         PMSIntegrationListItem,
+                                         PMSIntegrationUpdate, PMSMatchRequest,
+                                         PMSSearchParams)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ async def create_pms_integration(
         return {
             "code": 200,
             "message": "PMS 記錄創建成功",
-            "data": {"id": pms_record.id}
+            "data": {"id": pms_record.id},
         }
     except Exception as e:
         logger.error(f"❌ Failed to create PMS integration: {e}")
@@ -60,6 +60,9 @@ async def list_pms_integrations(
     match_status: Optional[str] = Query(None, description="匹配狀態篩選"),
     start_date: Optional[str] = Query(None, description="開始日期"),
     end_date: Optional[str] = Query(None, description="結束日期"),
+    line_channel_id: Optional[str] = Query(
+        None, description="LINE OA channel_id（多 OA 隔離）"
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -71,6 +74,7 @@ async def list_pms_integrations(
         match_status: 匹配狀態 (pending, matched, unmatched)
         start_date: 入住日期起始
         end_date: 入住日期結束
+        line_channel_id: 依 LINE OA 篩選（多 OA 隔離）
         page: 頁碼
         page_size: 每頁數量
         db: 資料庫 session
@@ -88,6 +92,8 @@ async def list_pms_integrations(
             query = query.where(PMSIntegration.stay_date >= start_date)
         if end_date:
             query = query.where(PMSIntegration.stay_date <= end_date)
+        if line_channel_id:
+            query = query.where(PMSIntegration.channel_id == line_channel_id)
 
         # 計算總數
         count_query = select(func.count()).select_from(query.subquery())
@@ -113,15 +119,17 @@ async def list_pms_integrations(
                         "member_id": r.member_id,
                         "match_status": r.match_status,
                         "match_rate": float(r.match_rate) if r.match_rate else None,
-                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                        "created_at": (
+                            r.created_at.isoformat() if r.created_at else None
+                        ),
                     }
                     for r in records
                 ],
                 "total": total,
                 "page": page,
                 "page_size": page_size,
-                "total_pages": (total + page_size - 1) // page_size
-            }
+                "total_pages": (total + page_size - 1) // page_size,
+            },
         }
     except Exception as e:
         logger.error(f"❌ Failed to list PMS integrations: {e}")
@@ -165,7 +173,7 @@ async def get_pms_integration(
             "error_message": record.error_message,
             "created_at": record.created_at.isoformat() if record.created_at else None,
             "updated_at": record.updated_at.isoformat() if record.updated_at else None,
-        }
+        },
     }
 
 
@@ -186,7 +194,9 @@ async def match_pms_to_member(
     """
     try:
         # 查找 PMS 記錄
-        pms_query = select(PMSIntegration).where(PMSIntegration.id == data.pms_integration_id)
+        pms_query = select(PMSIntegration).where(
+            PMSIntegration.id == data.pms_integration_id
+        )
         pms_result = await db.execute(pms_query)
         pms_record = pms_result.scalar_one_or_none()
 
@@ -198,7 +208,7 @@ async def match_pms_to_member(
             or_(
                 Member.id == data.member_id,
                 Member.phone == pms_record.phone,
-                Member.id_number == pms_record.id_number
+                Member.id_number == pms_record.id_number,
             )
         )
         member_result = await db.execute(member_query)
@@ -220,8 +230,8 @@ async def match_pms_to_member(
             "data": {
                 "pms_integration_id": pms_record.id,
                 "member_id": member.id,
-                "match_status": "matched"
-            }
+                "match_status": "matched",
+            },
         }
     except HTTPException:
         raise
@@ -263,11 +273,7 @@ async def update_pms_integration(
         await db.commit()
         await db.refresh(record)
 
-        return {
-            "code": 200,
-            "message": "更新成功",
-            "data": {"id": record.id}
-        }
+        return {"code": 200, "message": "更新成功", "data": {"id": record.id}}
     except Exception as e:
         logger.error(f"❌ Failed to update PMS integration: {e}")
         await db.rollback()
@@ -300,10 +306,7 @@ async def delete_pms_integration(
         await db.delete(record)
         await db.commit()
 
-        return {
-            "code": 200,
-            "message": "刪除成功"
-        }
+        return {"code": 200, "message": "刪除成功"}
     except Exception as e:
         logger.error(f"❌ Failed to delete PMS integration: {e}")
         await db.rollback()

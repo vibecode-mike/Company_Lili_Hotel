@@ -14,6 +14,7 @@ from sqlalchemy import (
     JSON,
     ForeignKey,
     Index,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -47,15 +48,25 @@ class ChatbotSession(Base):
     checkin_date = Column(Date, nullable=True, comment="入住日期")
     checkout_date = Column(Date, nullable=True, comment="退房日期")
     room_plan_requests = Column(
-        JSON, nullable=True, comment="幾間幾人房請求陣列，格式 [{room_count, adults_per_room}]；rotate 時清空"
+        JSON,
+        nullable=True,
+        comment="幾間幾人房請求陣列，格式 [{room_count, adults_per_room}]；rotate 時清空",
     )
     selected_rooms = Column(
-        JSON, nullable=True, comment="訪客點選確認的房型與間數陣列，格式 [{room_type_code, room_type_name, room_count, source}]"
+        JSON,
+        nullable=True,
+        comment="訪客點選確認的房型與間數陣列，格式 [{room_type_code, room_type_name, room_count, source}]",
     )
     selected_room_type = Column(
-        String(100), nullable=True, comment="向下相容欄位：selected_rooms[0].room_type_code"
+        String(100),
+        nullable=True,
+        comment="向下相容欄位：selected_rooms[0].room_type_code",
     )
-    selected_room_count = Column(SmallInteger, nullable=True, comment="向下相容欄位：selected_rooms[0].room_count")
+    selected_room_count = Column(
+        SmallInteger,
+        nullable=True,
+        comment="向下相容欄位：selected_rooms[0].room_count",
+    )
     member_name = Column(String(100), nullable=True, comment="訪客姓名（暫存）")
     member_phone = Column(String(20), nullable=True, comment="訪客電話（暫存）")
     member_email = Column(String(255), nullable=True, comment="訪客 Email（暫存）")
@@ -91,13 +102,24 @@ class FaqPmsConnection(Base):
     """FAQ 與 PMS 即時房況串接設定表"""
 
     __tablename__ = "faq_pms_connections"
+    __table_args__ = (
+        UniqueConstraint(
+            "faq_category_id", "channel_id", name="uq_faq_pms_category_channel"
+        ),
+        Index("ix_faq_pms_connections_channel_id", "channel_id"),
+    )
 
     faq_category_id = Column(
         BigInteger,
         ForeignKey("faq_categories.id", ondelete="CASCADE"),
         nullable=False,
-        unique=True,
         comment="關聯的 FAQ 大分類",
+    )
+    channel_id = Column(
+        String(100),
+        ForeignKey("line_channels.channel_id", ondelete="CASCADE"),
+        nullable=False,
+        comment="所屬 LINE OA channel_id（多 OA 隔離）",
     )
     api_endpoint = Column(
         String(500), nullable=False, comment="PMS 即時房況 API 端點 URL"
@@ -117,8 +139,11 @@ class FaqPmsConnection(Base):
     last_synced_at = Column(DateTime, nullable=True, comment="最後連線成功時間")
     error_message = Column(String(500), nullable=True, comment="最後一次錯誤訊息")
     snapshot_completed = Column(
-        Boolean, nullable=False, default=False, server_default="0",
-        comment="PMS 快照是否已完成"
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="0",
+        comment="PMS 快照是否已完成",
     )
 
     # 關聯關係
@@ -135,7 +160,9 @@ class BookingRecord(Base):
         Index("idx_booking_record_created", "created_at"),
     )
 
-    id = Column(String(36), primary_key=True, comment="UUID，訂房紀錄 ID（reservation_id）")
+    id = Column(
+        String(36), primary_key=True, comment="UUID，訂房紀錄 ID（reservation_id）"
+    )
     session_id = Column(
         String(36),
         ForeignKey("chatbot_sessions.id", ondelete="CASCADE"),
@@ -153,29 +180,59 @@ class BookingRecord(Base):
         nullable=False,
         comment="多房型混搭快照陣列，格式 [{room_type_code, room_type_name, room_count, source}]",
     )
-    room_type_code = Column(String(100), nullable=False, comment="向下相容：selected_rooms[0].room_type_code")
-    room_type_name = Column(String(200), nullable=False, comment="向下相容：selected_rooms[0].room_type_name")
-    room_count = Column(SmallInteger, nullable=False, comment="向下相容：selected_rooms[0].room_count")
+    room_type_code = Column(
+        String(100),
+        nullable=False,
+        comment="向下相容：selected_rooms[0].room_type_code",
+    )
+    room_type_name = Column(
+        String(200),
+        nullable=False,
+        comment="向下相容：selected_rooms[0].room_type_name",
+    )
+    room_count = Column(
+        SmallInteger, nullable=False, comment="向下相容：selected_rooms[0].room_count"
+    )
     checkin_date = Column(Date, nullable=False, comment="入住日期")
-    checkout_date = Column(Date, nullable=False, comment="退房日期；必須晚於 checkin_date")
-    adults = Column(SmallInteger, nullable=False, comment="總大人數（由 selected_rooms 累加）")
-    member_name = Column(String(100), nullable=False, comment="訪客姓名快照（訂房當下的值）")
+    checkout_date = Column(
+        Date, nullable=False, comment="退房日期；必須晚於 checkin_date"
+    )
+    adults = Column(
+        SmallInteger, nullable=False, comment="總大人數（由 selected_rooms 累加）"
+    )
+    member_name = Column(
+        String(100), nullable=False, comment="訪客姓名快照（訂房當下的值）"
+    )
     member_phone = Column(String(20), nullable=False, comment="訪客電話快照，10 位數字")
-    member_email = Column(String(255), nullable=False, comment="訪客 Email 快照，需含 @")
-    cart_url = Column(String(500), nullable=True, comment="PMS 購物車 URL（booking-save 呼叫 PMS 建立購物車後儲存）")
+    member_email = Column(
+        String(255), nullable=False, comment="訪客 Email 快照，需含 @"
+    )
+    cart_url = Column(
+        String(500),
+        nullable=True,
+        comment="PMS 購物車 URL（booking-save 呼叫 PMS 建立購物車後儲存）",
+    )
     session_log = Column(JSON, nullable=True, comment="完整 Session 對話紀錄 JSON")
     data_source = Column(
         String(20), nullable=False, comment="房型資料來源：pms | faq_static"
     )
     db_saved = Column(
-        Boolean, nullable=False, default=True,
+        Boolean,
+        nullable=False,
+        default=True,
         comment="true=正式 DB 寫入；false=測試模式 JSON 降級",
     )
     source = Column(
-        String(20), nullable=False, default="Webchat", comment="訂房來源標識，固定為 Webchat"
+        String(20),
+        nullable=False,
+        default="Webchat",
+        comment="訂房來源標識，固定為 Webchat",
     )
     created_at = Column(
-        DateTime, nullable=False, server_default=func.now(), comment="建立時間（UTC），即訪客點擊「立即預訂」的時間"
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        comment="建立時間（UTC），即訪客點擊「立即預訂」的時間",
     )
 
     # 關聯關係

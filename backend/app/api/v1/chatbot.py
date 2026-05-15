@@ -5,34 +5,27 @@ Website chatbot booking API.
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.schemas.chatbot import (
-    BookingSaveInSchema,
-    BookingSaveOutSchema,
-    ChatbotMessageInSchema,
-    ChatbotMessageOutSchema,
-    ChatbotRoomsOutSchema,
-    ConfirmRoomInSchema,
-    ConfirmRoomOutSchema,
-    SessionResetInSchema,
-    SessionResetOutSchema,
-    TrackClickInSchema,
-    TrackClickOutSchema,
-)
-import logging
-
 from app.models.chatbot_booking import FaqPmsConnection
-from app.services.chatbot_service import (
-    chatbot_service,
-    init_pms_from_db, set_pms_enabled,
-)
-from app.services.pms_chatbot_client import pms_enabled as pms_configured, query_pms, query_pms_all_roomtypes
-from sqlalchemy import select
+from app.schemas.chatbot import (BookingSaveInSchema, BookingSaveOutSchema,
+                                 ChatbotMessageInSchema,
+                                 ChatbotMessageOutSchema,
+                                 ChatbotRoomsOutSchema, ConfirmRoomInSchema,
+                                 ConfirmRoomOutSchema, SessionResetInSchema,
+                                 SessionResetOutSchema, TrackClickInSchema,
+                                 TrackClickOutSchema)
+from app.services.chatbot_service import (chatbot_service, init_pms_from_db,
+                                          set_pms_enabled)
+from app.services.pms_chatbot_client import pms_enabled as pms_configured
+from app.services.pms_chatbot_client import query_pms, query_pms_all_roomtypes
 
 logger = logging.getLogger(__name__)
 
@@ -43,16 +36,16 @@ router = APIRouter()
 _BOOKING_FAQ_CATEGORY_NAME = "訂房"  # FAQ 大分類名稱
 
 
-async def _get_or_create_pms_conn(db: AsyncSession) -> FaqPmsConnection:
-    """取得唯一的 PMS 連線設定記錄，不存在則建立。"""
-    # 先查詢是否已有 pms_connection 記錄
-    result = await db.execute(select(FaqPmsConnection).limit(1))
-    conn = result.scalar_one_or_none()
-    if conn is not None:
-        return conn
+async def _get_or_create_pms_conn(
+    db: AsyncSession, line_channel_id: Optional[str] = None
+) -> FaqPmsConnection:
+    """取得指定 LINE OA 的 PMS 連線設定記錄，不存在則建立。
 
-    # 動態查找「訂房」分類 ID，避免寫死
+    line_channel_id 為必填（向下相容：未提供時拿任一筆，但會 deprecate）。
+    """
     from app.models.faq import FaqCategory
+
+    # 先查詢「訂房」分類 ID
     cat_result = await db.execute(
         select(FaqCategory).where(FaqCategory.name == _BOOKING_FAQ_CATEGORY_NAME)
     )
@@ -63,8 +56,27 @@ async def _get_or_create_pms_conn(db: AsyncSession) -> FaqPmsConnection:
             detail=f"找不到 FAQ 分類「{_BOOKING_FAQ_CATEGORY_NAME}」，請先建立",
         )
 
+    # 依 (category_id, channel_id) 查
+    stmt = select(FaqPmsConnection).where(
+        FaqPmsConnection.faq_category_id == category.id
+    )
+    if line_channel_id:
+        stmt = stmt.where(FaqPmsConnection.channel_id == line_channel_id)
+    stmt = stmt.limit(1)
+    result = await db.execute(stmt)
+    conn = result.scalar_one_or_none()
+    if conn is not None:
+        return conn
+
+    if not line_channel_id:
+        raise HTTPException(
+            status_code=400,
+            detail="必須指定 LINE 館別（line_channel_id）",
+        )
+
     conn = FaqPmsConnection(
         faq_category_id=category.id,
+        channel_id=line_channel_id,
         api_endpoint="",
         api_key_encrypted="",
         auth_type="api_key",
@@ -77,25 +89,40 @@ async def _get_or_create_pms_conn(db: AsyncSession) -> FaqPmsConnection:
 
 
 @router.get("/pms-status")
-async def get_pms_status(db: AsyncSession = Depends(get_db)):
-    """取得 PMS 串接啟用狀態（從 DB 讀取）"""
-    conn = await _get_or_create_pms_conn(db)
+async def get_pms_status(
+    line_channel_id: Optional[str] = Query(
+        None, description="LINE OA channel_id（多 OA 隔離）"
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """取得指定 LINE OA 的 PMS 串接啟用狀態"""
+    conn = await _get_or_create_pms_conn(db, line_channel_id)
     init_pms_from_db(conn.status)
     return {
         "enabled": conn.status == "enabled",
         "configured": pms_configured(),
-        "last_synced_at": conn.last_synced_at.strftime("%Y-%m-%d %H:%M") if conn.last_synced_at else None,
+        "last_synced_at": (
+            conn.last_synced_at.strftime("%Y-%m-%d %H:%M")
+            if conn.last_synced_at
+            else None
+        ),
     }
 
 
 @router.put("/pms-status")
-async def update_pms_status(body: dict, db: AsyncSession = Depends(get_db)):
-    """切換 PMS 串接啟用狀態（寫入 DB）"""
+async def update_pms_status(
+    body: dict,
+    line_channel_id: Optional[str] = Query(
+        None, description="LINE OA channel_id（多 OA 隔離）"
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """切換指定 LINE OA 的 PMS 串接啟用狀態"""
     enabled = body.get("enabled")
     if enabled is None:
         raise HTTPException(status_code=422, detail="需提供 enabled 欄位")
 
-    conn = await _get_or_create_pms_conn(db)
+    conn = await _get_or_create_pms_conn(db, line_channel_id)
     new_status = "enabled" if enabled else "disabled"
     conn.status = new_status
     await db.commit()
@@ -107,8 +134,10 @@ async def update_pms_status(body: dict, db: AsyncSession = Depends(get_db)):
 @router.get("/pms-rooms")
 async def get_pms_rooms():
     """取得 PMS 即時房型列表（供管理後台顯示）"""
-    from app.services.chatbot_service import ROOMTYPE_NAME, ROOMTYPE_MAX_OCCUPANCY
     from datetime import date, timedelta
+
+    from app.services.chatbot_service import (ROOMTYPE_MAX_OCCUPANCY,
+                                              ROOMTYPE_NAME)
 
     if not pms_configured():
         return {"rooms": [], "error": "PMS 未串接"}
@@ -116,7 +145,8 @@ async def get_pms_rooms():
         today = date.today()
         tomorrow = today + timedelta(days=1)
         result = await asyncio.get_event_loop().run_in_executor(
-            None, lambda: query_pms_all_roomtypes(today.isoformat(), tomorrow.isoformat())
+            None,
+            lambda: query_pms_all_roomtypes(today.isoformat(), tomorrow.isoformat()),
         )
         rooms = []
         for room in result.get("room", []):
@@ -129,14 +159,16 @@ async def get_pms_rooms():
             # 剩餘 0 間的房型（閎運有登記代碼但今天沒放庫存）不顯示
             if remaining <= 0:
                 continue
-            rooms.append({
-                "room_type_code": code,
-                "room_type_name": ROOMTYPE_NAME.get(code, code),
-                "price": int(price_str) if price_str.isdigit() else 0,
-                "max_occupancy": ROOMTYPE_MAX_OCCUPANCY.get(code, 2),
-                "remaining": remaining,
-                "image": str(room.get("image") or "").strip() or None,
-            })
+            rooms.append(
+                {
+                    "room_type_code": code,
+                    "room_type_name": ROOMTYPE_NAME.get(code, code),
+                    "price": int(price_str) if price_str.isdigit() else 0,
+                    "max_occupancy": ROOMTYPE_MAX_OCCUPANCY.get(code, 2),
+                    "remaining": remaining,
+                    "image": str(room.get("image") or "").strip() or None,
+                }
+            )
         return {"rooms": rooms}
     except Exception as e:
         logger.warning(f"PMS rooms fetch failed: {e}")
@@ -175,10 +207,14 @@ def _validate_date_range(checkin_date: str, checkout_date: str) -> None:
         checkin = datetime.strptime(checkin_date, "%Y-%m-%d").date()
         checkout = datetime.strptime(checkout_date, "%Y-%m-%d").date()
     except Exception as exc:
-        raise HTTPException(status_code=422, detail="checkin_date/checkout_date 格式需為 YYYY-MM-DD") from exc
+        raise HTTPException(
+            status_code=422, detail="checkin_date/checkout_date 格式需為 YYYY-MM-DD"
+        ) from exc
 
     if checkout <= checkin:
-        raise HTTPException(status_code=422, detail="checkout_date 必須晚於 checkin_date")
+        raise HTTPException(
+            status_code=422, detail="checkout_date 必須晚於 checkin_date"
+        )
 
 
 @router.post("/message", response_model=ChatbotMessageOutSchema)
@@ -196,6 +232,7 @@ async def chatbot_message(
             site_id=payload.site_id,
             site_name=payload.site_name,
             admin_test=payload.admin_test,
+            line_channel_id=payload.line_channel_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -240,19 +277,24 @@ async def chatbot_confirm_room(payload: ConfirmRoomInSchema) -> ConfirmRoomOutSc
             for r in payload.rooms
         ]
     elif payload.room_type_code:
-        rooms = [{
-            "room_type_code": payload.room_type_code,
-            "room_count": max(1, payload.room_count or 1),
-            "room_type_name": payload.room_type_name,
-            "source": payload.source or "pms",
-        }]
+        rooms = [
+            {
+                "room_type_code": payload.room_type_code,
+                "room_count": max(1, payload.room_count or 1),
+                "room_type_name": payload.room_type_name,
+                "source": payload.source or "pms",
+            }
+        ]
     else:
         rooms = []
 
     if not rooms:
         raise HTTPException(
             status_code=422,
-            detail={"error_code": "NO_ROOMS_SELECTED", "message": "請至少選擇一個房型與間數"},
+            detail={
+                "error_code": "NO_ROOMS_SELECTED",
+                "message": "請至少選擇一個房型與間數",
+            },
         )
 
     return chatbot_service.confirm_rooms(

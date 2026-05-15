@@ -73,6 +73,8 @@ export async function sendChatbotMessage(payload: {
   test_mode?: boolean;
   /** CRM 後台 ChatFAB 試聊框專用：true 時不建立會員、不寫對話紀錄 */
   admin_test?: boolean;
+  /** 多 OA 隔離：admin_test 時由 sidebar 選定，限定該館的 FAQ + token quota */
+  line_channel_id?: string | null;
 }): Promise<ChatbotMessageResponse> {
   const response = await apiPost("/api/v1/chatbot/message", payload, {
     skipAuth: true,

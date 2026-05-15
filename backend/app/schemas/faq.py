@@ -1,6 +1,7 @@
 """
 FAQ 知識庫管理與 AI 聊天相關 Schema
 """
+
 from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
@@ -9,6 +10,7 @@ from app.schemas.chatbot import ReplyType
 
 
 # === FaqCategoryField ===
+
 
 class FaqCategoryFieldSchema(BaseModel):
     """大分類欄位定義"""
@@ -24,6 +26,7 @@ class FaqCategoryFieldSchema(BaseModel):
 
 
 # === FaqCategory ===
+
 
 class FaqCategorySchema(BaseModel):
     """大分類詳情（含欄位定義）"""
@@ -49,6 +52,7 @@ class FaqCategoryToggleSchema(BaseModel):
 
 # === FaqRuleTag ===
 
+
 class FaqRuleTagSchema(BaseModel):
     """規則標籤"""
 
@@ -60,6 +64,7 @@ class FaqRuleTagSchema(BaseModel):
 
 
 # === FaqRule ===
+
 
 class FaqRuleCreateSchema(BaseModel):
     """建立規則"""
@@ -112,8 +117,8 @@ class FaqRuleListSchema(BaseModel):
         from_attributes = True
 
 
-
 # === AiTokenUsage ===
+
 
 class AiTokenUsageSchema(BaseModel):
     """Token 用量"""
@@ -138,6 +143,7 @@ class AiTokenUsageUpdateSchema(BaseModel):
 
 # === AiToneConfig ===
 
+
 class AiToneConfigSchema(BaseModel):
     """語氣設定"""
 
@@ -152,6 +158,7 @@ class AiToneConfigSchema(BaseModel):
 
 
 # === FaqModuleAuth ===
+
 
 class FaqModuleAuthSchema(BaseModel):
     """模組授權狀態"""
@@ -188,6 +195,7 @@ class FaqModuleAuthUpdateSchema(BaseModel):
 
 # === AI Chat ===
 
+
 class AiChatRequestSchema(BaseModel):
     """AI 聊天請求"""
 
@@ -221,3 +229,6 @@ class AiTestChatRequestSchema(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000)
     rule_ids: List[int] = []
     category_id: Optional[int] = None
+    line_channel_id: Optional[str] = (
+        None  # LINE OA channel_id（多 OA 隔離：限定該館的 FAQ + token quota）
+    )

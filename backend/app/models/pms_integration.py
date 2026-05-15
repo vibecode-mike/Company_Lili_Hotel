@@ -41,6 +41,13 @@ class PMSIntegration(Base):
         index=True,
         comment="關聯的會員ID",
     )
+    channel_id = Column(
+        String(100),
+        ForeignKey("line_channels.channel_id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="所屬 LINE OA channel_id（多 OA 隔離）",
+    )
     match_status = Column(
         String(20), default="pending", comment="比對狀態：matched/pending/failed"
     )

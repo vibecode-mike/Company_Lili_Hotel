@@ -1,25 +1,20 @@
 """
 FAQ 知識庫管理服務層
 """
-import json
-from typing import Optional, List, Dict, Any
-from datetime import datetime, timezone
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, delete
-from sqlalchemy.orm import selectinload
-import logging
 
-from app.models.faq import (
-    Industry,
-    FaqCategory,
-    FaqCategoryField,
-    FaqRule,
-    FaqRuleTag,
-    AiTokenUsage,
-    AiToneConfig,
-    FaqModuleAuth,
-)
+import json
+import logging
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy import delete, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from app.models.chatbot_booking import FaqPmsConnection
+from app.models.faq import (AiTokenUsage, AiToneConfig, FaqCategory,
+                            FaqCategoryField, FaqModuleAuth, FaqRule,
+                            FaqRuleTag, Industry)
 
 logger = logging.getLogger(__name__)
 
@@ -62,13 +57,19 @@ class FaqService:
 
         # 一次查詢取得所有分類的規則數量、已發佈數量、最後更新時間
         from sqlalchemy import case
+
         counts_stmt = (
             select(
                 FaqRule.category_id,
                 func.count().label("rule_count"),
-                func.count(case((
-                    (FaqRule.status == "active") & (FaqRule.is_enabled == True), 1  # noqa: E712
-                ))).label("published_count"),
+                func.count(
+                    case(
+                        (
+                            (FaqRule.status == "active") & (FaqRule.is_enabled == True),
+                            1,  # noqa: E712
+                        )
+                    )
+                ).label("published_count"),
                 func.max(FaqRule.updated_at).label("last_rule_updated_at"),
             )
             .select_from(FaqRule)
@@ -78,7 +79,11 @@ class FaqService:
             counts_stmt = counts_stmt.where(FaqRule.channel_id == line_channel_id)
         counts_result = await db.execute(counts_stmt)
         counts_map = {
-            row.category_id: (row.rule_count, row.published_count, row.last_rule_updated_at)
+            row.category_id: (
+                row.rule_count,
+                row.published_count,
+                row.last_rule_updated_at,
+            )
             for row in counts_result
         }
 
@@ -204,7 +209,9 @@ class FaqService:
         count_result = await db.execute(count_stmt)
         current_count = count_result.scalar() or 0
         if current_count >= MAX_RULES_PER_CATEGORY:
-            raise ValueError(f"已達規則數量上限（{MAX_RULES_PER_CATEGORY} 筆），無法新增")
+            raise ValueError(
+                f"已達規則數量上限（{MAX_RULES_PER_CATEGORY} 筆），無法新增"
+            )
 
         rule = FaqRule(
             category_id=category_id,
@@ -240,8 +247,10 @@ class FaqService:
             return None
 
         if content_json is not None:
-            # PMS 串接啟用時，剔除 PMS 唯讀欄位的變更
-            pms_conn = await self.get_pms_connection(db, rule.category_id)
+            # PMS 串接啟用時，剔除 PMS 唯讀欄位的變更（依規則所屬 channel 查 PMS 連線）
+            pms_conn = await self.get_pms_connection(
+                db, rule.category_id, rule.channel_id
+            )
             if pms_conn and pms_conn.status == "enabled":
                 old_content = json.loads(rule.content_json) if rule.content_json else {}
                 for field in PMS_READONLY_FIELDS:
@@ -254,9 +263,7 @@ class FaqService:
 
         # 更新標籤
         if tag_names is not None:
-            await db.execute(
-                delete(FaqRuleTag).where(FaqRuleTag.rule_id == rule_id)
-            )
+            await db.execute(delete(FaqRuleTag).where(FaqRuleTag.rule_id == rule_id))
             for tag_name in tag_names:
                 tag = FaqRuleTag(rule_id=rule.id, tag_name=tag_name)
                 db.add(tag)
@@ -306,9 +313,7 @@ class FaqService:
         line_channel_id: Optional[str] = None,
     ) -> Optional[AiTokenUsage]:
         """查詢 Token 用量（多 OA：每個 channel 一筆）"""
-        stmt = select(AiTokenUsage).where(
-            AiTokenUsage.industry_id == industry_id
-        )
+        stmt = select(AiTokenUsage).where(AiTokenUsage.industry_id == industry_id)
         if line_channel_id:
             stmt = stmt.where(AiTokenUsage.channel_id == line_channel_id)
         result = await db.execute(stmt)
@@ -421,12 +426,19 @@ class FaqService:
         required_fields = result.scalars().all()
 
         for field in required_fields:
-            if field.field_name not in content_json or not content_json[field.field_name]:
+            if (
+                field.field_name not in content_json
+                or not content_json[field.field_name]
+            ):
                 return field.field_name
         return None
 
     async def toggle_rule(
-        self, db: AsyncSession, rule_id: int, is_enabled: bool = None, status: str = None
+        self,
+        db: AsyncSession,
+        rule_id: int,
+        is_enabled: bool = None,
+        status: str = None,
     ) -> Optional[FaqRule]:
         """切換規則啟用狀態（is_enabled）或發佈狀態（status）。
 
@@ -450,9 +462,7 @@ class FaqService:
         await db.flush()
         return rule
 
-    async def publish_all_draft(
-        self, db: AsyncSession, user_id: int
-    ) -> int:
+    async def publish_all_draft(self, db: AsyncSession, user_id: int) -> int:
         """發佈所有 draft 規則，回傳發佈數量。
         - 分類 is_active=True + 規則 is_enabled=True + status=draft → 發佈
         - 分類 is_active=False 的已發佈規則 → 撤回為未發佈
@@ -460,7 +470,9 @@ class FaqService:
         now = datetime.now()
 
         # 1. 取得所有啟用分類的 ID
-        active_cat_stmt = select(FaqCategory.id).where(FaqCategory.is_active == True)  # noqa: E712
+        active_cat_stmt = select(FaqCategory.id).where(
+            FaqCategory.is_active == True
+        )  # noqa: E712
         active_cat_result = await db.execute(active_cat_stmt)
         active_cat_ids = set(active_cat_result.scalars().all())
 
@@ -498,9 +510,7 @@ class FaqService:
         await db.flush()
         return count
 
-    async def export_rules(
-        self, db: AsyncSession, category_id: int
-    ) -> List[FaqRule]:
+    async def export_rules(self, db: AsyncSession, category_id: int) -> List[FaqRule]:
         """匯出分類下所有規則（含標籤）"""
         stmt = (
             select(FaqRule)
@@ -512,7 +522,11 @@ class FaqService:
         return list(result.scalars().all())
 
     async def import_rules(
-        self, db: AsyncSession, category_id: int, rows: List[Dict[str, Any]], user_id: int
+        self,
+        db: AsyncSession,
+        category_id: int,
+        rows: List[Dict[str, Any]],
+        user_id: int,
     ) -> int:
         """匯入規則（以房型名稱為 key，Upsert + 刪除多餘），回傳匯入數量"""
         # 查詢現有規則（含 tags），建立 {房型名稱: rule} 對照表
@@ -542,7 +556,11 @@ class FaqService:
         for row in rows:
             # 抽出會員標籤，不存進 content_json
             tag_value = row.pop("會員標籤", "").strip()
-            tag_names = [t.strip() for t in tag_value.split(",") if t.strip()] if tag_value else []
+            tag_names = (
+                [t.strip() for t in tag_value.split(",") if t.strip()]
+                if tag_value
+                else []
+            )
 
             name = row.get("房型名稱", "")
             imported_names.add(name)
@@ -588,12 +606,21 @@ class FaqService:
     # === PMS 串接 ===
 
     async def get_pms_connection(
-        self, db: AsyncSession, category_id: int
+        self,
+        db: AsyncSession,
+        category_id: int,
+        channel_id: Optional[str] = None,
     ) -> Optional[FaqPmsConnection]:
-        """取得 PMS 串接設定"""
+        """取得 PMS 串接設定。
+
+        channel_id 未提供時回傳該 category 任一筆（向下相容；用於 _snapshot 內部）；
+        提供時嚴格依 (category_id, channel_id) 查詢。
+        """
         stmt = select(FaqPmsConnection).where(
             FaqPmsConnection.faq_category_id == category_id
         )
+        if channel_id:
+            stmt = stmt.where(FaqPmsConnection.channel_id == channel_id)
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -604,10 +631,11 @@ class FaqService:
         api_endpoint: str,
         api_key: str,
         auth_type: str,
+        channel_id: Optional[str] = None,
     ) -> FaqPmsConnection:
-        """建立 PMS 串接設定"""
-        # 檢查是否已有連線（重新串接）
-        existing = await self.get_pms_connection(db, category_id)
+        """建立 PMS 串接設定（per channel）"""
+        # 檢查該 channel 是否已有連線（重新串接）
+        existing = await self.get_pms_connection(db, category_id, channel_id)
         if existing:
             existing.api_endpoint = api_endpoint
             existing.api_key_encrypted = api_key
@@ -619,12 +647,13 @@ class FaqService:
             await db.flush()
             # 重新串接：snapshot_completed=True → 不再觸發快照（spec）
             if not existing.snapshot_completed:
-                await self._snapshot_pms_to_faq(db, category_id, existing)
+                await self._snapshot_pms_to_faq(db, category_id, existing, channel_id)
             return existing
 
         now = datetime.now()
         conn = FaqPmsConnection(
             faq_category_id=category_id,
+            channel_id=channel_id,
             api_endpoint=api_endpoint,
             api_key_encrypted=api_key,
             auth_type=auth_type,
@@ -637,7 +666,7 @@ class FaqService:
         await db.flush()
 
         # 首次串接：自動將 PMS 房型資料帶入 FAQ 規則
-        await self._snapshot_pms_to_faq(db, category_id, conn)
+        await self._snapshot_pms_to_faq(db, category_id, conn, channel_id)
         return conn
 
     async def _snapshot_pms_to_faq(
@@ -645,12 +674,14 @@ class FaqService:
         db: AsyncSession,
         category_id: int,
         conn: FaqPmsConnection,
+        channel_id: Optional[str] = None,
     ) -> None:
         """首次串接 PMS 時，將 PMS 房型資料自動帶入 FAQ 規則。
 
         Spec: faq_pms_realtime_connection.feature — 首次快照機制
         """
         import asyncio
+
         from app.services.pms_chatbot_client import pms_enabled, query_pms
 
         if not pms_enabled():
@@ -661,6 +692,7 @@ class FaqService:
         try:
             # 查詢 PMS 取得所有房型（用明天~後天做為查詢區間）
             from datetime import timedelta
+
             tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
             day_after = (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d")
             raw = await asyncio.to_thread(query_pms, tomorrow, day_after, None, 2)
@@ -672,7 +704,8 @@ class FaqService:
                 return
 
             # 載入房型名稱對照表
-            from app.services.chatbot_service import ROOMTYPE_NAME, ROOMTYPE_MAX_OCCUPANCY
+            from app.services.chatbot_service import (ROOMTYPE_MAX_OCCUPANCY,
+                                                      ROOMTYPE_NAME)
 
             for room in rooms:
                 code = room.get("roomtype", "")
@@ -686,18 +719,22 @@ class FaqService:
                 max_occ = ROOMTYPE_MAX_OCCUPANCY.get(code, 2)
 
                 pms_image = str(room.get("image") or "").strip()
-                content_json = json.dumps({
-                    "房型名稱": name,
-                    "房型特色": "",
-                    "房價": str(price),
-                    "人數": str(max_occ),
-                    "間數": str(remain),
-                    "url": "",
-                    "image_url": pms_image,
-                }, ensure_ascii=False)
+                content_json = json.dumps(
+                    {
+                        "房型名稱": name,
+                        "房型特色": "",
+                        "房價": str(price),
+                        "人數": str(max_occ),
+                        "間數": str(remain),
+                        "url": "",
+                        "image_url": pms_image,
+                    },
+                    ensure_ascii=False,
+                )
 
                 rule = FaqRule(
                     category_id=category_id,
+                    channel_id=channel_id,
                     content_json=content_json,
                     status="draft",
                     is_enabled=True,
@@ -706,7 +743,9 @@ class FaqService:
 
             conn.snapshot_completed = True
             await db.flush()
-            logger.info(f"PMS snapshot: created {len(rooms)} FAQ rules for category {category_id}")
+            logger.info(
+                f"PMS snapshot: created {len(rooms)} FAQ rules for category {category_id}"
+            )
 
         except Exception as exc:
             logger.warning(f"PMS snapshot failed: {exc}")
@@ -715,10 +754,14 @@ class FaqService:
             await db.flush()
 
     async def toggle_pms_connection(
-        self, db: AsyncSession, category_id: int, status: str
+        self,
+        db: AsyncSession,
+        category_id: int,
+        status: str,
+        channel_id: Optional[str] = None,
     ) -> Optional[FaqPmsConnection]:
-        """切換 PMS 串接狀態"""
-        conn = await self.get_pms_connection(db, category_id)
+        """切換 PMS 串接狀態（per channel）"""
+        conn = await self.get_pms_connection(db, category_id, channel_id)
         if not conn:
             return None
         conn.status = status

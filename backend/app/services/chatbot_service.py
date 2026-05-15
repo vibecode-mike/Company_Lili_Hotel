@@ -12,40 +12,32 @@ import re
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone, timedelta
-from zoneinfo import ZoneInfo
+from datetime import date, datetime, timedelta, timezone
 from threading import Lock
 from typing import Any, Dict, List, Literal, Optional, Tuple
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from openai import AsyncOpenAI
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func as sa_func
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.models.conversation import ConversationMessage, ConversationThread
-from app.models.faq import AiTokenUsage, FaqRule, FaqCategory, FaqRuleTag, Industry
+from app.models.faq import (AiTokenUsage, FaqCategory, FaqRule, FaqRuleTag,
+                            Industry)
 from app.models.member import Member
-from app.models.tag import MemberTag, MemberInteractionTag
-from sqlalchemy import func as sa_func
-from app.schemas.chatbot import (
-    BookingContextSchema,
-    ChatbotMessageOutSchema,
-    ChatbotRoomsOutSchema,
-    ConfirmRoomOutSchema,
-    MemberFormDefinitionSchema,
-    MemberFormFieldSchema,
-    ReplyType,
-    RoomCardSchema,
-    SessionResetOutSchema,
-)
-from app.services.pms_chatbot_client import (
-    build_booking_url,
-    pms_enabled,
-    query_pms,
-    query_pms_all_roomtypes,
-)
+from app.models.tag import MemberInteractionTag, MemberTag
+from app.schemas.chatbot import (BookingContextSchema, ChatbotMessageOutSchema,
+                                 ChatbotRoomsOutSchema, ConfirmRoomOutSchema,
+                                 MemberFormDefinitionSchema,
+                                 MemberFormFieldSchema, ReplyType,
+                                 RoomCardSchema, SessionResetOutSchema)
+from app.services.pms_chatbot_client import (build_booking_url, pms_enabled,
+                                             query_pms,
+                                             query_pms_all_roomtypes)
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +45,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # External Booking API (閎運訂房系統)
 # ---------------------------------------------------------------------------
+
 
 def _call_booking_api(
     rooms: List[Dict[str, Any]],
@@ -76,6 +69,7 @@ def _call_booking_api(
         return None
 
     import uuid as _uuid
+
     order_id = str(_uuid.uuid4()).replace("-", "")[:20]
 
     payload = {
@@ -112,7 +106,9 @@ def _call_booking_api(
             logger.info(f"[BookingAPI] Got payment URL: {location}")
             return location
 
-    logger.warning(f"[BookingAPI] Unexpected response: {resp.status_code} {resp.text[:200]}")
+    logger.warning(
+        f"[BookingAPI] Unexpected response: {resp.status_code} {resp.text[:200]}"
+    )
     return None
 
 
@@ -135,9 +131,17 @@ ROOMTYPE_NAME = {
 }
 
 ROOMTYPE_MAX_OCCUPANCY = {
-    "V7": 2, "V6": 2, "V5": 2, "V3": 2, "V2": 2,
-    "V1": 4, "WS": 2, "GS": 2, "V8": 2,
-    "TT": 2, "KK": 2,
+    "V7": 2,
+    "V6": 2,
+    "V5": 2,
+    "V3": 2,
+    "V2": 2,
+    "V1": 4,
+    "WS": 2,
+    "GS": 2,
+    "V8": 2,
+    "TT": 2,
+    "KK": 2,
 }
 
 
@@ -147,7 +151,9 @@ ROOMTYPE_MAX_OCCUPANCY = {
 _TEST_INJECT_ROOMTYPES = ("TT", "KK")
 
 
-def _inject_tt_test_inventory(raw: Dict[str, Any], startdate: str, enddate: str) -> None:
+def _inject_tt_test_inventory(
+    raw: Dict[str, Any], startdate: str, enddate: str
+) -> None:
     """
     測試用：當 settings.TEST_ROOM_TT_ENABLED=1 時，為 raw PMS 回應補上 _TEST_INJECT_ROOMTYPES 的假庫存資料，
     讓聊天機器人房卡可以顯示測試房型。測完把 .env 的 flag 拿掉或改 0 即可恢復正常。
@@ -168,11 +174,13 @@ def _inject_tt_test_inventory(raw: Dict[str, Any], startdate: str, enddate: str)
     fake_data = []
     cursor = start_d
     while cursor < end_d:
-        fake_data.append({
-            "odate": cursor.isoformat(),
-            "remain": "010",  # 與閎運實際開的測試房間數對齊，允許加到 10 間
-            "price": "1;",
-        })
+        fake_data.append(
+            {
+                "odate": cursor.isoformat(),
+                "remain": "010",  # 與閎運實際開的測試房間數對齊，允許加到 10 間
+                "price": "1;",
+            }
+        )
         cursor += timedelta(days=1)
 
     # 閎運對 TT / KK 的圖片 URL（如 10_101thumb.jpg）實際是 404，
@@ -184,19 +192,25 @@ def _inject_tt_test_inventory(raw: Dict[str, Any], startdate: str, enddate: str)
                 entry["data"] = fake_data
             entry["image"] = ""  # 清掉壞連結
         else:
-            rooms.append({
-                "roomtype": code,
-                "housingcnt": "2",
-                "image": "",
-                "data": fake_data,
-            })
+            rooms.append(
+                {
+                    "roomtype": code,
+                    "housingcnt": "2",
+                    "image": "",
+                    "data": fake_data,
+                }
+            )
+
 
 # ---------------------------------------------------------------------------
 # FAQ KB fallback — read room data from DB instead of hardcoded list
 # ---------------------------------------------------------------------------
 
+
 async def _kb_fallback_rooms(
-    db: Optional[AsyncSession], adults: Optional[int] = None,
+    db: Optional[AsyncSession],
+    adults: Optional[int] = None,
+    line_channel_id: Optional[str] = None,
 ) -> List[RoomCardSchema]:
     """查詢 FAQ KB 取得靜態房型資料，回傳 RoomCardSchema 清單（source=faq_kb）。
 
@@ -205,10 +219,13 @@ async def _kb_fallback_rooms(
 
     adults=None：未指定人數，依 max_occupancy 由小到大排序，不過濾。
     adults=整數：過濾 max_occupancy >= adults，再依匹配度與價格排序。
+    line_channel_id：限定特定 LINE OA 的 FAQ；None 時讀所有（不建議，僅向下相容）。
     """
     if db is None:
         return []
-    result = await _kb_search(db, "booking_billing", "", top_k=20)
+    result = await _kb_search(
+        db, "booking_billing", "", top_k=20, line_channel_id=line_channel_id
+    )
     items = result.get("items") or []
     cards: List[RoomCardSchema] = []
     for item in items:
@@ -222,46 +239,71 @@ async def _kb_fallback_rooms(
                 code = c
                 break
         price_raw = item.get("房價") or item.get("price") or 0
-        price = _to_int(str(price_raw).replace(",", "").replace("元", "").split("~")[0].split("-")[0])
-        max_occ = _to_int(item.get("人數") or item.get("max_occupancy"), ROOMTYPE_MAX_OCCUPANCY.get(code, 2))
+        price = _to_int(
+            str(price_raw)
+            .replace(",", "")
+            .replace("元", "")
+            .split("~")[0]
+            .split("-")[0]
+        )
+        max_occ = _to_int(
+            item.get("人數") or item.get("max_occupancy"),
+            ROOMTYPE_MAX_OCCUPANCY.get(code, 2),
+        )
         room_count = _to_int(item.get("間數") or item.get("available_count"), None)
         features = str(item.get("房型特色") or "")
         raw_image = str(item.get("image_url") or item.get("url") or "").strip()
-        image_url = raw_image if raw_image else (settings.DEFAULT_ROOM_IMAGE_URL or None)
-        cards.append(RoomCardSchema(
-            room_type_code=code or name,
-            room_type_name=name,
-            price=price,
-            price_label="參考房價",
-            available_count=room_count,
-            max_occupancy=max_occ,
-            image_url=image_url,
-            features=features,
-            source="faq_kb",
-        ))
+        image_url = (
+            raw_image if raw_image else (settings.DEFAULT_ROOM_IMAGE_URL or None)
+        )
+        cards.append(
+            RoomCardSchema(
+                room_type_code=code or name,
+                room_type_name=name,
+                price=price,
+                price_label="參考房價",
+                available_count=room_count,
+                max_occupancy=max_occ,
+                image_url=image_url,
+                features=features,
+                source="faq_kb",
+            )
+        )
     # 未指定人數：依人數由小到大排序，相同人數價格低者優先
     if adults is None:
-        cards.sort(key=lambda c: ((c.max_occupancy or 2), c.price if c.price > 0 else 10**12))
+        cards.sort(
+            key=lambda c: ((c.max_occupancy or 2), c.price if c.price > 0 else 10**12)
+        )
         return cards
     # 指定人數：過濾可住人數 >= 查詢人數，照匹配度排序（最接近的排前面）
     filtered = [c for c in cards if (c.max_occupancy or 2) >= adults]
     result = filtered if filtered else cards
-    result.sort(key=lambda c: (abs((c.max_occupancy or 2) - adults), c.price if c.price > 0 else 10**12))
+    result.sort(
+        key=lambda c: (
+            abs((c.max_occupancy or 2) - adults),
+            c.price if c.price > 0 else 10**12,
+        )
+    )
     return result
 
 
 async def _enrich_cards_with_kb(
-    cards: List[RoomCardSchema], db: Optional[AsyncSession]
+    cards: List[RoomCardSchema],
+    db: Optional[AsyncSession],
+    line_channel_id: Optional[str] = None,
 ) -> List[RoomCardSchema]:
     """Spec: PMS 資料為主，FAQ_KB 資料補充房型圖片與特色描述。
     圖片優先序：PMS image > KB image > settings.DEFAULT_ROOM_IMAGE_URL。
     最後若仍空，則不補（由下游 line_app 的 dummyimage 接手）。
+    line_channel_id：限定特定 LINE OA 的 FAQ；None 時讀所有（不建議，僅向下相容）。
     """
     if not cards:
         return cards
     kb_by_name: Dict[str, dict] = {}
     if db is not None:
-        result = await _kb_search(db, "booking_billing", "", top_k=20)
+        result = await _kb_search(
+            db, "booking_billing", "", top_k=20, line_channel_id=line_channel_id
+        )
         items = result.get("items") or []
         for item in items:
             name = str(item.get("房型名稱") or "").strip()
@@ -290,9 +332,11 @@ async def _enrich_cards_with_kb(
         enriched.append(card)
     return enriched
 
+
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
+
 
 def _room_display_name(code: str) -> str:
     return ROOMTYPE_NAME.get(code, code)
@@ -322,8 +366,12 @@ _ROOM_FIELDS = ["房型名稱", "房型特色", "房價", "人數", "間數", "u
 
 
 async def _kb_search(
-    db: AsyncSession, category: str, query: str, top_k: int = 6,
-    test_mode: bool = False, line_channel_id: Optional[str] = None,
+    db: AsyncSession,
+    category: str,
+    query: str,
+    top_k: int = 6,
+    test_mode: bool = False,
+    line_channel_id: Optional[str] = None,
 ) -> dict:
     from app.models.faq import FaqCategory, FaqRule
 
@@ -337,7 +385,9 @@ async def _kb_search(
 
     # 查詢啟用中的分類
     cat_result = await db.execute(
-        select(FaqCategory).where(FaqCategory.name == cat_name, FaqCategory.is_active == True)  # noqa: E712
+        select(FaqCategory).where(
+            FaqCategory.name == cat_name, FaqCategory.is_active == True
+        )  # noqa: E712
     )
     cat = cat_result.scalar_one_or_none()
     if not cat:
@@ -346,13 +396,10 @@ async def _kb_search(
     # 測試模式：讀 draft + active；正式模式：只讀 active
     allowed_statuses = ["draft", "active"] if test_mode else ["active"]
 
-    rule_query = (
-        select(FaqRule)
-        .where(
-            FaqRule.category_id == cat.id,
-            FaqRule.status.in_(allowed_statuses),
-            FaqRule.is_enabled_filter(),
-        )
+    rule_query = select(FaqRule).where(
+        FaqRule.category_id == cat.id,
+        FaqRule.status.in_(allowed_statuses),
+        FaqRule.is_enabled_filter(),
     )
     # 多 OA 隔離：訊息來自特定 LINE OA 時，只用該 OA 的規則
     if line_channel_id:
@@ -365,23 +412,29 @@ async def _kb_search(
 
     rows = []
     for rule in rules:
-            c = rule.content_json
-            if isinstance(c, str):
-                try:
-                    c = json.loads(c)
-                except Exception:
-                    c = {}
-            row = dict(c or {})
-            row["tags"] = [t.tag_name for t in (rule.tags or [])]
-            row["_rule_id"] = rule.id
-            rows.append(row)
+        c = rule.content_json
+        if isinstance(c, str):
+            try:
+                c = json.loads(c)
+            except Exception:
+                c = {}
+        row = dict(c or {})
+        row["tags"] = [t.tag_name for t in (rule.tags or [])]
+        row["_rule_id"] = rule.id
+        rows.append(row)
 
     fields = _FACILITY_FIELDS if category == "facilities" else _ROOM_FIELDS
     q = (query or "").strip().lower()
 
     def _result(items):
         rule_ids = [r["_rule_id"] for r in items if "_rule_id" in r]
-        return {"ok": True, "category": category, "query": query, "items": items, "rule_ids": rule_ids}
+        return {
+            "ok": True,
+            "category": category,
+            "query": query,
+            "items": items,
+            "rule_ids": rule_ids,
+        }
 
     if not q:
         return _result(rows[:top_k])
@@ -403,6 +456,7 @@ async def _kb_search(
 # ---------------------------------------------------------------------------
 # Mixed-room availability helpers (adapted from zhida)
 # ---------------------------------------------------------------------------
+
 
 def _required_room_count(adults: int, max_occupancy: int) -> int:
     party_size = max(1, _to_int(adults, 1))
@@ -430,10 +484,15 @@ def _inventory_cards_from_pms_raw(
         if not data_rows:
             continue
 
-        filtered = [
-            d for d in data_rows
-            if checkin_date <= str(d.get("odate") or "") < enddate
-        ] if checkin_date and enddate else data_rows
+        filtered = (
+            [
+                d
+                for d in data_rows
+                if checkin_date <= str(d.get("odate") or "") < enddate
+            ]
+            if checkin_date and enddate
+            else data_rows
+        )
 
         if not filtered:
             filtered = data_rows
@@ -445,15 +504,17 @@ def _inventory_cards_from_pms_raw(
         nightly_price = _clean_price(filtered[0].get("price", 0))
         max_occupancy = ROOMTYPE_MAX_OCCUPANCY.get(room_type_code, occupancy_fallback)
         pms_image = str(room.get("image") or "").strip() or None
-        cards.append({
-            "room_type_code": room_type_code,
-            "room_type_name": room_type_name,
-            "available_count": min(remains),
-            "max_occupancy": max_occupancy,
-            "price": nightly_price,
-            "image_url": pms_image,
-            "source": "pms_inventory",
-        })
+        cards.append(
+            {
+                "room_type_code": room_type_code,
+                "room_type_name": room_type_name,
+                "available_count": min(remains),
+                "max_occupancy": max_occupancy,
+                "price": nightly_price,
+                "image_url": pms_image,
+                "source": "pms_inventory",
+            }
+        )
     return cards
 
 
@@ -467,14 +528,25 @@ def _merge_room_inventory(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if not prev:
             merged[code] = dict(c)
             continue
-        prev["available_count"] = max(_to_int(prev.get("available_count"), 0), _to_int(c.get("available_count"), 0))
-        prev["max_occupancy"] = max(_to_int(prev.get("max_occupancy"), 1), _to_int(c.get("max_occupancy"), 1))
+        prev["available_count"] = max(
+            _to_int(prev.get("available_count"), 0),
+            _to_int(c.get("available_count"), 0),
+        )
+        prev["max_occupancy"] = max(
+            _to_int(prev.get("max_occupancy"), 1), _to_int(c.get("max_occupancy"), 1)
+        )
         pp, np_ = _to_int(prev.get("price"), 0), _to_int(c.get("price"), 0)
         if pp <= 0:
             prev["price"] = np_
         elif np_ > 0:
             prev["price"] = min(pp, np_)
-    return sorted(merged.values(), key=lambda x: (_to_int(x.get("price"), 0) or 10**12, x.get("room_type_name", "")))
+    return sorted(
+        merged.values(),
+        key=lambda x: (
+            _to_int(x.get("price"), 0) or 10**12,
+            x.get("room_type_name", ""),
+        ),
+    )
 
 
 def _normalize_mixed_requests(requests: Any) -> List[Dict[str, Any]]:
@@ -489,28 +561,42 @@ def _normalize_mixed_requests(requests: Any) -> List[Dict[str, Any]]:
         name = str(r.get("room_type_name") or "").strip() or None
         if not occ_raw and not code and not name:
             continue
-        normalized.append({
-            "room_count": max(1, _to_int(r.get("room_count"), 1)),
-            "occupancy": occ_raw if occ_raw > 0 else None,
-            "room_type_code": code,
-            "room_type_name": name,
-        })
+        normalized.append(
+            {
+                "room_count": max(1, _to_int(r.get("room_count"), 1)),
+                "occupancy": occ_raw if occ_raw > 0 else None,
+                "room_type_code": code,
+                "room_type_name": name,
+            }
+        )
     return normalized
 
 
-def _find_candidate_rooms(req: Dict[str, Any], inventory: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _find_candidate_rooms(
+    req: Dict[str, Any], inventory: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
     code = str(req.get("room_type_code") or "").strip().upper()
     name = str(req.get("room_type_name") or "").strip().lower()
     occupancy = _to_int(req.get("occupancy"), 0)
 
     if code:
-        return [c for c in inventory if str(c.get("room_type_code") or "").strip().upper() == code]
+        return [
+            c
+            for c in inventory
+            if str(c.get("room_type_code") or "").strip().upper() == code
+        ]
     if name:
-        matched = [c for c in inventory if name in str(c.get("room_type_name") or "").strip().lower()]
+        matched = [
+            c
+            for c in inventory
+            if name in str(c.get("room_type_name") or "").strip().lower()
+        ]
         if matched:
             return matched
     if occupancy > 0:
-        exact = [c for c in inventory if _to_int(c.get("max_occupancy"), 0) == occupancy]
+        exact = [
+            c for c in inventory if _to_int(c.get("max_occupancy"), 0) == occupancy
+        ]
         if exact:
             return exact
         return [c for c in inventory if _to_int(c.get("max_occupancy"), 0) >= occupancy]
@@ -522,17 +608,27 @@ def _find_candidate_rooms(req: Dict[str, Any], inventory: List[Dict[str, Any]]) 
 _MEMBER_FORM = MemberFormDefinitionSchema(
     fields=[
         MemberFormFieldSchema(
-            field_name="guest_name", label="姓名", is_required=True,
-            input_type="text", validation_pattern=None, error_message=None,
+            field_name="guest_name",
+            label="姓名",
+            is_required=True,
+            input_type="text",
+            validation_pattern=None,
+            error_message=None,
         ),
         MemberFormFieldSchema(
-            field_name="guest_phone", label="聯絡電話", is_required=True,
-            input_type="tel", validation_pattern=r"^\d{10}$",
+            field_name="guest_phone",
+            label="聯絡電話",
+            is_required=True,
+            input_type="tel",
+            validation_pattern=r"^\d{10}$",
             error_message="哎呀，電話格式似乎不太對，請確認是 10 位數號碼喔！",
         ),
         MemberFormFieldSchema(
-            field_name="guest_email", label="Email", is_required=True,
-            input_type="email", validation_pattern=r".+@.+",
+            field_name="guest_email",
+            label="Email",
+            is_required=True,
+            input_type="email",
+            validation_pattern=r".+@.+",
             error_message="Email 格式錯誤",
         ),
     ],
@@ -556,7 +652,10 @@ _PMS_TOOL = {
             "type": "object",
             "properties": {
                 "startdate": {"type": "string", "description": "入住日期 YYYY-MM-DD"},
-                "enddate": {"type": "string", "description": "退房日期 YYYY-MM-DD（未提供則填入住日+1天）"},
+                "enddate": {
+                    "type": "string",
+                    "description": "退房日期 YYYY-MM-DD（未提供則填入住日+1天）",
+                },
                 "housingcnt": {
                     "type": "integer",
                     "description": "每間房入住人數（選填）。僅當客人主動指定房型才帶入（雙人房=2、四人房=4）；未指定則省略。",
@@ -581,7 +680,10 @@ _CONFIRM_ROOM_TOOL = {
         "parameters": {
             "type": "object",
             "properties": {
-                "room_type_code": {"type": "string", "description": "房型代碼，例如 WS、V7、GS"},
+                "room_type_code": {
+                    "type": "string",
+                    "description": "房型代碼，例如 WS、V7、GS",
+                },
                 "room_type_name": {"type": "string", "description": "房型名稱"},
                 "room_count": {"type": "integer", "description": "訂房間數，預設 1"},
             },
@@ -656,10 +758,22 @@ _MIXED_AVAIL_TOOL = {
                     "items": {
                         "type": "object",
                         "properties": {
-                            "room_count": {"type": "integer", "description": "需求間數"},
-                            "occupancy": {"type": ["integer", "null"], "description": "每間人數，例如 2=雙人房"},
-                            "room_type_code": {"type": ["string", "null"], "description": "指定房型代碼（可選）"},
-                            "room_type_name": {"type": ["string", "null"], "description": "指定房型名稱（可選）"},
+                            "room_count": {
+                                "type": "integer",
+                                "description": "需求間數",
+                            },
+                            "occupancy": {
+                                "type": ["integer", "null"],
+                                "description": "每間人數，例如 2=雙人房",
+                            },
+                            "room_type_code": {
+                                "type": ["string", "null"],
+                                "description": "指定房型代碼（可選）",
+                            },
+                            "room_type_name": {
+                                "type": ["string", "null"],
+                                "description": "指定房型名稱（可選）",
+                            },
                         },
                         "required": ["room_count"],
                     },
@@ -700,8 +814,21 @@ _MARK_UNANSWERABLE_TOOL = {
     },
 }
 
-_TOOLS_WITH_PMS = [_KB_SEARCH_TOOL, _PMS_TOOL, _MIXED_AVAIL_TOOL, _CONFIRM_ROOM_TOOL, _SAVE_MEMBER_TOOL, _MARK_UNANSWERABLE_TOOL]
-_TOOLS_WITHOUT_PMS = [_KB_SEARCH_TOOL, _PMS_TOOL, _CONFIRM_ROOM_TOOL, _SAVE_MEMBER_TOOL, _MARK_UNANSWERABLE_TOOL]
+_TOOLS_WITH_PMS = [
+    _KB_SEARCH_TOOL,
+    _PMS_TOOL,
+    _MIXED_AVAIL_TOOL,
+    _CONFIRM_ROOM_TOOL,
+    _SAVE_MEMBER_TOOL,
+    _MARK_UNANSWERABLE_TOOL,
+]
+_TOOLS_WITHOUT_PMS = [
+    _KB_SEARCH_TOOL,
+    _PMS_TOOL,
+    _CONFIRM_ROOM_TOOL,
+    _SAVE_MEMBER_TOOL,
+    _MARK_UNANSWERABLE_TOOL,
+]
 
 # 保險網：AI 回覆含以下任一字串時，即使沒呼叫 mark_unanswerable 也視為答不出
 # 這些是「契約化措辭」——對應 system prompt「無法回答的情境」要求 AI 必須輸出的固定句
@@ -747,6 +874,7 @@ def init_pms_from_db(status: str) -> None:
 
 def _get_tools() -> list:
     return _TOOLS_WITH_PMS if is_pms_enabled() else _TOOLS_WITHOUT_PMS
+
 
 # System prompt cached by date — regenerated only at midnight
 _prompt_cache: Dict[date, str] = {}
@@ -870,13 +998,14 @@ def _build_system_prompt_for(today: date) -> str:
 # Session TTL constants
 # ---------------------------------------------------------------------------
 
-_SESSION_TTL = 60 * 20        # 20 minutes
-_EVICT_INTERVAL = 60 * 10     # check every 10 minutes
+_SESSION_TTL = 60 * 20  # 20 minutes
+_EVICT_INTERVAL = 60 * 10  # check every 10 minutes
 
 
 # ---------------------------------------------------------------------------
 # Session state
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class ChatbotSessionState:
@@ -885,7 +1014,7 @@ class ChatbotSessionState:
     hotel_id: Optional[int] = None
     intent_state: Literal["detecting", "confirmed", "none"] = "detecting"
     turn_count: int = 0
-    booking_rooms: int = 1          # 間數 (spec: booking_rooms)
+    booking_rooms: int = 1  # 間數 (spec: booking_rooms)
     booking_adults: Optional[int] = None  # 每間人數
     checkin_date: Optional[str] = None
     checkout_date: Optional[str] = None
@@ -920,9 +1049,11 @@ class ChatbotSessionState:
 # Tool calling context (shared between website chatbot & member chat)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ToolCallingContext:
     """Tool calling 共用上下文，與 session 儲存方式解耦"""
+
     db: Optional[AsyncSession] = None
     test_mode: bool = False
     collect_rule_ids: bool = False
@@ -946,6 +1077,7 @@ class ToolCallingContext:
 # ---------------------------------------------------------------------------
 # ChatbotService
 # ---------------------------------------------------------------------------
+
 
 class ChatbotService:
     def __init__(self) -> None:
@@ -987,7 +1119,9 @@ class ChatbotService:
             self._evict_stale_sessions()
             session = self._sessions.get(browser_key)
             if not session:
-                session = ChatbotSessionState(browser_key=browser_key, hotel_id=hotel_id)
+                session = ChatbotSessionState(
+                    browser_key=browser_key, hotel_id=hotel_id
+                )
                 self._sessions[browser_key] = session
             elif hotel_id is not None:
                 session.hotel_id = hotel_id
@@ -1015,6 +1149,7 @@ class ChatbotService:
         site_id: Optional[str] = None,
         site_name: Optional[str] = None,
         admin_test: bool = False,
+        line_channel_id: Optional[str] = None,
     ) -> ChatbotMessageOutSchema:
         session = self.get_or_create_session(browser_key, hotel_id)
 
@@ -1035,7 +1170,9 @@ class ChatbotService:
         room_plan = self._extract_room_plan(message)
         if room_plan:
             session.room_plan_requests = [room_plan]
-            session.booking_adults = room_plan["room_count"] * room_plan["adults_per_room"]
+            session.booking_adults = (
+                room_plan["room_count"] * room_plan["adults_per_room"]
+            )
 
         # Deterministic extraction: dates (with past-date guard)
         past_date_warning: Optional[str] = None
@@ -1054,16 +1191,22 @@ class ChatbotService:
                 session.checkin_date = checkin_str
                 session.checkout_date = checkout_str
 
-        # 多 OA 路由：依 site_id 查 webchat_site_channels 取得綁定的 LINE channel_id
-        webchat_line_channel_id = (
-            await self._resolve_webchat_channel_id(db, site_id) if db else None
-        )
+        # 多 OA 路由：
+        # 1) admin_test（CRM 後台試聊）直接用 sidebar 傳來的 line_channel_id
+        # 2) webchat 訪客依 site_id 查 webchat_site_channels 取得綁定的 channel_id
+        if line_channel_id:
+            webchat_line_channel_id = line_channel_id
+        else:
+            webchat_line_channel_id = (
+                await self._resolve_webchat_channel_id(db, site_id) if db else None
+            )
 
         # Build unified tool calling context
         # collect_rule_ids=True 讓 _unified_tool_loop 在 kb_search 時記下引用到的 FAQ rule，
         # 後續才能依規則標籤自動為（訪客 / 已加入會員的）webchat 使用者打標。
         ctx = ToolCallingContext(
-            db=db, test_mode=test_mode,
+            db=db,
+            test_mode=test_mode,
             collect_rule_ids=True,
             line_channel_id=webchat_line_channel_id,
             checkin_date=session.checkin_date,
@@ -1094,12 +1237,19 @@ class ChatbotService:
                 known_parts.append(f"人數：{session.booking_adults}")
             if session.room_plan_requests:
                 rp = session.room_plan_requests[0] if session.room_plan_requests else {}
-                known_parts.append(f"房型需求：{rp.get('room_count', 1)}間{rp.get('adults_per_room', 2)}人房")
+                known_parts.append(
+                    f"房型需求：{rp.get('room_count', 1)}間{rp.get('adults_per_room', 2)}人房"
+                )
 
             if known_parts:
-                sys_prompt += "\n\n目前已收集到的訂房資訊（不需要再追問這些）：\n" + "、".join(known_parts)
+                sys_prompt += (
+                    "\n\n目前已收集到的訂房資訊（不需要再追問這些）：\n"
+                    + "、".join(known_parts)
+                )
             if missing_parts:
-                sys_prompt += "\n尚缺：" + "、".join(missing_parts) + " → 請追問這些資訊"
+                sys_prompt += (
+                    "\n尚缺：" + "、".join(missing_parts) + " → 請追問這些資訊"
+                )
             elif session.checkin_date and session.checkout_date:
                 sys_prompt += "\n→ 兩項資訊已齊全，你必須在本次回覆中呼叫 query_pms_availability，不可只回文字，嚴禁追問人數或房型。"
 
@@ -1188,6 +1338,7 @@ class ChatbotService:
         if not site_id:
             return None
         from app.models.webchat_site import WebchatSiteChannel
+
         res = await db.execute(
             select(WebchatSiteChannel.line_channel_id).where(
                 WebchatSiteChannel.site_id == site_id
@@ -1281,49 +1432,60 @@ class ChatbotService:
         # 三筆訊息（user / bot 文字 / room_cards）原本共用同一個 now，
         # MySQL 同 timestamp 排序非決定性 → 畫面順序會亂跳。
         # 解法：三筆各偏移毫秒，保證 user → bot → room_cards 嚴格遞增。
-        db.add(ConversationMessage(
-            id=str(uuid4()),
-            thread_id=thread.id,
-            platform="Webchat",
-            direction="incoming",
-            role="user",
-            content=user_message,
-            message_source="webhook",
-            created_at=now,
-        ))
-
-        # 4. 寫入 bot 回覆（純文字）— +1ms 確保排在使用者訊息後
-        if bot_reply:
-            db.add(ConversationMessage(
+        db.add(
+            ConversationMessage(
                 id=str(uuid4()),
                 thread_id=thread.id,
                 platform="Webchat",
-                direction="outgoing",
-                role="assistant",
-                content=bot_reply,
-                message_source="gpt",
-                created_at=now + timedelta(milliseconds=1),
-            ))
+                direction="incoming",
+                role="user",
+                content=user_message,
+                message_source="webhook",
+                created_at=now,
+            )
+        )
 
-        # 5. 房卡（如有）：另存一筆 message_type='room_cards'，+2ms 排在文字回覆後
-        if room_cards:
-            try:
-                room_cards_payload = json.dumps(
-                    {"room_cards": [rc.model_dump() if hasattr(rc, "model_dump") else dict(rc) for rc in room_cards]},
-                    ensure_ascii=False,
-                    default=str,
-                )
-                db.add(ConversationMessage(
+        # 4. 寫入 bot 回覆（純文字）— +1ms 確保排在使用者訊息後
+        if bot_reply:
+            db.add(
+                ConversationMessage(
                     id=str(uuid4()),
                     thread_id=thread.id,
                     platform="Webchat",
                     direction="outgoing",
                     role="assistant",
-                    message_type="room_cards",
-                    content=room_cards_payload,
+                    content=bot_reply,
                     message_source="gpt",
-                    created_at=now + timedelta(milliseconds=2),
-                ))
+                    created_at=now + timedelta(milliseconds=1),
+                )
+            )
+
+        # 5. 房卡（如有）：另存一筆 message_type='room_cards'，+2ms 排在文字回覆後
+        if room_cards:
+            try:
+                room_cards_payload = json.dumps(
+                    {
+                        "room_cards": [
+                            rc.model_dump() if hasattr(rc, "model_dump") else dict(rc)
+                            for rc in room_cards
+                        ]
+                    },
+                    ensure_ascii=False,
+                    default=str,
+                )
+                db.add(
+                    ConversationMessage(
+                        id=str(uuid4()),
+                        thread_id=thread.id,
+                        platform="Webchat",
+                        direction="outgoing",
+                        role="assistant",
+                        message_type="room_cards",
+                        content=room_cards_payload,
+                        message_source="gpt",
+                        created_at=now + timedelta(milliseconds=2),
+                    )
+                )
             except Exception as exc:
                 logger.warning(f"[chatbot] serialize room_cards failed: {exc}")
 
@@ -1347,8 +1509,12 @@ class ChatbotService:
         # 未指定 channel_id 時用第一筆 LineChannel 作為 fallback（官網 chatbot 用）
         if not line_channel_id:
             from app.models.line_channel import LineChannel
+
             lc_res = await db.execute(
-                select(LineChannel).where(LineChannel.is_active == True).order_by(LineChannel.id.asc()).limit(1)  # noqa: E712
+                select(LineChannel)
+                .where(LineChannel.is_active == True)
+                .order_by(LineChannel.id.asc())
+                .limit(1)  # noqa: E712
             )
             lc = lc_res.scalar_one_or_none()
             if lc and lc.channel_id:
@@ -1394,7 +1560,9 @@ class ChatbotService:
                 # 保險網：AI 沒呼叫 mark_unanswerable 但回覆含明確答不出字樣 → 補標
                 if not ctx.unanswered and _contains_unanswerable_phrase(reply):
                     ctx.unanswered = True
-                    logger.info(f"[unanswered-fallback] caught by keyword: {reply[:80]}")
+                    logger.info(
+                        f"[unanswered-fallback] caught by keyword: {reply[:80]}"
+                    )
                 return reply
 
             messages.append(msg)
@@ -1413,11 +1581,13 @@ class ChatbotService:
 
                 llm_result = self._clean_for_llm(result, fn_name, ctx.collect_rule_ids)
 
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": json.dumps(llm_result, ensure_ascii=False),
-                })
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": json.dumps(llm_result, ensure_ascii=False),
+                    }
+                )
 
         # 超過 5 輪迴圈仍未完成 → 視為系統性答不出
         ctx.unanswered = True
@@ -1430,12 +1600,18 @@ class ChatbotService:
         if fn_name == "kb_search":
             if ctx.db is not None:
                 result = await _kb_search(
-                    ctx.db, args.get("category", ""), args.get("query", ""),
+                    ctx.db,
+                    args.get("category", ""),
+                    args.get("query", ""),
                     test_mode=ctx.test_mode,
                     line_channel_id=ctx.line_channel_id,
                 )
             else:
-                result = {"ok": False, "error": "database session not available", "items": []}
+                result = {
+                    "ok": False,
+                    "error": "database session not available",
+                    "items": [],
+                }
             if ctx.collect_rule_ids and isinstance(result, dict):
                 ctx.referenced_rule_ids.update(result.get("rule_ids", []))
             return result
@@ -1470,7 +1646,9 @@ class ChatbotService:
     @staticmethod
     def _clean_for_llm(result: Any, fn_name: str, collect_rule_ids: bool) -> Any:
         """清理內部欄位（rule_ids, _rule_id）不讓 LLM 看到"""
-        if not (collect_rule_ids and fn_name == "kb_search" and isinstance(result, dict)):
+        if not (
+            collect_rule_ids and fn_name == "kb_search" and isinstance(result, dict)
+        ):
             return result
         cleaned = {k: v for k, v in result.items() if k != "rule_ids"}
         cleaned["items"] = [
@@ -1498,7 +1676,9 @@ class ChatbotService:
         enddate = str(args.get("enddate", ""))
         # housingcnt 為選填：客人未指定時為 None，此時回傳所有房型依人數由小到大排序
         housingcnt_raw = args.get("housingcnt")
-        housingcnt_specified = housingcnt_raw is not None and str(housingcnt_raw).strip() != ""
+        housingcnt_specified = (
+            housingcnt_raw is not None and str(housingcnt_raw).strip() != ""
+        )
         housingcnt = int(housingcnt_raw) if housingcnt_specified else 2
         roomtype = args.get("roomtype") or None
         logger.info(
@@ -1509,7 +1689,9 @@ class ChatbotService:
         # Auto-fill enddate if missing (default: checkin + 1 night)
         if startdate and not enddate:
             try:
-                enddate = (date.fromisoformat(startdate) + timedelta(days=1)).isoformat()
+                enddate = (
+                    date.fromisoformat(startdate) + timedelta(days=1)
+                ).isoformat()
             except ValueError:
                 pass
 
@@ -1528,7 +1710,11 @@ class ChatbotService:
 
         # PMS disabled → FAQ KB fallback (spec: _kb_search("booking_billing"))
         if not is_pms_enabled():
-            cards = await _kb_fallback_rooms(db, housingcnt if housingcnt_specified else None)
+            cards = await _kb_fallback_rooms(
+                db,
+                housingcnt if housingcnt_specified else None,
+                line_channel_id=ctx.line_channel_id,
+            )
             if not cards:
                 return {
                     "source": "no_data",
@@ -1555,13 +1741,17 @@ class ChatbotService:
             # 未指定人數且未指定房型 → 用 query_pms_all_roomtypes（housingcnt 空字串）取全部房型；
             # 否則用 query_pms（會依 housingcnt 過濾）
             if not housingcnt_specified and not roomtype:
-                raw = await asyncio.to_thread(query_pms_all_roomtypes, startdate, enddate)
+                raw = await asyncio.to_thread(
+                    query_pms_all_roomtypes, startdate, enddate
+                )
                 logger.info(
                     f"[PMS] all-roomtypes query: {len(raw.get('room', []))} room types, "
                     f"startdate={startdate}, enddate={enddate}"
                 )
             else:
-                raw = await asyncio.to_thread(query_pms, startdate, enddate, roomtype, housingcnt)
+                raw = await asyncio.to_thread(
+                    query_pms, startdate, enddate, roomtype, housingcnt
+                )
                 logger.info(
                     f"[PMS] query result: {len(raw.get('room', []))} room types, "
                     f"startdate={startdate}, enddate={enddate}, housingcnt={housingcnt}"
@@ -1574,8 +1764,12 @@ class ChatbotService:
             # Spec: 僅在客人明確指定 housingcnt=1 且查無房時自動以 housingcnt=2 重查
             fallback_housingcnt = None
             if housingcnt_specified and not cards and housingcnt == 1:
-                logger.info("[PMS] housingcnt=1 returned empty, retrying with housingcnt=2")
-                raw2 = await asyncio.to_thread(query_pms, startdate, enddate, roomtype, 2)
+                logger.info(
+                    "[PMS] housingcnt=1 returned empty, retrying with housingcnt=2"
+                )
+                raw2 = await asyncio.to_thread(
+                    query_pms, startdate, enddate, roomtype, 2
+                )
                 _inject_tt_test_inventory(raw2, startdate, enddate)
                 availability = self._extract_availability(raw2, startdate, enddate)
                 cards = self._availability_to_room_cards(availability, 2)
@@ -1584,11 +1778,17 @@ class ChatbotService:
 
             if not cards:
                 # PMS returned empty → FAQ KB fallback
-                cards = await _kb_fallback_rooms(db, housingcnt if housingcnt_specified else None)
+                cards = await _kb_fallback_rooms(
+                    db,
+                    housingcnt if housingcnt_specified else None,
+                    line_channel_id=ctx.line_channel_id,
+                )
                 source_note = "faq_kb"
             else:
                 # Spec: PMS 資料為主，FAQ_KB 資料補充房型圖片與特色描述
-                cards = await _enrich_cards_with_kb(cards, db)
+                cards = await _enrich_cards_with_kb(
+                    cards, db, line_channel_id=ctx.line_channel_id
+                )
                 source_note = "pms"
 
             result_dict: Dict[str, Any] = {
@@ -1610,11 +1810,17 @@ class ChatbotService:
                 if fallback_housingcnt is not None:
                     result_dict["note"] = "沒有符合人數的房型，以下是其他可參考的房型"
                 elif cards and not any(c.max_occupancy == housingcnt for c in cards):
-                    result_dict["note"] = f"目前沒有剛好 {housingcnt} 人的房型有空房，以下是其他可入住的房型供您參考"
+                    result_dict["note"] = (
+                        f"目前沒有剛好 {housingcnt} 人的房型有空房，以下是其他可入住的房型供您參考"
+                    )
             return result_dict, cards
 
         except Exception as exc:
-            cards = await _kb_fallback_rooms(db, housingcnt if housingcnt_specified else None)
+            cards = await _kb_fallback_rooms(
+                db,
+                housingcnt if housingcnt_specified else None,
+                line_channel_id=ctx.line_channel_id,
+            )
             if not cards:
                 return {
                     "source": "no_data",
@@ -1661,13 +1867,20 @@ class ChatbotService:
         self._apply_member_to_session(session, name, phone, email)
         return {"ok": True, "name": name, "phone": phone, "email": email}
 
-    async def _run_mixed_avail_tool(self, args: Dict[str, Any], ctx: Optional[ToolCallingContext] = None) -> Dict[str, Any]:
+    async def _run_mixed_avail_tool(
+        self, args: Dict[str, Any], ctx: Optional[ToolCallingContext] = None
+    ) -> Dict[str, Any]:
         """Execute mixed-room availability check (adapted from zhida)."""
         startdate = str(args.get("startdate", ""))
         enddate = str(args.get("enddate", ""))
         requests = _normalize_mixed_requests(args.get("requests") or [])
         if not requests:
-            return {"ok": False, "error": "requests 至少需一筆有效需求", "all_available": False, "items": []}
+            return {
+                "ok": False,
+                "error": "requests 至少需一筆有效需求",
+                "all_available": False,
+                "items": [],
+            }
 
         # Collect inventory for all needed occupancies
         candidates_occ = {1, 2}
@@ -1679,17 +1892,24 @@ class ChatbotService:
         inventory_cards: List[Dict[str, Any]] = []
         for housingcnt in sorted(candidates_occ):
             try:
-                raw = await asyncio.to_thread(query_pms, startdate, enddate, None, housingcnt)
+                raw = await asyncio.to_thread(
+                    query_pms, startdate, enddate, None, housingcnt
+                )
                 inventory_cards.extend(
-                    _inventory_cards_from_pms_raw(raw, startdate, enddate, occupancy_fallback=housingcnt)
+                    _inventory_cards_from_pms_raw(
+                        raw, startdate, enddate, occupancy_fallback=housingcnt
+                    )
                 )
             except Exception:
                 continue
         inventory = _merge_room_inventory(inventory_cards)
 
         remaining = {
-            str(c.get("room_type_code") or "").strip(): _to_int(c.get("available_count"), 0)
-            for c in inventory if str(c.get("room_type_code") or "").strip()
+            str(c.get("room_type_code") or "").strip(): _to_int(
+                c.get("available_count"), 0
+            )
+            for c in inventory
+            if str(c.get("room_type_code") or "").strip()
         }
 
         item_results: List[Dict[str, Any]] = []
@@ -1700,42 +1920,67 @@ class ChatbotService:
             candidates = sorted(
                 candidates,
                 key=lambda c: (
-                    abs(_to_int(c.get("max_occupancy"), 0) - _to_int(req.get("occupancy"), 0))
-                    if _to_int(req.get("occupancy"), 0) > 0 else 0,
+                    (
+                        abs(
+                            _to_int(c.get("max_occupancy"), 0)
+                            - _to_int(req.get("occupancy"), 0)
+                        )
+                        if _to_int(req.get("occupancy"), 0) > 0
+                        else 0
+                    ),
                     _to_int(c.get("price"), 0) or 10**12,
                     -_to_int(c.get("available_count"), 0),
                 ),
             )
             chosen = next(
-                (c for c in candidates if remaining.get(str(c.get("room_type_code") or "").strip(), 0) >= req_count),
+                (
+                    c
+                    for c in candidates
+                    if remaining.get(str(c.get("room_type_code") or "").strip(), 0)
+                    >= req_count
+                ),
                 None,
             )
             if not chosen:
                 all_available = False
                 sample = candidates[0] if candidates else None
-                item_results.append({
-                    "request": req, "matched": False,
-                    "room_type_code": sample.get("room_type_code") if sample else None,
-                    "room_type_name": sample.get("room_type_name") if sample else None,
-                    "requested_count": req_count,
-                    "available_count": _to_int(sample.get("available_count"), 0) if sample else 0,
-                    "reason": "INSUFFICIENT_INVENTORY_OR_NOT_FOUND",
-                })
+                item_results.append(
+                    {
+                        "request": req,
+                        "matched": False,
+                        "room_type_code": (
+                            sample.get("room_type_code") if sample else None
+                        ),
+                        "room_type_name": (
+                            sample.get("room_type_name") if sample else None
+                        ),
+                        "requested_count": req_count,
+                        "available_count": (
+                            _to_int(sample.get("available_count"), 0) if sample else 0
+                        ),
+                        "reason": "INSUFFICIENT_INVENTORY_OR_NOT_FOUND",
+                    }
+                )
                 continue
 
             code = str(chosen.get("room_type_code") or "").strip()
             remaining[code] = max(0, remaining.get(code, 0) - req_count)
             chosen_price = _to_int(chosen.get("price"), 0)
-            item_results.append({
-                "request": req, "matched": True,
-                "room_type_code": chosen.get("room_type_code"),
-                "room_type_name": chosen.get("room_type_name"),
-                "requested_count": req_count,
-                "available_count": _to_int(chosen.get("available_count"), 0),
-                "max_occupancy": _to_int(chosen.get("max_occupancy"), 0),
-                "price": chosen_price,
-                "subtotal_price": chosen_price * req_count if chosen_price > 0 else 0,
-            })
+            item_results.append(
+                {
+                    "request": req,
+                    "matched": True,
+                    "room_type_code": chosen.get("room_type_code"),
+                    "room_type_name": chosen.get("room_type_name"),
+                    "requested_count": req_count,
+                    "available_count": _to_int(chosen.get("available_count"), 0),
+                    "max_occupancy": _to_int(chosen.get("max_occupancy"), 0),
+                    "price": chosen_price,
+                    "subtotal_price": (
+                        chosen_price * req_count if chosen_price > 0 else 0
+                    ),
+                }
+            )
 
         # 產生 room_cards 讓前端顯示房卡 carousel
         if ctx is not None and inventory:
@@ -1745,7 +1990,9 @@ class ChatbotService:
             )
             if cards:
                 db = ctx.db
-                cards = await _enrich_cards_with_kb(cards, db)
+                cards = await _enrich_cards_with_kb(
+                    cards, db, line_channel_id=ctx.line_channel_id
+                )
                 ctx.room_cards = cards
             if startdate:
                 ctx.checkin_date = startdate
@@ -1769,7 +2016,9 @@ class ChatbotService:
         source: str = "pms",
     ) -> None:
         session.selected_room_type = room_type_code
-        session.selected_room_name = room_type_name or _room_display_name(room_type_code)
+        session.selected_room_name = room_type_name or _room_display_name(
+            room_type_code
+        )
         session.selected_room_count = max(1, room_count)
         session.selected_room_source = source
         session.intent_state = "confirmed"
@@ -1804,7 +2053,9 @@ class ChatbotService:
         session.booking_adults = adults
 
         try:
-            raw = await asyncio.to_thread(query_pms, checkin_date, checkout_date, None, adults)
+            raw = await asyncio.to_thread(
+                query_pms, checkin_date, checkout_date, None, adults
+            )
             availability = self._extract_availability(raw, checkin_date, checkout_date)
             cards = self._availability_to_room_cards(availability, adults)
             if cards:
@@ -1837,12 +2088,14 @@ class ChatbotService:
         """Legacy single-room confirm (backward compat)."""
         return self.confirm_rooms(
             browser_key=browser_key,
-            rooms=[{
-                "room_type_code": room_type_code,
-                "room_count": max(1, room_count),
-                "room_type_name": room_type_name,
-                "source": source or "pms",
-            }],
+            rooms=[
+                {
+                    "room_type_code": room_type_code,
+                    "room_count": max(1, room_count),
+                    "room_type_name": room_type_name,
+                    "source": source or "pms",
+                }
+            ],
         )
 
     def confirm_rooms(
@@ -1865,11 +2118,16 @@ class ChatbotService:
             source=first.get("source", "pms"),
         )
         from app.schemas.chatbot import MemberPrefillSchema
-        prefill = MemberPrefillSchema(
-            guest_name=session.member_name or "",
-            guest_phone=session.member_phone or "",
-            guest_email=session.member_email or "",
-        ) if (session.member_name or session.member_phone or session.member_email) else None
+
+        prefill = (
+            MemberPrefillSchema(
+                guest_name=session.member_name or "",
+                guest_phone=session.member_phone or "",
+                guest_email=session.member_email or "",
+            )
+            if (session.member_name or session.member_phone or session.member_email)
+            else None
+        )
 
         return ConfirmRoomOutSchema(
             session_id=session.session_id,
@@ -1894,7 +2152,8 @@ class ChatbotService:
         checkout_date: Optional[str] = None,
     ):
         """Validate and save booking. Returns BookingSaveOutSchema-compatible dict."""
-        from app.schemas.chatbot import BookingSaveOutSchema, BookingSavedDetailSchema
+        from app.schemas.chatbot import (BookingSavedDetailSchema,
+                                         BookingSaveOutSchema)
 
         session = self.get_or_create_session(browser_key)
 
@@ -1918,22 +2177,31 @@ class ChatbotService:
             missing.append("member_name")
         if missing:
             from fastapi import HTTPException
+
             raise HTTPException(
                 status_code=422,
-                detail={"error_code": "INCOMPLETE_BOOKING_CONTEXT", "message": f"缺少必要欄位：{missing}"},
+                detail={
+                    "error_code": "INCOMPLETE_BOOKING_CONTEXT",
+                    "message": f"缺少必要欄位：{missing}",
+                },
             )
 
         # 2. Phone format (10 digits)
         if not str(phone).isdigit() or len(str(phone)) != 10:
             from fastapi import HTTPException
+
             raise HTTPException(
                 status_code=422,
-                detail={"error_code": "INVALID_PHONE", "message": "電話格式錯誤，請輸入 10 位數號碼"},
+                detail={
+                    "error_code": "INVALID_PHONE",
+                    "message": "電話格式錯誤，請輸入 10 位數號碼",
+                },
             )
 
         # 2.5 Email format (must contain @)
         if email and "@" not in email:
             from fastapi import HTTPException
+
             raise HTTPException(
                 status_code=422,
                 detail={"error_code": "INVALID_EMAIL", "message": "Email 格式錯誤"},
@@ -1945,12 +2213,17 @@ class ChatbotService:
             checkout_obj = datetime.strptime(checkout, "%Y-%m-%d").date()
             if checkout_obj <= checkin_obj:
                 from fastapi import HTTPException
+
                 raise HTTPException(
                     status_code=422,
-                    detail={"error_code": "INVALID_DATE_RANGE", "message": "退房日期必須晚於入住日期"},
+                    detail={
+                        "error_code": "INVALID_DATE_RANGE",
+                        "message": "退房日期必須晚於入住日期",
+                    },
                 )
         except ValueError:
             from fastapi import HTTPException
+
             raise HTTPException(
                 status_code=422,
                 detail={"error_code": "INVALID_DATE_RANGE", "message": "日期格式錯誤"},
@@ -1959,12 +2232,15 @@ class ChatbotService:
         # --- Compose selected_rooms snapshot ---
         selected_rooms = list(session.selected_rooms) if session.selected_rooms else []
         if not selected_rooms and session.selected_room_type:
-            selected_rooms = [{
-                "room_type_code": session.selected_room_type,
-                "room_count": session.selected_room_count or 1,
-                "room_type_name": session.selected_room_name or session.selected_room_type,
-                "source": session.selected_room_source or "pms",
-            }]
+            selected_rooms = [
+                {
+                    "room_type_code": session.selected_room_type,
+                    "room_count": session.selected_room_count or 1,
+                    "room_type_name": session.selected_room_name
+                    or session.selected_room_type,
+                    "source": session.selected_room_source or "pms",
+                }
+            ]
 
         first_room = selected_rooms[0] if selected_rooms else {}
         session.member_name = name
@@ -1992,7 +2268,11 @@ class ChatbotService:
                 name=name,
                 phone=phone,
                 email=email,
-                line_uid=browser_key if browser_key.startswith("U") else f"web_{browser_key[:16]}",
+                line_uid=(
+                    browser_key
+                    if browser_key.startswith("U")
+                    else f"web_{browser_key[:16]}"
+                ),
             )
         except Exception as e:
             logger.warning(f"[booking_save] External booking API failed: {e}")
@@ -2006,24 +2286,34 @@ class ChatbotService:
         db_saved = False
         try:
             from app.config import settings as _s
+
             if getattr(_s, "ENABLE_DB", True):
                 from sqlalchemy.orm import Session as DbSession
+
                 from app.database import SessionLocal
-                from app.models.chatbot_booking import BookingRecord, ChatbotSession as ChatbotSessionModel
+                from app.models.chatbot_booking import BookingRecord
+                from app.models.chatbot_booking import \
+                    ChatbotSession as ChatbotSessionModel
                 from app.models.member import Member
 
                 db: DbSession = SessionLocal()
                 try:
                     # Upsert member：優先找 widget 對話建立的 guest Member（webchat_uid=browser_key），
                     # 把它「升級」為正式會員以保留對話歷史；否則 fallback 到 phone+email 查詢
-                    existing_member = db.query(Member).filter(
-                        Member.webchat_uid == browser_key
-                    ).first()
+                    existing_member = (
+                        db.query(Member)
+                        .filter(Member.webchat_uid == browser_key)
+                        .first()
+                    )
                     if existing_member is None:
-                        existing_member = db.query(Member).filter(
-                            Member.phone == phone,
-                            Member.email == email,
-                        ).first()
+                        existing_member = (
+                            db.query(Member)
+                            .filter(
+                                Member.phone == phone,
+                                Member.email == email,
+                            )
+                            .first()
+                        )
                     if existing_member:
                         existing_member.name = name
                         existing_member.phone = phone
@@ -2049,9 +2339,11 @@ class ChatbotService:
                         crm_member_id = new_member.id
 
                     # Upsert chatbot session
-                    chatbot_session_rec = db.query(ChatbotSessionModel).filter_by(
-                        id=session.session_id
-                    ).first()
+                    chatbot_session_rec = (
+                        db.query(ChatbotSessionModel)
+                        .filter_by(id=session.session_id)
+                        .first()
+                    )
                     if not chatbot_session_rec:
                         chatbot_session_rec = ChatbotSessionModel(id=session.session_id)
                         db.add(chatbot_session_rec)
@@ -2061,16 +2353,26 @@ class ChatbotService:
                     chatbot_session_rec.turn_count = session.turn_count
                     chatbot_session_rec.booking_adults = session.booking_adults
                     chatbot_session_rec.checkin_date = checkin_obj if checkin else None
-                    chatbot_session_rec.checkout_date = checkout_obj if checkout else None
-                    chatbot_session_rec.room_plan_requests = list(session.room_plan_requests)
+                    chatbot_session_rec.checkout_date = (
+                        checkout_obj if checkout else None
+                    )
+                    chatbot_session_rec.room_plan_requests = list(
+                        session.room_plan_requests
+                    )
                     chatbot_session_rec.selected_rooms = selected_rooms
-                    chatbot_session_rec.selected_room_type = first_room.get("room_type_code")
-                    chatbot_session_rec.selected_room_count = first_room.get("room_count", 1)
+                    chatbot_session_rec.selected_room_type = first_room.get(
+                        "room_type_code"
+                    )
+                    chatbot_session_rec.selected_room_count = first_room.get(
+                        "room_count", 1
+                    )
                     chatbot_session_rec.member_name = name
                     chatbot_session_rec.member_phone = phone
                     chatbot_session_rec.member_email = email
                     chatbot_session_rec.crm_member_id = crm_member_id
-                    chatbot_session_rec.needs_human_followup = session.needs_human_followup
+                    chatbot_session_rec.needs_human_followup = (
+                        session.needs_human_followup
+                    )
 
                     # Insert booking record
                     booking_rec = BookingRecord(
@@ -2108,64 +2410,92 @@ class ChatbotService:
         # tag_name=房型名稱、tag_source='booking_conversion'，落在會員管理「轉單」tab
         if db_saved and crm_member_id and selected_rooms:
             try:
-                from app.database import SessionLocal
                 from sqlalchemy import text as _text
+
+                from app.database import SessionLocal
+
                 conv_db = SessionLocal()
                 try:
                     now_dt = datetime.now()
                     for room in selected_rooms:
-                        raw_name = (room.get("room_type_name") or room.get("room_type_code") or "").strip()
+                        raw_name = (
+                            room.get("room_type_name")
+                            or room.get("room_type_code")
+                            or ""
+                        ).strip()
                         if not raw_name:
                             continue
-                        tag_name = raw_name[:20]  # 與 LINE booking_callback 對齊（截 20）
+                        tag_name = raw_name[
+                            :20
+                        ]  # 與 LINE booking_callback 對齊（截 20）
                         room_qty = max(1, int(room.get("room_count") or 1))
 
                         # tag_trigger_logs：每次訂單都新增一筆 CONVERSION
                         conv_db.execute(
-                            _text("""
+                            _text(
+                                """
                                 INSERT INTO tag_trigger_logs
                                     (member_id, tag_id, tag_type, tag_name,
                                      trigger_source, triggered_at, created_at)
                                 VALUES
                                     (:mid, NULL, 'interaction', :tag_name,
                                      'CONVERSION', :triggered_at, NOW())
-                            """),
-                            {"mid": crm_member_id, "tag_name": tag_name, "triggered_at": now_dt},
+                            """
+                            ),
+                            {
+                                "mid": crm_member_id,
+                                "tag_name": tag_name,
+                                "triggered_at": now_dt,
+                            },
                         )
 
                         # member_interaction_tags：upsert 同 (member, tag_name, tag_source='booking_conversion')
                         existing_row = conv_db.execute(
-                            _text("""
+                            _text(
+                                """
                                 SELECT id FROM member_interaction_tags
                                 WHERE member_id = :mid
                                   AND tag_name = :tag_name
                                   AND tag_source = 'booking_conversion'
                                 LIMIT 1
-                            """),
+                            """
+                            ),
                             {"mid": crm_member_id, "tag_name": tag_name},
                         ).first()
                         if existing_row:
                             conv_db.execute(
-                                _text("""
+                                _text(
+                                    """
                                     UPDATE member_interaction_tags
                                     SET click_count = click_count + :qty,
                                         last_triggered_at = :triggered_at
                                     WHERE id = :eid
-                                """),
-                                {"qty": room_qty, "triggered_at": now_dt, "eid": existing_row.id},
+                                """
+                                ),
+                                {
+                                    "qty": room_qty,
+                                    "triggered_at": now_dt,
+                                    "eid": existing_row.id,
+                                },
                             )
                         else:
                             conv_db.execute(
-                                _text("""
+                                _text(
+                                    """
                                     INSERT INTO member_interaction_tags
                                         (member_id, tag_name, tag_source, click_count,
                                          last_triggered_at, message_id, tagged_at, created_at)
                                     VALUES
                                         (:mid, :tag_name, 'booking_conversion', :qty,
                                          :triggered_at, NULL, :triggered_at, NOW())
-                                """),
-                                {"mid": crm_member_id, "tag_name": tag_name,
-                                 "qty": room_qty, "triggered_at": now_dt},
+                                """
+                                ),
+                                {
+                                    "mid": crm_member_id,
+                                    "tag_name": tag_name,
+                                    "qty": room_qty,
+                                    "triggered_at": now_dt,
+                                },
                             )
                     conv_db.commit()
                     logger.info(
@@ -2174,7 +2504,9 @@ class ChatbotService:
                     )
                 except Exception:
                     conv_db.rollback()
-                    logger.exception("[booking_conversion] write failed (booking still saved)")
+                    logger.exception(
+                        "[booking_conversion] write failed (booking still saved)"
+                    )
                 finally:
                     conv_db.close()
             except Exception:
@@ -2228,7 +2560,8 @@ class ChatbotService:
 
             if has_range:
                 filtered = [
-                    row for row in data_rows
+                    row
+                    for row in data_rows
                     if startdate <= str(row.get("odate") or "") < enddate
                 ]
             else:
@@ -2244,18 +2577,22 @@ class ChatbotService:
             if min_remain <= 0:
                 continue
 
-            available.append({
-                "roomtype": room_type,
-                "name": _room_display_name(room_type),
-                "nightly_price": _clean_price(filtered[0].get("price", 0)),
-                "min_remain": min_remain,
-                "image": str(room.get("image") or "").strip() or None,
-            })
+            available.append(
+                {
+                    "roomtype": room_type,
+                    "name": _room_display_name(room_type),
+                    "nightly_price": _clean_price(filtered[0].get("price", 0)),
+                    "min_remain": min_remain,
+                    "image": str(room.get("image") or "").strip() or None,
+                }
+            )
 
         return {"ok": True, "available": available}
 
     def _availability_to_room_cards(
-        self, availability: dict, housingcnt: Optional[int] = None,
+        self,
+        availability: dict,
+        housingcnt: Optional[int] = None,
     ) -> List[RoomCardSchema]:
         """將 PMS 可用房型轉為房卡。
 
@@ -2278,12 +2615,22 @@ class ChatbotService:
         ]
         if housingcnt is None:
             # 未指定人數：依人數由小到大排序，相同人數則價格低者優先
-            cards.sort(key=lambda c: ((c.max_occupancy or 2), c.price if c.price > 0 else 10**12))
+            cards.sort(
+                key=lambda c: (
+                    (c.max_occupancy or 2),
+                    c.price if c.price > 0 else 10**12,
+                )
+            )
             return cards
         # 指定人數：過濾後依匹配度排序
         filtered = [c for c in cards if (c.max_occupancy or 2) >= housingcnt]
         result = filtered if filtered else cards
-        result.sort(key=lambda c: (abs((c.max_occupancy or 2) - housingcnt), c.price if c.price > 0 else 10**12))
+        result.sort(
+            key=lambda c: (
+                abs((c.max_occupancy or 2) - housingcnt),
+                c.price if c.price > 0 else 10**12,
+            )
+        )
         return result
 
     # ------------------------------------------------------------------
@@ -2308,7 +2655,9 @@ class ChatbotService:
         return missing
 
     def _determine_reply_type(
-        self, session: ChatbotSessionState, room_cards: List[RoomCardSchema],
+        self,
+        session: ChatbotSessionState,
+        room_cards: List[RoomCardSchema],
     ) -> ReplyType:
         """Determine reply_type and clear stale room selection when new cards arrive."""
         if room_cards:
@@ -2326,11 +2675,18 @@ class ChatbotService:
         return "text"
 
     async def _pms_fallback(
-        self, session: ChatbotSessionState, ctx: ToolCallingContext,
+        self,
+        session: ChatbotSessionState,
+        ctx: ToolCallingContext,
         room_cards: List[RoomCardSchema],
     ) -> List[RoomCardSchema]:
         """Query PMS if LLM didn't call the tool but we have enough info."""
-        if room_cards or ctx.pms_called or not session.checkin_date or not session.checkout_date:
+        if (
+            room_cards
+            or ctx.pms_called
+            or not session.checkin_date
+            or not session.checkout_date
+        ):
             return room_cards
         adults = 2
         if session.room_plan_requests:
@@ -2340,7 +2696,11 @@ class ChatbotService:
             ctx.checkout_date = session.checkout_date
             ctx.booking_adults = adults
             _, fallback_cards = await self._run_pms_tool(
-                {"startdate": session.checkin_date, "enddate": session.checkout_date, "housingcnt": adults},
+                {
+                    "startdate": session.checkin_date,
+                    "enddate": session.checkout_date,
+                    "housingcnt": adults,
+                },
                 ctx,
             )
             if fallback_cards:
@@ -2355,7 +2715,19 @@ class ChatbotService:
 
     def _extract_room_plan(self, message: str) -> Optional[Dict[str, int]]:
         """Spec: '我要X間Y人房' → {room_count, adults_per_room}。不調用 LLM。"""
-        cn_num = {"一": 1, "二": 2, "兩": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
+        cn_num = {
+            "一": 1,
+            "二": 2,
+            "兩": 2,
+            "三": 3,
+            "四": 4,
+            "五": 5,
+            "六": 6,
+            "七": 7,
+            "八": 8,
+            "九": 9,
+            "十": 10,
+        }
         # Pattern: [X間][Y人房 | 雙人房 | 單人房 | ...]
         room_count_match = re.search(r"(\d+)\s*間", message)
         if room_count_match:
@@ -2373,7 +2745,10 @@ class ChatbotService:
         # Numeric: X人房
         numeric_match = re.search(r"(\d+)\s*人\s*房", message)
         if numeric_match:
-            return {"room_count": room_count or 1, "adults_per_room": int(numeric_match.group(1))}
+            return {
+                "room_count": room_count or 1,
+                "adults_per_room": int(numeric_match.group(1)),
+            }
 
         # 只說了「X間」但沒說房型 → 不算齊全
         return None
@@ -2383,9 +2758,21 @@ class ChatbotService:
         today = datetime.now(ZoneInfo("Asia/Taipei")).date()
         current_year = today.year
 
-        cn_digits = {"一": 1, "二": 2, "兩": 2, "三": 3, "四": 4, "五": 5,
-                     "六": 6, "七": 7, "八": 8, "九": 9, "十": 10,
-                     "〇": 0, "零": 0}
+        cn_digits = {
+            "一": 1,
+            "二": 2,
+            "兩": 2,
+            "三": 3,
+            "四": 4,
+            "五": 5,
+            "六": 6,
+            "七": 7,
+            "八": 8,
+            "九": 9,
+            "十": 10,
+            "〇": 0,
+            "零": 0,
+        }
 
         def _cn_to_int(s: str) -> Optional[int]:
             """中文數字轉 int：十八→18, 二十→20, 三→3"""
@@ -2419,10 +2806,17 @@ class ChatbotService:
         nights = _extract_nights(message) or 1
 
         # --- 相對日期：今天、明天、後天、大後天 ---
-        relative_map = {"今天": 0, "今晚": 0, "今日": 0,
-                        "明天": 1, "明日": 1,
-                        "後天": 2, "後天": 2,
-                        "大後天": 3, "大後天": 3}
+        relative_map = {
+            "今天": 0,
+            "今晚": 0,
+            "今日": 0,
+            "明天": 1,
+            "明日": 1,
+            "後天": 2,
+            "後天": 2,
+            "大後天": 3,
+            "大後天": 3,
+        }
         for keyword, delta in relative_map.items():
             if keyword in message:
                 checkin = today + timedelta(days=delta)
@@ -2443,21 +2837,34 @@ class ChatbotService:
         # --- Pattern: YYYY/M/D or YYYY-M-D or YYYY.M.D ---
         m_full = re.search(r"(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})", message)
         if m_full:
-            checkin = date(int(m_full.group(1)), int(m_full.group(2)), int(m_full.group(3)))
-            rest = message[m_full.end():]
-            m_co = re.search(r"(?:到|至|～|~|—|-)\s*(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})", rest)
+            checkin = date(
+                int(m_full.group(1)), int(m_full.group(2)), int(m_full.group(3))
+            )
+            rest = message[m_full.end() :]
+            m_co = re.search(
+                r"(?:到|至|～|~|—|-)\s*(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})", rest
+            )
             if m_co:
-                checkout = date(int(m_co.group(1)), int(m_co.group(2)), int(m_co.group(3)))
+                checkout = date(
+                    int(m_co.group(1)), int(m_co.group(2)), int(m_co.group(3))
+                )
             else:
-                m_co2 = re.search(r"(?:到|至|～|~|—|-)\s*(\d{1,2})[/\-.](\d{1,2})", rest)
+                m_co2 = re.search(
+                    r"(?:到|至|～|~|—|-)\s*(\d{1,2})[/\-.](\d{1,2})", rest
+                )
                 if m_co2:
-                    checkout = date(current_year, int(m_co2.group(1)), int(m_co2.group(2)))
+                    checkout = date(
+                        current_year, int(m_co2.group(1)), int(m_co2.group(2))
+                    )
                 else:
                     checkout = checkin + timedelta(days=nights)
             return checkin.isoformat(), checkout.isoformat()
 
         # --- Pattern: M/D到M/D or M.D到M.D ---
-        m2 = re.search(r"(\d{1,2})[/\-.](\d{1,2}).*?(?:到|至|～|~).*?(\d{1,2})[/\-.](\d{1,2})", message)
+        m2 = re.search(
+            r"(\d{1,2})[/\-.](\d{1,2}).*?(?:到|至|～|~).*?(\d{1,2})[/\-.](\d{1,2})",
+            message,
+        )
         if m2:
             checkin = date(current_year, int(m2.group(1)), int(m2.group(2)))
             checkout = date(current_year, int(m2.group(3)), int(m2.group(4)))
@@ -2478,7 +2885,10 @@ class ChatbotService:
             return checkin.isoformat(), checkout.isoformat()
 
         # --- Pattern: 中文數字「三月十八」「三月十八號」---
-        m5 = re.search(r"([一二三四五六七八九十]+)月([一二三四五六七八九十零〇]+)[號號日]?", message)
+        m5 = re.search(
+            r"([一二三四五六七八九十]+)月([一二三四五六七八九十零〇]+)[號號日]?",
+            message,
+        )
         if m5:
             month = _cn_to_int(m5.group(1))
             day = _cn_to_int(m5.group(2))
@@ -2516,7 +2926,6 @@ class ChatbotService:
 
     def _has_member_profile(self, session: ChatbotSessionState) -> bool:
         return bool(session.member_name and session.member_phone)
-
 
     # ------------------------------------------------------------------
     # LINE / 會員聊天室 AI 回覆
@@ -2586,7 +2995,9 @@ class ChatbotService:
         room_plan = self._extract_room_plan(message)
         if room_plan:
             session.room_plan_requests = [room_plan]
-            session.booking_adults = room_plan["room_count"] * room_plan["adults_per_room"]
+            session.booking_adults = (
+                room_plan["room_count"] * room_plan["adults_per_room"]
+            )
 
         # 6. 建 ToolCallingContext — 帶 _session 解鎖 confirm_room + save_member_info
         ctx = ToolCallingContext(
@@ -2615,14 +3026,24 @@ class ChatbotService:
             known_parts.append(f"人數：{session.booking_adults}")
         if session.room_plan_requests:
             rp = session.room_plan_requests[0] if session.room_plan_requests else {}
-            known_parts.append(f"房型需求：{rp.get('room_count', 1)}間{rp.get('adults_per_room', 2)}人房")
+            known_parts.append(
+                f"房型需求：{rp.get('room_count', 1)}間{rp.get('adults_per_room', 2)}人房"
+            )
 
         if known_parts:
-            messages[0]["content"] += "\n\n目前已收集到的訂房資訊（不需要再追問這些）：\n" + "、".join(known_parts)
+            messages[0][
+                "content"
+            ] += "\n\n目前已收集到的訂房資訊（不需要再追問這些）：\n" + "、".join(
+                known_parts
+            )
         if missing_parts:
-            messages[0]["content"] += "\n尚缺：" + "、".join(missing_parts) + " → 請追問這些資訊"
+            messages[0]["content"] += (
+                "\n尚缺：" + "、".join(missing_parts) + " → 請追問這些資訊"
+            )
         elif session.checkin_date and session.checkout_date:
-            messages[0]["content"] += "\n→ 兩項資訊已齊全，你必須在本次回覆中呼叫 query_pms_availability，不可只回文字，嚴禁追問人數或房型。"
+            messages[0][
+                "content"
+            ] += "\n→ 兩項資訊已齊全，你必須在本次回覆中呼叫 query_pms_availability，不可只回文字，嚴禁追問人數或房型。"
 
         # 統一 Tool Calling 迴圈
         if past_date_warning:
@@ -2686,19 +3107,31 @@ class ChatbotService:
         self,
         db: AsyncSession,
         message: str,
+        line_channel_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """測試聊天（讀 draft + active，扣 token，不貼 tag）"""
-        token_usage = await self._get_token_usage(db, check_exhausted=False)
+        """測試聊天（讀 draft + active，扣該館 token，不貼 tag）"""
+        token_usage = await self._get_token_usage(
+            db, check_exhausted=False, line_channel_id=line_channel_id
+        )
 
         messages: List[Dict[str, Any]] = [
             {"role": "system", "content": _build_system_prompt()},
             {"role": "user", "content": message},
         ]
 
-        ctx = ToolCallingContext(db=db, test_mode=True, collect_rule_ids=True)
+        ctx = ToolCallingContext(
+            db=db,
+            test_mode=True,
+            collect_rule_ids=True,
+            line_channel_id=line_channel_id,
+        )
         reply = await self._unified_tool_loop(messages, ctx)
 
-        if token_usage and not isinstance(token_usage, ChatbotMessageOutSchema) and ctx.total_tokens_used > 0:
+        if (
+            token_usage
+            and not isinstance(token_usage, ChatbotMessageOutSchema)
+            and ctx.total_tokens_used > 0
+        ):
             token_usage.used_amount += ctx.total_tokens_used
             await db.flush()
 
@@ -2719,7 +3152,9 @@ class ChatbotService:
         """取得 token 額度。回傳 AiTokenUsage | None（無產業）| dict（額度用完 error）"""
         if not industry_id:
             ind_result = await db.execute(
-                select(Industry).where(Industry.is_active == True).limit(1)  # noqa: E712
+                select(Industry)
+                .where(Industry.is_active == True)
+                .limit(1)  # noqa: E712
             )
             industry = ind_result.scalar_one_or_none()
             if not industry:
@@ -2729,14 +3164,20 @@ class ChatbotService:
         # 未指定 channel_id 時用第一筆 LineChannel 作為 fallback（官網 chatbot）
         if not line_channel_id:
             from app.models.line_channel import LineChannel
+
             lc_res = await db.execute(
-                select(LineChannel).where(LineChannel.is_active == True).order_by(LineChannel.id.asc()).limit(1)  # noqa: E712
+                select(LineChannel)
+                .where(LineChannel.is_active == True)
+                .order_by(LineChannel.id.asc())
+                .limit(1)  # noqa: E712
             )
             lc = lc_res.scalar_one_or_none()
             if lc and lc.channel_id:
                 line_channel_id = lc.channel_id
 
-        usage_query = select(AiTokenUsage).where(AiTokenUsage.industry_id == industry_id)
+        usage_query = select(AiTokenUsage).where(
+            AiTokenUsage.industry_id == industry_id
+        )
         if line_channel_id:
             usage_query = usage_query.where(AiTokenUsage.channel_id == line_channel_id)
         usage_result = await db.execute(usage_query)
@@ -2772,8 +3213,7 @@ class ChatbotService:
             msgs = msgs[1:]
 
         return [
-            {"role": m.role, "content": m.content}
-            for m in reversed(msgs) if m.content
+            {"role": m.role, "content": m.content} for m in reversed(msgs) if m.content
         ]
 
     async def _auto_tag_member(
@@ -2811,24 +3251,31 @@ class ChatbotService:
         existing_result = await db.execute(
             select(MemberTag.tag_name).where(
                 MemberTag.member_id == member.id,
-                MemberTag.tag_name.in_(tag_names) if tag_names else MemberTag.tag_name == "",
+                (
+                    MemberTag.tag_name.in_(tag_names)
+                    if tag_names
+                    else MemberTag.tag_name == ""
+                ),
                 MemberTag.message_id == None,  # noqa: E711
             )
         )
         existing_tags = {t for (t,) in existing_result.all()}
 
         from app.services.platform_channel_resolver import resolve_for_member
+
         platform, channel_id = resolve_for_member(member)
 
         tagged: List[str] = []
         for tag_name in tag_names - existing_tags:
-            db.add(MemberTag(
-                member_id=member.id,
-                tag_name=tag_name,
-                tag_source="AI_chatbot",
-                platform=platform,
-                channel_id=channel_id,
-            ))
+            db.add(
+                MemberTag(
+                    member_id=member.id,
+                    tag_name=tag_name,
+                    tag_source="AI_chatbot",
+                    platform=platform,
+                    channel_id=channel_id,
+                )
+            )
             tagged.append(tag_name)
         if tagged:
             await db.flush()
@@ -2838,8 +3285,9 @@ class ChatbotService:
         #    純聊天命中 FAQ 只寫會員標籤；互動標籤交由 track_widget_click + LINE 點擊事件獨佔
 
         # 寫 tag_trigger_logs（供時段洞察 heatmap 使用）— 只記會員標籤觸發
-        from app.services.tag_trigger_service import record_tag_trigger
         from app.models.tag_trigger_log import TagType, TriggerSource
+        from app.services.tag_trigger_service import record_tag_trigger
+
         for tag_name in tag_names:
             await record_tag_trigger(
                 db,
@@ -2871,8 +3319,8 @@ class ChatbotService:
         - rule_id 優先：對應 FaqRule.category_id 的 FaqCategory.name 即互動標籤
         - 無 rule_id 才用 category_name（房卡情境傳房型名稱，FAQ 情境傳分類名稱）
         """
-        from app.services.tag_trigger_service import record_tag_trigger
         from app.models.tag_trigger_log import TagType, TriggerSource
+        from app.services.tag_trigger_service import record_tag_trigger
 
         result = await db.execute(
             select(Member).where(Member.webchat_uid == browser_key)
@@ -2922,15 +3370,17 @@ class ChatbotService:
             if existing.channel_id is None:
                 existing.channel_id = webchat_channel
         else:
-            db.add(MemberInteractionTag(
-                member_id=member.id,
-                tag_name=target_category,
-                tag_source=tag_source,
-                click_count=1,
-                last_triggered_at=now,
-                platform="Webchat",
-                channel_id=webchat_channel,
-            ))
+            db.add(
+                MemberInteractionTag(
+                    member_id=member.id,
+                    tag_name=target_category,
+                    tag_source=tag_source,
+                    click_count=1,
+                    last_triggered_at=now,
+                    platform="Webchat",
+                    channel_id=webchat_channel,
+                )
+            )
 
         # 同步更新 last_interaction_at（避免訪客在 7 天 retention 期間被誤刪）
         member.last_interaction_at = now
@@ -2938,7 +3388,11 @@ class ChatbotService:
         # 寫 tag_trigger_logs 供時段熱圖使用
         # room_select 屬於按鈕點擊事件 → CLICK（與 LINE 房卡點擊一致，落在「互動」tab）
         # 其他事件視為對話衍生標籤 → INTERACTION
-        trigger_source = TriggerSource.CLICK if event_type == "room_select" else TriggerSource.INTERACTION
+        trigger_source = (
+            TriggerSource.CLICK
+            if event_type == "room_select"
+            else TriggerSource.INTERACTION
+        )
         await record_tag_trigger(
             db,
             member_id=member.id,
@@ -2957,7 +3411,9 @@ class ChatbotService:
         return True
 
     @staticmethod
-    def _chat_error(message: str, token_exhausted: bool = False) -> ChatbotMessageOutSchema:
+    def _chat_error(
+        message: str, token_exhausted: bool = False
+    ) -> ChatbotMessageOutSchema:
         return ChatbotMessageOutSchema(
             session_id="",
             intent_state="none",

@@ -1,6 +1,7 @@
 """
 PMS 系統整合相關 Schema
 """
+
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from datetime import datetime
@@ -19,6 +20,7 @@ class PMSIntegrationCreate(PMSIntegrationBase):
 
     member_id: Optional[int] = None
     match_status: str = "pending"  # pending/matched/unmatched
+    channel_id: Optional[str] = None  # 所屬 LINE OA channel_id（多 OA 隔離）
 
 
 class PMSIntegrationUpdate(BaseModel):
@@ -27,6 +29,7 @@ class PMSIntegrationUpdate(BaseModel):
     member_id: Optional[int] = None
     match_status: Optional[str] = None
     stay_records: Optional[Dict[str, Any]] = None
+    channel_id: Optional[str] = None
 
 
 class PMSIntegrationListItem(BaseModel):

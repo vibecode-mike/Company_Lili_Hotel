@@ -566,18 +566,22 @@ const PMSDataTable = memo(function PMSDataTable({
   onCategoryActiveChange?: (v: boolean) => void;
 }) {
   const { showToast } = useToast();
+  const { selectedChannel } = useChannel();
+  const selectedLineChannelId = selectedChannel?.channel_id ?? "";
   const [rooms, setRooms] = useState<RoomRecord[]>([]);
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [loadingRooms, setLoadingRooms] = useState(true);
   const [pmsEnabled, setPmsEnabled] = useState(false);
 
-  // Fetch PMS enabled status
+  // Fetch PMS enabled status（依當前 LINE OA）
   useEffect(() => {
-    apiGet("/api/v1/chatbot/pms-status")
+    if (!selectedLineChannelId) return;
+    const url = `/api/v1/chatbot/pms-status?line_channel_id=${encodeURIComponent(selectedLineChannelId)}`;
+    apiGet(url)
       .then((res) => res.json())
       .then((json: any) => setPmsEnabled(!!json?.enabled))
       .catch(() => {});
-  }, []);
+  }, [selectedLineChannelId]);
   const [viewMode, setViewMode] = useState<ViewMode>("faq");
   const [pmsRooms, setPmsRooms] = useState<RoomRecord[]>([]);
   const [loadingPmsRooms, setLoadingPmsRooms] = useState(false);
@@ -626,8 +630,6 @@ const PMSDataTable = memo(function PMSDataTable({
   const [editingRoom, setEditingRoom] = useState<RoomRecord | null>(null);
   const [editDraft, setEditDraft] = useState<RoomFaqDraft | null>(null);
   const savedRuleIdRef = useRef<string | null>(null);
-  const { selectedChannel } = useChannel();
-  const selectedLineChannelId = selectedChannel?.channel_id ?? "";
 
   // Load FAQ rules from API（依當前 sidebar 館別過濾）
   useEffect(() => {
@@ -1633,6 +1635,8 @@ const DataSourcesTable = memo(function DataSourcesTable({
   categoryName?: string;
 }) {
   const { showToast } = useToast();
+  const { selectedChannel } = useChannel();
+  const selectedLineChannelId = selectedChannel?.channel_id ?? "";
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
@@ -1779,7 +1783,10 @@ const DataSourcesTable = memo(function DataSourcesTable({
                         s.type === "PMS" ? { ...s, enabled: v } : s,
                       ),
                     );
-                    apiPut("/api/v1/chatbot/pms-status", { enabled: v }).catch(() => {
+                    const putUrl = selectedLineChannelId
+                      ? `/api/v1/chatbot/pms-status?line_channel_id=${encodeURIComponent(selectedLineChannelId)}`
+                      : "/api/v1/chatbot/pms-status";
+                    apiPut(putUrl, { enabled: v }).catch(() => {
                       setSources((prev) =>
                         prev.map((s) =>
                           s.type === "PMS" ? { ...s, enabled: !v } : s,
@@ -1873,11 +1880,11 @@ export default function PMSIntegration({
 
   // Fetch PMS status + category info on mount, then set published for both rows
   useEffect(() => {
-    const catUrl = selectedLineChannelId
-      ? `/api/v1/faq/categories?line_channel_id=${encodeURIComponent(selectedLineChannelId)}`
-      : "/api/v1/faq/categories";
+    if (!selectedLineChannelId) return;
+    const catUrl = `/api/v1/faq/categories?line_channel_id=${encodeURIComponent(selectedLineChannelId)}`;
+    const pmsUrl = `/api/v1/chatbot/pms-status?line_channel_id=${encodeURIComponent(selectedLineChannelId)}`;
     Promise.all([
-      apiGet("/api/v1/chatbot/pms-status").then((res) => res.json()).catch(() => null),
+      apiGet(pmsUrl).then((res) => res.json()).catch(() => null),
       apiGet(catUrl).then((res) => res.json()).catch(() => null),
     ]).then(([pmsData, catData]) => {
       const pmsEnabled = !!pmsData?.enabled;
