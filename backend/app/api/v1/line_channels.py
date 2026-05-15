@@ -402,6 +402,58 @@ async def delete_channel(
         raise HTTPException(status_code=500, detail=f"刪除設定失敗: {str(e)}")
 
 
+@router.post("/test-hotelcode")
+async def test_hotelcode(data: dict):
+    """測試 PMS hotelcode 是否有效（Phase E：給 Card 10「測試連線」按鈕用）。
+
+    純測試 — 直接打 PMS API 驗證該 hotelcode 能不能回房型資料，
+    不會寫入 DB、不需要 FAQ category 上下文。
+    """
+    hotelcode = (data.get("hotelcode") or "").strip()
+    if not hotelcode:
+        raise HTTPException(status_code=422, detail="請提供 hotelcode")
+
+    from app.services.pms_chatbot_client import pms_enabled as pms_configured
+    from app.services.pms_chatbot_client import query_pms
+
+    if not pms_configured():
+        raise HTTPException(
+            status_code=400,
+            detail="PMS 環境變數未設定（PMS_API_URL / PMS_ACCOUNT / PMS_SECRET）",
+        )
+
+    try:
+        import asyncio
+
+        result = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: query_pms("2026-01-01", "2026-01-02", None, 2, hotelcode),
+        )
+        room_count = len(result.get("room") or [])
+        if room_count == 0:
+            return {
+                "success": False,
+                "message": "PMS 回傳空資料，hotelcode 可能無效或該分館未開通",
+                "room_count": 0,
+            }
+        return {
+            "success": True,
+            "message": f"連線成功，取得 {room_count} 種房型資料",
+            "room_count": room_count,
+        }
+    except Exception as e:
+        msg = str(e)
+        if "401" in msg or "Unauthorized" in msg:
+            detail = "API Key 無效（401 Unauthorized）"
+        elif "403" in msg or "Forbidden" in msg or "whitelist" in msg.lower():
+            detail = "IP 未在白名單，請聯繫閎運開通"
+        elif "timeout" in msg.lower() or "timed out" in msg.lower():
+            detail = "連線逾時"
+        else:
+            detail = msg
+        return {"success": False, "message": f"連線失敗：{detail}", "room_count": 0}
+
+
 @router.get("/{channel_db_id}/embed-code")
 async def get_embed_code(
     channel_db_id: int,

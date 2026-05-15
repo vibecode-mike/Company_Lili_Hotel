@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, ChevronUp, ExternalLink, X, Check, ArrowLeft, Copy } from 'lucide-react';
+import { ChevronDown, ChevronUp, ExternalLink, X, Check, ArrowLeft, Copy, Wifi, Loader2 } from 'lucide-react';
 import { Checkbox } from './ui/checkbox';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useToast } from './ToastProvider';
@@ -79,6 +79,21 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
   const [isVerifyingUsage, setIsVerifyingUsage] = useState<boolean>(false);
   const { showToast } = useToast();
 
+  // Phase E Card 10：Webchat 站點 + PMS Hotel Code（皆選填）
+  const [siteId, setSiteId] = useState<string>('');
+  const [siteName, setSiteName] = useState<string>('');
+  const [hotelcode, setHotelcode] = useState<string>('');
+  const [pmsSkip, setPmsSkip] = useState<boolean>(false);
+  const [hotelcodeTestResult, setHotelcodeTestResult] = useState<
+    { ok: boolean; message: string } | null
+  >(null);
+  const [isTestingHotelcode, setIsTestingHotelcode] = useState<boolean>(false);
+
+  // Phase E Card 11：完成後的嵌入碼
+  const [embedCode, setEmbedCode] = useState<string>('');
+  const [embedSiteId, setEmbedSiteId] = useState<string>('');
+  const [embedCopied, setEmbedCopied] = useState<boolean>(false);
+
   // Refs for each card
   const card1Ref = useRef<HTMLDivElement>(null);
   const card2Ref = useRef<HTMLDivElement>(null);
@@ -89,6 +104,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
   const card7Ref = useRef<HTMLDivElement>(null);
   const card8Ref = useRef<HTMLDivElement>(null);
   const card9Ref = useRef<HTMLDivElement>(null);
+  const card10Ref = useRef<HTMLDivElement>(null);
 
   // 載入現有設定：
   //  - 編輯模式（editingChannelId 有值）→ 抓 /line_channels/{id}
@@ -205,11 +221,12 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
       }
 
       await refreshStatus();
-      return true;
+      // Phase E：回傳 channel DB id 給 caller，避免 setState 非同步問題
+      return { ok: true, id: result.id };
     } catch (error) {
       console.error('保存 LINE 頻道設定失敗:', error);
       showToast('保存失敗，請稍後再試', 'error');
-      return false;
+      return { ok: false, id: null };
     }
   };
 
@@ -315,17 +332,24 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
         return;
       }
 
-      // 3. 驗證通過才一次寫入 DB
-      const saved = await saveSettings({
+      // 3. 驗證通過才一次寫入 DB（Phase E：site_id / site_name / hotelcode 一條龍一次帶）
+      const savePayload: Record<string, string> = {
         channel_id: channelId,
         channel_secret: channelSecret,
         channel_access_token: channelAccessToken,
         login_channel_id: loginChannelId,
         login_channel_secret: loginChannelSecret,
-      });
-      if (!saved) {
+      };
+      if (siteId.trim()) savePayload.site_id = siteId.trim();
+      if (siteName.trim()) savePayload.site_name = siteName.trim();
+      // 勾「暫不需 PMS」→ 不送 hotelcode（DB 留 NULL）
+      if (!pmsSkip && hotelcode.trim()) savePayload.hotelcode = hotelcode.trim();
+
+      const saveResult = await saveSettings(savePayload);
+      if (!saveResult.ok) {
         return;
       }
+      const newChannelDbId = saveResult.id ?? lineChannelDbId;
 
       // 4. 清除草稿
       try {
@@ -334,20 +358,76 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
         console.error('清除草稿失敗:', error);
       }
 
+      // 5. 若有填 site_id，抓嵌入碼供 Card 11 顯示
+      if (siteId.trim() && newChannelDbId) {
+        try {
+          const resp = await fetch(
+            `/api/v1/line_channels/${newChannelDbId}/embed-code`,
+          );
+          if (resp.ok) {
+            const data = await resp.json();
+            setEmbedCode(data.embed_code || '');
+            setEmbedSiteId(data.site_id || '');
+          }
+        } catch (err) {
+          console.error('取得嵌入碼失敗:', err);
+        }
+      }
+
       setIsSetupComplete(true);
 
       // 如果有提供 onComplete 回調，則使用它；否則使用內建導航
-      if (onComplete) {
+      // 注意：填了 site_id 時，希望 admin 先看到嵌入碼 → 不自動跳走
+      if (onComplete && !siteId.trim()) {
         onComplete();
-      } else {
+      } else if (!siteId.trim()) {
         showToast('設定完成，帶您前往會員管理頁', 'success');
         navigate('member-management');
+      } else {
+        showToast('設定完成！請複製下方嵌入碼給對方工程師', 'success');
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : '建立連結失敗，請稍後再試';
       showToast(message, 'error');
     } finally {
       setIsVerifyingUsage(false);
+    }
+  };
+
+  // Phase E：「測試連線」按鈕 — 直接打閎運 PMS API 驗證 hotelcode
+  const handleTestHotelcode = async () => {
+    const code = hotelcode.trim();
+    if (!code) {
+      setHotelcodeTestResult({ ok: false, message: '請先輸入 Hotel Code' });
+      return;
+    }
+    setIsTestingHotelcode(true);
+    setHotelcodeTestResult(null);
+    try {
+      const resp = await fetch('/api/v1/line_channels/test-hotelcode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hotelcode: code }),
+      });
+      const json = await resp.json();
+      if (!resp.ok) {
+        setHotelcodeTestResult({
+          ok: false,
+          message: json.detail || '測試連線失敗',
+        });
+        return;
+      }
+      setHotelcodeTestResult({
+        ok: Boolean(json.success),
+        message: json.message || (json.success ? '連線成功' : '連線失敗'),
+      });
+    } catch (err) {
+      setHotelcodeTestResult({
+        ok: false,
+        message: err instanceof Error ? err.message : '測試連線失敗',
+      });
+    } finally {
+      setIsTestingHotelcode(false);
     }
   };
 
@@ -1561,6 +1641,252 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
               </div>
             )}
           </div>
+
+          {/* Card 10: Webchat 站點 + PMS Hotel Code（選填，Phase E） */}
+          <div
+            ref={card10Ref}
+            className={`bg-white rounded-[14px] border-[1.6px] ${expandedCard === 10 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
+          >
+            <button
+              onClick={() => toggleCard(10)}
+              className="w-full px-[24px] py-[16px] flex items-center justify-between hover:bg-gray-50 rounded-t-[14px] transition-colors"
+            >
+              <div className="flex items-center gap-[12px]">
+                <div className="bg-[#0f6beb] rounded-full size-[32px] flex items-center justify-center">
+                  <span className="text-[14px] leading-[20px] text-white">10</span>
+                </div>
+                <div className="flex flex-col items-start">
+                  <p className="text-[18px] leading-[28px] text-neutral-950">
+                    官網彈窗機器人 + PMS 串接（選填）
+                  </p>
+                  <p className="text-[16px] leading-[24px] text-[#717182]">
+                    對接官網聊天視窗、客房查詢系統
+                  </p>
+                </div>
+              </div>
+              {expandedCard === 10 ? (
+                <ChevronUp className="size-[20px] text-[#6A7282]" />
+              ) : (
+                <ChevronDown className="size-[20px] text-[#6A7282]" />
+              )}
+            </button>
+
+            {expandedCard === 10 && (
+              <div className="px-[24px] pb-[24px] flex flex-col gap-[20px]">
+                <p className="text-[14px] leading-[20px] text-[#4a5565]">
+                  以下兩個區塊都是選填。若該 LINE 帳號要對接官網聊天視窗或客房查詢，請填寫對應欄位；不填可直接跳過。
+                </p>
+
+                {/* ① 官網機器人部署 */}
+                <div className="border border-gray-200 rounded-[10px] p-[16px] flex flex-col gap-[12px]">
+                  <p className="text-[14px] leading-[20px] font-bold text-[#364153]">
+                    ① 官網機器人部署
+                  </p>
+                  <p className="text-[12px] leading-[18px] text-[#6A7282]">
+                    填寫完資料將會自動生成程式碼。請將下方生成的程式碼交付給工程師嵌入在官網內即可生成彈窗聊天機器人。
+                  </p>
+                  <div className="flex flex-col gap-[8px]">
+                    <label className="text-[14px] leading-[14px] text-neutral-950">
+                      Site ID（英文代號，例：starbit-ryan）
+                    </label>
+                    <input
+                      type="text"
+                      value={siteId}
+                      onChange={(e) => setSiteId(e.target.value)}
+                      placeholder="starbit-ryan"
+                      className="bg-[#f3f3f5] h-[36px] px-[12px] py-[4px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] border-none outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-[8px]">
+                    <label className="text-[14px] leading-[14px] text-neutral-950">
+                      站點顯示名稱（給後台識別用）
+                    </label>
+                    <input
+                      type="text"
+                      value={siteName}
+                      onChange={(e) => setSiteName(e.target.value)}
+                      placeholder="思偉達飯店｜雷恩館"
+                      className="bg-[#f3f3f5] h-[36px] px-[12px] py-[4px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] border-none outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                    />
+                  </div>
+
+                  {/* 即時嵌入碼預覽 */}
+                  {siteId.trim() && (() => {
+                    const previewCode = `<script src="${(import.meta.env.VITE_WEBHOOK_BASE_URL || 'https://crmpoc.star-bit.io').replace(/\/+$/, '')}/widget/loader.js?site_id=${siteId.trim()}" async></script>`;
+                    return (
+                      <div className="bg-gray-50 border border-gray-200 rounded-[8px] p-[12px] flex flex-col gap-[8px]">
+                        <p className="text-[12px] leading-[18px] text-[#6A7282]">
+                          嵌入碼預覽（建立連結後生效）
+                        </p>
+                        <div className="bg-gray-900 text-green-400 rounded-[6px] p-[10px] font-mono text-[11px] leading-[16px] break-all">
+                          {previewCode}
+                        </div>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(previewCode);
+                            showToast('嵌入碼已複製到剪貼簿', 'success');
+                          }}
+                          className="self-start h-[26px] px-[6px] bg-white border border-[#0f6beb] text-[#0f6beb] hover:bg-blue-50 text-[12px] rounded-[4px] inline-flex items-center gap-[4px] w-fit"
+                        >
+                          <Copy className="size-[12px]" />
+                          複製嵌入碼
+                        </button>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* ② PMS Hotel Code */}
+                <div className="border border-gray-200 rounded-[10px] p-[16px] flex flex-col gap-[12px]">
+                  <p className="text-[14px] leading-[20px] font-bold text-[#364153]">
+                    ② PMS Hotel Code（接客房查詢、訂房用）
+                  </p>
+                  <p className="text-[12px] leading-[18px] text-[#6A7282]">
+                    若此 LINE 帳號要接客房即時查詢/訂房流程，請填入 Hotel Code（例：ZH01）。
+                  </p>
+                  <div className="flex items-center gap-[8px]">
+                    <Checkbox
+                      checked={pmsSkip}
+                      onCheckedChange={(v) => {
+                        const next = Boolean(v);
+                        setPmsSkip(next);
+                        if (next) {
+                          setHotelcode('');
+                          setHotelcodeTestResult(null);
+                        }
+                      }}
+                      className="size-[16px]"
+                    />
+                    <span className="text-[13px] leading-[18px] text-[#364153]">
+                      此 LINE 帳號暫不需 PMS（純客服機器人）
+                    </span>
+                  </div>
+                  {!pmsSkip && (
+                    <>
+                      <div className="flex flex-col gap-[8px]">
+                        <label className="text-[14px] leading-[14px] text-neutral-950">
+                          Hotel Code
+                        </label>
+                        <div className="flex gap-[8px]">
+                          <input
+                            type="text"
+                            value={hotelcode}
+                            onChange={(e) => {
+                              setHotelcode(e.target.value);
+                              setHotelcodeTestResult(null);
+                            }}
+                            placeholder="ZH01"
+                            className="flex-1 bg-[#f3f3f5] h-[36px] px-[12px] py-[4px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] border-none outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                          />
+                          <button
+                            onClick={handleTestHotelcode}
+                            disabled={!hotelcode.trim() || isTestingHotelcode}
+                            className={`h-[36px] px-[16px] rounded-[8px] text-[14px] border transition-colors inline-flex items-center justify-center gap-[6px] shrink-0 ${
+                              hotelcode.trim() && !isTestingHotelcode
+                                ? 'bg-white border-[#0f6beb] text-[#0f6beb] hover:bg-blue-50'
+                                : 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
+                            }`}
+                          >
+                            {isTestingHotelcode ? (
+                              <>
+                                <Loader2 className="size-[14px] animate-spin" />
+                                測試中
+                              </>
+                            ) : (
+                              <>
+                                <Wifi className="size-[14px]" />
+                                測試連線
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                      {hotelcodeTestResult && (
+                        <div
+                          className={`p-[12px] rounded-[6px] text-[13px] leading-[18px] ${
+                            hotelcodeTestResult.ok
+                              ? 'bg-green-50 border border-green-200 text-green-700'
+                              : 'bg-red-50 border border-red-200 text-red-700'
+                          }`}
+                        >
+                          {hotelcodeTestResult.ok ? '✅ ' : '❌ '}
+                          {hotelcodeTestResult.message}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                <p className="text-[12px] leading-[18px] text-[#6A7282]">
+                  💡 此卡片可全部留空，直接按下方「完成設定」即可。
+                </p>
+
+                {/* Card 10 完成按鈕 — 等同於 Card 9 的「建立連結」 */}
+                <div className="flex justify-end pt-[8px]">
+                  <button
+                    disabled={!canSubmitConnection}
+                    onClick={canSubmitConnection ? handleCreateConnection : undefined}
+                    className={`h-[40px] px-[24px] rounded-[8px] text-white text-[14px] leading-[20px] flex items-center justify-center transition-colors ${
+                      canSubmitConnection
+                        ? 'bg-[#0f6beb] hover:bg-[#0d5bbf]'
+                        : 'bg-[#d1d5dc] opacity-50 cursor-not-allowed'
+                    }`}
+                  >
+                    {isVerifyingUsage ? '驗證中...' : '完成設定'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Card 11: 嵌入碼（建立連結成功且有填 site_id 時顯示） */}
+          {embedCode && (
+            <div className="bg-white rounded-[14px] border-[1.6px] border-green-300">
+              <div className="px-[24px] py-[16px] flex items-center gap-[12px]">
+                <div className="bg-green-600 rounded-full size-[32px] flex items-center justify-center">
+                  <Check className="size-[18px] text-white" />
+                </div>
+                <div className="flex flex-col">
+                  <p className="text-[18px] leading-[28px] text-neutral-950">
+                    Widget 嵌入碼已就緒
+                  </p>
+                  <p className="text-[14px] leading-[20px] text-[#717182]">
+                    請將以下程式碼寄給對方工程師貼到網站
+                  </p>
+                </div>
+              </div>
+              <div className="px-[24px] pb-[24px] flex flex-col gap-[12px]">
+                <div className="bg-gray-900 text-green-400 rounded-[8px] p-[16px] font-mono text-[12px] leading-[18px] break-all">
+                  {embedCode}
+                </div>
+                <div className="flex items-center gap-[12px]">
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(embedCode);
+                      setEmbedCopied(true);
+                      setTimeout(() => setEmbedCopied(false), 2000);
+                      showToast('嵌入碼已複製到剪貼簿', 'success');
+                    }}
+                    className="h-[36px] px-[16px] bg-[#0f6beb] hover:bg-[#0d5bbf] text-white text-[14px] rounded-[6px] flex items-center gap-[6px]"
+                  >
+                    <Copy className="size-[14px]" />
+                    {embedCopied ? '已複製' : '複製嵌入碼'}
+                  </button>
+                  <span className="text-[12px] leading-[18px] text-[#6A7282]">
+                    站點 ID：<code className="bg-gray-100 px-[6px] py-[2px] rounded">{embedSiteId}</code>
+                  </span>
+                </div>
+                <div className="bg-blue-50 border border-[#bedbff] rounded-[6px] p-[12px] text-[12px] leading-[18px] text-[#193cb8]">
+                  💡 部署小提示：
+                  <ul className="list-disc pl-[18px] mt-[4px] space-y-[2px]">
+                    <li>貼到官網 HTML 的 <code className="bg-blue-100 px-[4px] rounded">&lt;/body&gt;</code> 標籤之前</li>
+                    <li>若官網有 CDN（Cloudflare 等），記得清除快取</li>
+                    <li>部署後用無痕視窗驗證視窗是否出現</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Warning Section */}
