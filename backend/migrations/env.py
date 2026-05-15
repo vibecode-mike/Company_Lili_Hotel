@@ -28,10 +28,30 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 target_metadata = Base.metadata
 
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
+# 對 alembic 隱形的表（line_app 自管，backend 不該介入）。
+# 歷史脈絡：commit cbd3057a 2025-11-27「移除 backend 中所有問卷相關代碼」明確把
+# survey 系統的 model / API / service / scheduler 整套從 backend 砍掉，問卷功能
+# 移由 line_app 獨立管理（line_app/manage_survey.py CLI + line_app/app.py raw SQL +
+# LIFF route）。表還在 DB 上是必要的（line_app 需要操作），但 backend alembic
+# 不應該把它們當作 drift 或試圖管理。
+EXCLUDED_TABLES = {
+    "surveys",
+    "survey_questions",
+    "survey_responses",
+    "survey_templates",
+}
+
+
+def _include_object(obj, name, type_, reflected, compare_to):
+    """過濾 alembic 對 EXCLUDED_TABLES 的偵測與管理。"""
+    if type_ == "table" and name in EXCLUDED_TABLES:
+        return False
+    # Index 也要過濾（不然 alembic 會抱怨 ix_survey_* 是 removed index）
+    if type_ == "index":
+        tbl_name = getattr(obj, "table", None)
+        if tbl_name is not None and getattr(tbl_name, "name", None) in EXCLUDED_TABLES:
+            return False
+    return True
 
 
 def run_migrations_offline() -> None:
@@ -52,6 +72,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=_include_object,
     )
 
     with context.begin_transaction():
@@ -59,7 +80,11 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        include_object=_include_object,
+    )
 
     with context.begin_transaction():
         context.run_migrations()
