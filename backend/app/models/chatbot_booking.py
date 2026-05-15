@@ -18,7 +18,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from app.models.base import Base
+from app.models.base import Base, _now_taipei
 
 
 class ChatbotSession(Base):
@@ -149,6 +149,21 @@ class FaqPmsConnection(Base):
         default=False,
         server_default="0",
         comment="PMS 快照是否已完成",
+    )
+
+    # 顯式 override Base 的 id / created_at / updated_at，對齊 DB 已有的 comment 字串
+    # （DB 上是 create_table 當初手寫的版本；Base 的 declared_attr 字串較泛用）
+    # 注意：comment 寫的 (UTC) 實際是臺灣時間（_now_taipei），這是已知誤標 —
+    # 見 memory project_utc_comment_mislabel，待 schema drift 清完後另開任務統一校正。
+    id = Column(BigInteger, primary_key=True, autoincrement=True, comment="唯一識別碼")
+    created_at = Column(
+        DateTime, default=_now_taipei, nullable=False, comment="建立時間（UTC）"
+    )
+    updated_at = Column(
+        DateTime,
+        default=_now_taipei,
+        onupdate=_now_taipei,
+        comment="更新時間（UTC）",
     )
 
     # 關聯關係
