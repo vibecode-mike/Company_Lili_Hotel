@@ -1006,7 +1006,10 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
               {channel_filter_sql}
         """, channel_param)
     elif target_audience == "filtered":
-        # 根據 include 和 exclude 標籤進行篩選
+        # 標籤篩選同時看 member_tags 與 member_interaction_tags（與 backend _calculate_target_count 一致）
+        # 多 OA 隔離：標籤 subquery 也以 channel_id 過濾，避免跨 OA 會員的他頻道標籤命中
+        tag_channel_filter_sql = " AND channel_id = :line_channel_id" if line_cid else ""
+
         if include_tags and exclude_tags:
             # 情境 B: 同時有包含和排除標籤
             include_placeholders = ", ".join([f":inc{i}" for i in range(len(include_tags))])
@@ -1020,22 +1023,37 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
             rs = fetchall(f"""
                 SELECT DISTINCT m.line_uid, m.id
                 FROM members m
-                INNER JOIN member_tags mt ON m.id = mt.member_id
                 WHERE m.line_uid IS NOT NULL
                   AND m.line_uid != ''
                   AND m.is_following = 1
                   {channel_filter_sql}
-                  AND mt.tag_name IN ({include_placeholders})
+                  AND (
+                      m.id IN (
+                          SELECT member_id FROM member_tags
+                          WHERE tag_name IN ({include_placeholders})
+                            {tag_channel_filter_sql}
+                      )
+                      OR
+                      m.id IN (
+                          SELECT member_id FROM member_interaction_tags
+                          WHERE tag_name IN ({include_placeholders})
+                            {tag_channel_filter_sql}
+                      )
+                  )
                   AND m.id NOT IN (
-                      SELECT DISTINCT m2.id
-                      FROM members m2
-                      INNER JOIN member_tags mt2 ON m2.id = mt2.member_id
-                      WHERE mt2.tag_name IN ({exclude_placeholders})
+                      SELECT member_id FROM member_tags
+                      WHERE tag_name IN ({exclude_placeholders})
+                        {tag_channel_filter_sql}
+                  )
+                  AND m.id NOT IN (
+                      SELECT member_id FROM member_interaction_tags
+                      WHERE tag_name IN ({exclude_placeholders})
+                        {tag_channel_filter_sql}
                   )
             """, params)
 
         elif include_tags:
-            # 情境 C: 僅包含標籤
+            # 情境 C: 僅包含標籤（同時看 member_tags 與 member_interaction_tags）
             include_placeholders = ", ".join([f":inc{i}" for i in range(len(include_tags))])
             params = {f"inc{i}": tag for i, tag in enumerate(include_tags)}
             params.update(channel_param)
@@ -1043,16 +1061,27 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
             rs = fetchall(f"""
                 SELECT DISTINCT m.line_uid, m.id
                 FROM members m
-                INNER JOIN member_tags mt ON m.id = mt.member_id
                 WHERE m.line_uid IS NOT NULL
                   AND m.line_uid != ''
                   AND m.is_following = 1
                   {channel_filter_sql}
-                  AND mt.tag_name IN ({include_placeholders})
+                  AND (
+                      m.id IN (
+                          SELECT member_id FROM member_tags
+                          WHERE tag_name IN ({include_placeholders})
+                            {tag_channel_filter_sql}
+                      )
+                      OR
+                      m.id IN (
+                          SELECT member_id FROM member_interaction_tags
+                          WHERE tag_name IN ({include_placeholders})
+                            {tag_channel_filter_sql}
+                      )
+                  )
             """, params)
 
         elif exclude_tags:
-            # 情境 D: 僅排除標籤
+            # 情境 D: 僅排除標籤（同時看 member_tags 與 member_interaction_tags）
             exclude_placeholders = ", ".join([f":exc{i}" for i in range(len(exclude_tags))])
             params = {f"exc{i}": tag for i, tag in enumerate(exclude_tags)}
             params.update(channel_param)
@@ -1065,10 +1094,14 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
                   AND m.is_following = 1
                   {channel_filter_sql}
                   AND m.id NOT IN (
-                      SELECT DISTINCT m2.id
-                      FROM members m2
-                      INNER JOIN member_tags mt ON m2.id = mt.member_id
-                      WHERE mt.tag_name IN ({exclude_placeholders})
+                      SELECT member_id FROM member_tags
+                      WHERE tag_name IN ({exclude_placeholders})
+                        {tag_channel_filter_sql}
+                  )
+                  AND m.id NOT IN (
+                      SELECT member_id FROM member_interaction_tags
+                      WHERE tag_name IN ({exclude_placeholders})
+                        {tag_channel_filter_sql}
                   )
             """, params)
         else:
