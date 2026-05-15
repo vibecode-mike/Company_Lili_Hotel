@@ -35,6 +35,7 @@ class ConversationThread(Base):
         Index("ix_conversation_threads_member_platform", "member_id", "platform"),
         Index("ix_conversation_threads_platform_uid", "platform", "platform_uid"),
         Index("ix_conversation_threads_member_last_msg", "member_id", "last_message_at"),
+        {"comment": "對話串表"},
     )
 
     id = Column(
@@ -88,6 +89,7 @@ class ConversationMessage(Base):
         Index("ix_conversation_messages_created_at", "created_at"),
         Index("ix_conversation_messages_thread_created", "thread_id", "created_at"),
         Index("ix_conversation_messages_unanswered_created", "unanswered", "created_at"),
+        {"comment": "對話訊息表"},
     )
 
     id = Column(String(100), primary_key=True, comment="訊息ID")

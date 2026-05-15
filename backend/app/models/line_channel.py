@@ -17,6 +17,7 @@ class LineChannel(Base):
     """LINE 頻道設定表（對應 line_app/app.py 使用的表）"""
 
     __tablename__ = "line_channels"
+    __table_args__ = ({"comment": "LINE 頻道設定表"},)
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     channel_id = Column(String(100), unique=True, nullable=True, comment="Messaging API Channel ID")
