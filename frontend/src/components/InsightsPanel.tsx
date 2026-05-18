@@ -249,9 +249,9 @@ const FAKE_HEATMAP_MATRIX: Record<"line" | "facebook" | "nonMember", number[][]>
 };
 
 const CHANNELS: { key: Channel; label: string; total: number }[] = [
-  { key: "line", label: "LINE", total: 389 },
-  { key: "facebook", label: "Facebook 會員", total: 79 },
-  { key: "nonMember", label: "官網", total: 70 },
+  { key: "line", label: "LINE", total: 0 },
+  { key: "facebook", label: "Facebook 會員", total: 0 },
+  { key: "nonMember", label: "官網", total: 0 },
 ];
 
 // 每 4 小時為一個區間（6 列）x 7 天（欄）
@@ -858,42 +858,62 @@ function TimeInsightsSection({ reducedMotion }: { reducedMotion: boolean }) {
   const apiChannelKey: Record<Channel, string> = { line: "line", facebook: "facebook", nonMember: "webchat" };
 
   // heatmap 載入（隨 channel 切換 / 館別切換）
+  // 三個 channel 的人次併發載入 → 三個 tab 立即顯示真實值（避免「點下去才更新」誤導）
+  // 但 heatmap matrix / 日期標籤只跟隨當前選中 channel 更新
   useEffect(() => {
-    const load = async (ch: Channel) => {
+    const loadChannel = async (ch: Channel): Promise<TimeSlotInsightsResponse | null> => {
       try {
         const res = await apiGet(
           `/api/v1/analytics/time-slot-insights?channel=${apiChannelKey[ch]}${lineChannelQuery}`,
         );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = (await res.json()) as TimeSlotInsightsResponse;
-        // ⚠️ 假數據注入（還原：把 FAKE_HEATMAP_ENABLED 設為 false）
-        if (FAKE_HEATMAP_ENABLED) {
-          const fakeRows = FAKE_HEATMAP_MATRIX[ch];
-          data.dates.forEach((dateStr, colIdx) => {
-            const fakeColIdx = FAKE_HEATMAP_DATES.indexOf(dateStr);
-            if (fakeColIdx >= 0) {
-              for (let rowIdx = 0; rowIdx < 6; rowIdx++) {
-                if (data.matrix[rowIdx] && fakeRows[rowIdx]) {
-                  data.matrix[rowIdx][colIdx] = fakeRows[rowIdx][fakeColIdx]!;
-                }
-              }
-            }
-          });
-        }
-        setMatrixByChannel((prev) => ({ ...prev, [ch]: data.matrix }));
-        setTotalByChannel((prev) => ({ ...prev, [ch]: data.total_unique_members }));
-        setApiDates(data.dates);
-        // 日期標籤：轉成 'M/D（週X）' 格式
-        const labels = data.dates.map((d, i) => {
-          const [, m, day] = d.split("-");
-          return `${Number(m)}/${Number(day)}（${data.weekdays[i]}）`;
-        });
-        setApiDateLabels(labels);
+        return (await res.json()) as TimeSlotInsightsResponse;
       } catch (err) {
-        console.error("[TimeInsights] load failed:", err);
+        console.error(`[TimeInsights] load ${ch} failed:`, err);
+        return null;
       }
     };
-    load(channel);
+
+    const applyFakeMatrix = (ch: Channel, data: TimeSlotInsightsResponse) => {
+      if (!FAKE_HEATMAP_ENABLED) return;
+      const fakeRows = FAKE_HEATMAP_MATRIX[ch];
+      data.dates.forEach((dateStr, colIdx) => {
+        const fakeColIdx = FAKE_HEATMAP_DATES.indexOf(dateStr);
+        if (fakeColIdx >= 0) {
+          for (let rowIdx = 0; rowIdx < 6; rowIdx++) {
+            if (data.matrix[rowIdx] && fakeRows[rowIdx]) {
+              data.matrix[rowIdx][colIdx] = fakeRows[rowIdx][fakeColIdx]!;
+            }
+          }
+        }
+      });
+    };
+
+    (async () => {
+      const allChannels: Channel[] = ["line", "facebook", "nonMember"];
+      const results = await Promise.all(allChannels.map(loadChannel));
+
+      const totalsUpdate: Partial<Record<Channel, number>> = {};
+      results.forEach((data, idx) => {
+        if (!data) return;
+        const ch = allChannels[idx]!;
+        applyFakeMatrix(ch, data);
+        totalsUpdate[ch] = data.total_unique_members;
+        // 只有當前選中 channel 才更新 matrix + 日期標籤
+        if (ch === channel) {
+          setMatrixByChannel((prev) => ({ ...prev, [ch]: data.matrix }));
+          setApiDates(data.dates);
+          const labels = data.dates.map((d, i) => {
+            const [, m, day] = d.split("-");
+            return `${Number(m)}/${Number(day)}（${data.weekdays[i]}）`;
+          });
+          setApiDateLabels(labels);
+        }
+      });
+      if (Object.keys(totalsUpdate).length > 0) {
+        setTotalByChannel((prev) => ({ ...prev, ...totalsUpdate }));
+      }
+    })();
   }, [channel, lineChannelQuery]);
 
   // 互動旅程明細載入（隨 channel + cell + 館別 切換）
