@@ -230,13 +230,15 @@ export function MembersProvider({ children }: MembersProviderProps) {
     try {
       // 1. 並行取得 LINE 會員 + Webchat 會員（含訪客）+ FB 會員 + FB 粉專列表（先顯示，再同步）
       // 使用 apiGet 自動處理 token 和 401 重試
-      // 全站館別切換：LINE 會員清單帶上 line_channel_id（後端 Phase 1+2 已支援）
+      // 全站館別切換：LINE / Webchat 會員清單都帶 line_channel_id
+      // Webchat 訪客的 members.line_channel_id 是從 webchat_site_id → webchat_site_channels 映射回來，
+      // 沒帶會跨 OA 顯示（漢堂館訪客出現在雷恩館清單）
       const lineChannelParam = selectedLineChannelId
         ? `&line_channel_id=${encodeURIComponent(selectedLineChannelId)}`
         : '';
       const [lineMembersRes, webchatMembersRes, fbMembersRes, fbChannelsRes] = await Promise.all([
         apiGet(`/api/v1/members?channel=line&page=1&page_size=200${lineChannelParam}`),
-        apiGet('/api/v1/members?channel=webchat&page=1&page_size=200'),
+        apiGet(`/api/v1/members?channel=webchat&page=1&page_size=200${lineChannelParam}`),
         jwtToken
           ? fetch(`/api/v1/fb_channels/message-list?jwt_token=${encodeURIComponent(jwtToken)}`)
           : Promise.resolve({ ok: false } as Response),
