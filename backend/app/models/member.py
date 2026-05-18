@@ -34,7 +34,7 @@ class Member(Base):
 
     # 基本資訊
     name = Column(String(32), comment="會員姓名（統一單欄位）")
-    gender = Column(String(1), nullable=False, default="0", server_default="0", comment="性別：0=不透漏/1=男/2=女")
+    gender = Column(String(1), nullable=True, default="0", server_default="0", comment="性別：0=不透漏/1=男/2=女")
     birthday = Column(Date, comment="生日")
     email = Column(String(255), unique=True, index=True, comment="電子信箱")
     phone = Column(String(20), index=True, comment="手機號碼")

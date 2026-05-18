@@ -197,7 +197,7 @@ class BookingRecord(Base):
     )
     selected_rooms = Column(
         JSON,
-        nullable=False,
+        nullable=True,
         comment="多房型混搭快照陣列，格式 [{room_type_code, room_type_name, room_count, source}]",
     )
     room_type_code = Column(
@@ -221,11 +221,11 @@ class BookingRecord(Base):
         SmallInteger, nullable=False, comment="總大人數（由 selected_rooms 累加）"
     )
     member_name = Column(
-        String(100), nullable=False, comment="訪客姓名快照（訂房當下的值）"
+        String(100), nullable=True, comment="訪客姓名快照（訂房當下的值）"
     )
-    member_phone = Column(String(20), nullable=False, comment="訪客電話快照，10 位數字")
+    member_phone = Column(String(20), nullable=True, comment="訪客電話快照，10 位數字")
     member_email = Column(
-        String(255), nullable=False, comment="訪客 Email 快照，需含 @"
+        String(255), nullable=True, comment="訪客 Email 快照，需含 @"
     )
     cart_url = Column(
         String(500),
