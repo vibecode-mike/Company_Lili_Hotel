@@ -1335,6 +1335,7 @@ class ChatbotService:
                     room_cards=room_cards,
                     site_id=site_id,
                     site_name=site_name,
+                    unanswered=ctx.unanswered,
                 )
             except Exception as exc:
                 logger.warning(f"[chatbot] persist widget conversation failed: {exc}")
@@ -1423,6 +1424,7 @@ class ChatbotService:
         room_cards: List[RoomCardSchema],
         site_id: Optional[str] = None,
         site_name: Optional[str] = None,
+        unanswered: bool = False,
     ) -> Member:
         """把 widget 一輪對話（user + bot）寫入 conversation_threads / messages，回傳對應的 Member。
 
@@ -1513,6 +1515,8 @@ class ChatbotService:
         )
 
         # 4. 寫入 bot 回覆（純文字）— +1ms 確保排在使用者訊息後
+        # unanswered=ctx.unanswered：mark_unanswerable tool 觸發或保險網命中時為 True
+        # 供 analytics「AI 未能回答」/ 行動建議統計，與 LINE 端 line_app/app.py:3187 對齊
         if bot_reply:
             db.add(
                 ConversationMessage(
@@ -1523,6 +1527,7 @@ class ChatbotService:
                     role="assistant",
                     content=bot_reply,
                     message_source="gpt",
+                    unanswered=unanswered,
                     created_at=now + timedelta(milliseconds=1),
                 )
             )
@@ -3459,7 +3464,9 @@ class ChatbotService:
         existing = existing_result.scalar_one_or_none()
         now = datetime.now()
         # widget 流程 = Webchat 平台
-        webchat_channel = member.webchat_site_id
+        # channel_id 用 LINE OA channel_id（webchat 訪客 register 時已映射），
+        # 與 resolve_for_member 對齊，讓 analytics / 多 OA 隔離跨平台用同一個 key
+        webchat_channel = member.line_channel_id
         if existing:
             existing.click_count = (existing.click_count or 1) + 1
             existing.last_triggered_at = now

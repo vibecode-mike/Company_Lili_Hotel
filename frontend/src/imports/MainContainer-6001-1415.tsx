@@ -11,6 +11,7 @@ import { TextIconButton, ArrowRightIcon, Tag } from "../components/common";
 import { MemberSourceIconLarge, ChannelIcon as CommonChannelIcon } from "../components/common/icons";
 import { CustomScrollbar } from "../components/MemberTagEditModal";
 import { useMembers } from "../contexts/MembersContext";
+import { useChannel } from "../contexts/ChannelContext";
 import { formatMemberDateTime, getLatestMemberChatTimestamp, formatUnansweredTime } from "../utils/memberTime";
 import { apiGet } from "../utils/apiClient";
 
@@ -1171,6 +1172,8 @@ export default function MainContainer({
   initialPlatformChannel,
 }: MemberMainContainerProps = {}) {
   const { displayMembers, isLoading, error } = useMembers();
+  const { selectedChannel } = useChannel();
+  const selectedLineChannelId = selectedChannel?.channel_id ?? '';
   const [searchValue, setSearchValue] = useState('');
   const [appliedSearchValue, setAppliedSearchValue] = useState('');
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
@@ -1247,11 +1250,15 @@ export default function MainContainer({
   }, []);
 
   // 拉標籤池：合併會員 + 互動 + 轉單三類後去重排序
+  // 帶 channel_id：多 OA 隔離，下拉選單只顯示當前分館的標籤
   useEffect(() => {
     let cancelled = false;
     async function loadTagPool() {
       try {
-        const res = await apiGet('/api/v1/tags/available-options');
+        const url = selectedLineChannelId
+          ? `/api/v1/tags/available-options?channel_id=${encodeURIComponent(selectedLineChannelId)}`
+          : '/api/v1/tags/available-options';
+        const res = await apiGet(url);
         if (!res.ok) return;
         const json = await res.json();
         const data = json?.data ?? {};
@@ -1273,7 +1280,7 @@ export default function MainContainer({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedLineChannelId]);
 
   // 合併 API 綁定帳號 + 從會員資料反推的 Webchat 站點
   const boundChannels = useMemo<BoundChannel[]>(() => {

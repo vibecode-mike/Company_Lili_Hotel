@@ -109,9 +109,13 @@ async def get_ai_coverage(
     start_dt = datetime.combine(start, datetime.min.time())
     end_dt = datetime.combine(end + timedelta(days=1), datetime.min.time())
 
-    # 多 OA 隔離：透過 thread_id → members.line_uid → line_channel_id 過濾
+    # 多 OA 隔離：透過 thread_id → members.line_uid / webchat_uid → line_channel_id 過濾
     # 為避免 conversation_messages.created_at vs members.created_at 欄位 ambiguous，全部加 cm. 前綴
-    daily_join = " JOIN members mem ON mem.line_uid = cm.thread_id" if line_channel_id else ""
+    # JOIN 條件兼顧 LINE / Webchat：LINE 端 thread_id=line_uid，Webchat 端 thread_id=webchat_uid
+    daily_join = (
+        " JOIN members mem ON mem.line_uid = cm.thread_id OR mem.webchat_uid = cm.thread_id"
+        if line_channel_id else ""
+    )
     daily_filter = " AND mem.line_channel_id = :line_channel_id" if line_channel_id else ""
     daily_params = {"start_dt": start_dt, "end_dt": end_dt}
     if line_channel_id:
@@ -152,7 +156,10 @@ async def get_ai_coverage(
 
     # 2. 未解 top N：取每筆未解訊息 + 前一筆 user 訊息（= 觸發問題）
     #    用 LEFT JOIN 找同 thread 最近一筆 created_at 更早的 user/incoming 訊息
-    top_join = " JOIN members mem2 ON mem2.line_uid = m.thread_id" if line_channel_id else ""
+    top_join = (
+        " JOIN members mem2 ON mem2.line_uid = m.thread_id OR mem2.webchat_uid = m.thread_id"
+        if line_channel_id else ""
+    )
     top_filter = " AND mem2.line_channel_id = :line_channel_id" if line_channel_id else ""
     top_params = {"start_dt": start_dt, "end_dt": end_dt, "top_n": top_n}
     if line_channel_id:
@@ -322,11 +329,13 @@ async def get_pending_conversations(
     if line_channel_id:
         params["line_channel_id"] = line_channel_id
 
+    # platform: 包含 Webchat，讓 widget 訪客的 unanswered 對話也納入
+    # JOIN: thread_id 對 LINE 是 line_uid，對 Webchat 是 webchat_uid（=browser_key），都要試
     sql = text(f"""
         WITH last_msg AS (
             SELECT thread_id, MAX(created_at) AS max_ts
             FROM conversation_messages
-            WHERE platform = 'LINE' OR platform IS NULL
+            WHERE platform IN ('LINE', 'Webchat') OR platform IS NULL
             GROUP BY thread_id
         ),
         pending AS (
@@ -352,7 +361,8 @@ async def get_pending_conversations(
                mem.name AS real_name,
                mem.line_avatar
         FROM pending p
-        LEFT JOIN members mem ON mem.line_uid = p.thread_id
+        LEFT JOIN members mem
+          ON mem.line_uid = p.thread_id OR mem.webchat_uid = p.thread_id
         WHERE 1=1{member_filter}
         ORDER BY p.pending_since DESC
         LIMIT :lim
@@ -390,15 +400,18 @@ async def get_pending_conversations(
         ))
 
     # total = 符合條件的總筆數（不受 limit 影響）
-    # 多 OA 隔離：透過 JOIN members 過濾
+    # 多 OA 隔離：透過 JOIN members 過濾（LINE / Webchat 都要 JOIN）
     total_member_filter = " AND mem2.line_channel_id = :line_channel_id" if line_channel_id else ""
-    total_join = " LEFT JOIN members mem2 ON mem2.line_uid = m.thread_id" if line_channel_id else ""
+    total_join = (
+        " LEFT JOIN members mem2 ON mem2.line_uid = m.thread_id OR mem2.webchat_uid = m.thread_id"
+        if line_channel_id else ""
+    )
     total_params = {"line_channel_id": line_channel_id} if line_channel_id else {}
     total_sql = text(f"""
         WITH last_msg AS (
             SELECT thread_id, MAX(created_at) AS max_ts
             FROM conversation_messages
-            WHERE platform = 'LINE' OR platform IS NULL
+            WHERE platform IN ('LINE', 'Webchat') OR platform IS NULL
             GROUP BY thread_id
         )
         SELECT COUNT(*)

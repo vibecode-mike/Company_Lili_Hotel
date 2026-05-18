@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useLayoutEffect, KeyboardEvent, R
 import svgPaths from '../imports/svg-pen3bccldb';
 import { useToast } from './ToastProvider';
 import { Tag } from './common';
+import { useChannel } from '../contexts/ChannelContext';
 
 /**
  * Custom scrollbar：以 absolute div 自繪 scrollbar，避免依賴瀏覽器/作業系統原生 scrollbar 的可見性。
@@ -128,6 +129,8 @@ export default function MemberTagEditModal({
   onSave,
 }: MemberTagEditModalProps) {
   const { showToast } = useToast();
+  const { selectedChannel } = useChannel();
+  const selectedLineChannelId = selectedChannel?.channel_id ?? '';
   const [searchInput, setSearchInput] = useState('');
   const isComposingRef = useRef(false);
   const [selectedMemberTags, setSelectedMemberTags] = useState<string[]>([]);
@@ -148,7 +151,11 @@ export default function MemberTagEditModal({
       }
 
       try {
-        const response = await fetch('/api/v1/tags/available-options', {
+        // 帶 channel_id：多 OA 隔離，避免標籤池跨分館混雜
+        const url = selectedLineChannelId
+          ? `/api/v1/tags/available-options?channel_id=${encodeURIComponent(selectedLineChannelId)}`
+          : '/api/v1/tags/available-options';
+        const response = await fetch(url, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -173,7 +180,7 @@ export default function MemberTagEditModal({
       setSearchInput('');
       fetchAvailableTags();
     }
-  }, [isOpen, initialMemberTags, initialInteractionTags, showToast]);
+  }, [isOpen, initialMemberTags, initialInteractionTags, showToast, selectedLineChannelId]);
 
   // 模糊比對：子字串 case-insensitive
   const fuzzyMatch = (str: string, pattern: string): boolean => {
