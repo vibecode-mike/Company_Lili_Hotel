@@ -653,7 +653,7 @@ export const RoomEditModal = memo(function RoomEditModal({
               </button>
             </div>
 
-            {/* "前往串接 PMS" — only when NOT connected */}
+            {/* "前往 PMS 環境啟用" — only when NOT connected */}
             {!isPmsConnected && (
               <button
                 type="button"
@@ -661,7 +661,7 @@ export const RoomEditModal = memo(function RoomEditModal({
                 className="flex items-center justify-center px-[8px] py-[8px] rounded-[8px] hover:bg-[#f5f9fe] active:bg-[#f5f9fe] transition-colors cursor-pointer border-none bg-transparent shrink-0 mr-[4px]"
               >
                 <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#0f6beb] whitespace-nowrap">
-                  前往串接 PMS
+                  前往 PMS 環境啟用
                 </span>
               </button>
             )}
