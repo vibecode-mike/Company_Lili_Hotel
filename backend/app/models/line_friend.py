@@ -50,4 +50,4 @@ class LineFriend(Base):
     unfollowed_at = Column(DateTime, nullable=True, comment="最後取消關注時間")
     last_interaction_at = Column(DateTime, nullable=True, comment="最後互動時間")
     created_at = Column(DateTime, server_default=func.now(), comment="建立時間")
-    updated_at = Column(DateTime, onupdate=func.now(), comment="更新時間")
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment="更新時間")
