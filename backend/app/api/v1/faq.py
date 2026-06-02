@@ -472,6 +472,43 @@ def _build_export_rows(rules) -> list[list[str]]:
     return rows
 
 
+def _write_table_file(
+    headers: list[str], rows: list[list[str]], fmt: str
+) -> tuple[bytes, str]:
+    """將 headers + rows 寫成檔案 bytes，回傳 (file_bytes, media_type)"""
+    if fmt == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(headers)
+        for row in rows:
+            writer.writerow(row)
+        return output.getvalue().encode("utf-8-sig"), "text/csv"
+
+    if fmt == "xlsx":
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(headers)
+        for row in rows:
+            ws.append(row)
+        buf = io.BytesIO()
+        wb.save(buf)
+        return (
+            buf.getvalue(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    wb = xlwt.Workbook(encoding="utf-8")
+    ws = wb.add_sheet("rules")
+    for c, header in enumerate(headers):
+        ws.write(0, c, header)
+    for r, row in enumerate(rows):
+        for c, val in enumerate(row):
+            ws.write(r + 1, c, val)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue(), "application/vnd.ms-excel"
+
+
 @router.get("/categories/{category_id}/rules/export")
 async def export_rules(
     category_id: int,
@@ -482,43 +519,39 @@ async def export_rules(
     """匯出分類下所有規則（支援 csv/xls/xlsx）"""
     rules = await faq_service.export_rules(db, category_id)
     rows = _build_export_rows(rules)
+    file_bytes, media_type = _write_table_file(EXPORT_HEADERS, rows, format)
+    filename = f"rules_export.{format}"
 
-    if format == "csv":
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(EXPORT_HEADERS)
-        for row in rows:
-            writer.writerow(row)
-        file_bytes = output.getvalue().encode("utf-8-sig")
-        media_type = "text/csv"
-        filename = "rules_export.csv"
+    return StreamingResponse(
+        io.BytesIO(file_bytes),
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
-    elif format == "xlsx":
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.append(EXPORT_HEADERS)
-        for row in rows:
-            ws.append(row)
-        buf = io.BytesIO()
-        wb.save(buf)
-        file_bytes = buf.getvalue()
-        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        filename = "rules_export.xlsx"
 
-    else:  # xls
-        wb = xlwt.Workbook(encoding="utf-8")
-        ws = wb.add_sheet("rules")
-        for c, header in enumerate(EXPORT_HEADERS):
-            ws.write(0, c, header)
-        for r, row in enumerate(rows):
-            for c, val in enumerate(row):
-                ws.write(r + 1, c, val)
-        buf = io.BytesIO()
-        wb.save(buf)
-        file_bytes = buf.getvalue()
-        media_type = "application/vnd.ms-excel"
-        filename = "rules_export.xls"
+# 訂房規則範本：欄位順序對應 EXPORT_HEADERS / FIELD_MAPPING
+TEMPLATE_EXAMPLE_ROW = [
+    "https://example.com/room.jpg",
+    "豪華雙人房",
+    "3500",
+    "2",
+    "5",
+    "海景陽台、免費早餐",
+    "VIP",
+    "https://example.com/booking/deluxe",
+]
 
+
+@router.get("/templates/booking-rules")
+async def download_booking_rules_template(
+    format: str = Query("csv", regex="^(csv|xls|xlsx)$"),
+    current_user: User = Depends(get_current_user),
+):
+    """下載訂房規則匯入範本（標題列 + 1 筆範例）"""
+    file_bytes, media_type = _write_table_file(
+        EXPORT_HEADERS, [TEMPLATE_EXAMPLE_ROW], format
+    )
+    filename = f"rules_template.{format}"
     return StreamingResponse(
         io.BytesIO(file_bytes),
         media_type=media_type,

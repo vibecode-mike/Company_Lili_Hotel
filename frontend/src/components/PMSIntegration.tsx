@@ -753,6 +753,29 @@ const PMSDataTable = memo(function PMSDataTable({
     }
   }, [categoryId, showToast]);
 
+  const handleDownloadTemplate = useCallback(async (format: "csv" | "xls" | "xlsx") => {
+    try {
+      const token = getAuthToken() || "";
+      const res = await fetch(
+        `/api/v1/faq/templates/booking-rules?format=${format}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) {
+        showToast("下載範本失敗", "error");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `rules_template.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      showToast("下載範本失敗", "error");
+    }
+  }, [showToast]);
+
   const handleToggle = useCallback(
     async (id: string, value: boolean) => {
       const room = rooms.find((r) => r.id === id);
@@ -1071,7 +1094,7 @@ const PMSDataTable = memo(function PMSDataTable({
         <div className="flex gap-[4px] self-stretch shrink-0 items-center">
           {viewMode === "faq" && (
             <>
-              <CategoryTitleDropdown onImport={handleImport} onExport={handleExport} />
+              <CategoryTitleDropdown onImport={handleImport} onExport={handleExport} onDownloadTemplate={handleDownloadTemplate} />
               <button
                 type="button"
                 onClick={() => {
@@ -1127,34 +1150,37 @@ const PMSDataTable = memo(function PMSDataTable({
       </div>
       )}
 
-      {/* Both-empty toolbar: only 新增規則 */}
+      {/* Both-empty toolbar: 下載範本 + 新增規則 */}
       {bothEmpty && (
         <div className="flex items-center w-full">
           <div className="flex-1" />
-          <button
-            type="button"
-            onClick={() => {
-              if (!categoryId) return;
-              const newId = `new-${Date.now()}`;
-              const newRoom: RoomRecord = {
-                id: newId, roomType: "", image: "", pricePerNight: 0, maxGuests: 0,
-                remainingRooms: "", features: "", memberTags: [], url: "",
-                lastUpdated: "—", enabled: false, published: false,
-                pmsRoomCode: "", customImageUrl: "",
-              };
-              setEditingRoom(newRoom);
-              setEditDraft({
-                customRoomName: "", customImageUrl: "", customPrice: "",
-                customGuests: "", customRemaining: "", features: "",
-                memberTags: [], bookingUrl: "",
-              });
-            }}
-            className="flex items-center justify-center px-[12px] py-[8px] rounded-[16px] shrink-0 cursor-pointer hover:bg-[#f0f6ff] active:bg-[#dce8fc] transition-colors duration-150"
-          >
-            <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#0f6beb] text-center whitespace-nowrap">
-              新增規則
-            </span>
-          </button>
+          <div className="flex gap-[4px] items-center">
+            <CategoryTitleDropdown onDownloadTemplate={handleDownloadTemplate} />
+            <button
+              type="button"
+              onClick={() => {
+                if (!categoryId) return;
+                const newId = `new-${Date.now()}`;
+                const newRoom: RoomRecord = {
+                  id: newId, roomType: "", image: "", pricePerNight: 0, maxGuests: 0,
+                  remainingRooms: "", features: "", memberTags: [], url: "",
+                  lastUpdated: "—", enabled: false, published: false,
+                  pmsRoomCode: "", customImageUrl: "",
+                };
+                setEditingRoom(newRoom);
+                setEditDraft({
+                  customRoomName: "", customImageUrl: "", customPrice: "",
+                  customGuests: "", customRemaining: "", features: "",
+                  memberTags: [], bookingUrl: "",
+                });
+              }}
+              className="flex items-center justify-center px-[12px] py-[8px] rounded-[16px] shrink-0 cursor-pointer hover:bg-[#f0f6ff] active:bg-[#dce8fc] transition-colors duration-150"
+            >
+              <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#0f6beb] text-center whitespace-nowrap">
+                新增規則
+              </span>
+            </button>
+          </div>
         </div>
       )}
 

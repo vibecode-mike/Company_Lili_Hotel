@@ -19,6 +19,7 @@ import {
 interface CategoryTitleDropdownProps {
   onImport?: (file: File) => void;
   onExport?: (format: "csv" | "xls" | "xlsx") => void;
+  onDownloadTemplate?: (format: "csv" | "xls" | "xlsx") => void;
 }
 
 const ACCEPTED_FORMATS = ".csv,.xls,.xlsx";
@@ -50,8 +51,10 @@ const EXPORT_OPTIONS: { label: string; value: "csv" | "xls" | "xlsx" }[] = [
 export default function CategoryTitleDropdown({
   onImport,
   onExport,
+  onDownloadTemplate,
 }: CategoryTitleDropdownProps) {
   const [open, setOpen] = React.useState(false);
+  const [templateOpen, setTemplateOpen] = React.useState(false);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [pendingFile, setPendingFile] = React.useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -97,35 +100,66 @@ export default function CategoryTitleDropdown({
         onChange={handleFileChange}
       />
 
+      {/* 下載範本 button + dropdown for format */}
+      {onDownloadTemplate && (
+        <DropdownMenu open={templateOpen} onOpenChange={setTemplateOpen}>
+          <DropdownMenuTrigger asChild>
+            <button type="button" className={`${btnClass} gap-[2px]`}>
+              <span className={btnTextClass}>下載範本</span>
+              {templateOpen ? <ChevronUp /> : <ChevronDown />}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            sideOffset={4}
+            className="min-w-[200px] bg-white rounded-[8px] border border-[#ddd] shadow-[0px_4px_12px_rgba(0,0,0,0.08)] p-[4px] z-50"
+          >
+            {EXPORT_OPTIONS.map((opt) => (
+              <DropdownMenuItem
+                key={`template-${opt.value}`}
+                onClick={() => onDownloadTemplate(opt.value)}
+                className="px-[12px] py-[8px] text-[14px] font-['Noto_Sans_TC',sans-serif] font-normal text-[#383838] leading-[1.5] rounded-[4px] cursor-pointer hover:bg-[#f5f5f5] outline-none"
+              >
+                {opt.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+
       {/* 匯入 button */}
-      <button type="button" onClick={handleImportClick} className={btnClass}>
-        <span className={btnTextClass}>匯入</span>
-      </button>
+      {onImport && (
+        <button type="button" onClick={handleImportClick} className={btnClass}>
+          <span className={btnTextClass}>匯入</span>
+        </button>
+      )}
 
       {/* 匯出 button + dropdown for format */}
-      <DropdownMenu open={open} onOpenChange={setOpen}>
-        <DropdownMenuTrigger asChild>
-          <button type="button" className={`${btnClass} gap-[2px]`}>
-            <span className={btnTextClass}>匯出</span>
-            {open ? <ChevronUp /> : <ChevronDown />}
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="end"
-          sideOffset={4}
-          className="min-w-[200px] bg-white rounded-[8px] border border-[#ddd] shadow-[0px_4px_12px_rgba(0,0,0,0.08)] p-[4px] z-50"
-        >
-          {EXPORT_OPTIONS.map((opt) => (
-            <DropdownMenuItem
-              key={`export-${opt.value}`}
-              onClick={() => onExport?.(opt.value)}
-              className="px-[12px] py-[8px] text-[14px] font-['Noto_Sans_TC',sans-serif] font-normal text-[#383838] leading-[1.5] rounded-[4px] cursor-pointer hover:bg-[#f5f5f5] outline-none"
-            >
-              {opt.label}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {onExport && (
+        <DropdownMenu open={open} onOpenChange={setOpen}>
+          <DropdownMenuTrigger asChild>
+            <button type="button" className={`${btnClass} gap-[2px]`}>
+              <span className={btnTextClass}>匯出</span>
+              {open ? <ChevronUp /> : <ChevronDown />}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            sideOffset={4}
+            className="min-w-[200px] bg-white rounded-[8px] border border-[#ddd] shadow-[0px_4px_12px_rgba(0,0,0,0.08)] p-[4px] z-50"
+          >
+            {EXPORT_OPTIONS.map((opt) => (
+              <DropdownMenuItem
+                key={`export-${opt.value}`}
+                onClick={() => onExport(opt.value)}
+                className="px-[12px] py-[8px] text-[14px] font-['Noto_Sans_TC',sans-serif] font-normal text-[#383838] leading-[1.5] rounded-[4px] cursor-pointer hover:bg-[#f5f5f5] outline-none"
+              >
+                {opt.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
 
       {/* 匯入確認彈窗 */}
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
