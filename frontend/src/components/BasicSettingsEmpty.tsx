@@ -178,12 +178,12 @@ export const BasicSettingsEmpty = memo(function BasicSettingsEmpty({
                       <div className="content-stretch flex flex-col h-full items-start justify-center relative">
                         <div className="relative shrink-0 w-full">
                           <p className="font-['Inter',sans-serif] font-normal leading-[28px] relative shrink-0 text-[#0a0a0a] text-[18px] tracking-[-0.44px]">
-                            官網彈窗
+                            官網彈窗機器人
                           </p>
                         </div>
                         <div className="relative shrink-0 w-full">
                           <p className="font-['Inter',sans-serif] font-normal leading-[24px] relative shrink-0 text-[#6e6e6e] text-[16px] whitespace-nowrap tracking-[-0.31px]">
-                            建立組織（免 LINE）
+                            建立組織
                           </p>
                         </div>
                       </div>

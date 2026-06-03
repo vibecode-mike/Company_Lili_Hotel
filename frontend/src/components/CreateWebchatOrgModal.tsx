@@ -58,7 +58,7 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="font-['Noto_Sans_TC',sans-serif] text-[20px] text-[#242424] mb-[4px]">
-          官網彈窗（免 LINE）
+          官網彈窗機器人
         </h2>
         <p className="font-['Noto_Sans_TC',sans-serif] text-[14px] text-[#6e6e6e] mb-[20px]">
           建立一個不需要 LINE 的組織，只用官網彈窗客服。只需填組織名稱即可，
