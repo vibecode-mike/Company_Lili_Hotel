@@ -2,6 +2,7 @@ import { useState, KeyboardEvent, useRef, useEffect } from 'react';
 import svgPaths from '../imports/svg-er211vihwc';
 import toggleSvgPaths from '../imports/svg-eulbcts4ba';
 import { Tag as TagComponent } from './common';
+import { useChannel } from '../contexts/ChannelContext';
 
 interface Tag {
   id: string;
@@ -22,6 +23,7 @@ const MAX_TAGS = 20; // 标签数量上限
 const MAX_TAG_LENGTH = 20; // 标签名称字符数上限
 
 export default function FilterModal({ onClose, onConfirm, initialSelectedTags, initialIsInclude, channelId }: FilterModalProps) {
+  const { selectedChannel } = useChannel();
   const [memberTags, setMemberTags] = useState<Tag[]>([]);
   const [interactionTags, setInteractionTags] = useState<Tag[]>([]);
   const [conversionTags, setConversionTags] = useState<Tag[]>([]);
@@ -41,7 +43,10 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
       setIsLoading(true);
       try {
         const token = localStorage.getItem('token');
-        const url = channelId
+        // 組織隔離：無 LINE 組織用 tenant_id；否則沿用傳入的 channelId
+        const url = selectedChannel?.tenant_id
+          ? `/api/v1/tags/available-options?tenant_id=${selectedChannel.tenant_id}`
+          : channelId
           ? `/api/v1/tags/available-options?channel_id=${encodeURIComponent(channelId)}`
           : '/api/v1/tags/available-options';
         const response = await fetch(url, {
@@ -83,7 +88,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
     };
 
     fetchAvailableTags();
-  }, [channelId]);
+  }, [channelId, selectedChannel?.tenant_id]);
 
   // 根據當前 Tab 獲取顯示的標籤
   const displayTags = activeTab === 'member'

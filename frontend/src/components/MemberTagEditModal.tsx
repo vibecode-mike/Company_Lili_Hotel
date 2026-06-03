@@ -151,8 +151,10 @@ export default function MemberTagEditModal({
       }
 
       try {
-        // 帶 channel_id：多 OA 隔離，避免標籤池跨分館混雜
-        const url = selectedLineChannelId
+        // 組織隔離：無 LINE 組織用 tenant_id；LINE 組織沿用 channel_id
+        const url = selectedChannel?.tenant_id
+          ? `/api/v1/tags/available-options?tenant_id=${selectedChannel.tenant_id}`
+          : selectedLineChannelId
           ? `/api/v1/tags/available-options?channel_id=${encodeURIComponent(selectedLineChannelId)}`
           : '/api/v1/tags/available-options';
         const response = await fetch(url, {
