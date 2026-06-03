@@ -38,6 +38,7 @@ async def get_tags(
     sort_order: Optional[str] = Query("desc", pattern="^(asc|desc)$"),
     platform: Optional[str] = Query(None, description="按平台過濾：LINE / Facebook / Webchat"),
     channel_id: Optional[str] = Query(None, description="按頻道過濾：LINE channel_id / FB page_id / Webchat site_id"),
+    tenant_id: Optional[int] = Query(None, description="按組織過濾（提供時優先於 channel_id）"),
     page_params: PageParams = Depends(),
     db: AsyncSession = Depends(get_db),
     # current_user: User = Depends(get_current_user),  # 暫時移除認證，開發階段使用
@@ -70,7 +71,10 @@ async def get_tags(
             query = query.where(MemberTag.tag_source == source)
         if platform:
             query = query.where(MemberTag.platform == platform)
-        if channel_id:
+        # 組織隔離優先；否則退回 channel_id
+        if tenant_id is not None:
+            query = query.where(MemberTag.tenant_id == tenant_id)
+        elif channel_id:
             query = query.where(MemberTag.channel_id == channel_id)
 
         # 排序
@@ -107,12 +111,14 @@ async def get_tags(
             # 使用轉義的 LIKE 模式
             escaped_search = InputValidator.escape_like_pattern(search)
             query = query.where(InteractionTag.tag_name.like(f"%{escaped_search}%", escape='\\'))
-        # 帶 channel_id 時：互動標籤定義為全局，但只回傳「在該頻道被會員觸發過」的
-        if channel_id or platform:
+        # 帶 channel_id / 組織時：互動標籤定義為全局，但只回傳「在該範圍被會員觸發過」的
+        if channel_id or platform or tenant_id is not None:
             subq = select(MemberInteractionTag.tag_name)
             if platform:
                 subq = subq.where(MemberInteractionTag.platform == platform)
-            if channel_id:
+            if tenant_id is not None:
+                subq = subq.where(MemberInteractionTag.tenant_id == tenant_id)
+            elif channel_id:
                 subq = subq.where(MemberInteractionTag.channel_id == channel_id)
             query = query.where(InteractionTag.tag_name.in_(subq))
 
@@ -158,6 +164,7 @@ async def get_tags(
 async def get_available_tag_options(
     platform: Optional[str] = Query(None, description="按平台過濾：LINE / Facebook / Webchat"),
     channel_id: Optional[str] = Query(None, description="按頻道過濾：LINE channel_id / FB page_id / Webchat site_id"),
+    tenant_id: Optional[int] = Query(None, description="按組織過濾（提供時優先於 channel_id）"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -173,7 +180,9 @@ async def get_available_tag_options(
     member_tags_query = select(MemberTag.tag_name).distinct().order_by(MemberTag.tag_name)
     if platform:
         member_tags_query = member_tags_query.where(MemberTag.platform == platform)
-    if channel_id:
+    if tenant_id is not None:
+        member_tags_query = member_tags_query.where(MemberTag.tenant_id == tenant_id)
+    elif channel_id:
         member_tags_query = member_tags_query.where(MemberTag.channel_id == channel_id)
     member_result = await db.execute(member_tags_query)
     member_tag_names = [row[0] for row in member_result.all()]
@@ -187,11 +196,13 @@ async def get_available_tag_options(
     # 來源 1: 自動產生的互動標籤 (InteractionTag) — 全歸互動標籤
     # 若帶 channel_id，僅顯示「在該頻道被會員觸發過」的定義
     auto_tags_query = select(InteractionTag.tag_name).distinct()
-    if platform or channel_id:
+    if platform or channel_id or tenant_id is not None:
         subq = select(MemberInteractionTag.tag_name)
         if platform:
             subq = subq.where(MemberInteractionTag.platform == platform)
-        if channel_id:
+        if tenant_id is not None:
+            subq = subq.where(MemberInteractionTag.tenant_id == tenant_id)
+        elif channel_id:
             subq = subq.where(MemberInteractionTag.channel_id == channel_id)
         auto_tags_query = auto_tags_query.where(InteractionTag.tag_name.in_(subq))
     auto_result = await db.execute(auto_tags_query)
@@ -203,7 +214,9 @@ async def get_available_tag_options(
     mit_query = select(MemberInteractionTag.tag_name, MemberInteractionTag.tag_source).distinct()
     if platform:
         mit_query = mit_query.where(MemberInteractionTag.platform == platform)
-    if channel_id:
+    if tenant_id is not None:
+        mit_query = mit_query.where(MemberInteractionTag.tenant_id == tenant_id)
+    elif channel_id:
         mit_query = mit_query.where(MemberInteractionTag.channel_id == channel_id)
     mit_result = await db.execute(mit_query)
     for tag_name, tag_source in mit_result.all():

@@ -436,6 +436,7 @@ async def get_auto_responses(
     line_channel_id: Optional[str] = Query(
         None, description="特定 LINE OA channel_id；提供時只回傳該分館的自動回應"
     ),
+    tenant_id: Optional[int] = Query(None, description="特定組織 ID（提供時優先於 line_channel_id）"),
     jwt_token: Optional[str] = Query(None, description="FB JWT token for fetching FB auto-responses"),
     db: AsyncSession = Depends(get_db),
 ):
@@ -465,10 +466,13 @@ async def get_auto_responses(
     if is_active is not None:
         query = query.where(AutoResponse.is_active == is_active)
 
-    # 多 OA 隔離：篩出該分館的自動回應
-    # 由於 AutoResponse.channel_id 可能存 LINE channel_id 或 basic_id（@ 開頭），
-    # 同一個 LINE OA 的兩種識別碼都要比對
-    if line_channel_id:
+    # 組織隔離優先（支援無 LINE 組織）；否則退回多 OA line_channel_id
+    if tenant_id is not None:
+        query = query.where(AutoResponse.tenant_id == tenant_id)
+    elif line_channel_id:
+        # 多 OA 隔離：篩出該分館的自動回應
+        # 由於 AutoResponse.channel_id 可能存 LINE channel_id 或 basic_id（@ 開頭），
+        # 同一個 LINE OA 的兩種識別碼都要比對
         ch_row = await db.execute(
             select(LineChannel).where(LineChannel.channel_id == line_channel_id)
         )
