@@ -74,8 +74,8 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
         <h2 className="font-['Noto_Sans_TC',sans-serif] text-[20px] text-[#242424] mb-[4px]">
           官網彈窗客服
         </h2>
-        <p className="font-['Noto_Sans_TC',sans-serif] text-[14px] text-[#6e6e6e] mb-[20px]">
-          在官網加上一個聊天視窗，訪客可以直接在網站上和客服對話。
+        <p className="font-['Noto_Sans_TC',sans-serif] text-[14px] text-[#6e6e6e] leading-[20px] mb-[20px]">
+          於官方網站嵌入即時線上客服視窗。訪客瀏覽網站時可直接開啟對話，向客服人員或自動客服諮詢，無需另外安裝任何軟體。
         </p>
 
         <label className="block font-['Noto_Sans_TC',sans-serif] text-[14px] text-[#383838] mb-[6px]">
@@ -87,8 +87,9 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
           onChange={(e) => setName(e.target.value)}
           placeholder="例：台北館"
           maxLength={100}
-          className="w-full border border-[#b6c8f1] rounded-[8px] px-3 py-2 text-[14px] mb-[16px] outline-none focus:border-[#0f6beb]"
+          className="w-full border border-[#b6c8f1] rounded-[8px] px-3 py-2 text-[14px] mb-[6px] outline-none focus:border-[#0f6beb]"
         />
+        <p className="text-[12px] text-[#9aa0ab] mb-[16px]">用於後台識別此組織，例如館別或客戶名稱。</p>
 
         <label className="block font-['Noto_Sans_TC',sans-serif] text-[14px] text-[#383838] mb-[6px]">
           官網代號（選填）
@@ -101,7 +102,9 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
           maxLength={50}
           className="w-full border border-[#b6c8f1] rounded-[8px] px-3 py-2 text-[14px] mb-[6px] outline-none focus:border-[#0f6beb]"
         />
-        <p className="text-[12px] text-[#9aa0ab] mb-[16px]">英文或數字，用來代表這個官網（之後產生安裝碼用）。</p>
+        <p className="text-[12px] text-[#9aa0ab] mb-[16px] leading-[18px]">
+          由英文或數字組成，用於識別要安裝客服視窗的官網。填寫後系統會自動產生對應的安裝程式碼。
+        </p>
 
         {error && <p className="text-[13px] text-[#d33] mb-[12px]">{error}</p>}
         {success && <p className="text-[13px] text-[#1a7f37] mb-[12px]">{success}</p>}
@@ -109,7 +112,7 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
         {embedCode && (
           <div className="mb-[12px]">
             <div className="flex items-center justify-between mb-[6px]">
-              <p className="text-[14px] text-[#383838]">安裝程式碼（交給網站工程師貼到官網）</p>
+              <p className="text-[14px] text-[#383838]">安裝程式碼</p>
               <button
                 type="button"
                 onClick={handleCopy}
@@ -129,6 +132,9 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
               onClick={(e) => (e.target as HTMLTextAreaElement).select()}
               className="w-full h-[64px] border border-[#b6c8f1] rounded-[8px] px-3 py-2 text-[12px] font-mono bg-[#f6f9fd] outline-none resize-none"
             />
+            <p className="text-[12px] text-[#9aa0ab] mt-[6px] leading-[18px]">
+              請將此程式碼提供給貴公司的網站維護人員，安裝至官網後即可在網站上顯示客服視窗。
+            </p>
           </div>
         )}
 

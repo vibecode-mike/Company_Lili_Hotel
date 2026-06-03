@@ -75,7 +75,7 @@ export function PmsConnectModal({ onClose }: PmsConnectModalProps) {
       <div className="bg-white rounded-[16px] w-full max-w-[460px] p-[28px] shadow-xl" onClick={(e) => e.stopPropagation()}>
         <h2 className="font-['Noto_Sans_TC',sans-serif] text-[20px] text-[#242424] mb-[4px]">PMS 串接</h2>
         <p className="font-['Noto_Sans_TC',sans-serif] text-[14px] text-[#6e6e6e] mb-[20px]">
-          設定「<span className="text-[#0f6beb]">{orgName}</span>」的訂房系統代號，用來查房況、接訂房。
+          設定「<span className="text-[#0f6beb]">{orgName}</span>」串接的訂房系統代號。設定後，客服與自動客服即可即時查詢房況、並協助訪客完成訂房。
         </p>
 
         {loading ? (
@@ -91,8 +91,11 @@ export function PmsConnectModal({ onClose }: PmsConnectModalProps) {
               onChange={(e) => setHotelcode(e.target.value)}
               placeholder="例：ZH01"
               maxLength={50}
-              className="w-full border border-[#b6c8f1] rounded-[8px] px-3 py-2 text-[14px] mb-[16px] outline-none focus:border-[#0f6beb]"
+              className="w-full border border-[#b6c8f1] rounded-[8px] px-3 py-2 text-[14px] mb-[6px] outline-none focus:border-[#0f6beb]"
             />
+            <p className="text-[12px] text-[#9aa0ab] mb-[16px] leading-[18px]">
+              由訂房系統（PMS）提供的飯店代號，例如 ZH01。
+            </p>
 
             <label className="flex items-center gap-[8px] text-[14px] text-[#383838] mb-[16px] cursor-pointer">
               <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
