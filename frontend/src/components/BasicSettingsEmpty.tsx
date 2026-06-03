@@ -5,6 +5,8 @@ interface BasicSettingsEmptyProps {
   onFacebookClick: () => void;
   /** 點「官網彈窗」卡 → 建立一個免 LINE 的組織 */
   onWebchatClick?: () => void;
+  /** 點「PMS 串接」卡 → 設定當前組織的 Hotel Code */
+  onPmsClick?: () => void;
 }
 
 /**
@@ -14,7 +16,8 @@ interface BasicSettingsEmptyProps {
 export const BasicSettingsEmpty = memo(function BasicSettingsEmpty({
   onLineClick,
   onFacebookClick,
-  onWebchatClick
+  onWebchatClick,
+  onPmsClick
 }: BasicSettingsEmptyProps) {
   return (
     <div className="bg-[#f6f9fd] min-h-screen w-full">
@@ -184,6 +187,42 @@ export const BasicSettingsEmpty = memo(function BasicSettingsEmpty({
                         <div className="relative shrink-0 w-full">
                           <p className="font-['Inter',sans-serif] font-normal leading-[24px] relative shrink-0 text-[#6e6e6e] text-[16px] whitespace-nowrap tracking-[-0.31px]">
                             建立組織
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </button>
+
+          {/* PMS 串接 Card */}
+          <button
+            onClick={onPmsClick}
+            className="platform-card basis-0 grow min-h-px min-w-px relative rounded-[16px] shrink-0 p-[20px] group text-left border border-[#e5e7eb]"
+          >
+            <div className="flex flex-row items-center justify-center size-full">
+              {/* PMS Icon（房間/鑰匙意象） */}
+              <div className="relative shrink-0 size-[48px]">
+                <svg className="block size-full" fill="none" viewBox="0 0 48 48">
+                  <rect width="36" height="36" x="6" y="6" rx="8" fill="#7c3aed" />
+                  <path d="M16 32V18a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14M14 32h20M21 22h6M21 26h6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                </svg>
+              </div>
+              <div className="basis-0 grow min-h-px min-w-px relative shrink-0">
+                <div className="flex flex-row items-center size-full">
+                  <div className="content-stretch flex items-center px-[24px] py-0 relative w-full">
+                    <div className="h-[52px] relative shrink-0 w-full">
+                      <div className="content-stretch flex flex-col h-full items-start justify-center relative">
+                        <div className="relative shrink-0 w-full">
+                          <p className="font-['Inter',sans-serif] font-normal leading-[28px] relative shrink-0 text-[#0a0a0a] text-[18px] tracking-[-0.44px]">
+                            PMS 串接
+                          </p>
+                        </div>
+                        <div className="relative shrink-0 w-full">
+                          <p className="font-['Inter',sans-serif] font-normal leading-[24px] relative shrink-0 text-[#6e6e6e] text-[16px] whitespace-nowrap tracking-[-0.31px]">
+                            設定訂房系統 Hotel Code
                           </p>
                         </div>
                       </div>

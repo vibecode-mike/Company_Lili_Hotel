@@ -5,6 +5,7 @@ import { BasicSettingsEmpty } from './BasicSettingsEmpty';
 import { BasicSettingsList, ChannelAccount } from './BasicSettingsList';
 import LineApiSettingsContent from './LineApiSettingsContent';
 import { CreateWebchatOrgModal } from './CreateWebchatOrgModal';
+import { PmsConnectModal } from './PmsConnectModal';
 import { useChannel } from '../contexts/ChannelContext';
 import {
   ensureFacebookSdkLoaded,
@@ -48,6 +49,7 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
   const { refetch: refetchChannels } = useChannel();
   const [viewState, setViewState] = useState<ViewState>('loading');
   const [showWebchatModal, setShowWebchatModal] = useState(false);
+  const [showPmsModal, setShowPmsModal] = useState(false);
   const [accounts, setAccounts] = useState<ChannelAccount[]>([]);
   const [facebookAuthorizing, setFacebookAuthorizing] = useState(false);
   const [facebookSdkLoading, setFacebookSdkLoading] = useState(false);
@@ -519,6 +521,7 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
           onLineClick={handleLineClick}
           onFacebookClick={handleFacebookClick}
           onWebchatClick={() => setShowWebchatModal(true)}
+          onPmsClick={() => setShowPmsModal(true)}
         />
         {showWebchatModal && (
           <CreateWebchatOrgModal
@@ -529,6 +532,7 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
             }}
           />
         )}
+        {showPmsModal && <PmsConnectModal onClose={() => setShowPmsModal(false)} />}
       </>
     );
   }
