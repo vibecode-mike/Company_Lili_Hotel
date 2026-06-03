@@ -498,12 +498,18 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
 
   const { selectedChannel } = useChannel();
   const selectedLineChannelId = selectedChannel?.channel_id ?? "";
+  // 組織隔離：無 LINE 組織用 tenant_id；否則 line_channel_id。scopeParam 不含前綴符號。
+  const scopeParam = selectedChannel?.tenant_id
+    ? `tenant_id=${selectedChannel.tenant_id}`
+    : selectedLineChannelId
+    ? `line_channel_id=${encodeURIComponent(selectedLineChannelId)}`
+    : "";
 
-  // Load FAQ rules from API（依當前 sidebar 館別過濾）
+  // Load FAQ rules from API（依當前 sidebar 組織過濾）
   useEffect(() => {
     setLoadingFacilities(true);
-    const catUrl = selectedLineChannelId
-      ? `/api/v1/faq/categories?line_channel_id=${encodeURIComponent(selectedLineChannelId)}`
+    const catUrl = scopeParam
+      ? `/api/v1/faq/categories?${scopeParam}`
       : "/api/v1/faq/categories";
     apiGet(catUrl)
       .then((res) => res.json())
@@ -514,9 +520,7 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
         setCategoryId(facilityCat.id);
         setCategoryActive(facilityCat.is_active ?? true);
         setCategoryName(facilityCat.name);
-        const channelQs = selectedLineChannelId
-          ? `&line_channel_id=${encodeURIComponent(selectedLineChannelId)}`
-          : "";
+        const channelQs = scopeParam ? `&${scopeParam}` : "";
         const rulesRes = await apiGet(
           `/api/v1/faq/categories/${facilityCat.id}/rules?page_size=50${channelQs}`,
         );
@@ -566,9 +570,7 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
     if (!categoryId) return;
     setLoadingFacilities(true);
     try {
-      const channelQs = selectedLineChannelId
-        ? `&line_channel_id=${encodeURIComponent(selectedLineChannelId)}`
-        : "";
+      const channelQs = scopeParam ? `&${scopeParam}` : "";
       const res = await apiGet(
         `/api/v1/faq/categories/${categoryId}/rules?page_size=50${channelQs}`,
       );
@@ -1061,7 +1063,7 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
             };
             const isNew = editingFacility.id.startsWith("new-");
             if (isNew && categoryId) {
-              if (!selectedLineChannelId) {
+              if (!scopeParam) {
                 showToast("請先選擇組織", "error");
                 return;
               }
@@ -1070,7 +1072,10 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
                 {
                   content_json,
                   tag_names: draft.memberTags,
-                  line_channel_id: selectedLineChannelId,
+                  // 無 LINE 組織送 tenant_id，否則送 line_channel_id
+                  ...(selectedChannel?.tenant_id
+                    ? { tenant_id: selectedChannel.tenant_id }
+                    : { line_channel_id: selectedLineChannelId }),
                 },
               );
               const json = await res.json();
