@@ -816,7 +816,9 @@ interface TimeSlotDetailResponse {
 function TimeInsightsSection({ reducedMotion }: { reducedMotion: boolean }) {
   // 全站館別切換：時段熱圖 + 互動旅程明細都按選中 LINE OA 過濾
   const { selectedChannel } = useChannel();
-  const lineChannelQuery = selectedChannel?.channel_id
+  const lineChannelQuery = selectedChannel?.tenant_id
+    ? `&tenant_id=${selectedChannel.tenant_id}`
+    : selectedChannel?.channel_id
     ? `&line_channel_id=${encodeURIComponent(selectedChannel.channel_id)}`
     : '';
   const { navigate } = useNavigation();
@@ -926,7 +928,9 @@ function TimeInsightsSection({ reducedMotion }: { reducedMotion: boolean }) {
           params.set("cell_date", apiDates[cell.c]);
           params.set("cell_block", String(cell.r));
         }
-        if (selectedChannel?.channel_id) {
+        if (selectedChannel?.tenant_id) {
+          params.set("tenant_id", String(selectedChannel.tenant_id));
+        } else if (selectedChannel?.channel_id) {
           params.set("line_channel_id", selectedChannel.channel_id);
         }
         const res = await apiGet(`/api/v1/analytics/time-slot-detail?${params.toString()}`);
@@ -1394,7 +1398,9 @@ export default function InsightsPanel({
   const reducedMotion = useReducedMotion();
   // 全站館別切換：所有 analytics endpoint 都附 line_channel_id
   const { selectedChannel } = useChannel();
-  const lineChannelQuery = selectedChannel?.channel_id
+  const lineChannelQuery = selectedChannel?.tenant_id
+    ? `&tenant_id=${selectedChannel.tenant_id}`
+    : selectedChannel?.channel_id
     ? `&line_channel_id=${encodeURIComponent(selectedChannel.channel_id)}`
     : '';
 
