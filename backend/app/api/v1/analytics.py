@@ -74,6 +74,25 @@ def _coverage(total: int, unanswered: int) -> float:
     return round((1 - unanswered / total) * 100, 1)
 
 
+def _scope_active(line_channel_id: Optional[str], tenant_id: Optional[int]) -> bool:
+    """是否有指定範圍（組織或 LINE 分館）。"""
+    return tenant_id is not None or bool(line_channel_id)
+
+
+def _scope_filter(alias: str, channel_col: str, line_channel_id: Optional[str],
+                  tenant_id: Optional[int], key: str = "scope_val"):
+    """組織重構：回傳 (filter_sql, params)。
+
+    tenant_id 提供時用 <alias>.tenant_id（支援無 LINE 組織）；
+    否則退回 line_channel_id，比對 <alias>.<channel_col>。
+    """
+    if tenant_id is not None:
+        return f" AND {alias}.tenant_id = :{key}", {key: tenant_id}
+    if line_channel_id:
+        return f" AND {alias}.{channel_col} = :{key}", {key: line_channel_id}
+    return "", {}
+
+
 # ---------------------------------------------------------------------------
 # Endpoint
 # ---------------------------------------------------------------------------
@@ -85,6 +104,7 @@ async def get_ai_coverage(
     end_date: Optional[str] = Query(None, description="結束日期 YYYY-MM-DD（台灣時間，含）；未提供則預設為今天"),
     top_n: int = Query(10, ge=1, le=50, description="未解問題 top N"),
     line_channel_id: Optional[str] = Query(None, description="特定 LINE OA channel_id；提供時只算該分館的訊息"),
+    tenant_id: Optional[int] = Query(None, description="特定組織 ID（提供時優先於 line_channel_id）"),
     db: AsyncSession = Depends(get_db),
 ) -> AiCoverageResponseSchema:
     """
@@ -112,14 +132,13 @@ async def get_ai_coverage(
     # 多 OA 隔離：透過 thread_id → members.line_uid / webchat_uid → line_channel_id 過濾
     # 為避免 conversation_messages.created_at vs members.created_at 欄位 ambiguous，全部加 cm. 前綴
     # JOIN 條件兼顧 LINE / Webchat：LINE 端 thread_id=line_uid，Webchat 端 thread_id=webchat_uid
+    scoped = _scope_active(line_channel_id, tenant_id)
     daily_join = (
         " JOIN members mem ON mem.line_uid = cm.thread_id OR mem.webchat_uid = cm.thread_id"
-        if line_channel_id else ""
+        if scoped else ""
     )
-    daily_filter = " AND mem.line_channel_id = :line_channel_id" if line_channel_id else ""
-    daily_params = {"start_dt": start_dt, "end_dt": end_dt}
-    if line_channel_id:
-        daily_params["line_channel_id"] = line_channel_id
+    daily_filter, daily_scope = _scope_filter("mem", "line_channel_id", line_channel_id, tenant_id)
+    daily_params = {"start_dt": start_dt, "end_dt": end_dt, **daily_scope}
 
     # 1. 每日統計
     daily_sql = text(f"""
@@ -158,12 +177,10 @@ async def get_ai_coverage(
     #    用 LEFT JOIN 找同 thread 最近一筆 created_at 更早的 user/incoming 訊息
     top_join = (
         " JOIN members mem2 ON mem2.line_uid = m.thread_id OR mem2.webchat_uid = m.thread_id"
-        if line_channel_id else ""
+        if scoped else ""
     )
-    top_filter = " AND mem2.line_channel_id = :line_channel_id" if line_channel_id else ""
-    top_params = {"start_dt": start_dt, "end_dt": end_dt, "top_n": top_n}
-    if line_channel_id:
-        top_params["line_channel_id"] = line_channel_id
+    top_filter, top_scope = _scope_filter("mem2", "line_channel_id", line_channel_id, tenant_id)
+    top_params = {"start_dt": start_dt, "end_dt": end_dt, "top_n": top_n, **top_scope}
 
     top_sql = text(f"""
         SELECT m.id AS message_id,
@@ -238,6 +255,7 @@ async def get_completed_orders(
     start_date: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD（台灣時間，含）"),
     end_date: Optional[str] = Query(None, description="結束日期 YYYY-MM-DD（台灣時間，含）"),
     line_channel_id: Optional[str] = Query(None, description="特定 LINE OA channel_id；提供時只算該分館客戶的訂單"),
+    tenant_id: Optional[int] = Query(None, description="特定組織 ID（提供時優先於 line_channel_id）"),
     db: AsyncSession = Depends(get_db),
 ) -> CompletedOrdersResponseSchema:
     """
@@ -255,12 +273,11 @@ async def get_completed_orders(
     start_dt = datetime.combine(start, datetime.min.time())
     end_dt = datetime.combine(end + timedelta(days=1), datetime.min.time())
 
-    # 多 OA 隔離：JOIN members 過濾
-    member_join = " JOIN members mem ON mem.id = b.member_id" if line_channel_id else ""
-    member_filter = " AND mem.line_channel_id = :line_channel_id" if line_channel_id else ""
-    params = {"start_dt": start_dt, "end_dt": end_dt}
-    if line_channel_id:
-        params["line_channel_id"] = line_channel_id
+    # 組織/多 OA 隔離：JOIN members 過濾
+    scoped = _scope_active(line_channel_id, tenant_id)
+    member_join = " JOIN members mem ON mem.id = b.member_id" if scoped else ""
+    member_filter, scope_params = _scope_filter("mem", "line_channel_id", line_channel_id, tenant_id)
+    params = {"start_dt": start_dt, "end_dt": end_dt, **scope_params}
 
     daily_sql = text(f"""
         SELECT DATE(b.paid_at) AS d, COUNT(*) AS n
@@ -313,6 +330,7 @@ class PendingConversationsResponseSchema(BaseModel):
 async def get_pending_conversations(
     limit: int = Query(50, ge=1, le=200, description="回傳筆數上限"),
     line_channel_id: Optional[str] = Query(None, description="特定 LINE OA channel_id；提供時只算該分館的待處理對話"),
+    tenant_id: Optional[int] = Query(None, description="特定組織 ID（提供時優先於 line_channel_id）"),
     db: AsyncSession = Depends(get_db),
 ) -> PendingConversationsResponseSchema:
     """
@@ -323,11 +341,9 @@ async def get_pending_conversations(
 
     多 OA 隔離：line_channel_id 提供時透過 members.line_channel_id 過濾。
     """
-    # 多 OA 隔離：透過 LEFT JOIN 後的 members 表過濾
-    member_filter = " AND mem.line_channel_id = :line_channel_id" if line_channel_id else ""
-    params = {"lim": limit}
-    if line_channel_id:
-        params["line_channel_id"] = line_channel_id
+    # 組織/多 OA 隔離：透過 LEFT JOIN 後的 members 表過濾
+    member_filter, scope_params = _scope_filter("mem", "line_channel_id", line_channel_id, tenant_id)
+    params = {"lim": limit, **scope_params}
 
     # platform: 包含 Webchat，讓 widget 訪客的 unanswered 對話也納入
     # JOIN: thread_id 對 LINE 是 line_uid，對 Webchat 是 webchat_uid（=browser_key），都要試
@@ -400,13 +416,12 @@ async def get_pending_conversations(
         ))
 
     # total = 符合條件的總筆數（不受 limit 影響）
-    # 多 OA 隔離：透過 JOIN members 過濾（LINE / Webchat 都要 JOIN）
-    total_member_filter = " AND mem2.line_channel_id = :line_channel_id" if line_channel_id else ""
+    # 組織/多 OA 隔離：透過 JOIN members 過濾（LINE / Webchat 都要 JOIN）
+    total_member_filter, total_params = _scope_filter("mem2", "line_channel_id", line_channel_id, tenant_id)
     total_join = (
         " LEFT JOIN members mem2 ON mem2.line_uid = m.thread_id OR mem2.webchat_uid = m.thread_id"
-        if line_channel_id else ""
+        if _scope_active(line_channel_id, tenant_id) else ""
     )
-    total_params = {"line_channel_id": line_channel_id} if line_channel_id else {}
     total_sql = text(f"""
         WITH last_msg AS (
             SELECT thread_id, MAX(created_at) AS max_ts
@@ -468,6 +483,7 @@ async def get_new_members(
     end_date: Optional[str] = Query(None, description="結束日期 YYYY-MM-DD（台灣時間，含）"),
     source: str = Query("line", description="渠道：line（預設）/ fb / webchat / all"),
     line_channel_id: Optional[str] = Query(None, description="特定 LINE OA channel_id；source=line 時提供可限定該分館"),
+    tenant_id: Optional[int] = Query(None, description="特定組織 ID（提供時優先於 line_channel_id）"),
     db: AsyncSession = Depends(get_db),
 ) -> NewMembersResponseSchema:
     """
@@ -493,11 +509,16 @@ async def get_new_members(
     start_dt = datetime.combine(start, datetime.min.time())
     end_dt = datetime.combine(end + timedelta(days=1), datetime.min.time())
 
-    # 多 OA 隔離：line_channel_id 提供時加 line_channel_id 過濾
-    channel_id_filter = " AND line_channel_id = :line_channel_id" if line_channel_id else ""
+    # 組織/多 OA 隔離：members 表直接過濾（tenant_id 優先，支援無 LINE 組織）
     params = {"start_dt": start_dt, "end_dt": end_dt}
-    if line_channel_id:
-        params["line_channel_id"] = line_channel_id
+    if tenant_id is not None:
+        channel_id_filter = " AND tenant_id = :scope_val"
+        params["scope_val"] = tenant_id
+    elif line_channel_id:
+        channel_id_filter = " AND line_channel_id = :scope_val"
+        params["scope_val"] = line_channel_id
+    else:
+        channel_id_filter = ""
 
     daily_sql = text(f"""
         SELECT DATE(created_at) AS d, COUNT(*) AS n
@@ -557,6 +578,7 @@ _WEEKDAY_ZH = ["一", "二", "三", "四", "五", "六", "日"]
 async def get_time_slot_insights(
     channel: str = Query("line", description="渠道：line / facebook / webchat"),
     line_channel_id: Optional[str] = Query(None, description="特定 LINE OA channel_id；提供時只算該分館的資料"),
+    tenant_id: Optional[int] = Query(None, description="特定組織 ID（提供時優先於 line_channel_id）"),
     end_date: Optional[str] = Query(None, description="滾動 7 天的結束日期（含），預設為昨天"),
     db: AsyncSession = Depends(get_db),
 ) -> TimeSlotInsightsResponseSchema:
@@ -578,11 +600,9 @@ async def get_time_slot_insights(
     start_dt = datetime.combine(start, datetime.min.time())
     end_dt = datetime.combine(end + timedelta(days=1), datetime.min.time())
 
-    # 多 OA 隔離：line_channel_id 過濾 tag_trigger_logs.channel_id
-    channel_id_filter = " AND t.channel_id = :line_channel_id" if line_channel_id else ""
-    base_params = {"start_dt": start_dt, "end_dt": end_dt}
-    if line_channel_id:
-        base_params["line_channel_id"] = line_channel_id
+    # 組織/多 OA 隔離：tag_trigger_logs 直接過濾（tenant_id 優先，支援無 LINE 組織）
+    channel_id_filter, scope_params = _scope_filter("t", "channel_id", line_channel_id, tenant_id)
+    base_params = {"start_dt": start_dt, "end_dt": end_dt, **scope_params}
 
     # 每個（日期、4hr 時段）算 COUNT(DISTINCT member_id）
     # 只算「用戶端真實互動」：對話 (INTERACTION) / 點擊 (CLICK) / 轉單 (CONVERSION)
@@ -675,6 +695,7 @@ _SOURCE_TO_TAB = {
 async def get_time_slot_detail(
     channel: str = Query("line", description="渠道：line / facebook / webchat"),
     line_channel_id: Optional[str] = Query(None, description="特定 LINE OA channel_id；提供時只算該分館的資料"),
+    tenant_id: Optional[int] = Query(None, description="特定組織 ID（提供時優先於 line_channel_id）"),
     end_date: Optional[str] = Query(None, description="滾動 7 天的結束日期（含），預設為今天"),
     cell_date: Optional[str] = Query(None, description="若提供，僅統計該日期"),
     cell_block: Optional[int] = Query(None, ge=0, le=5, description="若提供，僅統計該時段（0=00:00,1=04:00,...,5=20:00）"),
@@ -714,11 +735,9 @@ async def get_time_slot_detail(
         scope_cell_date = None
         scope_cell_block = None
 
-    # 多 OA 隔離：line_channel_id 過濾 tag_trigger_logs.channel_id
-    channel_id_filter = " AND t.channel_id = :line_channel_id" if line_channel_id else ""
-    base_params = {"start_dt": scope_start, "end_dt": scope_end}
-    if line_channel_id:
-        base_params["line_channel_id"] = line_channel_id
+    # 組織/多 OA 隔離：tag_trigger_logs 直接過濾（tenant_id 優先，支援無 LINE 組織）
+    channel_id_filter, scope_params = _scope_filter("t", "channel_id", line_channel_id, tenant_id)
+    base_params = {"start_dt": scope_start, "end_dt": scope_end, **scope_params}
 
     # 一次撈出三類 source 的 (tag_name, trigger_source, event_count, last_triggered_at)
     # 用 COUNT(*) 不去重 member，讓「同會員同房型訂 3 間 → conversion=3」符合規格
