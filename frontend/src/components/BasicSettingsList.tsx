@@ -1,5 +1,6 @@
 import { memo, useState, useMemo } from 'react';
 import { ChannelStatusBadge } from './ChannelStatusBadge';
+import { apiPost } from '../utils/apiClient';
 
 export interface ChannelAccount {
   id: string;
@@ -94,6 +95,49 @@ export const BasicSettingsList = memo(function BasicSettingsList({
   // Sort state - default to descending (newest first)
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
 
+  // 建立組織（免 LINE）modal 狀態
+  const [showOrgModal, setShowOrgModal] = useState(false);
+  const [orgName, setOrgName] = useState('');
+  const [orgSiteId, setOrgSiteId] = useState('');
+  const [orgSubmitting, setOrgSubmitting] = useState(false);
+  const [orgError, setOrgError] = useState('');
+  const [orgSuccess, setOrgSuccess] = useState('');
+
+  const resetOrgForm = () => {
+    setOrgName('');
+    setOrgSiteId('');
+    setOrgError('');
+    setOrgSuccess('');
+    setOrgSubmitting(false);
+  };
+
+  const handleCreateOrg = async () => {
+    const name = orgName.trim();
+    if (!name) {
+      setOrgError('請輸入組織名稱');
+      return;
+    }
+    setOrgSubmitting(true);
+    setOrgError('');
+    setOrgSuccess('');
+    try {
+      const body: Record<string, unknown> = { name };
+      if (orgSiteId.trim()) body.webchat_site_id = orgSiteId.trim();
+      const res = await apiPost('/api/v1/tenants', body);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      setOrgSuccess(`組織「${name}」已建立${orgSiteId.trim() ? '，並綁定官網彈窗站點' : ''}。`);
+      setOrgName('');
+      setOrgSiteId('');
+    } catch (e) {
+      setOrgError(e instanceof Error ? e.message : '建立失敗，請稍後再試');
+    } finally {
+      setOrgSubmitting(false);
+    }
+  };
+
   // Toggle sort order
   const handleSort = () => {
     setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
@@ -134,8 +178,16 @@ export const BasicSettingsList = memo(function BasicSettingsList({
           </div>
         </div>
 
-        {/* Add Account Button */}
-        <div className="content-stretch flex items-center justify-end relative shrink-0 w-full mb-[24px]">
+        {/* Add Account / Create Org Buttons */}
+        <div className="content-stretch flex items-center justify-end gap-[12px] relative shrink-0 w-full mb-[24px]">
+          <button
+            onClick={() => { resetOrgForm(); setShowOrgModal(true); }}
+            className="bg-white border border-[#242424] content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 hover:bg-[#f0f0f0] transition-colors duration-200"
+          >
+            <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[16px] text-center text-[#242424]">
+              建立組織（免 LINE）
+            </p>
+          </button>
           <button
             onClick={onAddAccount}
             className="bg-[#242424] content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 hover:bg-[#383838] transition-colors duration-200"
@@ -302,6 +354,71 @@ export const BasicSettingsList = memo(function BasicSettingsList({
           </div>
         </div>
       </div>
+
+      {/* 建立組織（免 LINE）Modal */}
+      {showOrgModal && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 px-4"
+          onClick={() => setShowOrgModal(false)}
+        >
+          <div
+            className="bg-white rounded-[16px] w-full max-w-[440px] p-[28px] shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="font-['Noto_Sans_TC',sans-serif] text-[20px] text-[#242424] mb-[4px]">建立組織</h2>
+            <p className="font-['Noto_Sans_TC',sans-serif] text-[14px] text-[#6e6e6e] mb-[20px]">
+              只需要組織名稱即可建立，不需要 LINE。可選填一個官網彈窗站點代號，立刻啟用純官網彈窗組織。
+            </p>
+
+            <label className="block font-['Noto_Sans_TC',sans-serif] text-[14px] text-[#383838] mb-[6px]">
+              組織名稱 <span className="text-[#d33]">*</span>
+            </label>
+            <input
+              type="text"
+              value={orgName}
+              onChange={(e) => setOrgName(e.target.value)}
+              placeholder="例：海景館"
+              maxLength={100}
+              className="w-full border border-[#b6c8f1] rounded-[8px] px-3 py-2 text-[14px] mb-[16px] outline-none focus:border-[#0f6beb]"
+            />
+
+            <label className="block font-['Noto_Sans_TC',sans-serif] text-[14px] text-[#383838] mb-[6px]">
+              官網彈窗站點代號（選填）
+            </label>
+            <input
+              type="text"
+              value={orgSiteId}
+              onChange={(e) => setOrgSiteId(e.target.value)}
+              placeholder="例：seaview（用於官網嵌入 widget）"
+              maxLength={50}
+              className="w-full border border-[#b6c8f1] rounded-[8px] px-3 py-2 text-[14px] mb-[16px] outline-none focus:border-[#0f6beb]"
+            />
+
+            {orgError && (
+              <p className="text-[13px] text-[#d33] mb-[12px]">{orgError}</p>
+            )}
+            {orgSuccess && (
+              <p className="text-[13px] text-[#1a7f37] mb-[12px]">{orgSuccess}</p>
+            )}
+
+            <div className="flex items-center justify-end gap-[12px] mt-[8px]">
+              <button
+                onClick={() => setShowOrgModal(false)}
+                className="px-[16px] py-[8px] rounded-[12px] text-[14px] text-[#6e6e6e] hover:bg-[#f0f0f0] transition-colors"
+              >
+                關閉
+              </button>
+              <button
+                onClick={handleCreateOrg}
+                disabled={orgSubmitting}
+                className="bg-[#242424] px-[20px] py-[8px] rounded-[12px] text-[14px] text-white hover:bg-[#383838] transition-colors disabled:opacity-60"
+              >
+                {orgSubmitting ? '建立中…' : '建立組織'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 });
