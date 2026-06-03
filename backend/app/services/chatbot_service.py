@@ -1092,6 +1092,8 @@ class ToolCallingContext:
     collect_rule_ids: bool = False
     # 多 OA 隔離：當訊息來自特定 LINE OA 時帶上 channel_id，FAQ 查詢只用該 OA 的規則
     line_channel_id: Optional[str] = None
+    # 組織隔離：無 LINE 組織（純官網彈窗）用 tenant_id 解析 PMS hotelcode
+    tenant_id: Optional[int] = None
     # 訂房狀態（PMS tool 會修改）
     checkin_date: Optional[str] = None
     checkout_date: Optional[str] = None
@@ -1233,6 +1235,11 @@ class ChatbotService:
             webchat_line_channel_id = (
                 await self._resolve_webchat_channel_id(db, site_id) if db else None
             )
+        # 組織隔離：純官網彈窗組織無 LINE channel，需 tenant_id 才能解析 PMS hotelcode
+        webchat_tenant_id = (
+            await self._resolve_webchat_tenant_id(db, site_id)
+            if (db and not webchat_line_channel_id) else None
+        )
 
         # Build unified tool calling context
         # collect_rule_ids=True 讓 _unified_tool_loop 在 kb_search 時記下引用到的 FAQ rule，
@@ -1242,6 +1249,7 @@ class ChatbotService:
             test_mode=test_mode,
             collect_rule_ids=True,
             line_channel_id=webchat_line_channel_id,
+            tenant_id=webchat_tenant_id,
             checkin_date=session.checkin_date,
             checkout_date=session.checkout_date,
             booking_adults=session.booking_adults,
@@ -1404,28 +1412,29 @@ class ChatbotService:
         self,
         db: Optional[AsyncSession],
         line_channel_id: Optional[str],
+        tenant_id: Optional[int] = None,
     ) -> Optional[str]:
-        """查該 LINE OA 的 PMS hotelcode。
+        """查該組織 / LINE OA 的 PMS hotelcode（組織重構：PMS 綁組織層級）。
 
-        Phase E-2：每個 LINE OA 對應一個閎運 hotelcode（DB 存）。
-        - 有 channel_id + 該 channel `status='enabled'` + `hotelcode` 非空 → 回該 hotelcode
-        - 該 channel 不存在 / `status='disabled'` / `hotelcode` 空 → 回 None
-          （caller 拿到 None 表示「此 OA 不接 PMS」，要走 FAQ KB fallback）
-        - 沒帶 channel_id（向下相容，例如 LINE bot 路徑還沒接上）→ fallback env PMS_HOTELCODE
+        - 有 channel_id → 依 channel 查（LINE 組織，多 OA 相容）
+        - 無 channel_id 但有 tenant_id → 依組織查（純官網彈窗組織）
+        - 任一路徑：`status='enabled'` + `hotelcode` 非空 才回；否則回 None（caller 走 KB fallback）
+        - 都沒帶（向下相容）→ fallback env PMS_HOTELCODE
         """
         if db is None:
-            return settings.PMS_HOTELCODE or None
-        if not line_channel_id:
             return settings.PMS_HOTELCODE or None
 
         from app.models.chatbot_booking import FaqPmsConnection
 
-        res = await db.execute(
-            select(FaqPmsConnection.hotelcode, FaqPmsConnection.status)
-            .where(FaqPmsConnection.channel_id == line_channel_id)
-            .limit(1)
-        )
-        row = res.first()
+        stmt = select(FaqPmsConnection.hotelcode, FaqPmsConnection.status)
+        if line_channel_id:
+            stmt = stmt.where(FaqPmsConnection.channel_id == line_channel_id)
+        elif tenant_id is not None:
+            stmt = stmt.where(FaqPmsConnection.tenant_id == tenant_id)
+        else:
+            return settings.PMS_HOTELCODE or None
+
+        row = (await db.execute(stmt.limit(1))).first()
         if not row:
             return None
         hotelcode, status = row
@@ -1804,13 +1813,16 @@ class ChatbotService:
         # 未指定人數時傳 None 給 _availability_to_room_cards，讓其以人數由小到大排序不過濾
         sort_housingcnt: Optional[int] = housingcnt if housingcnt_specified else None
 
-        # 解析該 LINE OA 的 hotelcode：
-        #   - None 代表「此 OA 不接 PMS」（disabled / hotelcode 空 / 沒對應 row）→ 走 KB fallback
+        # 解析該組織 / LINE OA 的 hotelcode：
+        #   - None 代表「此組織不接 PMS」（disabled / hotelcode 空 / 沒對應 row）→ 走 KB fallback
         #   - 有值才實際打 PMS API
-        hotelcode = await self._resolve_hotelcode(db, ctx.line_channel_id)
+        # hotelcode 已是「依範圍（channel 或 tenant）解析、且該範圍 status='enabled'」的結果，
+        # 故閘門只需再確認 env 憑證齊全（_PMS_CONFIGURED），不依賴 channel-keyed 的記憶體快取
+        # （無 LINE 組織 channel_id=None，舊的 is_pms_enabled(None) 會誤判為「任一啟用」）。
+        hotelcode = await self._resolve_hotelcode(db, ctx.line_channel_id, ctx.tenant_id)
 
-        # PMS disabled（env 沒設好 / 該 channel 沒啟用 / 此 OA 無 hotelcode）→ FAQ KB fallback
-        if not is_pms_enabled(ctx.line_channel_id) or not hotelcode:
+        # PMS 未就緒（env 沒設好 / 此組織未啟用 / 無 hotelcode）→ FAQ KB fallback
+        if not _PMS_CONFIGURED or not hotelcode:
             cards = await _kb_fallback_rooms(
                 db,
                 housingcnt if housingcnt_specified else None,
