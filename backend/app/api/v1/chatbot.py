@@ -94,6 +94,40 @@ async def _get_or_create_pms_conn(
     return conn
 
 
+@router.get("/widget-embed")
+async def get_widget_embed(
+    line_channel_id: Optional[str] = Query(None, description="LINE OA channel_id"),
+    tenant_id: Optional[int] = Query(None, description="組織 ID（提供時優先）"),
+    db: AsyncSession = Depends(get_db),
+):
+    """取得某組織 / LINE OA 的官網彈窗客服嵌入碼（給網頁前端工程師部署）。
+
+    依 tenant_id 或 line_channel_id 找到綁定的 webchat 站點，回傳嵌入碼。
+    找不到站點 → 回 has_site=False（前端提示「此組織尚未設定官網站點」）。
+    """
+    from app.config import settings
+    from app.models.webchat_site import WebchatSiteChannel
+
+    stmt = select(WebchatSiteChannel.site_id)
+    if tenant_id is not None:
+        stmt = stmt.where(WebchatSiteChannel.tenant_id == tenant_id)
+    elif line_channel_id:
+        stmt = stmt.where(WebchatSiteChannel.line_channel_id == line_channel_id)
+    else:
+        raise HTTPException(status_code=400, detail="需提供 tenant_id 或 line_channel_id")
+
+    site_id = (await db.execute(stmt.limit(1))).scalar_one_or_none()
+    if not site_id:
+        return {"has_site": False, "embed_code": "", "site_id": ""}
+
+    public_base = (settings.PUBLIC_BASE or "").rstrip("/")
+    embed_code = (
+        f'<script src="{public_base}/widget/loader.js'
+        f'?site_id={site_id}" async></script>'
+    )
+    return {"has_site": True, "embed_code": embed_code, "site_id": site_id}
+
+
 @router.get("/pms-status")
 async def get_pms_status(
     line_channel_id: Optional[str] = Query(

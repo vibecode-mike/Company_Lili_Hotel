@@ -86,7 +86,7 @@ export const BasicSettingsEmpty = memo(function BasicSettingsEmpty({
                           </p>
                         </div>
                         <div className="relative shrink-0 w-full">
-                          <p className="font-['Inter',sans-serif] font-normal leading-[24px] relative shrink-0 text-[#6e6e6e] text-[16px] whitespace-nowrap tracking-[-0.31px]">
+                          <p className="font-['Inter',sans-serif] font-normal leading-[24px] relative shrink-0 text-[#6e6e6e] text-[16px] tracking-[-0.31px]">
                             連接 LINE 官方帳號
                           </p>
                         </div>
@@ -146,7 +146,7 @@ export const BasicSettingsEmpty = memo(function BasicSettingsEmpty({
                           </p>
                         </div>
                         <div className="relative shrink-0 w-full">
-                          <p className="font-['Inter',sans-serif] font-normal leading-[24px] relative shrink-0 text-[#6e6e6e] text-[16px] whitespace-nowrap tracking-[-0.31px]">
+                          <p className="font-['Inter',sans-serif] font-normal leading-[24px] relative shrink-0 text-[#6e6e6e] text-[16px] tracking-[-0.31px]">
                             連接 Facebook 帳號
                           </p>
                         </div>
@@ -181,11 +181,11 @@ export const BasicSettingsEmpty = memo(function BasicSettingsEmpty({
                       <div className="content-stretch flex flex-col h-full items-start justify-center relative">
                         <div className="relative shrink-0 w-full">
                           <p className="font-['Inter',sans-serif] font-normal leading-[28px] relative shrink-0 text-[#0a0a0a] text-[18px] tracking-[-0.44px]">
-                            官網彈窗機器人
+                            官網彈窗客服
                           </p>
                         </div>
                         <div className="relative shrink-0 w-full">
-                          <p className="font-['Inter',sans-serif] font-normal leading-[24px] relative shrink-0 text-[#6e6e6e] text-[16px] whitespace-nowrap tracking-[-0.31px]">
+                          <p className="font-['Inter',sans-serif] font-normal leading-[24px] relative shrink-0 text-[#6e6e6e] text-[16px] tracking-[-0.31px]">
                             建立組織
                           </p>
                         </div>
@@ -221,8 +221,8 @@ export const BasicSettingsEmpty = memo(function BasicSettingsEmpty({
                           </p>
                         </div>
                         <div className="relative shrink-0 w-full">
-                          <p className="font-['Inter',sans-serif] font-normal leading-[24px] relative shrink-0 text-[#6e6e6e] text-[16px] whitespace-nowrap tracking-[-0.31px]">
-                            設定訂房系統 Hotel Code
+                          <p className="font-['Inter',sans-serif] font-normal leading-[24px] relative shrink-0 text-[#6e6e6e] text-[16px] tracking-[-0.31px]">
+                            設定 Hotel Code
                           </p>
                         </div>
                       </div>

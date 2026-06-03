@@ -1,5 +1,7 @@
-import { useState } from 'react';
-import { apiPost } from '../utils/apiClient';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { apiGet, apiPost } from '../utils/apiClient';
+import { useChannel } from '../contexts/ChannelContext';
 
 interface CreateWebchatOrgModalProps {
   onClose: () => void;
@@ -20,6 +22,23 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [embedCode, setEmbedCode] = useState('');
+
+  // 開啟時：若「當前選中的組織」已有官網站點，直接顯示其部署嵌入碼（給前端工程師）
+  const { selectedChannel } = useChannel();
+  useEffect(() => {
+    const scopeQ = selectedChannel?.tenant_id
+      ? `tenant_id=${selectedChannel.tenant_id}`
+      : selectedChannel?.channel_id
+      ? `line_channel_id=${encodeURIComponent(selectedChannel.channel_id)}`
+      : '';
+    if (!scopeQ) return;
+    apiGet(`/api/v1/chatbot/widget-embed?${scopeQ}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.has_site && d.embed_code) setEmbedCode(d.embed_code);
+      })
+      .catch(() => {});
+  }, [selectedChannel?.tenant_id, selectedChannel?.channel_id]);
 
   const handleCreate = async () => {
     const trimmed = name.trim();
@@ -51,9 +70,9 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
     }
   };
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 px-4"
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 px-4"
       onClick={onClose}
     >
       <div
@@ -61,7 +80,7 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="font-['Noto_Sans_TC',sans-serif] text-[20px] text-[#242424] mb-[4px]">
-          官網彈窗機器人
+          官網彈窗客服
         </h2>
         <p className="font-['Noto_Sans_TC',sans-serif] text-[14px] text-[#6e6e6e] mb-[20px]">
           建立一個不需要 LINE 的組織，只用官網彈窗客服。只需填組織名稱即可，
@@ -123,7 +142,8 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
