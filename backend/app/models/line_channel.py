@@ -8,6 +8,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     DateTime,
+    ForeignKey,
 )
 from sqlalchemy.sql import func
 from app.models.base import Base
@@ -20,6 +21,12 @@ class LineChannel(Base):
     __table_args__ = ({"comment": "LINE 頻道設定表"},)
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
+    tenant_id = Column(
+        BigInteger,
+        ForeignKey("tenants.id", ondelete="SET NULL", name="fk_line_channels_tenant"),
+        nullable=True,
+        comment="所屬組織 ID",
+    )
     channel_id = Column(String(100), unique=True, nullable=True, comment="Messaging API Channel ID")
     channel_access_token = Column(
         String(500), nullable=False, comment="頻道存取權杖"

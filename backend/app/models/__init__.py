@@ -3,6 +3,7 @@
 """
 
 from app.models.base import Base
+from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.member import Member
 from app.models.tag import MemberTag, InteractionTag, MemberInteractionTag
@@ -41,6 +42,7 @@ from app.models.faq import (
 
 __all__ = [
     "Base",
+    "Tenant",
     "User",
     "Member",
     "MemberTag",
