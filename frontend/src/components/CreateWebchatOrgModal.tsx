@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { apiGet, apiPost } from '../utils/apiClient';
-import { useChannel } from '../contexts/ChannelContext';
+import { apiPost } from '../utils/apiClient';
 
 interface CreateWebchatOrgModalProps {
   onClose: () => void;
@@ -21,24 +20,20 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [embedCode, setEmbedCode] = useState('');
+  const [copied, setCopied] = useState(false);
 
-  // 開啟時：若「當前選中的組織」已有官網站點，直接顯示其部署嵌入碼（給前端工程師）
-  const { selectedChannel } = useChannel();
-  useEffect(() => {
-    const scopeQ = selectedChannel?.tenant_id
-      ? `tenant_id=${selectedChannel.tenant_id}`
-      : selectedChannel?.channel_id
-      ? `line_channel_id=${encodeURIComponent(selectedChannel.channel_id)}`
-      : '';
-    if (!scopeQ) return;
-    apiGet(`/api/v1/chatbot/widget-embed?${scopeQ}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d?.has_site && d.embed_code) setEmbedCode(d.embed_code);
-      })
-      .catch(() => {});
-  }, [selectedChannel?.tenant_id, selectedChannel?.channel_id]);
+  // 即時嵌入碼預覽：跟著「站點代號」輸入即時變動（widget 與 CRM 同網域）
+  const embedCode = siteId.trim()
+    ? `<script src="${window.location.origin}/widget/loader.js?site_id=${siteId.trim()}" async></script>`
+    : '';
+
+  const handleCopy = () => {
+    if (!embedCode) return;
+    navigator.clipboard?.writeText(embedCode).then(
+      () => { setCopied(true); setTimeout(() => setCopied(false), 1500); },
+      () => {},
+    );
+  };
 
   const handleCreate = async () => {
     const trimmed = name.trim();
@@ -57,11 +52,8 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || `HTTP ${res.status}`);
       }
-      const data = await res.json().catch(() => ({}));
       setSuccess(`組織「${trimmed}」已建立${siteId.trim() ? '，並綁定官網彈窗站點' : ''}。`);
-      if (data?.webchat_embed_code) setEmbedCode(data.webchat_embed_code);
-      setName('');
-      setSiteId('');
+      // 不清空 siteId，讓下方嵌入碼留著供複製給前端工程師
       onCreated?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : '建立失敗，請稍後再試');
@@ -72,7 +64,7 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 px-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-4"
       onClick={onClose}
     >
       <div
@@ -94,7 +86,7 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="例：海景館"
+          placeholder="例：台北館"
           maxLength={100}
           className="w-full border border-[#b6c8f1] rounded-[8px] px-3 py-2 text-[14px] mb-[16px] outline-none focus:border-[#0f6beb]"
         />
@@ -106,7 +98,7 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
           type="text"
           value={siteId}
           onChange={(e) => setSiteId(e.target.value)}
-          placeholder="例：seaview（用於官網嵌入 widget）"
+          placeholder="例：taipei（用於官網嵌入 widget）"
           maxLength={50}
           className="w-full border border-[#b6c8f1] rounded-[8px] px-3 py-2 text-[14px] mb-[16px] outline-none focus:border-[#0f6beb]"
         />
@@ -116,7 +108,21 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
 
         {embedCode && (
           <div className="mb-[12px]">
-            <p className="text-[13px] text-[#383838] mb-[6px]">官網機器人佈署 — 把這段嵌入碼貼到官網 &lt;/body&gt; 前：</p>
+            <div className="flex items-center justify-between mb-[6px]">
+              <p className="text-[14px] text-[#383838]">官網機器人佈署 — 貼到官網 &lt;/body&gt; 前：</p>
+              <button
+                type="button"
+                onClick={handleCopy}
+                title="複製"
+                className="shrink-0 p-[4px] rounded hover:bg-[#eef2ff] text-[#0f6beb]"
+              >
+                {copied ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6 9 17l-5-5"/></svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                )}
+              </button>
+            </div>
             <textarea
               readOnly
               value={embedCode}

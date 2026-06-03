@@ -71,7 +71,7 @@ export function PmsConnectModal({ onClose }: PmsConnectModalProps) {
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
       <div className="bg-white rounded-[16px] w-full max-w-[460px] p-[28px] shadow-xl" onClick={(e) => e.stopPropagation()}>
         <h2 className="font-['Noto_Sans_TC',sans-serif] text-[20px] text-[#242424] mb-[4px]">PMS 串接</h2>
         <p className="font-['Noto_Sans_TC',sans-serif] text-[14px] text-[#6e6e6e] mb-[20px]">
