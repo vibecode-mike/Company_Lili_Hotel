@@ -81,6 +81,12 @@ class TagTriggerLog(Base):
     triggered_at = Column(DateTime, default=datetime.now, nullable=False, comment="觸發時間")
     platform = Column(String(20), nullable=True, comment="平台：LINE / Facebook / Webchat")
     channel_id = Column(String(100), nullable=True, comment="頻道識別：LINE channel_id / FB page_id / Webchat site_id")
+    tenant_id = Column(
+        BigInteger,
+        ForeignKey("tenants.id", ondelete="SET NULL", name="fk_tag_trigger_logs_tenant"),
+        nullable=True,
+        comment="所屬組織 ID（組織重構 Phase 2）",
+    )
 
     # 關聯關係（tag_id 不再硬連 FK）
     member = relationship("Member")

@@ -64,6 +64,12 @@ class MemberTag(Base):
     click_count = Column(Integer, nullable=False, server_default="1", comment="點擊次數，>= 1。預設值：1（首次點擊）。重複點擊同一組合時執行 UPDATE click_count = click_count + 1，累計點擊次數不去重")
     platform = Column(String(20), nullable=True, comment="平台：LINE / Facebook / Webchat。Step 3 backfill 後再評估是否收緊 NOT NULL")
     channel_id = Column(String(100), nullable=True, comment="頻道識別：LINE channel_id / FB page_id / Webchat site_id")
+    tenant_id = Column(
+        BigInteger,
+        ForeignKey("tenants.id", ondelete="SET NULL", name="fk_member_tags_tenant"),
+        nullable=True,
+        comment="所屬組織 ID（組織重構 Phase 2）",
+    )
     tagged_at = Column(DateTime, server_default=func.now(), comment="標記時間")
     created_at = Column(DateTime, server_default=func.now(), comment="建立時間")
     updated_at = Column(DateTime, onupdate=func.now(), comment="更新時間")
@@ -134,6 +140,12 @@ class MemberInteractionTag(Base):
     click_count = Column(Integer, nullable=False, server_default="1", comment="點擊次數，>= 1。預設值：1（首次點擊）。重複點擊同一組合時執行 UPDATE click_count = click_count + 1，累計點擊次數不去重。手動標籤此欄位固定為 1")
     platform = Column(String(20), nullable=True, comment="平台：LINE / Facebook / Webchat。Step 3 backfill 後再評估是否收緊 NOT NULL")
     channel_id = Column(String(100), nullable=True, comment="頻道識別：LINE channel_id / FB page_id / Webchat site_id")
+    tenant_id = Column(
+        BigInteger,
+        ForeignKey("tenants.id", ondelete="SET NULL", name="fk_member_interaction_tags_tenant"),
+        nullable=True,
+        comment="所屬組織 ID（組織重構 Phase 2）",
+    )
     tagged_at = Column(DateTime, server_default=func.now(), comment="標記時間")
     created_at = Column(DateTime, server_default=func.now(), comment="建立時間")
     updated_at = Column(DateTime, onupdate=func.now(), comment="更新時間")

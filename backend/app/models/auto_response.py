@@ -71,6 +71,12 @@ class AutoResponse(Base):
         index=True,
         comment="渠道ID（LINE channel ID 或 FB page ID），用於帳號級別的歡迎訊息/一律回應管理",
     )
+    tenant_id = Column(
+        BigInteger,
+        ForeignKey("tenants.id", ondelete="SET NULL", name="fk_auto_responses_tenant"),
+        nullable=True,
+        comment="所屬組織 ID（組織重構 Phase 2）",
+    )
 
     # 版本與重複狀態（用於關鍵字衝突管理）
     version = Column(Integer, default=1, comment="版本號，用於追蹤編輯歷史")

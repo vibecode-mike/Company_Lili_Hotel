@@ -104,6 +104,12 @@ class ComponentInteractionLog(Base):
     user_agent = Column(Text, comment="用戶代理")
     platform = Column(String(20), nullable=True, comment="平台：LINE / Facebook / Webchat")
     channel_id = Column(String(100), nullable=True, comment="頻道識別：LINE channel_id / FB page_id / Webchat site_id")
+    tenant_id = Column(
+        BigInteger,
+        ForeignKey("tenants.id", ondelete="SET NULL", name="fk_component_interaction_logs_tenant"),
+        nullable=True,
+        comment="所屬組織 ID（組織重構 Phase 2）",
+    )
 
     # 關聯關係
     message = relationship("Message", back_populates="interaction_logs")

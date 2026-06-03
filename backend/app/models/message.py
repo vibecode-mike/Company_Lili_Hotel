@@ -96,6 +96,12 @@ class Message(Base):
         nullable=True,
         comment="渠道ID（LINE channel_id 或 FB page_id）",
     )
+    tenant_id = Column(
+        BigInteger,
+        ForeignKey("tenants.id", ondelete="SET NULL", name="fk_messages_tenant"),
+        nullable=True,
+        comment="所屬組織 ID（組織重構 Phase 2）",
+    )
 
     # 相容 line_app/app.py 的欄位
     interaction_tags = Column(JSON, comment="互動標籤（相容舊程式）")

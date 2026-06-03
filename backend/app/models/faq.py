@@ -122,6 +122,12 @@ class FaqRule(Base):
         index=True,
         comment="所屬 LINE OA channel_id（多 OA 隔離）",
     )
+    tenant_id = Column(
+        BigInteger,
+        ForeignKey("tenants.id", ondelete="SET NULL", name="fk_faq_rules_tenant"),
+        nullable=True,
+        comment="所屬組織 ID（組織重構 Phase 2）",
+    )
     content_json = Column(Text, nullable=False, comment="規則內容 JSON")
     status = Column(
         String(20),
@@ -219,6 +225,12 @@ class AiTokenUsage(Base):
         ForeignKey("line_channels.channel_id", ondelete="CASCADE"),
         nullable=False,
         comment="所屬 LINE OA channel_id（多 OA 隔離）",
+    )
+    tenant_id = Column(
+        BigInteger,
+        ForeignKey("tenants.id", ondelete="SET NULL", name="fk_ai_token_usages_tenant"),
+        nullable=True,
+        comment="所屬組織 ID（組織重構 Phase 2）",
     )
     total_quota = Column(
         BigInteger, nullable=False, default=0, comment="Token 總額度"
