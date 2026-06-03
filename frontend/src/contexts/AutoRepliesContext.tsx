@@ -357,7 +357,9 @@ export function AutoRepliesProvider({ children }: AutoRepliesProviderProps) {
       const jwtToken = getJwtToken();
       const params = new URLSearchParams();
       if (jwtToken) params.set('jwt_token', jwtToken);
-      if (selectedLineChannelId) params.set('line_channel_id', selectedLineChannelId);
+      // 組織隔離：無 LINE 組織用 tenant_id；LINE 組織沿用 line_channel_id
+      if (selectedChannel?.tenant_id) params.set('tenant_id', String(selectedChannel.tenant_id));
+      else if (selectedLineChannelId) params.set('line_channel_id', selectedLineChannelId);
       const queryString = params.toString();
       const url = queryString
         ? `/api/v1/auto_responses?${queryString}`
