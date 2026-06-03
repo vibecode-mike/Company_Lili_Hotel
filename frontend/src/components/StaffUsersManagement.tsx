@@ -275,7 +275,7 @@ export default function StaffUsersManagement({
         <PageHeaderWithBreadcrumb
           breadcrumbItems={[{ label: "帳號管理", active: true }]}
           title="帳號管理"
-          description="新增、編輯員工帳號，並指派每個帳號可看到的 LINE 館別"
+          description="新增、編輯員工帳號，並指派每個帳號可看到的組織"
         />
 
 
@@ -332,7 +332,7 @@ export default function StaffUsersManagement({
                       角色
                     </th>
                     <th className="text-left px-[24px] py-[16px] text-[14px] text-[#6e6e6e] font-normal">
-                      可用 LINE 館別
+                      可用組織
                     </th>
                     <th className="text-center px-[24px] py-[16px] text-[14px] text-[#6e6e6e] font-normal w-[80px]">
                       啟用
@@ -494,14 +494,14 @@ export default function StaffUsersManagement({
                       value="admin"
                       current={form.role}
                       label="系統管理員"
-                      desc="可管理所有帳號與所有館別"
+                      desc="可管理所有帳號與所有組織"
                       onChange={() => setForm({ ...form, role: "admin" })}
                     />
                     <RoleRadio
                       value="customer_service"
                       current={form.role}
                       label="使用者"
-                      desc="僅能使用被指派的館別"
+                      desc="僅能使用被指派的組織"
                       onChange={() => setForm({ ...form, role: "customer_service" })}
                     />
                   </div>
@@ -520,10 +520,10 @@ export default function StaffUsersManagement({
                 </Field>
 
                 <Field
-                  label="可用 LINE 館別"
+                  label="可用組織"
                   hint={
                     form.role === "admin"
-                      ? "系統管理員預設可看所有館別，仍可在此調整"
+                      ? "系統管理員預設可看所有組織，仍可在此調整"
                       : undefined
                   }
                 >
@@ -562,7 +562,7 @@ export default function StaffUsersManagement({
                   </div>
                 </Field>
 
-                <Field label="可用 LINE 館別" hint="如需調整請聯絡系統管理員">
+                <Field label="可用組織" hint="如需調整請聯絡系統管理員">
                   {editingUser && editingUser.channels.length === 0 ? (
                     <div className="px-[16px] py-[10px] rounded-[12px] bg-[#f5f5f5] text-[14px] text-gray-500">
                       未指派

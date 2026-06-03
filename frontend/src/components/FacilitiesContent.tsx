@@ -1062,7 +1062,7 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
             const isNew = editingFacility.id.startsWith("new-");
             if (isNew && categoryId) {
               if (!selectedLineChannelId) {
-                showToast("請先選擇 LINE 館別", "error");
+                showToast("請先選擇組織", "error");
                 return;
               }
               const res = await apiPost(

@@ -8,7 +8,7 @@ interface SidebarChannelSwitcherProps {
 }
 
 /**
- * Sidebar 頂部「館別切換」元件。
+ * Sidebar 頂部「組織切換」元件。
  *
  * 設計：
  * - 兩行顯示：channel_name（主，深色）+ basic_id（副，灰色）
@@ -49,7 +49,7 @@ export function SidebarChannelSwitcher({ isOpen }: SidebarChannelSwitcherProps) 
 
   return (
     <div className="box-border flex flex-col gap-1 px-4 mb-4">
-      <p className="text-[12px] leading-[16px] text-[#717182] tracking-wide mb-1">館別切換</p>
+      <p className="text-[12px] leading-[16px] text-[#717182] tracking-wide mb-1">組織切換</p>
       <div ref={wrapperRef} className="relative">
         <button
           type="button"
@@ -72,9 +72,9 @@ export function SidebarChannelSwitcher({ isOpen }: SidebarChannelSwitcherProps) 
                 )}
               </>
             ) : hasNoChannels ? (
-              <p className="text-[14px] text-[#c43d3d]">未指派館別</p>
+              <p className="text-[14px] text-[#c43d3d]">未指派組織</p>
             ) : (
-              <p className="text-[14px] text-[#717182]">尚未設定館別</p>
+              <p className="text-[14px] text-[#717182]">尚未設定組織</p>
             )}
           </div>
           <ChevronDown

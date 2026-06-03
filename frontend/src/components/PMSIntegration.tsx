@@ -903,7 +903,7 @@ const PMSDataTable = memo(function PMSDataTable({
         try {
           if (categoryId) {
             if (!selectedLineChannelId) {
-              showToast("請先選擇 LINE 館別", "error");
+              showToast("請先選擇組織", "error");
               return;
             }
             const res = await apiPost(
