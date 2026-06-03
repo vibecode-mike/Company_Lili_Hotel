@@ -4,6 +4,8 @@ import { useToast } from './ToastProvider';
 import { BasicSettingsEmpty } from './BasicSettingsEmpty';
 import { BasicSettingsList, ChannelAccount } from './BasicSettingsList';
 import LineApiSettingsContent from './LineApiSettingsContent';
+import { CreateWebchatOrgModal } from './CreateWebchatOrgModal';
+import { useChannel } from '../contexts/ChannelContext';
 import {
   ensureFacebookSdkLoaded,
   fbGetManagedPages,
@@ -43,7 +45,9 @@ type FacebookSdkConfigDto = {
 export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
   const { isConfigured, refreshStatus } = useLineChannelStatus();
   const { showToast } = useToast();
+  const { refetch: refetchChannels } = useChannel();
   const [viewState, setViewState] = useState<ViewState>('loading');
+  const [showWebchatModal, setShowWebchatModal] = useState(false);
   const [accounts, setAccounts] = useState<ChannelAccount[]>([]);
   const [facebookAuthorizing, setFacebookAuthorizing] = useState(false);
   const [facebookSdkLoading, setFacebookSdkLoading] = useState(false);
@@ -510,10 +514,22 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
 
   if (viewState === 'empty') {
     return (
-      <BasicSettingsEmpty
-        onLineClick={handleLineClick}
-        onFacebookClick={handleFacebookClick}
-      />
+      <>
+        <BasicSettingsEmpty
+          onLineClick={handleLineClick}
+          onFacebookClick={handleFacebookClick}
+          onWebchatClick={() => setShowWebchatModal(true)}
+        />
+        {showWebchatModal && (
+          <CreateWebchatOrgModal
+            onClose={() => setShowWebchatModal(false)}
+            onCreated={() => {
+              reloadAccounts();
+              refetchChannels();
+            }}
+          />
+        )}
+      </>
     );
   }
 

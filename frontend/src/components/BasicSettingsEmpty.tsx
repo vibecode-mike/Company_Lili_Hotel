@@ -3,6 +3,8 @@ import { memo } from 'react';
 interface BasicSettingsEmptyProps {
   onLineClick: () => void;
   onFacebookClick: () => void;
+  /** 點「官網彈窗」卡 → 建立一個免 LINE 的組織 */
+  onWebchatClick?: () => void;
 }
 
 /**
@@ -11,7 +13,8 @@ interface BasicSettingsEmptyProps {
  */
 export const BasicSettingsEmpty = memo(function BasicSettingsEmpty({
   onLineClick,
-  onFacebookClick
+  onFacebookClick,
+  onWebchatClick
 }: BasicSettingsEmptyProps) {
   return (
     <div className="bg-[#f6f9fd] min-h-screen w-full">
@@ -142,6 +145,45 @@ export const BasicSettingsEmpty = memo(function BasicSettingsEmpty({
                         <div className="relative shrink-0 w-full">
                           <p className="font-['Inter',sans-serif] font-normal leading-[24px] relative shrink-0 text-[#6e6e6e] text-[16px] whitespace-nowrap tracking-[-0.31px]">
                             連接 Facebook 帳號
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </button>
+
+          {/* 官網彈窗 Card（免 LINE） */}
+          <button
+            onClick={onWebchatClick}
+            className="platform-card basis-0 grow min-h-px min-w-px relative rounded-[16px] shrink-0 p-[20px] group text-left border border-[#e5e7eb]"
+          >
+            <div className="flex flex-row items-center justify-center size-full">
+              {/* 官網彈窗 Icon（對話泡泡） */}
+              <div className="relative shrink-0 size-[48px]">
+                <svg className="block size-full" fill="none" viewBox="0 0 48 48">
+                  <rect width="36" height="36" x="6" y="6" rx="8" fill="#0f6beb" />
+                  <path
+                    d="M16 17h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H22l-5 4v-4h-1a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z"
+                    fill="white"
+                  />
+                </svg>
+              </div>
+              <div className="basis-0 grow min-h-px min-w-px relative shrink-0">
+                <div className="flex flex-row items-center size-full">
+                  <div className="content-stretch flex items-center px-[24px] py-0 relative w-full">
+                    <div className="h-[52px] relative shrink-0 w-full">
+                      <div className="content-stretch flex flex-col h-full items-start justify-center relative">
+                        <div className="relative shrink-0 w-full">
+                          <p className="font-['Inter',sans-serif] font-normal leading-[28px] relative shrink-0 text-[#0a0a0a] text-[18px] tracking-[-0.44px]">
+                            官網彈窗
+                          </p>
+                        </div>
+                        <div className="relative shrink-0 w-full">
+                          <p className="font-['Inter',sans-serif] font-normal leading-[24px] relative shrink-0 text-[#6e6e6e] text-[16px] whitespace-nowrap tracking-[-0.31px]">
+                            建立組織（免 LINE）
                           </p>
                         </div>
                       </div>
