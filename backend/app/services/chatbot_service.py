@@ -1381,6 +1381,25 @@ class ChatbotService:
         )
         return res.scalar_one_or_none()
 
+    async def _resolve_webchat_tenant_id(
+        self, db: AsyncSession, site_id: Optional[str]
+    ) -> Optional[int]:
+        """依 site_id 查 webchat_site_channels 找到所屬組織 tenant_id。
+
+        組織重構 Phase 4：純官網彈窗組織沒有 line_channel_id，BEFORE INSERT
+        trigger 無從補 tenant_id，因此這裡必須明確解析並寫入 member.tenant_id。
+        """
+        if not site_id:
+            return None
+        from app.models.webchat_site import WebchatSiteChannel
+
+        res = await db.execute(
+            select(WebchatSiteChannel.tenant_id).where(
+                WebchatSiteChannel.site_id == site_id
+            )
+        )
+        return res.scalar_one_or_none()
+
     async def _resolve_hotelcode(
         self,
         db: Optional[AsyncSession],
@@ -1439,6 +1458,8 @@ class ChatbotService:
         site_name = (site_name or "").strip()[:100] or None
         # 多 OA：依 site_id 查出綁定的 LINE channel_id，寫進 member.line_channel_id
         line_channel_id = await self._resolve_webchat_channel_id(db, site_id)
+        # 組織歸屬：純官網彈窗組織無 LINE，需明確解析 tenant_id（trigger 補不到）
+        tenant_id = await self._resolve_webchat_tenant_id(db, site_id)
 
         # 1. upsert Member by webchat_uid=browser_key
         result = await db.execute(
@@ -1462,6 +1483,7 @@ class ChatbotService:
                 webchat_site_id=site_id,
                 webchat_site_name=site_name,
                 line_channel_id=line_channel_id,
+                tenant_id=tenant_id,
             )
             db.add(member)
             await db.flush()  # 取得 member.id
@@ -1474,6 +1496,8 @@ class ChatbotService:
                 member.webchat_site_name = site_name
             if line_channel_id and not member.line_channel_id:
                 member.line_channel_id = line_channel_id
+            if tenant_id and not member.tenant_id:
+                member.tenant_id = tenant_id
 
         # 2. upsert ConversationThread (id = browser_key)
         thread_result = await db.execute(

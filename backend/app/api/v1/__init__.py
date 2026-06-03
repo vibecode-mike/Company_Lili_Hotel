@@ -41,6 +41,7 @@ from app.api.v1 import (
     admin_retention,
     fb_admin,
     staff,
+    tenants,
 )
 
 api_router = APIRouter()
@@ -84,3 +85,4 @@ api_router.include_router(analytics.router, prefix="/analytics", tags=["數據�
 api_router.include_router(conversations_export.router, prefix="", tags=["對話紀錄匯出"])
 api_router.include_router(admin_retention.router, prefix="/admin/retention", tags=["訪客資料保留"])
 api_router.include_router(staff.router, prefix="/staff", tags=["員工帳號管理"])
+api_router.include_router(tenants.router, prefix="/tenants", tags=["組織管理"])
