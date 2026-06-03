@@ -37,11 +37,14 @@ _BOOKING_FAQ_CATEGORY_NAME = "訂房"  # FAQ 大分類名稱
 
 
 async def _get_or_create_pms_conn(
-    db: AsyncSession, line_channel_id: Optional[str] = None
+    db: AsyncSession,
+    line_channel_id: Optional[str] = None,
+    tenant_id: Optional[int] = None,
 ) -> FaqPmsConnection:
-    """取得指定 LINE OA 的 PMS 連線設定記錄，不存在則建立。
+    """取得指定組織 / LINE OA 的 PMS 連線設定記錄，不存在則建立。
 
-    line_channel_id 為必填（向下相容：未提供時拿任一筆，但會 deprecate）。
+    組織重構：PMS 綁組織層級。tenant_id 提供時依組織查/建（純官網彈窗組織）；
+    否則依 line_channel_id（LINE 組織，多 OA 相容）。
     """
     from app.models.faq import FaqCategory
 
@@ -56,11 +59,13 @@ async def _get_or_create_pms_conn(
             detail=f"找不到 FAQ 分類「{_BOOKING_FAQ_CATEGORY_NAME}」，請先建立",
         )
 
-    # 依 (category_id, channel_id) 查
+    # 依 (category_id, 範圍) 查：組織優先，否則 channel
     stmt = select(FaqPmsConnection).where(
         FaqPmsConnection.faq_category_id == category.id
     )
-    if line_channel_id:
+    if tenant_id is not None:
+        stmt = stmt.where(FaqPmsConnection.tenant_id == tenant_id)
+    elif line_channel_id:
         stmt = stmt.where(FaqPmsConnection.channel_id == line_channel_id)
     stmt = stmt.limit(1)
     result = await db.execute(stmt)
@@ -68,15 +73,16 @@ async def _get_or_create_pms_conn(
     if conn is not None:
         return conn
 
-    if not line_channel_id:
+    if not line_channel_id and tenant_id is None:
         raise HTTPException(
             status_code=400,
-            detail="必須指定 LINE 館別（line_channel_id）",
+            detail="必須指定組織（tenant_id）或 LINE 館別（line_channel_id）",
         )
 
     conn = FaqPmsConnection(
         faq_category_id=category.id,
-        channel_id=line_channel_id,
+        channel_id=line_channel_id,  # 純官網組織為 None
+        tenant_id=tenant_id,
         api_endpoint="",
         api_key_encrypted="",
         auth_type="api_key",
@@ -93,14 +99,17 @@ async def get_pms_status(
     line_channel_id: Optional[str] = Query(
         None, description="LINE OA channel_id（多 OA 隔離）"
     ),
+    tenant_id: Optional[int] = Query(None, description="組織 ID（提供時優先；PMS 綁組織）"),
     db: AsyncSession = Depends(get_db),
 ):
-    """取得指定 LINE OA 的 PMS 串接啟用狀態"""
-    conn = await _get_or_create_pms_conn(db, line_channel_id)
-    init_pms_from_db(conn.status, line_channel_id)
+    """取得指定組織 / LINE OA 的 PMS 串接啟用狀態與 hotelcode"""
+    conn = await _get_or_create_pms_conn(db, line_channel_id, tenant_id)
+    if line_channel_id:
+        init_pms_from_db(conn.status, line_channel_id)
     return {
         "enabled": conn.status == "enabled",
         "configured": pms_configured(),
+        "hotelcode": conn.hotelcode or "",
         "last_synced_at": (
             conn.last_synced_at.strftime("%Y-%m-%d %H:%M")
             if conn.last_synced_at
@@ -115,20 +124,27 @@ async def update_pms_status(
     line_channel_id: Optional[str] = Query(
         None, description="LINE OA channel_id（多 OA 隔離）"
     ),
+    tenant_id: Optional[int] = Query(None, description="組織 ID（提供時優先；PMS 綁組織）"),
     db: AsyncSession = Depends(get_db),
 ):
-    """切換指定 LINE OA 的 PMS 串接啟用狀態"""
+    """設定指定組織 / LINE OA 的 PMS 串接：可帶 enabled（啟用狀態）與 hotelcode。"""
     enabled = body.get("enabled")
-    if enabled is None:
-        raise HTTPException(status_code=422, detail="需提供 enabled 欄位")
+    hotelcode = body.get("hotelcode")
+    if enabled is None and hotelcode is None:
+        raise HTTPException(status_code=422, detail="需提供 enabled 或 hotelcode 欄位")
 
-    conn = await _get_or_create_pms_conn(db, line_channel_id)
-    new_status = "enabled" if enabled else "disabled"
-    conn.status = new_status
+    conn = await _get_or_create_pms_conn(db, line_channel_id, tenant_id)
+    if hotelcode is not None:
+        conn.hotelcode = (hotelcode or "").strip() or None
+    if enabled is not None:
+        conn.status = "enabled" if enabled else "disabled"
     await db.commit()
 
-    set_pms_enabled(line_channel_id, bool(enabled))
-    return {"enabled": conn.status == "enabled"}
+    # 同步記憶體旗標（LINE 用 channel_id；組織用 tenant:<id> 哨符）
+    scope_key = line_channel_id or (f"tenant:{tenant_id}" if tenant_id is not None else None)
+    if scope_key:
+        set_pms_enabled(scope_key, conn.status == "enabled")
+    return {"enabled": conn.status == "enabled", "hotelcode": conn.hotelcode or ""}
 
 
 @router.get("/pms-rooms")
