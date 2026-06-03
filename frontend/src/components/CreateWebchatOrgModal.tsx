@@ -52,7 +52,7 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || `HTTP ${res.status}`);
       }
-      setSuccess(`組織「${trimmed}」已建立${siteId.trim() ? '，並綁定官網彈窗站點' : ''}。`);
+      setSuccess(`「${trimmed}」已建立${siteId.trim() ? '，官網聊天視窗已啟用' : ''}。`);
       // 不清空 siteId，讓下方嵌入碼留著供複製給前端工程師
       onCreated?.();
     } catch (e) {
@@ -75,12 +75,11 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
           官網彈窗客服
         </h2>
         <p className="font-['Noto_Sans_TC',sans-serif] text-[14px] text-[#6e6e6e] mb-[20px]">
-          建立一個不需要 LINE 的組織，只用官網彈窗客服。只需填組織名稱即可，
-          可選填官網彈窗站點代號以立即啟用。
+          在官網加上一個聊天視窗，訪客可以直接在網站上和客服對話。
         </p>
 
         <label className="block font-['Noto_Sans_TC',sans-serif] text-[14px] text-[#383838] mb-[6px]">
-          組織名稱 <span className="text-[#d33]">*</span>
+          名稱 <span className="text-[#d33]">*</span>
         </label>
         <input
           type="text"
@@ -92,16 +91,17 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
         />
 
         <label className="block font-['Noto_Sans_TC',sans-serif] text-[14px] text-[#383838] mb-[6px]">
-          官網彈窗站點代號（選填）
+          官網代號（選填）
         </label>
         <input
           type="text"
           value={siteId}
           onChange={(e) => setSiteId(e.target.value)}
-          placeholder="例：taipei（用於官網嵌入 widget）"
+          placeholder="例：taipei"
           maxLength={50}
-          className="w-full border border-[#b6c8f1] rounded-[8px] px-3 py-2 text-[14px] mb-[16px] outline-none focus:border-[#0f6beb]"
+          className="w-full border border-[#b6c8f1] rounded-[8px] px-3 py-2 text-[14px] mb-[6px] outline-none focus:border-[#0f6beb]"
         />
+        <p className="text-[12px] text-[#9aa0ab] mb-[16px]">英文或數字，用來代表這個官網（之後產生安裝碼用）。</p>
 
         {error && <p className="text-[13px] text-[#d33] mb-[12px]">{error}</p>}
         {success && <p className="text-[13px] text-[#1a7f37] mb-[12px]">{success}</p>}
@@ -109,7 +109,7 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
         {embedCode && (
           <div className="mb-[12px]">
             <div className="flex items-center justify-between mb-[6px]">
-              <p className="text-[14px] text-[#383838]">官網機器人佈署 — 貼到官網 &lt;/body&gt; 前：</p>
+              <p className="text-[14px] text-[#383838]">安裝程式碼（交給網站工程師貼到官網）</p>
               <button
                 type="button"
                 onClick={handleCopy}

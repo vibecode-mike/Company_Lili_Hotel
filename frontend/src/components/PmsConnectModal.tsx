@@ -75,8 +75,7 @@ export function PmsConnectModal({ onClose }: PmsConnectModalProps) {
       <div className="bg-white rounded-[16px] w-full max-w-[460px] p-[28px] shadow-xl" onClick={(e) => e.stopPropagation()}>
         <h2 className="font-['Noto_Sans_TC',sans-serif] text-[20px] text-[#242424] mb-[4px]">PMS 串接</h2>
         <p className="font-['Noto_Sans_TC',sans-serif] text-[14px] text-[#6e6e6e] mb-[20px]">
-          設定「<span className="text-[#0f6beb]">{orgName}</span>」的訂房系統 Hotel Code。
-          此組織底下的 LINE / 官網彈窗 / FB 接客房查詢、訂房時都會共用這組 PMS。
+          設定「<span className="text-[#0f6beb]">{orgName}</span>」的訂房系統代號，用來查房況、接訂房。
         </p>
 
         {loading ? (
@@ -97,7 +96,7 @@ export function PmsConnectModal({ onClose }: PmsConnectModalProps) {
 
             <label className="flex items-center gap-[8px] text-[14px] text-[#383838] mb-[16px] cursor-pointer">
               <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-              啟用 PMS 即時房況串接
+              啟用即時房況查詢
             </label>
 
             {err && <p className="text-[13px] text-[#d33] mb-[12px]">{err}</p>}
