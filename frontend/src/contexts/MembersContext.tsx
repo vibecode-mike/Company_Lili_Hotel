@@ -233,12 +233,15 @@ export function MembersProvider({ children }: MembersProviderProps) {
       // 全站館別切換：LINE / Webchat 會員清單都帶 line_channel_id
       // Webchat 訪客的 members.line_channel_id 是從 webchat_site_id → webchat_site_channels 映射回來，
       // 沒帶會跨 OA 顯示（漢堂館訪客出現在雷恩館清單）
-      const lineChannelParam = selectedLineChannelId
+      // 組織隔離：無 LINE 組織用 tenant_id 過濾；LINE 組織沿用 line_channel_id（相容舊行為）
+      const channelParam = selectedChannel?.tenant_id
+        ? `&tenant_id=${selectedChannel.tenant_id}`
+        : selectedLineChannelId
         ? `&line_channel_id=${encodeURIComponent(selectedLineChannelId)}`
         : '';
       const [lineMembersRes, webchatMembersRes, fbMembersRes, fbChannelsRes] = await Promise.all([
-        apiGet(`/api/v1/members?channel=line&page=1&page_size=200${lineChannelParam}`),
-        apiGet(`/api/v1/members?channel=webchat&page=1&page_size=200${lineChannelParam}`),
+        apiGet(`/api/v1/members?channel=line&page=1&page_size=200${channelParam}`),
+        apiGet(`/api/v1/members?channel=webchat&page=1&page_size=200${channelParam}`),
         jwtToken
           ? fetch(`/api/v1/fb_channels/message-list?jwt_token=${encodeURIComponent(jwtToken)}`)
           : Promise.resolve({ ok: false } as Response),

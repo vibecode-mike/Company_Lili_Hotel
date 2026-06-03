@@ -46,7 +46,7 @@ interface ChannelProviderProps {
  * - user 沒被指派任何 channel 時 selectedChannel = null + hasNoChannels = true
  */
 export function ChannelProvider({ children }: ChannelProviderProps) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [channels, setChannels] = useState<LineChannelInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +67,35 @@ export function ChannelProvider({ children }: ChannelProviderProps) {
         throw new Error(`HTTP ${res.status}`);
       }
       const data = await res.json();
-      setChannels(Array.isArray(data) ? data : []);
+      const lineChannels: LineChannelInfo[] = Array.isArray(data) ? data : [];
+
+      // 組織重構：admin 額外把「無 LINE 的組織」附加進清單（讓純官網彈窗組織也能在切換器看到）。
+      // LINE 組織的載入完全不動（零風險）；無 LINE 組織用 `tenant:<id>` 哨符當 channel_id。
+      let noLineOrgs: LineChannelInfo[] = [];
+      if ((user?.role || '').toLowerCase() === 'admin') {
+        try {
+          const tRes = await apiGet('/api/v1/tenants');
+          if (tRes.ok) {
+            const tenants = await tRes.json();
+            if (Array.isArray(tenants)) {
+              noLineOrgs = tenants
+                .filter((t) => (t.line_channel_count ?? 0) === 0)
+                .map((t) => ({
+                  id: -Number(t.id), // 避免與 LINE channel 的 id 撞號
+                  channel_id: `tenant:${t.id}`,
+                  channel_name: t.name,
+                  basic_id: '（官網彈窗・無 LINE）',
+                  is_active: !!t.is_active,
+                  tenant_id: Number(t.id),
+                  is_no_line_org: true,
+                }));
+            }
+          }
+        } catch {
+          // 取組織清單失敗不影響 LINE 主清單
+        }
+      }
+      setChannels([...lineChannels, ...noLineOrgs]);
     } catch (err) {
       const message = err instanceof Error ? err.message : '取得可用 LINE OA 失敗';
       setError(message);
@@ -75,7 +103,7 @@ export function ChannelProvider({ children }: ChannelProviderProps) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.role]);
 
   useEffect(() => {
     if (!isAuthenticated) {

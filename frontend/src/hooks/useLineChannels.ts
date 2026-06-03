@@ -7,6 +7,10 @@ export interface LineChannelInfo {
   channel_name: string | null;
   basic_id: string | null;
   is_active: boolean;
+  /** 所屬組織 ID（組織重構）；切換器用來識別組織 */
+  tenant_id?: number | null;
+  /** 純官網彈窗組織（無 LINE）：channel_id 為 `tenant:<id>` 哨符，無法用於 LINE 過濾 */
+  is_no_line_org?: boolean;
 }
 
 interface UseLineChannelsResult {
