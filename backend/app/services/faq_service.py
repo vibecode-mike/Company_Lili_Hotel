@@ -42,9 +42,10 @@ class FaqService:
         db: AsyncSession,
         industry_id: int,
         line_channel_id: Optional[str] = None,
+        tenant_id: Optional[int] = None,
     ) -> List[FaqCategory]:
         """取得大分類清單（含欄位定義與規則數量）。
-        line_channel_id 提供時，rule_count / published_count 只算該 OA 的規則。
+        tenant_id 提供時優先（支援無 LINE 組織）；否則退回 line_channel_id。
         """
         stmt = (
             select(FaqCategory)
@@ -75,7 +76,9 @@ class FaqService:
             .select_from(FaqRule)
             .group_by(FaqRule.category_id)
         )
-        if line_channel_id:
+        if tenant_id is not None:
+            counts_stmt = counts_stmt.where(FaqRule.tenant_id == tenant_id)
+        elif line_channel_id:
             counts_stmt = counts_stmt.where(FaqRule.channel_id == line_channel_id)
         counts_result = await db.execute(counts_stmt)
         counts_map = {
@@ -121,12 +124,15 @@ class FaqService:
         page: int = 1,
         page_size: int = 20,
         line_channel_id: Optional[str] = None,
+        tenant_id: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """取得規則清單（含分頁）。line_channel_id 提供時只回傳該 OA 的規則。"""
+        """取得規則清單（含分頁）。tenant_id 優先（支援無 LINE 組織），否則退回 line_channel_id。"""
         base_stmt = select(FaqRule).where(FaqRule.category_id == category_id)
         if status:
             base_stmt = base_stmt.where(FaqRule.status == status)
-        if line_channel_id:
+        if tenant_id is not None:
+            base_stmt = base_stmt.where(FaqRule.tenant_id == tenant_id)
+        elif line_channel_id:
             base_stmt = base_stmt.where(FaqRule.channel_id == line_channel_id)
 
         # 計數
@@ -137,7 +143,9 @@ class FaqService:
         )
         if status:
             count_stmt = count_stmt.where(FaqRule.status == status)
-        if line_channel_id:
+        if tenant_id is not None:
+            count_stmt = count_stmt.where(FaqRule.tenant_id == tenant_id)
+        elif line_channel_id:
             count_stmt = count_stmt.where(FaqRule.channel_id == line_channel_id)
         count_result = await db.execute(count_stmt)
         total = count_result.scalar() or 0
@@ -186,11 +194,12 @@ class FaqService:
         content_json: Dict[str, Any],
         tag_names: List[str],
         user_id: int,
-        line_channel_id: str,
+        line_channel_id: Optional[str] = None,
+        tenant_id: Optional[int] = None,
     ) -> FaqRule:
-        """建立規則。line_channel_id 為該 rule 所屬的 LINE OA。"""
-        if not line_channel_id:
-            raise ValueError("必須指定 LINE 館別（line_channel_id）")
+        """建立規則。LINE 組織帶 line_channel_id；純官網彈窗組織帶 tenant_id（channel_id 留空）。"""
+        if not line_channel_id and tenant_id is None:
+            raise ValueError("必須指定組織（tenant_id）或 LINE 館別（line_channel_id）")
 
         # 檢查分類是否存在
         cat_stmt = select(FaqCategory).where(FaqCategory.id == category_id)
@@ -199,13 +208,16 @@ class FaqService:
         if not category:
             raise ValueError("大分類不存在")
 
-        # 檢查規則數量上限（同分類同 OA 內）
+        # 檢查規則數量上限（同分類同範圍內：組織優先，否則 OA）
         count_stmt = (
             select(func.count())
             .select_from(FaqRule)
             .where(FaqRule.category_id == category_id)
-            .where(FaqRule.channel_id == line_channel_id)
         )
+        if tenant_id is not None:
+            count_stmt = count_stmt.where(FaqRule.tenant_id == tenant_id)
+        else:
+            count_stmt = count_stmt.where(FaqRule.channel_id == line_channel_id)
         count_result = await db.execute(count_stmt)
         current_count = count_result.scalar() or 0
         if current_count >= MAX_RULES_PER_CATEGORY:
@@ -215,7 +227,8 @@ class FaqService:
 
         rule = FaqRule(
             category_id=category_id,
-            channel_id=line_channel_id,
+            channel_id=line_channel_id,  # 純官網組織為 None
+            tenant_id=tenant_id,         # LINE 組織為 None（BEFORE INSERT trigger 依 channel_id 補）
             content_json=json.dumps(content_json, ensure_ascii=False),
             status="draft",
             created_by=user_id,

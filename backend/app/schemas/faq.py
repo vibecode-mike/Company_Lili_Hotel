@@ -71,7 +71,8 @@ class FaqRuleCreateSchema(BaseModel):
 
     content_json: Dict[str, Any]
     tag_names: List[str] = []
-    line_channel_id: str = Field(..., description="所屬 LINE OA channel_id（必填）")
+    line_channel_id: Optional[str] = Field(None, description="所屬 LINE OA channel_id（LINE 組織必填）")
+    tenant_id: Optional[int] = Field(None, description="所屬組織 ID（無 LINE 組織用，與 line_channel_id 二擇一）")
 
 
 class FaqRuleUpdateSchema(BaseModel):

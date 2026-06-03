@@ -42,6 +42,7 @@ async def get_categories(
     line_channel_id: Optional[str] = Query(
         None, description="LINE OA channel_id，rule_count 與 PMS 連線狀態只算該 OA"
     ),
+    tenant_id: Optional[int] = Query(None, description="組織 ID（提供時優先於 line_channel_id）"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -50,7 +51,7 @@ async def get_categories(
     if not industry:
         raise HTTPException(status_code=404, detail="尚未設定產業資料")
 
-    categories = await faq_service.get_categories(db, industry.id, line_channel_id)
+    categories = await faq_service.get_categories(db, industry.id, line_channel_id, tenant_id)
 
     # Build response with PMS connection status for each category
     result = []
@@ -138,12 +139,13 @@ async def get_rules(
     line_channel_id: Optional[str] = Query(
         None, description="LINE OA channel_id，提供時只回該 OA 的規則"
     ),
+    tenant_id: Optional[int] = Query(None, description="組織 ID（提供時優先於 line_channel_id）"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """取得分類下規則清單"""
     result = await faq_service.get_rules(
-        db, category_id, status, page, page_size, line_channel_id
+        db, category_id, status, page, page_size, line_channel_id, tenant_id
     )
 
     items = []
@@ -207,6 +209,7 @@ async def create_rule(
             data.tag_names,
             current_user.id,
             data.line_channel_id,
+            data.tenant_id,
         )
         _bump_rule_modified()
         return {
