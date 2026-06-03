@@ -92,6 +92,7 @@ async def get_members(
     page_params: PageParams = Depends(),
     channel: Optional[str] = None,
     line_channel_id: Optional[str] = Query(None, description="特定 LINE OA channel_id（多分館隔離用）"),
+    tenant_id: Optional[int] = Query(None, description="特定組織 ID（組織隔離；提供時優先於 line_channel_id）"),
     member_type: str = Query("all", pattern="^(all|member|guest)$", description="會員類型：all=全部 / member=已加入會員 / guest=訪客"),
     db: AsyncSession = Depends(get_db),
     # current_user: User = Depends(get_current_user),  # 暫時移除認證，開發階段使用
@@ -139,13 +140,17 @@ async def get_members(
     if params.tags:
         tag_names = params.tags.split(",")  # 現在使用標籤名稱而非ID
         tag_conditions = [MemberTag.tag_name.in_(tag_names)]
-        # 帶 line_channel_id 時：只看該 OA 下的標籤
-        if line_channel_id:
+        # 組織隔離優先；否則退回 line_channel_id（多 OA）
+        if tenant_id is not None:
+            tag_conditions.append(MemberTag.tenant_id == tenant_id)
+        elif line_channel_id:
             tag_conditions.append(MemberTag.channel_id == line_channel_id)
         query = query.join(MemberTag).where(and_(*tag_conditions))
 
-    # 多 OA 隔離：line_channel_id 提供時，限制為該分館的 LINE 會員
-    if line_channel_id:
+    # 組織隔離：tenant_id 提供時優先（支援無 LINE 組織）；否則退回 line_channel_id
+    if tenant_id is not None:
+        query = query.where(Member.tenant_id == tenant_id)
+    elif line_channel_id:
         query = query.where(Member.line_channel_id == line_channel_id)
 
     # 取得所有啟用中的 LINE channel_id
