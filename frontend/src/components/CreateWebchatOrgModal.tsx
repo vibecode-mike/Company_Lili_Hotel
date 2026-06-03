@@ -19,6 +19,7 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [embedCode, setEmbedCode] = useState('');
 
   const handleCreate = async () => {
     const trimmed = name.trim();
@@ -37,7 +38,9 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || `HTTP ${res.status}`);
       }
+      const data = await res.json().catch(() => ({}));
       setSuccess(`組織「${trimmed}」已建立${siteId.trim() ? '，並綁定官網彈窗站點' : ''}。`);
+      if (data?.webchat_embed_code) setEmbedCode(data.webchat_embed_code);
       setName('');
       setSiteId('');
       onCreated?.();
@@ -91,6 +94,18 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
 
         {error && <p className="text-[13px] text-[#d33] mb-[12px]">{error}</p>}
         {success && <p className="text-[13px] text-[#1a7f37] mb-[12px]">{success}</p>}
+
+        {embedCode && (
+          <div className="mb-[12px]">
+            <p className="text-[13px] text-[#383838] mb-[6px]">官網機器人佈署 — 把這段嵌入碼貼到官網 &lt;/body&gt; 前：</p>
+            <textarea
+              readOnly
+              value={embedCode}
+              onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+              className="w-full h-[64px] border border-[#b6c8f1] rounded-[8px] px-3 py-2 text-[12px] font-mono bg-[#f6f9fd] outline-none resize-none"
+            />
+          </div>
+        )}
 
         <div className="flex items-center justify-end gap-[12px] mt-[8px]">
           <button

@@ -37,6 +37,7 @@ class TenantResponse(BaseModel):
     is_active: bool
     line_channel_count: int = Field(0, description="底下已接的 LINE OA 數")
     webchat_site_count: int = Field(0, description="底下已接的官網彈窗站點數")
+    webchat_embed_code: Optional[str] = Field(None, description="建立時若帶官網站點，回傳嵌入碼供前端顯示")
     created_at: Optional[datetime] = None
 
     class Config:

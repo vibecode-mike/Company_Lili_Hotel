@@ -114,7 +114,16 @@ async def create_tenant(
     await db.commit()
     await db.refresh(tenant)
     logger.info(f"建立組織 id={tenant.id} name={name} webchat_site={payload.webchat_site_id or '-'}")
-    return await _to_response(db, tenant)
+    resp = await _to_response(db, tenant)
+    # 官網機器人佈署：若建立了官網站點，附上嵌入碼（只需 site_id）
+    if payload.webchat_site_id:
+        from app.config import settings
+        public_base = (settings.PUBLIC_BASE or "").rstrip("/")
+        resp.webchat_embed_code = (
+            f'<script src="{public_base}/widget/loader.js'
+            f'?site_id={payload.webchat_site_id.strip()}" async></script>'
+        )
+    return resp
 
 
 @router.patch("/{tenant_id}", response_model=TenantResponse)
