@@ -106,7 +106,11 @@ class FaqPmsConnection(Base):
         UniqueConstraint(
             "faq_category_id", "channel_id", name="uq_faq_pms_category_channel"
         ),
+        UniqueConstraint(
+            "faq_category_id", "tenant_id", name="uq_faq_pms_category_tenant"
+        ),
         Index("ix_faq_pms_connections_channel_id", "channel_id"),
+        Index("ix_faq_pms_connections_tenant_id", "tenant_id"),
     )
 
     faq_category_id = Column(
@@ -118,8 +122,14 @@ class FaqPmsConnection(Base):
     channel_id = Column(
         String(100),
         ForeignKey("line_channels.channel_id", ondelete="CASCADE"),
-        nullable=False,
-        comment="所屬 LINE OA channel_id（多 OA 隔離）",
+        nullable=True,
+        comment="所屬 LINE OA channel_id（選配；純官網彈窗組織可為空，改用 tenant_id）",
+    )
+    tenant_id = Column(
+        BigInteger,
+        ForeignKey("tenants.id", ondelete="CASCADE", name="fk_faq_pms_connections_tenant"),
+        nullable=True,
+        comment="所屬組織 ID（PMS 綁組織層級；同組織所有渠道共用）",
     )
     hotelcode = Column(
         String(50),
