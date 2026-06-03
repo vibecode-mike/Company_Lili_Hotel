@@ -118,15 +118,15 @@ class FaqRule(Base):
     channel_id = Column(
         String(100),
         ForeignKey("line_channels.channel_id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
-        comment="所屬 LINE OA channel_id（多 OA 隔離）",
+        comment="所屬 LINE OA channel_id（選配；純官網彈窗組織可為空，改用 tenant_id 歸屬）",
     )
     tenant_id = Column(
         BigInteger,
         ForeignKey("tenants.id", ondelete="SET NULL", name="fk_faq_rules_tenant"),
         nullable=True,
-        comment="所屬組織 ID（組織重構 Phase 2）",
+        comment="所屬組織 ID（組織重構；無 LINE 組織的 FAQ 主要歸屬）",
     )
     content_json = Column(Text, nullable=False, comment="規則內容 JSON")
     status = Column(
