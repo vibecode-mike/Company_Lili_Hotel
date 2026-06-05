@@ -78,9 +78,11 @@ def upgrade() -> None:
         )
 
     # backfill：依 channel_id 對到組織
+    # COLLATE：跨表字串欄位 collation 在 staging 不一致，強制統一避免 MySQL 1267。
     op.execute(f"""
         UPDATE {TABLE} fpc
-        JOIN line_channels lc ON lc.channel_id = fpc.channel_id
+        JOIN line_channels lc
+          ON lc.channel_id COLLATE utf8mb4_unicode_ci = fpc.channel_id COLLATE utf8mb4_unicode_ci
         SET fpc.tenant_id = lc.tenant_id
         WHERE fpc.tenant_id IS NULL AND lc.tenant_id IS NOT NULL
     """)

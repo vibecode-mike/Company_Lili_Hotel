@@ -82,11 +82,15 @@ def upgrade() -> None:
             )
 
         # backfill：用 channel_id 或 basic_id 對到組織；只動還沒分配的列
+        # COLLATE：staging 上 data 表與 line_channels 的字串欄位 collation 不一致
+        # （utf8mb4_0900_ai_ci vs utf8mb4_unicode_ci）→ 直接比較會爆 MySQL 1267。
+        # 兩側都強制 utf8mb4_unicode_ci，跨環境一致、不影響比對結果（皆 utf8mb4）。
         op.execute(
             f"""
             UPDATE {table} d
             JOIN line_channels lc
-              ON lc.channel_id = d.{col} OR lc.basic_id = d.{col}
+              ON lc.channel_id COLLATE utf8mb4_unicode_ci = d.{col} COLLATE utf8mb4_unicode_ci
+              OR lc.basic_id COLLATE utf8mb4_unicode_ci = d.{col} COLLATE utf8mb4_unicode_ci
             SET d.tenant_id = lc.tenant_id
             WHERE d.tenant_id IS NULL AND lc.tenant_id IS NOT NULL
             """

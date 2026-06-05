@@ -46,13 +46,17 @@ DATA_TABLES = [
 
 
 def _trigger_body(col: str) -> str:
+    # COLLATE：staging 上 data 表與 line_channels 字串欄位 collation 不一致
+    # （utf8mb4_0900_ai_ci vs utf8mb4_unicode_ci）→ 觸發時比較會爆 MySQL 1267，
+    # 導致該表 INSERT/UPDATE 全部失敗。兩側強制 utf8mb4_unicode_ci。
     return dedent(
         f"""
         BEGIN
             IF NEW.tenant_id IS NULL AND NEW.{col} IS NOT NULL THEN
                 SET NEW.tenant_id = (
                     SELECT lc.tenant_id FROM line_channels lc
-                    WHERE (lc.channel_id = NEW.{col} OR lc.basic_id = NEW.{col})
+                    WHERE (lc.channel_id COLLATE utf8mb4_unicode_ci = NEW.{col} COLLATE utf8mb4_unicode_ci
+                        OR lc.basic_id COLLATE utf8mb4_unicode_ci = NEW.{col} COLLATE utf8mb4_unicode_ci)
                       AND lc.tenant_id IS NOT NULL
                     LIMIT 1
                 );

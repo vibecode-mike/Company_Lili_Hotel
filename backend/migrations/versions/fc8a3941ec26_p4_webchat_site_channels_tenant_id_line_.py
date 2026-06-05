@@ -96,10 +96,12 @@ def upgrade() -> None:
         )
 
     # backfill：既有 site 依 line_channel_id 對到組織
+    # COLLATE：跨表字串欄位 collation 在 staging 不一致，強制統一避免 MySQL 1267。
     op.execute(
         """
         UPDATE webchat_site_channels w
-        JOIN line_channels lc ON lc.channel_id = w.line_channel_id
+        JOIN line_channels lc
+          ON lc.channel_id COLLATE utf8mb4_unicode_ci = w.line_channel_id COLLATE utf8mb4_unicode_ci
         SET w.tenant_id = lc.tenant_id
         WHERE w.tenant_id IS NULL AND lc.tenant_id IS NOT NULL
         """
