@@ -65,6 +65,13 @@ def _has_fk(bind, table, fk_name):
 def upgrade() -> None:
     bind = op.get_bind()
 
+    # members backfill（UPDATE members SET tenant_id）會觸發既有的 line_friend 同步
+    # AFTER trigger → sp_sync_member_to_line_friend，該 SP 內部 `line_friends.line_uid = 變數`
+    # 在 staging collation 不一致時會爆 MySQL 1267，導致整支 migration 失敗。
+    # 補 tenant_id 與 line_friend 同步無關 → 用既有的 @skip 開關暫停同步 trigger。
+    op.execute("SET @skip_member_trigger = 1")
+    op.execute("SET @skip_line_friend_trigger = 1")
+
     for table, col in DATA_TABLES:
         fk_name = f"fk_{table}_tenant"
 
@@ -95,6 +102,10 @@ def upgrade() -> None:
             WHERE d.tenant_id IS NULL AND lc.tenant_id IS NOT NULL
             """
         )
+
+    # 還原同步 trigger 開關
+    op.execute("SET @skip_member_trigger = 0")
+    op.execute("SET @skip_line_friend_trigger = 0")
 
 
 def downgrade() -> None:
