@@ -165,11 +165,47 @@ def _build_booking_confirm_flex(data: BookingCallbackRequest) -> dict:
     }
 
 
-def _push_line_flex(line_uid: str, flex_dict: dict, alt_text: str = "訂房確認通知") -> bool:
-    """用 LINE Push Message API 發送 Flex Message"""
-    token = settings.LINE_CHANNEL_ACCESS_TOKEN
+async def _resolve_channel_token(line_uid: str) -> Optional[str]:
+    """
+    依會員所屬官方帳號(multi-OA)取對應的 channel_access_token。
+
+    members.line_channel_id 存的是 LINE 的 Channel ID 字串，對應 line_channels.channel_id
+    （不是 PK line_channels.id），所以 join 在 channel_id 上。
+    staging 與地端 collation 不一致(1267)，跨欄字串比較一律加 COLLATE。
+
+    回傳 None 代表：會員未綁 channel、channel 不存在/停用，或查詢失敗 → 由呼叫端決定 fallback。
+    """
+    if not line_uid:
+        return None
+    try:
+        from app.database import AsyncSessionLocal
+        from sqlalchemy import text as _text
+
+        async with AsyncSessionLocal() as db:
+            row = (await db.execute(
+                _text(
+                    "SELECT lc.channel_access_token AS token "
+                    "FROM members m "
+                    "JOIN line_channels lc "
+                    "  ON lc.channel_id = m.line_channel_id COLLATE utf8mb4_unicode_ci "
+                    " AND lc.is_active = 1 "
+                    "WHERE m.line_uid = :uid AND m.line_channel_id IS NOT NULL "
+                    "LIMIT 1"
+                ),
+                {"uid": line_uid},
+            )).first()
+            return row.token if row and row.token else None
+    except Exception:
+        logger.exception("[BookingCallback] resolve channel token failed for %s", line_uid)
+        return None
+
+
+def _push_line_flex(
+    line_uid: str, flex_dict: dict, alt_text: str = "訂房確認通知", token: Optional[str] = None
+) -> bool:
+    """用 LINE Push Message API 發送 Flex Message（token 由呼叫端依會員所屬 OA 傳入）"""
     if not token:
-        logger.error("[BookingCallback] LINE_CHANNEL_ACCESS_TOKEN not configured")
+        logger.error("[BookingCallback] no LINE channel token resolved for %s, skip push", line_uid)
         return False
 
     resp = httpx.post(
@@ -399,7 +435,11 @@ async def booking_callback(
         else:
             flex_dict = _build_booking_failed_flex(data)
             alt_text = "付款未完成通知"
-        line_sent = _push_line_flex(line_uid, flex_dict, alt_text=alt_text)
+        # multi-OA：依會員所屬官方帳號取 token；查不到才退回 env 主帳號（相容舊有單一主帳號會員）
+        token = await _resolve_channel_token(line_uid)
+        if not token:
+            token = settings.LINE_CHANNEL_ACCESS_TOKEN or None
+        line_sent = _push_line_flex(line_uid, flex_dict, alt_text=alt_text, token=token)
     else:
         logger.warning(f"[BookingCallback] No line_uid provided, cannot push")
 

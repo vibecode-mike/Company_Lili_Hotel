@@ -39,8 +39,11 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 240  # 4 小時
 
     # LINE Messaging API
-    LINE_CHANNEL_ACCESS_TOKEN: str
-    LINE_CHANNEL_SECRET: str
+    # 多官方帳號(multi-OA)：憑證改存 DB line_channels(per-channel)，初始無 OA 時這兩個 env 可為空。
+    # 留必填會在「未綁定任何 OA」的環境啟動時 ValidationError 害 backend 整個起不來。
+    # 對照 line_app/config.py 早就是 os.getenv(..., "")。
+    LINE_CHANNEL_ACCESS_TOKEN: str = ""
+    LINE_CHANNEL_SECRET: str = ""
 
     # OpenAI 配置
     OPENAI_API_KEY: str = ""
