@@ -32,6 +32,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # ===== STEP 1: 建 line_friends 表（IF NOT EXISTS） =====
+    # ⚠️ 注意：下方 COLLATE=utf8mb4_0900_ai_ci 是寫死的，這是「member<->line_friend
+    #    同步 SP 在 unicode_ci 環境撞 1267」的根因——若該環境其餘表是 unicode_ci，
+    #    這張表就會與 members 不一致。已套用環境改不動這支(IF NOT EXISTS 不會重建)，
+    #    收斂改由後續 migration 8232192e915c「對齊 members」處理。新環境若要乾淨，
+    #    應改成跟 members 同一個 collation。
     op.execute("""
         CREATE TABLE IF NOT EXISTS line_friends (
             id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'LINE 好友 ID',
