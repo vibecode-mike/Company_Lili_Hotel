@@ -2230,6 +2230,33 @@ def api_broadcast():
 # ============================================
 # 1:1 聊天 API
 # ============================================
+def _resolve_send_line_channel_id(line_uid: str) -> Optional[str]:
+    """決定手動推播要用哪個 OA 的 token。
+
+    multi-OA 後 token 改存 DB line_channels(per-channel)，全域 messaging_api 仍綁
+    .env 的 LINE_CHANNEL_ACCESS_TOKEN——在 env token 失效/不符的環境會 401。
+    目前資料模型沒有 friend↔OA 對應欄位，採「唯一啟用中的 OA」。
+
+    ⚠️  多 OA（≥2 啟用）下的限制：這裡只能取 id 最小的 OA，無法判斷該好友真正屬於
+    哪個 OA。LINE userId 是 per-channel scoped——同一人在不同 OA 是不同 userId，拿
+    OA-A 好友的 userId 配 OA-B token 去 push，LINE 直接回錯（非該 channel 好友），
+    所以後果是「部分好友送訊失敗」，**不是**跨 OA 誤送/洩漏。上多 OA 前必做：在
+    line_friends（或 conversation_threads）加 line_channel_id，webhook 收訊時記下來
+    源 OA，這支再改成「查該好友的 OA」而非「取唯一啟用 OA」。
+    """
+    rows = fetchall(
+        f"SELECT {LINE_CHANNEL_ID_COL} AS cid FROM line_channels WHERE is_active = 1 ORDER BY id"
+    )
+    if not rows:
+        return None
+    if len(rows) > 1:
+        logging.warning(
+            "[api_send_chat_message] 多個啟用 OA 但無 uid↔OA 對應，預設用第一個 %s（uid=%s）",
+            rows[0]["cid"], line_uid,
+        )
+    return rows[0]["cid"]
+
+
 @app.post("/api/v1/chat/send")
 def api_send_chat_message():
     """
@@ -2258,15 +2285,17 @@ def api_send_chat_message():
         if not text:
             return jsonify({"ok": False, "error": "text required"}), 400
 
-        # 1. 發送訊息
+        # 1. 發送訊息（用 DB per-OA token，不用會失效的全域 env token）
         text = render_template_text(text, line_uid=line_uid)
-        messaging_api.push_message(
+        line_channel_id = _resolve_send_line_channel_id(line_uid)
+        api = get_messaging_api_by_line_id(line_channel_id) if line_channel_id else messaging_api
+        api.push_message(
             PushMessageRequest(
                 to=line_uid,
                 messages=[TextMessage(text=text)]
             )
         )
-        logging.info(f"[api_send_chat_message] 成功發送訊息給 {line_uid}")
+        logging.info(f"[api_send_chat_message] 成功發送訊息給 {line_uid}（channel={line_channel_id}）")
 
         # 2. 確保對話串存在
         thread_id = ensure_thread_for_user(line_uid)
