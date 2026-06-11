@@ -2235,15 +2235,23 @@ def _resolve_send_line_channel_id(line_uid: str) -> Optional[str]:
 
     multi-OA 後 token 改存 DB line_channels(per-channel)，全域 messaging_api 仍綁
     .env 的 LINE_CHANNEL_ACCESS_TOKEN——在 env token 失效/不符的環境會 401。
-    目前資料模型沒有 friend↔OA 對應欄位，採「唯一啟用中的 OA」。
 
-    ⚠️  多 OA（≥2 啟用）下的限制：這裡只能取 id 最小的 OA，無法判斷該好友真正屬於
-    哪個 OA。LINE userId 是 per-channel scoped——同一人在不同 OA 是不同 userId，拿
-    OA-A 好友的 userId 配 OA-B token 去 push，LINE 直接回錯（非該 channel 好友），
-    所以後果是「部分好友送訊失敗」，**不是**跨 OA 誤送/洩漏。上多 OA 前必做：在
-    line_friends（或 conversation_threads）加 line_channel_id，webhook 收訊時記下來
-    源 OA，這支再改成「查該好友的 OA」而非「取唯一啟用 OA」。
+    每個好友屬於哪個 OA 已記在 members.line_channel_id（前端館別切換也是靠它篩），
+    所以優先用「該好友的 members.line_channel_id」拿對的 token——多 OA 也能正確送，
+    不會發生「拿 OA-A token 送 OA-B 好友被 LINE 拒」的問題。
+
+    查不到該會員 / line_channel_id 為空時(極少數，如剛加好友尚未建 member)才退回
+    「唯一啟用中的 OA」；若同時有 ≥2 啟用 OA 又查不到歸屬，只能取 id 最小者並 warning。
     """
+    rows = fetchall(
+        "SELECT line_channel_id AS cid FROM members "
+        "WHERE line_uid = :uid AND line_channel_id IS NOT NULL LIMIT 1",
+        {"uid": line_uid},
+    )
+    if rows and rows[0]["cid"]:
+        return rows[0]["cid"]
+
+    # fallback：該好友沒有歸屬 OA → 用啟用中的 OA
     rows = fetchall(
         f"SELECT {LINE_CHANNEL_ID_COL} AS cid FROM line_channels WHERE is_active = 1 ORDER BY id"
     )
@@ -2251,8 +2259,8 @@ def _resolve_send_line_channel_id(line_uid: str) -> Optional[str]:
         return None
     if len(rows) > 1:
         logging.warning(
-            "[api_send_chat_message] 多個啟用 OA 但無 uid↔OA 對應，預設用第一個 %s（uid=%s）",
-            rows[0]["cid"], line_uid,
+            "[api_send_chat_message] uid=%s 查無歸屬 OA 且有多個啟用 OA，預設用第一個 %s",
+            line_uid, rows[0]["cid"],
         )
     return rows[0]["cid"]
 
