@@ -21,6 +21,14 @@ import React from 'react';
 import type { ChannelPlatform } from '../../../types/channel';
 import { getChannelConfig } from '../../../types/channel';
 
+// 透過 import 讓 Vite 打包器處理資產 URL（dev 與 build 皆成立）。
+// 不可寫死 `/src/...` 路徑：那只有 dev server 服務得到，build 後 404 / SPA 回傳
+// index.html(200) 會被當成圖片而顯示「彩色方塊」破圖，且因 200 連 onError 降級都不觸發。
+import sourceLine20 from './assets/source-line-20.svg';
+import sourceLine28 from './assets/source-line-28.svg';
+import sourceFacebook20 from './assets/source-facebook-20.svg';
+import sourceFacebook28 from './assets/source-facebook-28.svg';
+
 // 組件 Props 定義
 export interface ChannelIconProps {
   /** 渠道平台類型 */
@@ -48,9 +56,9 @@ function getChannelSvgPath(channel: ChannelPlatform, size: number): string | nul
 
   switch (normalizedChannel) {
     case 'LINE':
-      return `/src/components/common/icons/assets/source-line-${svgSize}.svg`;
+      return svgSize === 20 ? sourceLine20 : sourceLine28;
     case 'FACEBOOK':
-      return `/src/components/common/icons/assets/source-facebook-${svgSize}.svg`;
+      return svgSize === 20 ? sourceFacebook20 : sourceFacebook28;
     case 'INSTAGRAM':
       // Instagram 圖標目前可能尚未準備，返回 null 將降級為 Emoji
       return null;
