@@ -1249,7 +1249,10 @@ async def send_member_chat_message(
 
         # 重新獲取聊天紀錄，檢查是否有外部 API 回推的新訊息
         try:
-            sent_timestamp = int(msg.created_at.replace(tzinfo=timezone.utc).timestamp()) if msg and msg.created_at else 0
+            # created_at 是台北 naive；標 TAIPEI_TZ 才得到正確 epoch。
+            # 之前誤標 UTC → sent_timestamp 比真實送出時間大 8 小時，
+            # 下面 msg_time > sent_timestamp 永遠不成立，FB 自動回覆即時推送從未觸發。
+            sent_timestamp = int(msg.created_at.replace(tzinfo=TAIPEI_TZ).timestamp()) if msg and msg.created_at else 0
 
             fb_history = await fb_client.get_chat_history(effective_fb_customer_id, page_id, jwt_token)
 
