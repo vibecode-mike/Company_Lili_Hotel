@@ -80,11 +80,28 @@ function mergeNewMessages(
   existing: ChatMessage[],
   incoming: ChatMessage[],
 ): ChatMessage[] {
-  const existingIds = new Set(existing.map((m) => m.id));
-  const unique = incoming.filter((m) => !existingIds.has(m.id));
-  if (unique.length === 0) return existing;
+  if (incoming.length === 0) return existing;
 
-  const merged = [...existing, ...unique];
+  const incomingById = new Map(incoming.map((m) => [m.id, m]));
+  const existingIds = new Set(existing.map((m) => m.id));
+
+  // 同 id：用新資料覆蓋既有（讓 isRead/status 等欄位能即時更新，例如「已讀」）
+  // 不同：附加為新訊息。
+  let changed = false;
+  const updated = existing.map((m) => {
+    const fresh = incomingById.get(m.id);
+    if (!fresh) return m;
+    if (fresh.isRead !== m.isRead || fresh.text !== m.text) {
+      changed = true;
+      return { ...m, ...fresh };
+    }
+    return m;
+  });
+
+  const newOnes = incoming.filter((m) => !existingIds.has(m.id));
+  if (!changed && newOnes.length === 0) return existing;
+
+  const merged = [...updated, ...newOnes];
   merged.sort((a, b) =>
     (extractMessageTimestamp(a) || "").localeCompare(
       extractMessageTimestamp(b) || "",
@@ -135,8 +152,13 @@ function transformFbMessages(
         hour: "2-digit",
         minute: "2-digit",
       }),
-      timestamp: dt.toISOString(),
-      isRead: true,
+      // 後端各來源 timestamp 一律台北 +08:00，這裡同步：純字串 localeCompare 排序
+      // 不能混 UTC(Z) 與 +08:00 基底
+      timestamp: new Date(dt.getTime() + 8 * 3600 * 1000)
+        .toISOString()
+        .replace("Z", "+08:00"),
+      // FB 無真實已讀回執，不偽稱已讀
+      isRead: false,
       source: isIncoming ? undefined : "external",
     } as ChatMessage;
   });
@@ -460,7 +482,17 @@ export default function ChatRoomLayout({
           : true;
 
         // 將新訊息按時間戳插入正確位置（messages 維持「舊 -> 新」排序）
-        setMessages((prev) => mergeNewMessages(prev, [sseMessage.data]));
+        setMessages((prev) => {
+          let base = prev;
+          // 使用者傳訊息進來＝看過了先前的對話 → 把我方(official)未讀訊息即時標已讀
+          // （與後端 line_app _mark_outgoing_read 啟發式一致，畫面不用重整就跳已讀）
+          if (sseMessage.data?.type === "user") {
+            base = prev.map((m) =>
+              m.type === "official" && !m.isRead ? { ...m, isRead: true } : m,
+            );
+          }
+          return mergeNewMessages(base, [sseMessage.data]);
+        });
 
         // SSE 新訊息到達後，若使用者在底部附近則自動捲到底
         if (wasNearBottom && container) {

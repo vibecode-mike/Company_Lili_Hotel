@@ -462,7 +462,7 @@ export function ChatBubble({
             } text-[#6E6E6E]`}
           >
             {message.time}
-            {message.isRead ? ' 已讀' : ''}
+            {isOfficial && message.isRead ? ' 已讀' : ''}
           </p>
         </div>
       </div>

@@ -194,6 +194,36 @@ async def track_redirect(request: Request):
     return JSONResponse(content={"ok": True}, status_code=resp.status_code)
 
 
+# --- [實驗] 已讀追蹤像素 -------------------------------------------------
+# 訊息裡塞 https://crmpoc.star-bit.io/api/v1/rt/<token> 這張 1x1 圖。對方載入它時
+# 打到這裡並 log（含 User-Agent / 來源）。用來判斷 LINE 是「送出當下就預抓」(=快取、
+# 無法當已讀) 還是「用戶端開啟才載入」(=可當真已讀訊號)。實驗用，驗完移除。
+import base64 as _rt_b64
+from fastapi import Request as _RtRequest
+from fastapi.responses import Response as _RtResponse
+
+_RT_PIXEL_PNG = _rt_b64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+)
+
+
+@app.get("/api/v1/rt/{token}")
+async def _read_tracking_pixel(token: str, request: _RtRequest):
+    import logging as _rt_logging
+    _rt_logging.getLogger("readtrack").info(
+        "[track] HIT token=%s ua=%r xff=%s client=%s",
+        token,
+        request.headers.get("user-agent", ""),
+        request.headers.get("x-forwarded-for", ""),
+        request.client.host if request.client else "",
+    )
+    return _RtResponse(
+        content=_RT_PIXEL_PNG,
+        media_type="image/png",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+    )
+
+
 # 掛載靜態文件目錄（上傳的圖片）
 UPLOAD_DIR = settings.upload_dir_path
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)

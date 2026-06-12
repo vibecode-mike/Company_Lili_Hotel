@@ -1915,6 +1915,33 @@ def send_survey_via_liff(payload: dict) -> dict:
 # -------------------------------------------------
 # Flask routes
 # -------------------------------------------------
+
+# --- [實驗] 已讀追蹤像素 ---------------------------------------------------
+# 在訊息裡塞 {PUBLIC_BASE}/uploads/rt/<token> 這張 1x1 圖。當對方載入它時會打到
+# 這裡並 log（含 User-Agent / 來源 IP），用來判斷 LINE 是「送出當下就預抓」(=快取、
+# 無法當已讀) 還是「用戶端開啟才載入」(=可當真已讀訊號)。實驗用，驗完再決定去留。
+_TRACK_PIXEL_GIF = (
+    b"GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00"
+    b"!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;"
+)
+
+
+@app.get(f"{ASSET_ROUTE_PREFIX}/rt/<token>")
+def _track_read_pixel(token):
+    logging.info(
+        "[track] HIT token=%s ua=%r xff=%s remote=%s",
+        token,
+        request.headers.get("User-Agent", ""),
+        request.headers.get("X-Forwarded-For", ""),
+        request.remote_addr,
+    )
+    resp = app.response_class(_TRACK_PIXEL_GIF, mimetype="image/gif")
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
+
+
 @app.get(f"{ASSET_ROUTE_PREFIX}/<path:filename>")
 def _serve_uploads(filename):
     return send_from_directory(ASSET_LOCAL_DIR, filename, conditional=True)
@@ -2868,6 +2895,7 @@ def on_postback(event: PostbackEvent):
                 message_source="webhook",
                 status="received"
             )
+            _mark_outgoing_read(thread_id)
         except Exception:
             # 建議留 log，比較好除錯，不要完全吃掉
             logging.exception("[on_postback] update member/line_friends failed")
@@ -2994,6 +3022,30 @@ def on_postback(event: PostbackEvent):
         return
 
 
+def _mark_outgoing_read(thread_id: str) -> None:
+    """使用者主動傳訊息/互動進來 ⇒ 視為已看過先前發出去的訊息，把該 thread 的
+    outgoing 標成 read（前端 isRead=(status=='read') → 顯示「已讀」，存 DB，重整不消失）。
+
+    LINE Messaging API 不提供 OA 訊息的真實已讀回執，這是啟發式近似——以「使用者
+    下次互動」當作已讀訊號。使用者只讀不回則不會標記。
+    """
+    if not thread_id:
+        return
+    try:
+        execute(
+            """
+            UPDATE conversation_messages
+            SET status = 'read', updated_at = NOW()
+            WHERE thread_id = :tid
+              AND direction = 'outgoing'
+              AND (status IS NULL OR status != 'read')
+            """,
+            {"tid": thread_id},
+        )
+    except Exception:
+        logging.exception("[_mark_outgoing_read] failed thread_id=%s", thread_id)
+
+
 def on_text(event: MessageEvent):
     """
     處理 LINE 文字訊息 Webhook
@@ -3030,6 +3082,8 @@ def on_text(event: MessageEvent):
             message_source="webhook",
             message_id=event.message.id,
         )
+        # 使用者傳訊息進來 ⇒ 把先前 outgoing 標已讀（啟發式近似已讀）
+        _mark_outgoing_read(thread_id)
     except Exception:
         logging.exception("[on_text] Failed to save incoming message")
 
@@ -3296,6 +3350,7 @@ def on_sticker(event: MessageEvent):
         event_id=event.message.id,
         status="received"
     )
+    _mark_outgoing_read(thread_id)
 
 # 處理圖片事件
 def on_image(event: MessageEvent):
@@ -3333,6 +3388,7 @@ def on_image(event: MessageEvent):
         event_id=message_id,
         status="received"
     )
+    _mark_outgoing_read(thread_id)
 
 def on_message_router(event: MessageEvent):
     msg = event.message

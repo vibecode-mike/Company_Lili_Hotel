@@ -121,6 +121,8 @@ async def notify_new_message(
                 direction=direction,
                 content=notification.message_text,
                 message_source=notification.source,
+                # status 不能留 NULL：已讀標記的 status != 'read' 條件會漏掉 NULL（SQL 三值邏輯）
+                status="sent" if direction == "outgoing" else "received",
                 created_at=created_at_local,
             )
             db.add(msg)

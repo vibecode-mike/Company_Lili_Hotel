@@ -31,16 +31,15 @@ from app.clients.fb_message_client import FbMessageClient
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict
 import os
-import pytz
 import logging
 
 logger = logging.getLogger(__name__)
 
-from app.services.chatroom_service import ChatroomService
+from app.services.chatroom_service import ChatroomService, format_chat_time
 from app.api.v1.chat_messages import _extract_fb_template_text
 
-# 臺北時區
-TAIPEI_TZ = pytz.timezone('Asia/Taipei')
+# 臺北時區（固定 +08:00；pytz.timezone 直接拿去 replace(tzinfo=) 會得到 LMT +08:06，禁用）
+TAIPEI_TZ = timezone(timedelta(hours=8))
 from app.websocket_manager import manager
 router = APIRouter()
 
@@ -1170,17 +1169,22 @@ async def send_member_chat_message(
                 await db.flush()
 
                 # WebSocket 推送通知前端即時更新（包含 senderName）
-                now_utc = datetime.now()
-                time_str = format_taipei_time(now_utc)
+                # datetime.now() 在本機已是台北時間（server TZ=Asia/Taipei），
+                # 用 format_chat_time（naive 視為台北、不再 +8）；format_taipei_time
+                # 會把台北時間當 UTC 再 +8，造成顯示時間多 8 小時。
+                now_local = datetime.now()
+                time_str = format_chat_time(now_local)
                 sender_name = current_user.username
                 await manager.send_new_message(thread_id, {
                     "id": line_msg_id,
                     "type": "official",
                     "text": text,
                     "time": time_str,
-                    "timestamp": now_utc.isoformat(),
+                    # 統一推台北 aware ISO（+08:00）：前端用字串排序，naive/UTC 混基底會錯亂
+                    "timestamp": now_local.replace(tzinfo=TAIPEI_TZ).isoformat(),
                     "thread_id": thread_id,
-                    "isRead": True,
+                    # 剛送出 ≠ 已讀，不再寫死 True（避免「送出顯示已讀、重整消失」）
+                    "isRead": False,
                     "source": "manual",
                     "senderName": sender_name
                 })
@@ -1225,17 +1229,20 @@ async def send_member_chat_message(
         if member:
             msg = await chatroom_service.append_message(member, "Facebook", "outgoing", text, message_source="manual", sender_id=current_user.id)
 
-            # WebSocket 推送通知前端即時更新 - 將 UTC 轉為臺北時間顯示
-            time_str = format_taipei_time(msg.created_at) if msg.created_at else ""
+            # WebSocket 推送通知前端即時更新
+            # msg.created_at 是 DB 台北時間(naive)，用 format_chat_time 不要 +8
+            time_str = format_chat_time(msg.created_at) if msg.created_at else ""
 
             await manager.send_new_message(msg.thread_id, {
                 "id": msg.id,
                 "type": "official",
                 "text": text,
                 "time": time_str,
-                "timestamp": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg.created_at else None,
+                # created_at 是 DB 台北時間(naive)，標 +08:00 不是 UTC
+                "timestamp": msg.created_at.replace(tzinfo=TAIPEI_TZ).isoformat() if msg.created_at else None,
                 "thread_id": msg.thread_id,
-                "isRead": True,
+                # 剛送出 ≠ 已讀（FB 無真實已讀回執）
+                "isRead": False,
                 "source": "manual",
                 "senderName": current_user.username
             })
@@ -1271,9 +1278,10 @@ async def send_member_chat_message(
                             "type": "user",
                             "text": fb_text,
                             "time": fb_time_str,
-                            "timestamp": fb_dt.isoformat(),
+                            # fb_dt 是真 UTC（FB API epoch），轉台北 +08:00 與其他來源一致
+                            "timestamp": fb_dt.astimezone(TAIPEI_TZ).isoformat(),
                             "thread_id": msg.thread_id,
-                            "isRead": True,
+                            "isRead": False,
                             "source": None,
                             "senderName": None
                         })
@@ -1287,7 +1295,7 @@ async def send_member_chat_message(
             "success": True,
             "message_id": send_result.get("message_id", msg.id if msg else None),
             "thread_id": msg.thread_id if msg else None,
-            "sent_at": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg and msg.created_at else datetime.now().isoformat()
+            "sent_at": msg.created_at.replace(tzinfo=TAIPEI_TZ).isoformat() if msg and msg.created_at else datetime.now(TAIPEI_TZ).isoformat()
         }
 
     elif platform_stripped == "Webchat":
@@ -1295,17 +1303,20 @@ async def send_member_chat_message(
         try:
             msg = await chatroom_service.append_message(member, platform_stripped, "outgoing", text, message_source="manual", sender_id=current_user.id)
 
-            # WebSocket 推送通知前端即時更新 - 將 UTC 轉為臺北時間顯示
-            time_str = format_taipei_time(msg.created_at) if msg.created_at else ""
+            # WebSocket 推送通知前端即時更新
+            # msg.created_at 是 DB 寫入的台北時間(naive)，用 format_chat_time 不要 +8
+            time_str = format_chat_time(msg.created_at) if msg.created_at else ""
 
             await manager.send_new_message(msg.thread_id, {
                 "id": msg.id,
                 "type": "official",
                 "text": text,
                 "time": time_str,
-                "timestamp": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg.created_at else None,
+                # created_at 是 DB 台北時間(naive)，標 +08:00 不是 UTC
+                "timestamp": msg.created_at.replace(tzinfo=TAIPEI_TZ).isoformat() if msg.created_at else None,
                 "thread_id": msg.thread_id,
-                "isRead": True,
+                # 剛送出 ≠ 已讀
+                "isRead": False,
                 "source": "manual",
                 "senderName": current_user.full_name or current_user.username
             })
@@ -1314,7 +1325,7 @@ async def send_member_chat_message(
                 "success": True,
                 "message_id": msg.id,
                 "thread_id": msg.thread_id,
-                "sent_at": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg.created_at else None
+                "sent_at": msg.created_at.replace(tzinfo=TAIPEI_TZ).isoformat() if msg.created_at else None
             }
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))

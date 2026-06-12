@@ -116,7 +116,8 @@ class FbProxyConnection:
             "time": dt.strftime("%p %I:%M").replace("AM", "上午").replace("PM", "下午"),
             "timestamp": dt.isoformat(),
             "thread_id": self.thread_id,
-            "isRead": True,
+            # FB 無真實已讀回執，不偽稱已讀
+            "isRead": False,
             "source": "fb_realtime",
         }
 

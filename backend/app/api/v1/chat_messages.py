@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import logging
 
 from app.database import get_db
@@ -20,6 +20,10 @@ import json
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# 台北時區（固定 +08:00）。聊天訊息 timestamp 對外一律輸出台北 aware ISO（+08:00），
+# 與 SSE 推送格式一致——前端用字串排序，混 UTC/naive 基底會錯亂。
+TAIPEI_TZ = timezone(timedelta(hours=8))
 
 
 def _ensure_utc(dt: datetime) -> datetime:
@@ -46,10 +50,11 @@ def parse_iso_datetime(value: str) -> Optional[datetime]:
         return None
 
 
-def format_iso_utc(dt: Optional[datetime]) -> Optional[str]:
+def format_iso_taipei(dt: Optional[datetime]) -> Optional[str]:
+    """輸出台北 aware ISO（+08:00）。naive 視為 UTC（與 parse_iso_datetime 對稱）。"""
     if not dt:
         return None
-    return _ensure_utc(dt).isoformat()
+    return _ensure_utc(dt).astimezone(TAIPEI_TZ).isoformat()
 
 
 def extract_message_text(message_content: str) -> str:
@@ -217,8 +222,9 @@ async def get_chat_messages(
                     type="user" if is_incoming else "official",
                     text=text,
                     time=time_str,
-                    timestamp=format_iso_utc(dt),
-                    isRead=True,
+                    timestamp=format_iso_taipei(dt),
+                    # FB 無真實已讀回執，不偽稱已讀
+                    isRead=False,
                     source="external" if not is_incoming else None,
                 ))
 
@@ -252,7 +258,7 @@ async def get_chat_messages(
                 type=record["type"],
                 text=text_content,
                 time=time_str,
-                timestamp=format_iso_utc(created_at) if created_at else record.get("timestamp"),
+                timestamp=format_iso_taipei(created_at) if created_at else record.get("timestamp"),
                 isRead=record.get("isRead", False),
                 source=record.get("source"),
                 senderName=record.get("senderName"),

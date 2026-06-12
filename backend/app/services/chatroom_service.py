@@ -1,10 +1,9 @@
 import json
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 
-import pytz
 from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -15,8 +14,9 @@ from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
-# 台北時區
-TAIPEI_TZ = pytz.timezone('Asia/Taipei')
+# 台北時區（固定 +08:00；pytz.timezone 拿去 replace(tzinfo=) 會得到 LMT +08:06，
+# 造成 isoformat 帶 +08:06 偏移，禁用 pytz）
+TAIPEI_TZ = timezone(timedelta(hours=8))
 
 
 def format_chat_time(dt: Optional[datetime]) -> str:
@@ -109,6 +109,8 @@ class ChatroomService:
             content=content,
             message_source=message_source,
             sent_by=sender_id,
+            # status 不能留 NULL：已讀標記的 status != 'read' 條件會漏掉 NULL（SQL 三值邏輯）
+            status="sent" if direction == "outgoing" else "received",
             created_at=datetime.now(),
         )
         self.db.add(msg)

@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo
 
 from openai import AsyncOpenAI
 from sqlalchemy import func as sa_func
-from sqlalchemy import select
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -1530,6 +1530,22 @@ class ChatbotService:
             thread.platform_uid = browser_key
             thread.last_message_at = now
 
+        # 使用者傳訊息進來 ⇒ 視為已看過先前發出的訊息，把該 thread 的 outgoing 標已讀
+        # （與 line_app._mark_outgoing_read 啟發式一致；webchat 沒有真實已讀回執。
+        #   status IS NULL 也要涵蓋——SQL 三值邏輯下 status != 'read' 會漏掉 NULL）
+        await db.execute(
+            update(ConversationMessage)
+            .where(
+                ConversationMessage.thread_id == thread.id,
+                ConversationMessage.direction == "outgoing",
+                or_(
+                    ConversationMessage.status.is_(None),
+                    ConversationMessage.status != "read",
+                ),
+            )
+            .values(status="read")
+        )
+
         # 3. 寫入使用者訊息
         # 三筆訊息（user / bot 文字 / room_cards）原本共用同一個 now，
         # MySQL 同 timestamp 排序非決定性 → 畫面順序會亂跳。
@@ -1543,6 +1559,7 @@ class ChatbotService:
                 role="user",
                 content=user_message,
                 message_source="webhook",
+                status="received",
                 created_at=now,
             )
         )
@@ -1561,6 +1578,7 @@ class ChatbotService:
                     content=bot_reply,
                     message_source="gpt",
                     unanswered=unanswered,
+                    status="sent",
                     created_at=now + timedelta(milliseconds=1),
                 )
             )
@@ -1588,6 +1606,7 @@ class ChatbotService:
                         message_type="room_cards",
                         content=room_cards_payload,
                         message_source="gpt",
+                        status="sent",
                         created_at=now + timedelta(milliseconds=2),
                     )
                 )
