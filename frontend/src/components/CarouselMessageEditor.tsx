@@ -125,6 +125,7 @@ export interface CarouselEditorHandle {
 // LINE Flex Message 風格的卡片預覽組件
 export const FlexMessageCardPreview = memo(function FlexMessageCardPreview({ card }: { card: CarouselCard }) {
   const aspectRatio = calculateAspectRatio(card);
+  const hasBody = card.enableTitle || card.enableContent || card.enablePrice;
 
   return (
     <div className="bg-white rounded-[10px] shadow-[0px_20px_25px_-5px_rgba(0,0,0,0.1),0px_8px_10px_-6px_rgba(0,0,0,0.1)] w-[300px] overflow-hidden">
@@ -141,7 +142,7 @@ export const FlexMessageCardPreview = memo(function FlexMessageCardPreview({ car
       )}
 
       {/* Body - Title, Content, Price */}
-      {(card.enableTitle || card.enableContent || card.enablePrice) && (
+      {hasBody && (
         <div className="p-[16px]">
           {card.enableTitle && (
             <div
@@ -189,7 +190,17 @@ export const FlexMessageCardPreview = memo(function FlexMessageCardPreview({ car
 
       {/* Footer - Buttons */}
       {(card.enableButton1 || card.enableButton2 || card.enableButton3) && (
-        <div className="px-[16px] pb-[16px]" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        <div
+          className="px-[16px] pb-[16px]"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+            // 沒有 body（標題/內文/金額）時，按鈕和圖片之間的間距由 footer 自己補，
+            // 否則間距來自 body 的 p-[16px] 下緣，這裡補了會變兩倍
+            paddingTop: hasBody ? 0 : 16,
+          }}
+        >
           {card.enableButton1 && (
             <button
               className={`w-full rounded-[4px] text-[14px] transition-colors text-center py-[10px] px-[16px] ${
