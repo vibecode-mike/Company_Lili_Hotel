@@ -57,7 +57,8 @@ def insert_conversation_message(*, thread_id: str, role: str, direction: str,
                                 message_source: str | None = None,
                                 message_id: str | None = None,
                                 platform: str | None = "LINE",
-                                unanswered: bool = False):
+                                unanswered: bool = False,
+                                broadcast_message_id: int | None = None):
     """
     儲存對話訊息到 conversation_messages 表
 
@@ -75,6 +76,8 @@ def insert_conversation_message(*, thread_id: str, role: str, direction: str,
         platform: 平台 (LINE / facebook / webchat)
         unanswered: AI 是否答不出（由 chatbot_service 的 mark_unanswerable tool 旗標決定，
                     用於數據洞察頁計算 AI 覆蓋率）
+        broadcast_message_id: 群發訊息對應的 messages.id（message_source=broadcast 時必填，
+                              聊天室讀取時以此參照還原 Flex 內容）
     """
     # 確保 thread_id 去除前後空白字元
     thread_id = thread_id.strip() if thread_id else ""
@@ -134,6 +137,12 @@ def insert_conversation_message(*, thread_id: str, role: str, direction: str,
             columns.append("unanswered")
             values.append(":unanswered")
             params["unanswered"] = 1 if unanswered else 0
+
+        # broadcast_message_id 欄位（若該 DB 已套用 migration）
+        if broadcast_message_id is not None and _table_has("conversation_messages", "broadcast_message_id"):
+            columns.append("broadcast_message_id")
+            values.append(":broadcast_message_id")
+            params["broadcast_message_id"] = broadcast_message_id
 
         columns.extend(["created_at", "updated_at"])
         values.extend(["NOW()", "NOW()"])

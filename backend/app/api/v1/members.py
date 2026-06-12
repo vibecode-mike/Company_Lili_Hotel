@@ -238,7 +238,13 @@ async def get_members(
                     ConversationMessage.platform == 'LINE',
                     ConversationMessage.platform == 'Webchat',
                     ConversationMessage.platform.is_(None),
-                )
+                ),
+                # 排除群發：避免一次群發把所有會員的「最後互動時間」整批刷新、
+                # 也避免群發蓋掉「最後一筆是 incoming」的藍點判斷
+                or_(
+                    ConversationMessage.message_source != 'broadcast',
+                    ConversationMessage.message_source.is_(None),
+                ),
             )
             .group_by(ConversationMessage.thread_id)
         ).subquery()
@@ -482,6 +488,11 @@ async def get_member(
                 or_(
                     ConversationMessage.platform == 'LINE',
                     ConversationMessage.platform == 'Webchat',
+                ),
+                # 排除群發：最後互動時間只看真實對話
+                or_(
+                    ConversationMessage.message_source != 'broadcast',
+                    ConversationMessage.message_source.is_(None),
                 ),
             )
             .order_by(ConversationMessage.created_at.desc())

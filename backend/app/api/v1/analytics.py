@@ -351,7 +351,9 @@ async def get_pending_conversations(
         WITH last_msg AS (
             SELECT thread_id, MAX(created_at) AS max_ts
             FROM conversation_messages
-            WHERE platform IN ('LINE', 'Webchat') OR platform IS NULL
+            WHERE (platform IN ('LINE', 'Webchat') OR platform IS NULL)
+              -- 排除群發：群發不是回覆，不能讓它把「最後一筆是 incoming」的待處理對話洗掉
+              AND (message_source IS NULL OR message_source != 'broadcast')
             GROUP BY thread_id
         ),
         pending AS (
@@ -426,7 +428,9 @@ async def get_pending_conversations(
         WITH last_msg AS (
             SELECT thread_id, MAX(created_at) AS max_ts
             FROM conversation_messages
-            WHERE platform IN ('LINE', 'Webchat') OR platform IS NULL
+            WHERE (platform IN ('LINE', 'Webchat') OR platform IS NULL)
+              -- 排除群發：與上方待處理對話清單的 last_msg 條件一致
+              AND (message_source IS NULL OR message_source != 'broadcast')
             GROUP BY thread_id
         )
         SELECT COUNT(*)

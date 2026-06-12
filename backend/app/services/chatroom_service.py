@@ -4,12 +4,13 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.member import Member
 from app.models.conversation import ConversationThread, ConversationMessage
+from app.models.message import Message
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -132,11 +133,6 @@ class ChatroomService:
         count_stmt = select(func.count()).select_from(ConversationMessage).where(
             ConversationMessage.thread_id == thread_id,
             ConversationMessage.platform == platform,
-            # 過濾群發訊息（NULL 視為非群發）
-            or_(
-                ConversationMessage.message_source != "broadcast",
-                ConversationMessage.message_source.is_(None)
-            ),
         )
         result = await self.db.execute(count_stmt)
         total = result.scalar() or 0
@@ -150,11 +146,6 @@ class ChatroomService:
             .where(
                 ConversationMessage.thread_id == thread_id,
                 ConversationMessage.platform == platform,
-                # 過濾群發訊息（NULL 視為非群發）
-                or_(
-                    ConversationMessage.message_source != "broadcast",
-                    ConversationMessage.message_source.is_(None)
-                ),
             )
             .order_by(ConversationMessage.created_at.desc())
             .limit(page_size)
@@ -162,6 +153,29 @@ class ChatroomService:
         )
         result = await self.db.execute(msg_stmt)
         records = list(reversed(result.scalars().all()))
+
+        # 群發訊息（message_type=flex）只存參照，這裡一次撈回本頁所有
+        # broadcast_message_id 對應的 messages.flex_message_json，避免 N+1
+        broadcast_ids = {
+            r.broadcast_message_id
+            for r in records
+            if r.message_type == "flex" and r.broadcast_message_id
+        }
+        flex_map: Dict[int, Any] = {}
+        if broadcast_ids:
+            flex_result = await self.db.execute(
+                select(Message.id, Message.flex_message_json).where(
+                    Message.id.in_(broadcast_ids)
+                )
+            )
+            for row in flex_result:
+                if not row.flex_message_json:
+                    continue
+                try:
+                    flex_map[row.id] = json.loads(row.flex_message_json)
+                except (TypeError, ValueError):
+                    # 非嚴格 JSON（歷史資料可能是 Python dict repr），交給前端 parser 正規化
+                    flex_map[row.id] = row.flex_message_json
 
         messages = []
         for record in records:
@@ -203,6 +217,10 @@ class ChatroomService:
                     msg_dict["text"] = ""
                 except Exception:
                     logger.warning(f"Failed to parse room_cards content for message {record.id}")
+
+            # 群發 Flex：帶出原始 flex 內容供前端還原卡片外觀；text 保留純文字備援
+            if record.message_type == "flex" and record.broadcast_message_id in flex_map:
+                msg_dict["flexMessage"] = flex_map[record.broadcast_message_id]
 
             messages.append(msg_dict)
 

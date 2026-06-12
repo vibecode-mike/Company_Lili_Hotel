@@ -121,6 +121,16 @@ class ConversationMessage(Base):
         nullable=True,
         comment="發送人員ID（僅 manual 訊息有值）",
     )
+    broadcast_message_id = Column(
+        BigInteger,
+        ForeignKey(
+            "messages.id",
+            ondelete="SET NULL",
+            name="fk_conversation_messages_broadcast",
+        ),
+        nullable=True,
+        comment="若為群發訊息，指向 messages.id（用於還原 Flex 內容）",
+    )
     unanswered = Column(
         Boolean,
         nullable=False,

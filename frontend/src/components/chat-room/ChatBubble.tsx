@@ -23,6 +23,7 @@
 import React from 'react';
 import type { ChatMessage, ChatPlatform } from './types';
 import type { RoomCard } from '../../utils/chatbotApi';
+import { FlexMessageRenderer } from './FlexMessageRenderer';
 import { PlatformIcon } from '../common/icons/PlatformIcon';
 import WebChatIcon from '../../assets/Icon-web-chat-16.png';
 import {
@@ -399,6 +400,8 @@ export function ChatBubble({
   const isImage = message.messageType === 'image';
   const isSticker = message.messageType === 'sticker';
   const isPostback = message.messageType === 'postback';
+  // 群發 Flex（message_source=broadcast 寫入時 message_type=flex 並帶 flexMessage）
+  const isFlex = message.messageType === 'flex' && !!message.flexMessage;
 
   return (
     <div
@@ -415,7 +418,30 @@ export function ChatBubble({
           isOfficial ? 'items-end' : 'items-start'
         } relative shrink-0`}
       >
-        {isBookingResult ? (
+        {isFlex ? (
+          /* 群發 Flex 卡片：上方加「群發」徽章與一般私訊區隔 */
+          <>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                background: '#FFF4E0',
+                color: '#B26A00',
+                border: '1px solid #FFD591',
+                fontSize: 11,
+                fontWeight: 500,
+                fontFamily: "'Noto Sans TC', sans-serif",
+                padding: '1px 8px',
+                borderRadius: 10,
+                lineHeight: '18px',
+              }}
+            >
+              📢 群發
+            </span>
+            <FlexMessageRenderer flexMessage={message.flexMessage!} fallbackText={message.text} />
+          </>
+        ) : isBookingResult ? (
           /* 訂房確認結果 */
           <BookingResultDisplay result={message.bookingResult!} />
         ) : isRoomCards ? (

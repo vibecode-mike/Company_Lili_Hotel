@@ -1234,6 +1234,27 @@ def push_campaign(payload: dict) -> Dict[str, Any]:
                 sent += 1
                 logging.info(f"[{idx}/{total_targets}] ✓ Success to {uid}")
 
+                # 寫入 1:1 聊天紀錄（conversation_messages）：
+                # 只存參照 broadcast_message_id → messages.id，不複製 flex JSON 本體，
+                # Backend 聊天室讀取時再以此 id 撈 messages.flex_message_json 還原外觀。
+                # 寫入失敗只記 log，不影響群發主流程。
+                try:
+                    thread_id = ensure_thread_for_user(uid)
+                    insert_conversation_message(
+                        thread_id=thread_id,
+                        role="assistant",
+                        direction="outgoing",
+                        message_type="flex",
+                        response=alt_txt,
+                        message_source="broadcast",
+                        status="sent",
+                        broadcast_message_id=cid,
+                    )
+                except Exception:
+                    logging.exception(
+                        f"[{idx}/{total_targets}] Failed to save broadcast to conversation_messages for {uid}"
+                    )
+
                 # 記錄 outgoing log
                 # 註解：群發記錄已在 _create_campaign_row() 和 _add_campaign_recipients() 中處理
                 # insert_message() 使用錯誤的 schema (試圖寫 member_id 到 messages 表)

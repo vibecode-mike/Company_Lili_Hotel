@@ -5,7 +5,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import List, Optional
+from typing import Any, List, Optional
 from datetime import datetime, timedelta, timezone
 import logging
 
@@ -128,6 +128,7 @@ class ChatMessage(BaseModel):
     senderName: Optional[str] = None  # 發送人員名稱：manual 顯示人員名稱，其他顯示「系統」
     messageType: Optional[str] = None  # 'text' | 'chat' | 'room_cards' 等
     roomCards: Optional[List[dict]] = None  # messageType='room_cards' 時填入房卡資料
+    flexMessage: Optional[Any] = None  # 群發 Flex 內容（messageType='flex' 時填入，dict 或原始字串）
 
     class Config:
         from_attributes = True
@@ -264,6 +265,7 @@ async def get_chat_messages(
                 senderName=record.get("senderName"),
                 messageType=record.get("messageType"),
                 roomCards=record.get("roomCards"),
+                flexMessage=record.get("flexMessage"),
             ))
 
         logger.info(f"✅ 成功獲取 {len(messages)} 筆聊天紀錄（共 {result['total']} 筆）")

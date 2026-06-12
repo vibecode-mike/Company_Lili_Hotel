@@ -3357,7 +3357,15 @@ class ChatbotService:
         """從 conversation_messages 取得近 N 輪對話歷史"""
         stmt = (
             select(ConversationMessage)
-            .where(ConversationMessage.thread_id == line_uid)
+            .where(
+                ConversationMessage.thread_id == line_uid,
+                # 排除群發：群發文案不是對話的一部分，混入會讓 AI 誤以為
+                # 自己說過促銷內容，也會擠占有限的歷史筆數
+                or_(
+                    ConversationMessage.message_source != "broadcast",
+                    ConversationMessage.message_source.is_(None),
+                ),
+            )
             .order_by(ConversationMessage.created_at.desc())
             .limit(limit * 2 + 1)
         )

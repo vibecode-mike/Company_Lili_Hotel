@@ -8,6 +8,7 @@ import { ArrowButton } from "./ArrowButton";
 import { SecondaryButton } from "./common/SecondaryButton";
 import { normalizeInteractionTags } from "../utils/interactionTags";
 import { apiGet } from "../utils/apiClient";
+import { parseFlexMessageToCards } from "../utils/parseFlexMessageToCards";
 
 interface MessageDetailDrawerProps {
   open: boolean;
@@ -291,197 +292,6 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
     imageTag: '',
   }];
 
-  const parseFlexMessageToCards = (flexMessageJson: string | Record<string, any> | null): CarouselCard[] => {
-    if (!flexMessageJson) {
-      return createFallbackCards();
-    }
-
-    try {
-      let flexMessage: Record<string, any> | null = null;
-
-      if (typeof flexMessageJson === 'string') {
-        try {
-          flexMessage = JSON.parse(flexMessageJson);
-        } catch {
-          const normalized = flexMessageJson
-            .replace(/'/g, '"')
-            .replace(/\bTrue\b/g, 'true')
-            .replace(/\bFalse\b/g, 'false')
-            .replace(/\bNone\b/g, 'null');
-          flexMessage = JSON.parse(normalized);
-        }
-      } else {
-        flexMessage = flexMessageJson;
-      }
-
-      // Flex wrapper可能是 { type: 'flex', altText, contents: {...} }
-      const root = flexMessage?.type === 'flex'
-        ? flexMessage.contents
-        : flexMessage;
-
-      if (!root) {
-        return createFallbackCards();
-      }
-
-      // Handle carousel type
-      if (root.type === 'carousel') {
-        const slides = root.contents || [];
-        return slides.map((bubble: any, index: number) => {
-          const body = bubble.body?.contents || [];
-          const hero = bubble.hero;
-
-          // Extract title, content, and price from body
-          let cardTitle = '';
-          let content = '';
-          let price = '';
-          let foundTitle = false;  // 追蹤是否已找到標題（即使為空）
-
-          body.forEach((item: any) => {
-            if (item.type === 'text' && item.weight === 'bold' && !foundTitle) {
-              cardTitle = item.text || '';
-              foundTitle = true;
-            } else if (item.type === 'text' && !content && foundTitle) {
-              content = item.text || '';
-            } else if (item.type === 'text' && item.text?.includes('NT$')) {
-              price = item.text.replace('NT$', '').trim();
-            }
-          });
-
-          // Extract buttons
-          const footer = bubble.footer?.contents || [];
-          const buttons = footer.filter((item: any) => item.type === 'button');
-
-          return {
-            id: index + 1,
-            enableImage: !!hero?.url,
-            enableTitle: foundTitle,  // 使用 flag，而非 cardTitle 的 truthy 值
-            enableContent: !!content,
-            enablePrice: !!price,
-            enableButton1: buttons.length > 0,
-            enableButton2: buttons.length > 1,
-            enableButton3: buttons.length > 2,
-            enableButton4: buttons.length > 3,
-            image: hero?.url || imgImageHero,
-            cardTitle,
-            content,
-            price,
-            currency: 'ntd',
-            button1: buttons[0]?.action?.label || '',
-            button2: buttons[1]?.action?.label || '',
-            button3: buttons[2]?.action?.label || '',
-            button4: buttons[3]?.action?.label || '',
-            button1Action: buttons[0]?.action?.type || '',
-            button1Url: buttons[0]?.action?.uri || '',
-            button1Tag: '',
-            button1Text: '',
-            button1TriggerImage: null,
-            button1Mode: 'primary',
-            button2Action: buttons[1]?.action?.type || '',
-            button2Url: buttons[1]?.action?.uri || '',
-            button2Tag: '',
-            button2Text: '',
-            button2TriggerImage: null,
-            button2Mode: 'secondary',
-            button3Action: buttons[2]?.action?.type || '',
-            button3Url: buttons[2]?.action?.uri || '',
-            button3Tag: '',
-            button3Text: '',
-            button3TriggerImage: null,
-            button3Mode: 'secondary',
-            button4Action: buttons[3]?.action?.type || '',
-            button4Url: buttons[3]?.action?.uri || '',
-            button4Tag: '',
-            button4Text: '',
-            button4TriggerImage: null,
-            button4Mode: 'secondary',
-            enableImageUrl: false,
-            imageUrl: '',
-            imageTag: '',
-          };
-        });
-      }
-
-      // Handle single bubble
-      if (root.type === 'bubble') {
-        const body = root.body?.contents || [];
-        const hero = root.hero;
-
-        let cardTitle = '';
-        let content = '';
-        let price = '';
-        let foundTitle = false;  // 追蹤是否已找到標題（即使為空）
-
-        body.forEach((item: any) => {
-          if (item.type === 'text' && item.weight === 'bold' && !foundTitle) {
-            cardTitle = item.text || '';
-            foundTitle = true;
-          } else if (item.type === 'text' && !content && foundTitle) {
-            content = item.text || '';
-          } else if (item.type === 'text' && item.text?.includes('NT$')) {
-            price = item.text.replace('NT$', '').trim();
-          }
-        });
-
-        const footer = root.footer?.contents || [];
-        const buttons = footer.filter((item: any) => item.type === 'button');
-
-        return [{
-          id: 1,
-          enableImage: !!hero?.url,
-          enableTitle: foundTitle,  // 使用 flag，而非 cardTitle 的 truthy 值
-          enableContent: !!content,
-          enablePrice: !!price,
-          enableButton1: buttons.length > 0,
-          enableButton2: buttons.length > 1,
-          enableButton3: buttons.length > 2,
-          enableButton4: buttons.length > 3,
-            image: hero?.url || hero?.contents?.url || imgImageHero,
-            cardTitle,
-            content,
-            price,
-          currency: 'ntd',
-          button1: buttons[0]?.action?.label || '',
-          button2: buttons[1]?.action?.label || '',
-          button3: buttons[2]?.action?.label || '',
-          button4: buttons[3]?.action?.label || '',
-          button1Action: buttons[0]?.action?.type || '',
-          button1Url: buttons[0]?.action?.uri || '',
-          button1Tag: '',
-          button1Text: '',
-          button1TriggerImage: null,
-          button1Mode: 'primary',
-          button2Action: buttons[1]?.action?.type || '',
-          button2Url: buttons[1]?.action?.uri || '',
-          button2Tag: '',
-          button2Text: '',
-          button2TriggerImage: null,
-          button2Mode: 'secondary',
-          button3Action: buttons[2]?.action?.type || '',
-          button3Url: buttons[2]?.action?.uri || '',
-          button3Tag: '',
-          button3Text: '',
-          button3TriggerImage: null,
-          button3Mode: 'secondary',
-          button4Action: buttons[3]?.action?.type || '',
-          button4Url: buttons[3]?.action?.uri || '',
-          button4Tag: '',
-          button4Text: '',
-          button4TriggerImage: null,
-          button4Mode: 'secondary',
-          enableImageUrl: false,
-          imageUrl: '',
-          imageTag: '',
-        }];
-      }
-
-      // Fallback if unable to parse
-      return createFallbackCards();
-    } catch (err) {
-      console.error('Error parsing Flex Message JSON:', err);
-      return createFallbackCards();
-    }
-  };
-
   // Format datetime for display
   const formatDateTime = (dateString: string | null) => {
     if (!dateString) return '-';
@@ -533,7 +343,7 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
       ? messageData.flex_message_json
       : messageData.fb_message_json || messageData.flex_message_json;
 
-    return parseFlexMessageToCards(jsonContent);
+    return parseFlexMessageToCards(jsonContent) ?? createFallbackCards();
   }, [messageData]);
 
   const displayData = React.useMemo(() => {
