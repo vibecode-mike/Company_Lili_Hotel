@@ -1550,70 +1550,123 @@ class ChatbotService:
         # 三筆訊息（user / bot 文字 / room_cards）原本共用同一個 now，
         # MySQL 同 timestamp 排序非決定性 → 畫面順序會亂跳。
         # 解法：三筆各偏移毫秒，保證 user → bot → room_cards 嚴格遞增。
-        db.add(
-            ConversationMessage(
-                id=str(uuid4()),
-                thread_id=thread.id,
-                platform="Webchat",
-                direction="incoming",
-                role="user",
-                content=user_message,
-                message_source="webhook",
-                status="received",
-                created_at=now,
-            )
+        # 捕捉訊息物件，commit 後推 SSE 給後台聊天室即時更新（對齊 LINE）。
+        user_msg = ConversationMessage(
+            id=str(uuid4()),
+            thread_id=thread.id,
+            platform="Webchat",
+            direction="incoming",
+            role="user",
+            content=user_message,
+            message_source="webhook",
+            status="received",
+            created_at=now,
         )
+        db.add(user_msg)
 
         # 4. 寫入 bot 回覆（純文字）— +1ms 確保排在使用者訊息後
         # unanswered=ctx.unanswered：mark_unanswerable tool 觸發或保險網命中時為 True
         # 供 analytics「AI 未能回答」/ 行動建議統計，與 LINE 端 line_app/app.py:3187 對齊
+        bot_msg: Optional[ConversationMessage] = None
         if bot_reply:
-            db.add(
-                ConversationMessage(
+            bot_msg = ConversationMessage(
+                id=str(uuid4()),
+                thread_id=thread.id,
+                platform="Webchat",
+                direction="outgoing",
+                role="assistant",
+                content=bot_reply,
+                message_source="gpt",
+                unanswered=unanswered,
+                status="sent",
+                created_at=now + timedelta(milliseconds=1),
+            )
+            db.add(bot_msg)
+
+        # 5. 房卡（如有）：另存一筆 message_type='room_cards'，+2ms 排在文字回覆後
+        cards_msg: Optional[ConversationMessage] = None
+        cards_list: list = []
+        if room_cards:
+            try:
+                cards_list = [
+                    rc.model_dump() if hasattr(rc, "model_dump") else dict(rc)
+                    for rc in room_cards
+                ]
+                room_cards_payload = json.dumps(
+                    {"room_cards": cards_list},
+                    ensure_ascii=False,
+                    default=str,
+                )
+                cards_msg = ConversationMessage(
                     id=str(uuid4()),
                     thread_id=thread.id,
                     platform="Webchat",
                     direction="outgoing",
                     role="assistant",
-                    content=bot_reply,
+                    message_type="room_cards",
+                    content=room_cards_payload,
                     message_source="gpt",
-                    unanswered=unanswered,
                     status="sent",
-                    created_at=now + timedelta(milliseconds=1),
+                    created_at=now + timedelta(milliseconds=2),
                 )
-            )
-
-        # 5. 房卡（如有）：另存一筆 message_type='room_cards'，+2ms 排在文字回覆後
-        if room_cards:
-            try:
-                room_cards_payload = json.dumps(
-                    {
-                        "room_cards": [
-                            rc.model_dump() if hasattr(rc, "model_dump") else dict(rc)
-                            for rc in room_cards
-                        ]
-                    },
-                    ensure_ascii=False,
-                    default=str,
-                )
-                db.add(
-                    ConversationMessage(
-                        id=str(uuid4()),
-                        thread_id=thread.id,
-                        platform="Webchat",
-                        direction="outgoing",
-                        role="assistant",
-                        message_type="room_cards",
-                        content=room_cards_payload,
-                        message_source="gpt",
-                        status="sent",
-                        created_at=now + timedelta(milliseconds=2),
-                    )
-                )
+                db.add(cards_msg)
             except Exception as exc:
                 logger.warning(f"[chatbot] serialize room_cards failed: {exc}")
 
         await db.commit()
+
+        # 6. 推 SSE 通知後台聊天室即時更新（對齊 LINE：webchat 原本只靠 3 秒 polling）。
+        #    放在 commit 之後、包 try/except，推播失敗不影響對話保存。
+        #    使用者訊息 type=user → 前端會自動把先前 official 標已讀（已讀回執免費對齊）。
+        try:
+            from app.services.chatroom_service import format_chat_time
+            from app.websocket_manager import manager
+
+            tpe = timezone(timedelta(hours=8))  # 固定 +08:00，勿用 pytz（會得 LMT +08:06）
+
+            def _iso(dt):
+                return dt.replace(tzinfo=tpe).isoformat() if dt else None
+
+            await manager.send_new_message(thread.id, {
+                "id": user_msg.id,
+                "type": "user",
+                "text": user_message,
+                "time": format_chat_time(user_msg.created_at),
+                "timestamp": _iso(user_msg.created_at),
+                "thread_id": thread.id,
+                "isRead": False,
+                "source": "webhook",
+                "senderName": None,
+            })
+            if bot_msg is not None:
+                await manager.send_new_message(thread.id, {
+                    "id": bot_msg.id,
+                    "type": "official",
+                    "text": bot_reply,
+                    "time": format_chat_time(bot_msg.created_at),
+                    "timestamp": _iso(bot_msg.created_at),
+                    "thread_id": thread.id,
+                    "isRead": False,
+                    "source": "gpt",
+                    "senderName": "系統",
+                })
+            if cards_msg is not None:
+                await manager.send_new_message(thread.id, {
+                    "id": cards_msg.id,
+                    "type": "official",
+                    "text": cards_msg.content,
+                    "time": format_chat_time(cards_msg.created_at),
+                    "timestamp": _iso(cards_msg.created_at),
+                    "thread_id": thread.id,
+                    "isRead": False,
+                    "source": "gpt",
+                    "senderName": "系統",
+                    "messageType": "room_cards",
+                    "roomCards": cards_list,
+                })
+        except Exception as exc:
+            logger.warning(f"[chatbot] SSE push failed (非關鍵): {exc}")
+
         return member
 
     async def _deduct_tokens(

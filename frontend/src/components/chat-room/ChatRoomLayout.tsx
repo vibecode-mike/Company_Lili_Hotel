@@ -626,17 +626,16 @@ export default function ChatRoomLayout({
       ? `fb_${fbCustomerId}`
       : undefined;
 
-  // LINE 用 SSE（因外部代理 HTTP/2 不支援 WebSocket Upgrade）
-  // Facebook/Webchat 用 WebSocket
-  const lineThreadId = currentPlatform === "LINE" ? currentThreadId : undefined;
+  // LINE / Webchat 用 SSE（因外部代理 HTTP/2 不支援 WebSocket Upgrade）
+  // Facebook 用 WebSocket（走外部 FB WS 代理）
+  const sseThreadId =
+    currentPlatform === "LINE" || currentPlatform === "Webchat"
+      ? currentThreadId
+      : undefined;
   const wsThreadId =
-    currentPlatform === "Facebook"
-      ? fbThreadId
-      : currentPlatform === "Webchat"
-        ? currentThreadId
-        : undefined;
+    currentPlatform === "Facebook" ? fbThreadId : undefined;
 
-  const { isConnected: sseConnected } = useSSE(lineThreadId, handleNewMessage);
+  const { isConnected: sseConnected } = useSSE(sseThreadId, handleNewMessage);
   const { isConnected: wsConnected } = useWebSocket(
     wsThreadId,
     handleNewMessage,
