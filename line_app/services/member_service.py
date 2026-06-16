@@ -15,7 +15,7 @@ from typing import Optional
 
 from sqlalchemy import text
 
-from config import LINE_CHANNEL_ACCESS_TOKEN, AUTO_BACKFILL_FRIENDS
+from config import AUTO_BACKFILL_FRIENDS
 from db import (
     engine,
     fetchone,
@@ -24,7 +24,11 @@ from db import (
     table_has_column as _table_has,
     column_is_required as _col_required,
 )
-from services.line_sdk import fetch_line_profile
+from services.line_sdk import (
+    fetch_line_profile,
+    get_channel_access_token_by_channel_id,
+    LINE_CHANNEL_ID_COL,
+)
 
 import requests
 
@@ -375,18 +379,20 @@ def render_template_text(
 # -------------------------------------------------
 # Followers 批量取得 / 補齊
 # -------------------------------------------------
-def get_all_follower_ids(limit: int = 500) -> list[str]:
+def get_all_follower_ids(line_channel_id: Optional[str] = None, limit: int = 500) -> list[str]:
     """
-    用 LINE 官方 followers API 把目前所有好友的 userId 撈出來。
+    用 LINE 官方 followers API 把『指定 OA』目前所有好友的 userId 撈出來。
 
+    :param line_channel_id: LINE 官方帳號 channel id；None 時 fallback .env 預設 token（與群發同一套）
     :param limit: 每次 API 要幾筆（官方上限 1000，這裡保守用 500）
     :return: 所有好友的 userId list
     """
-    if not LINE_CHANNEL_ACCESS_TOKEN:
-        raise RuntimeError("缺少 LINE_CHANNEL_ACCESS_TOKEN，請確認 .env 設定")
+    # 多 OA：依 channel 取對應 token；沒帶 channel -> get_channel_access_token_by_channel_id
+    # 內部自動 fallback .env（保證回 str，否則丟 RuntimeError）
+    token = get_channel_access_token_by_channel_id(line_channel_id)
 
     headers = {
-        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
+        "Authorization": f"Bearer {token}"
     }
 
     all_ids: list[str] = []
@@ -425,76 +431,127 @@ def get_all_follower_ids(limit: int = 500) -> list[str]:
     return all_ids
 
 
+def _backfill_one_oa(line_channel_id: Optional[str]) -> None:
+    """
+    補單一 OA 的好友（line_channel_id=None 代表 .env 預設帳號，相容單帳號舊環境）。
+
+    重點：好友以「對應的 line_channel_id」寫進 members —— 這是群發受眾人數、
+    會員列表多 OA 過濾（members.line_channel_id）唯一的資料來源。寫法與 on_follow
+    一致：upsert_line_friend + upsert_member(帶 channel) + 連結 member_id。
+    """
+    label = line_channel_id or "(.env 預設)"
+    logging.info("[BACKFILL] === OA=%s 開始撈取好友 userId ===", label)
+
+    follower_ids = get_all_follower_ids(line_channel_id=line_channel_id)
+    if not follower_ids:
+        logging.warning("[BACKFILL] OA=%s 未取得任何好友（token 有問題或目前沒有好友）", label)
+        return
+
+    # 已正確歸屬本 OA 的好友：以 members.line_channel_id 判斷（受眾/列表都讀這張表）。
+    # 沒帶 channel（單帳號舊環境）時退回用 line_friends 既有名單判斷。
+    if line_channel_id:
+        rows = fetchall(
+            "SELECT line_uid FROM members "
+            "WHERE line_channel_id = :cid AND is_following = 1 "
+            "AND line_uid IS NOT NULL AND line_uid != ''",
+            {"cid": line_channel_id},
+        )
+    else:
+        rows = fetchall("SELECT line_uid FROM line_friends WHERE is_following = 1", {})
+    db_existing = {row["line_uid"] for row in rows}
+
+    # 找出「LINE 有、但 DB 還沒正確歸屬本 OA」的 userId（含舊資料缺 channel 的修復）
+    missing_ids = [uid for uid in follower_ids if uid not in db_existing]
+    if not missing_ids:
+        logging.info("[BACKFILL] OA=%s 資料已齊全，不需要補", label)
+        return
+
+    logging.info("[BACKFILL] OA=%s 需要補 %d 位好友", label, len(missing_ids))
+
+    success = 0
+    fail = 0
+    total = len(missing_ids)
+    for idx, uid in enumerate(missing_ids, start=1):
+        try:
+            # 1) 用該 OA 的 token 取 profile（名稱 & 大頭貼）
+            display_name, picture_url = fetch_line_profile(uid, line_channel_id=line_channel_id)
+
+            # 2) 寫 line_friends（與 on_follow 同序：先 friend，member_id 之後再連）
+            friend_id = upsert_line_friend(
+                line_uid=uid,
+                display_name=display_name,
+                picture_url=picture_url,
+                is_following=True,
+            )
+
+            # 3) 寫 members（帶 channel）—— 受眾人數 / 會員列表多 OA 過濾的來源
+            mid = upsert_member(
+                uid,
+                display_name,
+                picture_url,
+                line_channel_id=line_channel_id,
+            )
+
+            # 4) 連結 friend ↔ member（此 UPDATE 觸發 trigger 把 is_following 同步回 members）
+            if friend_id and mid:
+                execute(
+                    "UPDATE line_friends SET member_id = :mid WHERE id = :fid",
+                    {"mid": mid, "fid": friend_id},
+                )
+
+            success += 1
+            logging.info(
+                "[BACKFILL] OA=%s (%d/%d) 已補 %s name=%r avatar=%s",
+                label, idx, total, uid, display_name, "Y" if picture_url else "N"
+            )
+
+        except Exception as e:
+            fail += 1
+            logging.exception(
+                "[BACKFILL] OA=%s (%d/%d) 補 %s 失敗：%s", label, idx, total, uid, e
+            )
+
+        # 防止太密集打 profile API，被 LINE throttle
+        time.sleep(0.2)
+
+    logging.info("[BACKFILL] OA=%s 補齊完成，成功 %d 筆，失敗 %d 筆", label, success, fail)
+
+
 def backfill_line_friends_on_startup():
     """
-    啟動時執行資料補齊（只補「LINE 有、但 line_friends 裡沒有」的好友）。
+    啟動時執行資料補齊（只補「LINE 有、但 DB 還沒正確歸屬」的好友）。
 
-    流程：
-      1. 如果 AUTO_BACKFILL_FRIENDS=0 -> 直接略過
-      2. 用 followers API 取得目前所有好友 userId
-      3. 查 DB line_friends 裡已經有的 line_uid
-      4. 找出「LINE 有但 DB 沒有」的那一批 missing_ids
-      5. 對每個 missing_id 呼叫 fetch_line_profile + upsert_line_friend 補上資料
+    多 OA：遍歷 line_channels 中 is_active=1 的每個官方帳號，各用自己的 token 撈
+    followers，並把好友以「對應 line_channel_id」寫入 members / line_friends。
+    無任何 active OA 時退回 .env 單帳號（相容舊行為）。AUTO_BACKFILL_FRIENDS 為總開關。
     """
     try:
         if not AUTO_BACKFILL_FRIENDS:
             logging.info("[BACKFILL] AUTO_BACKFILL_FRIENDS=0，略過 backfill")
             return
 
-        logging.info("[BACKFILL] 開始從 LINE 撈取全部好友 userId ...")
-        follower_ids = get_all_follower_ids()
-        if not follower_ids:
-            logging.warning("[BACKFILL] 未從 LINE 取得任何好友，可能 token 有問題或目前沒有好友")
-            return
+        # 取得所有啟用中的 OA channel id（欄名因環境而異，沿用 LINE_CHANNEL_ID_COL）
+        try:
+            oa_rows = fetchall(
+                f"SELECT {LINE_CHANNEL_ID_COL} AS cid FROM line_channels WHERE is_active = 1 ORDER BY id",
+                {},
+            )
+        except Exception:
+            logging.exception("[BACKFILL] 查詢 line_channels 失敗，改用 .env 單帳號")
+            oa_rows = []
 
-        # 取得 DB 已存的好友名單（只看 is_following=1 的）
-        rows = fetchall("SELECT line_uid FROM line_friends WHERE is_following = 1", {})
-        db_existing = {row["line_uid"] for row in rows}
+        channel_ids = [r["cid"] for r in (oa_rows or []) if r.get("cid")]
+        if not channel_ids:
+            logging.info("[BACKFILL] 無啟用中的 OA，使用 .env 預設帳號 backfill")
+            channel_ids = [None]  # None -> get_all_follower_ids fallback .env
 
-        # 找出 LINE 有但 DB 沒存的 userId
-        missing_ids = [uid for uid in follower_ids if uid not in db_existing]
-
-        if not missing_ids:
-            logging.info("[BACKFILL] line_friends 資料已齊全，不需要補")
-            return
-
-        logging.info("[BACKFILL] 需要補 %d 位好友資料", len(missing_ids))
-
-        success = 0
-        fail = 0
-
-        for idx, uid in enumerate(missing_ids, start=1):
+        logging.info("[BACKFILL] 共 %d 個 OA 需要 backfill", len(channel_ids))
+        for channel_id in channel_ids:
             try:
-                # 1) 先用現成的 profile API 拿名稱 & 大頭貼
-                display_name, picture_url = fetch_line_profile(uid)
-
-                # 2) 寫入 / 更新 line_friends
-                upsert_line_friend(
-                    line_uid=uid,
-                    display_name=display_name,
-                    picture_url=picture_url,
-                    member_id=None,
-                    is_following=True,
-                )
-
-                success += 1
-                logging.info(
-                    "[BACKFILL] (%d/%d) 已補上 %s name=%r avatar=%s",
-                    idx, len(missing_ids), uid, display_name,
-                    "Y" if picture_url else "N"
-                )
-
-            except Exception as e:
-                fail += 1
-                logging.exception(
-                    "[BACKFILL] (%d/%d) 補 %s 失敗：%s",
-                    idx, len(missing_ids), uid, e
-                )
-
-            # 防止太密集打 profile API，被 LINE throttle
-            time.sleep(0.2)
-
-        logging.info("[BACKFILL] 補齊完成，成功 %d 筆，失敗 %d 筆", success, fail)
+                _backfill_one_oa(channel_id)
+            except Exception:
+                # 單一 OA 失敗不影響其他 OA
+                logging.exception("[BACKFILL] OA=%s backfill 失敗", channel_id or "(.env 預設)")
 
     except Exception as e:
         logging.exception("[BACKFILL] backfill_line_friends_on_startup 整體失敗：%s", e)
