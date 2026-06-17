@@ -1,6 +1,7 @@
 
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
+import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 import { visualizer } from 'rollup-plugin-visualizer';
 
@@ -12,6 +13,7 @@ const HMR_PROTOCOL = process.env.VITE_HMR_PROTOCOL || process.env.HMR_PROTOCOL |
 export default defineConfig({
     plugins: [
       react(),
+      tailwindcss(),
       visualizer({
         filename: './build/stats.html',
         open: false,

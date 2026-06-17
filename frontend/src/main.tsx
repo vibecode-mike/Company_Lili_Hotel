@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
-import "./index.css";
+// 切廚房：改用 live Tailwind 編譯（globals.css 內 @import "tailwindcss"），
+// 不再載入預編譯的靜態 ./index.css。手寫規則（捲軸 / .row-divider 表格分隔線）已稽核搬入 globals.css。
 import "./styles/globals.css";
 
 // Patch removeChild to handle Radix UI Portal cleanup issues

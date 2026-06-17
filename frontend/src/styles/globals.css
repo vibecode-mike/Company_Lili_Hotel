@@ -1,3 +1,6 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
 @custom-variant dark (&:is(.dark *));
 
 /* 全域字型：Noto Sans TC + 預設 0% 字距，作為後續設計系統 tokenize 的基線 */
@@ -46,6 +49,40 @@ body {
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* =====================================================================
+   * Design Tokens — 級距系統 (token 定義；元件尚未引用，待後續逐頁遷移)
+   * 對照表：docs/token-migration-map.md
+   * ===================================================================== */
+
+  /* --- Spacing：4-point grid（n × 4px）。與 Tailwind 數字級距 (gap-2=8px…) 同值 --- */
+  --space-0-5: 2px;   /* = Tailwind 0.5 */
+  --space-1: 4px;
+  --space-1-5: 6px;   /* = Tailwind 1.5 */
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* --- Font family：全站統一單一定義（取代各檔 4+ 種 Noto 寫法） --- */
+  --font-family-base: 'Noto Sans TC', sans-serif;
+
+  /* --- Font size：對齊 Tailwind 字級（主力 12 / 14 / 16 佔九成）。--font-size 既有，維持 16px --- */
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-base: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 24px;
+  --font-size-3xl: 32px;
+
+  /* --- Line height：[1.5] 佔 417 處，收斂為單一基準（= Tailwind leading-normal） --- */
+  --line-height-base: 1.5;
 }
 
 .dark {
@@ -112,10 +149,17 @@ body {
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* Radius 階梯：沿用 --radius (10px) 基準 calc 推導，對齊主力值 8/10/12/16
+   * sm/md/lg 維持原值（rounded-sm/md/lg 既有用法零變化）
+   * xl 由 14px → 12px（Tailwind 慣例值；影響既有 rounded-xl，見對照表）
+   * xs/2xl/3xl 為新增階梯 */
+  --radius-xs: calc(var(--radius) - 6px);   /* 4px  */
+  --radius-sm: calc(var(--radius) - 4px);   /* 6px  */
+  --radius-md: calc(var(--radius) - 2px);   /* 8px  */
+  --radius-lg: var(--radius);               /* 10px */
+  --radius-xl: calc(var(--radius) + 2px);   /* 12px (was 14px) */
+  --radius-2xl: calc(var(--radius) + 6px);  /* 16px */
+  --radius-3xl: calc(var(--radius) + 10px); /* 20px */
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -641,4 +685,10 @@ html {
 .date-input-blue-icon::-webkit-calendar-picker-indicator {
   filter: brightness(0) saturate(100%) invert(33%) sepia(91%) saturate(2842%) hue-rotate(208deg) brightness(94%) contrast(91%);
   cursor: pointer;
+}
+
+/* 表格列分隔線：取代 JIT-only 的 [&>td]:border-b [&>td]:border-[#ddd] 寫法
+   （自舊 index.css 預編譯輸出搬遷，AIChatbotOverview / FacilitiesContent / PMSIntegration 使用）*/
+.row-divider > td {
+  border-bottom: 1px solid #ddd;
 }
