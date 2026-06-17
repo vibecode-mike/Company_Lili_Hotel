@@ -1223,37 +1223,50 @@ export default function ChatRoomLayout({
                   setCurrentPlatform(platform);
                 }}
               />
-              {/* 即時連線狀態指示 */}
-              <span
-                title={
-                  isRealtimeConnected
-                    ? "即時連線中"
-                    : currentPlatform === "Facebook"
-                      ? "Facebook 未連線"
-                      : "輪詢模式（每 3 秒更新）"
-                }
-                className={`inline-block w-2 h-2 rounded-full ${isRealtimeConnected ? "bg-green-500" : "bg-yellow-500 animate-pulse"}`}
-              />
-              <button
-                onClick={() => loadChatMessages(1, false)}
-                disabled={isLoading}
-                title="重新整理聊天紀錄"
-                className="p-1.5 rounded-full hover:bg-gray-100 disabled:opacity-50 transition-colors"
-              >
-                <svg
-                  className={`w-5 h-5 text-gray-500 ${isLoading ? "animate-spin" : ""}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+              {/* ──────────────────────────────────────────────────────────────
+                  暫時隱藏：即時連線狀態點 + 重新整理聊天紀錄按鈕。
+                  原因：這兩個元件之前因舊預編譯 index.css 過時、相關 class 從未生成而長期隱形；
+                  切廚房改用 live Tailwind 後才恢復顯示。經與同事討論，先收起、待後續決定是否正式上或移除。
+                  做法：僅以 `false &&` 不渲染 UI；功能邏輯（isRealtimeConnected 連線狀態、
+                  loadChatMessages 重載）完全保留、未刪除。
+                  恢復方式：將下面兩處的 `false` 改回 `true`（或移除 `false && ( ... )` 外層）即可。
+                  ────────────────────────────────────────────────────────────── */}
+              {/* 即時連線狀態指示：綠=SSE 即時連線中，黃閃=輪詢模式/未連線 */}
+              {false && (
+                <span
+                  title={
+                    isRealtimeConnected
+                      ? "即時連線中"
+                      : currentPlatform === "Facebook"
+                        ? "Facebook 未連線"
+                        : "輪詢模式（每 3 秒更新）"
+                  }
+                  className={`inline-block w-2 h-2 rounded-full ${isRealtimeConnected ? "bg-green-500" : "bg-yellow-500 animate-pulse"}`}
+                />
+              )}
+              {/* 重新整理聊天紀錄按鈕 */}
+              {false && (
+                <button
+                  onClick={() => loadChatMessages(1, false)}
+                  disabled={isLoading}
+                  title="重新整理聊天紀錄"
+                  className="p-1.5 rounded-full hover:bg-gray-100 disabled:opacity-50 transition-colors"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                  />
-                </svg>
-              </button>
+                  <svg
+                    className={`w-5 h-5 text-gray-500 ${isLoading ? "animate-spin" : ""}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                </button>
+              )}
             </div>
 
             {/* 日期（中間） */}
