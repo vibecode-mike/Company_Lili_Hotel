@@ -225,22 +225,42 @@ async def get_members(
     all_lookup_uids = list({*member_line_uids, *member_webchat_uids})
 
     if all_lookup_uids:
-        # 使用子查詢找出每個 thread_id 的最新聊天時間
         # conversation_messages 的 thread_id = platform_uid (line_uid 或 webchat_uid)
-        subq = (
+        platform_filter = or_(
+            ConversationMessage.platform == 'LINE',
+            ConversationMessage.platform == 'Webchat',
+            ConversationMessage.platform.is_(None),
+        )
+
+        # (1) 最後聊天時間：含群發 —— 依需求群發也算一次互動，故不過濾 message_source
+        time_subq = (
             select(
                 ConversationMessage.thread_id,
                 func.max(ConversationMessage.created_at).label('max_created_at')
             )
             .where(
                 ConversationMessage.thread_id.in_(all_lookup_uids),
-                or_(
-                    ConversationMessage.platform == 'LINE',
-                    ConversationMessage.platform == 'Webchat',
-                    ConversationMessage.platform.is_(None),
-                ),
-                # 排除群發：避免一次群發把所有會員的「最後互動時間」整批刷新、
-                # 也避免群發蓋掉「最後一筆是 incoming」的藍點判斷
+                platform_filter,
+            )
+            .group_by(ConversationMessage.thread_id)
+        ).subquery()
+
+        time_result = await db.execute(
+            select(time_subq.c.thread_id, time_subq.c.max_created_at)
+        )
+        for thread_id, max_created_at in time_result:
+            last_chat_times[thread_id] = max_created_at
+
+        # (2) 藍點（未回覆判斷）：排除群發
+        # 避免一次群發把所有等待中的藍點清掉、也避免群發蓋掉「最後一筆是 incoming」的判斷
+        blue_subq = (
+            select(
+                ConversationMessage.thread_id,
+                func.max(ConversationMessage.created_at).label('max_created_at')
+            )
+            .where(
+                ConversationMessage.thread_id.in_(all_lookup_uids),
+                platform_filter,
                 or_(
                     ConversationMessage.message_source != 'broadcast',
                     ConversationMessage.message_source.is_(None),
@@ -257,14 +277,13 @@ async def get_members(
                 ConversationMessage.message_source,
                 ConversationMessage.unanswered,
             )
-            .join(subq, and_(
-                ConversationMessage.thread_id == subq.c.thread_id,
-                ConversationMessage.created_at == subq.c.max_created_at
+            .join(blue_subq, and_(
+                ConversationMessage.thread_id == blue_subq.c.thread_id,
+                ConversationMessage.created_at == blue_subq.c.max_created_at
             ))
         )
 
         for thread_id, created_at, direction, message_source, unanswered in chat_result:
-            last_chat_times[thread_id] = created_at
             # 亮藍點的條件：
             # (a) 最後一筆是 incoming（使用者訊息尚未被回覆）
             # (b) 最後一筆是 AI 回覆但被標記 unanswered=1（mark_unanswerable 觸發）→ 需人工介入
@@ -489,11 +508,7 @@ async def get_member(
                     ConversationMessage.platform == 'LINE',
                     ConversationMessage.platform == 'Webchat',
                 ),
-                # 排除群發：最後互動時間只看真實對話
-                or_(
-                    ConversationMessage.message_source != 'broadcast',
-                    ConversationMessage.message_source.is_(None),
-                ),
+                # 依需求：最後聊天時間含群發（群發也算一次互動），故不過濾 message_source
             )
             .order_by(ConversationMessage.created_at.desc())
             .limit(1)

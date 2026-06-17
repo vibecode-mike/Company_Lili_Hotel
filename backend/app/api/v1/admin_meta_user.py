@@ -5,10 +5,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, or_
 
 from app.database import get_db
 from app.models.member import Member
+from app.models.conversation import ConversationMessage
 from app.models.tag import MemberTag, MemberInteractionTag
 from app.models.fb_channel import FbChannel
 from app.models.line_channel import LineChannel
@@ -166,6 +167,29 @@ async def get_meta_user_profile(
             "tag_type": tag_type,
         })
 
+    # 最後聊天時間：查 conversation_messages 最新一筆（與會員列表頁對齊）
+    # thread_id = platform_uid（line_uid 或 webchat_uid）；查無對話才 fallback last_interaction_at
+    # 注意：依需求「含群發」—— 群發也算一次互動，不做 message_source != 'broadcast' 過濾
+    last_chat_time = member.last_interaction_at
+    lookup_uid = member.line_uid or member.webchat_uid
+    if lookup_uid:
+        last_chat_result = await db.execute(
+            select(ConversationMessage.created_at)
+            .where(
+                ConversationMessage.thread_id == lookup_uid,
+                or_(
+                    ConversationMessage.platform == "LINE",
+                    ConversationMessage.platform == "Webchat",
+                    ConversationMessage.platform.is_(None),
+                ),
+            )
+            .order_by(ConversationMessage.created_at.desc())
+            .limit(1)
+        )
+        last_chat_row = last_chat_result.scalar()
+        if last_chat_row:
+            last_chat_time = last_chat_row
+
     # 訪客模式：選定渠道強制為 Webchat、channel_info 也以 Webchat 呈現
     is_guest = bool(getattr(member, "is_guest", False))
     if is_guest:
@@ -185,7 +209,7 @@ async def get_meta_user_profile(
         "gender": member.gender or "",
         "birthday": member.birthday or "",
         "created_at": member.created_at.isoformat() if member.created_at else None,
-        "last_interaction_at": member.updated_at.isoformat() if member.updated_at else None,
+        "last_interaction_at": last_chat_time.isoformat() if last_chat_time else None,
         # LINE 渠道
         "line_uid": member.line_uid or "",
         "line_display_name": member.line_display_name or "",
