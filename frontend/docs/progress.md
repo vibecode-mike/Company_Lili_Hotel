@@ -95,6 +95,21 @@
 
 ---
 
+## 4.5 ⚠️⚠️ 切廚房副作用：休眠 class 活化回歸（2026-06-18 發現，重要）
+
+切廚房 commit 自稱「零退化」，但**不成立**。機制：舊預編譯 `index.css` 是過時快照，**漏掉約 1000 個元件實際在用的 class**（切廚房 commit 訊息自己有寫）。這些 class 在切廚房前是**死的（沒生效）**，live Tailwind 一開全部**第一次生效** → 凡是「元件寫了某 arbitrary class、但該 class 不在舊 index.css」之處，畫面會悄悄改變。
+
+**已證實並修掉的兩處（2026-06-18）**：
+- **基本設定頁變窄**（commit `d96076fb`）：`max-w-[1240px]/px-[40px]/pt-[48px]` 舊 index.css 內 = 0 次 → 以前全失效（滿版），現在生效 → 框成 1240 置中。改回 `w-full`。
+- **全站捲軸變預設醜樣**（commit `2a7b07c6`）：27 個 bare overflow 容器補 `.scrollbar-transparent`。
+
+**結論**：這是**系統性風險**，不是兩個孤例。任何頁面只要用了「不在舊 index.css 的 arbitrary class」就可能跑版。**建議排一輪有系統的逐頁 audit**（特別是 arbitrary 值的 `max-w-`/`min-w-`/`max-h-`/絕對定位/`px-/py-` 等版面類），不要只等使用者一個個回報。
+- 快速判斷某 class 是否「以前是死的」：`git show 8817a30b^:frontend/src/index.css | grep -c '<class>'`，回 0 = 切廚房後才首次生效、是高風險點。
+
+> 註：此與字體/圓角/間距的「主動 token 遷移」是兩回事 —— 這是切廚房**被動**帶出的回歸，需先止血。
+
+---
+
 ## 5. 明天的第一個動作（建議）
 
 > 「字體 Inter→Noto」開工：
