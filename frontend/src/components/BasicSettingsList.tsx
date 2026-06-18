@@ -110,7 +110,7 @@ export const BasicSettingsList = memo(function BasicSettingsList({
 
   return (
     <div className="bg-[#f6f9fd] min-h-screen w-full">
-      <div className="max-w-[1240px] mx-auto px-[40px] pt-[48px] pb-[80px]">
+      <div className="w-full px-[40px] pt-[48px] pb-[80px]">
         {/* Breadcrumb */}
         <div className="mb-[16px]">
           <p className="text-[14px] leading-[1.5] text-[#383838] font-medium">基本設定</p>
