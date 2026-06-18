@@ -86,8 +86,7 @@ export function SidebarChannelSwitcher({ isOpen }: SidebarChannelSwitcherProps) 
         </button>
 
         {dropdownOpen && availableChannels.length > 0 && (
-          // TODO(臨時驗收C1): max-h 暫改 48px 讓 2 個頻道也出捲軸，驗收完改回 max-h-[320px]
-          <Scrollable orientation="vertical" className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#b6c8f1] rounded-[8px] shadow-md z-[60] overflow-hidden" viewportClassName="max-h-[48px]">
+          <Scrollable orientation="vertical" className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#b6c8f1] rounded-[8px] shadow-md z-[60] overflow-hidden" viewportClassName="max-h-[320px]">
             {availableChannels.map((channel) => {
               const isSelected = selectedChannel?.channel_id === channel.channel_id;
               return (

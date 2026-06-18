@@ -1,6 +1,7 @@
 import React from "react";
 import { Drawer, DrawerContent, DrawerClose, DrawerPortal, DrawerOverlay, DrawerTitle, DrawerDescription } from "./ui/drawer";
 import svgPaths from "../imports/svg-ukuy34kve3";
+import Scrollable from "./common/Scrollable";
 import imgImageHero from "figma:asset/68b289cb927cef11d11501fd420bb560ad25c667.png";
 import { cn } from "./ui/utils";
 import { FlexMessageCardPreview, type CarouselCard } from "./CarouselMessageEditor";
@@ -419,7 +420,7 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
       <DrawerContent
         className="bg-white border-0 rounded-none w-[344px] h-screen p-0"
       >
-          <div className="box-border content-stretch flex flex-col gap-[32px] items-start p-[32px] relative size-full overflow-y-auto scrollbar-transparent" data-name="Drawer">
+          <Scrollable orientation="vertical" className="size-full" viewportClassName="box-border content-stretch flex flex-col gap-[32px] items-start p-[32px] h-full">
             {/* Accessibility - Hidden Title and Description */}
             <DrawerTitle className="sr-only">訊息詳細資訊</DrawerTitle>
             <DrawerDescription className="sr-only">
@@ -503,7 +504,7 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
                 </InfoRow>
               )}
             </div>
-          </div>
+          </Scrollable>
         </DrawerContent>
     </Drawer>
   );

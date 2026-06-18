@@ -531,8 +531,7 @@ export default function StaffUsersManagement({
                   {allChannels.length === 0 ? (
                     <p className="text-[13px] text-gray-500">尚未建立任何 LINE OA</p>
                   ) : (
-                    // TODO(臨時驗收C1): max-h 暫改 48px 讓 2 個 OA 也出捲軸，驗收完改回 max-h-[180px]
-                    <Scrollable orientation="vertical" className="border border-[#dddddd] rounded-[12px] overflow-hidden" viewportClassName="space-y-[8px] max-h-[48px] p-[12px]">
+                    <Scrollable orientation="vertical" className="border border-[#dddddd] rounded-[12px] overflow-hidden" viewportClassName="space-y-[8px] max-h-[180px] p-[12px]">
                       {allChannels.map((c: LineChannelInfo) => (
                         <label
                           key={c.channel_id}
