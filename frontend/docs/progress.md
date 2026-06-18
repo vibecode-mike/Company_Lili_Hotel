@@ -1,6 +1,6 @@
 # 前端 Design Token 遷移 — 進度與接續指南
 
-> 最後更新：2026-06-18
+> 最後更新：2026-06-19
 > 用途：明天打開就能照著接續。本檔 = 唯一進度真相來源。
 > 對照表（舊硬寫值 → 新 token）：**`docs/token-migration-map.md`**
 > 元件盤點：`docs/component-audit.md`
@@ -96,7 +96,7 @@
 - [ ] **維持方案 B（不自繪）**：textarea、下拉 popover、shadcn UI 庫元件 —— 不納入 C 計畫
 - [ ] **【Windows 跨系統檢查點】** 用 Windows 開 crmpoc 確認 C 捲軸是 **4px 灰圓角**、沒變回 Windows 預設醜樣式（選 C 而非 A 的核心理由，需實測；若不一致→檢討 thumb 繪製，不退回 A）
 - [ ] **FilterModal 雙捲軸**：單獨小批，**保留 `showScrollbar` 的 `pr-2` 邏輯**
-- [ ] **字體 commit（`71b92bbd` 全站收斂 Noto）是否已 push staging + 告知同事**（待確認；目前仍在本地未 push）
+- [x] **字體（`71b92bbd` 全站收斂 Noto）已 push staging（已部署、CI 綠燈）、已告知同事**
 
 ### 雙軸表格批細節：會員表格（`src/imports/MainContainer-6001-1415.tsx`）
 
@@ -174,10 +174,18 @@
 
 ---
 
-## 5. 明天的第一個動作（建議）
+## 5. 明天的執行計畫（並行多批次）
 
-> 「字體 Inter→Noto」開工：
-> 1. 先 `git add docs/*.md` 把文件納管（待辦 A，順手）。
-> 2. 產出 `docs/font-inter-to-noto.md`（§3 的清單）。
-> 3. 依清單逐檔把 Inter/PingFang 收斂到 Noto，build + dev 自我驗證。
-> 4. push main → 等 CI 綠 → staging 逐頁看字體 → OK。
+**背景**：捲軸這批因撞到 Chrome 自訂捲軸的技術限制（CSS 做不到 hover-only）、被迫改走 JS 自繪大工程，所以特別耗時；**這是特例**。接下來的字體／間距／圓角是純 token 替換（改 CSS 變數 + 批次套用），不撞限制，**會快很多**。
+
+**加速原則**：一天做多個批次（並行推進），但每批維持「**單一主題、做完各自驗收再下一批**」——不要把多種改動混在一個提示詞裡（今天全站掛掉的教訓：**變數單純才好定位**）。
+
+**明天建議順序**（每批：單一主題 → 做完 → 驗收 → commit）：
+
+- **批次 1：捲軸 C1 第二組** —— `CarouselMessageEditor` line534 縱向、`FacebookMessageEditor` line332 縱向，**都別碰橫向 tab**；FB 需有粉專才測得到
+- **批次 2：圓角批次** —— 重做之前因切廚房還原掉的圓角統一，**純 token，快**
+- **批次 3：捲軸 C1 Sidebar** —— side menu 導覽，結構單純但全站可見
+- **批次 4：間距批次** —— gap/padding 級距統一，**純 token，快**
+- **批次 5：捲軸 C2 聊天室** —— ⚠️**最高風險**：SSE 自動捲動 + 無限捲動，**放最後、精神好時做、不催；可延後到後天，不要硬塞**
+
+**彈性**：批次 1–4 是快批，順的話一天可全清；批次 5（聊天室）時間/精神不夠就延後。
