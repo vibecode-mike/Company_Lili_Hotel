@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
+import Scrollable from './common/Scrollable';
 import { useChannel } from '../contexts/ChannelContext';
 
 interface SidebarChannelSwitcherProps {
@@ -85,7 +86,8 @@ export function SidebarChannelSwitcher({ isOpen }: SidebarChannelSwitcherProps) 
         </button>
 
         {dropdownOpen && availableChannels.length > 0 && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#b6c8f1] rounded-[8px] shadow-md z-[60] max-h-[320px] overflow-y-auto scrollbar-transparent">
+          // TODO(臨時驗收C1): max-h 暫改 48px 讓 2 個頻道也出捲軸，驗收完改回 max-h-[320px]
+          <Scrollable orientation="vertical" className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#b6c8f1] rounded-[8px] shadow-md z-[60] overflow-hidden" viewportClassName="max-h-[48px]">
             {availableChannels.map((channel) => {
               const isSelected = selectedChannel?.channel_id === channel.channel_id;
               return (
@@ -116,7 +118,7 @@ export function SidebarChannelSwitcher({ isOpen }: SidebarChannelSwitcherProps) 
                 </button>
               );
             })}
-          </div>
+          </Scrollable>
         )}
       </div>
     </div>
