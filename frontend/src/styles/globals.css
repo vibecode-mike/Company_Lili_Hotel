@@ -253,46 +253,6 @@ html {
   animation: blink-cursor 1s infinite;
 }
 
-/* 自訂 Scrollbar 樣式 - 適用於聊天消息區域 */
-.chat-messages-scroll::-webkit-scrollbar {
-  width: 8px;
-}
-
-.chat-messages-scroll::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 4px;
-}
-
-.chat-messages-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-  transition: background 0.2s ease;
-}
-
-.chat-messages-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-.chat-messages-scroll::-webkit-scrollbar-thumb:active {
-  background: rgba(255, 255, 255, 0.4);
-}
-
-/* Firefox 支援 */
-.chat-messages-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
-}
-
-/* 隱藏 textarea 的 scrollbar */
-.chat-input-textarea::-webkit-scrollbar {
-  display: none;
-}
-
-.chat-input-textarea {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
-}
-
 /* Chat widget 輸入框 - 細灰 scrollbar（4px，符合 Figma 設計稿） */
 .chat-widget-textarea::-webkit-scrollbar {
   width: 4px;
@@ -312,58 +272,46 @@ html {
   scrollbar-color: #dddddd transparent;
 }
 
-/* 透明 scrollbar - 適用於會員備註區域 */
+/* 方案 B：thumb 常駐顯示（很淡的半透明灰），不綁容器 hover。
+   原因：Chrome/Blink 對「容器 :hover 重繪自訂捲軸」不可靠（進整區不一定觸發、聊天室忽有忽無），
+   故改為常駐淡灰、暗示可捲動；碰到捲軸本體再加深以利抓取。
+   縱向(width)與橫向(height)一律 4px、圓角；track 透明（閒置不露白）。 */
 .scrollbar-transparent::-webkit-scrollbar {
-  width: 8px;
+  width: 4px;
+  height: 4px;
+  background: transparent;
 }
 
 .scrollbar-transparent::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.scrollbar-transparent::-webkit-scrollbar-thumb {
+.scrollbar-transparent::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* 常駐顯示的很淡半透明灰 thumb（比舊 hover 0.2 更淡），平常不搶眼但暗示可捲動 */
+.scrollbar-transparent::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
   border-radius: 4px;
 }
 
+/* 滑鼠碰到捲軸本體時加深，維持「可抓取」回饋 */
 .scrollbar-transparent::-webkit-scrollbar-thumb:hover {
-  background: transparent;
+  background: rgba(0, 0, 0, 0.3);
 }
 
 .scrollbar-transparent::-webkit-scrollbar-thumb:active {
-  background: transparent;
+  background: rgba(0, 0, 0, 0.35);
 }
 
-/* 表格專用 scrollbar - 白色半透明 */
-.table-scroll::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.table-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.table-scroll::-webkit-scrollbar-thumb {
-  background: transparent;
-  border-radius: 4px;
-  transition: background 0.2s ease;
-}
-
-.table-scroll::-webkit-scrollbar-thumb:hover,
-.table-scroll::-webkit-scrollbar-thumb:active,
-.table-scroll:hover::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.8);
-}
-
-/* Firefox 支援 */
-.table-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-}
-
-.table-scroll:hover {
-  scrollbar-color: rgba(255, 255, 255, 0.8) transparent;
+/* 標準屬性「只給 Firefox」：FF 不認得 ::-webkit-scrollbar，這個 @supports 才命中；
+   Chrome/Safari 認得 → 不套，沿用上面的 ::-webkit-scrollbar 規則。FF 維持常駐細灰條。 */
+@supports not selector(::-webkit-scrollbar) {
+  .scrollbar-transparent {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.12) transparent;
+  }
 }
 
 /* 平台選擇卡片 hover/active 效果 */
