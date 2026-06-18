@@ -57,6 +57,70 @@
 
 ---
 
+## 2b. 元件層統一（之後處理）
+
+> 捲軸 CSS 規則已收斂成單一正解 `.scrollbar-transparent`（4px、半透明灰、圓角、hover 容器才顯示、含 Firefox 支援）。
+> 以下兩項屬「元件層」的捲軸實作，本批**不動**，留待日後評估：
+
+- [ ] **1. React 自繪捲軸（`.no-native-scrollbar` 搭配的 `CustomScrollbar`）**
+  - 現況：`MemberTagEditModal` 等用 `.no-native-scrollbar` 隱藏原生捲軸、改用 React 自繪，理由是避開 macOS overlay scrollbar 在 modal 內不可見的問題。
+  - 待評估：能否拆掉自繪、直接改用 CSS `.scrollbar-transparent`（**需先驗證 macOS modal 不會再出現捲軸不可見的問題**）。若確認非自繪不可，則把它**元件化成共用 `<CustomScrollbar>`**，避免各處各寫一份。
+- [ ] **2. `.chat-widget-textarea`（webchat 輸入框捲軸）**
+  - 現況：widget 專屬，已是 4px 細灰、但為**常駐顯示**（非 hover 才出現）。
+  - 待評估：日後是否也改成「hover 才顯示」，與全站 `.scrollbar-transparent` 行為一致。
+
+---
+
+## 2c. 捲軸方案 C 推進（C 計畫）
+
+> 方案 C＝共用 `<Scrollable>`（`src/components/common/Scrollable.tsx`）：`.no-native-scrollbar` 隱原生捲軸 + JS 自繪 4px thumb；
+> 進整區才顯示、離開消失、sticky 不震、thumb 不蓋表頭（表頭走 `header` 槽渲染在 viewport 外）。
+> 選方案 C（而非純 CSS 方案 A）的核心理由：**JS 自繪理論上跨系統一致**，不會在 Windows 變回預設醜捲軸 —— 待實測確認（見下方檢查點）。
+
+### 已完成（commit）
+
+- [x] **方案 B 退路存檔點**：commit `28449e13`（常駐淡灰捲軸；C 失敗可整批退回此點）
+- [x] **C0：共用 `<Scrollable>` 元件（支援 `header` 槽避開 sticky 表頭）+ BasicSettingsList**：commit `b831567c`（縱向；六項驗收全過：平常乾淨／進整區出現／離開消失／捲動順／sticky 不震／thumb 不蓋表頭）
+- [x] **C1 第一組：3 個縱向面板**（`StaffUsersManagement` / `SidebarChannelSwitcher` / `MessageDetailDrawer`）：commit `93eab253`
+
+### 待辦（明天繼續）
+
+- [ ] **C1 第二組**：
+  - `CarouselMessageEditor.tsx` — 只遷 **line 534 縱向**（`w-full h-full overflow-y-auto`），**別碰 line 570 橫向** tab strip
+  - `FacebookMessageEditor.tsx` — 只遷 **line 332 縱向**，**別碰 line 372 橫向**；⚠️ 需 crmpoc 有 **FB 粉專**才切得到、測得到
+  - 入口：群發訊息 → 活動與訊息推播 → 建立/編輯訊息 → 渠道選 LINE OA（Carousel）或 FB 粉專（FB 編輯器）
+- [ ] **C1 Sidebar**：side menu 導覽清單（全站高可見度，放 C1 **最後**做）
+- [ ] **C2 聊天室**（最高風險：SSE 自動捲到底 + 無限往上捲）：`ChatMessageList` / `ChatRoomLayout`，須保留 ref/onScroll，單獨謹慎做
+- [ ] **C3** 表格橫向+巢狀 ／ **C4** 各頁 `<main>`（9 個頁殼主捲動）／ **C5** 其餘橫向（tab／輪播／chip）
+- [ ] **雙軸表格批**：會員表格（雙軸 + 幽靈橫捲軸 + 表頭 4px 對不齊）→ 細節見下方
+- [ ] **維持方案 B（不自繪）**：textarea、下拉 popover、shadcn UI 庫元件 —— 不納入 C 計畫
+- [ ] **【Windows 跨系統檢查點】** 用 Windows 開 crmpoc 確認 C 捲軸是 **4px 灰圓角**、沒變回 Windows 預設醜樣式（選 C 而非 A 的核心理由，需實測；若不一致→檢討 thumb 繪製，不退回 A）
+- [ ] **FilterModal 雙捲軸**：單獨小批，**保留 `showScrollbar` 的 `pr-2` 邏輯**
+- [ ] **字體 commit（`71b92bbd` 全站收斂 Noto）是否已 push staging + 告知同事**（待確認；目前仍在本地未 push）
+
+### 雙軸表格批細節：會員表格（`src/imports/MainContainer-6001-1415.tsx`）
+
+- 問題（結構性、與 C0 無關，方案 B 時代就有）：
+  - **雙軸**：外層 `overflow-x-auto`（包 `min-w-[1160px]`）+ 內層 `max-h-[600px] overflow-y-auto`。
+  - **幽靈橫捲軸**：內層只想縱捲，但 `overflow-y:auto` 會讓 `overflow-x` 被瀏覽器自動升級成 `auto`；垂直捲軸吃掉 ~4px 寬、欄位 min-w 合計≈1160 → 溢出 → **第二條橫捲軸**（與外層那條疊在底部）。
+  - **表頭差 4px 對不齊**：表頭在縱捲區外用滿 1160px、資料列在縱捲區內被捲軸吃 4px → 同一根因。
+- 解法方向：遷移到 `<Scrollable orientation="both">`，用 `header` 槽固定表頭（同時解掉對不齊），或明確 `overflow-x-hidden` 擋幽靈橫捲軸。屬比 C0 複雜的雙軸+sticky 容器，單獨一批處理。
+
+### ⚠️ C 計畫排除清單（不要再被誤列進任何批次）
+
+> 教訓：列批次清單前，必須先確認元件「**真的會 render 出現在畫面上**」，不能只靠 grep `overflow-y`。死碼一律排除。
+
+- **死碼（無人 import / import 了卻從不 render → 改了也驗不了）→ 永久排除**：
+  - `src/components/flex-message/ConfigPanel.tsx`（孤兒，無人 import）
+  - `src/components/chat-room/MemberInfoPanel.tsx`（聊天室實際用 `MemberInfoPanelComplete.tsx`，此檔無人 import）
+  - `src/components/flex-message/FlexMessageEditorNew.tsx`（**import 了但從不 render**：唯一渲染它的 `message-creation/PreviewPanel.tsx` 在 `MessageCreation` 只被 import、JSX 從未掛載；live 的 LINE 訊息編輯器掛的是 `CarouselMessageEditor`）。⚠️ 教訓加強版：「有 import」不等於「會 render」，必須追 JSX 是否真的掛到頁面上。
+  - `src/imports/LineFlexMessageBuilder.tsx`（Figma 死檔，整檔無人掛載；內含自己的 PreviewPanel/ConfigPanel，勿混淆）
+- **活的 Flex/輪播編輯器其實是 `CarouselMessageEditor.tsx`**（雙軸：`overflow-y` 534 行 + `overflow-x` 570 行）→ 屬「第二組（同檔有橫向容器）」，不是 group 1。
+- **活的但目前不是捲動容器 → 不納入捲軸統一**：
+  - `src/components/chat-room/MemberInfoPanelComplete.tsx`（聊天室右側會員資訊面板）目前**沒有 `overflow-y`**，不是捲動容器；除非日後它自己變成需要捲動，否則不列入 C 計畫。
+
+---
+
 ## 3. 字體任務（B）開工須知
 
 **Token 對照表**：`docs/token-migration-map.md` §1（字體相關全在這）
