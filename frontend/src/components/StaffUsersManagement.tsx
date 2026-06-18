@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Check } from "lucide-react";
 import { PageWithSidebar } from "./Sidebar";
+import Scrollable from "./common/Scrollable";
 import { PageHeaderWithBreadcrumb } from "./common/Breadcrumb";
 import { Tag } from "./common";
 import { apiGet, apiPost, apiPatch, apiDelete } from "../utils/apiClient";
@@ -530,7 +531,8 @@ export default function StaffUsersManagement({
                   {allChannels.length === 0 ? (
                     <p className="text-[13px] text-gray-500">尚未建立任何 LINE OA</p>
                   ) : (
-                    <div className="space-y-[8px] max-h-[180px] overflow-y-auto border border-[#dddddd] rounded-[12px] p-[12px] scrollbar-transparent">
+                    // TODO(臨時驗收C1): max-h 暫改 48px 讓 2 個 OA 也出捲軸，驗收完改回 max-h-[180px]
+                    <Scrollable orientation="vertical" className="border border-[#dddddd] rounded-[12px] overflow-hidden" viewportClassName="space-y-[8px] max-h-[48px] p-[12px]">
                       {allChannels.map((c: LineChannelInfo) => (
                         <label
                           key={c.channel_id}
@@ -550,7 +552,7 @@ export default function StaffUsersManagement({
                           )}
                         </label>
                       ))}
-                    </div>
+                    </Scrollable>
                   )}
                 </Field>
               </>
