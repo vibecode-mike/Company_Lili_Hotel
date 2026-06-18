@@ -443,7 +443,7 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
 
               <InfoRow label="平台">
                 <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0" data-name="Table/List-atomic">
-                  <div className="flex flex-col font-['Inter:Regular',sans-serif] font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] text-nowrap tracking-[0.22px]">
+                  <div className="flex flex-col font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] text-nowrap tracking-[0.22px]">
                     <p className="leading-[24px] whitespace-pre">{displayData.platform}</p>
                   </div>
                 </div>
@@ -462,7 +462,7 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
                 <>
                   <InfoRow label="發送人數">
                     <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0" data-name="Table/List-atomic">
-                      <div className="flex flex-col font-['Inter:Regular',sans-serif] font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] text-nowrap tracking-[0.22px]">
+                      <div className="flex flex-col font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] text-nowrap tracking-[0.22px]">
                         <p className="leading-[24px] whitespace-pre">{displayData.recipients}</p>
                       </div>
                     </div>
@@ -470,7 +470,7 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
 
                   <InfoRow label="已開啟次數">
                     <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0" data-name="Table/List-atomic">
-                      <div className="flex flex-col font-['Inter:Regular',sans-serif] font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] text-nowrap tracking-[0.22px]">
+                      <div className="flex flex-col font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] text-nowrap tracking-[0.22px]">
                         <p className="leading-[24px] whitespace-pre">{displayData.opens}</p>
                       </div>
                     </div>
@@ -478,7 +478,7 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
 
                   <InfoRow label="點擊次數">
                     <div className="box-border content-stretch flex items-center px-[12px] py-0 relative self-stretch shrink-0" data-name="Table/List-atomic">
-                      <div className="flex flex-col font-['Inter:Regular',sans-serif] font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] text-nowrap tracking-[0.22px]">
+                      <div className="flex flex-col font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#383838] text-[14px] text-nowrap tracking-[0.22px]">
                         <p className="leading-[24px] whitespace-pre">{displayData.clicks}</p>
                       </div>
                     </div>

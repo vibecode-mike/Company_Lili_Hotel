@@ -81,12 +81,12 @@ export const BasicSettingsEmpty = memo(function BasicSettingsEmpty({
                     <div className="h-[52px] relative shrink-0 w-full">
                       <div className="content-stretch flex flex-col h-full items-start justify-center relative">
                         <div className="relative shrink-0 w-full">
-                          <p className="font-['Inter',sans-serif] font-normal leading-[28px] relative shrink-0 text-[#0a0a0a] text-[18px] tracking-[-0.44px]">
+                          <p className="font-normal leading-[28px] relative shrink-0 text-[#0a0a0a] text-[18px] tracking-[-0.44px]">
                             LINE
                           </p>
                         </div>
                         <div className="relative shrink-0 w-full">
-                          <p className="font-['Inter',sans-serif] font-normal leading-[24px] relative shrink-0 text-[#6e6e6e] text-[16px] tracking-[-0.31px]">
+                          <p className="font-normal leading-[24px] relative shrink-0 text-[#6e6e6e] text-[16px] tracking-[-0.31px]">
                             連接 LINE 官方帳號
                           </p>
                         </div>
@@ -141,12 +141,12 @@ export const BasicSettingsEmpty = memo(function BasicSettingsEmpty({
                     <div className="h-[52px] relative shrink-0 w-full">
                       <div className="content-stretch flex flex-col h-full items-start justify-center relative">
                         <div className="relative shrink-0 w-full">
-                          <p className="font-['Inter',sans-serif] font-normal leading-[28px] relative shrink-0 text-[#0a0a0a] text-[18px] tracking-[-0.44px]">
+                          <p className="font-normal leading-[28px] relative shrink-0 text-[#0a0a0a] text-[18px] tracking-[-0.44px]">
                             Facebook
                           </p>
                         </div>
                         <div className="relative shrink-0 w-full">
-                          <p className="font-['Inter',sans-serif] font-normal leading-[24px] relative shrink-0 text-[#6e6e6e] text-[16px] tracking-[-0.31px]">
+                          <p className="font-normal leading-[24px] relative shrink-0 text-[#6e6e6e] text-[16px] tracking-[-0.31px]">
                             連接 Facebook 帳號
                           </p>
                         </div>
@@ -180,12 +180,12 @@ export const BasicSettingsEmpty = memo(function BasicSettingsEmpty({
                     <div className="h-[52px] relative shrink-0 w-full">
                       <div className="content-stretch flex flex-col h-full items-start justify-center relative">
                         <div className="relative shrink-0 w-full">
-                          <p className="font-['Inter',sans-serif] font-normal leading-[28px] relative shrink-0 text-[#0a0a0a] text-[18px] tracking-[-0.44px]">
+                          <p className="font-normal leading-[28px] relative shrink-0 text-[#0a0a0a] text-[18px] tracking-[-0.44px]">
                             官網彈窗客服
                           </p>
                         </div>
                         <div className="relative shrink-0 w-full">
-                          <p className="font-['Inter',sans-serif] font-normal leading-[24px] relative shrink-0 text-[#6e6e6e] text-[16px] tracking-[-0.31px]">
+                          <p className="font-normal leading-[24px] relative shrink-0 text-[#6e6e6e] text-[16px] tracking-[-0.31px]">
                             建立組織
                           </p>
                         </div>
@@ -216,12 +216,12 @@ export const BasicSettingsEmpty = memo(function BasicSettingsEmpty({
                     <div className="h-[52px] relative shrink-0 w-full">
                       <div className="content-stretch flex flex-col h-full items-start justify-center relative">
                         <div className="relative shrink-0 w-full">
-                          <p className="font-['Inter',sans-serif] font-normal leading-[28px] relative shrink-0 text-[#0a0a0a] text-[18px] tracking-[-0.44px]">
+                          <p className="font-normal leading-[28px] relative shrink-0 text-[#0a0a0a] text-[18px] tracking-[-0.44px]">
                             PMS 串接
                           </p>
                         </div>
                         <div className="relative shrink-0 w-full">
-                          <p className="font-['Inter',sans-serif] font-normal leading-[24px] relative shrink-0 text-[#6e6e6e] text-[16px] tracking-[-0.31px]">
+                          <p className="font-normal leading-[24px] relative shrink-0 text-[#6e6e6e] text-[16px] tracking-[-0.31px]">
                             設定 Hotel Code
                           </p>
                         </div>

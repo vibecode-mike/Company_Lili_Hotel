@@ -389,7 +389,7 @@ const TableRow = memo(function TableRow({
       </td>
 
       {/* 簡介 */}
-      <td className="px-[12px] py-[12px] w-[240px] text-[14px] text-[#383838] font-['Inter',sans-serif] font-normal tracking-[0.22px] leading-[24px]">
+      <td className="px-[12px] py-[12px] w-[240px] text-[14px] text-[#383838] font-normal tracking-[0.22px] leading-[24px]">
         <span
           className="truncate block max-w-[216px]"
           title={record.description}

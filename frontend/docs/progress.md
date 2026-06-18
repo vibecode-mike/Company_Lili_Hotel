@@ -1,6 +1,6 @@
 # 前端 Design Token 遷移 — 進度與接續指南
 
-> 最後更新：2026-06-17（晚）
+> 最後更新：2026-06-18
 > 用途：明天打開就能照著接續。本檔 = 唯一進度真相來源。
 > 對照表（舊硬寫值 → 新 token）：**`docs/token-migration-map.md`**
 > 元件盤點：`docs/component-audit.md`
@@ -10,7 +10,7 @@
 ## 0. 一句話現況
 
 「切廚房」已完成並上線到 staging —— 前端已改用 **live Tailwind v4 即時編譯**（不再用預編譯靜態 CSS）。
-接下來是「逐類 token 遷移」，**一次只動一個變數**。下一個變數＝**字體 Inter→Noto**（明天開始）。
+「逐類 token 遷移」**一次只動一個變數**。**字體 Inter→Noto 已於 dev 完成（待 staging 驗收）**。下一個變數＝**圓角 Radius**（待辦 C）。
 
 ---
 
@@ -44,10 +44,8 @@
 
 > 原則：每一項 = 一個獨立變數 = 獨立一筆（或一小批）commit，做完先在 staging 驗收，OK 再下一項。
 
-- [ ] **A. docs 納管**（小，隨手可做）
-  - `docs/token-migration-map.md`、`docs/component-audit.md`、**本檔 `docs/progress.md`** 目前都還是 untracked。
-  - `globals.css` 註解有引用 token-migration-map，建議 `git add docs/*.md` 一起納管。
-- [ ] **B. 字體 Inter→Noto**（下一個變數，明天開始）→ 見 §3
+- [x] **A. docs 納管** —— 已 commit（`aa6a5911`：token-migration-map / component-audit / progress 三份）。
+- [x] **B. 字體 Inter→Noto** —— dev 已完成（清單見 `docs/font-inter-to-noto.md`，9 元件檔 ×29 處 + `styles.ts` 死常數 + `globals.css .booking-url-text`；移除 `font-['Inter…']` 改繼承全域 Noto）。`build` 通過、scope 內零殘留。**待 staging 眼睛確認**（尤其訊息預覽 JP 示意字）。注意：PingFang 只在 `src/imports/` 死碼、不在範圍。
 - [ ] **C. 圓角 Radius**：把元件內 `rounded-[Npx]` 收斂到 `rounded-xs…3xl`。對照 `token-migration-map.md` §2。
   - 注意 §6b 眼睛確認：`rounded-[14px]`→12（−2px，集中在 LineApiSettingsContent）、`rounded-[15px]`→16（+1px）、`rounded-[2px]`→4（+2px）、`rounded-[32/80px]`→`rounded-full`、Figma 垃圾值（`158.824px`/`3.35544e+07px`）→`rounded-full`。
 - [ ] **D. 間距 Spacing**：`px/py/p/gap/m*-[Npx]` 收斂到 Tailwind 數字工具類。對照 §3。

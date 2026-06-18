@@ -725,7 +725,7 @@ export default function CreateAutoReplyInteractive({
                   <div className="bg-gradient-to-b box-border content-stretch flex from-[#a5d8ff] gap-[20px] items-start overflow-clip p-[24px] relative rounded-[20px] self-stretch shrink-0 to-[#d0ebff] w-[460px]">
                     <div className="bg-white relative rounded-[3.35544e+07px] shrink-0 size-[45px]">
                       <div className="bg-clip-padding border-0 border-[transparent] border-solid box-border content-stretch flex items-center justify-center relative size-[45px]">
-                        <p className="font-['Inter:Regular',sans-serif] font-normal leading-[18px] text-[#383838] text-[12px] text-nowrap">OA</p>
+                        <p className="font-normal leading-[18px] text-[#383838] text-[12px] text-nowrap">OA</p>
                       </div>
                     </div>
                     <div className="relative shrink-0 w-[288px]">

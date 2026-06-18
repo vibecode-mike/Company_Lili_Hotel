@@ -26,7 +26,7 @@ export interface ChatMessageListProps {
 function OABadge() {
   return (
     <div className="bg-white relative rounded-full shrink-0 size-[45px] flex items-center justify-center">
-      <p className="font-['Inter:Regular',sans-serif] font-normal leading-[18px] text-[#383838] text-[12px]">
+      <p className="font-normal leading-[18px] text-[#383838] text-[12px]">
         OA
       </p>
     </div>

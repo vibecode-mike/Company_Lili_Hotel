@@ -243,7 +243,7 @@ export const BasicSettingsList = memo(function BasicSettingsList({
                   <div className="basis-0 grow min-h-px min-w-px relative shrink-0">
                     <div className="flex flex-row items-center size-full">
                       <div className="content-stretch flex items-center px-[12px] py-0 relative w-full">
-                        <p className="font-['Inter',sans-serif] font-normal leading-[24px] text-[#383838] text-[14px] tracking-[0.22px]">
+                        <p className="font-normal leading-[24px] text-[#383838] text-[14px] tracking-[0.22px]">
                           {account.channelId}
                         </p>
                       </div>

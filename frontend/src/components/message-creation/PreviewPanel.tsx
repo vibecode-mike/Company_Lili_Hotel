@@ -78,7 +78,7 @@ function CardPreview({ card }: { card: CardData }) {
           {/* 标题 */}
           {card.enableTitle && card.cardTitle && (
             <div className="absolute h-[28.5px] left-[16px] overflow-clip top-[208px] w-[256px]">
-              <p className="absolute font-['Inter:Regular','Noto_Sans_JP:Regular',sans-serif] font-normal leading-[28.5px] left-0 not-italic text-[#383838] text-[19px] text-nowrap top-0 tracking-[-0.4453px] whitespace-pre">
+              <p className="absolute font-normal leading-[28.5px] left-0 not-italic text-[#383838] text-[19px] text-nowrap top-0 tracking-[-0.4453px] whitespace-pre">
                 {card.cardTitle}
               </p>
             </div>
@@ -87,7 +87,7 @@ function CardPreview({ card }: { card: CardData }) {
           {/* 内容 */}
           {card.enableContent && card.content && (
             <div className="absolute h-[18px] left-[16px] overflow-clip top-[252.5px] w-[256px]">
-              <p className="absolute font-['Inter:Regular','Noto_Sans_JP:Regular',sans-serif] font-normal leading-[18px] left-0 not-italic text-[#383838] text-[12px] text-nowrap top-0 whitespace-pre">
+              <p className="absolute font-normal leading-[18px] left-0 not-italic text-[#383838] text-[12px] text-nowrap top-0 whitespace-pre">
                 {card.content}
               </p>
             </div>
@@ -96,7 +96,7 @@ function CardPreview({ card }: { card: CardData }) {
           {/* 价格 */}
           {card.enablePrice && (
             <div className="absolute h-[36px] left-[16px] top-[286.5px] w-[256px]">
-              <p className="absolute font-['Inter:Regular',sans-serif] font-normal leading-[36px] left-[256.81px] not-italic text-[#383838] text-[24px] text-right top-0 tracking-[0.0703px] translate-x-[-100%] w-[78px]">
+              <p className="absolute font-normal leading-[36px] left-[256.81px] not-italic text-[#383838] text-[24px] text-right top-0 tracking-[0.0703px] translate-x-[-100%] w-[78px]">
                 {card.currency === 'ntd' ? 'NT $' : '$'} {card.price || '0'}
               </p>
             </div>
@@ -113,7 +113,7 @@ function CardPreview({ card }: { card: CardData }) {
                 />
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <p className="font-['Inter:Regular','Noto_Sans_JP:Regular',sans-serif] font-normal leading-[28.5px] text-[#383838] text-[19px] text-center text-nowrap tracking-[-0.4453px] whitespace-pre">
+                  <p className="font-normal leading-[28.5px] text-[#383838] text-[19px] text-center text-nowrap tracking-[-0.4453px] whitespace-pre">
                     選擇圖片
                   </p>
                 </div>

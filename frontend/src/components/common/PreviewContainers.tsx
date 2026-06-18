@@ -71,7 +71,7 @@ export function OABadge({ className = '' }: OABadgeProps) {
       className={`bg-white relative rounded-full shrink-0 size-[45px] flex items-center justify-center ${className}`}
       data-name="OA Badge"
     >
-      <p className="font-['Inter:Regular',_sans-serif] font-normal leading-[18px] text-[#383838] text-[12px] text-nowrap whitespace-pre">
+      <p className="font-normal leading-[18px] text-[#383838] text-[12px] text-nowrap whitespace-pre">
         OA
       </p>
     </div>
@@ -86,7 +86,7 @@ export function OABadge({ className = '' }: OABadgeProps) {
 function CardTitle({ title }: { title?: string }) {
   return (
     <div className="absolute h-[28.5px] left-[16px] overflow-clip top-[208px] w-[256px]">
-      <p className="absolute font-['Inter:Regular',_'Noto_Sans_JP:Regular',_sans-serif] font-normal leading-[28.5px] left-0 not-italic text-[#383838] text-[19px] text-nowrap top-0 tracking-[-0.4453px] whitespace-pre">
+      <p className="absolute font-normal leading-[28.5px] left-0 not-italic text-[#383838] text-[19px] text-nowrap top-0 tracking-[-0.4453px] whitespace-pre">
         {title || '標題文字'}
       </p>
     </div>
@@ -99,7 +99,7 @@ function CardTitle({ title }: { title?: string }) {
 function CardContent({ content }: { content?: string }) {
   return (
     <div className="absolute h-[18px] left-[16px] overflow-clip top-[252.5px] w-[256px]">
-      <p className="absolute font-['Inter:Regular',_'Noto_Sans_JP:Regular',_sans-serif] font-normal leading-[18px] left-0 not-italic text-[#383838] text-[12px] text-nowrap top-0 whitespace-pre">
+      <p className="absolute font-normal leading-[18px] left-0 not-italic text-[#383838] text-[12px] text-nowrap top-0 whitespace-pre">
         {content || '內文文字'}
       </p>
     </div>
@@ -112,7 +112,7 @@ function CardContent({ content }: { content?: string }) {
 function CardPrice({ price, currency }: { price?: string; currency?: 'ntd' | 'usd' }) {
   return (
     <div className="absolute h-[36px] left-[16px] top-[286.5px] w-[256px]">
-      <p className="absolute font-['Inter:Regular',_sans-serif] font-normal leading-[36px] left-[256.81px] not-italic text-[#383838] text-[24px] text-right top-0 tracking-[0.0703px] translate-x-[-100%] w-[78px]">
+      <p className="absolute font-normal leading-[36px] left-[256.81px] not-italic text-[#383838] text-[24px] text-right top-0 tracking-[0.0703px] translate-x-[-100%] w-[78px]">
         {currency === 'ntd' ? 'NT $' : '$'} {price || '0'}
       </p>
     </div>
@@ -128,7 +128,7 @@ function ActionButton({ text, className = '' }: ActionButtonProps) {
       <div aria-hidden="true" className="absolute border border-gray-200 border-solid inset-0 pointer-events-none rounded-[12px]" />
       <div className="bg-clip-padding border-0 border-[transparent] border-solid box-border content-stretch flex flex-col h-[47px] items-start pb-px pt-[13px] px-[13px] relative w-[256px]">
         <div className="h-[21px] overflow-clip relative shrink-0 w-full">
-          <p className="absolute font-['Inter:Regular',_'Noto_Sans_JP:Regular',_sans-serif] font-normal leading-[21px] left-[115px] not-italic text-[#383838] text-[14px] text-center text-nowrap top-0 tracking-[-0.1504px] translate-x-[-50%] whitespace-pre">
+          <p className="absolute font-normal leading-[21px] left-[115px] not-italic text-[#383838] text-[14px] text-center text-nowrap top-0 tracking-[-0.1504px] translate-x-[-50%] whitespace-pre">
             {text || '動作按鈕'}
           </p>
         </div>

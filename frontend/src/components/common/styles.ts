@@ -46,8 +46,6 @@ export const COLORS = {
 
 export const FONTS = {
   notoSans: "font-['Noto_Sans_TC:Regular',sans-serif]",
-  inter: "font-['Inter:Regular',sans-serif]",
-  notoSansJP: "font-['Inter:Regular','Noto_Sans_JP:Regular',sans-serif]",
 } as const;
 
 // ========== 通用样式类 ==========

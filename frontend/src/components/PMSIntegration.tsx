@@ -425,23 +425,23 @@ const TableRow = memo(function TableRow({
       </td>
 
       {/* 房價 — left-aligned */}
-      <td className="px-[12px] py-[12px] w-[160px] text-[14px] text-[#383838] font-['Inter',sans-serif] font-normal tracking-[0.22px] leading-[24px] whitespace-nowrap">
+      <td className="px-[12px] py-[12px] w-[160px] text-[14px] text-[#383838] font-normal tracking-[0.22px] leading-[24px] whitespace-nowrap">
         {`NT$${record.pricePerNight.toLocaleString()}`}
       </td>
 
       {/* 可入住人數 — left-aligned */}
-      <td className="px-[12px] py-[12px] w-[140px] text-[14px] text-[#383838] font-['Inter',sans-serif] font-normal tracking-[0.22px] leading-[24px]">
+      <td className="px-[12px] py-[12px] w-[140px] text-[14px] text-[#383838] font-normal tracking-[0.22px] leading-[24px]">
         {record.maxGuests}
       </td>
 
       {/* 剩餘間數 — left-aligned */}
-      <td className="px-[12px] py-[12px] w-[140px] text-[14px] text-[#383838] font-['Inter',sans-serif] font-normal tracking-[0.22px] leading-[24px]">
+      <td className="px-[12px] py-[12px] w-[140px] text-[14px] text-[#383838] font-normal tracking-[0.22px] leading-[24px]">
         {record.remainingRooms}
       </td>
 
       {/* 房型特色 — FAQ only */}
       {!pmsView && (
-        <td className="px-[12px] py-[12px] w-[160px] text-[14px] text-[#383838] font-['Inter',sans-serif] font-normal tracking-[0.22px] leading-[24px]">
+        <td className="px-[12px] py-[12px] w-[160px] text-[14px] text-[#383838] font-normal tracking-[0.22px] leading-[24px]">
           <span className="truncate block max-w-[136px]" title={record.features}>
             {record.features}
           </span>
