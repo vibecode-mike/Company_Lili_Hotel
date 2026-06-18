@@ -148,7 +148,7 @@ const Sidebar = memo(
         <SidebarChannelSwitcher isOpen={isOpen} />
 
         {/* Menu Items */}
-        <div className="flex-1 w-full overflow-y-auto pb-[40px]">
+        <div className="flex-1 w-full overflow-y-auto pb-[40px] scrollbar-transparent">
           {isOpen && (
             <>
               {/* 數據洞察 Section */}

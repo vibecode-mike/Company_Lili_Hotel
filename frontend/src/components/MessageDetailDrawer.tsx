@@ -419,7 +419,7 @@ export function MessageDetailDrawer({ open, onClose, messageId, onEdit }: Messag
       <DrawerContent
         className="bg-white border-0 rounded-none w-[344px] h-screen p-0"
       >
-          <div className="box-border content-stretch flex flex-col gap-[32px] items-start p-[32px] relative size-full overflow-y-auto" data-name="Drawer">
+          <div className="box-border content-stretch flex flex-col gap-[32px] items-start p-[32px] relative size-full overflow-y-auto scrollbar-transparent" data-name="Drawer">
             {/* Accessibility - Hidden Title and Description */}
             <DrawerTitle className="sr-only">訊息詳細資訊</DrawerTitle>
             <DrawerDescription className="sr-only">

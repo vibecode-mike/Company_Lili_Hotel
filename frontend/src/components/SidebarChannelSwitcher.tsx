@@ -85,7 +85,7 @@ export function SidebarChannelSwitcher({ isOpen }: SidebarChannelSwitcherProps) 
         </button>
 
         {dropdownOpen && availableChannels.length > 0 && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#b6c8f1] rounded-[8px] shadow-md z-[60] max-h-[320px] overflow-y-auto">
+          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#b6c8f1] rounded-[8px] shadow-md z-[60] max-h-[320px] overflow-y-auto scrollbar-transparent">
             {availableChannels.map((channel) => {
               const isSelected = selectedChannel?.channel_id === channel.channel_id;
               return (

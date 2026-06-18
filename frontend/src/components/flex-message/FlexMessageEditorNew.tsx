@@ -462,7 +462,7 @@ export default function FlexMessageEditorNew({ onFlexMessageChange }: FlexMessag
         </div>
 
         {/* Right Config Panel */}
-        <div className="flex-1 overflow-y-auto bg-white">
+        <div className="flex-1 overflow-y-auto bg-white scrollbar-transparent">
           <div className="pr-[40px] pl-[32px] py-[24px]">
             <div className="max-w-[588px] space-y-3">
               {/* Carousel Tabs */}

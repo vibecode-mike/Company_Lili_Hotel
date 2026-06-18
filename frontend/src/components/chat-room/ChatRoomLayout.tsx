@@ -1295,7 +1295,7 @@ export default function ChatRoomLayout({
             <div
               ref={chatContainerRef}
               onScroll={handleScroll}
-              className="box-border content-stretch flex flex-col gap-[12px] items-start overflow-y-auto p-[16px] relative w-full"
+              className="box-border content-stretch flex flex-col gap-[12px] items-start overflow-y-auto p-[16px] relative w-full scrollbar-transparent"
               style={{ height: "calc(100% - 180px)" }}
             >
               {/* Loading more messages indicator (top) */}

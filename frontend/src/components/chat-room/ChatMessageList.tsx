@@ -108,7 +108,7 @@ export default function ChatMessageList({ messages, memberName, memberAvatar }: 
   }, [messages]);
 
   return (
-    <div className="h-full overflow-y-auto bg-gradient-to-b from-[#a5d8ff] to-[#d0ebff] p-[24px]">
+    <div className="h-full overflow-y-auto bg-gradient-to-b from-[#a5d8ff] to-[#d0ebff] p-[24px] scrollbar-transparent">
       <div className="flex flex-col gap-[16px]">
         {messages.map((message) => (
           <React.Fragment key={message.id}>

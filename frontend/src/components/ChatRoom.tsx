@@ -64,7 +64,7 @@ export default function ChatRoom({ member, memberId, memberName, initialPlatform
   // 有 memberId 時，即使 member 還沒載入，也可以先建立 WebSocket 連線
   if (!member && !memberId) {
     return (
-      <div className="bg-slate-50 content-stretch flex flex-col items-start relative w-full h-full overflow-y-auto" data-name="Main Container">
+      <div className="bg-slate-50 content-stretch flex flex-col items-start relative w-full h-full overflow-y-auto scrollbar-transparent" data-name="Main Container">
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <p className="text-[20px] text-[#383838] mb-[8px]">找不到會員資料</p>
@@ -82,7 +82,7 @@ export default function ChatRoom({ member, memberId, memberName, initialPlatform
   }
 
   return (
-    <div className="bg-slate-50 content-stretch flex flex-col items-start relative w-full h-full overflow-y-auto" data-name="Main Container">
+    <div className="bg-slate-50 content-stretch flex flex-col items-start relative w-full h-full overflow-y-auto scrollbar-transparent" data-name="Main Container">
       {/* Breadcrumb - 三層：會員管理 > 會員資訊 > 聊天 */}
       <div className="relative shrink-0 w-full">
         <div className="flex flex-row items-center size-full">

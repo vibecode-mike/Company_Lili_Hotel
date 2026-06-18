@@ -86,7 +86,7 @@ export default function MemberNoteEditor({
               onChange={(e) => setNoteValue(e.target.value)}
               placeholder="輸入會員備註，如：喜好、重要紀錄或追蹤事項。"
               readOnly={!isEditing}
-              className="w-full min-h-[96px] font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] resize-none outline-none bg-transparent placeholder:text-[#A8A8A8] overflow-y-auto"
+              className="w-full min-h-[96px] font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] resize-none outline-none bg-transparent placeholder:text-[#A8A8A8] overflow-y-auto scrollbar-transparent"
               style={{
                 scrollbarWidth: 'thin',
                 scrollbarColor: 'transparent transparent'

@@ -627,7 +627,7 @@ export default function AIChatbotOverview({
                 共 {categories.length} 類，已發佈 {publishedCount} 類
               </p>
 
-              <div className="w-full overflow-x-auto rounded-[16px] ring-1 ring-[#ddd]">
+              <div className="w-full overflow-x-auto rounded-[16px] ring-1 ring-[#ddd] scrollbar-transparent">
                 <table
                   className="w-full border-separate"
                   style={{ minWidth: 700, borderSpacing: 0 }}

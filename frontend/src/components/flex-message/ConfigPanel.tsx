@@ -149,7 +149,7 @@ export default function ConfigPanel({
   const buttonLabels = ['一', '二', '三', '四'];
 
   return (
-    <div className="relative h-full bg-white overflow-y-auto">
+    <div className="relative h-full bg-white overflow-y-auto scrollbar-transparent">
       <div className="p-6 space-y-5">
         {/* Carousel Tabs */}
         <div className="flex items-center gap-2">

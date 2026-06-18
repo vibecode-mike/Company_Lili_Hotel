@@ -930,7 +930,7 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
 
       {/* Table — only shown when data exists */}
       {!isEmpty && (
-      <div className="w-full overflow-x-auto rounded-[16px] ring-1 ring-[#ddd]">
+      <div className="w-full overflow-x-auto rounded-[16px] ring-1 ring-[#ddd] scrollbar-transparent">
         <table
           className="min-w-[1200px] w-full"
           style={{ borderCollapse: "separate", borderSpacing: 0 }}
@@ -1327,7 +1327,7 @@ const DataSourcesTable = memo(function DataSourcesTable({
       <p className="text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]">
         共 {rows.length} 筆，引用順序如下
       </p>
-      <div className="w-full overflow-x-auto rounded-[16px] ring-1 ring-[#ddd]">
+      <div className="w-full overflow-x-auto rounded-[16px] ring-1 ring-[#ddd] scrollbar-transparent">
         <table
           className="w-full"
           style={{

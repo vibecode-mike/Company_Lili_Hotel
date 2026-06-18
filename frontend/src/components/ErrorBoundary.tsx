@@ -40,7 +40,7 @@ export default class ErrorBoundary extends React.Component<Props, State> {
             <p className="text-[14px] text-[#383838] mb-[12px]">
               {this.state.error.message || String(this.state.error)}
             </p>
-            <pre className="text-[12px] text-[#6e6e6e] bg-[#f5f5f5] p-[12px] rounded-[8px] overflow-auto max-h-[280px] whitespace-pre-wrap">
+            <pre className="text-[12px] text-[#6e6e6e] bg-[#f5f5f5] p-[12px] rounded-[8px] overflow-auto max-h-[280px] whitespace-pre-wrap scrollbar-transparent">
 {this.state.error.stack}
 {this.state.info?.componentStack}
             </pre>

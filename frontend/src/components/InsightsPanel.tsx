@@ -1243,7 +1243,7 @@ function TimeInsightsSection({ reducedMotion }: { reducedMotion: boolean }) {
             <InfoIconWithTooltip tooltip="找出用戶最活躍的詢問時段，掌握對話 → 互動 → 轉單的漏斗效益" />
           </div>
         </div>
-        <div ref={tabsContainerRef} className="flex shrink-0 overflow-x-auto">
+        <div ref={tabsContainerRef} className="flex shrink-0 overflow-x-auto scrollbar-transparent">
           {CHANNELS.filter((ch) => ch.key !== "facebook").map((ch, idx) => {
             const active = channel === ch.key;
             return (
@@ -1269,7 +1269,7 @@ function TimeInsightsSection({ reducedMotion }: { reducedMotion: boolean }) {
 
       {/* B. Heatmap：7 欄 x 6 列 + 時間/日期標籤 + 圖例 */}
       <div ref={heatmapRef} className="bg-white px-[20px] py-[16px] flex flex-col gap-[16px]">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto scrollbar-transparent">
           <div className="min-w-[720px]">
             <div
               className="grid items-stretch"

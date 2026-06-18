@@ -530,7 +530,7 @@ export default function StaffUsersManagement({
                   {allChannels.length === 0 ? (
                     <p className="text-[13px] text-gray-500">尚未建立任何 LINE OA</p>
                   ) : (
-                    <div className="space-y-[8px] max-h-[180px] overflow-y-auto border border-[#dddddd] rounded-[12px] p-[12px]">
+                    <div className="space-y-[8px] max-h-[180px] overflow-y-auto border border-[#dddddd] rounded-[12px] p-[12px] scrollbar-transparent">
                       {allChannels.map((c: LineChannelInfo) => (
                         <label
                           key={c.channel_id}

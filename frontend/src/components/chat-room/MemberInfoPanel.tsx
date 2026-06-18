@@ -64,7 +64,7 @@ export default function MemberInfoPanel({ member }: MemberInfoPanelProps) {
   };
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div className="h-full overflow-y-auto scrollbar-transparent">
       <div className="p-[28px] flex flex-col gap-[20px]">
         {/* 头像部分 */}
         <div className="flex flex-col items-center gap-[12px]">

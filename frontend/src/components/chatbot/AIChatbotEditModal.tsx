@@ -623,7 +623,7 @@ export const RoomEditModal = memo(function RoomEditModal({
     <>
       {/* Main modal overlay */}
       <div
-        className="fixed inset-0 flex items-start justify-center p-[20px] overflow-y-auto"
+        className="fixed inset-0 flex items-start justify-center p-[20px] overflow-y-auto scrollbar-transparent"
         style={{ zIndex: 99999, backgroundColor: "rgba(0,0,0,0.45)" }}
         onClick={handleBackdrop}
       >
@@ -924,7 +924,7 @@ export const FacilityEditModal = memo(function FacilityEditModal({
   return createPortal(
     <>
       <div
-        className="fixed inset-0 flex items-start justify-center p-[20px] overflow-y-auto"
+        className="fixed inset-0 flex items-start justify-center p-[20px] overflow-y-auto scrollbar-transparent"
         style={{ zIndex: 99999, backgroundColor: "rgba(0,0,0,0.45)" }}
         onClick={handleBackdrop}
       >

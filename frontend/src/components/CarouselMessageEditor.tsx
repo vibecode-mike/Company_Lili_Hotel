@@ -531,7 +531,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
       : undefined;
 
   return (
-    <div className="w-full h-full bg-[#F8FAFC] overflow-y-auto">
+    <div className="w-full h-full bg-[#F8FAFC] overflow-y-auto scrollbar-transparent">
       <div className="flex gap-[32px] items-start p-[40px] w-full">
         {/* Left: Preview Card */}
         <div className="shrink-0">
@@ -567,7 +567,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
 
           {/* Carousel Tabs */}
           <div className="relative h-[40px] w-full">
-            <div className="flex items-center gap-[8px] flex-nowrap overflow-x-auto">
+            <div className="flex items-center gap-[8px] flex-nowrap overflow-x-auto scrollbar-transparent">
               <div className="bg-neutral-100 rounded-[10px] p-[4px] flex items-center gap-[4px] flex-nowrap shrink-0">
                 {cards.map((card) => (
                   <button
