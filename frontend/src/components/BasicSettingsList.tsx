@@ -1,5 +1,6 @@
 import { memo, useState, useMemo } from 'react';
 import { ChannelStatusBadge } from './ChannelStatusBadge';
+import Scrollable from './common/Scrollable';
 
 export interface ChannelAccount {
   id: string;
@@ -148,10 +149,15 @@ export const BasicSettingsList = memo(function BasicSettingsList({
 
         {/* Table */}
         <div className="content-stretch flex flex-col items-start relative rounded-[16px] shrink-0 w-full overflow-hidden bg-white">
-          {/* 垂直滾動容器 + Sticky 表頭 */}
-          <div className="max-h-[600px] overflow-y-auto table-scroll w-full">
-          {/* Table Header - Sticky */}
-          <div className="bg-white relative w-full border-b border-[#ddd] sticky top-0 z-10">
+          {/* 垂直滾動容器（捲軸方案 C：自繪 thumb）；表頭走 header 槽固定在捲動區外 */}
+          <Scrollable
+            orientation="vertical"
+            className="w-full"
+            viewportClassName="max-h-[600px] w-full"
+            header={
+              /* 表頭放進 Scrollable 的 header 槽：渲染在捲動 viewport 之外，
+                 不隨資料列捲動（不抖動）、也不會被自繪 thumb 覆蓋 */
+              <div className="bg-white relative w-full border-b border-[#ddd]">
             <div className="flex flex-row items-center size-full">
               <div className="content-stretch flex items-center pb-[12px] pt-[16px] px-[12px] relative w-full">
                 {/* Column: 帳號 */}
@@ -207,6 +213,8 @@ export const BasicSettingsList = memo(function BasicSettingsList({
               </div>
             </div>
           </div>
+            }
+          >
 
           {/* Table Rows */}
           {sortedAccounts.map((account, index) => (
@@ -299,7 +307,7 @@ export const BasicSettingsList = memo(function BasicSettingsList({
               </div>
             </div>
           ))}
-          </div>
+          </Scrollable>
         </div>
       </div>
     </div>
