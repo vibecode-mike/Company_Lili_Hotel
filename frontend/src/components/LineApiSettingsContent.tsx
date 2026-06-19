@@ -568,7 +568,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
           {/* Card 1: Duplicate Card */}
           <div 
             ref={card1Ref}
-            className={`bg-white rounded-[14px] border-[1.6px] ${expandedCard === 1 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
+            className={`bg-white rounded-[14px] border-[1.6px] overflow-hidden ${expandedCard === 1 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
           >
             {/* Card Header */}
             <button
@@ -706,7 +706,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
           {/* Card 2: Channel ID */}
           <div 
             ref={card2Ref}
-            className={`bg-white rounded-[14px] border-[1.6px] ${expandedCard === 2 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
+            className={`bg-white rounded-[14px] border-[1.6px] overflow-hidden ${expandedCard === 2 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
           >
             {/* Card Header */}
             <button
@@ -826,7 +826,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
           {/* Card 3: Channel Secret */}
           <div 
             ref={card3Ref}
-            className={`bg-white rounded-[14px] border-[1.6px] ${expandedCard === 3 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
+            className={`bg-white rounded-[14px] border-[1.6px] overflow-hidden ${expandedCard === 3 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
           >
             <button
               onClick={() => toggleCard(3)}
@@ -936,7 +936,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
           {/* Card 4: Channel Access Token */}
           <div 
             ref={card4Ref}
-            className={`bg-white rounded-[14px] border-[1.6px] ${expandedCard === 4 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
+            className={`bg-white rounded-[14px] border-[1.6px] overflow-hidden ${expandedCard === 4 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
           >
             <button
               onClick={() => toggleCard(4)}
@@ -1058,7 +1058,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
           {/* Card 5: Webhook URL - 截圖待替換 */}
           <div
             ref={card5Ref}
-            className={`bg-white rounded-[14px] border-[1.6px] ${expandedCard === 5 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
+            className={`bg-white rounded-[14px] border-[1.6px] overflow-hidden ${expandedCard === 5 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
           >
             <button
               onClick={() => toggleCard(5)}
@@ -1189,7 +1189,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
           {/* Card 6: Webhook confirmation */}
           <div
             ref={card6Ref}
-            className={`bg-white rounded-[14px] border-[1.6px] ${expandedCard === 6 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
+            className={`bg-white rounded-[14px] border-[1.6px] overflow-hidden ${expandedCard === 6 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
           >
             <button
               onClick={() => toggleCard(6)}
@@ -1304,7 +1304,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
           {/* Card 7: LINE Login Channel */}
           <div
             ref={card7Ref}
-            className={`bg-white rounded-[14px] border-[1.6px] ${expandedCard === 7 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
+            className={`bg-white rounded-[14px] border-[1.6px] overflow-hidden ${expandedCard === 7 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
           >
             {/* Card Header */}
             <button
@@ -1404,7 +1404,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
           {/* Card 8: Login Channel ID */}
           <div
             ref={card8Ref}
-            className={`bg-white rounded-[14px] border-[1.6px] ${expandedCard === 8 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
+            className={`bg-white rounded-[14px] border-[1.6px] overflow-hidden ${expandedCard === 8 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
           >
             {/* Card Header */}
             <button
@@ -1508,7 +1508,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
           {/* Card 9: Login Channel Secret */}
           <div
             ref={card9Ref}
-            className={`bg-white rounded-[14px] border-[1.6px] ${expandedCard === 9 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
+            className={`bg-white rounded-[14px] border-[1.6px] overflow-hidden ${expandedCard === 9 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
           >
             <button
               onClick={() => toggleCard(9)}
