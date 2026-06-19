@@ -7,9 +7,9 @@
 
 ---
 
-## ⚠️ 待釐清：工作區既存 WIP（非本批圓角，疑似前次 session/同事的捲軸表格工程）
+## ✅ 已釐清並落地：工作區既存 WIP（捲軸表格圓角裁切，非圓角批次）
 
-> 記錄時間：2026-06-19。**狀態：原樣保留，未 commit / 未 stash / 未還原。** 待釐清來歷後再處理。
+> 記錄時間：2026-06-19。**狀態：已查證 = 自己 6/18 下午做的「捲軸表格圓角裁切」延續工作、100% 純前端、與圓角批次零衝突。已 reflow 內層縮排後 commit 成獨立一包 `97eb29ae`（單一主題；3 個 `.serena/project.yml` 工具設定檔未包入）。尚未 push，待 crmpoc 驗收。**
 
 開始今天圓角批次時，`git status` 已有 **14 個 modified 檔**（早於本 session 就存在），經查**不是圓角**，而是一批做到一半的**捲軸 scrollbar 收斂 + 表格圓角裁切**工程（風格同 §4.5 的 `2a7b07c6` scrollbar 批 / 捲軸 C3 雙軸表格）。三個主題：
 
@@ -35,6 +35,14 @@
 | **Part C 零像素 sweep** | `FacilitiesContent.tsx`、`PMSIntegration.tsx`、`InteractiveMessageTable.tsx`（含 `rounded-[16px]`）等多檔 |
 
 > 在這些檔上動圓角，會和上述 WIP 混在同一工作區、無法乾淨切分（不像 `LineApiSettings.tsx` 只有 1 行可輕鬆分開）。處理順序：**先釐清/落地這批 WIP（commit 成它自己的包，或 stash）→ 工作區乾淨 → 再繼續重疊到的圓角批次**。沒重疊的（如 `CarouselMessageEditor`、`AutoReply`）可先做。
+
+### ⚠️ 協調點：圓角值批次的執行順序與位置（WIP 已 commit `97eb29ae` 後新增）
+
+這批 WIP 已落地，工作區乾淨，重疊不再是阻塞。但**圓角值批次接手時必須注意**：
+
+1. **順序固定**：**這批 WIP 先（已 commit `97eb29ae`）→ 圓角值批次後**。圓角值批次（尤其「群發訊息群 B2」、「Part C 零像素 sweep」）會去編輯這批剛動過位置的表格 `rounded-[16px]`，必須疊在 WIP 之上做，不可反序、不可另開分支平行改同一行（會文字衝突）。
+2. **圓角現在掛在「外層 wrapper」的 div 上**：B 類 5 表格（`AutoReplyTableStyled` / `InteractiveMessageTable` / `AIChatbotOverview` / `FacilitiesContent` / `PMSIntegration`）的 `rounded-[16px]` 已從原本的捲動容器**搬到新加的 `overflow-hidden` 外層 wrapper**。圓角值批次要改表格圓角值時，**改那個外層 wrapper 的 `rounded-[16px]`，不是內層 `overflow-x-auto` 那層**（內層已不帶圓角）。
+3. WIP 只動「結構位置 + overflow-hidden 裁切」、**沒動圓角數值**（仍是 16）；數值統一仍由圓角值批次負責。兩者是互補、非衝突。
 
 ---
 
