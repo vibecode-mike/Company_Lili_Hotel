@@ -149,15 +149,18 @@ body {
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  /* Radius 階梯：沿用 --radius (10px) 基準 calc 推導，對齊主力值 8/10/12/16
-   * sm/md/lg 維持原值（rounded-sm/md/lg 既有用法零變化）
-   * xl 由 14px → 12px（Tailwind 慣例值；影響既有 rounded-xl，見對照表）
-   * xs/2xl/3xl 為新增階梯 */
+  /* Radius 階梯：全部收斂為 4 的倍數（規範允許 0/2）。基準 --radius (10px) calc 推導。
+   * 定案階梯：2xs=2 · xs=4 · md=8 · xl=12 · 2xl=16 · 3xl=20
+   * sm/lg 退役：sm(原6)→併 md(8)、lg(原10)→併 xl(12)。
+   *   兩者暫留為別名（值已對齊 md/xl），既有 rounded-sm/rounded-lg 用法自動跟著變
+   *   （sm +2px、lg +2px，屬「6→8 / 10→12」視覺批）；零像素 sweep 階段再把名稱正規化掉。
+   * 2xs 為新增（給保留的 2px）。 */
+  --radius-2xs: calc(var(--radius) - 8px);  /* 2px  🆕 */
   --radius-xs: calc(var(--radius) - 6px);   /* 4px  */
-  --radius-sm: calc(var(--radius) - 4px);   /* 6px  */
+  --radius-sm: calc(var(--radius) - 2px);   /* 8px  退役→併 md（原 6px）*/
   --radius-md: calc(var(--radius) - 2px);   /* 8px  */
-  --radius-lg: var(--radius);               /* 10px */
-  --radius-xl: calc(var(--radius) + 2px);   /* 12px (was 14px) */
+  --radius-lg: calc(var(--radius) + 2px);   /* 12px 退役→併 xl（原 10px）*/
+  --radius-xl: calc(var(--radius) + 2px);   /* 12px */
   --radius-2xl: calc(var(--radius) + 6px);  /* 16px */
   --radius-3xl: calc(var(--radius) + 10px); /* 20px */
   --color-sidebar: var(--sidebar);
