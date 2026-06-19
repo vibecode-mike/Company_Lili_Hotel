@@ -85,10 +85,16 @@
 
 ### 待辦（明天繼續）
 
-- [ ] **C1 第二組**：
-  - `CarouselMessageEditor.tsx` — 只遷 **line 534 縱向**（`w-full h-full overflow-y-auto`），**別碰 line 570 橫向** tab strip
-  - `FacebookMessageEditor.tsx` — 只遷 **line 332 縱向**，**別碰 line 372 橫向**；⚠️ 需 crmpoc 有 **FB 粉專**才切得到、測得到
+- [ ] **C1 第二組**（⏸ **待處理（非跳過）—— 暫維持方案 B，2026-06-19 擱置**）：
+  - 兩個雙軸容器（縱向自繪 + 同層橫向 tab 並存）：
+    - `CarouselMessageEditor.tsx`（line 534 縱向 / line 570 橫向 tab strip）
+    - `FacebookMessageEditor.tsx`（line 332 縱向 / line 372 橫向；⚠️ 需 crmpoc 有 **FB 粉專**才切得到、測得到）
   - 入口：群發訊息 → 活動與訊息推播 → 建立/編輯訊息 → 渠道選 LINE OA（Carousel）或 FB 粉專（FB 編輯器）
+  - **擱置原因**：CarouselMessageEditor 縱向換 `<Scrollable>` 後，**橫向 tab strip 出現「輪播 9 卡在邊緣/被切掉」異常**（明明沒碰橫向）。
+    - 靜態分析推不出根因：換 Scrollable 後 tab 寬度基準沒變、`no-native-scrollbar` 比原本 4px gutter 還**少佔 4px（內容反而變寬）**、新 thumb track 在 `right-0` 但內容有 `p-[40px]`、離 tab 右緣 36px 不會蓋到 → 三項都不該讓 tab 變窄。typecheck 過、無 reparent。
+    - 唯一方向性差異是那 4px（且是變寬），疑為雙軸臨界狀態的版位位移，但**需 Chrome 現場量 computed layout 才能確認機制**，當下 session 無瀏覽器檢查工具。
+  - **已 revert** CarouselMessageEditor 回原本 `overflow-y-auto scrollbar-transparent`（方案 B、可正常操作）；FacebookMessageEditor 同結構、本次一併不做。
+  - **待日後**有 Chrome 檢查工具 / 更多現場截圖細節時再回來攻 C。
 - [ ] **C1 Sidebar**：side menu 導覽清單（全站高可見度，放 C1 **最後**做）
 - [ ] **C2 聊天室**（最高風險：SSE 自動捲到底 + 無限往上捲）：`ChatMessageList` / `ChatRoomLayout`，須保留 ref/onScroll，單獨謹慎做
 - [ ] **C3** 表格橫向+巢狀 ／ **C4** 各頁 `<main>`（9 個頁殼主捲動）／ **C5** 其餘橫向（tab／輪播／chip）
