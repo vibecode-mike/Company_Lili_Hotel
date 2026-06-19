@@ -1037,8 +1037,8 @@ function Table8Columns3Actions({
             tagPool={tagPool}
           />
 
-          {/* 垂直滾動容器 - 只有資料列滾動 */}
-          <div className="max-h-[600px] overflow-y-auto scrollbar-transparent">
+          {/* 垂直滾動容器 - 只有資料列滾動；overflow-x-hidden 擋掉 overflow-y:auto 自動升級出的幽靈橫捲軸（雙軸完整修留待雙軸表格批） */}
+          <div className="max-h-[600px] overflow-y-auto overflow-x-hidden scrollbar-transparent">
             {members.map((member, index) => (
               <MemberRow
                 key={member.id}

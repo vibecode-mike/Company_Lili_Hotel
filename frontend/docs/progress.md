@@ -151,6 +151,11 @@
   - **表頭差 4px 對不齊**：表頭在縱捲區外用滿 1160px、資料列在縱捲區內被捲軸吃 4px → 同一根因。
 - 解法方向：遷移到 `<Scrollable orientation="both">`，用 `header` 槽固定表頭（同時解掉對不齊），或明確 `overflow-x-hidden` 擋幽靈橫捲軸。屬比 C0 複雜的雙軸+sticky 容器，單獨一批處理。
 
+- **2026-06-19 進度：已做「路徑 1 止血」**（內層加 `overflow-x-hidden`，消掉幽靈橫捲軸 → 雙條變單條；列互動正常）。**仍有三件未解，全部留待本批（路徑 2 = 換 `<Scrollable orientation="both">`）一起解**：
+  1. **橫軸難抓**（外層橫捲軸是 4px 太細，滑鼠不好抓拖）→ Scrollable 自繪可拖曳 thumb 解。
+  2. **表頭差 4px 對不齊**（根因同上：表頭在縱捲區外滿 1160、資料列在縱捲區內被捲軸吃 4px）→ Scrollable `header` 槽解。
+  3. **橫捲軸沒收進圓角 / 掉表格外**（外層 `overflow-x-auto` 又自帶 `rounded-[16px]` 但缺 `overflow-hidden` 裁切，瀏覽器捲軸不被圓角裁切 → 橫跨下圓角）→ Scrollable 遷移時用「自繪 viewport + 圓角 wrapper」一起解；**不要現在硬加 wrapper**（路徑 2 會整個重做，屬拋棄式白工）。
+
 ### ⚠️ C 計畫排除清單（不要再被誤列進任何批次）
 
 > 教訓：列批次清單前，必須先確認元件「**真的會 render 出現在畫面上**」，不能只靠 grep `overflow-y`。死碼一律排除。
