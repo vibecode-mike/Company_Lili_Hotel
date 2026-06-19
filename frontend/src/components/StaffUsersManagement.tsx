@@ -384,11 +384,11 @@ export default function StaffUsersManagement({
                       <td className="px-[24px] py-[20px]">
                         <div className="flex justify-center">
                           {u.is_active ? (
-                            <span className="inline-flex items-center justify-center w-[24px] h-[24px] rounded-[6px] bg-[#0f6beb]">
+                            <span className="inline-flex items-center justify-center w-[24px] h-[24px] rounded-md bg-[#0f6beb]">
                               <Check className="w-[16px] h-[16px] text-white" strokeWidth={3} />
                             </span>
                           ) : (
-                            <span className="inline-flex items-center justify-center w-[24px] h-[24px] rounded-[6px] border border-[#dddddd] bg-white" />
+                            <span className="inline-flex items-center justify-center w-[24px] h-[24px] rounded-md border border-[#dddddd] bg-white" />
                           )}
                         </div>
                       </td>
