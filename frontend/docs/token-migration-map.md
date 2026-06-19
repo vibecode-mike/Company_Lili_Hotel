@@ -109,7 +109,7 @@ Tailwind 預設字級與本案主力值完全吻合：`text-xs`=12 / `text-sm`=1
 | `rounded-[15px]` | 4 | `rounded-2xl`(16) | ⚠️ +1px | PreviewContainers×3、CreateAutoReplyInteractive |
 | `rounded-[2px]` | 4 | `rounded-xs`(4) | ⚠️ +2px | ui/chart×2、ui/tooltip、InsightsPanel |
 | `rounded-[32px]` | 1 | `rounded-3xl`(20) 或 `rounded-full` | ⚠️ 視為膠囊鈕，建議 `rounded-full` | common/SecondaryButton.tsx |
-| `rounded-[80px]` | 4 | `rounded-full` | MessageList×2=`h-[8px]` 進度條→**零變化**（圓角夾到高度一半 4px）；AIChatbotOverview×2 待查 | MessageList×2（B2b 已轉）、AIChatbotOverview×2 |
+| `rounded-[80px]` | 4 | `rounded-full` | 全為 `h-[8px]` 進度條→**零變化**（圓角夾到高度一半 4px）| MessageList×2 + AIChatbotOverview×2（皆已轉）|
 | `rounded-[inherit]` | 7 | **維持原樣** | — 合法 Tailwind，勿動 | — |
 | `rounded-[158.824px]` | 1 | `rounded-full` | 🗑 Figma 圓頭像亂值 | chat-room/ChatRoomLayout.tsx |
 | `rounded-[3.35544e+07px]` | 1 | `rounded-full` | 🗑 Figma 溢位垃圾 | CreateAutoReplyInteractive.tsx |
@@ -223,7 +223,7 @@ Tailwind 預設字級與本案主力值完全吻合：`text-xs`=12 / `text-sm`=1
 - `rounded-[2px]`（4，ui/chart·tooltip·InsightsPanel）→ 4px，**+2px**
 - **既有 `rounded-xl`（×5）因 token 由 14→12px 一併變動，−2px**（這是唯一受影響的既有具名用法）
 - `rounded-[32px]`（SecondaryButton）→ 建議 `rounded-full`（膠囊鈕）
-- `rounded-[80px]`：⚠️ **不是膠囊鈕** —— MessageList×2 是 **`h-[8px]` 用量進度條**，改 `rounded-full` **零變化**（圓角被瀏覽器夾到「高度一半 = 4px」，與 80px 渲染完全相同）；AIChatbotOverview×2 待查（同為 `h-[8px]` 進度條的機率高）
+- `rounded-[80px]`：⚠️ **不是膠囊鈕** —— MessageList×2 與 AIChatbotOverview×2 **都是 `h-[8px]` 用量進度條**，改 `rounded-full` **零變化**（圓角被瀏覽器夾到「高度一半 = 4px」，與 80px 渲染完全相同）。4 處皆已轉。
 
 ### 6c. 間距差 ±1~2px（清單見 §3.2）
 - 最值得注意：`gap-[10px]`（27 次、12 檔，−2px）、`py-[10px]`（9 次，−2px）、`p-[13px]`/`px-[13px]`（−1px）、Figma 子像素 `*-[12.8px]`/`*-[16.8px]`。

@@ -93,7 +93,7 @@ type SortDir = "asc" | "desc";
 
 const TagChip = memo(function TagChip({ label }: { label: string }) {
   return (
-    <span className="inline-flex items-center px-[4px] py-[4px] rounded-[8px] bg-[#f0f6ff] text-[#0f6beb] text-[16px] leading-[1.5] whitespace-nowrap font-['Noto_Sans_TC',sans-serif] font-normal">
+    <span className="inline-flex items-center px-[4px] py-[4px] rounded-md bg-[#f0f6ff] text-[#0f6beb] text-[16px] leading-[1.5] whitespace-nowrap font-['Noto_Sans_TC',sans-serif] font-normal">
       {label}
     </span>
   );
@@ -158,7 +158,7 @@ const Toggle = memo(function Toggle({
       </button>
       {showTip && tipPos && createPortal(
         <div
-          className="fixed bg-[#383838] text-white text-[12px] leading-[1.5] font-['Noto_Sans_TC',sans-serif] font-normal rounded-[8px] p-[8px] whitespace-nowrap pointer-events-none"
+          className="fixed bg-[#383838] text-white text-[12px] leading-[1.5] font-['Noto_Sans_TC',sans-serif] font-normal rounded-md p-[8px] whitespace-nowrap pointer-events-none"
           style={{ zIndex: 9999, top: tipPos.top, left: tipPos.left, transform: "translateX(-85%)" }}
         >
           {disabledTip}
@@ -248,7 +248,7 @@ const TabButton = memo(function TabButton({
       )}
       <div
         onClick={onClick}
-        className="box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer transition-colors"
+        className="box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-2xl shrink-0 cursor-pointer transition-colors"
       >
         <p
           className={`basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center ${
@@ -306,7 +306,7 @@ const FilterOption = memo(function FilterOption({
   onChange: (v: string) => void;
 }) {
   return (
-    <div className="relative bg-white rounded-[16px] min-h-[48px] px-[8px] flex items-center shrink-0 cursor-pointer">
+    <div className="relative bg-white rounded-2xl min-h-[48px] px-[8px] flex items-center shrink-0 cursor-pointer">
       <div className="flex gap-[8px] items-center pointer-events-none select-none">
         <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] whitespace-nowrap">
           {value}
@@ -414,7 +414,7 @@ const TableRow = memo(function TableRow({
           <ImageWithFallback
             src={record.customImageUrl || record.image || ""}
             alt={record.roomType}
-            className="shrink-0 rounded-[4px] object-cover"
+            className="shrink-0 rounded-xs object-cover"
             style={{ width: 110, height: 74 }}
           />
           {/* Room name */}
@@ -497,7 +497,7 @@ const TableRow = memo(function TableRow({
           className="px-[12px] py-[12px] align-middle text-center bg-white"
         >
           <div
-            className="inline-flex items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0"
+            className="inline-flex items-center justify-center min-w-[32px] p-[4px] rounded-md shrink-0"
             style={{ backgroundColor: record.published ? "#e4fcea" : "#f5f5f5" }}
           >
             <span
@@ -1051,7 +1051,7 @@ const PMSDataTable = memo(function PMSDataTable({
       <div className="flex flex-wrap gap-y-[8px] items-stretch w-full">
         {/* Search bar + 清除全部條件 */}
         <div className="flex gap-[4px] self-stretch shrink-0">
-          <div className="bg-white flex gap-[28px] items-center px-[12px] py-[8px] rounded-[16px] shrink-0 w-[292px]">
+          <div className="bg-white flex gap-[28px] items-center px-[12px] py-[8px] rounded-2xl shrink-0 w-[292px]">
             <div className="flex flex-[1_0_0] gap-[4px] items-center min-w-0">
               <IconSearch />
               <input
@@ -1082,7 +1082,7 @@ const PMSDataTable = memo(function PMSDataTable({
 
           <button
             onClick={handleClearFilters}
-            className="flex gap-[2px] items-center justify-center px-[8px] py-[8px] rounded-[12px] shrink-0 self-stretch cursor-pointer hover:bg-[#f0f6ff] active:bg-[#dce8fc] transition-colors"
+            className="flex gap-[2px] items-center justify-center px-[8px] py-[8px] rounded-xl shrink-0 self-stretch cursor-pointer hover:bg-[#f0f6ff] active:bg-[#dce8fc] transition-colors"
             type="button"
           >
             <span className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[#0f6beb] text-[16px] whitespace-nowrap">
@@ -1132,7 +1132,7 @@ const PMSDataTable = memo(function PMSDataTable({
                     bookingUrl: "",
                   });
                 }}
-                className="flex items-center justify-center px-[12px] py-[8px] rounded-[16px] shrink-0 self-stretch cursor-pointer hover:bg-[#f0f6ff] active:bg-[#dce8fc] transition-colors duration-150"
+                className="flex items-center justify-center px-[12px] py-[8px] rounded-2xl shrink-0 self-stretch cursor-pointer hover:bg-[#f0f6ff] active:bg-[#dce8fc] transition-colors duration-150"
               >
                 <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#0f6beb] text-center whitespace-nowrap">
                   新增規則
@@ -1144,7 +1144,7 @@ const PMSDataTable = memo(function PMSDataTable({
           <button
             type="button"
             onClick={() => window.dispatchEvent(new CustomEvent("open-chatfab"))}
-            className="bg-[#242424] flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] shrink-0 self-stretch cursor-pointer hover:bg-[#383838] transition-colors duration-150"
+            className="bg-[#242424] flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-2xl shrink-0 self-stretch cursor-pointer hover:bg-[#383838] transition-colors duration-150"
           >
             <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-white text-center whitespace-nowrap">
               測試
@@ -1178,7 +1178,7 @@ const PMSDataTable = memo(function PMSDataTable({
                   memberTags: [], bookingUrl: "",
                 });
               }}
-              className="flex items-center justify-center px-[12px] py-[8px] rounded-[16px] shrink-0 cursor-pointer hover:bg-[#f0f6ff] active:bg-[#dce8fc] transition-colors duration-150"
+              className="flex items-center justify-center px-[12px] py-[8px] rounded-2xl shrink-0 cursor-pointer hover:bg-[#f0f6ff] active:bg-[#dce8fc] transition-colors duration-150"
             >
               <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#0f6beb] text-center whitespace-nowrap">
                 新增規則
@@ -1325,7 +1325,7 @@ const PMSDataTable = memo(function PMSDataTable({
 
       {/* Table — only shown when current view has data */}
       {!bothEmpty && !pmsViewEmpty && !faqViewEmpty && (
-      <div className="w-full rounded-[16px] ring-1 ring-[#ddd] bg-white overflow-hidden">
+      <div className="w-full rounded-2xl ring-1 ring-[#ddd] bg-white overflow-hidden">
         <div className="overflow-x-auto scrollbar-transparent">
           <table
             className="min-w-[1486px] w-full"
@@ -1621,7 +1621,7 @@ const DataSourceTableRow = memo(function DataSourceTableRow({
         className="px-[12px] py-[12px] align-middle text-center bg-white"
       >
         <div
-          className="inline-flex items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0"
+          className="inline-flex items-center justify-center min-w-[32px] p-[4px] rounded-md shrink-0"
           style={{ backgroundColor: row.published ? "#e4fcea" : "#f5f5f5" }}
         >
           <span
@@ -1724,7 +1724,7 @@ const DataSourcesTable = memo(function DataSourcesTable({
             onClick={() =>
               window.dispatchEvent(new CustomEvent("open-chatfab"))
             }
-            className="bg-[#242424] flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] shrink-0 cursor-pointer hover:bg-[#383838] transition-colors"
+            className="bg-[#242424] flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-2xl shrink-0 cursor-pointer hover:bg-[#383838] transition-colors"
           >
             <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-white text-center">
               測試
@@ -1736,7 +1736,7 @@ const DataSourcesTable = memo(function DataSourcesTable({
       <p className="text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]">
         共 {sources.length} 筆，引用順序如下
       </p>
-      <div className="w-full rounded-[16px] ring-1 ring-[#ddd] bg-white overflow-hidden">
+      <div className="w-full rounded-2xl ring-1 ring-[#ddd] bg-white overflow-hidden">
         <div className="overflow-x-auto scrollbar-transparent">
           <table
             className="w-full"

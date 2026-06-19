@@ -164,7 +164,7 @@ const StatusTag = memo(function StatusTag({
   return (
     <div
       style={{ backgroundColor: bgColor }}
-      className="inline-flex items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0"
+      className="inline-flex items-center justify-center min-w-[32px] p-[4px] rounded-md shrink-0"
     >
       <p
         style={{ flex: "1 0 0", color: textColor }}
@@ -189,7 +189,7 @@ function ViewDetailTooltip({ anchorRef, visible }: { anchorRef: React.RefObject<
   if (!visible) return null;
   return createPortal(
     <div
-      className="fixed bg-[#383838] text-white text-[12px] leading-[1.5] font-['Noto_Sans_TC',sans-serif] font-normal rounded-[8px] p-[8px] whitespace-nowrap pointer-events-none"
+      className="fixed bg-[#383838] text-white text-[12px] leading-[1.5] font-['Noto_Sans_TC',sans-serif] font-normal rounded-md p-[8px] whitespace-nowrap pointer-events-none"
       style={{ zIndex: 9999, top: pos.top, left: pos.left }}
     >
       查看詳細
@@ -257,7 +257,7 @@ const TableRow = memo(function TableRow({
         className="px-[12px] py-[12px] align-middle text-center bg-white group-hover:bg-[#f5f8ff] transition-colors"
       >
         <div
-          className="inline-flex items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0"
+          className="inline-flex items-center justify-center min-w-[32px] p-[4px] rounded-md shrink-0"
           style={{ backgroundColor: record.published ? "#e4fcea" : "#f5f5f5" }}
         >
           <span
@@ -490,12 +490,12 @@ export default function AIChatbotOverview({
         {/* Token 用量 */}
         <div className="px-[40px] pb-[20px] w-full">
           <div
-            className="bg-[rgba(255,255,255,0.3)] relative rounded-[16px] w-full"
+            className="bg-[rgba(255,255,255,0.3)] relative rounded-2xl w-full"
             data-name="Description Container"
           >
             <div
               aria-hidden="true"
-              className="absolute border border-[#f0f6ff] border-solid inset-0 pointer-events-none rounded-[16px]"
+              className="absolute border border-[#f0f6ff] border-solid inset-0 pointer-events-none rounded-2xl"
             />
             <div className="flex flex-col justify-center w-full">
               <div className="box-border content-stretch flex flex-col gap-[8px] items-start justify-center p-[24px] relative w-full">
@@ -523,11 +523,11 @@ export default function AIChatbotOverview({
                       </div>
                     </div>
                     <div
-                      className="bg-[#f0f6ff] h-[8px] overflow-clip relative rounded-[80px] shrink-0 w-full"
+                      className="bg-[#f0f6ff] h-[8px] overflow-clip relative rounded-full shrink-0 w-full"
                       data-name="usage status"
                     >
                       <div
-                        className="absolute bg-[#3a87f2] h-[8px] left-0 rounded-[80px] top-0 transition-all duration-300"
+                        className="absolute bg-[#3a87f2] h-[8px] left-0 rounded-full top-0 transition-all duration-300"
                         style={{
                           width: `${Math.min(tokenUsage.usage_percent, 100)}%`,
                         }}
@@ -552,7 +552,7 @@ export default function AIChatbotOverview({
                       </div>
                     </div>
                     {tokenUsage.remaining <= 0 && (
-                      <div className="mt-[4px] px-[10px] py-[6px] bg-[#fef2f2] border border-[#fecaca] rounded-[8px]">
+                      <div className="mt-[4px] px-[10px] py-[6px] bg-[#fef2f2] border border-[#fecaca] rounded-md">
                         <p className="text-[12px] text-[#dc2626] font-medium font-['Noto_Sans_TC',sans-serif]">
                           Token 額度已用完，AI 回覆已停用。當前客服已啟用自動回應模組，須加值請聯繫系統商。
                         </p>
@@ -576,7 +576,7 @@ export default function AIChatbotOverview({
             <div className="flex flex-col gap-[16px] items-start w-full">
               <div className="flex items-stretch gap-[4px] w-full">
                 <div
-                  className="bg-white flex gap-[28px] items-center px-[12px] py-[8px] rounded-[16px] shrink-0"
+                  className="bg-white flex gap-[28px] items-center px-[12px] py-[8px] rounded-2xl shrink-0"
                   style={{ width: 292 }}
                 >
                   <div
@@ -612,7 +612,7 @@ export default function AIChatbotOverview({
 
                 <button
                   onClick={handleClearSearch}
-                  className="flex gap-[2px] items-center justify-center px-[8px] py-[8px] rounded-[12px] shrink-0 self-stretch cursor-pointer hover:bg-[#f0f6ff] active:bg-[#dce8fc] transition-colors"
+                  className="flex gap-[2px] items-center justify-center px-[8px] py-[8px] rounded-xl shrink-0 self-stretch cursor-pointer hover:bg-[#f0f6ff] active:bg-[#dce8fc] transition-colors"
                   type="button"
                 >
                   <span className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[#0f6beb] text-[16px] whitespace-nowrap">
@@ -627,7 +627,7 @@ export default function AIChatbotOverview({
                 共 {categories.length} 類，已發佈 {publishedCount} 類
               </p>
 
-              <div className="w-full rounded-[16px] ring-1 ring-[#ddd] bg-white overflow-hidden">
+              <div className="w-full rounded-2xl ring-1 ring-[#ddd] bg-white overflow-hidden">
                 <div className="overflow-x-auto scrollbar-transparent">
                   <table
                     className="w-full border-separate"
