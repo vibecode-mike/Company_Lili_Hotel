@@ -543,7 +543,7 @@ function CoreInsightsCard({
   const { name: periodName, trendPrefix } = PERIOD_MAP[period];
 
   return (
-    <div ref={coreRef} className="bg-white rounded-[16px] flex flex-col w-full overflow-hidden">
+    <div ref={coreRef} className="bg-white rounded-2xl flex flex-col w-full overflow-hidden">
       {/* Header：核心洞察 + 期間 dropdown + 描述（自帶 border-b #ddd，對應 Figma Dimesion 1744:33108） */}
       <div className="bg-white border-b border-solid border-[#ddd] py-[16px]">
         <div className="flex items-start">
@@ -558,7 +558,7 @@ function CoreInsightsCard({
                   ref={triggerRef}
                   type="button"
                   onClick={() => setOpen((v) => !v)}
-                  className="flex items-center gap-[2px] justify-center p-[4px] rounded-[8px] cursor-pointer hover:bg-[#f0f6ff] transition-colors"
+                  className="flex items-center gap-[2px] justify-center p-[4px] rounded-md cursor-pointer hover:bg-[#f0f6ff] transition-colors"
                   aria-haspopup="listbox"
                   aria-expanded={open}
                   aria-label="切換比較期間"
@@ -580,7 +580,7 @@ function CoreInsightsCard({
                   <ul
                     ref={listRef}
                     role="listbox"
-                    className="fixed min-w-[120px] bg-white border border-solid rounded-[12px] flex flex-col gap-[4px] p-[4px]"
+                    className="fixed min-w-[120px] bg-white border border-solid rounded-xl flex flex-col gap-[4px] p-[4px]"
                     style={{
                       top: dropdownPos.top,
                       left: dropdownPos.left,
@@ -600,7 +600,7 @@ function CoreInsightsCard({
                               onPeriodChange(opt.value);
                               setOpen(false);
                             }}
-                            className={`flex w-full items-center gap-[4px] min-h-[48px] p-[8px] rounded-[8px] text-[16px] leading-[1.5] text-[#383838] text-left cursor-pointer transition-colors hover:bg-[#f0f6ff] ${
+                            className={`flex w-full items-center gap-[4px] min-h-[48px] p-[8px] rounded-md text-[16px] leading-[1.5] text-[#383838] text-left cursor-pointer transition-colors hover:bg-[#f0f6ff] ${
                               selected ? "bg-[#f0f6ff]" : "bg-white"
                             }`}
                           >
@@ -698,7 +698,7 @@ function FaqRow({
         </div>
       </div>
       {isExpanded && (
-        <div className="bg-[#f8fafc] rounded-[12px] p-[16px] mx-[24px] mb-[12px] text-[14px] text-[#6e6e6e] whitespace-pre-line">
+        <div className="bg-[#f8fafc] rounded-xl p-[16px] mx-[24px] mb-[12px] text-[14px] text-[#6e6e6e] whitespace-pre-line">
           {item.aiAnswer}
         </div>
       )}
@@ -756,7 +756,7 @@ function InfoIconWithTooltip({ tooltip }: { tooltip: string }) {
       {visible &&
         createPortal(
           <div
-            className="fixed bg-[#383838] text-white text-[12px] leading-[1.5] font-['Noto_Sans_TC',sans-serif] font-normal rounded-[8px] p-[8px] pointer-events-none"
+            className="fixed bg-[#383838] text-white text-[12px] leading-[1.5] font-['Noto_Sans_TC',sans-serif] font-normal rounded-md p-[8px] pointer-events-none"
             style={{ zIndex: 9999, top: pos.top, left: pos.left, maxWidth: 320 }}
           >
             {tooltip}
@@ -1044,7 +1044,7 @@ function TimeInsightsSection({ reducedMotion }: { reducedMotion: boolean }) {
   }, [totalByChannel]);
 
   return (
-    <div className="bg-white rounded-[16px] flex flex-col w-full overflow-hidden">
+    <div className="bg-white rounded-2xl flex flex-col w-full overflow-hidden">
       {/* C. 互動旅程：標題 + 三個彩色底線 tab + stacked bar list */}
       <div
         ref={journeyRef}
@@ -1178,7 +1178,7 @@ function TimeInsightsSection({ reducedMotion }: { reducedMotion: boolean }) {
                             platformChannel: channelMap[channel],
                           });
                         }}
-                        className="bg-[#f0f6ff] rounded-[8px] px-[8px] py-[4px] min-w-[32px] text-[#0f6beb] text-[16px] leading-[1.5] text-center whitespace-nowrap cursor-pointer border-none transition-colors hover:bg-[#dde9ff]"
+                        className="bg-[#f0f6ff] rounded-md px-[8px] py-[4px] min-w-[32px] text-[#0f6beb] text-[16px] leading-[1.5] text-center whitespace-nowrap cursor-pointer border-none transition-colors hover:bg-[#dde9ff]"
                         aria-label={`在會員列表查看標籤「${item.tag}」`}
                       >
                         {item.tag}
@@ -1186,7 +1186,7 @@ function TimeInsightsSection({ reducedMotion }: { reducedMotion: boolean }) {
                     </div>
                     <div className="flex-1 min-w-0 flex items-center gap-[8px]" style={{ height: 44 }}>
                       <div
-                        className="flex-1 min-w-0 bg-[#fafafa] rounded-[4px] overflow-hidden flex items-center"
+                        className="flex-1 min-w-0 bg-[#fafafa] rounded-xs overflow-hidden flex items-center"
                         style={{ minHeight: 44, height: 44 }}
                       >
                         {segments.map((seg) =>
@@ -1337,7 +1337,7 @@ function TimeInsightsSection({ reducedMotion }: { reducedMotion: boolean }) {
         <div className="flex items-center gap-[4px] pl-[44px]">
           <span className="text-[14px] leading-[1.5] text-[#6e6e6e]">少</span>
           <div
-            className="h-[8px] rounded-[2px]"
+            className="h-[8px] rounded-2xs"
             style={{
               width: "110px",
               background: `linear-gradient(90deg, ${HEATMAP_LOW} 0%, ${HEATMAP_HIGH} 90%, ${HEATMAP_MAX} 100%)`,
@@ -1374,7 +1374,7 @@ function ExpandToggleButton({
       <button
         type="button"
         onClick={onClick}
-        className="flex items-center justify-center w-[80px] p-[8px] rounded-[8px] cursor-pointer hover:bg-[#f0f6ff] transition-colors"
+        className="flex items-center justify-center w-[80px] p-[8px] rounded-md cursor-pointer hover:bg-[#f0f6ff] transition-colors"
       >
         <span className="text-[#0f6beb] text-[16px] leading-[1.5] whitespace-nowrap">
           {isExpanded ? "收合" : "查看全部"}
@@ -1595,7 +1595,7 @@ export default function InsightsPanel({
           />
 
           {/* 行動建議區塊 */}
-          <div className="bg-white relative rounded-[16px] w-full">
+          <div className="bg-white relative rounded-2xl w-full">
             <div className="relative py-[16px] px-[20px] flex flex-col gap-[24px]">
               <div className="flex items-center gap-[4px]">
                 <span className="text-[16px] leading-[1.5] text-[#383838]">
@@ -1615,7 +1615,7 @@ export default function InsightsPanel({
                   <span className="flex-1 min-w-0 text-[14px] leading-[1.5] text-[#383838]">
                     1. <span style={{ color: "#B71C1C" }}>{pending?.total ?? 0}則</span>對話待回覆
                   </span>
-                  <span className="flex items-center justify-center p-[4px] rounded-[8px] shrink-0">
+                  <span className="flex items-center justify-center p-[4px] rounded-md shrink-0">
                     <span className="inline-flex size-[24px] items-center justify-center">
                       <ChevronDown
                         size={20}
@@ -1633,7 +1633,7 @@ export default function InsightsPanel({
                       {(isPendingExpanded ? pending.items : pending.items.slice(0, 10)).map((item, idx, arr) => (
                       <div
                         key={item.thread_id}
-                        className="flex items-center justify-between py-[8px] px-[12px] rounded-[8px]"
+                        className="flex items-center justify-between py-[8px] px-[12px] rounded-md"
                         style={{ backgroundColor: idx % 2 === 0 ? "#FFFFFF" : "#FAFAFA" }}
                       >
                         <div className="flex items-center gap-[10px] min-w-0">
@@ -1706,7 +1706,7 @@ export default function InsightsPanel({
                     </span>
                     訊息，建議加入知識庫
                   </span>
-                  <span className="flex items-center justify-center p-[4px] rounded-[8px] shrink-0">
+                  <span className="flex items-center justify-center p-[4px] rounded-md shrink-0">
                     <span className="inline-flex size-[24px] items-center justify-center">
                       <ChevronDown
                         size={20}
@@ -1724,7 +1724,7 @@ export default function InsightsPanel({
                       {(isAiUnansweredExpanded ? unansweredSnapshot.top_unanswered : unansweredSnapshot.top_unanswered.slice(0, 10)).map((q, idx, arr) => (
                       <div
                         key={q.message_id}
-                        className="flex items-center justify-between min-h-[48px] py-[8px] px-[12px] rounded-[8px]"
+                        className="flex items-center justify-between min-h-[48px] py-[8px] px-[12px] rounded-md"
                         style={{ backgroundColor: idx % 2 === 0 ? "#FFFFFF" : "#FAFAFA" }}
                       >
                         <span className="text-[16px] leading-[1.5] text-[#383838] truncate" title={q.question}>
