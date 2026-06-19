@@ -302,7 +302,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
 
   return (
     <div
-      className="bg-white relative rounded-[16px] flex flex-col"
+      className="bg-white relative rounded-2xl flex flex-col"
       style={{
         width: 'min(800px, 95vw)',
         height: 'min(600px, 85vh)',
@@ -310,7 +310,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
         maxHeight: '85vh'
       }}
     >
-      <div className="flex flex-col h-full rounded-[16px]">
+      <div className="flex flex-col h-full rounded-2xl">
         <div className="box-border flex flex-col items-start p-[32px] relative h-full overflow-hidden">
           {/* Header Content - Fixed, never shrinks */}
           <div className="flex flex-col gap-[20px] items-start w-full flex-shrink-0 flex-grow-0">
@@ -329,7 +329,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
             {/* Search Bar and Toggle */}
             <div className="flex flex-col sm:flex-row gap-[16px] items-stretch sm:items-start w-full">
               {/* Search Bar */}
-              <div className="bg-white flex-1 min-w-0 rounded-[16px] border border-[#e1ebf9]">
+              <div className="bg-white flex-1 min-w-0 rounded-2xl border border-[#e1ebf9]">
                 <div className="flex flex-wrap gap-[4px] items-center px-[12px] py-[8px] min-h-[48px]">
                   <IconSearch />
                   {selectedTags.map(tag => (
@@ -470,7 +470,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
                   </div>
                   {/* Show create new tag option */}
                   {showNewTagCreation && (
-                    <div className="bg-slate-50 relative rounded-[4px] shrink-0 w-full mt-[4px]">
+                    <div className="bg-slate-50 relative rounded-xs shrink-0 w-full mt-[4px]">
                       <div className="flex flex-row items-center size-full">
                         <div className="box-border content-stretch flex gap-[10px] items-center px-[8px] py-[6px] relative w-full">
                           <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[14px] text-center text-nowrap whitespace-pre">建立</p>
@@ -494,7 +494,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
             {showScrollbar && (
               <div 
                 ref={scrollbarRef}
-                className="absolute bg-[#dddddd] right-0 rounded-[4px] w-[4px] cursor-pointer hover:bg-[#b8b8b8] transition-colors"
+                className="absolute bg-[#dddddd] right-0 rounded-xs w-[4px] cursor-pointer hover:bg-[#b8b8b8] transition-colors"
                 style={{ 
                   top: `${scrollbarStyles.top - 225}px`, 
                   height: `${scrollbarStyles.height}px` 
@@ -507,10 +507,10 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
           {/* Buttons - Fixed at bottom, never shrinks */}
           <div className="content-stretch flex gap-[8px] items-center justify-center relative flex-shrink-0 flex-grow-0 w-full">
             <div className="basis-0 content-stretch flex gap-[8px] grow items-center justify-end min-h-px min-w-px relative shrink-0">
-              <div className="bg-neutral-100 box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer hover:bg-neutral-200 transition-colors" onClick={onClose}>
+              <div className="bg-neutral-100 box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-2xl shrink-0 cursor-pointer hover:bg-neutral-200 transition-colors" onClick={onClose}>
                 <p className="basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#383838] text-[16px] text-center">取消</p>
               </div>
-              <div className="bg-[#242424] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer hover:bg-[#383838] transition-colors" onClick={() => onConfirm?.(selectedTags, isInclude)}>
+              <div className="bg-[#242424] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-2xl shrink-0 cursor-pointer hover:bg-[#383838] transition-colors" onClick={() => onConfirm?.(selectedTags, isInclude)}>
                 <p className="basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center text-white">確認</p>
               </div>
             </div>

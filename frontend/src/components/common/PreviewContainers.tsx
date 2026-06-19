@@ -124,8 +124,8 @@ function CardPrice({ price, currency }: { price?: string; currency?: 'ntd' | 'us
  */
 function ActionButton({ text, className = '' }: ActionButtonProps) {
   return (
-    <div className={`bg-white h-[47px] relative rounded-[12px] shrink-0 w-[256px] ${className}`}>
-      <div aria-hidden="true" className="absolute border border-gray-200 border-solid inset-0 pointer-events-none rounded-[12px]" />
+    <div className={`bg-white h-[47px] relative rounded-xl shrink-0 w-[256px] ${className}`}>
+      <div aria-hidden="true" className="absolute border border-gray-200 border-solid inset-0 pointer-events-none rounded-xl" />
       <div className="bg-clip-padding border-0 border-[transparent] border-solid box-border content-stretch flex flex-col h-[47px] items-start pb-px pt-[13px] px-[13px] relative w-[256px]">
         <div className="h-[21px] overflow-clip relative shrink-0 w-full">
           <p className="absolute font-normal leading-[21px] left-[115px] not-italic text-[#383838] text-[14px] text-center text-nowrap top-0 tracking-[-0.1504px] translate-x-[-50%] whitespace-pre">
@@ -171,7 +171,7 @@ export function CardImage({ imageUrl, placeholder = '選擇圖片', className = 
  */
 export function MessageCard({ cardData, className = '' }: MessageCardProps) {
   return (
-    <div className={`bg-white h-[460.5px] relative rounded-[12px] shrink-0 w-full ${className}`}>
+    <div className={`bg-white h-[460.5px] relative rounded-xl shrink-0 w-full ${className}`}>
       <div className="bg-clip-padding border-0 border-[transparent] border-solid box-border h-[460.5px] overflow-clip relative rounded-[inherit] w-full">
         <CardTitle title={cardData?.cardTitle} />
         <CardContent content={cardData?.content} />
@@ -231,7 +231,7 @@ export function TriggerText({ text, placeholder = '文字訊息' }: TriggerTextP
  */
 export function TriggerImagePreview({ cardData, triggerImageUrl, className = '' }: TriggerImagePreviewProps) {
   return (
-    <div className={`bg-gradient-to-b from-[#a5d8ff] relative rounded-[20px] size-full to-[#d0ebff] ${className}`}>
+    <div className={`bg-gradient-to-b from-[#a5d8ff] relative rounded-3xl size-full to-[#d0ebff] ${className}`}>
       <div className="size-full">
         <div className="box-border content-stretch flex gap-[20px] items-start overflow-clip pb-[24px] pl-[24px] pr-0 pt-[24px] relative size-full">
           <OABadge />
@@ -268,7 +268,7 @@ export function TriggerTextPreview({ cardData, triggerText, className = '' }: Tr
  */
 export function GradientPreviewContainer({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-gradient-to-b from-[#a5d8ff] relative rounded-[20px] to-[#d0ebff] ${className}`}>
+    <div className={`bg-gradient-to-b from-[#a5d8ff] relative rounded-3xl to-[#d0ebff] ${className}`}>
       <div className="h-full min-h-[720px] flex items-center justify-center">
         <div className="box-border content-stretch flex gap-[20px] items-center pb-[24px] pl-[24px] pr-[24px] pt-[24px] relative">
           <OABadge />

@@ -225,7 +225,7 @@ const MessageRow = memo(function MessageRow({
 
   return (
     <div
-      className={`relative shrink-0 w-full transition-colors hover:bg-[#F8FAFC] cursor-pointer ${isLast ? 'rounded-bl-[16px] rounded-br-[16px]' : 'border-b border-[#dddddd]'}`}
+      className={`relative shrink-0 w-full transition-colors hover:bg-[#F8FAFC] cursor-pointer ${isLast ? 'rounded-bl-2xl rounded-br-2xl' : 'border-b border-[#dddddd]'}`}
       style={{ backgroundColor: 'white' }}
       data-name="MessageRow"
     >
@@ -283,8 +283,8 @@ const MessageRow = memo(function MessageRow({
 // 空狀態組件
 const EmptyStateRow = memo(function EmptyStateRow() {
   return (
-    <div className="bg-white shrink-0 w-full rounded-bl-[16px] rounded-br-[16px] relative" aria-live="polite">
-      <div aria-hidden="true" className="absolute border-[#dddddd] border border-solid inset-0 pointer-events-none rounded-bl-[16px] rounded-br-[16px]" />
+    <div className="bg-white shrink-0 w-full rounded-bl-2xl rounded-br-2xl relative" aria-live="polite">
+      <div aria-hidden="true" className="absolute border-[#dddddd] border border-solid inset-0 pointer-events-none rounded-bl-2xl rounded-br-2xl" />
       <div className="flex items-center justify-center p-[40px]">
         <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[#a8a8a8] text-[16px]">尚無此資料</p>
       </div>
@@ -363,7 +363,7 @@ export default function InteractiveMessageTable({ messages, onEdit, onViewDetail
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-name="MessageTable">
       {/* 圓角裁切層 - 讓水平捲軸收在圓角內、不凸出 */}
-      <div className="bg-white rounded-[16px] w-full overflow-hidden">
+      <div className="bg-white rounded-2xl w-full overflow-hidden">
         {/* 外層容器 - 水平滾動 */}
         <div className="w-full overflow-x-auto scrollbar-transparent">
           {/* 內層容器 - 最小寬度確保欄位對齊 */}

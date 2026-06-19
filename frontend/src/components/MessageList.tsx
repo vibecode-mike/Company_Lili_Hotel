@@ -81,7 +81,7 @@ const SearchBar = memo(function SearchBar({
 }) {
   return (
     <div
-      className="bg-white box-border content-stretch flex gap-[28px] items-center min-w-[292px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 w-[292px]"
+      className="bg-white box-border content-stretch flex gap-[28px] items-center min-w-[292px] px-[12px] py-[8px] relative rounded-2xl shrink-0 w-[292px]"
       data-name="Search Bar"
     >
       <div className="basis-0 content-stretch flex gap-[4px] grow items-center min-h-px min-w-px relative shrink-0">
@@ -134,7 +134,7 @@ const ButtonReanalyze = memo(function ButtonReanalyze({
   return (
     <div
       onClick={onClick}
-      className="box-border content-stretch flex gap-[2px] items-center justify-center min-w-[72px] px-[8px] py-[12px] relative rounded-[12px] shrink-0 cursor-pointer hover:bg-[#f0f6ff] transition-colors h-[48px]"
+      className="box-border content-stretch flex gap-[2px] items-center justify-center min-w-[72px] px-[8px] py-[12px] relative rounded-xl shrink-0 cursor-pointer hover:bg-[#f0f6ff] transition-colors h-[48px]"
       data-name="Button/Reanalyze"
     >
       <p className="basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">
@@ -173,7 +173,7 @@ const ButtonFilledButton = memo(function ButtonFilledButton({
   return (
     <div
       onClick={onClick}
-      className="bg-[#242424] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer hover:bg-[#383838] transition-colors"
+      className="bg-[#242424] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-2xl shrink-0 cursor-pointer hover:bg-[#383838] transition-colors"
       data-name="Button/Filled Button"
     >
       <p className="basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center text-white">
@@ -231,7 +231,7 @@ const ButtonFilledButton1 = memo(function ButtonFilledButton1({
   return (
     <div
       onClick={onClick}
-      className="box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer transition-colors"
+      className="box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-2xl shrink-0 cursor-pointer transition-colors"
       data-name="Button/Filled Button"
     >
       <p
@@ -281,7 +281,7 @@ const ButtonFilledButton2 = memo(function ButtonFilledButton2({
   return (
     <div
       onClick={onClick}
-      className="box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer transition-colors"
+      className="box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-2xl shrink-0 cursor-pointer transition-colors"
       data-name="Button/Filled Button"
     >
       <p
@@ -331,7 +331,7 @@ const ButtonFilledButton3 = memo(function ButtonFilledButton3({
   return (
     <div
       onClick={onClick}
-      className="box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer transition-colors"
+      className="box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-2xl shrink-0 cursor-pointer transition-colors"
       data-name="Button/Filled Button"
     >
       <p
@@ -494,12 +494,12 @@ const MainContent = memo(function MainContent({
       {/* Description Container - Message Usage */}
       <div className="px-[40px] pb-[20px] w-full">
         <div
-          className="bg-[rgba(255,255,255,0.3)] relative rounded-[16px] w-full"
+          className="bg-[rgba(255,255,255,0.3)] relative rounded-2xl w-full"
           data-name="Description Container"
         >
           <div
             aria-hidden="true"
-            className="absolute border border-[#f0f6ff] border-solid inset-0 pointer-events-none rounded-[16px]"
+            className="absolute border border-[#f0f6ff] border-solid inset-0 pointer-events-none rounded-2xl"
           />
           <div className="flex flex-col justify-center w-full">
             <div className="box-border content-stretch flex flex-col gap-[8px] items-start justify-center p-[24px] relative w-full">

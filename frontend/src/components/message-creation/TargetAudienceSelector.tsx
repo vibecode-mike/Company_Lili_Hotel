@@ -98,7 +98,7 @@ export default function TargetAudienceSelector({
                 {/* 选择标签按钮 */}
                 <button
                   onClick={onOpenFilterModal}
-                  className="bg-white border border-neutral-100 rounded-[8px] px-[12px] py-[8px] h-[48px] text-left hover:border-neutral-200 transition-colors"
+                  className="bg-white border border-neutral-100 rounded-md px-[12px] py-[8px] h-[48px] text-left hover:border-neutral-200 transition-colors"
                 >
                   <span className="text-[16px] text-[#717182]">選擇標籤</span>
                 </button>
@@ -109,7 +109,7 @@ export default function TargetAudienceSelector({
                     {selectedTags.map((tag) => (
                       <div
                         key={tag.id}
-                        className="bg-[#f0f6ff] text-[#0f6beb] px-[8px] py-[4px] rounded-[8px] flex items-center gap-2 text-[16px] leading-[1.5]"
+                        className="bg-[#f0f6ff] text-[#0f6beb] px-[8px] py-[4px] rounded-md flex items-center gap-2 text-[16px] leading-[1.5]"
                       >
                         <span>{tag.name}</span>
                         <button

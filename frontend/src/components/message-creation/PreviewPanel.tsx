@@ -73,7 +73,7 @@ function CardPreview({ card }: { card: CardData }) {
   // 默认预览（只显示卡片）
   return (
     <GradientPreviewContainer>
-      <div className="bg-white h-[460.5px] relative rounded-[12px] shrink-0 w-full">
+      <div className="bg-white h-[460.5px] relative rounded-xl shrink-0 w-full">
         <div className="bg-clip-padding border-0 border-[transparent] border-solid box-border h-[460.5px] overflow-clip relative rounded-[inherit] w-full">
           {/* 标题 */}
           {card.enableTitle && card.cardTitle && (

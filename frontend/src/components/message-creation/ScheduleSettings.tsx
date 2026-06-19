@@ -101,7 +101,7 @@ export default function ScheduleSettings({
           <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
             <PopoverTrigger asChild disabled={scheduleType === 'immediate'}>
               <div 
-                className={`bg-white border border-neutral-100 rounded-[8px] px-[8px] py-[8px] w-[298px] flex items-center gap-6 transition-colors ${
+                className={`bg-white border border-neutral-100 rounded-md px-[8px] py-[8px] w-[298px] flex items-center gap-6 transition-colors ${
                   scheduleType === 'immediate' 
                     ? 'cursor-not-allowed opacity-50' 
                     : 'cursor-pointer hover:border-neutral-200'
@@ -144,7 +144,7 @@ export default function ScheduleSettings({
                       value={scheduledTime.hours} 
                       onValueChange={(value) => handleTimeChange('hours', value)}
                     >
-                      <SelectTrigger className="w-[80px] h-[40px] rounded-[8px]">
+                      <SelectTrigger className="w-[80px] h-[40px] rounded-md">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -161,7 +161,7 @@ export default function ScheduleSettings({
                       value={scheduledTime.minutes} 
                       onValueChange={(value) => handleTimeChange('minutes', value)}
                     >
-                      <SelectTrigger className="w-[80px] h-[40px] rounded-[8px]">
+                      <SelectTrigger className="w-[80px] h-[40px] rounded-md">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -178,13 +178,13 @@ export default function ScheduleSettings({
                   <Button
                     variant="outline"
                     onClick={() => setDatePickerOpen(false)}
-                    className="h-[40px] rounded-[8px]"
+                    className="h-[40px] rounded-md"
                   >
                     取消
                   </Button>
                   <Button
                     onClick={handleDateTimeConfirm}
-                    className="h-[40px] rounded-[8px] bg-[#242424] hover:bg-[#383838]"
+                    className="h-[40px] rounded-md bg-[#242424] hover:bg-[#383838]"
                   >
                     確認
                   </Button>

@@ -118,7 +118,7 @@ function MessagePreview({
 }) {
   return (
     <div className="content-stretch flex flex-col gap-[8px] items-center relative shrink-0 w-full">
-      <div className="bg-gradient-to-b box-border content-stretch flex from-[#a5d8ff] gap-[12px] h-[304.2px] items-center justify-center overflow-clip p-[12px] relative rounded-[20px] shrink-0 to-[#d0ebff] w-[276px]" data-name="Container">
+      <div className="bg-gradient-to-b box-border content-stretch flex from-[#a5d8ff] gap-[12px] h-[304.2px] items-center justify-center overflow-clip p-[12px] relative rounded-3xl shrink-0 to-[#d0ebff] w-[276px]" data-name="Container">
         <div style={{ transform: 'scale(0.6)', transformOrigin: 'center' }}>
           <FlexMessageCardPreview card={card} />
         </div>
@@ -166,7 +166,7 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
 
 function Tag({ label }: { label: string }) {
   return (
-    <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0" data-name="Tag">
+    <div className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-md shrink-0" data-name="Tag">
       <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">{label}</p>
     </div>
   );

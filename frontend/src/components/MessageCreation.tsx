@@ -2139,7 +2139,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                 )}
                 <Button
                   onClick={handleSaveDraft}
-                  className="bg-[#f0f6ff] text-[#0f6beb] hover:bg-[#e0ecff] h-[48px] px-3 min-w-[72px] rounded-[16px]"
+                  className="bg-[#f0f6ff] text-[#0f6beb] hover:bg-[#e0ecff] h-[48px] px-3 min-w-[72px] rounded-2xl"
                 >
                   儲存草稿
                 </Button>
@@ -2155,7 +2155,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                     btn.style.cursor = 'not-allowed';
                     handlePublish();
                   }}
-                  className="bg-[#242424] hover:bg-[#383838] text-white h-[48px] px-3 min-w-[72px] rounded-[16px]"
+                  className="bg-[#242424] hover:bg-[#383838] text-white h-[48px] px-3 min-w-[72px] rounded-2xl"
                 >
                   發佈
                 </Button>
@@ -2171,12 +2171,12 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                 </Label>
                 <div className="flex-1 flex flex-col gap-[2px]">
                   {channelOptions.length === 0 ? (
-                    <div className="text-[14px] text-[#999] p-3 bg-gray-50 rounded-[8px] border border-neutral-100">
+                    <div className="text-[14px] text-[#999] p-3 bg-gray-50 rounded-md border border-neutral-100">
                       請先至「基本設定」連結 LINE 或 Facebook 渠道
                     </div>
                   ) : (
                     <Select value={selectedChannel} onValueChange={handleChannelChange}>
-                      <SelectTrigger className="w-full h-[48px] rounded-[8px] bg-white border border-neutral-100">
+                      <SelectTrigger className="w-full h-[48px] rounded-md bg-white border border-neutral-100">
                         {selectedChannel ? (
                           <div className="flex items-center gap-2">
                             <ChannelIcon
@@ -2234,7 +2234,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                     }}
                     placeholder="輸入訊息"
                     maxLength={32}
-                    className={`w-full h-[48px] rounded-[8px] bg-white border ${
+                    className={`w-full h-[48px] rounded-md bg-white border ${
                       title
                         ? 'border-neutral-100 focus-visible:border-neutral-300 focus-visible:ring-[#0f6beb]/20'
                         : 'border-[#f44336] focus-visible:border-[#f44336] focus-visible:ring-[#f44336]/30'
@@ -2286,7 +2286,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                     }}
                     placeholder="顯示於裝置通知列的訊息內容"
                     maxLength={100}
-                    className={`h-[48px] rounded-[8px] bg-white border ${
+                    className={`h-[48px] rounded-md bg-white border ${
                       notificationMsg
                         ? 'border-neutral-100 focus-visible:border-neutral-300 focus-visible:ring-[#0f6beb]/20'
                         : 'border-[#f44336] focus-visible:border-[#f44336] focus-visible:ring-[#f44336]/30'
@@ -2340,7 +2340,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                     <Label htmlFor="scheduled" className="cursor-pointer text-[16px] text-[#383838]">自訂時間</Label>
                     <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
                       <PopoverTrigger asChild disabled={scheduleType === 'immediate'}>
-                        <div className={`bg-white border border-neutral-100 rounded-[8px] px-[8px] py-[8px] w-[298px] flex items-center gap-6 transition-colors ${scheduleType === 'immediate' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-neutral-200'}`}>
+                        <div className={`bg-white border border-neutral-100 rounded-md px-[8px] py-[8px] w-[298px] flex items-center gap-6 transition-colors ${scheduleType === 'immediate' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-neutral-200'}`}>
                           <span className={`text-[16px] ${scheduledDate ? 'text-[#383838]' : 'text-[#a8a8a8]'}`}>
                             {formatDate(scheduledDate)}
                           </span>
@@ -2374,7 +2374,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                                 setScheduledTime(newTime);
                                 setTimeout(() => validateScheduledDateTime(scheduledDate, newTime), 0);
                               }}>
-                                <SelectTrigger className="w-[80px] h-[40px] rounded-[8px]">
+                                <SelectTrigger className="w-[80px] h-[40px] rounded-md">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -2395,7 +2395,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                                 setScheduledTime(newTime);
                                 setTimeout(() => validateScheduledDateTime(scheduledDate, newTime), 0);
                               }}>
-                                <SelectTrigger className="w-[80px] h-[40px] rounded-[8px]">
+                                <SelectTrigger className="w-[80px] h-[40px] rounded-md">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -2416,13 +2416,13 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                             <Button
                               variant="outline"
                               onClick={() => setDatePickerOpen(false)}
-                              className="h-[40px] rounded-[8px]"
+                              className="h-[40px] rounded-md"
                             >
                               取消
                             </Button>
                             <Button
                               onClick={handleDateTimeConfirm}
-                              className="h-[40px] rounded-[8px] bg-[#242424] hover:bg-[#383838]"
+                              className="h-[40px] rounded-md bg-[#242424] hover:bg-[#383838]"
                             >
                               確認
                             </Button>
@@ -2493,7 +2493,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                       </div>
                     </div>
                     <div
-                      className={`bg-white max-w-[600px] min-w-[300px] rounded-[8px] shrink-0 w-full border border-neutral-100 ${
+                      className={`bg-white max-w-[600px] min-w-[300px] rounded-md shrink-0 w-full border border-neutral-100 ${
                         targetType !== 'filtered' ? 'opacity-60 select-none' : ''
                       }`}
                       aria-disabled={targetType !== 'filtered'}
@@ -2503,7 +2503,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                           {selectedFilterTags.length > 0 && (
                             <>
                               {selectedFilterTags.map(tag => (
-                                <div key={tag.id} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0">
+                                <div key={tag.id} className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] rounded-md shrink-0">
                                   <p className="basis-0 font-normal grow leading-[1.5] min-h-px min-w-px shrink-0 text-[#0f6beb] text-[16px]">{tag.name}</p>
                                   <button
                                     type="button"
@@ -2536,7 +2536,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                                 }
                                 setModalOpen(true);
                               }}
-                              className="box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] rounded-[8px] shrink-0 hover:bg-neutral-50 transition-colors"
+                              className="box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] rounded-md shrink-0 hover:bg-neutral-50 transition-colors"
                             >
                               <p className="basis-0 font-normal grow leading-[1.5] min-h-px min-w-px shrink-0 text-[#a8a8a8] text-[16px] text-center">＋ 新增標籤</p>
                             </button>
