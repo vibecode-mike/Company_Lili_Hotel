@@ -85,8 +85,30 @@
 
 - [x] **A. docs 納管** —— 已 commit（`aa6a5911`：token-migration-map / component-audit / progress 三份）。
 - [x] **B. 字體 Inter→Noto** —— dev 已完成（清單見 `docs/font-inter-to-noto.md`，9 元件檔 ×29 處 + `styles.ts` 死常數 + `globals.css .booking-url-text`；移除 `font-['Inter…']` 改繼承全域 Noto）。`build` 通過、scope 內零殘留。**待 staging 眼睛確認**（尤其訊息預覽 JP 示意字）。注意：PingFang 只在 `src/imports/` 死碼、不在範圍。
-- [ ] **C. 圓角 Radius**：把元件內 `rounded-[Npx]` 收斂到 `rounded-xs…3xl`。對照 `token-migration-map.md` §2。
-  - 注意 §6b 眼睛確認：`rounded-[14px]`→12（−2px，集中在 LineApiSettingsContent）、`rounded-[15px]`→16（+1px）、`rounded-[2px]`→4（+2px）、`rounded-[32/80px]`→`rounded-full`、Figma 垃圾值（`158.824px`/`3.35544e+07px`）→`rounded-full`。
+- [~] **C. 圓角 Radius**：把元件內 `rounded-[Npx]` 收斂到 token 名。對照 `token-migration-map.md` §2（⚠️ 數字真相以 `globals.css @theme` 為準，見 §2a）。**進行中 — 進度見下方「C 圓角進度（2026-06-19 收工封存）」**。
+
+### 📌 C 圓角進度（2026-06-19 收工封存）
+
+> 真相來源 = `globals.css @theme`。策略（選 B）：**先做「值會變」的，純換名 sweep 留到最後**。逐頁 commit、crmpoc 驗收、push staging 綠燈才下一批。今晚全部已上 staging。
+
+**🔑 三個定案（明天直接照做，勿再議）**
+1. **共用卡片 = 選項 1：全域 16**（`FlexMessageCardPreview` 卡片角 `10→16`，**接受聊天室卡片變圓**）。
+2. **設定頁 target = 16**（`rounded-[14px]→16`，+2px，設計裁示「大面板配大圓角更服貼」；token map 已更正）。
+3. **`token-migration-map.md` 今天修了 3 個錯**（① 階梯 sm/lg 退役 ② 80px 是 8px 進度條非膠囊鈕 ③ 14px→16 非 12）→ **它是施工期暫用對照表，Part C sweep 完成後退場**（見 §2a）。
+
+**✅ 今晚完成（全已 push、staging 綠燈、prod 未碰）**
+- 會員表止血（`4f620f2c`，幽靈橫捲軸消，雙軸完整修留雙軸表格批）+ docs 文件治理（`3457f7ec`）
+- 群發訊息群：B2a 零變化（`447ef790`）+ B2b 15→16 預覽框/80px→full 進度條（`9869af13`）
+- 數據洞察（`393102a3`，含 2xs 首用）
+- AI Chatbot / PMS / 設施 三頁零變化（`e5727c1f`）
+- 第一梯值會變：D 關鍵字回應 15→16+垃圾→full（`56fcaeb3`）、E 帳號管理 6→8（`ae970a96`）、F 聊天室頭像 158.824→full（`bafef36d`）、G ErrorBoundary 10→12（`28b85bcc`，信 diff 未目視）
+
+**⬜ 圓角剩餘待辦（明天，按此順序）**
+1. **C 設定頁 14→16 ×19** —— `LineApiSettingsContent.tsx`，`rounded-[14px]`/`rounded-t-[14px]`/`rounded-tl/tr-[14px]` 全 → `rounded-2xl`(16)，+2px。量最大、視覺變化明顯。驗收 `/settings`。
+2. **A 共用卡片 10→16 ⭐高風險** —— `FlexMessageCardPreview`（在 `CarouselMessageEditor.tsx`）。**要把 Carousel 的 `rounded-[10px]`×14 分兩類：卡片角→16（設計值）vs 其他容器→12（歸位）**，不可一律轉。動到三處渲染：**聊天室 `/members/chat`、訊息詳情抽屜（`/messages` 點列）、訊息預覽（`/flex-editor`）**，三處都要驗。
+3. **B Carousel/FB 其餘 ⚠️風險最高放最後** —— CarouselMessageEditor 其餘 10px→12、`rounded-[6px]`→8；`FBConfigPanel.tsx` `6px`→8。**捲軸 C1 第二組擱置中、動圓角別碰捲軸結構；FB 需 crmpoc 有粉專才驗得到**。
+4. **Part C 全站純換名 sweep** —— 圓角值全定案後，把全站剩餘 on-ladder arbitrary（`8/12/16/20/4/2px` 及 directional）一次按頁換成 token 名，**零變化**。含晶片/modal/內層那些還是 `rounded-[8px]` 的。sweep 完 → `token-migration-map.md` 退場。
+5. **dead code 刪除（獨立 commit）** —— `imports/` 裡的 Figma 死碼（含一堆 8.4px/28px/80px/e+07 垃圾值，改了也驗不到）；參考 §C 計畫排除清單。**單獨一刀，不混圓角值改動**。
 - [ ] **D. 間距 Spacing**：`px/py/p/gap/m*-[Npx]` 收斂到 Tailwind 數字工具類。對照 §3。
   - §3.1 是零變化（4 倍數）可安心批次；§3.2 是需眼睛確認（`gap-[10px]`→8 等 ±1~2px）。
   - §3.3 大版面位移（`ml-[330/280/250/72px]`）**不納入** spacing，另案處理。
