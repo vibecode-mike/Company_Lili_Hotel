@@ -95,7 +95,7 @@ export const containerStyles = {
   page: 'flex flex-col gap-[32px] p-[28px] size-full',
   section: 'flex flex-col gap-[20px]',
   header: 'flex flex-col gap-[8px]',
-  scrollable: 'overflow-auto rounded-[20px]',
+  scrollable: 'overflow-auto rounded-[20px] scrollbar-transparent',
 } as const;
 
 /**
@@ -103,7 +103,7 @@ export const containerStyles = {
  */
 export const tableStyles = {
   container: 'relative rounded-[20px] border border-[#e1ebf9] overflow-hidden',
-  scrollContainer: 'overflow-auto max-h-[600px]',
+  scrollContainer: 'overflow-auto max-h-[600px] scrollbar-transparent',
   header: `${FONTS.notoSans} text-[16px] leading-[1.5] text-[#383838] font-normal`,
   cell: `${FONTS.notoSans} text-[16px] leading-[1.5] text-[#383838]`,
   row: 'hover:bg-gray-50 transition-colors',

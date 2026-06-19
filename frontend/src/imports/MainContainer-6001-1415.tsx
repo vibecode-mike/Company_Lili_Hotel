@@ -1022,7 +1022,7 @@ function Table8Columns3Actions({
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-name="Table/8 Columns+3 Actions">
       {/* 外層容器 - 水平滾動 */}
-      <div className="bg-white rounded-[16px] w-full overflow-x-auto table-scroll">
+      <div className="bg-white rounded-[16px] w-full overflow-x-auto scrollbar-transparent">
         {/* 內層容器 - 最小寬度確保欄位對齊 */}
         <div className="min-w-[1160px]">
           {/* 表頭 - 固定在滾動區域外 */}
@@ -1038,7 +1038,7 @@ function Table8Columns3Actions({
           />
 
           {/* 垂直滾動容器 - 只有資料列滾動 */}
-          <div className="max-h-[600px] overflow-y-auto table-scroll">
+          <div className="max-h-[600px] overflow-y-auto scrollbar-transparent">
             {members.map((member, index) => (
               <MemberRow
                 key={member.id}

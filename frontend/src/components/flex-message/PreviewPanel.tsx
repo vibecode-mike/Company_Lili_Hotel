@@ -61,8 +61,7 @@ export default function PreviewPanel({ bubbles, activeBubbleIndex, onBubbleChang
         {/* Scrollable Preview Container */}
         <div
           ref={scrollContainerRef}
-          className="overflow-x-auto scrollbar-hide snap-x snap-mandatory"
-          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+          className="overflow-x-auto scrollbar-transparent snap-x snap-mandatory"
         >
           <div className="flex gap-6 px-[25px]">
             {bubbles.map((bubble, index) => (

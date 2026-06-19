@@ -1325,162 +1325,164 @@ const PMSDataTable = memo(function PMSDataTable({
 
       {/* Table — only shown when current view has data */}
       {!bothEmpty && !pmsViewEmpty && !faqViewEmpty && (
-      <div className="w-full overflow-x-auto rounded-[16px] ring-1 ring-[#ddd] scrollbar-transparent">
-        <table
-          className="min-w-[1486px] w-full"
-          style={{ borderCollapse: "separate", borderSpacing: 0 }}
-        >
-          <thead className="sticky top-0 z-[3]">
-            <tr className="bg-white [&>th]:border-b [&>th]:border-[#ddd]">
-              {/* 房型名稱 — no sort */}
-              <th className="px-[12px] py-[16px] text-left text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd] w-[220px]">
-                房型名稱
-              </th>
-
-              <Th
-                width={160}
-                sortable
-                field="pricePerNight"
-                {...thProps}
-              >
-                房價
-              </Th>
-
-              <Th
-                width={140}
-                sortable
-                field="maxGuests"
-                {...thProps}
-              >
-                可入住人數
-              </Th>
-
-              <Th
-                width={140}
-                sortable
-                field="remainingRooms"
-                {...thProps}
-              >
-                剩餘間數
-              </Th>
-
-              {/* 房型特色 — FAQ only */}
-              {viewMode === "faq" && (
-                <th className="px-[12px] py-[16px] text-left text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd] w-[160px]">
-                  房型特色
+      <div className="w-full rounded-[16px] ring-1 ring-[#ddd] bg-white overflow-hidden">
+        <div className="overflow-x-auto scrollbar-transparent">
+          <table
+            className="min-w-[1486px] w-full"
+            style={{ borderCollapse: "separate", borderSpacing: 0 }}
+          >
+            <thead className="sticky top-0 z-[3]">
+              <tr className="bg-white [&>th]:border-b [&>th]:border-[#ddd]">
+                {/* 房型名稱 — no sort */}
+                <th className="px-[12px] py-[16px] text-left text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd] w-[220px]">
+                  房型名稱
                 </th>
-              )}
 
-              {viewMode === "faq" && (
-                <Th width={200} sortable field="memberTags" {...thProps}>
-                  會員標籤
+                <Th
+                  width={160}
+                  sortable
+                  field="pricePerNight"
+                  {...thProps}
+                >
+                  房價
                 </Th>
-              )}
 
-              {/* 訂房 URL — FAQ only */}
-              {viewMode === "faq" && (
-                <th className="px-[12px] py-[16px] text-left text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd] w-[160px]">
-                  訂房 URL
-                </th>
-              )}
-
-              {viewMode === "faq" && (
-                <Th width={220} sortable field="lastUpdated" {...thProps}>
-                  最後更新
+                <Th
+                  width={140}
+                  sortable
+                  field="maxGuests"
+                  {...thProps}
+                >
+                  可入住人數
                 </Th>
-              )}
 
-              {/* 發佈狀態 — FAQ only 凍結欄 */}
-              {viewMode === "faq" && (
-                <th
-                  onClick={() => handleSort("published")}
-                  style={{
-                    width: 90,
-                    minWidth: 90,
-                    maxWidth: 90,
-                    position: "sticky",
-                    right: 188,
-                    zIndex: 2,
-                    boxShadow: "inset 1px 0 0 #ddd",
-                  }}
-                  className="px-[12px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap select-none bg-white border-b border-[#ddd] cursor-pointer hover:bg-[#f5f8ff] transition-colors duration-150"
+                <Th
+                  width={140}
+                  sortable
+                  field="remainingRooms"
+                  {...thProps}
                 >
-                  <span className="inline-flex items-center gap-[4px]">
-                    發佈狀態
-                    <SortIcon
-                      field="published"
-                      sortField={sortField}
-                      sortDir={sortDir}
-                      onSort={handleSort}
-                    />
-                  </span>
-                </th>
-              )}
+                  剩餘間數
+                </Th>
 
-              {/* 加入測試環境 — FAQ only 凍結欄 */}
-              {viewMode === "faq" && (
-                <th
-                  style={{
-                    width: 120,
-                    minWidth: 120,
-                    maxWidth: 120,
-                    position: "sticky",
-                    right: 68,
-                    zIndex: 2,
-                  }}
-                  className="px-[8px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] bg-white border-b border-[#ddd]"
-                >
-                  <TestEnvHeaderLabel />
-                </th>
-              )}
+                {/* 房型特色 — FAQ only */}
+                {viewMode === "faq" && (
+                  <th className="px-[12px] py-[16px] text-left text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd] w-[160px]">
+                    房型特色
+                  </th>
+                )}
 
-              {/* 動作 — FAQ only 凍結欄 */}
-              {viewMode === "faq" && (
-                <th
-                  style={{ width: 68, minWidth: 68, maxWidth: 68, position: "sticky", right: 0, zIndex: 2 }}
-                  className="px-[12px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd]"
-                >
-                  動作
-                </th>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {(viewMode === "faq" ? loadingRooms : loadingPmsRooms) ? (
-              <tr>
-                <td
-                  colSpan={viewMode === "pms" ? 4 : 10}
-                  className="px-[12px] py-[40px] text-center text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]"
-                >
-                  載入中…
-                </td>
+                {viewMode === "faq" && (
+                  <Th width={200} sortable field="memberTags" {...thProps}>
+                    會員標籤
+                  </Th>
+                )}
+
+                {/* 訂房 URL — FAQ only */}
+                {viewMode === "faq" && (
+                  <th className="px-[12px] py-[16px] text-left text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd] w-[160px]">
+                    訂房 URL
+                  </th>
+                )}
+
+                {viewMode === "faq" && (
+                  <Th width={220} sortable field="lastUpdated" {...thProps}>
+                    最後更新
+                  </Th>
+                )}
+
+                {/* 發佈狀態 — FAQ only 凍結欄 */}
+                {viewMode === "faq" && (
+                  <th
+                    onClick={() => handleSort("published")}
+                    style={{
+                      width: 90,
+                      minWidth: 90,
+                      maxWidth: 90,
+                      position: "sticky",
+                      right: 188,
+                      zIndex: 2,
+                      boxShadow: "inset 1px 0 0 #ddd",
+                    }}
+                    className="px-[12px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap select-none bg-white border-b border-[#ddd] cursor-pointer hover:bg-[#f5f8ff] transition-colors duration-150"
+                  >
+                    <span className="inline-flex items-center gap-[4px]">
+                      發佈狀態
+                      <SortIcon
+                        field="published"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      />
+                    </span>
+                  </th>
+                )}
+
+                {/* 加入測試環境 — FAQ only 凍結欄 */}
+                {viewMode === "faq" && (
+                  <th
+                    style={{
+                      width: 120,
+                      minWidth: 120,
+                      maxWidth: 120,
+                      position: "sticky",
+                      right: 68,
+                      zIndex: 2,
+                    }}
+                    className="px-[8px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] bg-white border-b border-[#ddd]"
+                  >
+                    <TestEnvHeaderLabel />
+                  </th>
+                )}
+
+                {/* 動作 — FAQ only 凍結欄 */}
+                {viewMode === "faq" && (
+                  <th
+                    style={{ width: 68, minWidth: 68, maxWidth: 68, position: "sticky", right: 0, zIndex: 2 }}
+                    className="px-[12px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd]"
+                  >
+                    動作
+                  </th>
+                )}
               </tr>
-            ) : filtered.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={viewMode === "pms" ? 4 : 10}
-                  className="px-[12px] py-[40px] text-center text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]"
-                >
-                  無符合條件的資料
-                </td>
-              </tr>
-            ) : (
-              filtered.map((record, idx) => (
-                <TableRow
-                  key={record.id}
-                  record={record}
-                  idx={idx}
-                  isLast={idx === filtered.length - 1}
-                  onToggle={handleToggle}
-                  onEdit={handleEdit}
-                  pmsView={viewMode === "pms"}
-                  categoryActive={categoryActive}
-                  categoryName={categoryName}
-                />
-              ))
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {(viewMode === "faq" ? loadingRooms : loadingPmsRooms) ? (
+                <tr>
+                  <td
+                    colSpan={viewMode === "pms" ? 4 : 10}
+                    className="px-[12px] py-[40px] text-center text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]"
+                  >
+                    載入中…
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={viewMode === "pms" ? 4 : 10}
+                    className="px-[12px] py-[40px] text-center text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]"
+                  >
+                    無符合條件的資料
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((record, idx) => (
+                  <TableRow
+                    key={record.id}
+                    record={record}
+                    idx={idx}
+                    isLast={idx === filtered.length - 1}
+                    onToggle={handleToggle}
+                    onEdit={handleEdit}
+                    pmsView={viewMode === "pms"}
+                    categoryActive={categoryActive}
+                    categoryName={categoryName}
+                  />
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
       )}
 
@@ -1734,159 +1736,161 @@ const DataSourcesTable = memo(function DataSourcesTable({
       <p className="text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]">
         共 {sources.length} 筆，引用順序如下
       </p>
-      <div className="w-full overflow-x-auto rounded-[16px] ring-1 ring-[#ddd] scrollbar-transparent">
-        <table
-          className="w-full"
-          style={{
-            minWidth: 700,
-            borderCollapse: "separate",
-            borderSpacing: 0,
-          }}
-        >
-          <thead className="sticky top-0 z-[3]">
-            <tr className="bg-white [&>th]:border-b [&>th]:border-[#ddd]">
-              <th
-                className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]"
-                style={{ width: 220 }}
-              >
-                來源類型
-              </th>
-              <th
-                onClick={() => handleSort("lastUpdated")}
-                className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd] cursor-pointer hover:bg-[#f5f8ff] transition-colors duration-150"
-              >
-                <span className="inline-flex items-center gap-[4px]">
-                  最後更新
-                  <SortIcon field="lastUpdated" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                </span>
-              </th>
-              <th
-                onClick={() => handleSort("lastPublished")}
-                className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd] cursor-pointer hover:bg-[#f5f8ff] transition-colors duration-150"
-              >
-                <span className="inline-flex items-center gap-[4px]">
-                  最後發佈
-                  <SortIcon field="lastPublished" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                </span>
-              </th>
-              {/* 凍結欄 header：發佈狀態 */}
-              <th
-                style={{
-                  width: 90,
-                  minWidth: 90,
-                  maxWidth: 90,
-                  position: "sticky",
-                  right: 120,
-                  zIndex: 2,
-                  boxShadow: "inset 1px 0 0 #ddd",
-                }}
-                className="px-[12px] py-[16px] text-center font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] bg-white border-b border-[#ddd]"
-              >
-                發佈狀態
-              </th>
-              {/* 凍結欄 header：加入測試環境（左線已在發佈狀態欄，此處不重複） */}
-              <th
-                style={{
-                  width: 120,
-                  position: "sticky",
-                  right: 0,
-                  zIndex: 2,
-                }}
-                className="px-[8px] py-[16px] text-center font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] bg-white border-b border-[#ddd]"
-              >
-                <TestEnvHeaderLabel />
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((row, idx) => (
-              <DataSourceTableRow
-                key={row.type}
-                row={row}
-                isLast={idx === sorted.length - 1}
-                categoryActive={categoryActive}
-                categoryName={categoryName}
-                onToggle={(type, v) => {
-                  if (type === "PMS") {
-                    setSources((prev) =>
-                      prev.map((s) =>
-                        s.type === "PMS" ? { ...s, enabled: v } : s,
-                      ),
-                    );
-                    const putUrl = selectedLineChannelId
-                      ? `/api/v1/chatbot/pms-status?line_channel_id=${encodeURIComponent(selectedLineChannelId)}`
-                      : "/api/v1/chatbot/pms-status";
-                    apiPut(putUrl, { enabled: v }).catch(() => {
+      <div className="w-full rounded-[16px] ring-1 ring-[#ddd] bg-white overflow-hidden">
+        <div className="overflow-x-auto scrollbar-transparent">
+          <table
+            className="w-full"
+            style={{
+              minWidth: 700,
+              borderCollapse: "separate",
+              borderSpacing: 0,
+            }}
+          >
+            <thead className="sticky top-0 z-[3]">
+              <tr className="bg-white [&>th]:border-b [&>th]:border-[#ddd]">
+                <th
+                  className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]"
+                  style={{ width: 220 }}
+                >
+                  來源類型
+                </th>
+                <th
+                  onClick={() => handleSort("lastUpdated")}
+                  className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd] cursor-pointer hover:bg-[#f5f8ff] transition-colors duration-150"
+                >
+                  <span className="inline-flex items-center gap-[4px]">
+                    最後更新
+                    <SortIcon field="lastUpdated" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                  </span>
+                </th>
+                <th
+                  onClick={() => handleSort("lastPublished")}
+                  className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd] cursor-pointer hover:bg-[#f5f8ff] transition-colors duration-150"
+                >
+                  <span className="inline-flex items-center gap-[4px]">
+                    最後發佈
+                    <SortIcon field="lastPublished" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                  </span>
+                </th>
+                {/* 凍結欄 header：發佈狀態 */}
+                <th
+                  style={{
+                    width: 90,
+                    minWidth: 90,
+                    maxWidth: 90,
+                    position: "sticky",
+                    right: 120,
+                    zIndex: 2,
+                    boxShadow: "inset 1px 0 0 #ddd",
+                  }}
+                  className="px-[12px] py-[16px] text-center font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] bg-white border-b border-[#ddd]"
+                >
+                  發佈狀態
+                </th>
+                {/* 凍結欄 header：加入測試環境（左線已在發佈狀態欄，此處不重複） */}
+                <th
+                  style={{
+                    width: 120,
+                    position: "sticky",
+                    right: 0,
+                    zIndex: 2,
+                  }}
+                  className="px-[8px] py-[16px] text-center font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] bg-white border-b border-[#ddd]"
+                >
+                  <TestEnvHeaderLabel />
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((row, idx) => (
+                <DataSourceTableRow
+                  key={row.type}
+                  row={row}
+                  isLast={idx === sorted.length - 1}
+                  categoryActive={categoryActive}
+                  categoryName={categoryName}
+                  onToggle={(type, v) => {
+                    if (type === "PMS") {
                       setSources((prev) =>
                         prev.map((s) =>
-                          s.type === "PMS" ? { ...s, enabled: !v } : s,
+                          s.type === "PMS" ? { ...s, enabled: v } : s,
                         ),
                       );
-                    });
-                  } else {
-                    setSources((prev) =>
-                      prev.map((s) =>
-                        s.type === type ? { ...s, enabled: v } : s,
+                      const putUrl = selectedLineChannelId
+                        ? `/api/v1/chatbot/pms-status?line_channel_id=${encodeURIComponent(selectedLineChannelId)}`
+                        : "/api/v1/chatbot/pms-status";
+                      apiPut(putUrl, { enabled: v }).catch(() => {
+                        setSources((prev) =>
+                          prev.map((s) =>
+                            s.type === "PMS" ? { ...s, enabled: !v } : s,
+                          ),
+                        );
+                      });
+                    } else {
+                      setSources((prev) =>
+                        prev.map((s) =>
+                          s.type === type ? { ...s, enabled: v } : s,
+                        ),
+                      );
+                    }
+                    showToast(
+                      v ? (
+                        <>
+                          {type} 已進入測試，請先試聊看看以確保回覆品質。{" "}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.dispatchEvent(new CustomEvent("open-chatfab"));
+                            }}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#DBEDFF",
+                              cursor: "pointer",
+                              padding: 0,
+                              fontFamily: "'Noto Sans TC', sans-serif",
+                              fontSize: 16,
+                              lineHeight: 1.5,
+                              textDecoration: "underline",
+                            }}
+                          >
+                            測試
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          已關閉 {type} 的測試模式。{" "}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.dispatchEvent(new CustomEvent("open-chatfab"));
+                            }}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#DBEDFF",
+                              cursor: "pointer",
+                              padding: 0,
+                              fontFamily: "'Noto Sans TC', sans-serif",
+                              fontSize: 16,
+                              lineHeight: 1.5,
+                              textDecoration: "underline",
+                            }}
+                          >
+                            測試
+                          </button>
+                        </>
                       ),
+                      "success",
                     );
-                  }
-                  showToast(
-                    v ? (
-                      <>
-                        {type} 已進入測試，請先試聊看看以確保回覆品質。{" "}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.dispatchEvent(new CustomEvent("open-chatfab"));
-                          }}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            color: "#DBEDFF",
-                            cursor: "pointer",
-                            padding: 0,
-                            fontFamily: "'Noto Sans TC', sans-serif",
-                            fontSize: 16,
-                            lineHeight: 1.5,
-                            textDecoration: "underline",
-                          }}
-                        >
-                          測試
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        已關閉 {type} 的測試模式。{" "}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.dispatchEvent(new CustomEvent("open-chatfab"));
-                          }}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            color: "#DBEDFF",
-                            cursor: "pointer",
-                            padding: 0,
-                            fontFamily: "'Noto Sans TC', sans-serif",
-                            fontSize: 16,
-                            lineHeight: 1.5,
-                            textDecoration: "underline",
-                          }}
-                        >
-                          測試
-                        </button>
-                      </>
-                    ),
-                    "success",
-                  );
-                }}
-              />
-            ))}
-          </tbody>
-        </table>
+                  }}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -1970,7 +1974,7 @@ export default function PMSIntegration({
 
       {/* Main content */}
       <main
-        className={`flex-1 bg-slate-50 transition-all duration-300 overflow-x-hidden overflow-y-auto ${
+        className={`flex-1 bg-slate-50 transition-all duration-300 overflow-x-hidden overflow-y-auto scrollbar-transparent ${
           sidebarOpen ? "ml-[330px] lg:ml-[280px] md:ml-[250px]" : "ml-[72px]"
         }`}
       >

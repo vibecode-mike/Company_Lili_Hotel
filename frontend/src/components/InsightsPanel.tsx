@@ -1574,7 +1574,7 @@ export default function InsightsPanel({
       />
 
       <main
-        className={`flex-1 transition-all duration-300 overflow-x-hidden overflow-y-auto ${sidebarOpen ? "ml-[330px] lg:ml-[280px] md:ml-[250px]" : "ml-[72px]"}`}
+        className={`flex-1 transition-all duration-300 overflow-x-hidden overflow-y-auto scrollbar-transparent ${sidebarOpen ? "ml-[330px] lg:ml-[280px] md:ml-[250px]" : "ml-[72px]"}`}
       >
         <PageHeaderWithBreadcrumb
           breadcrumbItems={[{ label: "數據洞察", active: true }]}

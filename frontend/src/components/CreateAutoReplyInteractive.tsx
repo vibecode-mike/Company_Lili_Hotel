@@ -642,7 +642,7 @@ export default function CreateAutoReplyInteractive({
         onToggleSidebar={setSidebarOpen}
       />
 
-      <main className={`flex-1 overflow-auto bg-slate-50 transition-all duration-300 ${sidebarOpen ? 'ml-[330px] lg:ml-[280px] md:ml-[250px]' : 'ml-[72px]'}`}>
+      <main className={`flex-1 overflow-auto scrollbar-transparent bg-slate-50 transition-all duration-300 ${sidebarOpen ? 'ml-[330px] lg:ml-[280px] md:ml-[250px]' : 'ml-[72px]'}`}>
         <div className="bg-slate-50 content-stretch flex flex-col items-start relative size-full">
           {isHydrating && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70">

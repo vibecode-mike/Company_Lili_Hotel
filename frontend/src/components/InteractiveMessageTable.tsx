@@ -362,33 +362,36 @@ export default function InteractiveMessageTable({ messages, onEdit, onViewDetail
 
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-name="MessageTable">
-      {/* 外層容器 - 水平滾動 */}
-      <div className="bg-white rounded-[16px] w-full overflow-x-auto table-scroll">
-        {/* 內層容器 - 最小寬度確保欄位對齊 */}
-        <div className="min-w-[1060px]">
-          {/* 表頭 - 固定在滾動區域外 */}
-          <TableHeader
-            sortConfig={sortConfig}
-            onSortChange={handleSort}
-            statusFilter={statusFilter}
-            channelHeaderSlot={channelHeaderSlot}
-          />
+      {/* 圓角裁切層 - 讓水平捲軸收在圓角內、不凸出 */}
+      <div className="bg-white rounded-[16px] w-full overflow-hidden">
+        {/* 外層容器 - 水平滾動 */}
+        <div className="w-full overflow-x-auto scrollbar-transparent">
+          {/* 內層容器 - 最小寬度確保欄位對齊 */}
+          <div className="min-w-[1060px]">
+            {/* 表頭 - 固定在滾動區域外 */}
+            <TableHeader
+              sortConfig={sortConfig}
+              onSortChange={handleSort}
+              statusFilter={statusFilter}
+              channelHeaderSlot={channelHeaderSlot}
+            />
 
-          {/* 垂直滾動容器 - 只有資料列滾動 */}
-          <div className="max-h-[600px] overflow-y-auto table-scroll">
-            {sortedMessages.length === 0 ? (
-              <EmptyStateRow />
-            ) : (
-              sortedMessages.map((message, index) => (
-                <MessageRow
-                  key={message.id}
-                  message={message}
-                  isLast={index === sortedMessages.length - 1}
-                  onEdit={onEdit}
-                  onViewDetails={onViewDetails}
-                />
-              ))
-            )}
+            {/* 垂直滾動容器 - 只有資料列滾動 */}
+            <div className="max-h-[600px] overflow-y-auto scrollbar-transparent">
+              {sortedMessages.length === 0 ? (
+                <EmptyStateRow />
+              ) : (
+                sortedMessages.map((message, index) => (
+                  <MessageRow
+                    key={message.id}
+                    message={message}
+                    isLast={index === sortedMessages.length - 1}
+                    onEdit={onEdit}
+                    onViewDetails={onViewDetails}
+                  />
+                ))
+              )}
+            </div>
           </div>
         </div>
       </div>

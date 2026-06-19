@@ -479,7 +479,7 @@ export default function AIChatbotOverview({
       />
 
       <main
-        className={`flex-1 bg-slate-50 transition-all duration-300 overflow-x-hidden overflow-y-auto min-h-screen ${marginLeft}`}
+        className={`flex-1 bg-slate-50 transition-all duration-300 overflow-x-hidden overflow-y-auto scrollbar-transparent min-h-screen ${marginLeft}`}
       >
         <PageHeaderWithBreadcrumb
           breadcrumbItems={[{ label: "AI Chatbot", active: true }]}
@@ -627,119 +627,121 @@ export default function AIChatbotOverview({
                 共 {categories.length} 類，已發佈 {publishedCount} 類
               </p>
 
-              <div className="w-full overflow-x-auto rounded-[16px] ring-1 ring-[#ddd] scrollbar-transparent">
-                <table
-                  className="w-full border-separate"
-                  style={{ minWidth: 700, borderSpacing: 0 }}
-                >
-                  <thead className="sticky top-0 z-[3]">
-                    <tr className="bg-white [&>th]:border-b [&>th]:border-[#ddd]">
-                      <th className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]">
-                        分類
-                      </th>
-                      <th
-                        className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd] cursor-pointer select-none hover:bg-[#f5f8ff] transition-colors duration-150"
-                      >
-                        <span className="inline-flex items-center gap-[4px]">
-                        最後更新
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 16 16"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="shrink-0 cursor-pointer select-none"
+              <div className="w-full rounded-[16px] ring-1 ring-[#ddd] bg-white overflow-hidden">
+                <div className="overflow-x-auto scrollbar-transparent">
+                  <table
+                    className="w-full border-separate"
+                    style={{ minWidth: 700, borderSpacing: 0 }}
+                  >
+                    <thead className="sticky top-0 z-[3]">
+                      <tr className="bg-white [&>th]:border-b [&>th]:border-[#ddd]">
+                        <th className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]">
+                          分類
+                        </th>
+                        <th
+                          className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd] cursor-pointer select-none hover:bg-[#f5f8ff] transition-colors duration-150"
                         >
-                          <g transform="translate(1.34, 2.67)">
-                            <path
-                              d="M2.85381 0.195333C2.97883 0.0703528 3.14837 0.000142415 3.32514 0.000142415C3.50192 0.000142415 3.67146 0.0703528 3.79647 0.195333L6.46314 2.862C6.58458 2.98774 6.65178 3.15614 6.65026 3.33093C6.64874 3.50573 6.57863 3.67294 6.45502 3.79655C6.33142 3.92015 6.16421 3.99026 5.98941 3.99178C5.81461 3.9933 5.64621 3.92611 5.52047 3.80467L3.99181 2.276V10C3.99181 10.1768 3.92157 10.3464 3.79655 10.4714C3.67152 10.5964 3.50195 10.6667 3.32514 10.6667C3.14833 10.6667 2.97876 10.5964 2.85374 10.4714C2.72871 10.3464 2.65847 10.1768 2.65847 10V2.276L1.12981 3.80467C1.00407 3.92611 0.835672 3.9933 0.660874 3.99178C0.486076 3.99026 0.318868 3.92015 0.195262 3.79655C0.0716568 3.67294 0.00154415 3.50573 2.52018e-05 3.33093C-0.00149374 3.15614 0.0657025 2.98774 0.187141 2.862L2.85381 0.195333Z"
-                              fill={sortDir === "asc" ? "#0f6beb" : "#9CA3AF"}
-                              onClick={(e) => { e.stopPropagation(); setSortDir((d) => d === "asc" ? "none" : "asc"); }}
-                              style={{ cursor: "pointer" }}
-                            />
-                            <path
-                              d="M9.32514 8.39067V0.666667C9.32514 0.489856 9.39538 0.320287 9.5204 0.195262C9.64543 0.070238 9.815 0 9.99181 0C10.1686 0 10.3382 0.070238 10.4632 0.195262C10.5882 0.320287 10.6585 0.489856 10.6585 0.666667V8.39067L12.1871 6.862C12.3129 6.74056 12.4813 6.67337 12.6561 6.67488C12.8309 6.6764 12.9981 6.74652 13.1217 6.87012C13.2453 6.99373 13.3154 7.16094 13.3169 7.33573C13.3184 7.51053 13.2512 7.67893 13.1298 7.80467L10.4631 10.4713C10.3381 10.5963 10.1686 10.6665 9.99181 10.6665C9.81503 10.6665 9.64549 10.5963 9.52047 10.4713L6.85381 7.80467C6.73237 7.67893 6.66517 7.51053 6.66669 7.33573C6.66821 7.16094 6.73832 6.99373 6.86193 6.87012C6.98553 6.74652 7.15274 6.6764 7.32754 6.67488C7.50234 6.67337 7.67074 6.74056 7.79647 6.862L9.32514 8.39067Z"
-                              fill={sortDir === "desc" ? "#0f6beb" : "#9CA3AF"}
-                              onClick={(e) => { e.stopPropagation(); setSortDir((d) => d === "desc" ? "none" : "desc"); }}
-                              style={{ cursor: "pointer" }}
-                            />
-                          </g>
-                        </svg>
-                        </span>
-                      </th>
-                      {/* 凍結欄 header：發佈狀態 */}
-                      <th
-                        style={{
-                          width: 90,
-                          minWidth: 90,
-                          maxWidth: 90,
-                          position: "sticky",
-                          right: 188,
-                          zIndex: 2,
-                          boxShadow: "inset 1px 0 0 #ddd",
-                        }}
-                        className="px-[12px] py-[16px] text-center font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd]"
-                      >
-                        發佈狀態
-                      </th>
-                      {/* 凍結欄 header：加入測試環境 */}
-                      <th
-                        style={{
-                          width: 120,
-                          position: "sticky",
-                          right: 68,
-                          zIndex: 2,
-                        }}
-                        className="px-[8px] py-[16px] text-center font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] bg-white border-b border-[#ddd]"
-                      >
-                        <TestEnvHeaderLabel />
-                      </th>
-                      {/* 凍結欄 header：動作 */}
-                      <th
-                        style={{
-                          width: 68,
-                          position: "sticky",
-                          right: 0,
-                          zIndex: 2,
-                        }}
-                        className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]"
-                      >
-                        動作
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loading ? (
-                      <tr>
-                        <td
-                          colSpan={4}
-                          className="bg-white px-[12px] py-[40px] text-center text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]"
+                          <span className="inline-flex items-center gap-[4px]">
+                          最後更新
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 16 16"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="shrink-0 cursor-pointer select-none"
+                          >
+                            <g transform="translate(1.34, 2.67)">
+                              <path
+                                d="M2.85381 0.195333C2.97883 0.0703528 3.14837 0.000142415 3.32514 0.000142415C3.50192 0.000142415 3.67146 0.0703528 3.79647 0.195333L6.46314 2.862C6.58458 2.98774 6.65178 3.15614 6.65026 3.33093C6.64874 3.50573 6.57863 3.67294 6.45502 3.79655C6.33142 3.92015 6.16421 3.99026 5.98941 3.99178C5.81461 3.9933 5.64621 3.92611 5.52047 3.80467L3.99181 2.276V10C3.99181 10.1768 3.92157 10.3464 3.79655 10.4714C3.67152 10.5964 3.50195 10.6667 3.32514 10.6667C3.14833 10.6667 2.97876 10.5964 2.85374 10.4714C2.72871 10.3464 2.65847 10.1768 2.65847 10V2.276L1.12981 3.80467C1.00407 3.92611 0.835672 3.9933 0.660874 3.99178C0.486076 3.99026 0.318868 3.92015 0.195262 3.79655C0.0716568 3.67294 0.00154415 3.50573 2.52018e-05 3.33093C-0.00149374 3.15614 0.0657025 2.98774 0.187141 2.862L2.85381 0.195333Z"
+                                fill={sortDir === "asc" ? "#0f6beb" : "#9CA3AF"}
+                                onClick={(e) => { e.stopPropagation(); setSortDir((d) => d === "asc" ? "none" : "asc"); }}
+                                style={{ cursor: "pointer" }}
+                              />
+                              <path
+                                d="M9.32514 8.39067V0.666667C9.32514 0.489856 9.39538 0.320287 9.5204 0.195262C9.64543 0.070238 9.815 0 9.99181 0C10.1686 0 10.3382 0.070238 10.4632 0.195262C10.5882 0.320287 10.6585 0.489856 10.6585 0.666667V8.39067L12.1871 6.862C12.3129 6.74056 12.4813 6.67337 12.6561 6.67488C12.8309 6.6764 12.9981 6.74652 13.1217 6.87012C13.2453 6.99373 13.3154 7.16094 13.3169 7.33573C13.3184 7.51053 13.2512 7.67893 13.1298 7.80467L10.4631 10.4713C10.3381 10.5963 10.1686 10.6665 9.99181 10.6665C9.81503 10.6665 9.64549 10.5963 9.52047 10.4713L6.85381 7.80467C6.73237 7.67893 6.66517 7.51053 6.66669 7.33573C6.66821 7.16094 6.73832 6.99373 6.86193 6.87012C6.98553 6.74652 7.15274 6.6764 7.32754 6.67488C7.50234 6.67337 7.67074 6.74056 7.79647 6.862L9.32514 8.39067Z"
+                                fill={sortDir === "desc" ? "#0f6beb" : "#9CA3AF"}
+                                onClick={(e) => { e.stopPropagation(); setSortDir((d) => d === "desc" ? "none" : "desc"); }}
+                                style={{ cursor: "pointer" }}
+                              />
+                            </g>
+                          </svg>
+                          </span>
+                        </th>
+                        {/* 凍結欄 header：發佈狀態 */}
+                        <th
+                          style={{
+                            width: 90,
+                            minWidth: 90,
+                            maxWidth: 90,
+                            position: "sticky",
+                            right: 188,
+                            zIndex: 2,
+                            boxShadow: "inset 1px 0 0 #ddd",
+                          }}
+                          className="px-[12px] py-[16px] text-center font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd]"
                         >
-                          載入中…
-                        </td>
+                          發佈狀態
+                        </th>
+                        {/* 凍結欄 header：加入測試環境 */}
+                        <th
+                          style={{
+                            width: 120,
+                            position: "sticky",
+                            right: 68,
+                            zIndex: 2,
+                          }}
+                          className="px-[8px] py-[16px] text-center font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] bg-white border-b border-[#ddd]"
+                        >
+                          <TestEnvHeaderLabel />
+                        </th>
+                        {/* 凍結欄 header：動作 */}
+                        <th
+                          style={{
+                            width: 68,
+                            position: "sticky",
+                            right: 0,
+                            zIndex: 2,
+                          }}
+                          className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]"
+                        >
+                          動作
+                        </th>
                       </tr>
-                    ) : filtered.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={4}
-                          className="bg-white px-[12px] py-[40px] text-center text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]"
-                        >
-                          無符合條件的資料
-                        </td>
-                      </tr>
-                    ) : (
-                      filtered.map((record, idx) => (
-                        <TableRow
-                          key={record.id}
-                          record={record}
-                          isLast={idx === filtered.length - 1}
-                          onToggle={handleToggle}
-                          onEdit={handleEdit}
-                        />
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {loading ? (
+                        <tr>
+                          <td
+                            colSpan={4}
+                            className="bg-white px-[12px] py-[40px] text-center text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]"
+                          >
+                            載入中…
+                          </td>
+                        </tr>
+                      ) : filtered.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={4}
+                            className="bg-white px-[12px] py-[40px] text-center text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]"
+                          >
+                            無符合條件的資料
+                          </td>
+                        </tr>
+                      ) : (
+                        filtered.map((record, idx) => (
+                          <TableRow
+                            key={record.id}
+                            record={record}
+                            isLast={idx === filtered.length - 1}
+                            onToggle={handleToggle}
+                            onEdit={handleEdit}
+                          />
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
         </div>

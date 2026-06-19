@@ -437,25 +437,28 @@ export default function AutoReplyTableStyled({ data, onRowClick, onToggleStatus,
 
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-name="AutoReplyTable">
-      {/* 外層容器 - 水平滾動 */}
-      <div className="bg-white rounded-[16px] w-full overflow-x-auto table-scroll">
-        {/* 內層容器 - 最小寬度確保欄位對齊 */}
-        <div className="min-w-[1160px]">
-          {/* 表頭 - 固定在滾動區域外 */}
-          <TableHeader sortConfig={sortConfig} onSortChange={handleSort} />
+      {/* 圓角裁切層 - 讓水平捲軸收在圓角內、不凸出 */}
+      <div className="bg-white rounded-[16px] w-full overflow-hidden">
+        {/* 外層容器 - 水平滾動 */}
+        <div className="w-full overflow-x-auto scrollbar-transparent">
+          {/* 內層容器 - 最小寬度確保欄位對齊 */}
+          <div className="min-w-[1160px]">
+            {/* 表頭 - 固定在滾動區域外 */}
+            <TableHeader sortConfig={sortConfig} onSortChange={handleSort} />
 
-          {/* 垂直滾動容器 - 只有資料列滾動 */}
-          <div className="max-h-[600px] overflow-y-auto table-scroll">
-            {sortedData.map((row, index) => (
-              <AutoReplyRow
-                key={row.id}
-                row={row}
-                isLast={index === sortedData.length - 1}
-                onRowClick={handleRowClick}
-                onToggleStatus={handleToggleStatus}
-                onDuplicateKeywordClick={onDuplicateKeywordClick}
-              />
-            ))}
+            {/* 垂直滾動容器 - 只有資料列滾動 */}
+            <div className="max-h-[600px] overflow-y-auto scrollbar-transparent">
+              {sortedData.map((row, index) => (
+                <AutoReplyRow
+                  key={row.id}
+                  row={row}
+                  isLast={index === sortedData.length - 1}
+                  onRowClick={handleRowClick}
+                  onToggleStatus={handleToggleStatus}
+                  onDuplicateKeywordClick={onDuplicateKeywordClick}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>

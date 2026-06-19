@@ -762,7 +762,7 @@ export default function MessageList({
 
       {/* Main Content */}
       <main
-        className={`flex-1 bg-slate-50 transition-all duration-300 overflow-x-hidden overflow-y-auto ${sidebarOpen ? "ml-[330px] lg:ml-[280px] md:ml-[250px]" : "ml-[72px]"}`}
+        className={`flex-1 bg-slate-50 transition-all duration-300 overflow-x-hidden overflow-y-auto scrollbar-transparent ${sidebarOpen ? "ml-[330px] lg:ml-[280px] md:ml-[250px]" : "ml-[72px]"}`}
       >
         {currentPage === "messages" ? (
           <div

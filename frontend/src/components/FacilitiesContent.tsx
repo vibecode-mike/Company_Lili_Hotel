@@ -930,111 +930,113 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
 
       {/* Table — only shown when data exists */}
       {!isEmpty && (
-      <div className="w-full overflow-x-auto rounded-[16px] ring-1 ring-[#ddd] scrollbar-transparent">
-        <table
-          className="min-w-[1200px] w-full"
-          style={{ borderCollapse: "separate", borderSpacing: 0 }}
-        >
-          <thead className="sticky top-0 z-[3]">
-            <tr className="bg-white [&>th]:border-b [&>th]:border-[#ddd]">
-              <th className="px-[12px] py-[16px] text-left text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd] w-[220px]">
-                設施名稱
-              </th>
+      <div className="w-full rounded-[16px] ring-1 ring-[#ddd] bg-white overflow-hidden">
+        <div className="overflow-x-auto scrollbar-transparent">
+          <table
+            className="min-w-[1200px] w-full"
+            style={{ borderCollapse: "separate", borderSpacing: 0 }}
+          >
+            <thead className="sticky top-0 z-[3]">
+              <tr className="bg-white [&>th]:border-b [&>th]:border-[#ddd]">
+                <th className="px-[12px] py-[16px] text-left text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd] w-[220px]">
+                  設施名稱
+                </th>
 
-              <Th width={160} sortable field="hours" {...thProps}>
-                開放時間
-              </Th>
+                <Th width={160} sortable field="hours" {...thProps}>
+                  開放時間
+                </Th>
 
-              <Th width={180} sortable field="fee" {...thProps}>
-                費用
-              </Th>
+                <Th width={180} sortable field="fee" {...thProps}>
+                  費用
+                </Th>
 
-              <th className="px-[12px] py-[16px] text-left text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd] w-[240px]">
-                簡介
-              </th>
+                <th className="px-[12px] py-[16px] text-left text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd] w-[240px]">
+                  簡介
+                </th>
 
-              <Th width={200} sortable field="memberTags" {...thProps}>
-                會員標籤
-              </Th>
+                <Th width={200} sortable field="memberTags" {...thProps}>
+                  會員標籤
+                </Th>
 
-              <Th width={134} sortable field="lastUpdated" {...thProps}>
-                最後更新
-              </Th>
+                <Th width={134} sortable field="lastUpdated" {...thProps}>
+                  最後更新
+                </Th>
 
-              {/* 發佈狀態 — 凍結欄 */}
-              <th
-                onClick={() => handleSort("published")}
-                style={{
-                  width: 90,
-                  minWidth: 90,
-                  maxWidth: 90,
-                  position: "sticky",
-                  right: 188,
-                  zIndex: 2,
-                  boxShadow: "inset 1px 0 0 #ddd",
-                }}
-                className="px-[12px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap select-none bg-white border-b border-[#ddd] cursor-pointer hover:bg-[#f5f8ff] transition-colors duration-150"
-              >
-                <span className="inline-flex items-center gap-[4px]">
-                  發佈狀態
-                  <SortIcon
-                    field="published"
-                    sortField={sortField}
-                    sortDir={sortDir}
-                    onSort={handleSort}
-                  />
-                </span>
-              </th>
-
-              {/* 加入測試環境 — 凍結欄 */}
-              <th
-                style={{
-                  width: 120,
-                  minWidth: 120,
-                  maxWidth: 120,
-                  position: "sticky",
-                  right: 68,
-                  zIndex: 2,
-                }}
-                className="px-[8px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] bg-white border-b border-[#ddd]"
-              >
-                <TestEnvHeaderLabel />
-              </th>
-
-              {/* 動作 — 凍結欄 */}
-              <th
-                style={{ width: 68, minWidth: 68, maxWidth: 68, position: "sticky", right: 0, zIndex: 2 }}
-                className="px-[12px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd]"
-              >
-                動作
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={8}
-                  className="px-[12px] py-[40px] text-center text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]"
+                {/* 發佈狀態 — 凍結欄 */}
+                <th
+                  onClick={() => handleSort("published")}
+                  style={{
+                    width: 90,
+                    minWidth: 90,
+                    maxWidth: 90,
+                    position: "sticky",
+                    right: 188,
+                    zIndex: 2,
+                    boxShadow: "inset 1px 0 0 #ddd",
+                  }}
+                  className="px-[12px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap select-none bg-white border-b border-[#ddd] cursor-pointer hover:bg-[#f5f8ff] transition-colors duration-150"
                 >
-                  無符合條件的資料
-                </td>
+                  <span className="inline-flex items-center gap-[4px]">
+                    發佈狀態
+                    <SortIcon
+                      field="published"
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                    />
+                  </span>
+                </th>
+
+                {/* 加入測試環境 — 凍結欄 */}
+                <th
+                  style={{
+                    width: 120,
+                    minWidth: 120,
+                    maxWidth: 120,
+                    position: "sticky",
+                    right: 68,
+                    zIndex: 2,
+                  }}
+                  className="px-[8px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] bg-white border-b border-[#ddd]"
+                >
+                  <TestEnvHeaderLabel />
+                </th>
+
+                {/* 動作 — 凍結欄 */}
+                <th
+                  style={{ width: 68, minWidth: 68, maxWidth: 68, position: "sticky", right: 0, zIndex: 2 }}
+                  className="px-[12px] py-[16px] text-center text-[14px] font-normal text-[#383838] font-['Noto_Sans_TC',sans-serif] leading-[1.5] whitespace-nowrap bg-white border-b border-[#ddd]"
+                >
+                  動作
+                </th>
               </tr>
-            ) : (
-              filtered.map((record, idx) => (
-                <TableRow
-                  key={record.id}
-                  record={record}
-                  isLast={idx === filtered.length - 1}
-                  onToggle={handleToggle}
-                  onEdit={handleEdit}
-                  categoryActive={categoryActive}
-                  categoryName={categoryName}
-                />
-              ))
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className="px-[12px] py-[40px] text-center text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]"
+                  >
+                    無符合條件的資料
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((record, idx) => (
+                  <TableRow
+                    key={record.id}
+                    record={record}
+                    isLast={idx === filtered.length - 1}
+                    onToggle={handleToggle}
+                    onEdit={handleEdit}
+                    categoryActive={categoryActive}
+                    categoryName={categoryName}
+                  />
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
       )}
 
@@ -1327,134 +1329,136 @@ const DataSourcesTable = memo(function DataSourcesTable({
       <p className="text-[14px] text-[#6e6e6e] font-['Noto_Sans_TC',sans-serif]">
         共 {rows.length} 筆，引用順序如下
       </p>
-      <div className="w-full overflow-x-auto rounded-[16px] ring-1 ring-[#ddd] scrollbar-transparent">
-        <table
-          className="w-full"
-          style={{
-            minWidth: 700,
-            borderCollapse: "separate",
-            borderSpacing: 0,
-          }}
-        >
-          <thead className="sticky top-0 z-[3]">
-            <tr className="bg-white [&>th]:border-b [&>th]:border-[#ddd]">
-              <th
-                className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]"
-                style={{ width: 220 }}
-              >
-                來源類型
-              </th>
-              <th
-                onClick={() => handleSort("status")}
-                className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd] cursor-pointer hover:bg-[#f5f8ff] transition-colors duration-150"
-              >
-                <span className="inline-flex items-center gap-[4px]">
-                  狀態
-                  <SortIcon field="status" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                </span>
-              </th>
-              <th
-                onClick={() => handleSort("lastUpdated")}
-                className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd] cursor-pointer hover:bg-[#f5f8ff] transition-colors duration-150"
-              >
-                <span className="inline-flex items-center gap-[4px]">
-                  最後更新
-                  <SortIcon field="lastUpdated" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                </span>
-              </th>
-              <th
-                onClick={() => handleSort("lastPublished")}
-                className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd] cursor-pointer hover:bg-[#f5f8ff] transition-colors duration-150"
-              >
-                <span className="inline-flex items-center gap-[4px]">
-                  最後發佈
-                  <SortIcon field="lastPublished" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                </span>
-              </th>
-              {/* 凍結欄 header：加入測試環境 */}
-              <th
-                style={{
-                  width: 120,
-                  position: "sticky",
-                  right: 0,
-                  zIndex: 2,
-                  boxShadow: "inset 1px 0 0 #ddd",
-                }}
-                className="px-[8px] py-[16px] text-center font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] bg-white border-b border-[#ddd]"
-              >
-                <TestEnvHeaderLabel />
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((row, idx) => (
-              <DataSourceTableRow
-                key={row.type}
-                row={row}
-                isLast={idx === sorted.length - 1}
-                onToggle={(type, v) => {
-                  setSources((prev) =>
-                    prev.map((s) =>
-                      s.type === type ? { ...s, enabled: v } : s,
-                    ),
-                  );
-                  showToast(
-                    v ? (
-                      <>
-                        {type} 已進入測試，請先試聊看看以確保回覆品質。{" "}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.dispatchEvent(new CustomEvent("open-chatfab"));
-                          }}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            color: "#DBEDFF",
-                            cursor: "pointer",
-                            padding: 0,
-                            fontFamily: "'Noto Sans TC', sans-serif",
-                            fontSize: 16,
-                            lineHeight: 1.5,
-                            textDecoration: "underline",
-                          }}
-                        >
-                          測試
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        已關閉 {type} 的測試模式。{" "}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.dispatchEvent(new CustomEvent("open-chatfab"));
-                          }}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            color: "#DBEDFF",
-                            cursor: "pointer",
-                            padding: 0,
-                            fontFamily: "'Noto Sans TC', sans-serif",
-                            fontSize: 16,
-                            lineHeight: 1.5,
-                            textDecoration: "underline",
-                          }}
-                        >
-                          測試
-                        </button>
-                      </>
-                    ),
-                    "success",
-                  );
-                }}
-              />
-            ))}
-          </tbody>
-        </table>
+      <div className="w-full rounded-[16px] ring-1 ring-[#ddd] bg-white overflow-hidden">
+        <div className="overflow-x-auto scrollbar-transparent">
+          <table
+            className="w-full"
+            style={{
+              minWidth: 700,
+              borderCollapse: "separate",
+              borderSpacing: 0,
+            }}
+          >
+            <thead className="sticky top-0 z-[3]">
+              <tr className="bg-white [&>th]:border-b [&>th]:border-[#ddd]">
+                <th
+                  className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd]"
+                  style={{ width: 220 }}
+                >
+                  來源類型
+                </th>
+                <th
+                  onClick={() => handleSort("status")}
+                  className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd] cursor-pointer hover:bg-[#f5f8ff] transition-colors duration-150"
+                >
+                  <span className="inline-flex items-center gap-[4px]">
+                    狀態
+                    <SortIcon field="status" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                  </span>
+                </th>
+                <th
+                  onClick={() => handleSort("lastUpdated")}
+                  className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd] cursor-pointer hover:bg-[#f5f8ff] transition-colors duration-150"
+                >
+                  <span className="inline-flex items-center gap-[4px]">
+                    最後更新
+                    <SortIcon field="lastUpdated" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                  </span>
+                </th>
+                <th
+                  onClick={() => handleSort("lastPublished")}
+                  className="text-left px-[12px] py-[16px] font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] whitespace-nowrap bg-white border-b border-[#ddd] cursor-pointer hover:bg-[#f5f8ff] transition-colors duration-150"
+                >
+                  <span className="inline-flex items-center gap-[4px]">
+                    最後發佈
+                    <SortIcon field="lastPublished" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                  </span>
+                </th>
+                {/* 凍結欄 header：加入測試環境 */}
+                <th
+                  style={{
+                    width: 120,
+                    position: "sticky",
+                    right: 0,
+                    zIndex: 2,
+                    boxShadow: "inset 1px 0 0 #ddd",
+                  }}
+                  className="px-[8px] py-[16px] text-center font-normal text-[14px] text-[#383838] font-['Noto_Sans_TC',sans-serif] bg-white border-b border-[#ddd]"
+                >
+                  <TestEnvHeaderLabel />
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((row, idx) => (
+                <DataSourceTableRow
+                  key={row.type}
+                  row={row}
+                  isLast={idx === sorted.length - 1}
+                  onToggle={(type, v) => {
+                    setSources((prev) =>
+                      prev.map((s) =>
+                        s.type === type ? { ...s, enabled: v } : s,
+                      ),
+                    );
+                    showToast(
+                      v ? (
+                        <>
+                          {type} 已進入測試，請先試聊看看以確保回覆品質。{" "}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.dispatchEvent(new CustomEvent("open-chatfab"));
+                            }}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#DBEDFF",
+                              cursor: "pointer",
+                              padding: 0,
+                              fontFamily: "'Noto Sans TC', sans-serif",
+                              fontSize: 16,
+                              lineHeight: 1.5,
+                              textDecoration: "underline",
+                            }}
+                          >
+                            測試
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          已關閉 {type} 的測試模式。{" "}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.dispatchEvent(new CustomEvent("open-chatfab"));
+                            }}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#DBEDFF",
+                              cursor: "pointer",
+                              padding: 0,
+                              fontFamily: "'Noto Sans TC', sans-serif",
+                              fontSize: 16,
+                              lineHeight: 1.5,
+                              textDecoration: "underline",
+                            }}
+                          >
+                            測試
+                          </button>
+                        </>
+                      ),
+                      "success",
+                    );
+                  }}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -1485,7 +1489,7 @@ export default function FacilitiesContent({
       />
 
       <main
-        className={`flex-1 bg-slate-50 transition-all duration-300 overflow-x-hidden overflow-y-auto min-h-screen ${
+        className={`flex-1 bg-slate-50 transition-all duration-300 overflow-x-hidden overflow-y-auto scrollbar-transparent min-h-screen ${
           sidebarOpen ? "ml-[330px] lg:ml-[280px] md:ml-[250px]" : "ml-[72px]"
         }`}
       >

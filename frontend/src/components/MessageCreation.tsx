@@ -2104,7 +2104,7 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
         />
 
         {/* Main Content */}
-        <main className={`flex-1 overflow-auto bg-slate-50 transition-all duration-300 ${sidebarOpen ? 'ml-[330px] lg:ml-[280px] md:ml-[250px]' : 'ml-[72px]'}`}>
+        <main className={`flex-1 overflow-auto scrollbar-transparent bg-slate-50 transition-all duration-300 ${sidebarOpen ? 'ml-[330px] lg:ml-[280px] md:ml-[250px]' : 'ml-[72px]'}`}>
           {/* Breadcrumb */}
           <div className="box-border flex items-center pb-0 pt-[48px] px-[40px]">
             <div className="box-border flex gap-1 items-center p-1">
