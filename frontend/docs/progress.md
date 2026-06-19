@@ -7,6 +7,37 @@
 
 ---
 
+## ⚠️ 待釐清：工作區既存 WIP（非本批圓角，疑似前次 session/同事的捲軸表格工程）
+
+> 記錄時間：2026-06-19。**狀態：原樣保留，未 commit / 未 stash / 未還原。** 待釐清來歷後再處理。
+
+開始今天圓角批次時，`git status` 已有 **14 個 modified 檔**（早於本 session 就存在），經查**不是圓角**，而是一批做到一半的**捲軸 scrollbar 收斂 + 表格圓角裁切**工程（風格同 §4.5 的 `2a7b07c6` scrollbar 批 / 捲軸 C3 雙軸表格）。三個主題：
+
+**主題 1：`<main>` 捲動區補 `scrollbar-transparent`**（各 1 行）
+- `CreateAutoReplyInteractive.tsx`、`InsightsPanel.tsx`、`MessageCreation.tsx`、`MessageList.tsx`、`Sidebar.tsx`、`layouts/MainLayout.tsx`、`AIChatbotOverview.tsx`(main 那行)
+
+**主題 2：表格「圓角裁切層」重構**（外加 `<div rounded-[16px] overflow-hidden>` 包裹 + 內層 `overflow-x-auto scrollbar-transparent`，並把 `table-scroll` 換成 `scrollbar-transparent`；註解「讓水平捲軸收在圓角內、不凸出」）
+- `AutoReplyTableStyled.tsx`、`InteractiveMessageTable.tsx`、`FacilitiesContent.tsx`、`PMSIntegration.tsx`、`AIChatbotOverview.tsx`(表格部分)
+
+**主題 3：雜項 scrollbar 收斂**
+- `common/styles.ts`（`scrollable`/`scrollContainer` 加 `scrollbar-transparent`）
+- `flex-message/PreviewPanel.tsx`（`scrollbar-hide` → `scrollbar-transparent`）
+- `imports/MainContainer-6001-1415.tsx`（`table-scroll` → `scrollbar-transparent`；注意此為 Figma 匯出檔卻被改）
+
+### 🚩 與圓角批次的檔案重疊（**必須先釐清這批 WIP 才能繼續這些圓角批次**）
+| 圓角批次 | 重疊到的 WIP 檔 |
+|---|---|
+| **群發訊息群（B2 下一批）** | `MessageCreation.tsx`、`AutoReplyTableStyled.tsx` |
+| **B4（15→16）** | `CreateAutoReplyInteractive.tsx` |
+| **B5（32/80→full）** | `AIChatbotOverview.tsx`、`MessageList.tsx` |
+| **B（2px→2xs）** | `InsightsPanel.tsx` |
+| **B6（Figma 垃圾值→full）** | `CreateAutoReplyInteractive.tsx` |
+| **Part C 零像素 sweep** | `FacilitiesContent.tsx`、`PMSIntegration.tsx`、`InteractiveMessageTable.tsx`（含 `rounded-[16px]`）等多檔 |
+
+> 在這些檔上動圓角，會和上述 WIP 混在同一工作區、無法乾淨切分（不像 `LineApiSettings.tsx` 只有 1 行可輕鬆分開）。處理順序：**先釐清/落地這批 WIP（commit 成它自己的包，或 stash）→ 工作區乾淨 → 再繼續重疊到的圓角批次**。沒重疊的（如 `CarouselMessageEditor`、`AutoReply`）可先做。
+
+---
+
 ## 0. 一句話現況
 
 「切廚房」已完成並上線到 staging —— 前端已改用 **live Tailwind v4 即時編譯**（不再用預編譯靜態 CSS）。
