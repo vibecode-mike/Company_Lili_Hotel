@@ -1077,7 +1077,7 @@ export default function ChatRoomLayout({
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <div className="absolute bg-[#f6f9fd] content-stretch flex flex-col items-center left-1/2 overflow-clip rounded-[158.824px] size-[158.824px] top-1/2 translate-x-[-50%] translate-y-[-50%]">
+                <div className="absolute bg-[#f6f9fd] content-stretch flex flex-col items-center left-1/2 overflow-clip rounded-full size-[158.824px] top-1/2 translate-x-[-50%] translate-y-[-50%]">
                   <div className="basis-0 bg-[#edf0f8] content-stretch flex grow items-center justify-center min-h-px min-w-px relative shrink-0 w-full">
                     <div className="relative shrink-0 size-[74.118px]">
                       <div className="absolute left-[calc(50%-0.06px)] size-[49.412px] top-[calc(50%-0.06px)] translate-x-[-50%] translate-y-[-50%]">
