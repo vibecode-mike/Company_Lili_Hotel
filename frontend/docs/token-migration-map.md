@@ -79,15 +79,18 @@ Tailwind 預設字級與本案主力值完全吻合：`text-xs`=12 / `text-sm`=1
 
 ## 2. Radius
 
-新階梯沿用既有 `--radius`(10px) 基準 calc 推導。**主力值 8/10/12/16 全部落在階梯上且零變化**（除 `rounded-xl` 既有用法）：
+> ⚠️ **圓角階梯數字以 `globals.css @theme` 為唯一真相**（程式 live、不會過時）。本表僅為施工期 arbitrary→token 對照；如有出入，**一律以 `globals.css` 為準**。
 
-| token | px | calc | 既有 |
+新階梯沿用既有 `--radius`(10px) 基準 calc 推導。階梯經 `ba389a6a` 定案：**sm/lg 退役併入 md/xl、新增 2xs**。**主力值 8/12/16/20/4 落在階梯上零變化；但 6/10 已隨 sm/lg 退役而移出階梯 → `6→8`、`10→12` 皆為「歸位 +2px」，非零變化**。下表為 `globals.css @theme` 現況快照（calc 基準 `--radius`=10px）：
+
+| token | px | calc | 沿革 |
 |---|---|---|---|
-| `--radius-xs` | 4 | `var(--radius) - 6px` | 🆕 新增 |
-| `--radius-sm` | 6 | `var(--radius) - 4px` | 維持 |
+| `--radius-2xs` | 2 | `var(--radius) - 8px` | 🆕 新增（`ba389a6a`）|
+| `--radius-xs` | 4 | `var(--radius) - 6px` | 維持 |
+| `--radius-sm` | 8 | `var(--radius) - 2px` | ⚠️ 退役→併 md（原 6px）|
 | `--radius-md` | 8 | `var(--radius) - 2px` | 維持 |
-| `--radius-lg` | 10 | `var(--radius)` | 維持 |
-| `--radius-xl` | 12 | `var(--radius) + 2px` | **改**（原 14px） |
+| `--radius-lg` | 12 | `var(--radius) + 2px` | ⚠️ 退役→併 xl（原 10px）|
+| `--radius-xl` | 12 | `var(--radius) + 2px` | 維持（原 14px→12）|
 | `--radius-2xl` | 16 | `var(--radius) + 6px` | 🆕 新增 |
 | `--radius-3xl` | 20 | `var(--radius) + 10px` | 🆕 新增 |
 
@@ -97,11 +100,11 @@ Tailwind 預設字級與本案主力值完全吻合：`text-xs`=12 / `text-sm`=1
 |---|---|---|---|---|
 | `rounded-[8px]` | 182 | `rounded-md` | ✅ 零變化 | 73 檔（最廣）|
 | `rounded-[16px]` | 128 | `rounded-2xl` | ✅ 零變化 | 廣布 |
-| `rounded-[10px]` | 60 | `rounded-lg` | ✅ 零變化 | 廣布 |
+| `rounded-[10px]` | 60 | `rounded-xl`(12) | ⚠️ **歸位 +2px**（lg 已退役，10 不在階梯）| 廣布（CarouselMessageEditor×14…）|
 | `rounded-[12px]` | 42 | `rounded-xl` | ✅ 零變化 | 廣布 |
 | `rounded-[4px]` | 21 | `rounded-xs` | ✅ 零變化 | 廣布 |
 | `rounded-[20px]` | 20 | `rounded-3xl` | ✅ 零變化 | ChatRoomLayout×7、common/styles.ts×5… |
-| `rounded-[6px]` | 4 | `rounded-sm` | ✅ 零變化 | StaffUsersManagement×2、FBConfigPanel、CarouselMessageEditor |
+| `rounded-[6px]` | 4 | `rounded-md`(8) | ⚠️ **歸位 +2px**（sm 已退役，6 不在階梯）| StaffUsersManagement×2、FBConfigPanel、CarouselMessageEditor |
 | `rounded-[14px]` / `rounded-t-[14px]` | 19 | `rounded-xl`(12) | ⚠️ −2px | LineApiSettingsContent.tsx（全數集中於此）|
 | `rounded-[15px]` | 4 | `rounded-2xl`(16) | ⚠️ +1px | PreviewContainers×3、CreateAutoReplyInteractive |
 | `rounded-[2px]` | 4 | `rounded-xs`(4) | ⚠️ +2px | ui/chart×2、ui/tooltip、InsightsPanel |
@@ -111,7 +114,7 @@ Tailwind 預設字級與本案主力值完全吻合：`text-xs`=12 / `text-sm`=1
 | `rounded-[158.824px]` | 1 | `rounded-full` | 🗑 Figma 圓頭像亂值 | chat-room/ChatRoomLayout.tsx |
 | `rounded-[3.35544e+07px]` | 1 | `rounded-full` | 🗑 Figma 溢位垃圾 | CreateAutoReplyInteractive.tsx |
 
-> 既有具名用法 `rounded-md`(41)/`rounded-lg`(29)/`rounded-sm`(15) → **零變化**（token px 未動）。
+> 既有具名用法：`rounded-md`(41) → **零變化**（仍 8px）。⚠️ `rounded-lg`(29) 隨 lg 退役 `10→12`、`rounded-sm`(15) 隨 sm 退役 `6→8`，皆 **+2px 且已於 `ba389a6a` 部署生效**（即現況，非待辦）。
 > 唯一受影響的既有用法：`rounded-xl`(×5，14px→12px)，列入 §6。inline `borderRadius` 的 `3.40282e38px` / `33554400px` 同屬 🗑 → `9999px` / `rounded-full`。
 
 ---

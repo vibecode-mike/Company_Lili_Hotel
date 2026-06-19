@@ -96,6 +96,17 @@
 
 ---
 
+## 2a. 📐 文件治理：圓角 / token 數字「真相來源」
+
+> 教訓（2026-06-19）：`token-migration-map.md` 停在舊階梯（`sm=6/lg=10`），但 `ba389a6a` 已把 sm/lg 退役併入 md/xl（`6→8`、`10→12`）。靠文件查數字差點把「+2px 歸位」誤做成「零變化」（尤其 CarouselMessageEditor 14× `rounded-[10px]`）。
+
+1. **數字真相唯一來源 = `globals.css @theme`**（程式 live、不會過時）。所有文件只「**指向它**」，**不複製階梯數字**到文件裡另存一份（複製＝會過時＝害人踩坑）。
+2. **`token-migration-map.md` = 施工期 arbitrary→token 對照表**（暫時性工具，非規範來源）。
+   - [ ] **待辦：Part C「零像素 sweep」完成後**（全站 `rounded-[Npx]` 等 arbitrary 都換成 token 名、不再需要對照）→ **封存或刪除 `token-migration-map.md`**，避免它過時又害人踩坑。**現在先不刪**（sweep 還要用它的 arbitrary 對照）。
+3. **最終歸宿 = `docs/design.md`**（待辦 F）：屆時圓角規範寫進 design.md，且**指向 `globals.css`**（不複製數字）。design.md 一旦完成 → `token-migration-map.md` 的規範性內容被取代 → 可正式退場。
+
+---
+
 ## 2b. 元件層統一（之後處理）
 
 > 捲軸 CSS 規則已收斂成單一正解 `.scrollbar-transparent`（4px、半透明灰、圓角、hover 容器才顯示、含 Firefox 支援）。
