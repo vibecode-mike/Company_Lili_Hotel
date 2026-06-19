@@ -192,11 +192,11 @@ export function MessageCard({ cardData, className = '' }: MessageCardProps) {
  */
 export function TriggerImage({ imageUrl, placeholder = '選擇圖片' }: TriggerImageProps) {
   return (
-    <div className="h-[240px] relative rounded-[15px] shrink-0 w-full overflow-hidden">
+    <div className="h-[240px] relative rounded-2xl shrink-0 w-full overflow-hidden">
       <ImageWithFallback
         src={imageUrl}
         alt="觸發圖片"
-        className="w-full h-full rounded-[15px]"
+        className="w-full h-full rounded-2xl"
       />
     </div>
   );
@@ -207,7 +207,7 @@ export function TriggerImage({ imageUrl, placeholder = '選擇圖片' }: Trigger
  */
 export function TriggerText({ text, placeholder = '文字訊息' }: TriggerTextProps) {
   return (
-    <div className="bg-[#f6f9fd] relative rounded-[15px] shrink-0 w-full">
+    <div className="bg-[#f6f9fd] relative rounded-2xl shrink-0 w-full">
       <div className="bg-clip-padding border-0 border-[transparent] border-solid box-border content-stretch flex flex-col items-center overflow-clip relative rounded-[inherit] w-full">
         <div className="relative shrink-0 w-full">
           <div className="flex flex-row items-center size-full">

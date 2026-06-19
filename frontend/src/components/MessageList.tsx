@@ -525,11 +525,11 @@ const MainContent = memo(function MainContent({
                 </div>
               </div>
               <div
-                className="bg-[#f0f6ff] h-[8px] overflow-clip relative rounded-[80px] shrink-0 w-full"
+                className="bg-[#f0f6ff] h-[8px] overflow-clip relative rounded-full shrink-0 w-full"
                 data-name="usage status"
               >
                 <div
-                  className="absolute bg-[#3a87f2] h-[8px] left-0 rounded-[80px] top-0 transition-all duration-300"
+                  className="absolute bg-[#3a87f2] h-[8px] left-0 rounded-full top-0 transition-all duration-300"
                   style={{
                     width: `${quotaPercent}%`,
                   }}
