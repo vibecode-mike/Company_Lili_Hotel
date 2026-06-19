@@ -47,13 +47,13 @@ export default class ErrorBoundary extends React.Component<Props, State> {
             <div className="mt-[16px] flex gap-[8px]">
               <button
                 onClick={this.handleReset}
-                className="px-[16px] h-[40px] rounded-[10px] bg-[#0f6beb] text-white text-[14px] hover:bg-[#0d5bcc]"
+                className="px-[16px] h-[40px] rounded-xl bg-[#0f6beb] text-white text-[14px] hover:bg-[#0d5bcc]"
               >
                 重試
               </button>
               <button
                 onClick={() => window.location.reload()}
-                className="px-[16px] h-[40px] rounded-[10px] border border-[#dddddd] text-[#6e6e6e] text-[14px] hover:bg-[#f5f5f5]"
+                className="px-[16px] h-[40px] rounded-xl border border-[#dddddd] text-[#6e6e6e] text-[14px] hover:bg-[#f5f5f5]"
               >
                 重新整理
               </button>
