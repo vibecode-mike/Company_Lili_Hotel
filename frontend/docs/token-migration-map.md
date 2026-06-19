@@ -105,7 +105,7 @@ Tailwind 預設字級與本案主力值完全吻合：`text-xs`=12 / `text-sm`=1
 | `rounded-[4px]` | 21 | `rounded-xs` | ✅ 零變化 | 廣布 |
 | `rounded-[20px]` | 20 | `rounded-3xl` | ✅ 零變化 | ChatRoomLayout×7、common/styles.ts×5… |
 | `rounded-[6px]` | 4 | `rounded-md`(8) | ⚠️ **歸位 +2px**（sm 已退役，6 不在階梯）| StaffUsersManagement×2、FBConfigPanel、CarouselMessageEditor |
-| `rounded-[14px]` / `rounded-t-[14px]` | 19 | `rounded-xl`(12) | ⚠️ −2px | LineApiSettingsContent.tsx（全數集中於此）|
+| `rounded-[14px]` / `rounded-t-[14px]` | 19 | `rounded-2xl`(16) | ⚠️ +2px（設計裁示：大面板配大圓角更服貼）| LineApiSettingsContent.tsx（全數集中於此）|
 | `rounded-[15px]` | 4 | `rounded-2xl`(16) | ⚠️ +1px | PreviewContainers×3、CreateAutoReplyInteractive |
 | `rounded-[2px]` | 4 | `rounded-xs`(4) | ⚠️ +2px | ui/chart×2、ui/tooltip、InsightsPanel |
 | `rounded-[32px]` | 1 | `rounded-3xl`(20) 或 `rounded-full` | ⚠️ 視為膠囊鈕，建議 `rounded-full` | common/SecondaryButton.tsx |
@@ -218,7 +218,7 @@ Tailwind 預設字級與本案主力值完全吻合：`text-xs`=12 / `text-sm`=1
   → 多為數字 / 拉丁字 / 備援字體，換 Noto 後字形會變。
 
 ### 6b. 圓角差 ±1~2px
-- `rounded-[14px]`/`rounded-t-[14px]`（19，LineApiSettingsContent）→ 12px，**−2px**
+- `rounded-[14px]`/`rounded-t-[14px]`（19，LineApiSettingsContent）→ **16px，+2px**（設計裁示：大面板配大圓角更服貼。先前誤寫 12px 已更正）
 - `rounded-[15px]`（4，PreviewContainers 等）→ 16px，**+1px**
 - `rounded-[2px]`（4，ui/chart·tooltip·InsightsPanel）→ 4px，**+2px**
 - **既有 `rounded-xl`（×5）因 token 由 14→12px 一併變動，−2px**（這是唯一受影響的既有具名用法）
