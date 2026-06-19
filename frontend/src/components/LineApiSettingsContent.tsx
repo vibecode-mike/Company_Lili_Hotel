@@ -453,7 +453,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
             </div>
 
             {/* LINE 官方帳號資訊卡片 - 白色背景，藍色邊框 */}
-            <div className="relative bg-white rounded-[10px] border-2 border-[#0f6beb] shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_-1px_rgba(0,0,0,0.1)] p-[18px] mb-[16px]">
+            <div className="relative bg-white rounded-xl border-2 border-[#0f6beb] shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_-1px_rgba(0,0,0,0.1)] p-[18px] mb-[16px]">
               <div className="flex items-center justify-between gap-[12px] flex-wrap sm:flex-nowrap">
                 <div className="flex items-center gap-[12px] flex-1 min-w-0">
                   {/* LINE Logo */}
@@ -484,7 +484,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
             {/* API 資訊卡片組 */}
             <div className="flex flex-col gap-[12px] mb-[16px]">
               {/* Channel ID 卡片 */}
-              <div className="relative bg-white rounded-[10px] border border-[#bedbff] p-[13px]">
+              <div className="relative bg-white rounded-xl border border-[#bedbff] p-[13px]">
                 <div className="flex flex-col gap-[4px]">
                   <p className="text-[14px] leading-[20px] text-[#4a5565] tracking-[-0.1504px]">Channel ID</p>
                   <p className="text-[16px] leading-[24px] text-[#101828] tracking-[-0.3125px] font-mono break-all">{channelId || 'ˇˇˇˇ'}</p>
@@ -492,7 +492,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
               </div>
 
               {/* Channel Secret 卡片 */}
-              <div className="relative bg-white rounded-[10px] border border-[#bedbff] p-[13px]">
+              <div className="relative bg-white rounded-xl border border-[#bedbff] p-[13px]">
                 <div className="flex flex-col gap-[4px]">
                   <p className="text-[14px] leading-[20px] text-[#4a5565] tracking-[-0.1504px]">Channel Secret</p>
                   <p className="text-[16px] leading-[24px] text-[#101828] tracking-[-0.3125px]">
@@ -502,7 +502,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
               </div>
 
               {/* Access Token 卡片 */}
-              <div className="relative bg-white rounded-[10px] border border-[#bedbff] p-[13px]">
+              <div className="relative bg-white rounded-xl border border-[#bedbff] p-[13px]">
                 <div className="flex flex-col gap-[4px]">
                   <p className="text-[14px] leading-[20px] text-[#4a5565] tracking-[-0.1504px]">Access Token</p>
                   <p className="text-[16px] leading-[24px] text-[#101828] tracking-[-0.3125px]">
@@ -512,7 +512,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
               </div>
 
               {/* Login Channel ID 卡片 */}
-              <div className="relative bg-white rounded-[10px] border border-[#bedbff] p-[13px]">
+              <div className="relative bg-white rounded-xl border border-[#bedbff] p-[13px]">
                 <div className="flex flex-col gap-[4px]">
                   <p className="text-[14px] leading-[20px] text-[#4a5565] tracking-[-0.1504px]">Login Channel ID</p>
                   <p className="text-[16px] leading-[24px] text-[#101828] tracking-[-0.3125px] font-mono break-all">{loginChannelId || 'ˇˇˇˇ'}</p>
@@ -520,7 +520,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
               </div>
 
               {/* Login Channel Secret 卡片 */}
-              <div className="relative bg-white rounded-[10px] border border-[#bedbff] p-[13px]">
+              <div className="relative bg-white rounded-xl border border-[#bedbff] p-[13px]">
                 <div className="flex flex-col gap-[4px]">
                   <p className="text-[14px] leading-[20px] text-[#4a5565] tracking-[-0.1504px]">Login Channel Secret</p>
                   <p className="text-[16px] leading-[24px] text-[#101828] tracking-[-0.3125px]">
@@ -595,7 +595,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
             {expandedCard === 1 && (
               <div className="px-[24px] pb-[24px] flex flex-col gap-[16px]">
                 {/* Steps Section */}
-                <div className="bg-[#e1edfd] rounded-[10px] p-[16px]">
+                <div className="bg-[#e1edfd] rounded-xl p-[16px]">
                   <p className="text-[14px] leading-[20px] font-bold text-[#364153] mb-[16px]">
                     📘 操作步驟
                   </p>
@@ -606,7 +606,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                       <ImageWithFallback
                         src={imgStep1New} 
                         alt="LINE Developers Console Screenshot"
-                        className="w-[398.4px] h-[224.1px] rounded-[10px] border-[1.6px] border-[#0f6beb] object-cover shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)]"
+                        className="w-[398.4px] h-[224.1px] rounded-xl border-[1.6px] border-[#0f6beb] object-cover shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)]"
                         onClick={() => setEnlargedImage(imgStep1New)}
                       />
                     </div>
@@ -733,7 +733,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
             {expandedCard === 2 && (
               <div className="px-[24px] pb-[24px] flex flex-col gap-[16px]">
                 {/* Steps Section */}
-                <div className="bg-[#e1edfd] rounded-[10px] p-[16px]">
+                <div className="bg-[#e1edfd] rounded-xl p-[16px]">
                   <p className="text-[14px] leading-[20px] font-bold text-[#364153] mb-[16px]">
                     📘 操作步驟
                   </p>
@@ -744,7 +744,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                       <ImageWithFallback
                         src={imgStep1}
                         alt="LINE Developers Console Screenshot"
-                        className="w-[398.4px] h-[224.1px] rounded-[10px] border-[1.6px] border-[#0f6beb] object-cover shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)]"
+                        className="w-[398.4px] h-[224.1px] rounded-xl border-[1.6px] border-[#0f6beb] object-cover shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)]"
                         onClick={() => setEnlargedImage(imgStep1)}
                       />
                     </div>
@@ -852,7 +852,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
             {expandedCard === 3 && (
               <div className="px-[24px] pb-[24px] flex flex-col gap-[16px]">
                 {/* Steps Section */}
-                <div className="bg-[#e1edfd] rounded-[10px] p-[16px]">
+                <div className="bg-[#e1edfd] rounded-xl p-[16px]">
                   <p className="text-[14px] leading-[20px] font-bold text-[#364153] mb-[16px]">
                     📘 操作步驟
                   </p>
@@ -863,7 +863,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                       <ImageWithFallback
                         src={imgStep2} 
                         alt="LINE Basic Settings Screenshot"
-                        className="w-[398.4px] h-[224.1px] rounded-[10px] border-[1.6px] border-[#0f6beb] object-cover shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)]"
+                        className="w-[398.4px] h-[224.1px] rounded-xl border-[1.6px] border-[#0f6beb] object-cover shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)]"
                         onClick={() => setEnlargedImage(imgStep2)}
                       />
                     </div>
@@ -962,7 +962,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
             {expandedCard === 4 && (
               <div className="px-[24px] pb-[24px] flex flex-col gap-[16px]">
                 {/* Steps Section */}
-                <div className="bg-[#e1edfd] rounded-[10px] p-[16px]">
+                <div className="bg-[#e1edfd] rounded-xl p-[16px]">
                   <p className="text-[14px] leading-[20px] font-bold text-[#364153] mb-[16px]">
                     📘 操作步驟
                   </p>
@@ -973,7 +973,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                       <ImageWithFallback
                         src={imgStep3} 
                         alt="LINE Messaging API Screenshot"
-                        className="w-[398.4px] h-[224.1px] rounded-[10px] border-[1.6px] border-[#0f6beb] object-cover shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)]"
+                        className="w-[398.4px] h-[224.1px] rounded-xl border-[1.6px] border-[#0f6beb] object-cover shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)]"
                         onClick={() => setEnlargedImage(imgStep3)}
                       />
                     </div>
@@ -1083,7 +1083,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
             {expandedCard === 5 && (
               <div className="px-[24px] pb-[24px] flex flex-col gap-[16px]">
                 {/* Steps Section */}
-                <div className="bg-[#e1edfd] rounded-[10px] p-[16px]">
+                <div className="bg-[#e1edfd] rounded-xl p-[16px]">
                   <p className="text-[14px] leading-[20px] font-bold text-[#364153] mb-[16px]">
                     📘 操作步驟
                   </p>
@@ -1094,7 +1094,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                       <ImageWithFallback
                         src={imgStep5Webhook}
                         alt="LINE Webhook URL Settings"
-                        className="w-[398.4px] h-[224.1px] rounded-[10px] border-[1.6px] border-[#0f6beb] object-cover shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)]"
+                        className="w-[398.4px] h-[224.1px] rounded-xl border-[1.6px] border-[#0f6beb] object-cover shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)]"
                         onClick={() => setEnlargedImage(imgStep5Webhook)}
                       />
                     </div>
@@ -1149,7 +1149,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                 </div>
 
                 {/* Webhook URL with copy button */}
-                <div className="bg-white border-[0.8px] border-[#bedbff] rounded-[10px] px-[12.8px] py-[12.8px]">
+                <div className="bg-white border-[0.8px] border-[#bedbff] rounded-xl px-[12.8px] py-[12.8px]">
                   <p className="text-[14px] leading-[20px] text-[#364153] mb-[8px]">你的 Webhook 網址：</p>
                   {channelId.trim() ? (
                     <div className="flex items-center gap-[8px]">
@@ -1215,7 +1215,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
             {expandedCard === 6 && (
               <div className="px-[24px] pb-[24px] flex flex-col gap-[16px]">
                 {/* Steps Section */}
-                <div className="bg-[#e1edfd] rounded-[10px] p-[16px]">
+                <div className="bg-[#e1edfd] rounded-xl p-[16px]">
                   <p className="text-[14px] leading-[20px] font-bold text-[#364153] mb-[16px]">
                     📘 操作步驟
                   </p>
@@ -1226,7 +1226,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                       <ImageWithFallback
                         src={imgStep4} 
                         alt="LINE OA Backend Settings"
-                        className="w-[398.4px] h-[224.1px] rounded-[10px] border-[1.6px] border-[#0f6beb] object-cover shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)]"
+                        className="w-[398.4px] h-[224.1px] rounded-xl border-[1.6px] border-[#0f6beb] object-cover shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)]"
                         onClick={() => setEnlargedImage(imgStep4)}
                       />
                     </div>
@@ -1273,7 +1273,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                 </div>
 
                 {/* Checkbox */}
-                <div className="bg-white border-[0.8px] border-[#bedbff] rounded-[10px] px-[12.8px] py-[12.8px]">
+                <div className="bg-white border-[0.8px] border-[#bedbff] rounded-xl px-[12.8px] py-[12.8px]">
                   <div className="flex items-center gap-[8px]">
                     <Checkbox
                       checked={isStep5Confirmed}
@@ -1331,7 +1331,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
             {expandedCard === 7 && (
               <div className="px-[24px] pb-[24px] flex flex-col gap-[16px]">
                 {/* Steps Section */}
-                <div className="bg-[#e1edfd] rounded-[10px] p-[16px]">
+                <div className="bg-[#e1edfd] rounded-xl p-[16px]">
                   <p className="text-[14px] leading-[20px] font-bold text-[#364153] mb-[16px]">
                     📘 操作步驟
                   </p>
@@ -1342,7 +1342,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                       <ImageWithFallback
                         src={imgStep6} 
                         alt="LINE Developers Console Screenshot"
-                        className="w-[398.4px] h-[224.1px] rounded-[10px] border-[1.6px] border-[#0f6beb] object-cover shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)]"
+                        className="w-[398.4px] h-[224.1px] rounded-xl border-[1.6px] border-[#0f6beb] object-cover shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)]"
                         onClick={() => setEnlargedImage(imgStep6)}
                       />
                     </div>
@@ -1431,7 +1431,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
             {expandedCard === 8 && (
               <div className="px-[24px] pb-[24px] flex flex-col gap-[16px]">
                 {/* Steps Section */}
-                <div className="bg-[#e1edfd] rounded-[10px] p-[16px]">
+                <div className="bg-[#e1edfd] rounded-xl p-[16px]">
                   <p className="text-[14px] leading-[20px] font-bold text-[#364153] mb-[16px]">
                     📘 操作步驟
                   </p>
@@ -1442,7 +1442,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                       <ImageWithFallback
                         src={imgStep7} 
                         alt="LINE Developers Console Screenshot"
-                        className="w-[398.4px] h-[224.1px] rounded-[10px] border-[1.6px] border-[#0f6beb] object-cover shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)]"
+                        className="w-[398.4px] h-[224.1px] rounded-xl border-[1.6px] border-[#0f6beb] object-cover shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)]"
                         onClick={() => setEnlargedImage(imgStep7)}
                       />
                     </div>
@@ -1534,7 +1534,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
             {expandedCard === 9 && (
               <div className="px-[24px] pb-[24px] flex flex-col gap-[16px]">
                 {/* Steps Section */}
-                <div className="bg-[#e1edfd] rounded-[10px] p-[16px]">
+                <div className="bg-[#e1edfd] rounded-xl p-[16px]">
                   <p className="text-[14px] leading-[20px] font-bold text-[#364153] mb-[16px]">
                     📘 操作步驟
                   </p>
@@ -1545,7 +1545,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                       <ImageWithFallback
                         src={imgStep8} 
                         alt="Placeholder Screenshot"
-                        className="w-[398.4px] h-[224.1px] rounded-[10px] border-[1.6px] border-[#0f6beb] object-cover shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)]"
+                        className="w-[398.4px] h-[224.1px] rounded-xl border-[1.6px] border-[#0f6beb] object-cover shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)]"
                         onClick={() => setEnlargedImage(imgStep8)}
                       />
                     </div>
@@ -1621,7 +1621,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
         </div>
 
         {/* Warning Section */}
-        <div className="bg-blue-50 border-[0.8px] border-[#bedbff] rounded-[10px] px-[16.8px] py-[16.8px]">
+        <div className="bg-blue-50 border-[0.8px] border-[#bedbff] rounded-xl px-[16.8px] py-[16.8px]">
           <p className="text-[14px] leading-[20px] text-[#193cb8]">
             <span className="font-bold">💡 提醒：</span>
             妥善保管您的 Channel Secret 和 Access Token，切勿公開分享。 這些資料將用於與 LINE 平台進行安全通訊。
@@ -1642,7 +1642,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
             <img
               src={enlargedImage}
               alt="Enlarged Screenshot"
-              className="max-w-[900px] max-h-[600px] rounded-[10px] object-contain shadow-2xl"
+              className="max-w-[900px] max-h-[600px] rounded-xl object-contain shadow-2xl"
             />
             <button
               onClick={() => setEnlargedImage(null)}

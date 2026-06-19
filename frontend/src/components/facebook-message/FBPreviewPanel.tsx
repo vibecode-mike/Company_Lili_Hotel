@@ -24,7 +24,7 @@ function FlexBubblePreview({ bubble }: { bubble: FlexBubble }) {
   const hasOnlyHero = bubble.hero && !hasTextContent && !hasButtons;
 
   return (
-    <div className="bg-white rounded-[10px] shadow-[0px_20px_25px_-5px_rgba(0,0,0,0.1),0px_8px_10px_-6px_rgba(0,0,0,0.1)] w-[300px] overflow-hidden">
+    <div className="bg-white rounded-xl shadow-[0px_20px_25px_-5px_rgba(0,0,0,0.1),0px_8px_10px_-6px_rgba(0,0,0,0.1)] w-[300px] overflow-hidden">
       {/* Hero Image */}
       {bubble.hero && bubble.hero.type === "image" && (
         <div className="w-full bg-gray-200 flex items-center justify-center overflow-hidden relative group">

@@ -954,7 +954,7 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
             <div className="flex gap-[8px]">
               <button
                 onClick={handleImageUpload}
-                className="flex-1 bg-white h-[36px] rounded-[10px] border border-[rgba(0,0,0,0.1)] flex items-center justify-center gap-[8px] hover:bg-gray-50 transition-colors"
+                className="flex-1 bg-white h-[36px] rounded-xl border border-[rgba(0,0,0,0.1)] flex items-center justify-center gap-[8px] hover:bg-gray-50 transition-colors"
               >
                 <Upload className="size-[16px]" strokeWidth={1.33} />
                 <span className="text-[14px] leading-[20px] text-neutral-950">上傳圖片</span>
@@ -962,7 +962,7 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
               <button
                 onClick={onDuplicateBubble}
                 disabled={!canDuplicate}
-                className="flex-1 bg-white h-[36px] rounded-[10px] border border-[rgba(0,0,0,0.1)] flex items-center justify-center gap-[8px] hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 bg-white h-[36px] rounded-xl border border-[rgba(0,0,0,0.1)] flex items-center justify-center gap-[8px] hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Copy className="size-[16px]" strokeWidth={1.33} />
                 <span className="text-[14px] leading-[20px] text-neutral-950">複製圖卡</span>
@@ -1086,7 +1086,7 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
               placeholder="輸入標題文字"
               maxLength={80}
               aria-invalid={isTitleInvalid}
-              className={`w-full h-[36px] px-[12px] rounded-[10px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 transition-all ${
+              className={`w-full h-[36px] px-[12px] rounded-xl text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 transition-all ${
                 isTitleInvalid ? "border-2 focus:ring-[#f44336]/30" : "border border-neutral-300 focus:ring-[#0f6beb]"
               }`}
               style={isTitleInvalid ? { borderColor: "#f44336", borderWidth: "2px" as const } : undefined}
@@ -1125,7 +1125,7 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
                 placeholder="輸入內文文字說明"
                 maxLength={80}
                 aria-invalid={isSubtitleInvalid}
-                className={`w-full h-[78px] px-[12px] py-[8px] rounded-[10px] text-[14px] leading-[20px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 transition-all resize-none ${
+                className={`w-full h-[78px] px-[12px] py-[8px] rounded-xl text-[14px] leading-[20px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 transition-all resize-none ${
                   isSubtitleInvalid ? "border-2 focus:ring-[#f44336]/30" : "border border-neutral-300 focus:ring-[#0f6beb]"
                 }`}
                 style={isSubtitleInvalid ? { borderColor: "#f44336", borderWidth: "2px" as const } : undefined}
@@ -1165,7 +1165,7 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
                 onChange={(e) => updatePrice(e.target.value)}
                 placeholder="NT$ 00,000"
                 maxLength={20}
-                className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                className="w-full h-[36px] px-[12px] rounded-xl border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
               />
               <span className="absolute right-[12px] top-[10px] text-[12px] leading-[16px] text-[#6a7282]">
                 {priceText.length}/20
@@ -1208,7 +1208,7 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
         )}
 
         {buttons.map((button: any, index: number) => (
-          <div key={index} className="flex flex-col gap-[12px] p-[12px] bg-gray-50 rounded-[10px] border border-gray-200">
+          <div key={index} className="flex flex-col gap-[12px] p-[12px] bg-gray-50 rounded-xl border border-gray-200">
             <div className="flex items-center justify-between">
               <span className="text-[14px] leading-[20px] text-neutral-950">按鈕 {index + 1}</span>
               <button
@@ -1229,7 +1229,7 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
                   onChange={(e) => updateButton(index, "label", e.target.value)}
                   placeholder="輸入按鈕文字"
                   maxLength={20}
-                  className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all bg-white"
+                  className="w-full h-[36px] px-[12px] rounded-xl border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all bg-white"
                 />
                 <span className="absolute right-[12px] top-[10px] text-[12px] leading-[16px] text-[#6a7282]">
                   {(button.action?.label || "").length}/20
@@ -1273,7 +1273,7 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
                   value={button.action?.uri || ""}
                   onChange={(e) => updateButton(index, "uri", e.target.value)}
                   placeholder="https://example.com"
-                  className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all bg-white"
+                  className="w-full h-[36px] px-[12px] rounded-xl border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all bg-white"
                 />
               </div>
             ) : (
@@ -1285,7 +1285,7 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
                     value={(bubble._metadata as any)?.buttonPayloads?.[index] || ""}
                     onChange={(e) => updateButton(index, "payload", e.target.value)}
                     placeholder="輸入觸發訊息"
-                    className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all bg-white"
+                    className="w-full h-[36px] px-[12px] rounded-xl border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all bg-white"
                   />
                   <p className="text-[12px] leading-[16px] text-[#6a7282]">當使用者點擊按鈕時會傳送此訊息</p>
                 </div>
@@ -1297,7 +1297,7 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
                     value={button.action?.uri || ""}
                     onChange={(e) => updateButton(index, "uri", e.target.value)}
                     placeholder="https://example.com"
-                    className="w-full h-[36px] px-[12px] rounded-[10px] border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all bg-white"
+                    className="w-full h-[36px] px-[12px] rounded-xl border border-neutral-100 text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all bg-white"
                   />
                 </div>
 

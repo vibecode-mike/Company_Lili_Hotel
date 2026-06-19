@@ -370,12 +370,12 @@ export function FacebookMessageEditor({ onJsonChange, initialJson }: FacebookMes
           {/* Carousel Tabs */}
           <div className="relative h-[40px] w-full">
             <div className="flex items-center gap-[8px] flex-nowrap overflow-x-auto scrollbar-transparent">
-              <div ref={tabScrollRef} className="bg-neutral-100 rounded-[10px] p-[4px] flex items-center gap-[4px] flex-nowrap shrink-0">
+              <div ref={tabScrollRef} className="bg-neutral-100 rounded-xl p-[4px] flex items-center gap-[4px] flex-nowrap shrink-0">
                 {bubbles.map((_, index) => (
                   <button
                     key={index}
                     onClick={() => setActiveBubbleIndex(index)}
-                    className={`h-[32px] px-[16px] rounded-[10px] flex items-center transition-all shrink-0 whitespace-nowrap ${
+                    className={`h-[32px] px-[16px] rounded-xl flex items-center transition-all shrink-0 whitespace-nowrap ${
                       index === activeBubbleIndex
                         ? 'bg-white shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_-1px_rgba(0,0,0,0.1)]'
                         : 'hover:bg-white/50'
