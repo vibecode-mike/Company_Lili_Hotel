@@ -128,7 +128,7 @@ export const FlexMessageCardPreview = memo(function FlexMessageCardPreview({ car
   const hasBody = card.enableTitle || card.enableContent || card.enablePrice;
 
   return (
-    <div className="bg-white rounded-[10px] shadow-[0px_20px_25px_-5px_rgba(0,0,0,0.1),0px_8px_10px_-6px_rgba(0,0,0,0.1)] w-[300px] overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-[0px_20px_25px_-5px_rgba(0,0,0,0.1),0px_8px_10px_-6px_rgba(0,0,0,0.1)] w-[300px] overflow-hidden">
       {/* Hero Image */}
       {card.enableImage && (
         <div className="w-full overflow-hidden">
@@ -318,7 +318,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
       <div className="flex flex-col gap-[4px]">
         <div className="flex flex-wrap gap-[6px] items-center min-h-[44px] w-full px-[12px] py-[8px] rounded-[8px] border border-neutral-200 bg-white">
           {tags.map(tag => (
-            <div key={tag} className="flex items-center gap-[4px] bg-[#f0f6ff] text-[#0f6beb] text-[12px] px-[8px] py-[4px] rounded-[6px]">
+            <div key={tag} className="flex items-center gap-[4px] bg-[#f0f6ff] text-[#0f6beb] text-[12px] px-[8px] py-[4px] rounded-md">
               <span className="leading-[16px]">{tag}</span>
               <button
                 type="button"
@@ -568,12 +568,12 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
           {/* Carousel Tabs */}
           <div className="relative h-[40px] w-full">
             <div className="flex items-center gap-[8px] flex-nowrap overflow-x-auto scrollbar-transparent">
-              <div className="bg-neutral-100 rounded-[10px] p-[4px] flex items-center gap-[4px] flex-nowrap shrink-0">
+              <div className="bg-neutral-100 rounded-xl p-[4px] flex items-center gap-[4px] flex-nowrap shrink-0">
                 {cards.map((card) => (
                   <button
                     key={card.id}
                     onClick={() => onTabChange(card.id)}
-                    className={`h-[32px] px-[16px] rounded-[10px] flex items-center transition-all shrink-0 whitespace-nowrap ${
+                    className={`h-[32px] px-[16px] rounded-xl flex items-center transition-all shrink-0 whitespace-nowrap ${
                       card.id === activeTab
                         ? 'bg-white shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_-1px_rgba(0,0,0,0.1)]'
                         : 'hover:bg-white/50'
@@ -618,7 +618,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
                 <div className="flex gap-[8px]">
                   <button
                     onClick={() => imageUploadRef.current?.click()}
-                    className="flex-1 bg-white h-[36px] rounded-[10px] border border-[rgba(0,0,0,0.1)] flex items-center justify-center gap-[8px] hover:bg-gray-50 transition-colors"
+                    className="flex-1 bg-white h-[36px] rounded-xl border border-[rgba(0,0,0,0.1)] flex items-center justify-center gap-[8px] hover:bg-gray-50 transition-colors"
                   >
                     <Upload className="size-[16px]" strokeWidth={1.33} />
                     <span className="text-[14px] leading-[20px] text-neutral-950">上傳圖片</span>
@@ -633,7 +633,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
                   
                   <button
                     onClick={onCopyCard}
-                    className="flex-1 bg-white h-[36px] rounded-[10px] border border-[rgba(0,0,0,0.1)] flex items-center justify-center gap-[8px] hover:bg-gray-50 transition-colors"
+                    className="flex-1 bg-white h-[36px] rounded-xl border border-[rgba(0,0,0,0.1)] flex items-center justify-center gap-[8px] hover:bg-gray-50 transition-colors"
                   >
                     <Copy className="size-[16px]" strokeWidth={1.33} />
                     <span className="text-[14px] leading-[20px] text-neutral-950">複製圖卡</span>
@@ -725,7 +725,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
                     placeholder="標題文字"
                     maxLength={20}
                     aria-invalid={showTitleInlineError || Boolean(errors?.cardTitle)}
-                    className={`w-full h-[36px] px-[12px] rounded-[10px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
+                    className={`w-full h-[36px] px-[12px] rounded-xl text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
                       requiredFieldClasses(showTitleInlineError || Boolean(errors?.cardTitle))
                     }`}
                     style={requiredFieldStyle(showTitleInlineError || Boolean(errors?.cardTitle))}
@@ -764,7 +764,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
                     placeholder="輸入內文文字說明"
                     maxLength={60}
                     aria-invalid={showContentInlineError || Boolean(errors?.content)}
-                    className={`w-full h-[78px] px-[12px] py-[8px] rounded-[10px] text-[14px] leading-[20px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all resize-none ${
+                    className={`w-full h-[78px] px-[12px] py-[8px] rounded-xl text-[14px] leading-[20px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all resize-none ${
                       requiredFieldClasses(showContentInlineError || Boolean(errors?.content))
                     }`}
                     style={requiredFieldStyle(showContentInlineError || Boolean(errors?.content))}
@@ -806,7 +806,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
                     onChange={(e) => onUpdateCard({ price: e.target.value })}
                     placeholder="0"
                     aria-invalid={showPriceInlineError || Boolean(errors?.price)}
-                    className={`w-full h-[36px] pl-[50px] pr-[12px] rounded-[10px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
+                    className={`w-full h-[36px] pl-[50px] pr-[12px] rounded-xl text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
                       requiredFieldClasses(showPriceInlineError || Boolean(errors?.price))
                     }`}
                     style={requiredFieldStyle(showPriceInlineError || Boolean(errors?.price))}
@@ -857,7 +857,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
                       button1ActionType: selectedPlatform === 'Facebook' ? 'url' : undefined
                     });
                   }}
-                  className="bg-white h-[32px] px-[13px] rounded-[10px] border border-[rgba(0,0,0,0.1)] flex items-center gap-[6px] hover:bg-gray-50 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                  className="bg-white h-[32px] px-[13px] rounded-xl border border-[rgba(0,0,0,0.1)] flex items-center gap-[6px] hover:bg-gray-50 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={structureLocked}
                 >
                   <Plus className="size-[16px]" strokeWidth={1.33} />
@@ -918,7 +918,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
                       placeholder="按鈕文字"
                       maxLength={12}
                       aria-invalid={showButton1TextError || Boolean(errors?.button1)}
-                      className={`w-full h-[36px] px-[12px] rounded-[10px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
+                      className={`w-full h-[36px] px-[12px] rounded-xl text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
                         requiredFieldClasses(showButton1TextError || Boolean(errors?.button1))
                       }`}
                       style={requiredFieldStyle(showButton1TextError || Boolean(errors?.button1))}
@@ -1055,7 +1055,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
                     button2ActionType: selectedPlatform === 'Facebook' ? 'url' : undefined
                   });
                 }}
-                className="bg-white h-[32px] px-[13px] rounded-[10px] border border-[rgba(0,0,0,0.1)] flex items-center gap-[6px] hover:bg-gray-50 transition-colors ml-[24px] disabled:cursor-not-allowed disabled:opacity-60"
+                className="bg-white h-[32px] px-[13px] rounded-xl border border-[rgba(0,0,0,0.1)] flex items-center gap-[6px] hover:bg-gray-50 transition-colors ml-[24px] disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={structureLocked}
               >
                 <Plus className="size-[16px]" strokeWidth={1.33} />
@@ -1109,7 +1109,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
                       placeholder="按鈕文字"
                       maxLength={12}
                       aria-invalid={showButton2TextError || Boolean(errors?.button2)}
-                      className={`w-full h-[36px] px-[12px] rounded-[10px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
+                      className={`w-full h-[36px] px-[12px] rounded-xl text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
                         requiredFieldClasses(showButton2TextError || Boolean(errors?.button2))
                       }`}
                       style={requiredFieldStyle(showButton2TextError || Boolean(errors?.button2))}
@@ -1246,7 +1246,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
                     button3ActionType: selectedPlatform === 'Facebook' ? 'url' : undefined
                   });
                 }}
-                className="bg-white h-[32px] px-[13px] rounded-[10px] border border-[rgba(0,0,0,0.1)] flex items-center gap-[6px] hover:bg-gray-50 transition-colors ml-[24px] disabled:cursor-not-allowed disabled:opacity-60"
+                className="bg-white h-[32px] px-[13px] rounded-xl border border-[rgba(0,0,0,0.1)] flex items-center gap-[6px] hover:bg-gray-50 transition-colors ml-[24px] disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={structureLocked}
               >
                 <Plus className="size-[16px]" strokeWidth={1.33} />
@@ -1285,7 +1285,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
                       placeholder="按鈕文字"
                       maxLength={12}
                       aria-invalid={showButton3TextError || Boolean(errors?.button3)}
-                      className={`w-full h-[36px] px-[12px] rounded-[10px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
+                      className={`w-full h-[36px] px-[12px] rounded-xl text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
                         requiredFieldClasses(showButton3TextError || Boolean(errors?.button3))
                       }`}
                       style={requiredFieldStyle(showButton3TextError || Boolean(errors?.button3))}
