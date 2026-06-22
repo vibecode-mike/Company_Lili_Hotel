@@ -303,10 +303,10 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
           </div>
         </div>
         <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0">
-          <div className="bg-white group h-[48px] min-h-[48px] relative rounded-[8px] shrink-0 w-full">
+          <div className="bg-white group h-[48px] min-h-[48px] relative rounded-md shrink-0 w-full">
             <div
               aria-hidden="true"
-              className="absolute border border-solid border-neutral-100 group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]"
+              className="absolute border border-solid border-neutral-100 group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-md"
               style={errors.realName ? { border: '2px solid #f44336' } : undefined}
             />
             <div className="flex flex-col justify-center min-h-inherit size-full">
@@ -363,8 +363,8 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
         <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0">
           {isGuest ? (
             // 訪客：純讀模式，整個 Popover 不掛載，避免 Radix Trigger 內部 onClick 繞過 guard
-            <div className="bg-white box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center p-[8px] relative rounded-[8px] shrink-0 w-full pointer-events-none select-none">
-              <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-[8px]" />
+            <div className="bg-white box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center p-[8px] relative rounded-md shrink-0 w-full pointer-events-none select-none">
+              <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-md" />
               <div className="content-stretch flex items-center relative shrink-0 w-full">
                 <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[16px] text-nowrap whitespace-pre" style={{ color: birthday ? '#383838' : '#a8a8a8' }}>
                   {birthday ? format(birthday, "yyyy/MM/dd") : "選擇年/月/日"}
@@ -375,7 +375,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
             <Popover open={birthdayPopoverOpen} onOpenChange={setBirthdayPopoverOpen}>
               <PopoverTrigger asChild>
                 <div
-                  className="bg-white cursor-pointer hover:border-[#0f6beb] box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center p-[8px] relative rounded-[8px] shrink-0 w-full"
+                  className="bg-white cursor-pointer hover:border-[#0f6beb] box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center p-[8px] relative rounded-md shrink-0 w-full"
                   onClick={(e) => {
                     e.stopPropagation();
                     if (!isEditing) {
@@ -384,14 +384,14 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
                     setBirthdayPopoverOpen(true);
                   }}
                 >
-                  <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-[8px]" />
+                  <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-md" />
                   <div className="content-stretch flex items-center relative shrink-0 w-full">
                     <div className="basis-0 content-stretch flex gap-[8px] grow items-center min-h-px min-w-0 relative shrink-0 pr-10">
                       <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[16px] text-nowrap whitespace-pre" style={{ color: birthday ? '#383838' : '#a8a8a8' }}>
                         {birthday ? format(birthday, "yyyy/MM/dd") : "選擇年/月/日"}
                       </p>
                     </div>
-                    <div className="content-stretch flex items-center justify-center min-h-[16px] min-w-[16px] absolute right-2 top-1/2 -translate-y-1/2 rounded-[8px] shrink-0 size-[28px]">
+                    <div className="content-stretch flex items-center justify-center min-h-[16px] min-w-[16px] absolute right-2 top-1/2 -translate-y-1/2 rounded-md shrink-0 size-[28px]">
                       <div className="relative shrink-0 size-[24px]">
                         <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
                           <g id="Icon/Calendar">
@@ -479,10 +479,10 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
           </div>
         </div>
         <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0">
-          <div className="bg-white group h-[48px] min-h-[48px] relative rounded-[8px] shrink-0 w-full">
+          <div className="bg-white group h-[48px] min-h-[48px] relative rounded-md shrink-0 w-full">
             <div
               aria-hidden="true"
-              className="absolute border border-solid border-neutral-100 group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]"
+              className="absolute border border-solid border-neutral-100 group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-md"
               style={errors.location ? { border: '2px solid #f44336' } : undefined}
             />
             <div className="flex flex-col justify-center min-h-inherit size-full">
@@ -542,10 +542,10 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
           </div>
         </div>
         <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0">
-          <div className="bg-white group h-[48px] min-h-[48px] relative rounded-[8px] shrink-0 w-full">
+          <div className="bg-white group h-[48px] min-h-[48px] relative rounded-md shrink-0 w-full">
             <div
               aria-hidden="true"
-              className="absolute border border-solid border-neutral-100 group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]"
+              className="absolute border border-solid border-neutral-100 group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-md"
               style={errors.phone ? { border: '2px solid #f44336' } : undefined}
             />
             <div className="flex flex-col justify-center min-h-inherit size-full">
@@ -605,10 +605,10 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
           </div>
         </div>
         <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0">
-          <div className="bg-white group h-[48px] min-h-[48px] relative rounded-[8px] shrink-0 w-full">
+          <div className="bg-white group h-[48px] min-h-[48px] relative rounded-md shrink-0 w-full">
             <div
               aria-hidden="true"
-              className="absolute border border-solid border-neutral-100 group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]"
+              className="absolute border border-solid border-neutral-100 group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-md"
               style={errors.email ? { border: '2px solid #f44336' } : undefined}
             />
             <div className="flex flex-col justify-center min-h-inherit size-full">
@@ -663,10 +663,10 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
           </div>
         </div>
         <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0">
-          <div className="bg-white group h-[48px] min-h-[48px] relative rounded-[8px] shrink-0 w-full">
+          <div className="bg-white group h-[48px] min-h-[48px] relative rounded-md shrink-0 w-full">
             <div
               aria-hidden="true"
-              className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]"
+              className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-md"
               style={errors.idNumber ? { border: '2px solid #f44336' } : undefined}
             />
             <div className="flex flex-col justify-center min-h-inherit size-full">
@@ -719,10 +719,10 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
           </div>
         </div>
         <div className="basis-0 content-stretch flex flex-col gap-[2px] grow items-start min-h-px min-w-px relative shrink-0">
-          <div className="bg-white group h-[48px] min-h-[48px] relative rounded-[8px] shrink-0 w-full">
+          <div className="bg-white group h-[48px] min-h-[48px] relative rounded-md shrink-0 w-full">
             <div
               aria-hidden="true"
-              className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]"
+              className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-md"
               style={errors.passportNumber ? { border: '2px solid #f44336' } : undefined}
             />
             <div className="flex flex-col justify-center min-h-inherit size-full">
@@ -768,7 +768,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
             }}
           />
           <div 
-            className="bg-[#242424] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer hover:opacity-80 transition-opacity" 
+            className="bg-[#242424] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-2xl shrink-0 cursor-pointer hover:opacity-80 transition-opacity" 
             data-name="Modal Button"
             onClick={(e) => {
               e.stopPropagation();

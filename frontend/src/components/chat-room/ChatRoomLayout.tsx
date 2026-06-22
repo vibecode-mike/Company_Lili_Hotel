@@ -1128,10 +1128,10 @@ export default function ChatRoomLayout({
           </div>
 
           {/* Member Info Panel */}
-          <div className="relative rounded-[20px] shrink-0 w-full">
+          <div className="relative rounded-3xl shrink-0 w-full">
             <div
               aria-hidden="true"
-              className="absolute border border-[#e1ebf9] border-solid inset-0 pointer-events-none rounded-[20px]"
+              className="absolute border border-[#e1ebf9] border-solid inset-0 pointer-events-none rounded-3xl"
             />
             <div className="size-full">
               <div className="box-border content-stretch flex flex-col gap-[32px] items-start p-[28px] relative w-full">
@@ -1154,7 +1154,7 @@ export default function ChatRoomLayout({
           </div>
 
           {/* User Note Section */}
-          <div className="content-stretch flex gap-[32px] items-start relative rounded-[20px] shrink-0 w-full">
+          <div className="content-stretch flex gap-[32px] items-start relative rounded-3xl shrink-0 w-full">
             <MemberNoteEditor
               initialValue={note}
               onSave={async (newNote) => {
@@ -1193,7 +1193,7 @@ export default function ChatRoomLayout({
                   });
                 }
               }}
-              containerClassName="basis-0 bg-white grow min-h-[48px] min-w-px relative rounded-[20px] shrink-0"
+              containerClassName="basis-0 bg-white grow min-h-[48px] min-w-px relative rounded-3xl shrink-0"
               innerClassName="box-border content-stretch flex gap-[4px] items-start justify-end min-h-inherit p-[20px] pb-[72px] relative w-full"
               editButtonPosition="absolute bottom-[28px] right-[28px]"
               saveButtonPosition="absolute bottom-[20px] right-[20px]"
@@ -1203,11 +1203,11 @@ export default function ChatRoomLayout({
 
         {/* Right Column: Chat Area - Figma 3.png 布局 */}
         <div
-          className="content-stretch flex flex-col gap-0 items-start relative self-stretch flex-1 rounded-[20px] overflow-hidden"
+          className="content-stretch flex flex-col gap-0 items-start relative self-stretch flex-1 rounded-3xl overflow-hidden"
           style={{ height: "900px" }}
         >
           {/* 頂部白色工具列 - 平台選擇器（左）+ 日期（中） */}
-          <div className="w-full px-[16px] py-[12px] flex items-center justify-between rounded-t-[20px] bg-white">
+          <div className="w-full px-[16px] py-[12px] flex items-center justify-between rounded-t-3xl bg-white">
             {/* 平台選擇器 + 刷新按鈕（左側） */}
             <div className="flex items-center gap-2">
               <PlatformSwitcher
@@ -1284,7 +1284,7 @@ export default function ChatRoomLayout({
 
           {/* 聊天訊息區域 - 淺藍色背景 */}
           <div
-            className="content-stretch flex flex-col gap-0 items-start relative w-full rounded-b-[20px] overflow-hidden"
+            className="content-stretch flex flex-col gap-0 items-start relative w-full rounded-b-3xl overflow-hidden"
             style={{
               backgroundColor: "#CDEAFD",
               height: "calc(100% - 48px)",
@@ -1351,8 +1351,8 @@ export default function ChatRoomLayout({
             </div>
 
             {/* Input Area (Fixed at Bottom) */}
-            <div className="relative rounded-[20px] shrink-0 w-full px-[24px] pb-[24px]">
-              <div className="bg-white relative rounded-[20px] shrink-0">
+            <div className="relative rounded-3xl shrink-0 w-full px-[24px] pb-[24px]">
+              <div className="bg-white relative rounded-3xl shrink-0">
                 <div className="flex flex-row justify-end min-h-inherit size-full">
                   <div className="box-border content-stretch flex gap-[4px] items-start justify-end min-h-inherit p-[20px] relative w-full">
                     <div className="basis-0 content-stretch flex flex-col gap-[12px] grow items-start min-h-[96px] min-w-px relative shrink-0">
@@ -1401,7 +1401,7 @@ export default function ChatRoomLayout({
                           <button
                             onClick={handleSendMessage}
                             disabled={!messageInput.trim() || isSending}
-                            className="bg-[#242424] disabled:opacity-50 relative rounded-[16px] min-h-[48px] min-w-[72px] shrink-0 transition-opacity disabled:cursor-not-allowed"
+                            className="bg-[#242424] disabled:opacity-50 relative rounded-2xl min-h-[48px] min-w-[72px] shrink-0 transition-opacity disabled:cursor-not-allowed"
                           >
                             <div className="flex flex-row items-center justify-center min-h-inherit min-w-inherit size-full">
                               <div className="box-border content-stretch flex items-center justify-center min-h-inherit min-w-inherit px-[12px] py-[8px] relative size-full">
