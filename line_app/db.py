@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, event
 from sqlalchemy.engine import Engine
 
 from config import DATABASE_URL, MYSQL_DB
@@ -25,6 +25,18 @@ engine: Engine = create_engine(
     pool_recycle=3600,
     future=True,
 )
+
+
+# 固定每條連線的 session 時區為 +08:00（台北），不依賴 MySQL 主機/session 預設時區。
+# line_app 用 NOW() 寫 conversation_messages 等表，若連線時區是 UTC，
+# 寫入會比台北早 8 小時，聊天室重整後時間就位移。固定 +08 確保寫入即台北牆鐘時間。
+@event.listens_for(engine, "connect")
+def _set_session_timezone(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("SET time_zone = '+08:00'")
+    finally:
+        cursor.close()
 
 
 # -------------------------------------------------

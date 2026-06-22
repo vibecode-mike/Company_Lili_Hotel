@@ -1195,10 +1195,10 @@ async def send_member_chat_message(
                 await db.flush()
 
                 # WebSocket 推送通知前端即時更新（包含 senderName）
-                # datetime.now() 在本機已是台北時間（server TZ=Asia/Taipei），
-                # 用 format_chat_time（naive 視為台北、不再 +8）；format_taipei_time
-                # 會把台北時間當 UTC 再 +8，造成顯示時間多 8 小時。
-                now_local = datetime.now()
+                # 用 aware 台北時間（datetime.now(TAIPEI_TZ)），不依賴主機時區——
+                # 即使在 UTC 主機上即時推送也不會位移 8 小時。
+                # format_chat_time 對 aware 走 astimezone(TAIPEI_TZ) 分支，結果正確。
+                now_local = datetime.now(TAIPEI_TZ)
                 time_str = format_chat_time(now_local)
                 sender_name = current_user.username
                 await manager.send_new_message(thread_id, {
@@ -1207,7 +1207,8 @@ async def send_member_chat_message(
                     "text": text,
                     "time": time_str,
                     # 統一推台北 aware ISO（+08:00）：前端用字串排序，naive/UTC 混基底會錯亂
-                    "timestamp": now_local.replace(tzinfo=TAIPEI_TZ).isoformat(),
+                    # now_local 已是 aware 台北，直接 isoformat 即帶 +08:00
+                    "timestamp": now_local.isoformat(),
                     "thread_id": thread_id,
                     # 剛送出 ≠ 已讀，不再寫死 True（避免「送出顯示已讀、重整消失」）
                     "isRead": False,
@@ -1223,7 +1224,8 @@ async def send_member_chat_message(
                 "success": True,
                 "message_id": line_msg_id,
                 "thread_id": thread_id,
-                "sent_at": datetime.now().isoformat()
+                # aware 台北 ISO（+08:00），不依賴主機時區（與 SSE timestamp 一致）
+                "sent_at": datetime.now(TAIPEI_TZ).isoformat()
             }
 
         except Exception as e:

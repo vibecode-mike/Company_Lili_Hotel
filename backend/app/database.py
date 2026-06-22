@@ -3,7 +3,7 @@
 """
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import declarative_base
-from sqlalchemy import exc as sqlalchemy_exc
+from sqlalchemy import exc as sqlalchemy_exc, event
 from app.config import settings
 import logging
 
@@ -24,6 +24,22 @@ else:
         echo=settings.DEBUG,
         pool_pre_ping=True,
     )
+
+# 固定每條 DB 連線的 session 時區為 +08:00（台北），不依賴 MySQL 主機/session 預設時區。
+# 確保任何環境（dev / staging / Cloud SQL 預設 UTC）NOW()、func.now() 的寫入與讀取
+# 都是台北牆鐘時間，符合「DB naive datetime = 台北時間」慣例。
+# async engine 的 connect 事件需掛在 sync_engine 上才會生效。
+# sqlite（測試）不支援 SET time_zone，故僅對非 sqlite 註冊。
+if not settings.DATABASE_URL.startswith("sqlite"):
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _set_session_timezone(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("SET time_zone = '+08:00'")
+        finally:
+            cursor.close()
+
 
 # 創建非同步 session factory
 AsyncSessionLocal = async_sessionmaker(
