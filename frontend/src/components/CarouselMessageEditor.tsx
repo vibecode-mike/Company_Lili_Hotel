@@ -203,7 +203,7 @@ export const FlexMessageCardPreview = memo(function FlexMessageCardPreview({ car
         >
           {card.enableButton1 && (
             <button
-              className={`w-full rounded-[4px] text-[14px] transition-colors text-center py-[10px] px-[16px] ${
+              className={`w-full rounded-xs text-[14px] transition-colors text-center py-[10px] px-[16px] ${
                 card.button1Mode === 'primary' 
                   ? 'bg-[#06C755] text-white hover:bg-[#05b34d]' 
                   : card.button1Mode === 'secondary'
@@ -216,7 +216,7 @@ export const FlexMessageCardPreview = memo(function FlexMessageCardPreview({ car
           )}
           {card.enableButton2 && (
             <button
-              className={`w-full rounded-[4px] text-[14px] transition-colors text-center py-[10px] px-[16px] ${
+              className={`w-full rounded-xs text-[14px] transition-colors text-center py-[10px] px-[16px] ${
                 card.button2Mode === 'primary' 
                   ? 'bg-[#06C755] text-white hover:bg-[#05b34d]' 
                   : card.button2Mode === 'secondary'
@@ -229,7 +229,7 @@ export const FlexMessageCardPreview = memo(function FlexMessageCardPreview({ car
           )}
           {card.enableButton3 && (
             <button
-              className={`w-full rounded-[4px] text-[14px] transition-colors text-center py-[10px] px-[16px] ${
+              className={`w-full rounded-xs text-[14px] transition-colors text-center py-[10px] px-[16px] ${
                 card.button3Mode === 'primary'
                   ? 'bg-[#06C755] text-white hover:bg-[#05b34d]'
                   : card.button3Mode === 'secondary'
@@ -316,7 +316,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
 
     return (
       <div className="flex flex-col gap-[4px]">
-        <div className="flex flex-wrap gap-[6px] items-center min-h-[44px] w-full px-[12px] py-[8px] rounded-[8px] border border-neutral-200 bg-white">
+        <div className="flex flex-wrap gap-[6px] items-center min-h-[44px] w-full px-[12px] py-[8px] rounded-md border border-neutral-200 bg-white">
           {tags.map(tag => (
             <div key={tag} className="flex items-center gap-[4px] bg-[#f0f6ff] text-[#0f6beb] text-[12px] px-[8px] py-[4px] rounded-md">
               <span className="leading-[16px]">{tag}</span>
@@ -535,7 +535,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
       <div className="flex gap-[32px] items-start p-[40px] w-full">
         {/* Left: Preview Card */}
         <div className="shrink-0">
-          <div className="bg-gradient-to-b from-[#a5d8ff] to-[#d0ebff] rounded-[20px] p-[24px] w-[460px] flex flex-col items-center justify-center">
+          <div className="bg-gradient-to-b from-[#a5d8ff] to-[#d0ebff] rounded-3xl p-[24px] w-[460px] flex flex-col items-center justify-center">
             <FlexMessageCardPreview card={currentCard} />
           </div>
         </div>
@@ -678,7 +678,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
                           onChange={(e) => onUpdateCard({ imageUrl: e.target.value })}
                           placeholder="https://example.com"
                           aria-invalid={showImageUrlInlineError || Boolean(errors?.imageUrl)}
-                          className={`w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
+                          className={`w-full h-[36px] px-[12px] rounded-md text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
                             requiredFieldClasses(showImageUrlInlineError || Boolean(errors?.imageUrl))
                           }`}
                           style={requiredFieldStyle(showImageUrlInlineError || Boolean(errors?.imageUrl))}
@@ -977,7 +977,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
                       onChange={(e) => onUpdateCard({ button1Url: e.target.value })}
                       placeholder="https://example.com"
                       aria-invalid={showButton1UrlError || Boolean(errors?.button1Url)}
-                      className={`w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
+                      className={`w-full h-[36px] px-[12px] rounded-md text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
                         requiredFieldClasses(showButton1UrlError || Boolean(errors?.button1Url))
                       }`}
                       style={requiredFieldStyle(showButton1UrlError || Boolean(errors?.button1Url))}
@@ -1007,7 +1007,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
                         onChange={(e) => onUpdateCard({ button1TriggerMessage: e.target.value })}
                         placeholder="例如：快來看看吧 http://example.com"
                         maxLength={200}
-                        className="w-full min-h-[72px] px-[12px] py-[8px] rounded-[8px] border border-neutral-200 text-[14px] resize-none focus:outline-none focus-visible:ring-2 transition-all"
+                        className="w-full min-h-[72px] px-[12px] py-[8px] rounded-md border border-neutral-200 text-[14px] resize-none focus:outline-none focus-visible:ring-2 transition-all"
                       />
                       <p className="text-[12px] text-[#6a7282] text-right">
                         {(currentCard.button1TriggerMessage || '').length}/200
@@ -1168,7 +1168,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
                       onChange={(e) => onUpdateCard({ button2Url: e.target.value })}
                       placeholder="https://example.com"
                       aria-invalid={showButton2UrlError || Boolean(errors?.button2Url)}
-                      className={`w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
+                      className={`w-full h-[36px] px-[12px] rounded-md text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
                         requiredFieldClasses(showButton2UrlError || Boolean(errors?.button2Url))
                       }`}
                       style={requiredFieldStyle(showButton2UrlError || Boolean(errors?.button2Url))}
@@ -1198,7 +1198,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
                         onChange={(e) => onUpdateCard({ button2TriggerMessage: e.target.value })}
                         placeholder="例如：快來看看吧 http://example.com"
                         maxLength={200}
-                        className="w-full min-h-[72px] px-[12px] py-[8px] rounded-[8px] border border-neutral-200 text-[14px] resize-none focus:outline-none focus-visible:ring-2 transition-all"
+                        className="w-full min-h-[72px] px-[12px] py-[8px] rounded-md border border-neutral-200 text-[14px] resize-none focus:outline-none focus-visible:ring-2 transition-all"
                       />
                       <p className="text-[12px] text-[#6a7282] text-right">
                         {(currentCard.button2TriggerMessage || '').length}/200
@@ -1344,7 +1344,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
                       onChange={(e) => onUpdateCard({ button3Url: e.target.value })}
                       placeholder="https://example.com"
                       aria-invalid={showButton3UrlError || Boolean(errors?.button3Url)}
-                      className={`w-full h-[36px] px-[12px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
+                      className={`w-full h-[36px] px-[12px] rounded-md text-[14px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all ${
                         requiredFieldClasses(showButton3UrlError || Boolean(errors?.button3Url))
                       }`}
                       style={requiredFieldStyle(showButton3UrlError || Boolean(errors?.button3Url))}
@@ -1374,7 +1374,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
                         onChange={(e) => onUpdateCard({ button3TriggerMessage: e.target.value })}
                         placeholder="例如：快來看看吧 http://example.com"
                         maxLength={200}
-                        className="w-full min-h-[72px] px-[12px] py-[8px] rounded-[8px] border border-neutral-200 text-[14px] resize-none focus:outline-none focus-visible:ring-2 transition-all"
+                        className="w-full min-h-[72px] px-[12px] py-[8px] rounded-md border border-neutral-200 text-[14px] resize-none focus:outline-none focus-visible:ring-2 transition-all"
                       />
                       <p className="text-[12px] text-[#6a7282] text-right">
                         {(currentCard.button3TriggerMessage || '').length}/200

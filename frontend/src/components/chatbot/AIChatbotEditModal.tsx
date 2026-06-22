@@ -117,7 +117,7 @@ const PmsReadCell = memo(function PmsReadCell({
   placeholder?: boolean;
 }) {
   return (
-    <div className="bg-white rounded-[8px] h-[48px] flex items-center px-[8px] w-full">
+    <div className="bg-white rounded-md h-[48px] flex items-center px-[8px] w-full">
       <span
         className={`font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] ${
           placeholder ? "text-[#a8a8a8]" : "text-[#383838]"
@@ -148,7 +148,7 @@ const FaqInput = memo(function FaqInput({
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
-      className="bg-[#f6f9fd] rounded-[8px] h-[48px] flex items-center px-[8px] w-full font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#383838] placeholder:text-[#a8a8a8] border-none outline-none focus:outline-none disabled:opacity-60"
+      className="bg-[#f6f9fd] rounded-md h-[48px] flex items-center px-[8px] w-full font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#383838] placeholder:text-[#a8a8a8] border-none outline-none focus:outline-none disabled:opacity-60"
     />
   );
 });
@@ -181,11 +181,11 @@ const TagsField = memo(function TagsField({
   };
 
   return (
-    <div className="bg-[#f6f9fd] rounded-[8px] min-h-[48px] p-[8px] w-full flex flex-wrap gap-[4px] items-center">
+    <div className="bg-[#f6f9fd] rounded-md min-h-[48px] p-[8px] w-full flex flex-wrap gap-[4px] items-center">
       {tags.map((tag) => (
         <span
           key={tag}
-          className="inline-flex items-center gap-[2px] bg-[#f0f6ff] rounded-[8px] px-[4px] py-[4px] text-[16px] text-[#0f6beb] font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5]"
+          className="inline-flex items-center gap-[2px] bg-[#f0f6ff] rounded-md px-[4px] py-[4px] text-[16px] text-[#0f6beb] font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5]"
         >
           {tag}
           {!disabled && (
@@ -307,7 +307,7 @@ const TextareaSection = memo(function TextareaSection({
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
           rows={2}
-          className="bg-[#f6f9fd] rounded-[8px] min-h-[48px] px-[8px] py-[12px] w-full font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#383838] placeholder:text-[#a8a8a8] border-none outline-none focus:outline-none resize-none disabled:opacity-60"
+          className="bg-[#f6f9fd] rounded-md min-h-[48px] px-[8px] py-[12px] w-full font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#383838] placeholder:text-[#a8a8a8] border-none outline-none focus:outline-none resize-none disabled:opacity-60"
         />
         {hint && (
           <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[12px] leading-[1.5] text-[#6e6e6e] px-[8px] py-[4px]">
@@ -332,7 +332,7 @@ const SmallDialog = memo(function SmallDialog({
       style={{ zIndex: 100001, backgroundColor: "rgba(0,0,0,0.45)" }}
     >
       <div
-        className="bg-white rounded-[16px] w-full max-w-[800px] p-[32px] flex flex-col gap-[60px] shadow-2xl"
+        className="bg-white rounded-2xl w-full max-w-[800px] p-[32px] flex flex-col gap-[60px] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {children}
@@ -361,7 +361,7 @@ const SaveFailedDialog = memo(function SaveFailedDialog({
         <button
           type="button"
           onClick={onClose}
-          className="bg-[#242424] flex items-center justify-center min-h-[48px] min-w-[72px] w-[114px] px-[12px] py-[8px] rounded-[16px] cursor-pointer border-none hover:bg-[#383838] transition-colors"
+          className="bg-[#242424] flex items-center justify-center min-h-[48px] min-w-[72px] w-[114px] px-[12px] py-[8px] rounded-2xl cursor-pointer border-none hover:bg-[#383838] transition-colors"
         >
           <span className="flex-1 font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-white text-center">
             關閉
@@ -393,7 +393,7 @@ const ConfirmLeaveDialog = memo(function ConfirmLeaveDialog({
         <button
           type="button"
           onClick={onSave}
-          className="bg-[#242424] flex items-center justify-center min-h-[48px] min-w-[72px] w-[114px] px-[12px] py-[8px] rounded-[16px] cursor-pointer border-none hover:bg-[#383838] transition-colors"
+          className="bg-[#242424] flex items-center justify-center min-h-[48px] min-w-[72px] w-[114px] px-[12px] py-[8px] rounded-2xl cursor-pointer border-none hover:bg-[#383838] transition-colors"
         >
           <span className="flex-1 font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-white text-center">
             儲存
@@ -402,7 +402,7 @@ const ConfirmLeaveDialog = memo(function ConfirmLeaveDialog({
         <button
           type="button"
           onClick={onLeave}
-          className="bg-[#ffebee] flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] cursor-pointer border-none hover:bg-[#ffcdd2] transition-colors"
+          className="bg-[#ffebee] flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-2xl cursor-pointer border-none hover:bg-[#ffcdd2] transition-colors"
         >
           <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#f44336] text-center whitespace-nowrap">
             確認離開
@@ -435,7 +435,7 @@ const PmsInvalidDialog = memo(function PmsInvalidDialog({
         <button
           type="button"
           onClick={onCancel}
-          className="bg-[#f5f5f5] flex items-center justify-center min-h-[48px] w-[134px] px-[12px] py-[8px] rounded-[16px] cursor-pointer border-none hover:bg-[#e8e8e8] transition-colors"
+          className="bg-[#f5f5f5] flex items-center justify-center min-h-[48px] w-[134px] px-[12px] py-[8px] rounded-2xl cursor-pointer border-none hover:bg-[#e8e8e8] transition-colors"
         >
           <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#383838]">
             取消
@@ -444,7 +444,7 @@ const PmsInvalidDialog = memo(function PmsInvalidDialog({
         <button
           type="button"
           onClick={onConfirm}
-          className="bg-[#242424] flex items-center justify-center min-h-[48px] w-[114px] px-[12px] py-[8px] rounded-[16px] cursor-pointer border-none hover:bg-[#383838] transition-colors"
+          className="bg-[#242424] flex items-center justify-center min-h-[48px] w-[114px] px-[12px] py-[8px] rounded-2xl cursor-pointer border-none hover:bg-[#383838] transition-colors"
         >
           <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-white">
             確認
@@ -479,7 +479,7 @@ const ConfirmDeleteDialog = memo(function ConfirmDeleteDialog({
         <button
           type="button"
           onClick={onCancel}
-          className="bg-[#f5f5f5] flex items-center justify-center min-h-[48px] w-[134px] px-[12px] py-[8px] rounded-[16px] cursor-pointer border-none hover:bg-[#e8e8e8] transition-colors"
+          className="bg-[#f5f5f5] flex items-center justify-center min-h-[48px] w-[134px] px-[12px] py-[8px] rounded-2xl cursor-pointer border-none hover:bg-[#e8e8e8] transition-colors"
         >
           <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#383838]">
             取消
@@ -488,7 +488,7 @@ const ConfirmDeleteDialog = memo(function ConfirmDeleteDialog({
         <button
           type="button"
           onClick={onConfirm}
-          className="bg-[#ffebee] flex items-center justify-center min-h-[48px] px-[12px] py-[8px] rounded-[16px] cursor-pointer border-none hover:bg-[#ffd5d8] transition-colors"
+          className="bg-[#ffebee] flex items-center justify-center min-h-[48px] px-[12px] py-[8px] rounded-2xl cursor-pointer border-none hover:bg-[#ffd5d8] transition-colors"
         >
           <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#f44336] whitespace-nowrap">
             確認刪除
@@ -505,7 +505,7 @@ const PmsTooltip = memo(function PmsTooltip({ visible }: { visible: boolean }) {
   if (!visible) return null;
   return (
     <div
-      className="absolute left-0 top-full mt-[6px] bg-[#383838] text-white text-[12px] leading-[1.5] font-['Noto_Sans_TC',sans-serif] font-normal rounded-[8px] p-[8px] w-[300px] pointer-events-none"
+      className="absolute left-0 top-full mt-[6px] bg-[#383838] text-white text-[12px] leading-[1.5] font-['Noto_Sans_TC',sans-serif] font-normal rounded-md p-[8px] w-[300px] pointer-events-none"
       style={{ zIndex: 100 }}
     >
       {
@@ -628,7 +628,7 @@ export const RoomEditModal = memo(function RoomEditModal({
         onClick={handleBackdrop}
       >
         <div
-          className="bg-white rounded-[16px] w-full max-w-[800px] my-auto flex flex-col p-[32px] gap-[60px] shadow-2xl"
+          className="bg-white rounded-2xl w-full max-w-[800px] my-auto flex flex-col p-[32px] gap-[60px] shadow-2xl"
           onClick={(e) => e.stopPropagation()}
         >
           {/* ── Header ── */}
@@ -658,7 +658,7 @@ export const RoomEditModal = memo(function RoomEditModal({
               <button
                 type="button"
                 onClick={onNavigateToPMS}
-                className="flex items-center justify-center px-[8px] py-[8px] rounded-[8px] hover:bg-[#f5f9fe] active:bg-[#f5f9fe] transition-colors cursor-pointer border-none bg-transparent shrink-0 mr-[4px]"
+                className="flex items-center justify-center px-[8px] py-[8px] rounded-md hover:bg-[#f5f9fe] active:bg-[#f5f9fe] transition-colors cursor-pointer border-none bg-transparent shrink-0 mr-[4px]"
               >
                 <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#0f6beb] whitespace-nowrap">
                   前往 PMS 環境啟用
@@ -797,7 +797,7 @@ export const RoomEditModal = memo(function RoomEditModal({
                 type="button"
                 onClick={() => setSubDialog("confirmDelete")}
                 disabled={saving}
-                className="bg-[#ffebee] flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] cursor-pointer border-none hover:bg-[#ffd5d8] transition-colors disabled:opacity-50"
+                className="bg-[#ffebee] flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-2xl cursor-pointer border-none hover:bg-[#ffd5d8] transition-colors disabled:opacity-50"
               >
                 <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#f44336]">
                   刪除
@@ -812,7 +812,7 @@ export const RoomEditModal = memo(function RoomEditModal({
                 type="button"
                 onClick={handleSave}
                 disabled={saving}
-                className="bg-[#242424] flex items-center justify-center min-h-[48px] w-[72px] px-[12px] py-[8px] rounded-[16px] cursor-pointer border-none hover:bg-[#383838] transition-colors disabled:opacity-60"
+                className="bg-[#242424] flex items-center justify-center min-h-[48px] w-[72px] px-[12px] py-[8px] rounded-2xl cursor-pointer border-none hover:bg-[#383838] transition-colors disabled:opacity-60"
               >
                 <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-white">
                   {saving ? "儲存中" : "儲存"}
@@ -929,7 +929,7 @@ export const FacilityEditModal = memo(function FacilityEditModal({
         onClick={handleBackdrop}
       >
         <div
-          className="bg-white rounded-[16px] w-full max-w-[800px] my-auto flex flex-col p-[32px] gap-[60px] shadow-2xl"
+          className="bg-white rounded-2xl w-full max-w-[800px] my-auto flex flex-col p-[32px] gap-[60px] shadow-2xl"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
@@ -1027,7 +1027,7 @@ export const FacilityEditModal = memo(function FacilityEditModal({
               type="button"
               onClick={() => setSubDialog("confirmDelete")}
               disabled={saving}
-              className="bg-[#ffebee] flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] cursor-pointer border-none hover:bg-[#ffd5d8] transition-colors disabled:opacity-50"
+              className="bg-[#ffebee] flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-2xl cursor-pointer border-none hover:bg-[#ffd5d8] transition-colors disabled:opacity-50"
             >
               <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#f44336]">
                 刪除
@@ -1038,7 +1038,7 @@ export const FacilityEditModal = memo(function FacilityEditModal({
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="bg-[#242424] flex items-center justify-center min-h-[48px] w-[72px] px-[12px] py-[8px] rounded-[16px] cursor-pointer border-none hover:bg-[#383838] transition-colors disabled:opacity-60"
+              className="bg-[#242424] flex items-center justify-center min-h-[48px] w-[72px] px-[12px] py-[8px] rounded-2xl cursor-pointer border-none hover:bg-[#383838] transition-colors disabled:opacity-60"
             >
               <span className="font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-white">
                 {saving ? "儲存中" : "儲存"}
