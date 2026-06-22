@@ -271,7 +271,7 @@ export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNav
         <div className="px-[40px] pb-[16px] w-full">
           <div className="content-stretch flex gap-[12px] items-center relative shrink-0 w-full">
             <div className="content-stretch flex gap-[4px] items-center relative shrink-0">
-              <div className="bg-white box-border content-stretch flex gap-[12px] items-center min-w-[292px] px-[12px] py-[8px] relative rounded-[16px] shrink-0">
+              <div className="bg-white box-border content-stretch flex gap-[12px] items-center min-w-[292px] px-[12px] py-[8px] relative rounded-2xl shrink-0">
                 <div className="basis-0 content-stretch flex gap-[4px] grow items-center min-h-px min-w-px relative shrink-0">
                   <IconSearch />
                   <input
@@ -289,7 +289,7 @@ export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNav
 
               <div
                 onClick={handleClearFilters}
-                className="box-border content-stretch flex gap-[2px] items-center justify-center min-w-[72px] px-[8px] py-[12px] relative rounded-[12px] shrink-0 cursor-pointer hover:bg-[#f0f6ff] transition-colors h-[48px]"
+                className="box-border content-stretch flex gap-[2px] items-center justify-center min-w-[72px] px-[8px] py-[12px] relative rounded-xl shrink-0 cursor-pointer hover:bg-[#f0f6ff] transition-colors h-[48px]"
                 data-name="Button/ClearFilters"
               >
                 <p className="basis-0 font-['Noto_Sans_TC:Regular',_sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">清除全部條件</p>
@@ -300,7 +300,7 @@ export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNav
 
             <button
               onClick={() => openEditor()}
-              className="bg-[#242424] hover:bg-[#383838] text-white rounded-[16px] h-[48px] min-w-[72px] px-[12px] transition-colors flex items-center justify-center shrink-0"
+              className="bg-[#242424] hover:bg-[#383838] text-white rounded-2xl h-[48px] min-w-[72px] px-[12px] transition-colors flex items-center justify-center shrink-0"
             >
               建立
             </button>
@@ -315,14 +315,14 @@ export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNav
 
         <div className="px-[40px] pb-[40px] w-full min-h-[240px]">
           {isLoading ? (
-            <div className="flex h-[240px] items-center justify-center rounded-[16px] border border-dashed border-[#dddddd] bg-white text-[#6e6e6e]">
+            <div className="flex h-[240px] items-center justify-center rounded-2xl border border-dashed border-[#dddddd] bg-white text-[#6e6e6e]">
               <div className="flex flex-col items-center gap-2 text-sm">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#0f6beb] border-r-transparent" />
                 <span>資料載入中...</span>
               </div>
             </div>
           ) : error ? (
-            <div className="flex h-[240px] items-center justify-center rounded-[16px] border border-dashed border-red-200 bg-white text-red-500">
+            <div className="flex h-[240px] items-center justify-center rounded-2xl border border-dashed border-red-200 bg-white text-red-500">
               {error}
             </div>
           ) : filteredData.length > 0 ? (
@@ -333,7 +333,7 @@ export default function AutoReply({ onBack: _onBack, onNavigateToMessages, onNav
               onDuplicateKeywordClick={handleDuplicateKeywordClick}
             />
           ) : (
-            <div className="flex h-[240px] items-center justify-center rounded-[16px] border border-dashed border-[#dddddd] bg-white text-[#6e6e6e]">
+            <div className="flex h-[240px] items-center justify-center rounded-2xl border border-dashed border-[#dddddd] bg-white text-[#6e6e6e]">
               尚無自動回應資料
             </div>
           )}

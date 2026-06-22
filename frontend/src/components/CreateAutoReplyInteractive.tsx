@@ -404,7 +404,7 @@ export default function CreateAutoReplyInteractive({
         {parts.map((part, i) => {
           if (part === '{好友的顯示名稱}') {
             return (
-              <span key={i} className="bg-[#f0f6ff] text-[#0f6beb] px-[4px] py-[2px] rounded-[8px] inline-block">
+              <span key={i} className="bg-[#f0f6ff] text-[#0f6beb] px-[4px] py-[2px] rounded-md inline-block">
                 好友的顯示名稱
               </span>
             );
@@ -690,7 +690,7 @@ export default function CreateAutoReplyInteractive({
                       type="button"
                       onClick={() => handleSave()}
                       disabled={isSaving || isHydrating}
-                      className={`bg-[#242424] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 transition-colors ${
+                      className={`bg-[#242424] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-2xl shrink-0 transition-colors ${
                         isSaving || isHydrating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-[#383838] active:bg-[#4a4a4a]'
                       }`}
                     >
@@ -710,8 +710,8 @@ export default function CreateAutoReplyInteractive({
               <div className="box-border content-stretch flex flex-col gap-[32px] items-start p-[40px] relative w-full">
                 {/* Switch Container */}
                 <div className="content-stretch flex gap-[24px] items-center relative shrink-0 w-full">
-                  <div className="bg-slate-50 box-border content-stretch flex gap-[4px] items-center p-[4px] relative rounded-[12px] shrink-0">
-                    <div className="bg-white box-border content-stretch flex flex-col gap-[4px] items-start justify-center p-[8px] relative rounded-[8px] shrink-0">
+                  <div className="bg-slate-50 box-border content-stretch flex gap-[4px] items-center p-[4px] relative rounded-xl shrink-0">
+                    <div className="bg-white box-border content-stretch flex flex-col gap-[4px] items-start justify-center p-[8px] relative rounded-md shrink-0">
                       <div className="content-stretch flex gap-[10px] items-center justify-center relative shrink-0 w-full">
                         <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[16px] text-center text-nowrap whitespace-pre">訊息排序</p>
                       </div>
@@ -722,7 +722,7 @@ export default function CreateAutoReplyInteractive({
                 {/* Content Container */}
                 <div className="content-stretch flex gap-[32px] items-start relative shrink-0 w-full">
                   {/* Preview Container */}
-                  <div className="bg-gradient-to-b box-border content-stretch flex from-[#a5d8ff] gap-[20px] items-start overflow-clip p-[24px] relative rounded-[20px] self-stretch shrink-0 to-[#d0ebff] w-[460px]">
+                  <div className="bg-gradient-to-b box-border content-stretch flex from-[#a5d8ff] gap-[20px] items-start overflow-clip p-[24px] relative rounded-3xl self-stretch shrink-0 to-[#d0ebff] w-[460px]">
                     <div className="bg-white relative rounded-full shrink-0 size-[45px]">
                       <div className="bg-clip-padding border-0 border-[transparent] border-solid box-border content-stretch flex items-center justify-center relative size-[45px]">
                         <p className="font-normal leading-[18px] text-[#383838] text-[12px] text-nowrap">OA</p>
@@ -759,8 +759,8 @@ export default function CreateAutoReplyInteractive({
                             <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] whitespace-nowrap">選擇回應平台</p>
                             <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#f44336] text-[16px] whitespace-nowrap">*</p>
                           </div>
-                          <div className="basis-0 bg-white grow min-h-[48px] relative rounded-[8px] shrink-0 w-full xl:w-auto">
-                            <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-[8px]" />
+                          <div className="basis-0 bg-white grow min-h-[48px] relative rounded-md shrink-0 w-full xl:w-auto">
+                            <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-md" />
                             <div className="flex flex-col justify-center min-h-inherit size-full">
                               <div className="box-border content-stretch flex flex-col gap-[4px] items-start justify-center min-h-inherit p-[8px] relative w-full cursor-pointer" onClick={() => setIsChannelDropdownOpen(!isChannelDropdownOpen)}>
                                 <div className="content-stretch flex gap-[8px] items-center relative shrink-0 w-full">
@@ -780,7 +780,7 @@ export default function CreateAutoReplyInteractive({
                                   </div>
                                 </div>
                                 {isChannelDropdownOpen && channelOptions.length > 0 && (
-                                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-neutral-100 rounded-[8px] shadow-lg z-10">
+                                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-neutral-100 rounded-md shadow-lg z-10">
                                     {channelOptions.map(opt => (
                                       <div
                                         key={opt.value}
@@ -812,8 +812,8 @@ export default function CreateAutoReplyInteractive({
                             <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] whitespace-nowrap">回應類型</p>
                             <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#f44336] text-[16px] whitespace-nowrap">*</p>
                           </div>
-                          <div className="basis-0 bg-white grow min-h-[48px] relative rounded-[8px] shrink-0 w-full xl:w-auto">
-                            <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-[8px]" />
+                          <div className="basis-0 bg-white grow min-h-[48px] relative rounded-md shrink-0 w-full xl:w-auto">
+                            <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-md" />
                             <div className="flex flex-col justify-center min-h-inherit size-full">
                               <div className="box-border content-stretch flex flex-col gap-[4px] items-start justify-center min-h-inherit p-[8px] relative w-full cursor-pointer" onClick={() => setIsDropdownOpen(!isDropdownOpen)}>
                                 <div className="content-stretch flex gap-[8px] items-start relative shrink-0 w-full">
@@ -825,7 +825,7 @@ export default function CreateAutoReplyInteractive({
                                   </div>
                                 </div>
                                 {isDropdownOpen && (
-                                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-neutral-100 rounded-[8px] shadow-lg z-10">
+                                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-neutral-100 rounded-md shadow-lg z-10">
                                     {replyTypeOptions
                                       .filter(opt => selectedChannel !== 'Facebook' || opt.value === 'keyword')
                                       .map(opt => (
@@ -919,19 +919,19 @@ export default function CreateAutoReplyInteractive({
 
                                 {/* 右側：上下移動和刪除按鈕 */}
                                 <div className="flex items-center shrink-0">
-                                  <button onClick={() => handleMoveUp(index)} disabled={index === 0} className={`box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[48px] p-[8px] relative rounded-[16px] shrink-0 transition-colors ${index === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-100 cursor-pointer'}`}>
+                                  <button onClick={() => handleMoveUp(index)} disabled={index === 0} className={`box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[48px] p-[8px] relative rounded-2xl shrink-0 transition-colors ${index === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-100 cursor-pointer'}`}>
                                     <div className="flex items-center justify-center relative shrink-0 rotate-180">
                                       <svg className="size-[24px]" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
                                         <path d={svgPathsModal.p2b927b00} fill="var(--fill-0, #6E6E6E)" />
                                       </svg>
                                     </div>
                                   </button>
-                                  <button onClick={() => handleMoveDown(index)} disabled={index === messages.length - 1} className={`box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[48px] p-[8px] relative rounded-[16px] shrink-0 transition-colors ${index === messages.length - 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-100 cursor-pointer'}`}>
+                                  <button onClick={() => handleMoveDown(index)} disabled={index === messages.length - 1} className={`box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[48px] p-[8px] relative rounded-2xl shrink-0 transition-colors ${index === messages.length - 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-100 cursor-pointer'}`}>
                                     <svg className="size-[24px]" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
                                       <path d={svgPathsModal.p2b927b00} fill="var(--fill-0, #6E6E6E)" />
                                     </svg>
                                   </button>
-                                  <button onClick={() => handleDeleteMessage(index)} disabled={messages.length === 1} className={`box-border content-stretch flex gap-[10px] items-center p-[8px] relative rounded-[16px] shrink-0 transition-colors group ${messages.length === 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#ffebee] active:bg-[#ffebee] cursor-pointer'}`}>
+                                  <button onClick={() => handleDeleteMessage(index)} disabled={messages.length === 1} className={`box-border content-stretch flex gap-[10px] items-center p-[8px] relative rounded-2xl shrink-0 transition-colors group ${messages.length === 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#ffebee] active:bg-[#ffebee] cursor-pointer'}`}>
                                     <svg className="size-[32px]" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
                                       <g clipPath="url(#clip0_msg_delete)">
                                         <path d={svgPathsModal.pcbf700} fill="var(--fill-0, #6E6E6E)" className={messages.length === 1 ? '' : 'group-hover:fill-[#F44336] group-active:fill-[#F44336] transition-colors'} />
@@ -947,8 +947,8 @@ export default function CreateAutoReplyInteractive({
                               {/* 輸入區域 */}
                               <div className="content-stretch flex items-start relative shrink-0 w-full">
                                 <div className="content-stretch flex flex-col gap-[2px] items-start min-h-px min-w-px relative shrink-0 w-full">
-                                  <div className="bg-white min-h-[48px] relative rounded-[8px] shrink-0 w-full">
-                                    <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-[8px]" />
+                                  <div className="bg-white min-h-[48px] relative rounded-md shrink-0 w-full">
+                                    <div aria-hidden="true" className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-md" />
                                     <div className="flex flex-col justify-center min-h-inherit size-full">
                                       <div className="box-border content-stretch flex flex-col gap-[4px] items-start justify-center min-h-inherit p-[16px] relative w-full">
                                         {/* 純文字輸入框 */}
@@ -968,7 +968,7 @@ export default function CreateAutoReplyInteractive({
                                         />
 
                                         {selectedChannel !== 'Facebook' && (
-                                          <div className="bg-neutral-100 box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer hover:bg-neutral-200 transition-colors" onClick={() => handleInsertVariable(index)}>
+                                          <div className="bg-neutral-100 box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-2xl shrink-0 cursor-pointer hover:bg-neutral-200 transition-colors" onClick={() => handleInsertVariable(index)}>
                                             <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] text-center">好友的顯示名稱</p>
                                           </div>
                                         )}
@@ -987,7 +987,7 @@ export default function CreateAutoReplyInteractive({
 
                           {/* 新增按鈕 */}
                           <div className="flex w-full">
-                            <button onClick={handleAddMessage} disabled={messages.length >= 5} className={`bg-[#f0f6ff] box-border content-stretch flex gap-[4px] items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 transition-colors ${messages.length >= 5 ? 'opacity-50 cursor-not-allowed bg-neutral-100' : 'cursor-pointer hover:bg-[#e0eeff]'}`}>
+                            <button onClick={handleAddMessage} disabled={messages.length >= 5} className={`bg-[#f0f6ff] box-border content-stretch flex gap-[4px] items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-2xl shrink-0 transition-colors ${messages.length >= 5 ? 'opacity-50 cursor-not-allowed bg-neutral-100' : 'cursor-pointer hover:bg-[#e0eeff]'}`}>
                               <svg className="size-[16px]" fill="none" preserveAspectRatio="none" viewBox="0 0 16 16">
                                 <g clipPath="url(#clip0_add)">
                                   <path d={svgPathsModal.p3a3793c0} fill={messages.length >= 5 ? '#A0A0A0' : '#0F6BEB'} />
@@ -1013,7 +1013,7 @@ export default function CreateAutoReplyInteractive({
       {/* 衝突對話框 */}
       {showConflictDialog && conflictData && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-[16px] p-[24px] max-w-[480px] w-full mx-4 shadow-xl">
+          <div className="bg-white rounded-2xl p-[24px] max-w-[480px] w-full mx-4 shadow-xl">
             <h2 className="font-['Noto_Sans_TC:Regular',sans-serif] text-[20px] text-[#383838] mb-[16px]">
               {conflictData.conflictType === 'welcome'
                 ? '系統目前已啟用中的歡迎訊息'
@@ -1036,7 +1036,7 @@ export default function CreateAutoReplyInteractive({
               <button
                 type="button"
                 onClick={handleSaveInactive}
-                className="bg-neutral-100 box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[16px] py-[8px] rounded-[16px] cursor-pointer hover:bg-neutral-200 transition-colors"
+                className="bg-neutral-100 box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[16px] py-[8px] rounded-2xl cursor-pointer hover:bg-neutral-200 transition-colors"
               >
                 <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[16px] text-[#383838]">
                   保存
@@ -1045,7 +1045,7 @@ export default function CreateAutoReplyInteractive({
               <button
                 type="button"
                 onClick={handleConfirmSwitch}
-                className="bg-[#0f6beb] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[16px] py-[8px] rounded-[16px] cursor-pointer hover:bg-[#0d5bc9] transition-colors"
+                className="bg-[#0f6beb] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[16px] py-[8px] rounded-2xl cursor-pointer hover:bg-[#0d5bc9] transition-colors"
               >
                 <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[16px] text-white">
                   確認切換

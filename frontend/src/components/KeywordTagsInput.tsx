@@ -109,12 +109,12 @@ export default function KeywordTagsInput({
       <div className="content-stretch flex flex-col gap-[2px] items-start min-h-px min-w-px relative shrink-0 w-full xl:basis-0 xl:grow xl:w-auto">
         {/* 输入框 */}
         <div 
-          className="bg-white min-h-[48px] relative rounded-[8px] shrink-0 w-full cursor-text"
+          className="bg-white min-h-[48px] relative rounded-md shrink-0 w-full cursor-text"
           onClick={handleContainerClick}
         >
           <div 
             aria-hidden="true" 
-            className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-[8px]"
+            className="absolute border border-neutral-100 border-solid inset-0 pointer-events-none rounded-md"
           />
           <div className="flex flex-col justify-center min-h-inherit size-full">
             <div className="box-border content-stretch flex flex-col gap-[4px] items-start justify-center min-h-inherit p-[16px] relative w-full">
@@ -124,7 +124,7 @@ export default function KeywordTagsInput({
                 {tags.map((tag, index) => (
                   <div
                     key={index}
-                    className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-[8px] shrink-0"
+                    className="bg-[#f0f6ff] box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] relative rounded-md shrink-0"
                   >
                     <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px]">
                       {tag}
