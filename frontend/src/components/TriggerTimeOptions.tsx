@@ -202,7 +202,7 @@ export default function TriggerTimeOptions({
                               </defs>
                             </svg>
                           </div>
-                          <div className="box-border content-stretch flex flex-col gap-[4px] h-full items-start justify-center p-[8px] relative rounded-[8px] shrink-0">
+                          <div className="box-border content-stretch flex flex-col gap-[4px] h-full items-start justify-center p-[8px] relative rounded-md shrink-0">
                             <div className="content-stretch flex gap-[10px] items-center justify-center relative shrink-0 w-full">
                               <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[16px] text-center text-nowrap whitespace-pre">按日期</p>
                             </div>
@@ -220,7 +220,7 @@ export default function TriggerTimeOptions({
                                 placeholder="年/月/日"
                               />
                             </div>
-                            <div className="box-border content-stretch flex flex-col gap-[4px] h-full items-center justify-center p-[8px] relative rounded-[8px] shrink-0">
+                            <div className="box-border content-stretch flex flex-col gap-[4px] h-full items-center justify-center p-[8px] relative rounded-md shrink-0">
                               <div className="content-stretch flex gap-[10px] items-center justify-center relative shrink-0 w-full">
                                 <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[16px] text-center text-nowrap whitespace-pre">~</p>
                               </div>
@@ -261,7 +261,7 @@ export default function TriggerTimeOptions({
                               </defs>
                             </svg>
                           </div>
-                          <div className="box-border content-stretch flex flex-col gap-[4px] h-full items-start justify-center p-[8px] relative rounded-[8px] shrink-0">
+                          <div className="box-border content-stretch flex flex-col gap-[4px] h-full items-start justify-center p-[8px] relative rounded-md shrink-0">
                             <div className="content-stretch flex gap-[10px] items-center justify-center relative shrink-0 w-full">
                               <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[16px] text-center text-nowrap whitespace-pre">按時間</p>
                             </div>
@@ -277,7 +277,7 @@ export default function TriggerTimeOptions({
                                 placeholder="時：分"
                               />
                             </div>
-                            <div className="box-border content-stretch flex flex-col gap-[4px] h-full items-center justify-center p-[8px] relative rounded-[8px] shrink-0">
+                            <div className="box-border content-stretch flex flex-col gap-[4px] h-full items-center justify-center p-[8px] relative rounded-md shrink-0">
                               <div className="content-stretch flex gap-[10px] items-center justify-center relative shrink-0 w-full">
                                 <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[16px] text-center text-nowrap whitespace-pre">~</p>
                               </div>
@@ -289,7 +289,7 @@ export default function TriggerTimeOptions({
                                 placeholder="時：分"
                               />
                             </div>
-                            <div className="box-border content-stretch flex flex-col gap-[4px] h-full items-center justify-center p-[8px] relative rounded-[8px] shrink-0">
+                            <div className="box-border content-stretch flex flex-col gap-[4px] h-full items-center justify-center p-[8px] relative rounded-md shrink-0">
                               <div className="content-stretch flex gap-[10px] items-center justify-center relative shrink-0 w-full">
                                 <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[16px] text-center text-nowrap whitespace-pre">（每天）</p>
                               </div>

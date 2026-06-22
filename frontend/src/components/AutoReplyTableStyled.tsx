@@ -87,7 +87,7 @@ function DuplicateKeywordTag({
   return (
     <div
       ref={tagRef}
-      className="box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] px-[8px] py-[4px] relative rounded-[8px] shrink-0 transition-colors cursor-pointer"
+      className="box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] px-[8px] py-[4px] relative rounded-md shrink-0 transition-colors cursor-pointer"
       style={{ backgroundColor: isHovered ? '#ffcdd2' : '#ffebee' }}
       onMouseEnter={() => { handleMouseEnter(); setIsHovered(true); }}
       onMouseLeave={() => { handleMouseLeave(); setIsHovered(false); }}
@@ -262,7 +262,7 @@ const AutoReplyRow = memo(function AutoReplyRow({
 
   return (
     <div
-      className={`relative shrink-0 w-full transition-colors hover:bg-[#F8FAFC] cursor-pointer ${isLast ? 'rounded-bl-[16px] rounded-br-[16px]' : 'border-b border-[#dddddd]'}`}
+      className={`relative shrink-0 w-full transition-colors hover:bg-[#F8FAFC] cursor-pointer ${isLast ? 'rounded-bl-2xl rounded-br-2xl' : 'border-b border-[#dddddd]'}`}
       style={{ backgroundColor: 'white' }}
       data-name="AutoReplyRow"
     >
@@ -293,7 +293,7 @@ const AutoReplyRow = memo(function AutoReplyRow({
                 ) : (
                   <div
                     key={idx}
-                    className="flex items-center justify-center min-w-[32px] px-[8px] py-[4px] rounded-[8px] bg-[#f0f6ff]"
+                    className="flex items-center justify-center min-w-[32px] px-[8px] py-[4px] rounded-md bg-[#f0f6ff]"
                   >
                     <p className="text-[14px] text-center whitespace-nowrap text-[#0f6beb] leading-[1.5]">
                       {kwObj.keyword}
@@ -438,7 +438,7 @@ export default function AutoReplyTableStyled({ data, onRowClick, onToggleStatus,
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-name="AutoReplyTable">
       {/* 圓角裁切層 - 讓水平捲軸收在圓角內、不凸出 */}
-      <div className="bg-white rounded-[16px] w-full overflow-hidden">
+      <div className="bg-white rounded-2xl w-full overflow-hidden">
         {/* 外層容器 - 水平滾動 */}
         <div className="w-full overflow-x-auto scrollbar-transparent">
           {/* 內層容器 - 最小寬度確保欄位對齊 */}
