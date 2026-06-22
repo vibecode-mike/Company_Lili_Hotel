@@ -320,7 +320,7 @@ function PostbackBubble({ content }: { content: string }) {
   }
   return (
     <div
-      className="flex flex-col max-w-[288px] w-fit rounded-[16px] overflow-hidden"
+      className="flex flex-col max-w-[288px] w-fit rounded-2xl overflow-hidden"
       style={{ backgroundColor: '#F3F4F6', border: '1px dashed #d1d5db' }}
     >
       <div className="p-[12px]">
@@ -340,7 +340,7 @@ function PostbackBubble({ content }: { content: string }) {
  */
 function TextFallback({ text }: { text: string }) {
   return (
-    <div className="flex flex-col max-w-[288px] w-fit rounded-[16px] overflow-hidden" style={{ backgroundColor: '#FFFFFF' }}>
+    <div className="flex flex-col max-w-[288px] w-fit rounded-2xl overflow-hidden" style={{ backgroundColor: '#FFFFFF' }}>
       <div className="p-[16px]">
         <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] leading-[1.5] text-[#6e6e6e]">
           {text}
@@ -459,7 +459,7 @@ export function ChatBubble({
         ) : (
           /* 氣泡 - Figma 3.png 規格 */
           <div
-            className="flex flex-col items-center max-w-[288px] w-fit overflow-clip relative rounded-[16px] shrink-0"
+            className="flex flex-col items-center max-w-[288px] w-fit overflow-clip relative rounded-2xl shrink-0"
             style={{ backgroundColor: isOfficial ? '#9ED5FF' : '#FFFFFF' }}
           >
             <div className="box-border content-center flex flex-wrap gap-0 items-center p-[16px] relative w-full">

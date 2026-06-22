@@ -31,7 +31,7 @@ interface MemberNoteEditorProps {
 export default function MemberNoteEditor({
   initialValue = '',
   onSave,
-  containerClassName = 'basis-0 bg-white grow min-h-[48px] min-w-px relative rounded-[20px] shrink-0',
+  containerClassName = 'basis-0 bg-white grow min-h-[48px] min-w-px relative rounded-3xl shrink-0',
   innerClassName = 'box-border content-stretch flex gap-[4px] items-start justify-end min-h-inherit p-[20px] pb-[72px] relative w-full',
   editButtonPosition = 'absolute bottom-[28px] right-[28px]',
   saveButtonPosition = 'absolute bottom-[20px] right-[20px]'
@@ -103,7 +103,7 @@ export default function MemberNoteEditor({
                 {/* Save Button - Pixel Perfect from Figma */}
                 <div 
                   onClick={handleSave}
-                  className="bg-[#242424] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 cursor-pointer hover:brightness-110 transition-all"
+                  className="bg-[#242424] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-2xl shrink-0 cursor-pointer hover:brightness-110 transition-all"
                 >
                   <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center text-white">儲存</p>
                 </div>

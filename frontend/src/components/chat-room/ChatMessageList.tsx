@@ -46,7 +46,7 @@ function UserMessage({ message, avatar }: { message: ChatMessage; avatar?: strin
       </div>
 
       {/* 消息内容 */}
-      <div className="bg-white rounded-[12px] px-[16px] py-[12px] max-w-[400px]">
+      <div className="bg-white rounded-xl px-[16px] py-[12px] max-w-[400px]">
         <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] leading-[1.5] text-[#383838] break-words">
           {message.text}
         </p>
@@ -81,7 +81,7 @@ function OfficialMessage({ message }: { message: ChatMessage }) {
       </div>
 
       {/* 消息内容 */}
-      <div className="bg-[#0f6beb] rounded-[12px] px-[16px] py-[12px] max-w-[400px]">
+      <div className="bg-[#0f6beb] rounded-xl px-[16px] py-[12px] max-w-[400px]">
         <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[16px] leading-[1.5] text-white break-words">
           {message.text}
         </p>

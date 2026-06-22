@@ -72,7 +72,7 @@ function TagList({
       {tags.map((tag) => (
         <div
           key={tag.id}
-          className={`${tagStyle} px-[8px] py-[4px] rounded-[8px] flex items-center gap-[4px] text-[16px] leading-[1.5]`}
+          className={`${tagStyle} px-[8px] py-[4px] rounded-md flex items-center gap-[4px] text-[16px] leading-[1.5]`}
         >
           <span>{tag.name}</span>
           {onRemove && (

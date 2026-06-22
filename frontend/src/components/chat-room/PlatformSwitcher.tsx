@@ -129,7 +129,7 @@ export function PlatformSwitcher({
         onClick={() => setIsOpen(!isOpen)}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        className={`flex items-center justify-between gap-[8px] px-[8px] py-[2px] rounded-[16px] transition-colors focus:outline-none ${
+        className={`flex items-center justify-between gap-[8px] px-[8px] py-[2px] rounded-2xl transition-colors focus:outline-none ${
           isHovered && !isOpen ? 'bg-[#e2edfd]' : ''
         }`}
       >
@@ -143,7 +143,7 @@ export function PlatformSwitcher({
       {/* 下拉選單 */}
       {isOpen && (
         <div
-          className="absolute top-[calc(100%+8px)] left-0 bg-white rounded-[12px] overflow-hidden z-50 min-w-[140px]"
+          className="absolute top-[calc(100%+8px)] left-0 bg-white rounded-xl overflow-hidden z-50 min-w-[140px]"
           style={{ boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.12)' }}
         >
           <div className="flex flex-col gap-[8px] py-[8px]">

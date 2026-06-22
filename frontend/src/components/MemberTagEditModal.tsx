@@ -97,7 +97,7 @@ export function CustomScrollbar({ scrollRef }: { scrollRef: RefObject<HTMLDivEle
     >
       <div
         ref={thumbRef}
-        className="absolute right-0 top-0 rounded-[4px] cursor-grab active:cursor-grabbing"
+        className="absolute right-0 top-0 rounded-xs cursor-grab active:cursor-grabbing"
         style={{
           height: '100%',
           width: '4px',
@@ -330,7 +330,7 @@ export default function MemberTagEditModal({
           el.scrollTop = Math.max(0, Math.min(maxScroll, el.scrollTop + e.deltaY));
         }}
       >
-        <div className="bg-white relative rounded-[16px] flex flex-col h-full overflow-hidden" data-name="Member Tag#Modal">
+        <div className="bg-white relative rounded-2xl flex flex-col h-full overflow-hidden" data-name="Member Tag#Modal">
           <div className="box-border flex flex-col p-[32px] h-full overflow-hidden min-w-0">
             {/* 內容區（Header + Search + Selected + Pool）— flex-1 撐到剩餘空間，footer 用 mt-auto 釘底 */}
             <div className="flex flex-col gap-[24px] w-full flex-1 min-h-0 min-w-0 overflow-hidden">
@@ -343,7 +343,7 @@ export default function MemberTagEditModal({
 
               {/* Search Bar — 純輸入欄，不在欄內塞 chip 以避免輸入時 input 寬度跳動 */}
               <div
-                className="bg-[#f6f9fd] rounded-[8px] w-full min-h-[48px] flex items-center gap-[4px] p-[8px]"
+                className="bg-[#f6f9fd] rounded-md w-full min-h-[48px] flex items-center gap-[4px] p-[8px]"
                 data-name="Search Bar"
               >
                 {/* Figma 1819:29991：24×24 frame，內含 17.6×17.575 magnifier，flex 置中、保留 aspect */}
@@ -434,7 +434,7 @@ export default function MemberTagEditModal({
                       {showCreateOption && (
                         <div
                           onClick={handleCreateTag}
-                          className="flex flex-wrap items-center gap-[4px] bg-[#fafafa] rounded-[8px] px-[8px] py-[4px] cursor-pointer hover:bg-slate-100 transition-colors min-w-0"
+                          className="flex flex-wrap items-center gap-[4px] bg-[#fafafa] rounded-md px-[8px] py-[4px] cursor-pointer hover:bg-slate-100 transition-colors min-w-0"
                           data-name="Create Tag CTA"
                         >
                           <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#383838] text-[16px] leading-[1.5] shrink-0">
@@ -472,7 +472,7 @@ export default function MemberTagEditModal({
             {/* Footer：取消 + 確認；mt-auto 釘到 modal 底部 */}
             <div className="flex items-center justify-end gap-[8px] w-full shrink-0 mt-[24px]" data-name="Footer">
               <div
-                className="box-border flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] cursor-pointer hover:bg-neutral-100 transition-colors"
+                className="box-border flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-2xl cursor-pointer hover:bg-neutral-100 transition-colors"
                 onClick={handleCancel}
               >
                 <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#383838] text-[16px] leading-[1.5] text-center">
@@ -480,7 +480,7 @@ export default function MemberTagEditModal({
                 </p>
               </div>
               <div
-                className="bg-[#242424] box-border flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] cursor-pointer hover:bg-[#383838] transition-colors"
+                className="bg-[#242424] box-border flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-2xl cursor-pointer hover:bg-[#383838] transition-colors"
                 onClick={handleConfirm}
               >
                 <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-white text-[16px] leading-[1.5] text-center">

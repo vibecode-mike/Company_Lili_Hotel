@@ -154,7 +154,7 @@ export default function DownloadConversationsModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-[16px] p-[32px] flex flex-col gap-[24px]"
+        className="bg-white rounded-2xl p-[32px] flex flex-col gap-[24px]"
         style={{
           // 仿 MemberTagEditModal：鎖固定寬高，小視窗時兩軸各保留 16px 邊距避免溢出
           width: 'min(480px, calc(100vw - 32px))',
@@ -204,7 +204,7 @@ export default function DownloadConversationsModal({
             <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#6e6e6e] text-[14px] leading-[1.5]">
               起始日期
             </p>
-            <div className="bg-[#f6f9fd] rounded-[8px] w-full min-h-[48px] flex items-center px-[12px]">
+            <div className="bg-[#f6f9fd] rounded-md w-full min-h-[48px] flex items-center px-[12px]">
               <input
                 type="date"
                 value={dateFrom}
@@ -218,7 +218,7 @@ export default function DownloadConversationsModal({
             <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#6e6e6e] text-[14px] leading-[1.5]">
               結束日期
             </p>
-            <div className="bg-[#f6f9fd] rounded-[8px] w-full min-h-[48px] flex items-center px-[12px]">
+            <div className="bg-[#f6f9fd] rounded-md w-full min-h-[48px] flex items-center px-[12px]">
               <input
                 type="date"
                 value={dateTo}
@@ -242,7 +242,7 @@ export default function DownloadConversationsModal({
           <button
             type="button"
             onClick={onClose}
-            className="box-border flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] cursor-pointer hover:bg-neutral-100 transition-colors bg-transparent border-0"
+            className="box-border flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-2xl cursor-pointer hover:bg-neutral-100 transition-colors bg-transparent border-0"
           >
             <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-[#383838] text-[16px] leading-[1.5] text-center">
               取消
@@ -252,7 +252,7 @@ export default function DownloadConversationsModal({
             type="button"
             onClick={handleDownload}
             disabled={submitting}
-            className="bg-[#242424] box-border flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] cursor-pointer hover:bg-[#383838] disabled:opacity-50 transition-colors border-0"
+            className="bg-[#242424] box-border flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-2xl cursor-pointer hover:bg-[#383838] disabled:opacity-50 transition-colors border-0"
           >
             <p className="font-['Noto_Sans_TC:Regular',sans-serif] font-normal text-white text-[16px] leading-[1.5] text-center">
               {submitting ? '下載中…' : '下載 CSV'}

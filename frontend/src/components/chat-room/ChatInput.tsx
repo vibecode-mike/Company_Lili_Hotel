@@ -40,8 +40,8 @@ export default function ChatInput({
     <div className="content-stretch flex flex-col gap-[4px] items-start relative shrink-0 w-full">
       <div className="content-stretch flex gap-[8px] items-end relative shrink-0 w-full">
         {/* Input Field */}
-        <div className="basis-0 bg-white group grow min-h-[48px] relative rounded-[8px] shrink-0">
-          <div aria-hidden="true" className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-[8px]" />
+        <div className="basis-0 bg-white group grow min-h-[48px] relative rounded-md shrink-0">
+          <div aria-hidden="true" className="absolute border border-neutral-100 border-solid group-focus-within:border-[#6e6e6e] group-focus-within:border-2 inset-0 pointer-events-none rounded-md" />
           <div className="flex flex-col justify-center min-h-inherit size-full">
             <div className="box-border content-stretch flex flex-col gap-[4px] h-[48px] items-start justify-center min-h-inherit p-[8px] relative w-full">
               <div className="content-stretch flex gap-[10px] items-start relative shrink-0 w-full">
@@ -65,7 +65,7 @@ export default function ChatInput({
         <button
           onClick={handleSend}
           disabled={isDisabled}
-          className={`box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[48px] px-[12px] py-[8px] relative rounded-[8px] shrink-0 transition-colors ${
+          className={`box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[48px] px-[12px] py-[8px] relative rounded-md shrink-0 transition-colors ${
             isDisabled 
               ? 'bg-[#dddddd] cursor-not-allowed' 
               : 'bg-[#242424] hover:bg-[#383838] cursor-pointer'

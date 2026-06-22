@@ -71,7 +71,7 @@ export default function ChatRoom({ member, memberId, memberName, initialPlatform
             <p className="text-[16px] text-[#6e6e6e] mb-[20px]">請返回會員列表重新選擇</p>
             <button
               onClick={onBack}
-              className="bg-[#242424] hover:bg-[#383838] text-white rounded-[16px] h-[48px] px-[24px] transition-colors"
+              className="bg-[#242424] hover:bg-[#383838] text-white rounded-2xl h-[48px] px-[24px] transition-colors"
             >
               返回會員列表
             </button>

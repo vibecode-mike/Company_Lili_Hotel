@@ -94,7 +94,7 @@ export function ResponseModeIndicator({
     <>
       <div
         ref={triggerRef}
-        className={`flex items-center gap-[4px] px-[8px] py-[4px] rounded-[16px] cursor-pointer ${className}`}
+        className={`flex items-center gap-[4px] px-[8px] py-[4px] rounded-2xl cursor-pointer ${className}`}
         onMouseEnter={() => setVisible(true)}
         onMouseLeave={() => setVisible(false)}
         onFocus={() => setVisible(true)}
@@ -109,7 +109,7 @@ export function ResponseModeIndicator({
       {visible &&
         createPortal(
           <div
-            className="fixed bg-[#383838] text-white text-[12px] leading-[1.5] font-['Noto_Sans_TC',sans-serif] font-normal rounded-[8px] p-[8px] pointer-events-none"
+            className="fixed bg-[#383838] text-white text-[12px] leading-[1.5] font-['Noto_Sans_TC',sans-serif] font-normal rounded-md p-[8px] pointer-events-none"
             style={{ zIndex: 9999, top: pos.top, left: pos.left, maxWidth: 320 }}
           >
             {config.tooltip}
