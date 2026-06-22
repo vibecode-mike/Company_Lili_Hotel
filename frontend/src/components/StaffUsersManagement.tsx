@@ -291,7 +291,7 @@ export default function StaffUsersManagement({
             {isAdmin && (
               <button
                 onClick={openCreate}
-                className="bg-[#242424] hover:bg-[#383838] text-white rounded-[16px] h-[48px] px-[20px] transition-colors flex items-center justify-center text-[16px]"
+                className="bg-[#242424] hover:bg-[#383838] text-white rounded-2xl h-[48px] px-[20px] transition-colors flex items-center justify-center text-[16px]"
               >
                 + 新增帳號
               </button>
@@ -302,24 +302,24 @@ export default function StaffUsersManagement({
         {/* Table */}
         <div className="px-[40px] pb-[40px] w-full">
           {error && (
-            <div className="mb-4 px-4 py-3 rounded-[16px] bg-red-50 text-red-700 text-[14px]">
+            <div className="mb-4 px-4 py-3 rounded-2xl bg-red-50 text-red-700 text-[14px]">
               {error}
             </div>
           )}
 
           {loading ? (
-            <div className="flex h-[240px] items-center justify-center rounded-[16px] border border-dashed border-[#dddddd] bg-white text-[#6e6e6e]">
+            <div className="flex h-[240px] items-center justify-center rounded-2xl border border-dashed border-[#dddddd] bg-white text-[#6e6e6e]">
               <div className="flex flex-col items-center gap-2 text-sm">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#0f6beb] border-r-transparent" />
                 <span>資料載入中...</span>
               </div>
             </div>
           ) : users.length === 0 ? (
-            <div className="flex h-[240px] items-center justify-center rounded-[16px] border border-dashed border-[#dddddd] bg-white text-[#6e6e6e]">
+            <div className="flex h-[240px] items-center justify-center rounded-2xl border border-dashed border-[#dddddd] bg-white text-[#6e6e6e]">
               尚無帳號
             </div>
           ) : (
-            <div className="bg-white rounded-[16px] w-full overflow-hidden">
+            <div className="bg-white rounded-2xl w-full overflow-hidden">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-[#dddddd]">
@@ -447,7 +447,7 @@ export default function StaffUsersManagement({
                   type="text"
                   value={form.username}
                   onChange={(e) => setForm({ ...form, username: e.target.value })}
-                  className="w-full h-[44px] px-[16px] border border-[#dddddd] rounded-[12px] text-[14px] text-[#383838] focus:outline-none focus:border-[#0f6beb] transition-colors"
+                  className="w-full h-[44px] px-[16px] border border-[#dddddd] rounded-xl text-[14px] text-[#383838] focus:outline-none focus:border-[#0f6beb] transition-colors"
                   placeholder="用於登入的帳號名稱"
                 />
               </Field>
@@ -458,7 +458,7 @@ export default function StaffUsersManagement({
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full h-[44px] px-[16px] border border-[#dddddd] rounded-[12px] text-[14px] text-[#383838] focus:outline-none focus:border-[#0f6beb] transition-colors"
+                className="w-full h-[44px] px-[16px] border border-[#dddddd] rounded-xl text-[14px] text-[#383838] focus:outline-none focus:border-[#0f6beb] transition-colors"
                 placeholder="example@company.com"
               />
             </Field>
@@ -468,7 +468,7 @@ export default function StaffUsersManagement({
                 type="text"
                 value={form.full_name}
                 onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-                className="w-full h-[44px] px-[16px] border border-[#dddddd] rounded-[12px] text-[14px] text-[#383838] focus:outline-none focus:border-[#0f6beb] transition-colors"
+                className="w-full h-[44px] px-[16px] border border-[#dddddd] rounded-xl text-[14px] text-[#383838] focus:outline-none focus:border-[#0f6beb] transition-colors"
                 placeholder="選填"
               />
             </Field>
@@ -482,7 +482,7 @@ export default function StaffUsersManagement({
                 type="password"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
-                className="w-full h-[44px] px-[16px] border border-[#dddddd] rounded-[12px] text-[14px] text-[#383838] focus:outline-none focus:border-[#0f6beb] transition-colors"
+                className="w-full h-[44px] px-[16px] border border-[#dddddd] rounded-xl text-[14px] text-[#383838] focus:outline-none focus:border-[#0f6beb] transition-colors"
                 placeholder="至少 6 個字元"
               />
             </Field>
@@ -531,11 +531,11 @@ export default function StaffUsersManagement({
                   {allChannels.length === 0 ? (
                     <p className="text-[13px] text-gray-500">尚未建立任何 LINE OA</p>
                   ) : (
-                    <Scrollable orientation="vertical" className="border border-[#dddddd] rounded-[12px] overflow-hidden" viewportClassName="space-y-[8px] max-h-[180px] p-[12px]">
+                    <Scrollable orientation="vertical" className="border border-[#dddddd] rounded-xl overflow-hidden" viewportClassName="space-y-[8px] max-h-[180px] p-[12px]">
                       {allChannels.map((c: LineChannelInfo) => (
                         <label
                           key={c.channel_id}
-                          className="flex items-center gap-[10px] cursor-pointer hover:bg-[#F8FAFC] px-[8px] py-[6px] rounded-[8px] transition-colors"
+                          className="flex items-center gap-[10px] cursor-pointer hover:bg-[#F8FAFC] px-[8px] py-[6px] rounded-md transition-colors"
                         >
                           <input
                             type="checkbox"
@@ -558,18 +558,18 @@ export default function StaffUsersManagement({
             ) : (
               <>
                 <Field label="角色" hint="如需調整請聯絡系統管理員">
-                  <div className="px-[16px] py-[10px] rounded-[12px] bg-[#f5f5f5] text-[14px] text-[#6e6e6e]">
+                  <div className="px-[16px] py-[10px] rounded-xl bg-[#f5f5f5] text-[14px] text-[#6e6e6e]">
                     {form.role === "admin" ? "系統管理員" : "使用者"}
                   </div>
                 </Field>
 
                 <Field label="可用組織" hint="如需調整請聯絡系統管理員">
                   {editingUser && editingUser.channels.length === 0 ? (
-                    <div className="px-[16px] py-[10px] rounded-[12px] bg-[#f5f5f5] text-[14px] text-gray-500">
+                    <div className="px-[16px] py-[10px] rounded-xl bg-[#f5f5f5] text-[14px] text-gray-500">
                       未指派
                     </div>
                   ) : (
-                    <div className="flex flex-wrap gap-[6px] px-[16px] py-[10px] rounded-[12px] bg-[#f5f5f5]">
+                    <div className="flex flex-wrap gap-[6px] px-[16px] py-[10px] rounded-xl bg-[#f5f5f5]">
                       {editingUser?.channels.map((c) => (
                         <Tag key={c.channel_id} variant="blue">
                           {c.channel_name || c.channel_id}
@@ -586,14 +586,14 @@ export default function StaffUsersManagement({
             <button
               onClick={closeModal}
               disabled={saving}
-              className="h-[44px] px-[20px] rounded-[12px] border border-[#dddddd] text-[14px] text-[#383838] hover:bg-[#F8FAFC] transition-colors disabled:opacity-50"
+              className="h-[44px] px-[20px] rounded-xl border border-[#dddddd] text-[14px] text-[#383838] hover:bg-[#F8FAFC] transition-colors disabled:opacity-50"
             >
               取消
             </button>
             <button
               onClick={handleSubmit}
               disabled={saving}
-              className="h-[44px] px-[20px] rounded-[12px] bg-[#242424] hover:bg-[#383838] text-white text-[14px] transition-colors disabled:opacity-50"
+              className="h-[44px] px-[20px] rounded-xl bg-[#242424] hover:bg-[#383838] text-white text-[14px] transition-colors disabled:opacity-50"
             >
               {saving ? "儲存中..." : "儲存"}
             </button>
@@ -619,13 +619,13 @@ export default function StaffUsersManagement({
           <DialogFooter>
             <button
               onClick={() => setDeleteConfirm(null)}
-              className="h-[44px] px-[20px] rounded-[12px] border border-[#dddddd] text-[14px] text-[#383838] hover:bg-[#F8FAFC] transition-colors"
+              className="h-[44px] px-[20px] rounded-xl border border-[#dddddd] text-[14px] text-[#383838] hover:bg-[#F8FAFC] transition-colors"
             >
               取消
             </button>
             <button
               onClick={handleDelete}
-              className="h-[44px] px-[20px] rounded-[12px] bg-[#e7000b] hover:bg-[#c70009] text-white text-[14px] transition-colors"
+              className="h-[44px] px-[20px] rounded-xl bg-[#e7000b] hover:bg-[#c70009] text-white text-[14px] transition-colors"
             >
               確認刪除
             </button>
@@ -677,7 +677,7 @@ function RoleRadio({
     <button
       type="button"
       onClick={onChange}
-      className={`flex-1 px-[16px] py-[12px] rounded-[12px] border text-left transition-colors ${
+      className={`flex-1 px-[16px] py-[12px] rounded-xl border text-left transition-colors ${
         active
           ? "border-[#0f6beb] bg-[#f0f6ff]"
           : "border-[#dddddd] bg-white hover:bg-[#F8FAFC]"

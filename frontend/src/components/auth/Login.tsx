@@ -53,7 +53,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-[#e5e7eb] flex items-center justify-center p-[24px]">
-      <div className="bg-white rounded-[20px] shadow-[0px_20px_25px_-5px_rgba(0,0,0,0.1),0px_8px_10px_-6px_rgba(0,0,0,0.1)] w-full max-w-[440px] p-[40px]">
+      <div className="bg-white rounded-3xl shadow-[0px_20px_25px_-5px_rgba(0,0,0,0.1),0px_8px_10px_-6px_rgba(0,0,0,0.1)] w-full max-w-[440px] p-[40px]">
         <div className="flex justify-center mb-[32px]">
           <StarbitLogo className="h-[48px]" />
         </div>
@@ -75,7 +75,7 @@ export default function Login() {
                 onBlur={() => validateEmail(email)}
                 placeholder="your@email.com"
                 disabled={isLoading}
-                className={`w-full h-[36px] pl-[40px] pr-[12px] rounded-[8px] bg-[#f3f3f5] text-[14px] text-[#000000] placeholder:text-[#9ca3af] border ${emailError ? 'border-red-500' : 'border-transparent'} focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
+                className={`w-full h-[36px] pl-[40px] pr-[12px] rounded-md bg-[#f3f3f5] text-[14px] text-[#000000] placeholder:text-[#9ca3af] border ${emailError ? 'border-red-500' : 'border-transparent'} focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
               />
             </div>
             {emailError && <p className="text-[12px] leading-[16px] text-red-500">{emailError}</p>}
@@ -94,7 +94,7 @@ export default function Login() {
                 onBlur={() => validatePassword(password)}
                 placeholder="••••••••"
                 disabled={isLoading}
-                className={`w-full h-[36px] pl-[40px] pr-[40px] rounded-[8px] bg-[#f3f3f5] text-[14px] text-[#000000] placeholder:text-[#9ca3af] border ${passwordError ? 'border-red-500' : 'border-transparent'} focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
+                className={`w-full h-[36px] pl-[40px] pr-[40px] rounded-md bg-[#f3f3f5] text-[14px] text-[#000000] placeholder:text-[#9ca3af] border ${passwordError ? 'border-red-500' : 'border-transparent'} focus:outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
               />
               <button type="button" onClick={() => setShowPassword(!showPassword)} disabled={isLoading} className="absolute right-[12px] top-[10px] text-[#9ca3af] hover:text-[#6b7280] transition-colors disabled:opacity-50">
                 {showPassword ? <EyeOff className="size-[16px]" /> : <Eye className="size-[16px]" />}
@@ -102,7 +102,7 @@ export default function Login() {
             </div>
             {passwordError && <p className="text-[12px] leading-[16px] text-red-500">{passwordError}</p>}
           </div>
-          <button type="submit" disabled={isLoading} className="w-full h-[40px] rounded-[8px] bg-[#0a0a0a] text-white text-[14px] leading-[20px] hover:bg-[#1a1a1a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
+          <button type="submit" disabled={isLoading} className="w-full h-[40px] rounded-md bg-[#0a0a0a] text-white text-[14px] leading-[20px] hover:bg-[#1a1a1a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
             {isLoading ? <div className="size-[16px] border-2 border-white border-t-transparent rounded-full animate-spin" /> : '登入'}
           </button>
         </form>
