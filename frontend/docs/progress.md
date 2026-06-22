@@ -104,14 +104,16 @@
 - 第一梯值會變：D 關鍵字回應 15→16+垃圾→full（`56fcaeb3`）、E 帳號管理 6→8（`ae970a96`）、F 聊天室頭像 158.824→full（`bafef36d`）、G ErrorBoundary 10→12（`28b85bcc`，信 diff 未目視）
 
 **⬜ 圓角剩餘待辦（明天，按此順序）**
-1. **C 設定頁 14→16 ×19** —— `LineApiSettingsContent.tsx`，`rounded-[14px]`/`rounded-t-[14px]`/`rounded-tl/tr-[14px]` 全 → `rounded-2xl`(16)，+2px。量最大、視覺變化明顯。驗收 `/settings`。
-2. **A 共用卡片 10→16 ⭐高風險** —— `FlexMessageCardPreview`（在 `CarouselMessageEditor.tsx`）。**要把 Carousel 的 `rounded-[10px]`×14 分兩類：卡片角→16（設計值）vs 其他容器→12（歸位）**，不可一律轉。動到三處渲染：**聊天室 `/members/chat`、訊息詳情抽屜（`/messages` 點列）、訊息預覽（`/flex-editor`）**，三處都要驗。
-3. **B Carousel/FB 其餘 ⚠️風險最高放最後** —— CarouselMessageEditor 其餘 10px→12、`rounded-[6px]`→8；`FBConfigPanel.tsx` `6px`→8。**捲軸 C1 第二組擱置中、動圓角別碰捲軸結構；FB 需 crmpoc 有粉專才驗得到**。
+1. ~~**C 設定頁 14→16 ×19**~~ ✅ **完成（`65ab3fd8`，push staging 綠燈）** —— `LineApiSettingsContent.tsx`，`rounded-[14px]`×10 + `rounded-t-[14px]`×9 → `rounded-2xl`/`rounded-t-2xl`(16)，+2px。
+2. ~~**A 共用卡片 10→16 ⭐高風險**~~ ✅ **完成（`01e58fc1`，push staging 綠燈）** —— `FlexMessageCardPreview`（在 `CarouselMessageEditor.tsx`）。實際分類：**131 卡片根（函式體內唯一 10px）→16（`rounded-2xl`，設計值，三處渲染同步變圓）**；**編輯器容器 ×13 →12（`rounded-xl`，歸位）**；**標籤 chip 6→8（`rounded-md`）**。三處渲染（聊天室 `chat-room/FlexMessageRenderer.tsx:52`、詳情抽屜 `MessageDetailDrawer.tsx:123`、編輯器預覽 `CarouselMessageEditor.tsx:539`）皆已驗收 OK。
+   - **padding 同心決策（2026-06-22）**：三處卡片都 `justify-center/items-center` **置中浮在框內**（預覽框左右浮 ~80px/上下 24px、抽屜再 scale 0.6），**卡片角與框角不相鄰、四邊內縮不等 → 不存在同心約束**。卡片角 10→16 是自洽變化，**padding 不動**。當初定案「pad24→4 / pad12→4」假設了「卡片貼框需同心」，讀結構發現前提不成立 → **移交間距批次（待辦 D）評估「卡片貼滿框（pad→4）」要不要做**，不混進圓角批。
+3. **B FB 其餘 ⚠️風險最高放最後** —— **CarouselMessageEditor 的 10px/6px 已全在 A 處理完**（容器→12、chip→8），B 只剩 **`FBConfigPanel.tsx` `6px`→8**。**捲軸 C1 第二組擱置中、動圓角別碰捲軸結構；FB 需 crmpoc 有粉專才驗得到**。
 4. **Part C 全站純換名 sweep** —— 圓角值全定案後，把全站剩餘 on-ladder arbitrary（`8/12/16/20/4/2px` 及 directional）一次按頁換成 token 名，**零變化**。含晶片/modal/內層那些還是 `rounded-[8px]` 的。sweep 完 → `token-migration-map.md` 退場。
 5. **dead code 刪除（獨立 commit）** —— `imports/` 裡的 Figma 死碼（含一堆 8.4px/28px/80px/e+07 垃圾值，改了也驗不到）；參考 §C 計畫排除清單。**單獨一刀，不混圓角值改動**。
 - [ ] **D. 間距 Spacing**：`px/py/p/gap/m*-[Npx]` 收斂到 Tailwind 數字工具類。對照 §3。
   - §3.1 是零變化（4 倍數）可安心批次；§3.2 是需眼睛確認（`gap-[10px]`→8 等 ±1~2px）。
   - §3.3 大版面位移（`ml-[330/280/250/72px]`）**不納入** spacing，另案處理。
+  - ⬜ **「卡片貼滿框（pad→4）」評估**（2026-06-22 從圓角批 A 移交）：A 做共用卡片圓角時，曾有舊定案「編輯器預覽框 `p-[24px]`→4 / 詳情抽屜 `p-[12px]`→4」，原假設「卡片貼框需同心」。實讀結構發現三處卡片**置中浮著、無同心約束**，前提不成立 → 砍 padding 純屬「要不要讓卡片貼滿框」的間距/視覺決策，移到此批評估。位置：`CarouselMessageEditor.tsx:538`（預覽框 `p-[24px]`）、`MessageDetailDrawer.tsx:121`（抽屜 `p-[12px]`）。**目前維持原樣**。
 - [ ] **E. 表格 UI 統一**：AI Chatbot 頁表格的灰色外框 + 表頭 hover 變色，是切廚房後恢復的樣式；連同其他頁表格一起在這批統一處理（目前刻意先不碰）。
   - ⬜ 待修小 bug（2026-06-19 做 B2a 時順手發現，與圓角無關）：`/messages`「已排程(0)」分頁的**空狀態（「尚無此資料」）外圍有奇怪的灰框、框線不對**。屬表格 UI 問題，留待本批一起修，**先不動**。
 - [ ] **F. 寫 `docs/design.md`**：把最終定案的 design system（字體 / 字級 / 行高 / 圓角 / 間距 / 顏色 token）整理成單一說明文件。
