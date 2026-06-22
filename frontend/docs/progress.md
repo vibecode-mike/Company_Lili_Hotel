@@ -110,6 +110,37 @@
 3. **B FB chip ⏸ 擱置（待粉專，2026-06-22）** —— **CarouselMessageEditor 的 10px/6px 已全在 A 處理完**；B 只剩 **`FBConfigPanel.tsx:60` 標籤 chip `rounded-[6px]`→`rounded-md`(8)**（1 處，與 A 已驗收的 Carousel chip:321 byte 級同款）。改動極小且不碰捲軸結構，但 **chip 只在 FB 渠道編輯器（群發→建立訊息→渠道選 FB 粉專→FBConfigPanel 標籤區）出現，crmpoc 未綁 FB 粉專就驗不到** → 已 revert 回 `rounded-[6px]`、**擱置待有粉專再做**。render chain 已確認活的：`MessageCreation:2625`→`FacebookMessageEditor:407`→`FBConfigPanel`。
 4. **Part C 全站純換名 sweep** —— 圓角值全定案後，把全站剩餘 on-ladder arbitrary（`8/12/16/20/4/2px` 及 directional）一次按頁換成 token 名，**零變化**。含晶片/modal/內層那些還是 `rounded-[8px]` 的。sweep 完 → `token-migration-map.md` 退場。
 5. **dead code 刪除（獨立 commit）** —— `imports/` 裡的 Figma 死碼（含一堆 8.4px/28px/80px/e+07 垃圾值，改了也驗不到）；參考 §C 計畫排除清單。**單獨一刀，不混圓角值改動**。
+### 📦 Part C 純換名 sweep — 分包（2026-06-22 重建，source ground truth）
+
+> ⚠️ 教訓：上一版分包只在對話裡產出、沒落檔 → context 摘要後遺失。本表為**從 source 重新清點重建**
+> （`grep rounded-[2/4/8/12/16/20px]` 全方向變體，排除 `imports/`/`.bak`/死碼），並寫進此檔＝跨 session 真相。
+>
+> **範圍鐵律**：只動 **on-ladder 零變化**——`2→2xs｜4→xs｜8→md｜12→xl｜16→2xl｜20→3xl`。
+> **off-ladder（6/10/14/15px）絕不碰**（多已在前面 A/B/C/D/E/F 批處理或擱置）。逐檔 `replace_all`、build 過、
+> git diff 審「只有 class 名換、值 1:1」、每包抽查 1–2 代表頁 crmpoc、逐包獨立 commit+push 驗 CI。
+>
+> **死碼已剔除（import≠render，已驗）**：`chat-room/MemberInfoPanel`(11，無人 render)、
+> `chat-room/MemberNoteEditor`(5，barrel 有匯出但唯一 `<MemberNoteEditor>` render＝`ChatRoomLayout:1158` 用的是 `shared/MemberNoteEditor`)。
+>
+> **總計活的 on-ladder ≈ 261 處**：256 可驗收（9 包）+ FB 待粉專 5 處（獨立）。含 `SecondaryButton` `rounded-[32px]→rounded-full`（32px 高、圓角已夾成膠囊，零變化、語意對；併入 P9）。
+
+| 包 | 主題 · crmpoc 代表頁 | 檔（數） | 小計 |
+|---|---|---|---|
+| **P1** | 設定頁 · `/settings`（LINE API 設定 / 基本設定） | LineApiSettingsContent 22、BasicSettingsEmpty 4、BasicSettingsList 2 | **28** |
+| **P2** | 帳號·登入 · 帳號管理頁 + 登入頁 | StaffUsersManagement 19（⚠️6px×2 off-ladder 留）、CreateWebchatOrgModal 6、auth/Login 4 | **29** |
+| **P3** | 自動回覆編輯 · 自動回覆→建立互動式回覆 | CreateAutoReplyInteractive 21（⚠️15px×1 off-ladder 留）、AutoReply 6、KeywordTagsInput 3 | **30** |
+| **P4** | 自動回覆 表格·觸發·時間 · 自動回覆列表頁 + 觸發時間 | DateTimePicker 12、AutoReplyTableStyled 5、TriggerTimeOptions 5 | **22** |
+| **P5** | AI Chatbot·輪播訊息 · AI Chatbot 編輯彈窗 + 群發→LINE OA 輪播編輯 | chatbot/AIChatbotEditModal 21、CarouselMessageEditor 12（⚠️10/6px 已於 A 處理，剩 8/12/16 零變化） | **33** |
+| **P6** | 聊天室 A 面板 · 聊天室（右側會員資訊面板 + 版面） | chat-room/MemberInfoPanelComplete 18、chat-room/ChatRoomLayout 10 | **28** |
+| **P7** | 聊天室 B 訊息列·會員 · 聊天室訊息區 + 會員標籤/對話下載 | ChatInput 3、ChatBubble 3、ChatMessageList 2、ResponseModeIndicator 2、PlatformSwitcher 2、MemberTagSection 1、FlexMessageRenderer 1、ChatRoom 1、shared/MemberNoteEditor 2、MemberTagEditModal 6、DownloadConversationsModal 5 | **28** |
+| **P8** | 共用容器·樣式·下拉 · 散落各頁（抽查自動回覆/會員列表的下拉/搜尋/空狀態卡） | common/styles.ts 12、CategoryTitleDropdown 5、SearchContainers 3、ImageUploadField 3、DeleteConfirmationModal 3、BlankStateCard 3 | **29** |
+| **P9** | 框架·導覽·ui·雜項 · 任一主頁殼 + PMS 連線彈窗 | Sidebar 2、SidebarChannelSwitcher 2、ChannelStatusBadge 2、common/ChannelSwitcher 2、ErrorBoundary 2、ToastProvider 1、figma/ImageWithFallback 1、ui/chart 2、ui/tooltip 1、ui/checkbox 1、buttons/CancelButton 2、common/Tag 1、TagList 1、TagItem 1、Scrollable 1、DeleteButton 1、TestEnvHeaderLabel 1、**SecondaryButton 32→full** 1、PmsConnectModal 4 | **29** |
+| **FB** | ⏸ **待粉專**（crmpoc 無 FB 粉專驗不到，獨立、不混可驗收包） | facebook-message/FBConfigPanel 4（⚠️6px off-ladder 留）、facebook-message/FacebookMessageEditor 1 | **5** |
+
+> ⚠️ **2xs（2px）首用風險**：P9 的 `ui/chart`(2px×2)/`ui/tooltip`/`ui/checkbox` 換 `rounded-2xs` 是 2xs token 首批廣用。
+> live Tailwind 會 JIT 從 `@theme --radius-2xs` 生成，理論上 OK，但**抽查時特別確認 2xs class 有生效、沒破圖**（防「換名後 class 不生效」那種）。
+> ⚠️ **P8/P9 是跨頁共用元件**，沒有單一「自己的頁」→ 抽查時挑「會掛載到它」的高流量頁（如自動回覆/會員列表/任一主頁殼）驗。
+
 - [ ] **D. 間距 Spacing**：`px/py/p/gap/m*-[Npx]` 收斂到 Tailwind 數字工具類。對照 §3。
   - §3.1 是零變化（4 倍數）可安心批次；§3.2 是需眼睛確認（`gap-[10px]`→8 等 ±1~2px）。
   - §3.3 大版面位移（`ml-[330/280/250/72px]`）**不納入** spacing，另案處理。
