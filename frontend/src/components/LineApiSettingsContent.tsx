@@ -436,7 +436,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
           </div>
 
           {/* 主要內容卡片 - 淡藍色背景 */}
-          <div className="relative bg-blue-50 rounded-[14px] border border-[#bedbff] p-[20px] sm:p-[24px]">
+          <div className="relative bg-blue-50 rounded-2xl border border-[#bedbff] p-[20px] sm:p-[24px]">
             {/* 頂部：勾選圖標 + 文字 */}
             <div className="flex items-center gap-[8px] mb-[24px]">
               <div className="relative shrink-0 size-[24px]">
@@ -568,12 +568,12 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
           {/* Card 1: Duplicate Card */}
           <div 
             ref={card1Ref}
-            className={`bg-white rounded-[14px] border-[1.6px] overflow-hidden ${expandedCard === 1 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
+            className={`bg-white rounded-2xl border-[1.6px] overflow-hidden ${expandedCard === 1 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
           >
             {/* Card Header */}
             <button
               onClick={() => toggleCard(1)}
-              className="w-full px-[24px] py-[16px] flex items-center justify-between hover:bg-gray-50 rounded-t-[14px] transition-colors"
+              className="w-full px-[24px] py-[16px] flex items-center justify-between hover:bg-gray-50 rounded-t-2xl transition-colors"
             >
               <div className="flex items-center gap-[12px]">
                 <div className="bg-[#0f6beb] rounded-full size-[32px] flex items-center justify-center">
@@ -706,12 +706,12 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
           {/* Card 2: Channel ID */}
           <div 
             ref={card2Ref}
-            className={`bg-white rounded-[14px] border-[1.6px] overflow-hidden ${expandedCard === 2 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
+            className={`bg-white rounded-2xl border-[1.6px] overflow-hidden ${expandedCard === 2 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
           >
             {/* Card Header */}
             <button
               onClick={() => toggleCard(2)}
-              className="w-full px-[24px] py-[16px] flex items-center justify-between hover:bg-gray-50 rounded-t-[14px] transition-colors"
+              className="w-full px-[24px] py-[16px] flex items-center justify-between hover:bg-gray-50 rounded-t-2xl transition-colors"
             >
               <div className="flex items-center gap-[12px]">
                 <div className="bg-[#0f6beb] rounded-full size-[32px] flex items-center justify-center">
@@ -826,11 +826,11 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
           {/* Card 3: Channel Secret */}
           <div 
             ref={card3Ref}
-            className={`bg-white rounded-[14px] border-[1.6px] overflow-hidden ${expandedCard === 3 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
+            className={`bg-white rounded-2xl border-[1.6px] overflow-hidden ${expandedCard === 3 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
           >
             <button
               onClick={() => toggleCard(3)}
-              className="w-full px-[24px] py-[16px] flex items-center justify-between hover:bg-gray-50 rounded-t-[14px] transition-colors"
+              className="w-full px-[24px] py-[16px] flex items-center justify-between hover:bg-gray-50 rounded-t-2xl transition-colors"
             >
               <div className="flex items-center gap-[12px]">
                 <div className="bg-[#0f6beb] rounded-full size-[32px] flex items-center justify-center">
@@ -936,11 +936,11 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
           {/* Card 4: Channel Access Token */}
           <div 
             ref={card4Ref}
-            className={`bg-white rounded-[14px] border-[1.6px] overflow-hidden ${expandedCard === 4 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
+            className={`bg-white rounded-2xl border-[1.6px] overflow-hidden ${expandedCard === 4 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
           >
             <button
               onClick={() => toggleCard(4)}
-              className="w-full px-[24px] py-[16px] flex items-center justify-between hover:bg-gray-50 rounded-t-[14px] transition-colors"
+              className="w-full px-[24px] py-[16px] flex items-center justify-between hover:bg-gray-50 rounded-t-2xl transition-colors"
             >
               <div className="flex items-center gap-[12px]">
                 <div className="bg-[#0f6beb] rounded-full size-[32px] flex items-center justify-center">
@@ -1058,11 +1058,11 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
           {/* Card 5: Webhook URL - 截圖待替換 */}
           <div
             ref={card5Ref}
-            className={`bg-white rounded-[14px] border-[1.6px] overflow-hidden ${expandedCard === 5 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
+            className={`bg-white rounded-2xl border-[1.6px] overflow-hidden ${expandedCard === 5 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
           >
             <button
               onClick={() => toggleCard(5)}
-              className="w-full px-[24px] py-[16px] flex items-center justify-between hover:bg-gray-50 rounded-t-[14px] transition-colors"
+              className="w-full px-[24px] py-[16px] flex items-center justify-between hover:bg-gray-50 rounded-t-2xl transition-colors"
             >
               <div className="flex items-center gap-[12px]">
                 <div className="bg-[#0f6beb] rounded-full size-[32px] flex items-center justify-center">
@@ -1189,11 +1189,11 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
           {/* Card 6: Webhook confirmation */}
           <div
             ref={card6Ref}
-            className={`bg-white rounded-[14px] border-[1.6px] overflow-hidden ${expandedCard === 6 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
+            className={`bg-white rounded-2xl border-[1.6px] overflow-hidden ${expandedCard === 6 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
           >
             <button
               onClick={() => toggleCard(6)}
-              className="w-full px-[24px] py-[16px] flex items-center justify-between hover:bg-gray-50 rounded-t-[14px] transition-colors"
+              className="w-full px-[24px] py-[16px] flex items-center justify-between hover:bg-gray-50 rounded-t-2xl transition-colors"
             >
               <div className="flex items-center gap-[12px]">
                 <div className="bg-[#0f6beb] rounded-full size-[32px] flex items-center justify-center">
@@ -1304,12 +1304,12 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
           {/* Card 7: LINE Login Channel */}
           <div
             ref={card7Ref}
-            className={`bg-white rounded-[14px] border-[1.6px] overflow-hidden ${expandedCard === 7 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
+            className={`bg-white rounded-2xl border-[1.6px] overflow-hidden ${expandedCard === 7 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
           >
             {/* Card Header */}
             <button
               onClick={() => toggleCard(7)}
-              className="w-full px-[24px] py-[16px] flex items-center justify-between hover:bg-gray-50 rounded-t-[14px] transition-colors"
+              className="w-full px-[24px] py-[16px] flex items-center justify-between hover:bg-gray-50 rounded-t-2xl transition-colors"
             >
               <div className="flex items-center gap-[12px]">
                 <div className="bg-[#0f6beb] rounded-full size-[32px] flex items-center justify-center">
@@ -1404,12 +1404,12 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
           {/* Card 8: Login Channel ID */}
           <div
             ref={card8Ref}
-            className={`bg-white rounded-[14px] border-[1.6px] overflow-hidden ${expandedCard === 8 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
+            className={`bg-white rounded-2xl border-[1.6px] overflow-hidden ${expandedCard === 8 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
           >
             {/* Card Header */}
             <button
               onClick={() => toggleCard(8)}
-              className="w-full px-[24px] py-[16px] flex items-center justify-between hover:bg-gray-50 rounded-t-[14px] transition-colors"
+              className="w-full px-[24px] py-[16px] flex items-center justify-between hover:bg-gray-50 rounded-t-2xl transition-colors"
             >
               <div className="flex items-center gap-[12px]">
                 <div className="bg-[#0f6beb] rounded-full size-[32px] flex items-center justify-center">
@@ -1508,11 +1508,11 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
           {/* Card 9: Login Channel Secret */}
           <div
             ref={card9Ref}
-            className={`bg-white rounded-[14px] border-[1.6px] overflow-hidden ${expandedCard === 9 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
+            className={`bg-white rounded-2xl border-[1.6px] overflow-hidden ${expandedCard === 9 ? 'border-[#0f6beb] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]' : 'border-gray-200'}`}
           >
             <button
               onClick={() => toggleCard(9)}
-              className="w-full px-[24px] py-[16px] flex items-center justify-between hover:bg-gray-50 rounded-t-[14px] transition-colors"
+              className="w-full px-[24px] py-[16px] flex items-center justify-between hover:bg-gray-50 rounded-t-2xl transition-colors"
             >
               <div className="flex items-center gap-[12px]">
                 <div className="bg-[#0f6beb] rounded-full size-[32px] flex items-center justify-center">
