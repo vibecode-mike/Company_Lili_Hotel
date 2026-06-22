@@ -56,6 +56,15 @@
 - **「零變化」可能其實 +2px → 驗明正身**
   - 自以為等價的替換，實際差了 2px（例：某圓角從一個值換到「等價」token 卻偏移）。
   - 教訓：替換前後**實際量過 px**，別信「應該一樣」。
+- **HMR 快取殘影 ≠ 真退化 → 強重整再判**
+  - dev server（live Tailwind）換 class 名（`rounded-[8px]`→`rounded-md`）的瞬間，HMR 更新 CSS 那一刻
+    瀏覽器可能短暫渲染舊/中間狀態，看起來像「圓角變了」。實例（2026-06-22，圓角 sweep P3）：
+    訊息文字框看起來變不圓 → 查 prod build CSS + **直接拉 dev server :5173 live CSS** 兩個獨立來源，
+    證實 `rounded-md=calc(var(--radius)-2px)`、`--radius=0.625rem`、`html font-size=16px` → 鐵定 8px=8px、零變化。
+    使用者 **Ctrl+Shift+R 強重整後圓角恢復一致** → 確認是 HMR 快取殘影。
+  - 教訓：crmpoc 驗收看到「換名後好像變了」，**先強重整**；仍不一致才查機制。
+    查機制時 ground truth = ①prod build CSS ②`curl localhost:5173/src/styles/globals.css` 的 live module
+    ③`--radius`/`html font-size` 是否唯一定義（rem token 的 px 值吃 root font-size，要連 font-size 一起驗）。
 - **死碼陷阱 → 列清單先驗 render，別只 grep**
   - grep 找到的元件不代表真的會被 render。曾經把 2 個死碼元件誤列進工作清單。
   - 教訓：列容器/元件批次清單前，先確認元件真的會 render（查 import / 路由），死碼一律排除。
