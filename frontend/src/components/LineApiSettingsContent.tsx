@@ -621,7 +621,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                             href="https://developers.line.biz/en/" 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-[4px] bg-[#0f6beb] text-white px-[8px] py-[1px] rounded-[4px] text-[12px] leading-[16px] hover:bg-[#0d5bbf] transition-colors"
+                            className="inline-flex items-center gap-[4px] bg-[#0f6beb] text-white px-[8px] py-[1px] rounded-xs text-[12px] leading-[16px] hover:bg-[#0d5bbf] transition-colors"
                           >
                             LINE Developers Console
                             <ExternalLink className="size-[12px]" />
@@ -673,7 +673,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                             href="https://account.line.biz/login?redirectUri=https%3A%2F%2Faccount.line.biz%2Foauth2%2Fcallback%3Fclient_id%3D10%26code_challenge%3DQRWU3NlqNfuAHKIf61Lav9XdqFw90xQ_yw0n_PwZJZ4%26code_challenge_method%3DS256%26redirect_uri%3Dhttps%253A%252F%252Fmanager.line.biz%252Fapi%252Foauth2%252FbizId%252Fcallback%26response_type%3Dcode%26state%3DdN6GnGuQU6OqkM3dKqLo6b5uAhJp6idd" 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-[4px] bg-[#0f6beb] text-white px-[8px] py-[1px] rounded-[4px] text-[12px] leading-[16px] hover:bg-[#0d5bbf] transition-colors"
+                            className="inline-flex items-center gap-[4px] bg-[#0f6beb] text-white px-[8px] py-[1px] rounded-xs text-[12px] leading-[16px] hover:bg-[#0d5bbf] transition-colors"
                           >
                             LINE 官方帳號後台
                             <ExternalLink className="size-[12px]" />
@@ -695,7 +695,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                 {/* Next Button */}
                 <button
                   onClick={() => goToNextCard(2)}
-                  className="bg-[#0f6beb] h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] hover:bg-[#0d5bbf] transition-colors flex items-center justify-center"
+                  className="bg-[#0f6beb] h-[36px] rounded-md text-white text-[14px] leading-[20px] hover:bg-[#0d5bbf] transition-colors flex items-center justify-center"
                 >
                   下一步
                 </button>
@@ -759,7 +759,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                             href="https://developers.line.biz/console/" 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-[4px] bg-[#0f6beb] text-white px-[8px] py-[1px] rounded-[4px] text-[12px] leading-[16px] hover:bg-[#0d5bbf] transition-colors"
+                            className="inline-flex items-center gap-[4px] bg-[#0f6beb] text-white px-[8px] py-[1px] rounded-xs text-[12px] leading-[16px] hover:bg-[#0d5bbf] transition-colors"
                           >
                             LINE Developers Console
                             <ExternalLink className="size-[12px]" />
@@ -794,7 +794,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                     placeholder="請輸入 Channel ID"
                     value={channelId}
                     onChange={(e) => setChannelId(e.target.value.trim())}
-                    className="bg-[#f3f3f5] h-[36px] px-[12px] py-[4px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] border-none outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                    className="bg-[#f3f3f5] h-[36px] px-[12px] py-[4px] rounded-md text-[14px] text-[#383838] placeholder:text-[#717182] border-none outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
                   />
                 </div>
 
@@ -811,7 +811,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                       goToNextCard(3);
                     }
                   }}
-                  className={`h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] flex items-center justify-center transition-colors ${
+                  className={`h-[36px] rounded-md text-white text-[14px] leading-[20px] flex items-center justify-center transition-colors ${
                     VALIDATION.channel_id.test(channelId.trim())
                       ? 'bg-[#0f6beb] hover:bg-[#0d5bbf]'
                       : 'bg-[#d1d5dc] opacity-50 cursor-not-allowed'
@@ -904,7 +904,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                     placeholder="請輸入 Channel Secret"
                     value={channelSecret}
                     onChange={(e) => setChannelSecret(e.target.value)}
-                    className="bg-[#f3f3f5] h-[36px] px-[12px] py-[4px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] border-none outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                    className="bg-[#f3f3f5] h-[36px] px-[12px] py-[4px] rounded-md text-[14px] text-[#383838] placeholder:text-[#717182] border-none outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
                   />
                 </div>
 
@@ -921,7 +921,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                       goToNextCard(4);
                     }
                   }}
-                  className={`h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] flex items-center justify-center transition-colors ${
+                  className={`h-[36px] rounded-md text-white text-[14px] leading-[20px] flex items-center justify-center transition-colors ${
                     VALIDATION.channel_secret.test(channelSecret.trim())
                       ? 'bg-[#0f6beb] hover:bg-[#0d5bbf]'
                       : 'bg-[#d1d5dc] opacity-50 cursor-not-allowed'
@@ -1024,7 +1024,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                       setChannelAccessToken(e.target.value);
                       setBasicIdError(''); // 清除錯誤訊息
                     }}
-                    className={`bg-[#f3f3f5] h-[36px] px-[12px] py-[4px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] border-none outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all ${basicIdError ? 'ring-2 ring-red-500' : ''}`}
+                    className={`bg-[#f3f3f5] h-[36px] px-[12px] py-[4px] rounded-md text-[14px] text-[#383838] placeholder:text-[#717182] border-none outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all ${basicIdError ? 'ring-2 ring-red-500' : ''}`}
                   />
                   {basicIdError && (
                     <p className="text-[12px] text-red-500">{basicIdError}</p>
@@ -1043,7 +1043,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                       }
                     }
                   }}
-                  className={`h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] flex items-center justify-center transition-colors ${
+                  className={`h-[36px] rounded-md text-white text-[14px] leading-[20px] flex items-center justify-center transition-colors ${
                     channelAccessToken.trim() && !isFetchingBasicId
                       ? 'bg-[#0f6beb] hover:bg-[#0d5bbf]'
                       : 'bg-[#d1d5dc] opacity-50 cursor-not-allowed'
@@ -1109,7 +1109,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                             href="https://account.line.biz/login?redirectUri=https%3A%2F%2Faccount.line.biz%2Foauth2%2Fcallback%3Fclient_id%3D10%26code_challenge%3DQRWU3NlqNfuAHKIf61Lav9XdqFw90xQ_yw0n_PwZJZ4%26code_challenge_method%3DS256%26redirect_uri%3Dhttps%253A%252F%252Fmanager.line.biz%252Fapi%252Foauth2%252FbizId%252Fcallback%26response_type%3Dcode%26state%3DdN6GnGuQU6OqkM3dKqLo6b5uAhJp6idd"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-[4px] bg-[#0f6beb] text-white px-[8px] py-[1px] rounded-[4px] text-[12px] leading-[16px] hover:bg-[#0d5bbf] transition-colors"
+                            className="inline-flex items-center gap-[4px] bg-[#0f6beb] text-white px-[8px] py-[1px] rounded-xs text-[12px] leading-[16px] hover:bg-[#0d5bbf] transition-colors"
                           >
                             LINE 官方帳號後台
                             <ExternalLink className="size-[12px]" />
@@ -1153,7 +1153,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                   <p className="text-[14px] leading-[20px] text-[#364153] mb-[8px]">你的 Webhook 網址：</p>
                   {channelId.trim() ? (
                     <div className="flex items-center gap-[8px]">
-                      <code className="flex-1 bg-[#f3f3f5] px-[12px] py-[8px] rounded-[8px] text-[14px] text-[#383838] break-all">
+                      <code className="flex-1 bg-[#f3f3f5] px-[12px] py-[8px] rounded-md text-[14px] text-[#383838] break-all">
                         {`${webhookBaseUrl}/callback/${channelId.trim()}`}
                       </code>
                       <button
@@ -1162,14 +1162,14 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                           navigator.clipboard.writeText(url);
                           showToast('已複製 Webhook 網址', 'success');
                         }}
-                        className="shrink-0 bg-[#0f6beb] hover:bg-[#0d5bbf] text-white px-[12px] py-[8px] rounded-[8px] text-[12px] leading-[16px] flex items-center gap-[4px] transition-colors"
+                        className="shrink-0 bg-[#0f6beb] hover:bg-[#0d5bbf] text-white px-[12px] py-[8px] rounded-md text-[12px] leading-[16px] flex items-center gap-[4px] transition-colors"
                       >
                         <Copy className="size-[14px]" />
                         複製
                       </button>
                     </div>
                   ) : (
-                    <p className="text-[14px] leading-[20px] text-[#717182] bg-[#f3f3f5] px-[12px] py-[8px] rounded-[8px]">
+                    <p className="text-[14px] leading-[20px] text-[#717182] bg-[#f3f3f5] px-[12px] py-[8px] rounded-md">
                       請先完成前面步驟
                     </p>
                   )}
@@ -1178,7 +1178,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                 {/* Next Button */}
                 <button
                   onClick={() => goToNextCard(6)}
-                  className="bg-[#0f6beb] h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] hover:bg-[#0d5bbf] transition-colors flex items-center justify-center"
+                  className="bg-[#0f6beb] h-[36px] rounded-md text-white text-[14px] leading-[20px] hover:bg-[#0d5bbf] transition-colors flex items-center justify-center"
                 >
                   下一步
                 </button>
@@ -1293,7 +1293,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                 {/* Button */}
                 <button
                   disabled
-                  className="hidden bg-[#d1d5dc] opacity-50 h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] cursor-not-allowed flex items-center justify-center"
+                  className="hidden bg-[#d1d5dc] opacity-50 h-[36px] rounded-md text-white text-[14px] leading-[20px] cursor-not-allowed flex items-center justify-center"
                 >
                   建立連結
                 </button>
@@ -1357,7 +1357,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                             href="https://developers.line.biz/console/"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-[4px] bg-[#0f6beb] text-white px-[8px] py-[1px] rounded-[4px] text-[12px] leading-[16px] hover:bg-[#0d5bbf] transition-colors"
+                            className="inline-flex items-center gap-[4px] bg-[#0f6beb] text-white px-[8px] py-[1px] rounded-xs text-[12px] leading-[16px] hover:bg-[#0d5bbf] transition-colors"
                           >
                             LINE Developers Console
                             <ExternalLink className="size-[12px]" />
@@ -1393,7 +1393,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                 {/* Next Button */}
                 <button
                   onClick={() => goToNextCard(8)}
-                  className="bg-[#0f6beb] h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] hover:bg-[#0d5bbf] transition-colors flex items-center justify-center"
+                  className="bg-[#0f6beb] h-[36px] rounded-md text-white text-[14px] leading-[20px] hover:bg-[#0d5bbf] transition-colors flex items-center justify-center"
                 >
                   下一步
                 </button>
@@ -1476,7 +1476,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                     placeholder="請輸入 Channel ID"
                     value={loginChannelId}
                     onChange={(e) => setLoginChannelId(e.target.value)}
-                    className="bg-[#f3f3f5] h-[36px] px-[12px] py-[4px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] border-none outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                    className="bg-[#f3f3f5] h-[36px] px-[12px] py-[4px] rounded-md text-[14px] text-[#383838] placeholder:text-[#717182] border-none outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
                   />
                 </div>
 
@@ -1493,7 +1493,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                       goToNextCard(9);
                     }
                   }}
-                  className={`h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] flex items-center justify-center transition-colors ${
+                  className={`h-[36px] rounded-md text-white text-[14px] leading-[20px] flex items-center justify-center transition-colors ${
                     VALIDATION.login_channel_id.test(loginChannelId.trim())
                       ? 'bg-[#0f6beb] hover:bg-[#0d5bbf]'
                       : 'bg-[#d1d5dc] opacity-50 cursor-not-allowed'
@@ -1586,7 +1586,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                     placeholder="請輸入 Channel Secret"
                     value={loginChannelSecret}
                     onChange={(e) => setLoginChannelSecret(e.target.value)}
-                    className="bg-[#f3f3f5] h-[36px] px-[12px] py-[4px] rounded-[8px] text-[14px] text-[#383838] placeholder:text-[#717182] border-none outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
+                    className="bg-[#f3f3f5] h-[36px] px-[12px] py-[4px] rounded-md text-[14px] text-[#383838] placeholder:text-[#717182] border-none outline-none focus:ring-2 focus:ring-[#0f6beb] transition-all"
                   />
                 </div>
 
@@ -1606,7 +1606,7 @@ export default function LineApiSettingsContent({ onComplete, onBack, editingChan
                 <button
                   disabled={!canSubmitConnection}
                   onClick={canSubmitConnection ? handleCreateConnection : undefined}
-                  className={`h-[36px] rounded-[8px] text-white text-[14px] leading-[20px] flex items-center justify-center transition-colors ${
+                  className={`h-[36px] rounded-md text-white text-[14px] leading-[20px] flex items-center justify-center transition-colors ${
                     canSubmitConnection
                       ? 'bg-[#0f6beb] hover:bg-[#0d5bbf]'
                       : 'bg-[#d1d5dc] opacity-50 cursor-not-allowed'

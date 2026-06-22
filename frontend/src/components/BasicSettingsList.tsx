@@ -139,7 +139,7 @@ export const BasicSettingsList = memo(function BasicSettingsList({
         <div className="content-stretch flex items-center justify-end relative shrink-0 w-full mb-[24px]">
           <button
             onClick={onAddAccount}
-            className="bg-[#242424] content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 hover:bg-[#383838] transition-colors duration-200"
+            className="bg-[#242424] content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-2xl shrink-0 hover:bg-[#383838] transition-colors duration-200"
           >
             <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[16px] text-center text-white">
               新增帳號
@@ -148,7 +148,7 @@ export const BasicSettingsList = memo(function BasicSettingsList({
         </div>
 
         {/* Table */}
-        <div className="content-stretch flex flex-col items-start relative rounded-[16px] shrink-0 w-full overflow-hidden bg-white">
+        <div className="content-stretch flex flex-col items-start relative rounded-2xl shrink-0 w-full overflow-hidden bg-white">
           {/* 垂直滾動容器（捲軸方案 C：自繪 thumb）；表頭走 header 槽固定在捲動區外 */}
           <Scrollable
             orientation="vertical"

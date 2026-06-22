@@ -50,7 +50,7 @@ export const BasicSettingsEmpty = memo(function BasicSettingsEmpty({
           {/* LINE Card */}
           <button
             onClick={onLineClick}
-            className="platform-card basis-0 grow min-h-px min-w-px relative rounded-[16px] shrink-0 p-[20px] group text-left border border-[#e5e7eb]"
+            className="platform-card basis-0 grow min-h-px min-w-px relative rounded-2xl shrink-0 p-[20px] group text-left border border-[#e5e7eb]"
           >
             <div className="flex flex-row items-center justify-center size-full">
               {/* LINE Icon */}
@@ -101,7 +101,7 @@ export const BasicSettingsEmpty = memo(function BasicSettingsEmpty({
           {/* Facebook Card */}
           <button
             onClick={onFacebookClick}
-            className="platform-card basis-0 grow min-h-px min-w-px relative rounded-[16px] shrink-0 p-[20px] group text-left border border-[#e5e7eb]"
+            className="platform-card basis-0 grow min-h-px min-w-px relative rounded-2xl shrink-0 p-[20px] group text-left border border-[#e5e7eb]"
           >
             <div className="flex flex-row items-center justify-center size-full">
               {/* Facebook Messenger Icon */}
@@ -161,7 +161,7 @@ export const BasicSettingsEmpty = memo(function BasicSettingsEmpty({
           {/* 官網彈窗 Card（免 LINE） */}
           <button
             onClick={onWebchatClick}
-            className="platform-card basis-0 grow min-h-px min-w-px relative rounded-[16px] shrink-0 p-[20px] group text-left border border-[#e5e7eb]"
+            className="platform-card basis-0 grow min-h-px min-w-px relative rounded-2xl shrink-0 p-[20px] group text-left border border-[#e5e7eb]"
           >
             <div className="flex flex-row items-center justify-center size-full">
               {/* 官網彈窗 Icon（對話泡泡） */}
@@ -200,7 +200,7 @@ export const BasicSettingsEmpty = memo(function BasicSettingsEmpty({
           {/* PMS 串接 Card */}
           <button
             onClick={onPmsClick}
-            className="platform-card basis-0 grow min-h-px min-w-px relative rounded-[16px] shrink-0 p-[20px] group text-left border border-[#e5e7eb]"
+            className="platform-card basis-0 grow min-h-px min-w-px relative rounded-2xl shrink-0 p-[20px] group text-left border border-[#e5e7eb]"
           >
             <div className="flex flex-row items-center justify-center size-full">
               {/* PMS Icon（房間/鑰匙意象） */}
