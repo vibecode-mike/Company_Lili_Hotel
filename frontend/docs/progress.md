@@ -124,6 +124,29 @@
 >
 > **總計活的 on-ladder ≈ 261 處**：256 可驗收（9 包）+ FB 待粉專 5 處（獨立）。含 `SecondaryButton` `rounded-[32px]→rounded-full`（32px 高、圓角已夾成膠囊，零變化、語意對；併入 P9）。
 
+#### 🚦 sweep 執行進度（2026-06-22 收工，明天接這裡）
+
+| 包 | 狀態 | commit | 備註 |
+|---|---|---|---|
+| **P1** 設定頁 | ✅ push 上線、CI 綠、驗收 OK | `357462a3` | — |
+| **P2** 帳號·登入 | ✅ push 上線、CI 綠、驗收 OK | `30454bd1` | StaffUsers 6px×2 確認 E 批已轉 md |
+| **P3** 自動回覆編輯 | ✅ push 上線、CI 綠、驗收 OK | `7293d084` | HMR 殘影誤判一次，強重整後確認零變化 |
+| **P4** 表格·觸發·時間 | ✅ push 上線、CI 綠、驗收 OK | `df156c5a` | 首次 directional（表格底 bl/br-2xl） |
+| **P5** Chatbot·輪播 | ✅ push 上線、CI 綠、驗收 OK | `d38e2fda` | — |
+| **P6** 聊天室面板 | ✅ push 上線、CI 綠、驗收 OK | `71601292` | — |
+| **P7** 聊天室訊息列·會員 | ✅ push 上線、CI 綠、驗收 OK | `6d3b00b5` | 11 檔 |
+| **P8** 共用容器·樣式·下拉 | ⏸ **已 commit、未 push、未驗收** | `fca2b8b1` | **明天驗收 OK 才 push**；可能要調整 |
+| **P9** 框架·導覽·ui·雜項 | ⬜ 未開始 | — | 含 SecondaryButton 32→full、2xs 首用風險 |
+| **FB** 待粉專 | ⬜ 擱置 | — | crmpoc 無粉專驗不到 |
+
+> **明天回來第一件事**：`git status` + `git log --oneline -5` 確認 P8(`fca2b8b1`) 還在本地未 push、工作區乾淨 →
+> crmpoc 驗收 P8（共用元件，挑自動回覆/會員列表等高流量頁，先強重整）→ OK 才 `git push origin main` 驗 CI → 再進 P9。
+> ⚠️ P8 commit 訊息標了「待明天驗收」；若驗收要調整，可 `git commit --amend` 或加修正 commit 後再 push。
+>
+> **同事動向存證（免明天看 log 困惑）**：P6(`71601292`) 之後、我 P7 之前，同事 vibecode-mike push 了
+> `eed2568e` **fix(timezone): 連線層 +08 + SSE 台北時間**（只動後端 `members.py`/`database.py`/`line_app/db.py`，
+> 與圓角 sweep **零重疊**）。我的 P7(`6d3b00b5`) 疊在它上面 fast-forward 成功、無衝突。log 看到它是同事的、不是我的。
+
 | 包 | 主題 · crmpoc 代表頁 | 檔（數） | 小計 |
 |---|---|---|---|
 | **P1** | 設定頁 · `/settings`（LINE API 設定 / 基本設定） | LineApiSettingsContent 22、BasicSettingsEmpty 4、BasicSettingsList 2 | **28** |
