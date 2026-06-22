@@ -106,7 +106,7 @@ export function SearchContainer({
   return (
     <div className={`content-stretch flex gap-[4px] items-center relative size-full ${className}`}>
       {/* 搜索欄 */}
-      <div className="bg-white box-border content-stretch flex gap-[28px] items-center min-w-[292px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 w-[292px]">
+      <div className="bg-white box-border content-stretch flex gap-[28px] items-center min-w-[292px] px-[12px] py-[8px] relative rounded-2xl shrink-0 w-[292px]">
         <SearchInput
           value={value}
           onChange={onChange}
@@ -119,7 +119,7 @@ export function SearchContainer({
       {/* 清除全部條件按鈕 */}
       <div
         onClick={handleClearAll}
-        className="box-border content-stretch flex gap-[2px] items-center justify-center min-w-[72px] px-[8px] py-[12px] relative rounded-[12px] shrink-0 cursor-pointer hover:bg-[#f0f6ff] transition-colors h-[48px]"
+        className="box-border content-stretch flex gap-[2px] items-center justify-center min-w-[72px] px-[8px] py-[12px] relative rounded-xl shrink-0 cursor-pointer hover:bg-[#f0f6ff] transition-colors h-[48px]"
       >
         <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[#0f6beb] text-[16px] text-center">
           清除全部條件
@@ -143,7 +143,7 @@ export function SimpleSearchBar({
   className = '' 
 }: SearchContainerProps) {
   return (
-    <div className={`bg-white box-border content-stretch flex gap-[28px] items-center min-w-[292px] px-[12px] py-[8px] relative rounded-[16px] shrink-0 w-[292px] ${className}`}>
+    <div className={`bg-white box-border content-stretch flex gap-[28px] items-center min-w-[292px] px-[12px] py-[8px] relative rounded-2xl shrink-0 w-[292px] ${className}`}>
       <SearchInput 
         value={value} 
         onChange={onChange} 

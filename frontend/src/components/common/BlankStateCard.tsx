@@ -37,7 +37,7 @@ function BlankActionButton({
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center justify-center px-[8px] py-[8px] rounded-[8px] cursor-pointer bg-transparent border-none hover:bg-[#f5f9fe] active:bg-[#ecf2fb] transition-colors duration-150"
+      className="flex items-center justify-center px-[8px] py-[8px] rounded-md cursor-pointer bg-transparent border-none hover:bg-[#f5f9fe] active:bg-[#ecf2fb] transition-colors duration-150"
     >
       <span className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[#0f6beb] text-[16px] text-center whitespace-nowrap">
         {label}
@@ -77,7 +77,7 @@ const BlankStateCard = memo(function BlankStateCard({
 }: BlankStateCardProps) {
   const pyClass = paddingY || "pt-[40px] pb-[40px]";
   return (
-    <div className={`flex flex-1 flex-col items-center ${pyClass} px-[12px] rounded-[4px] border border-dashed border-[#e5e7eb]`}>
+    <div className={`flex flex-1 flex-col items-center ${pyClass} px-[12px] rounded-xs border border-dashed border-[#e5e7eb]`}>
       {/* Top: icon */}
       <FileIcon />
       {/* Middle: text — flex-1 so it absorbs height differences */}
@@ -120,7 +120,7 @@ const BlankStateContainer = memo(function BlankStateContainer({
   children,
 }: BlankStateContainerProps) {
   return (
-    <div className="bg-white flex gap-[12px] items-stretch h-[256px] p-[12px] rounded-[16px] w-full">
+    <div className="bg-white flex gap-[12px] items-stretch h-[256px] p-[12px] rounded-2xl w-full">
       {children}
     </div>
   );

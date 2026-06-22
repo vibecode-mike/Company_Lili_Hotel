@@ -54,7 +54,7 @@ export const FONTS = {
  * 标签样式
  */
 export const tagStyles = {
-  base: 'bg-[#f0f6ff] text-[#0f6beb] px-[8px] py-[4px] rounded-[8px] text-[16px] leading-[1.5]',
+  base: 'bg-[#f0f6ff] text-[#0f6beb] px-[8px] py-[4px] rounded-md text-[16px] leading-[1.5]',
   inline: 'inline-flex items-center gap-[2px]',
   block: 'flex items-center gap-[2px]',
   small: 'text-[14px] px-[6px] py-[2px]',
@@ -64,28 +64,28 @@ export const tagStyles = {
  * 按钮样式
  */
 export const buttonStyles = {
-  primary: 'bg-[#242424] text-white px-[12px] py-[8px] rounded-[16px] min-h-[48px] min-w-[72px] hover:bg-[#333333] transition-colors',
-  secondary: 'bg-white text-[#383838] px-[12px] py-[8px] rounded-[16px] border border-gray-200 hover:bg-gray-50 transition-colors',
-  text: 'text-[#0f6beb] hover:bg-[#f0f6ff] px-[8px] py-[12px] rounded-[12px] transition-colors',
-  icon: 'p-[8px] hover:bg-gray-100 rounded-[8px] transition-colors',
+  primary: 'bg-[#242424] text-white px-[12px] py-[8px] rounded-2xl min-h-[48px] min-w-[72px] hover:bg-[#333333] transition-colors',
+  secondary: 'bg-white text-[#383838] px-[12px] py-[8px] rounded-2xl border border-gray-200 hover:bg-gray-50 transition-colors',
+  text: 'text-[#0f6beb] hover:bg-[#f0f6ff] px-[8px] py-[12px] rounded-xl transition-colors',
+  icon: 'p-[8px] hover:bg-gray-100 rounded-md transition-colors',
 } as const;
 
 /**
  * 输入框样式
  */
 export const inputStyles = {
-  base: `${FONTS.notoSans} text-[16px] leading-[1.5] text-[#383838] placeholder:text-[#717182] border border-gray-200 rounded-[12px] px-[12px] py-[8px] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] focus:border-transparent`,
+  base: `${FONTS.notoSans} text-[16px] leading-[1.5] text-[#383838] placeholder:text-[#717182] border border-gray-200 rounded-xl px-[12px] py-[8px] focus:outline-none focus:ring-2 focus:ring-[#0f6beb] focus:border-transparent`,
   search: `${FONTS.notoSans} text-[20px] leading-[1.5] text-[#383838] placeholder:text-[#dddddd] bg-transparent border-none outline-none`,
-  textarea: `${FONTS.notoSans} text-[16px] leading-[1.5] text-[#383838] placeholder:text-[#717182] border border-gray-200 rounded-[12px] px-[12px] py-[8px] resize-none focus:outline-none focus:ring-2 focus:ring-[#0f6beb] focus:border-transparent`,
+  textarea: `${FONTS.notoSans} text-[16px] leading-[1.5] text-[#383838] placeholder:text-[#717182] border border-gray-200 rounded-xl px-[12px] py-[8px] resize-none focus:outline-none focus:ring-2 focus:ring-[#0f6beb] focus:border-transparent`,
 } as const;
 
 /**
  * 卡片样式
  */
 export const cardStyles = {
-  base: 'bg-white rounded-[20px] border border-[#e1ebf9]',
-  shadow: 'bg-white rounded-[20px] shadow-sm',
-  elevated: 'bg-white rounded-[20px] shadow-md',
+  base: 'bg-white rounded-3xl border border-[#e1ebf9]',
+  shadow: 'bg-white rounded-3xl shadow-sm',
+  elevated: 'bg-white rounded-3xl shadow-md',
 } as const;
 
 /**
@@ -95,14 +95,14 @@ export const containerStyles = {
   page: 'flex flex-col gap-[32px] p-[28px] size-full',
   section: 'flex flex-col gap-[20px]',
   header: 'flex flex-col gap-[8px]',
-  scrollable: 'overflow-auto rounded-[20px] scrollbar-transparent',
+  scrollable: 'overflow-auto rounded-3xl scrollbar-transparent',
 } as const;
 
 /**
  * 表格样式
  */
 export const tableStyles = {
-  container: 'relative rounded-[20px] border border-[#e1ebf9] overflow-hidden',
+  container: 'relative rounded-3xl border border-[#e1ebf9] overflow-hidden',
   scrollContainer: 'overflow-auto max-h-[600px] scrollbar-transparent',
   header: `${FONTS.notoSans} text-[16px] leading-[1.5] text-[#383838] font-normal`,
   cell: `${FONTS.notoSans} text-[16px] leading-[1.5] text-[#383838]`,

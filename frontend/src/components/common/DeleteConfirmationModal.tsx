@@ -62,7 +62,7 @@ export function DeleteConfirmationModal({
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent
-        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-[800px] bg-white rounded-[16px] p-[32px] shadow-lg"
+        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-[800px] bg-white rounded-2xl p-[32px] shadow-lg"
       >
         <AlertDialogHeader className="gap-[16px]">
           <AlertDialogTitle className="text-[24px] font-semibold text-[#383838] text-center">
@@ -74,14 +74,14 @@ export function DeleteConfirmationModal({
         </AlertDialogHeader>
         <AlertDialogFooter className="flex flex-row justify-center gap-[16px] mt-[24px]">
           <AlertDialogCancel
-            className="h-[48px] px-[24px] min-w-[120px] rounded-[16px] border border-[#d0d5dd] bg-white text-[#383838] text-[16px] font-medium hover:bg-[#f9fafb] transition-colors"
+            className="h-[48px] px-[24px] min-w-[120px] rounded-2xl border border-[#d0d5dd] bg-white text-[#383838] text-[16px] font-medium hover:bg-[#f9fafb] transition-colors"
             disabled={isLoading}
           >
             {cancelText}
           </AlertDialogCancel>
           <AlertDialogAction
             onClick={handleConfirm}
-            className="h-[48px] px-[24px] min-w-[120px] rounded-[16px] bg-[#f44336] text-white text-[16px] font-medium hover:bg-[#d32f2f] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="h-[48px] px-[24px] min-w-[120px] rounded-2xl bg-[#f44336] text-white text-[16px] font-medium hover:bg-[#d32f2f] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={isLoading}
           >
             {isLoading ? (

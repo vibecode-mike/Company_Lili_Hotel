@@ -86,7 +86,7 @@ export default function CategoryTitleDropdown({
   };
 
   const btnClass =
-    "flex items-center justify-center px-[12px] py-[8px] rounded-[16px] shrink-0 self-stretch cursor-pointer hover:bg-[#f0f6ff] active:bg-[#dce8fc] transition-colors duration-150";
+    "flex items-center justify-center px-[12px] py-[8px] rounded-2xl shrink-0 self-stretch cursor-pointer hover:bg-[#f0f6ff] active:bg-[#dce8fc] transition-colors duration-150";
   const btnTextClass =
     "font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#0f6beb] text-center whitespace-nowrap";
 
@@ -112,13 +112,13 @@ export default function CategoryTitleDropdown({
           <DropdownMenuContent
             align="end"
             sideOffset={4}
-            className="min-w-[200px] bg-white rounded-[8px] border border-[#ddd] shadow-[0px_4px_12px_rgba(0,0,0,0.08)] p-[4px] z-50"
+            className="min-w-[200px] bg-white rounded-md border border-[#ddd] shadow-[0px_4px_12px_rgba(0,0,0,0.08)] p-[4px] z-50"
           >
             {EXPORT_OPTIONS.map((opt) => (
               <DropdownMenuItem
                 key={`template-${opt.value}`}
                 onClick={() => onDownloadTemplate(opt.value)}
-                className="px-[12px] py-[8px] text-[14px] font-['Noto_Sans_TC',sans-serif] font-normal text-[#383838] leading-[1.5] rounded-[4px] cursor-pointer hover:bg-[#f5f5f5] outline-none"
+                className="px-[12px] py-[8px] text-[14px] font-['Noto_Sans_TC',sans-serif] font-normal text-[#383838] leading-[1.5] rounded-xs cursor-pointer hover:bg-[#f5f5f5] outline-none"
               >
                 {opt.label}
               </DropdownMenuItem>
@@ -146,13 +146,13 @@ export default function CategoryTitleDropdown({
           <DropdownMenuContent
             align="end"
             sideOffset={4}
-            className="min-w-[200px] bg-white rounded-[8px] border border-[#ddd] shadow-[0px_4px_12px_rgba(0,0,0,0.08)] p-[4px] z-50"
+            className="min-w-[200px] bg-white rounded-md border border-[#ddd] shadow-[0px_4px_12px_rgba(0,0,0,0.08)] p-[4px] z-50"
           >
             {EXPORT_OPTIONS.map((opt) => (
               <DropdownMenuItem
                 key={`export-${opt.value}`}
                 onClick={() => onExport(opt.value)}
-                className="px-[12px] py-[8px] text-[14px] font-['Noto_Sans_TC',sans-serif] font-normal text-[#383838] leading-[1.5] rounded-[4px] cursor-pointer hover:bg-[#f5f5f5] outline-none"
+                className="px-[12px] py-[8px] text-[14px] font-['Noto_Sans_TC',sans-serif] font-normal text-[#383838] leading-[1.5] rounded-xs cursor-pointer hover:bg-[#f5f5f5] outline-none"
               >
                 {opt.label}
               </DropdownMenuItem>
