@@ -491,8 +491,9 @@ async def get_embed_code(
 
     public_base = (settings.PUBLIC_BASE or "").rstrip("/")
     embed_code = (
-        f'<script src="{public_base}/widget/loader.js'
-        f'?site_id={site.site_id}" async></script>'
+        f'<script src="{public_base}/api/v1/widget/lili-chatbot.js" '
+        f'data-site-id="{site.site_id}" '
+        f'data-site-name="{site.site_name or ""}"></script>'
     )
     return {
         "embed_code": embed_code,

@@ -120,8 +120,9 @@ async def create_tenant(
         from app.config import settings
         public_base = (settings.PUBLIC_BASE or "").rstrip("/")
         resp.webchat_embed_code = (
-            f'<script src="{public_base}/widget/loader.js'
-            f'?site_id={payload.webchat_site_id.strip()}" async></script>'
+            f'<script src="{public_base}/api/v1/widget/lili-chatbot.js" '
+            f'data-site-id="{payload.webchat_site_id.strip()}" '
+            f'data-site-name="{(payload.webchat_site_name or name) or ""}"></script>'
         )
     return resp
 

@@ -108,7 +108,7 @@ async def get_widget_embed(
     from app.config import settings
     from app.models.webchat_site import WebchatSiteChannel
 
-    stmt = select(WebchatSiteChannel.site_id)
+    stmt = select(WebchatSiteChannel.site_id, WebchatSiteChannel.site_name)
     if tenant_id is not None:
         stmt = stmt.where(WebchatSiteChannel.tenant_id == tenant_id)
     elif line_channel_id:
@@ -116,14 +116,18 @@ async def get_widget_embed(
     else:
         raise HTTPException(status_code=400, detail="需提供 tenant_id 或 line_channel_id")
 
-    site_id = (await db.execute(stmt.limit(1))).scalar_one_or_none()
-    if not site_id:
+    row = (await db.execute(stmt.limit(1))).first()
+    if not row:
         return {"has_site": False, "embed_code": "", "site_id": ""}
+    site_id, site_name = row
 
+    # widget 實檔是 /api/v1/widget/lili-chatbot.js，且只讀 data-site-id/data-site-name 屬性
+    # （舊版產生 /widget/loader.js?site_id= 會載到前端首頁 HTML，當 script 跑會失敗）
     public_base = (settings.PUBLIC_BASE or "").rstrip("/")
     embed_code = (
-        f'<script src="{public_base}/widget/loader.js'
-        f'?site_id={site_id}" async></script>'
+        f'<script src="{public_base}/api/v1/widget/lili-chatbot.js" '
+        f'data-site-id="{site_id}" '
+        f'data-site-name="{site_name or ""}"></script>'
     )
     return {"has_site": True, "embed_code": embed_code, "site_id": site_id}
 

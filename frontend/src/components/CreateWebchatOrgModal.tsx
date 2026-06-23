@@ -22,9 +22,11 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
   const [success, setSuccess] = useState('');
   const [copied, setCopied] = useState(false);
 
-  // 即時嵌入碼預覽：跟著「站點代號」輸入即時變動（widget 與 CRM 同網域）
+  // 即時嵌入碼預覽：跟著「站點代號」輸入即時變動。
+  // widget 實檔在 /api/v1/widget/lili-chatbot.js，且只讀 data-site-id / data-site-name 屬性
+  // （舊版 /widget/loader.js?site_id= 會載到前端首頁 HTML，當 script 跑會失敗）。
   const embedCode = siteId.trim()
-    ? `<script src="${window.location.origin}/widget/loader.js?site_id=${siteId.trim()}" async></script>`
+    ? `<script src="${window.location.origin}/api/v1/widget/lili-chatbot.js" data-site-id="${siteId.trim()}"${name.trim() ? ` data-site-name="${name.trim()}"` : ''}></script>`
     : '';
 
   const handleCopy = () => {
