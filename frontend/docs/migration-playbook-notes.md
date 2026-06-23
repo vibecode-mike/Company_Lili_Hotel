@@ -81,6 +81,14 @@
 - **隔天 / 隔多天回來 → 先確認狀態，不靠記憶**
   - 休息後回來第一件事是用 git 確認真實狀態（工作區 / 同步 / 上次收工點），
     不靠「我印象中應該是…」。記憶會騙人。
+- **頁殼 main 是 window 捲，不是有界內捲 → 排除出自繪 Scrollable 計畫**
+  - 發現（2026-06-23，C4 驗證第一頁時）：頁殼最外層是 `min-h-screen flex` + Sidebar `position:fixed`（脫離流排）
+    → flex 列高由 main 內容驅動 → main 拉伸到自己內容高 → **永不溢出**。所以頁殼 `<main overflow-y-auto scrollbar-transparent>`
+    是 **inert 死樣式**，實際是**瀏覽器原生 window 捲軸**在捲，main 不是捲動容器。
+  - 對比：Sidebar 的 `<aside>` 是 `h-screen`（有界高）→ nav `flex-1 min-h-0` 才是真內捲，套 Scrollable 成立。
+  - 判斷法：套 Scrollable 前先看祖先有沒有**有界高度**（`h-screen` / `max-h-[]` / 固定 `h-[]`）。只有 `min-h-screen` = 整頁捲，沒有可套的有界區。
+  - 決策：**自繪 4px Scrollable 只給「有界內層容器」**（清單 / 面板 / 表格 body / 下拉 / 抽屜）；頁面層級的整頁捲，**原生 window 捲軸是正解**，不為了視覺一致硬把頁殼改 `h-screen` 內捲（大 UX 改動、性價比差）。
+  - 連帶：9 個頁殼 main（MessageList/PMS/Insights/AIChatbot/Facilities/CreateAutoReply/MessageCreation/LineApiSettings/MainLayout）全部**排除出 C 計畫**。
 
 ---
 

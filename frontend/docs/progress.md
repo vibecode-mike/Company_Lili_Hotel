@@ -228,9 +228,10 @@
     - 唯一方向性差異是那 4px（且是變寬），疑為雙軸臨界狀態的版位位移，但**需 Chrome 現場量 computed layout 才能確認機制**，當下 session 無瀏覽器檢查工具。
   - **已 revert** CarouselMessageEditor 回原本 `overflow-y-auto scrollbar-transparent`（方案 B、可正常操作）；FacebookMessageEditor 同結構、本次一併不做。
   - **待日後**有 Chrome 檢查工具 / 更多現場截圖細節時再回來攻 C。
-- [ ] **C1 Sidebar**：side menu 導覽清單（全站高可見度，放 C1 **最後**做）
+- [x] **C1 Sidebar** ✅ **完成（2026-06-23，`a1a256bb`，未 push）** —— 側欄 nav 換 Scrollable（填高型 outer `flex-1 min-h-0` + viewport `h-full`）。aside 是 `h-screen` 有界 → 真內捲、套得成立。驗收 OK（捲動順 / footer 固定不抖 / 展開收合正常 / thumb 正確）。
 - [ ] **C2 聊天室**（最高風險：SSE 自動捲到底 + 無限往上捲）：`ChatMessageList` / `ChatRoomLayout`，須保留 ref/onScroll，單獨謹慎做
-- [ ] **C3** 表格橫向+巢狀 ／ **C4** 各頁 `<main>`（9 個頁殼主捲動）／ **C5** 其餘橫向（tab／輪播／chip）
+- [x] ~~**C4** 各頁 `<main>`（9 個頁殼主捲動）~~ ❌ **排除出 C 計畫（2026-06-23）** —— 驗證發現頁殼是 `min-h-screen` + Sidebar `fixed` → **整頁 window 捲、main 不是有界內捲容器**（`overflow-y-auto scrollbar-transparent` 是 inert 死樣式）。自繪 Scrollable 只給有界內層容器；頁面整頁捲用原生 window 捲軸是正解，不硬改 `h-screen`。詳見 playbook §2「頁殼 main 是 window 捲」。9 頁全排除（含先前盤的乾淨批/雙軸批/min-h-screen 批）。
+- [ ] **C3** 表格橫向+巢狀 ／ **C5** 其餘橫向（tab／輪播／chip）
 - [ ] **雙軸表格批**：會員表格（雙軸 + 幽靈橫捲軸 + 表頭 4px 對不齊）→ 細節見下方
 - [ ] **維持方案 B（不自繪）**：textarea、下拉 popover、shadcn UI 庫元件 —— 不納入 C 計畫
 - [ ] **【Windows 跨系統檢查點】** 用 Windows 開 crmpoc 確認 C 捲軸是 **4px 灰圓角**、沒變回 Windows 預設醜樣式（選 C 而非 A 的核心理由，需實測；若不一致→檢討 thumb 繪製，不退回 A）
