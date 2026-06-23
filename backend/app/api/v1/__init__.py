@@ -42,6 +42,7 @@ from app.api.v1 import (
     fb_admin,
     staff,
     tenants,
+    webchat_sites,
 )
 
 api_router = APIRouter()
@@ -86,3 +87,4 @@ api_router.include_router(conversations_export.router, prefix="", tags=["對話�
 api_router.include_router(admin_retention.router, prefix="/admin/retention", tags=["訪客資料保留"])
 api_router.include_router(staff.router, prefix="/staff", tags=["員工帳號管理"])
 api_router.include_router(tenants.router, prefix="/tenants", tags=["組織管理"])
+api_router.include_router(webchat_sites.router, prefix="/webchat_sites", tags=["官網彈窗站點"])

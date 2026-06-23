@@ -42,5 +42,15 @@ class WebchatSiteChannel(SQLAlchemyBase):
         nullable=True,
         comment="顯示名稱（例：思偉達飯店｜雷恩館），方便後台識別",
     )
+    last_seen_at = Column(
+        DateTime,
+        nullable=True,
+        comment="最後一次 widget 被瀏覽器載入的時間（台灣時間）；用於基本設定狀態判定（有值=已開通）",
+    )
+    last_seen_url = Column(
+        String(500),
+        nullable=True,
+        comment="最後一次 widget 載入時所在的頁面網址",
+    )
     created_at = Column(DateTime, server_default=func.now(), nullable=False, comment="建立時間")
     updated_at = Column(DateTime, onupdate=func.now(), nullable=True, comment="更新時間")
