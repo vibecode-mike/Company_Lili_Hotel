@@ -215,6 +215,15 @@
 - [x] **方案 B 退路存檔點**：commit `28449e13`（常駐淡灰捲軸；C 失敗可整批退回此點）
 - [x] **C0：共用 `<Scrollable>` 元件（支援 `header` 槽避開 sticky 表頭）+ BasicSettingsList**：commit `b831567c`（縱向；六項驗收全過：平常乾淨／進整區出現／離開消失／捲動順／sticky 不震／thumb 不蓋表頭）
 - [x] **C1 第一組：3 個縱向面板**（`StaffUsersManagement` / `SidebarChannelSwitcher` / `MessageDetailDrawer`）：commit `93eab253`
+- [x] **C1 Sidebar：側欄導覽 nav**（填高型 outer `flex-1 min-h-0` + viewport `h-full`；aside 是 `h-screen` 有界→真內捲）：commit `a1a256bb`（未 push）
+- [x] **ErrorBoundary：錯誤堆疊框**（max-h-280 有界縱捲；max-h 放 viewport，rounded+bg+overflow-hidden 放 outer）：commit `aef947ed`（未 push）
+
+### 🚩 收工狀態（2026-06-23）—— 下次接這裡
+
+> **今天捲軸完成**：Sidebar(`a1a256bb`) + ErrorBoundary(`aef947ed`)，都已 commit、**未 push**（攢著與圓角 dead code 一起，等使用者決定 push 時機）。
+> **C4 頁殼 main 全排除**（window 捲，見下方 ❌ 與 playbook §2「頁殼 main 是 window 捲」）。
+> **低風險井已見底**：trivial 只過 ErrorBoundary；`MemberNoteEditor:89`=textarea(排除)、C3 表格=雙軸(留雙軸批)。
+> **下次低風險首選**：`AIChatbotEditModal:626/927`（fixed inset-0 單軸 overlay，乾淨）。完整待做見下方「### 真正剩的有界內層容器清單」。
 
 ### 待辦（明天繼續）
 
@@ -235,11 +244,36 @@
 - [ ] **C2 聊天室**（最高風險：SSE 自動捲到底 + 無限往上捲）：`ChatMessageList` / `ChatRoomLayout`，須保留 ref/onScroll，單獨謹慎做
 - [x] ~~**C4** 各頁 `<main>`（9 個頁殼主捲動）~~ ❌ **排除出 C 計畫（2026-06-23）** —— 驗證發現頁殼是 `min-h-screen` + Sidebar `fixed` → **整頁 window 捲、main 不是有界內捲容器**（`overflow-y-auto scrollbar-transparent` 是 inert 死樣式）。自繪 Scrollable 只給有界內層容器；頁面整頁捲用原生 window 捲軸是正解，不硬改 `h-screen`。詳見 playbook §2「頁殼 main 是 window 捲」。9 頁全排除（含先前盤的乾淨批/雙軸批/min-h-screen 批）。
 - [ ] **C3** 表格橫向+巢狀 ／ **C5** 其餘橫向（tab／輪播／chip）
+  - ⚠️ **C3 表格是雙軸**（`AutoReplyTableStyled:443 橫 + :450 縱 max-h-600`、`InteractiveMessageTable:368+380` 同型）：縱向 thumb 落在 1160px 表格最右、只有橫捲到底才看得到 → **單套縱向＝半套、無意義**。縱軸 thumb 收可視右緣 + 表頭對齊要靠 `orientation="both"` + `header` 槽**整批解** → **併入「雙軸表格批」**，不單獨做（2026-06-23 確認）。
 - [ ] **雙軸表格批**：會員表格（雙軸 + 幽靈橫捲軸 + 表頭 4px 對不齊）→ 細節見下方
 - [ ] **維持方案 B（不自繪）**：textarea、下拉 popover、shadcn UI 庫元件 —— 不納入 C 計畫
+  - ⚠️ 例：`shared/MemberNoteEditor:89` 的捲動元素是 `<textarea>`（不是 div）→ **紅線排除**，Scrollable 包不到原生 textarea 內捲（2026-06-23 確認，別再誤列進低風險）。
 - [ ] **【Windows 跨系統檢查點】** 用 Windows 開 crmpoc 確認 C 捲軸是 **4px 灰圓角**、沒變回 Windows 預設醜樣式（選 C 而非 A 的核心理由，需實測；若不一致→檢討 thumb 繪製，不退回 A）
 - [ ] **FilterModal 雙捲軸**：單獨小批，**保留 `showScrollbar` 的 `pr-2` 邏輯**
 - [x] **字體（`71b92bbd` 全站收斂 Noto）已 push staging（已部署、CI 綠燈）、已告知同事**
+
+### 真正剩的有界內層容器清單（2026-06-23 盤點，落檔免遺失）
+
+> 已套 5 處：`BasicSettingsList`(C0)·`SidebarChannelSwitcher`·`MessageDetailDrawer`·`StaffUsersManagement`(C1-1)·`Sidebar` nav(`a1a256bb`)。已做 `ErrorBoundary`(`aef947ed`)。
+> 排除：9 頁殼 main(window 捲) + shadcn 紅線(`ui/*` / textarea / popover)。
+
+**🔴 Group 1 — 已知敏感（留最後 / 卡關，先別碰）**
+- C2 聊天室（最高風險，SSE 自動捲）：`chat-room/ChatMessageList:111`、`ChatRoomLayout:1298`、`ChatRoom:67/85`
+- 雙軸表格 會員表：`imports/MainContainer-6001-1415:467(縱·自繪)/1025(橫)/1041(max-h-600)`
+- C1第二組卡關：`CarouselMessageEditor:534/570`、`FacebookMessageEditor:332/372`（FB待粉專）
+
+**🟡 Group 2 — 表格類（C3，雙軸 → 併雙軸表格批）**
+- `AutoReplyTableStyled:450(max-h-600)+443(橫)`、`InteractiveMessageTable:380+368`
+- 純橫向 table：`PMSIntegration:1329/1740`、`AIChatbotOverview:631`、`FacilitiesContent:934/1333`
+
+**🟢 Group 3 — Modal / 面板（有界縱捲）**
+- `MemberTagEditModal:386`（`no-native-scrollbar`＝§2b React 自繪，先評估 macOS modal 可見性再統一）
+- `FilterModal:435`（§2c `showScrollbar`/`pr-2` 邏輯要保留）
+- 🆕 `AIChatbotEditModal:626/927`（`fixed inset-0` overlay 單軸，**乾淨·下次低風險首選**）
+- ~~`shared/MemberNoteEditor:89`~~ ❌ textarea，方案 B 排除
+
+**🔵 Group 4 — 純橫向（C5）**
+- `InsightsPanel:1246/1272`（圖表/tab 橫捲）、`flex-message/PreviewPanel:64`（輪播預覽 snap-x）
 
 ### 雙軸表格批細節：會員表格（`src/imports/MainContainer-6001-1415.tsx`）
 
