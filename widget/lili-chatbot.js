@@ -26,6 +26,30 @@
 
   // iframe src is same origin as the script (crmpoc.star-bit.io)
   var scriptSrc = scriptTag.src;
+
+  // ── 載入回報（beacon）──────────────────────────────────
+  // widget 一被載入就回報後端，標記此站點「已開通」（基本設定狀態用）。
+  // 純前端站點識別靠 SITE_ID；沒有 SITE_ID（demo/預覽頁）就不回報。
+  //
+  // 重點：客戶官網多為跨網域，故刻意做成「簡單請求」（無 body、url 走 query），
+  // 避免觸發 CORS 預檢(OPTIONS) —— nginx 的預檢回應未帶 Access-Control-Allow-Origin
+  // 會把帶 body/JSON 的跨網域 POST 擋掉。navigator.sendBeacon 天生是簡單請求、
+  // fire-and-forget，最適合載入時回報；舊瀏覽器再 fallback 到 no-cors fetch。
+  // 失敗一律靜默，絕不可影響客服 widget 正常開啟。
+  if (SITE_ID) {
+    try {
+      var API_BASE = scriptSrc.replace(/\/widget\/lili-chatbot\.js.*$/, "");
+      var SEEN_URL = API_BASE + "/webchat_sites/" + encodeURIComponent(SITE_ID)
+        + "/seen?url=" + encodeURIComponent(location.href);
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(SEEN_URL);
+      } else {
+        fetch(SEEN_URL, { method: "POST", mode: "no-cors", keepalive: true }).catch(function () {});
+      }
+    } catch (e) {}
+  }
+  // ──────────────────────────────────────────────────────
+
   var FRAME_BASE = scriptSrc.replace(/lili-chatbot\.js.*$/, "chatbot-frame.html");
   var FRAME_URL = FRAME_BASE
     + (FRAME_BASE.indexOf("?") >= 0 ? "&" : "?")
