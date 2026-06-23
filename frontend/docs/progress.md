@@ -109,7 +109,11 @@
    - **padding 同心決策（2026-06-22）**：三處卡片都 `justify-center/items-center` **置中浮在框內**（預覽框左右浮 ~80px/上下 24px、抽屜再 scale 0.6），**卡片角與框角不相鄰、四邊內縮不等 → 不存在同心約束**。卡片角 10→16 是自洽變化，**padding 不動**。當初定案「pad24→4 / pad12→4」假設了「卡片貼框需同心」，讀結構發現前提不成立 → **移交間距批次（待辦 D）評估「卡片貼滿框（pad→4）」要不要做**，不混進圓角批。
 3. **B FB chip ⏸ 擱置（待粉專，2026-06-22）** —— **CarouselMessageEditor 的 10px/6px 已全在 A 處理完**；B 只剩 **`FBConfigPanel.tsx:60` 標籤 chip `rounded-[6px]`→`rounded-md`(8)**（1 處，與 A 已驗收的 Carousel chip:321 byte 級同款）。改動極小且不碰捲軸結構，但 **chip 只在 FB 渠道編輯器（群發→建立訊息→渠道選 FB 粉專→FBConfigPanel 標籤區）出現，crmpoc 未綁 FB 粉專就驗不到** → 已 revert 回 `rounded-[6px]`、**擱置待有粉專再做**。render chain 已確認活的：`MessageCreation:2625`→`FacebookMessageEditor:407`→`FBConfigPanel`。
 4. **Part C 全站純換名 sweep** —— 圓角值全定案後，把全站剩餘 on-ladder arbitrary（`8/12/16/20/4/2px` 及 directional）一次按頁換成 token 名，**零變化**。含晶片/modal/內層那些還是 `rounded-[8px]` 的。sweep 完 → `token-migration-map.md` 退場。
-5. **dead code 刪除（獨立 commit）** —— `imports/` 裡的 Figma 死碼（含一堆 8.4px/28px/80px/e+07 垃圾值，改了也驗不到）；參考 §C 計畫排除清單。**單獨一刀，不混圓角值改動**。
+5. ~~**dead code 刪除（獨立 commit）**~~ ✅ **完成（2026-06-23，A `8d152087` / B `1cd21127`，獨立 commit 不混圓角；待 push）** ——
+   - **Group A**：5 個未掛載元件死檔（`flex-message/ConfigPanel`、`flex-message/FlexMessageEditorNew`、連帶 `message-creation/PreviewPanel`、`chat-room/MemberInfoPanel`、`chat-room/MemberNoteEditor`）+ barrel 清理（`chat-room/index.ts`、`message-creation/index.ts`、`chat-room/types.ts` 孤兒介面、`MessageCreation.tsx` 兩條死 import）。−1898 行。render-chain 逐一驗證（import≠render）。
+   - **Group B**：`imports/` 141 個零 importer Figma 死碼（具名元件 51 + svg 圖示 90）。`imports/` **192 檔 → 51 活檔**。判定法＝quote-anchored importer 掃描，**T2=0（無死碼叢集）**。
+   - **保留的帶 id 活版**：`MainContainer-6001-1415`（會員表）、`Container-8548-103`（聊天室）、`MemberDetailContainer`、`MemberListContainer`、`StarbitLogoAssets`、`ButtonEdit` —— build 產物 chunk 確認在。
+   - **驗證**：A、B 刪完各 `npm run build` 雙綠（刪錯會因 import 不存在而爆）。crmpoc 主頁抽查（/members 會員表、聊天室、訊息建立頁）確認元件都在。
 ### 📦 Part C 純換名 sweep — 分包（2026-06-22 重建，source ground truth）
 
 > ⚠️ 教訓：上一版分包只在對話裡產出、沒落檔 → context 摘要後遺失。本表為**從 source 重新清點重建**
