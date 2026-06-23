@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 from urllib.parse import quote_plus
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 
@@ -73,6 +74,14 @@ DATABASE_URL = (
     f"mysql+pymysql://{DB_USER}:{quote_plus(DB_PASS)}@"
     f"{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
 )
+
+# -------------------------------------------------
+# 營運時區（Operating Timezone）
+# -------------------------------------------------
+# DB 一律存 UTC；只有「日曆日 / 自動回應時段」這類以商家營運所在地為準的計算才換算到此。
+# 預設台北（Asia/Taipei）。與 backend app/core/timezone.py 對齊。
+# ⚠️ 台北無 DST 才可安全；未來含 DST 的營運時區需改具名時區 + 動態 offset。
+OPERATING_TZ = ZoneInfo("Asia/Taipei")
 
 # -------------------------------------------------
 # 檔案儲存配置
