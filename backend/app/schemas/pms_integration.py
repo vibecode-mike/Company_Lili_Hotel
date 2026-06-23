@@ -4,7 +4,7 @@ PMS 系統整合相關 Schema
 
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from app.core.timezone import AwareUtcDatetime
 
 
 class PMSIntegrationBase(BaseModel):
@@ -40,7 +40,7 @@ class PMSIntegrationListItem(BaseModel):
     phone: Optional[str] = None
     member_id: Optional[int] = None
     match_status: str
-    created_at: datetime
+    created_at: AwareUtcDatetime
 
     class Config:
         from_attributes = True
@@ -50,7 +50,7 @@ class PMSIntegrationDetail(PMSIntegrationListItem):
     """PMS 系統整合詳情"""
 
     stay_records: Optional[Dict[str, Any]] = None
-    updated_at: Optional[datetime] = None
+    updated_at: Optional[AwareUtcDatetime] = None
 
 
 class PMSMatchRequest(BaseModel):

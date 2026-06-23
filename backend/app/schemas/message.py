@@ -5,6 +5,7 @@
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Dict, Any, List, Union
 from datetime import datetime, timezone
+from app.core.timezone import AwareUtcDatetime
 from decimal import Decimal
 
 
@@ -75,7 +76,7 @@ class MessageBase(BaseModel):
     target_filter: Optional[Dict[str, Any]] = None  # 篩選條件（JSON格式）
 
     # 排程設定
-    scheduled_at: Optional[datetime] = None  # 排程發送時間（UTC）
+    scheduled_at: Optional[AwareUtcDatetime] = None  # 排程發送時間（UTC）
 
     trigger_condition: Optional[Dict[str, Any]] = None  # 特定觸發條件
 
@@ -144,7 +145,7 @@ class MessageCreate(BaseModel):
 
     # 排程設定
     schedule_type: str  # 'immediate', 'scheduled', 'draft'
-    scheduled_at: Optional[datetime] = None
+    scheduled_at: Optional[AwareUtcDatetime] = None
 
     # 輪播相關（多圖模式）
     carousel_items: Optional[List[CarouselItemCreate]] = None
@@ -214,7 +215,7 @@ class MessageUpdate(MessageBase):
     flex_message_json: Optional[str] = None  # Flex Message JSON（更新時可選）
     fb_message_json: Optional[str] = None  # Facebook Messenger JSON（更新時可選）
     failure_reason: Optional[str] = None  # 發送失敗原因
-    scheduled_at: Optional[datetime] = None  # ✅ 排程時間（更新時可選）
+    scheduled_at: Optional[AwareUtcDatetime] = None  # ✅ 排程時間（更新時可選）
     channel_id: Optional[str] = None  # 渠道ID（LINE channel_id 或 FB page_id）
 
 class TemplateInfo(BaseModel):
@@ -268,16 +269,16 @@ class MessageListItem(BaseModel):
     click_count: int = 0  # 點擊次數（依規格：從 ComponentInteractionLog 統計）
     open_rate: Optional[float] = None
     click_rate: Optional[float] = None
-    scheduled_at: Optional[datetime] = Field(
+    scheduled_at: Optional[AwareUtcDatetime] = Field(
         default=None,
         validation_alias="scheduled_datetime_utc",
         description="排程發送時間（UTC）",
     )
-    send_time: Optional[datetime] = None  # 傳送時間
+    send_time: Optional[AwareUtcDatetime] = None  # 傳送時間
     source_draft_id: Optional[int] = None  # 來源草稿ID
     created_by: Optional[CreatorInfo] = None  # 發送人員（創建者）
-    created_at: datetime
-    updated_at: Optional[datetime] = None  # 最後更新時間
+    created_at: AwareUtcDatetime
+    updated_at: Optional[AwareUtcDatetime] = None  # 最後更新時間
 
     @field_validator("created_by", mode="before")
     @classmethod
@@ -327,8 +328,8 @@ class MessageSearchParams(BaseModel):
 
     search: Optional[str] = None
     send_status: Optional[str] = None  # 已排程/已發送/草稿/發送失敗
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
+    start_date: Optional[AwareUtcDatetime] = None
+    end_date: Optional[AwareUtcDatetime] = None
     channel_id: Optional[str] = None  # LINE channel_id 篩選（多帳號支援）
     page: int = 1
     page_size: int = 20
@@ -339,7 +340,7 @@ class SendMessageResponse(BaseModel):
 
     message_id: int
     sent_count: int
-    sent_at: datetime
+    sent_at: AwareUtcDatetime
 
 
 class MessageListResponse(BaseModel):
@@ -358,9 +359,9 @@ class RecipientListItem(BaseModel):
     """接收者列表項"""
 
     member: Dict[str, Any]
-    sent_at: Optional[datetime] = None
-    opened_at: Optional[datetime] = None
-    clicked_at: Optional[datetime] = None
+    sent_at: Optional[AwareUtcDatetime] = None
+    opened_at: Optional[AwareUtcDatetime] = None
+    clicked_at: Optional[AwareUtcDatetime] = None
     status: str  # pending/sent/opened/clicked/failed
 
     class Config:

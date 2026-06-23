@@ -3,7 +3,8 @@
 """
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime, date
+from datetime import date
+from app.core.timezone import AwareUtcDatetime
 from decimal import Decimal
 
 
@@ -42,7 +43,7 @@ class ConsumptionRecordListItem(BaseModel):
     amount: Decimal
     room_type: Optional[str] = None
     stay_date: Optional[date] = None
-    created_at: datetime
+    created_at: AwareUtcDatetime
 
     class Config:
         from_attributes = True

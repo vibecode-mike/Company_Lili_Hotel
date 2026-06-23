@@ -3,7 +3,7 @@
 """
 from pydantic import BaseModel, Field
 from typing import Optional
-from datetime import datetime
+from app.core.timezone import AwareUtcDatetime
 
 
 class TenantCreate(BaseModel):
@@ -38,7 +38,7 @@ class TenantResponse(BaseModel):
     line_channel_count: int = Field(0, description="底下已接的 LINE OA 數")
     webchat_site_count: int = Field(0, description="底下已接的官網彈窗站點數")
     webchat_embed_code: Optional[str] = Field(None, description="建立時若帶官網站點，回傳嵌入碼供前端顯示")
-    created_at: Optional[datetime] = None
+    created_at: Optional[AwareUtcDatetime] = None
 
     class Config:
         from_attributes = True

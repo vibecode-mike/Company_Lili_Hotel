@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.auth import get_current_user, oauth2_scheme
+from app.core.timezone import to_utc_iso
 from app.core.security import decode_access_token
 from app.database import get_db
 from app.models.user import User
@@ -78,12 +79,12 @@ async def get_categories(
             "published_count": getattr(cat, "published_count", 0),
             # 該 OA 下此分類的最後更新時間（沒規則就是 null，前端顯示「—」）
             "last_rule_updated_at": (
-                cat.last_rule_updated_at.isoformat()
+                to_utc_iso(cat.last_rule_updated_at)
                 if getattr(cat, "last_rule_updated_at", None)
                 else None
             ),
             # 保留原本 category 級別的 updated_at 以維持相容
-            "updated_at": cat.updated_at.isoformat() if cat.updated_at else None,
+            "updated_at": to_utc_iso(cat.updated_at),
             "pms_connection": None,
         }
         # Attach PMS connection info if data_source_type is pms（依當前 LINE OA 篩選）
@@ -93,7 +94,7 @@ async def get_categories(
                 cat_data["pms_connection"] = {
                     "status": pms_conn.status,
                     "last_synced_at": (
-                        pms_conn.last_synced_at.isoformat()
+                        to_utc_iso(pms_conn.last_synced_at)
                         if pms_conn.last_synced_at
                         else None
                     ),
@@ -164,13 +165,13 @@ async def get_rules(
                 "status": rule.status,
                 "is_enabled": rule.is_enabled,
                 "published_at": (
-                    rule.published_at.isoformat() if rule.published_at else None
+                    to_utc_iso(rule.published_at)
                 ),
                 "tags": [
                     {"id": t.id, "tag_name": t.tag_name} for t in (rule.tags or [])
                 ],
-                "created_at": rule.created_at.isoformat() if rule.created_at else None,
-                "updated_at": rule.updated_at.isoformat() if rule.updated_at else None,
+                "created_at": to_utc_iso(rule.created_at),
+                "updated_at": to_utc_iso(rule.updated_at),
             }
         )
 
@@ -260,12 +261,12 @@ async def get_rule(
             "created_by": rule.created_by,
             "updated_by": rule.updated_by,
             "published_at": (
-                rule.published_at.isoformat() if rule.published_at else None
+                to_utc_iso(rule.published_at)
             ),
             "published_by": rule.published_by,
             "tags": [{"id": t.id, "tag_name": t.tag_name} for t in (rule.tags or [])],
-            "created_at": rule.created_at.isoformat() if rule.created_at else None,
-            "updated_at": rule.updated_at.isoformat() if rule.updated_at else None,
+            "created_at": to_utc_iso(rule.created_at),
+            "updated_at": to_utc_iso(rule.updated_at),
             "pms_readonly_fields": pms_readonly,
         },
     }
@@ -847,7 +848,7 @@ async def create_pms_connection(
         "status": conn.status,
         "auth_type": conn.auth_type,
         "last_synced_at": (
-            conn.last_synced_at.isoformat() if conn.last_synced_at else None
+            to_utc_iso(conn.last_synced_at)
         ),
         "snapshot_completed": conn.snapshot_completed,
     }
@@ -897,7 +898,7 @@ async def get_pms_connection(
         "auth_type": conn.auth_type,
         "api_endpoint": conn.api_endpoint,
         "last_synced_at": (
-            conn.last_synced_at.isoformat() if conn.last_synced_at else None
+            to_utc_iso(conn.last_synced_at)
         ),
         "snapshot_completed": conn.snapshot_completed,
     }
@@ -1026,7 +1027,7 @@ async def get_module_auth(
             "client_id": auth.client_id,
             "is_authorized": auth.is_authorized,
             "authorized_at": (
-                auth.authorized_at.isoformat() if auth.authorized_at else None
+                to_utc_iso(auth.authorized_at)
             ),
             "authorized_by": auth.authorized_by,
         },

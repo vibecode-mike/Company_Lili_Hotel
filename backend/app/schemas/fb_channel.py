@@ -3,7 +3,7 @@ Facebook 粉絲專頁頻道設定 Schemas
 """
 from pydantic import BaseModel, Field
 from typing import Optional, List
-from datetime import datetime
+from app.core.timezone import AwareUtcDatetime
 
 
 class FbChannelBase(BaseModel):
@@ -14,7 +14,7 @@ class FbChannelBase(BaseModel):
     channel_name: Optional[str] = Field(None, max_length=100, description="頻道名稱")
     is_active: Optional[bool] = Field(True, description="是否啟用（管理員手動控制）")
     connection_status: Optional[str] = Field('disconnected', description="連結狀態: connected/expired/disconnected（系統自動偵測）")
-    last_verified_at: Optional[datetime] = Field(None, description="最後驗證時間（UTC）")
+    last_verified_at: Optional[AwareUtcDatetime] = Field(None, description="最後驗證時間（UTC）")
 
 
 class FbChannelCreate(FbChannelBase):
@@ -29,15 +29,15 @@ class FbChannelUpdate(BaseModel):
     channel_name: Optional[str] = Field(None, max_length=100, description="頻道名稱")
     is_active: Optional[bool] = Field(None, description="是否啟用")
     connection_status: Optional[str] = Field(None, description="連結狀態")
-    last_verified_at: Optional[datetime] = Field(None, description="最後驗證時間")
+    last_verified_at: Optional[AwareUtcDatetime] = Field(None, description="最後驗證時間")
 
 
 class FbChannelResponse(FbChannelBase):
     """Facebook 頻道設定回應"""
 
     id: int = Field(..., description="ID")
-    created_at: Optional[datetime] = Field(None, description="建立時間")
-    updated_at: Optional[datetime] = Field(None, description="更新時間")
+    created_at: Optional[AwareUtcDatetime] = Field(None, description="建立時間")
+    updated_at: Optional[AwareUtcDatetime] = Field(None, description="更新時間")
 
     class Config:
         from_attributes = True
@@ -61,7 +61,7 @@ class FbChannelStatusResponse(BaseModel):
     connection_status: Optional[str] = Field(
         'disconnected', description="連結狀態: connected/expired/disconnected"
     )
-    last_verified_at: Optional[datetime] = Field(
+    last_verified_at: Optional[AwareUtcDatetime] = Field(
         None, description="最後驗證時間（UTC）"
     )
 

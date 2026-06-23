@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 
 from app.database import get_db
+from app.core.timezone import to_utc_iso
 from app.models.member import Member
 from app.models.conversation import ConversationMessage
 from app.models.tag import MemberTag, MemberInteractionTag
@@ -208,8 +209,8 @@ async def get_meta_user_profile(
         "phone": member.phone or "",
         "gender": member.gender or "",
         "birthday": member.birthday or "",
-        "created_at": member.created_at.isoformat() if member.created_at else None,
-        "last_interaction_at": last_chat_time.isoformat() if last_chat_time else None,
+        "created_at": to_utc_iso(member.created_at),
+        "last_interaction_at": to_utc_iso(last_chat_time),
         # LINE 渠道
         "line_uid": member.line_uid or "",
         "line_display_name": member.line_display_name or "",

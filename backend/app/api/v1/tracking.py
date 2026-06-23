@@ -6,6 +6,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
+from app.core.timezone import to_utc_iso
 from app.schemas.tracking import (
     TrackInteractionRequest,
     TrackInteractionResponse,
@@ -60,7 +61,7 @@ async def track_interaction(
                 "line_id": interaction_log.line_id,
                 "campaign_id": interaction_log.campaign_id,
                 "interaction_type": interaction_log.interaction_type.value,
-                "triggered_at": interaction_log.triggered_at.isoformat(),
+                "triggered_at": to_utc_iso(interaction_log.triggered_at),
             },
         }
     except ValueError as e:
@@ -150,7 +151,7 @@ async def get_campaign_interactions(
                         "interaction_tag_name": log.interaction_tag.name if log.interaction_tag else None,
                         "interaction_type": log.interaction_type.value,
                         "interaction_value": log.interaction_value,
-                        "triggered_at": log.triggered_at.isoformat(),
+                        "triggered_at": to_utc_iso(log.triggered_at),
                         "line_event_type": log.line_event_type,
                     }
                     for log in interactions

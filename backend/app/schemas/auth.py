@@ -3,7 +3,7 @@
 """
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime
+from app.core.timezone import AwareUtcDatetime
 from app.models.user import UserRole
 
 
@@ -22,7 +22,7 @@ class UserInfo(BaseModel):
     email: str
     full_name: Optional[str] = None
     role: UserRole
-    last_login_at: Optional[datetime] = None
+    last_login_at: Optional[AwareUtcDatetime] = None
     faq_can_view: bool = True
     faq_can_manage: bool = True
     faq_can_publish: bool = False

@@ -4,7 +4,8 @@
 """
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime, date
+from datetime import date
+from app.core.timezone import AwareUtcDatetime
 
 
 class CampaignBase(BaseModel):
@@ -42,7 +43,7 @@ class CampaignListItemNew(BaseModel):
     campaign_date: Optional[date] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
-    created_at: datetime
+    created_at: AwareUtcDatetime
 
     class Config:
         from_attributes = True
@@ -51,7 +52,7 @@ class CampaignListItemNew(BaseModel):
 class CampaignDetailNew(CampaignListItemNew):
     """活動詳情"""
 
-    updated_at: Optional[datetime] = None
+    updated_at: Optional[AwareUtcDatetime] = None
 
 
 class CampaignSearchParams(BaseModel):

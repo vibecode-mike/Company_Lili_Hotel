@@ -3,7 +3,7 @@
 """
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from app.core.timezone import AwareUtcDatetime
 from decimal import Decimal
 
 
@@ -64,7 +64,7 @@ class TemplateListItem(BaseModel):
     id: int
     name: Optional[str] = None
     template_type: Optional[str] = None  # Template01/Template02/Template03/Template04
-    created_at: datetime
+    created_at: AwareUtcDatetime
 
     class Config:
         from_attributes = True
@@ -75,7 +75,7 @@ class TemplateDetail(TemplateBase):
 
     id: int
     carousel_items: List[CarouselItemResponse] = []
-    created_at: datetime
+    created_at: AwareUtcDatetime
 
     class Config:
         from_attributes = True
@@ -100,8 +100,8 @@ class TemplateLibraryItem(BaseModel):
     is_in_library: bool
     usage_count: int
     storage_type: Optional[str] = "database"
-    created_at: datetime
-    updated_at: Optional[datetime] = None
+    created_at: AwareUtcDatetime
+    updated_at: Optional[AwareUtcDatetime] = None
 
     class Config:
         from_attributes = True
@@ -113,7 +113,7 @@ class TemplateCopyResponse(BaseModel):
     id: int
     name: str
     source_template_id: int
-    created_at: datetime
+    created_at: AwareUtcDatetime
 
     class Config:
         from_attributes = True

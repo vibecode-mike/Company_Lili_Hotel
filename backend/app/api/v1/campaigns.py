@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.database import get_db
+from app.core.timezone import to_utc_iso
 from app.models.campaign import Campaign
 from app.schemas.campaign import (
     CampaignCreateNew,
@@ -116,7 +117,7 @@ async def list_campaigns(
                         "start_date": c.start_date.isoformat() if c.start_date else None,
                         "end_date": c.end_date.isoformat() if c.end_date else None,
                         "status": c.status,
-                        "created_at": c.created_at.isoformat() if c.created_at else None,
+                        "created_at": to_utc_iso(c.created_at),
                     }
                     for c in campaigns
                 ],
@@ -164,8 +165,8 @@ async def get_campaign(
             "end_date": campaign.end_date.isoformat() if campaign.end_date else None,
             "description": campaign.description,
             "status": campaign.status,
-            "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
-            "updated_at": campaign.updated_at.isoformat() if campaign.updated_at else None,
+            "created_at": to_utc_iso(campaign.created_at),
+            "updated_at": to_utc_iso(campaign.updated_at),
         }
     }
 

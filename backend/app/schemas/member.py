@@ -3,7 +3,8 @@
 """
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List
-from datetime import datetime, date
+from datetime import date
+from app.core.timezone import AwareUtcDatetime
 
 
 class TagInfo(BaseModel):
@@ -69,11 +70,11 @@ class MemberListItem(BaseModel):
     phone: Optional[str] = None
     join_source: str = "LINE"  # 加入來源：LINE/CRM/PMS/ERP/系統/Facebook/Webchat
     tags: List[TagInfo] = []
-    created_at: datetime
-    last_interaction_at: Optional[datetime] = None
+    created_at: AwareUtcDatetime
+    last_interaction_at: Optional[AwareUtcDatetime] = None
     # 未回覆狀態
     is_unanswered: bool = False  # 是否有未回覆的訊息
-    unanswered_since: Optional[datetime] = None  # 未回覆訊息的時間戳
+    unanswered_since: Optional[AwareUtcDatetime] = None  # 未回覆訊息的時間戳
     # 渠道名稱
     channel_name: Optional[str] = None  # 渠道帳號名稱 (e.g., "下班解憂所")
     # 訪客狀態

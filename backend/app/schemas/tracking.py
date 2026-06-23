@@ -3,7 +3,7 @@
 """
 from pydantic import BaseModel, Field
 from typing import Optional
-from datetime import datetime
+from app.core.timezone import AwareUtcDatetime
 
 
 class TrackInteractionRequest(BaseModel):
@@ -54,4 +54,4 @@ class CampaignStatisticsResponse(BaseModel):
     interactions_by_type: dict
     carousel_stats: list
     component_stats: list
-    generated_at: datetime
+    generated_at: AwareUtcDatetime

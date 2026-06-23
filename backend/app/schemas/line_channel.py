@@ -3,7 +3,7 @@ LINE 頻道設定 Schemas
 """
 from pydantic import BaseModel, Field
 from typing import Optional, List
-from datetime import datetime
+from app.core.timezone import AwareUtcDatetime
 
 
 class LineChannelBase(BaseModel):
@@ -60,8 +60,8 @@ class LineChannelResponse(LineChannelBase):
     """LINE 頻道設定回應"""
 
     id: int = Field(..., description="ID")
-    created_at: Optional[datetime] = Field(None, description="建立時間")
-    updated_at: Optional[datetime] = Field(None, description="更新時間")
+    created_at: Optional[AwareUtcDatetime] = Field(None, description="建立時間")
+    updated_at: Optional[AwareUtcDatetime] = Field(None, description="更新時間")
 
     class Config:
         from_attributes = True

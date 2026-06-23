@@ -4,7 +4,7 @@ FAQ 知識庫管理與 AI 聊天相關 Schema
 
 from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from app.core.timezone import AwareUtcDatetime
 
 from app.schemas.chatbot import ReplyType
 
@@ -92,11 +92,11 @@ class FaqRuleSchema(BaseModel):
     is_enabled: bool = True
     created_by: Optional[int] = None
     updated_by: Optional[int] = None
-    published_at: Optional[datetime] = None
+    published_at: Optional[AwareUtcDatetime] = None
     published_by: Optional[int] = None
     tags: List[FaqRuleTagSchema] = []
-    created_at: datetime
-    updated_at: Optional[datetime] = None
+    created_at: AwareUtcDatetime
+    updated_at: Optional[AwareUtcDatetime] = None
 
     class Config:
         from_attributes = True
@@ -111,8 +111,8 @@ class FaqRuleListSchema(BaseModel):
     status: str
     is_enabled: bool = True
     tags: List[FaqRuleTagSchema] = []
-    created_at: datetime
-    updated_at: Optional[datetime] = None
+    created_at: AwareUtcDatetime
+    updated_at: Optional[AwareUtcDatetime] = None
 
     class Config:
         from_attributes = True
@@ -167,7 +167,7 @@ class FaqModuleAuthSchema(BaseModel):
     id: int
     client_id: str
     is_authorized: bool
-    authorized_at: Optional[datetime] = None
+    authorized_at: Optional[AwareUtcDatetime] = None
     authorized_by: Optional[str] = None
 
     class Config:

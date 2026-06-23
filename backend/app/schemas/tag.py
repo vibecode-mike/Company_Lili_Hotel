@@ -3,7 +3,7 @@
 """
 from pydantic import BaseModel, field_validator
 from typing import Optional
-from datetime import datetime
+from app.core.timezone import AwareUtcDatetime
 import re
 
 
@@ -103,8 +103,8 @@ class TagListItem(BaseModel):
     tag_source: Optional[str] = None
     trigger_count: int = 0
     trigger_member_count: int = 0
-    last_triggered_at: Optional[datetime] = None
-    created_at: datetime
+    last_triggered_at: Optional[AwareUtcDatetime] = None
+    created_at: AwareUtcDatetime
 
     class Config:
         from_attributes = True
@@ -113,7 +113,7 @@ class TagListItem(BaseModel):
 class TagDetail(TagListItem):
     """標籤詳情"""
 
-    updated_at: Optional[datetime] = None
+    updated_at: Optional[AwareUtcDatetime] = None
 
 
 class TagSearchParams(BaseModel):

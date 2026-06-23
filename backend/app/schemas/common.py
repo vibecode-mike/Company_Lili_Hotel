@@ -1,8 +1,9 @@
 """
 通用 Schema
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime, timezone
+from app.core.timezone import AwareUtcDatetime
 from typing import Optional, Any
 
 
@@ -11,7 +12,7 @@ class ResponseBase(BaseModel):
 
     code: int = 200
     message: str = "success"
-    timestamp: datetime = datetime.now()
+    timestamp: AwareUtcDatetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class SuccessResponse(ResponseBase):
