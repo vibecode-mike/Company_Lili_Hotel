@@ -85,7 +85,7 @@
 
 - [x] **A. docs 納管** —— 已 commit（`aa6a5911`：token-migration-map / component-audit / progress 三份）。
 - [x] **B. 字體 Inter→Noto** —— dev 已完成（清單見 `docs/font-inter-to-noto.md`，9 元件檔 ×29 處 + `styles.ts` 死常數 + `globals.css .booking-url-text`；移除 `font-['Inter…']` 改繼承全域 Noto）。`build` 通過、scope 內零殘留。**待 staging 眼睛確認**（尤其訊息預覽 JP 示意字）。注意：PingFang 只在 `src/imports/` 死碼、不在範圍。
-- [~] **C. 圓角 Radius**：把元件內 `rounded-[Npx]` 收斂到 token 名。對照 `token-migration-map.md` §2（⚠️ 數字真相以 `globals.css @theme` 為準，見 §2a）。**進行中 — 進度見下方「C 圓角進度（2026-06-19 收工封存）」**。
+- [x] **C. 圓角 Radius**：把元件內 `rounded-[Npx]` 收斂到 token 名。對照 `token-migration-map.md` §2（⚠️ 數字真相以 `globals.css @theme` 為準，見 §2a）。**✅ 已完成（2026-06-23）：值會變的批次（A/B/C/D/E/F/G）+ 純換名 sweep P1–P9 全部 push 上線、CI 綠、crmpoc 驗收 OK。唯 FB 待粉專 5 處擱置。** 進度見下方「C 圓角進度」。
 
 ### 📌 C 圓角進度（2026-06-19 收工封存）
 
@@ -136,12 +136,12 @@
 | **P6** 聊天室面板 | ✅ push 上線、CI 綠、驗收 OK | `71601292` | — |
 | **P7** 聊天室訊息列·會員 | ✅ push 上線、CI 綠、驗收 OK | `6d3b00b5` | 11 檔 |
 | **P8** 共用容器·樣式·下拉 | ✅ push 上線、CI 綠、驗收 OK | `fca2b8b1` | 6/23 驗收：下拉/搜尋/空狀態卡圓角零變化、沒破版 |
-| **P9** 框架·導覽·ui·雜項 | ⏸ **已 commit、未 push、未驗收**（6/23） | `f2892027` | 19 檔 29 處；2xs 首用 build 已驗 class 生效=2px；SecondaryButton 32→full 現高度=膠囊零變化；chart `rounded-lg` 別名留待正規化 |
+| **P9** 框架·導覽·ui·雜項 | ✅ push 上線、CI 綠、驗收 OK | `f2892027` | 6/23 驗收：2xs 小圓角(chart/tooltip)有渲染、SecondaryButton 膠囊、其他元件零破版。19 檔 29 處；2xs 首用 class 生效=2px；chart `rounded-lg` 別名留待正規化 |
 | **FB** 待粉專 | ⬜ 擱置 | — | crmpoc 無粉專驗不到 |
 
-> **現在做到哪**（6/23）：P8 已驗收 OK、push 上線、CI 綠（staging success / prod skipped）。**正在做 P9**。
-> P9 是跨頁共用元件（框架·導覽·ui·雜項），沒有自己的頁 → 抽查時挑「會掛載到它」的高流量頁（任一主頁殼 + PMS 連線彈窗）。
-> ⚠️ P9 含兩個高風險點：① **SecondaryButton 32→full**（語意變更非零變化，需眼睛確認）② **2xs（2px）首用**（`ui/chart`/`ui/tooltip`/`ui/checkbox`，確認 live Tailwind JIT 有生效沒破圖）。
+> ✅ **圓角 token sweep 全數完成**（6/23）：Part C 純換名 sweep **P1–P9 全部 push 上線、CI 綠、crmpoc 驗收 OK**。唯一未做＝ **FB 待粉專**（crmpoc 無 FB 粉專驗不到，5 處，獨立擱置）。
+> P9 驗收（6/23）：2xs 小圓角（chart/tooltip）有渲染、SecondaryButton 膠囊、其他元件圓角沒破版。push 兩個 commit（P9 `f2892027` + docs `cdc90d8b`），CI staging success / prod 未碰。
+> 👉 **下一步＝待辦清單第 5 項「dead code 刪除」**（imports/ Figma 死碼 + ConfigPanel/FlexMessageEditorNew/MemberInfoPanel/chat-room/MemberNoteEditor），獨立 commit、不混圓角。
 >
 > **同事動向存證（免明天看 log 困惑）**：P6(`71601292`) 之後、我 P7 之前，同事 vibecode-mike push 了
 > `eed2568e` **fix(timezone): 連線層 +08 + SSE 台北時間**（只動後端 `members.py`/`database.py`/`line_app/db.py`，
