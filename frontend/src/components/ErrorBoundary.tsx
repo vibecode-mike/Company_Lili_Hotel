@@ -4,6 +4,7 @@
  *       並把 stack trace 同時印到 console，避免「整頁空白」這種沒線索的狀況。
  */
 import React from 'react';
+import Scrollable from './common/Scrollable';
 
 interface Props {
   children: React.ReactNode;
@@ -40,10 +41,16 @@ export default class ErrorBoundary extends React.Component<Props, State> {
             <p className="text-[14px] text-[#383838] mb-[12px]">
               {this.state.error.message || String(this.state.error)}
             </p>
-            <pre className="text-[12px] text-[#6e6e6e] bg-[#f5f5f5] p-[12px] rounded-md overflow-auto max-h-[280px] whitespace-pre-wrap scrollbar-transparent">
+            <Scrollable
+              orientation="vertical"
+              className="rounded-md bg-[#f5f5f5] overflow-hidden"
+              viewportClassName="max-h-[280px] p-[12px]"
+            >
+              <pre className="text-[12px] text-[#6e6e6e] whitespace-pre-wrap">
 {this.state.error.stack}
 {this.state.info?.componentStack}
-            </pre>
+              </pre>
+            </Scrollable>
             <div className="mt-[16px] flex gap-[8px]">
               <button
                 onClick={this.handleReset}
