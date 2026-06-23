@@ -50,11 +50,6 @@ export interface MemberTagSectionProps {
   showEditButton?: boolean;
 }
 
-export interface MemberNoteEditorProps {
-  initialNote?: string;
-  onSave?: (note: string) => void;
-}
-
 export interface ChatMessageListProps {
   messages: ChatMessage[];
 }

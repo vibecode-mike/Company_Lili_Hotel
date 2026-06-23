@@ -13,10 +13,3 @@ export type {
   TargetAudienceSelectorProps,
   Tag,
 } from './TargetAudienceSelector';
-
-// ========== 预览面板 ==========
-export { default as PreviewPanel } from './PreviewPanel';
-export type { 
-  PreviewPanelProps,
-  CardData,
-} from './PreviewPanel';
