@@ -135,13 +135,13 @@
 | **P5** Chatbot·輪播 | ✅ push 上線、CI 綠、驗收 OK | `d38e2fda` | — |
 | **P6** 聊天室面板 | ✅ push 上線、CI 綠、驗收 OK | `71601292` | — |
 | **P7** 聊天室訊息列·會員 | ✅ push 上線、CI 綠、驗收 OK | `6d3b00b5` | 11 檔 |
-| **P8** 共用容器·樣式·下拉 | ⏸ **已 commit、未 push、未驗收** | `fca2b8b1` | **明天驗收 OK 才 push**；可能要調整 |
-| **P9** 框架·導覽·ui·雜項 | ⬜ 未開始 | — | 含 SecondaryButton 32→full、2xs 首用風險 |
+| **P8** 共用容器·樣式·下拉 | ✅ push 上線、CI 綠、驗收 OK | `fca2b8b1` | 6/23 驗收：下拉/搜尋/空狀態卡圓角零變化、沒破版 |
+| **P9** 框架·導覽·ui·雜項 | ⏸ **已 commit、未 push、未驗收**（6/23） | `f2892027` | 19 檔 29 處；2xs 首用 build 已驗 class 生效=2px；SecondaryButton 32→full 現高度=膠囊零變化；chart `rounded-lg` 別名留待正規化 |
 | **FB** 待粉專 | ⬜ 擱置 | — | crmpoc 無粉專驗不到 |
 
-> **明天回來第一件事**：`git status` + `git log --oneline -5` 確認 P8(`fca2b8b1`) 還在本地未 push、工作區乾淨 →
-> crmpoc 驗收 P8（共用元件，挑自動回覆/會員列表等高流量頁，先強重整）→ OK 才 `git push origin main` 驗 CI → 再進 P9。
-> ⚠️ P8 commit 訊息標了「待明天驗收」；若驗收要調整，可 `git commit --amend` 或加修正 commit 後再 push。
+> **現在做到哪**（6/23）：P8 已驗收 OK、push 上線、CI 綠（staging success / prod skipped）。**正在做 P9**。
+> P9 是跨頁共用元件（框架·導覽·ui·雜項），沒有自己的頁 → 抽查時挑「會掛載到它」的高流量頁（任一主頁殼 + PMS 連線彈窗）。
+> ⚠️ P9 含兩個高風險點：① **SecondaryButton 32→full**（語意變更非零變化，需眼睛確認）② **2xs（2px）首用**（`ui/chart`/`ui/tooltip`/`ui/checkbox`，確認 live Tailwind JIT 有生效沒破圖）。
 >
 > **同事動向存證（免明天看 log 困惑）**：P6(`71601292`) 之後、我 P7 之前，同事 vibecode-mike push 了
 > `eed2568e` **fix(timezone): 連線層 +08 + SSE 台北時間**（只動後端 `members.py`/`database.py`/`line_app/db.py`，
