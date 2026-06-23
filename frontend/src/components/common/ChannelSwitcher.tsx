@@ -105,7 +105,7 @@ export default function ChannelSwitcher({ items, selectedKey, onChange }: Props)
         <ul
           ref={listRef}
           role="listbox"
-          className="fixed min-w-[200px] max-w-[360px] bg-white border border-solid rounded-[12px] flex flex-col gap-[4px] p-[4px]"
+          className="fixed min-w-[200px] max-w-[360px] bg-white border border-solid rounded-xl flex flex-col gap-[4px] p-[4px]"
           style={dropdownStyle}
         >
           {items.map((opt) => {
@@ -119,7 +119,7 @@ export default function ChannelSwitcher({ items, selectedKey, onChange }: Props)
                     onChange(opt.key);
                     setOpen(false);
                   }}
-                  className={`flex w-full items-center gap-[8px] min-h-[48px] p-[8px] rounded-[8px] text-[16px] leading-[1.5] text-[#383838] text-left cursor-pointer transition-colors hover:bg-[#f0f6ff] ${
+                  className={`flex w-full items-center gap-[8px] min-h-[48px] p-[8px] rounded-md text-[16px] leading-[1.5] text-[#383838] text-left cursor-pointer transition-colors hover:bg-[#f0f6ff] ${
                     active ? "bg-[#f0f6ff]" : "bg-white"
                   }`}
                 >

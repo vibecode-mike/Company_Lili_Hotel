@@ -82,7 +82,7 @@ export function DeleteButton({
         type="button"
         onClick={handleClick}
         disabled={disabled || isDeleting}
-        className={`h-[48px] px-3 min-w-[72px] rounded-[16px] bg-[#fff5f5] text-[#f44336] text-[16px] font-medium transition-colors hover:bg-[#ffebeb] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-[6px] ${className}`}
+        className={`h-[48px] px-3 min-w-[72px] rounded-2xl bg-[#fff5f5] text-[#f44336] text-[16px] font-medium transition-colors hover:bg-[#ffebeb] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-[6px] ${className}`}
       >
         <Trash2 className="h-5 w-5" />
         {buttonText}

@@ -2,7 +2,7 @@
  * 標籤列表
  *
  * UI 復用「編輯會員標籤」modal 內無 close button 的標籤樣式：
- * - 內部 chip：Tag component（bg-[#f0f6ff] / text-[#0f6beb]、p-[4px]、rounded-[8px]、text-[16px]）
+ * - 內部 chip：Tag component（bg-[#f0f6ff] / text-[#0f6beb]、p-[4px]、rounded-md、text-[16px]）
  * - 外層容器：flex-wrap + gap-[4px]，與 modal 的標籤池相同間距
  *
  * 純展示元件，不含 onRemove/編輯互動

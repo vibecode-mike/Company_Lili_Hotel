@@ -22,7 +22,7 @@ export function ImagePlaceholder({ className, style }: { className?: string; sty
       src={EMPTY_SRC}
       alt=""
       draggable={false}
-      className={`rounded-[4px] ${className ?? ''}`}
+      className={`rounded-xs ${className ?? ''}`}
       style={{ ...placeholderBg, ...style }}
     />
   )

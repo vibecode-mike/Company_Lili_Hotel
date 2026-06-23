@@ -41,7 +41,7 @@ const MenuItem = memo(function MenuItem({
       onClick={onClick}
       disabled={disabled}
       title={disabled ? tooltip : undefined}
-      className={`box-border flex items-center px-[28px] py-[8px] rounded-[8px] w-full transition-colors ${
+      className={`box-border flex items-center px-[28px] py-[8px] rounded-md w-full transition-colors ${
         disabled
           ? "opacity-50 cursor-not-allowed"
           : isActive
@@ -224,7 +224,7 @@ const Sidebar = memo(
                   onClick={() => navigate("staff-users")}
                 />
                 <button
-                  className="box-border flex items-center px-[28px] py-[8px] rounded-[8px] w-full hover:bg-slate-200 transition-colors"
+                  className="box-border flex items-center px-[28px] py-[8px] rounded-md w-full hover:bg-slate-200 transition-colors"
                   hidden
                 >
                   <p className="text-[16px] text-[#383838]">標籤管理</p>

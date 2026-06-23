@@ -61,7 +61,7 @@ export function SecondaryButton({
       onMouseDown={() => !disabled && setIsPressed(true)}
       onMouseUp={() => setIsPressed(false)}
       disabled={disabled}
-      className={`box-border content-stretch flex gap-[4px] items-center justify-center px-[12px] py-[4px] relative rounded-[32px] shrink-0 transition-colors ${
+      className={`box-border content-stretch flex gap-[4px] items-center justify-center px-[12px] py-[4px] relative rounded-full shrink-0 transition-colors ${
         disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
       } ${className}`}
       data-name="Icon+Text Button*Secondary"

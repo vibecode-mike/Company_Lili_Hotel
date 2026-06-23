@@ -4,7 +4,7 @@
  * UI 復用「編輯會員標籤」modal footer 的取消按鈕樣式：
  * - 無底色，hover 時 bg-neutral-100
  * - 文字色 #383838、字級 16px
- * - rounded-[16px]、min-h-[48px]、min-w-[72px]
+ * - rounded-2xl、min-h-[48px]、min-w-[72px]
  *
  * 功能由呼叫端透過 onClick 自行實作（保留 e.stopPropagation() 等需求）
  */
@@ -31,7 +31,7 @@ export function CancelButton({ onClick, label = '取消', className = '', disabl
         if (disabled) return;
         onClick?.(e);
       }}
-      className={`box-border flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-[16px] transition-colors ${
+      className={`box-border flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] rounded-2xl transition-colors ${
         disabled
           ? 'opacity-60 cursor-not-allowed'
           : 'cursor-pointer hover:bg-neutral-100'

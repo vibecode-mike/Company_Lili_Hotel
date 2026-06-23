@@ -23,7 +23,7 @@ export const ChannelStatusBadge = memo(function ChannelStatusBadge({
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="status-badge-expired content-stretch flex items-center justify-center min-w-[32px] px-[8px] py-[4px] relative rounded-[8px] shrink-0 cursor-default">
+          <div className="status-badge-expired content-stretch flex items-center justify-center min-w-[32px] px-[8px] py-[4px] relative rounded-md shrink-0 cursor-default">
             <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[16px] text-center whitespace-nowrap">
               連結已失效
             </p>
@@ -43,7 +43,7 @@ export const ChannelStatusBadge = memo(function ChannelStatusBadge({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <div className="status-badge-connected content-stretch flex items-center justify-center min-w-[32px] px-[8px] py-[4px] relative rounded-[8px] shrink-0 cursor-default">
+        <div className="status-badge-connected content-stretch flex items-center justify-center min-w-[32px] px-[8px] py-[4px] relative rounded-md shrink-0 cursor-default">
           <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[16px] text-center whitespace-nowrap">
             已連結
           </p>

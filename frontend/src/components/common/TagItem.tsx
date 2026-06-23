@@ -53,7 +53,7 @@ const TagItem = memo(function TagItem({
     <div 
       className={`
         box-border content-stretch flex gap-[2px] items-center justify-center 
-        min-w-[32px] p-[4px] relative rounded-[8px] shrink-0 
+        min-w-[32px] p-[4px] relative rounded-md shrink-0 
         ${onClick ? 'cursor-pointer' : ''}
         ${getVariantStyles()}
         transition-colors

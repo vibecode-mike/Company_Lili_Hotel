@@ -153,7 +153,7 @@ const Scrollable = forwardRef<HTMLDivElement, ScrollableProps>(function Scrollab
   };
 
   const thumbBase =
-    'pointer-events-auto absolute rounded-[4px] bg-black/30 hover:bg-black/45 active:bg-black/55 cursor-grab active:cursor-grabbing transition-opacity duration-150';
+    'pointer-events-auto absolute rounded-xs bg-black/30 hover:bg-black/45 active:bg-black/55 cursor-grab active:cursor-grabbing transition-opacity duration-150';
   const thumbStyle: CSSProperties = { opacity: active ? 1 : 0, willChange: 'transform' };
 
   // viewport（真正的捲動元素）+ 自繪 thumb。thumb 用 absolute 定位，

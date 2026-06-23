@@ -35,12 +35,12 @@ export default class ErrorBoundary extends React.Component<Props, State> {
     if (this.state.error) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-slate-50 p-8">
-          <div className="max-w-[720px] w-full bg-white rounded-[16px] p-[24px] shadow">
+          <div className="max-w-[720px] w-full bg-white rounded-2xl p-[24px] shadow">
             <h2 className="text-[20px] font-medium text-[#f44336] mb-[12px]">頁面發生錯誤</h2>
             <p className="text-[14px] text-[#383838] mb-[12px]">
               {this.state.error.message || String(this.state.error)}
             </p>
-            <pre className="text-[12px] text-[#6e6e6e] bg-[#f5f5f5] p-[12px] rounded-[8px] overflow-auto max-h-[280px] whitespace-pre-wrap scrollbar-transparent">
+            <pre className="text-[12px] text-[#6e6e6e] bg-[#f5f5f5] p-[12px] rounded-md overflow-auto max-h-[280px] whitespace-pre-wrap scrollbar-transparent">
 {this.state.error.stack}
 {this.state.info?.componentStack}
             </pre>

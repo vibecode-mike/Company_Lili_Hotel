@@ -56,7 +56,7 @@ export function SidebarChannelSwitcher({ isOpen }: SidebarChannelSwitcherProps) 
           type="button"
           onClick={() => setDropdownOpen((v) => !v)}
           disabled={loading || availableChannels.length === 0}
-          className="w-full bg-white border border-[#b6c8f1] rounded-[8px] px-3 py-2 flex items-center justify-between gap-2 text-left hover:border-[#0f6beb] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full bg-white border border-[#b6c8f1] rounded-md px-3 py-2 flex items-center justify-between gap-2 text-left hover:border-[#0f6beb] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
           <div className="flex-1 min-w-0">
             {loading ? (
@@ -86,7 +86,7 @@ export function SidebarChannelSwitcher({ isOpen }: SidebarChannelSwitcherProps) 
         </button>
 
         {dropdownOpen && availableChannels.length > 0 && (
-          <Scrollable orientation="vertical" className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#b6c8f1] rounded-[8px] shadow-md z-[60] overflow-hidden" viewportClassName="max-h-[320px]">
+          <Scrollable orientation="vertical" className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#b6c8f1] rounded-md shadow-md z-[60] overflow-hidden" viewportClassName="max-h-[320px]">
             {availableChannels.map((channel) => {
               const isSelected = selectedChannel?.channel_id === channel.channel_id;
               return (

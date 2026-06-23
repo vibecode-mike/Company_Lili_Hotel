@@ -84,7 +84,7 @@ function Toast({ message, type, index, onClose }: { message: React.ReactNode; ty
     <div
       ref={ref}
       onClick={handleClick}
-      className={`bg-[#383838] rounded-[8px] cursor-pointer z-[9999] transition-all duration-300 ${
+      className={`bg-[#383838] rounded-md cursor-pointer z-[9999] transition-all duration-300 ${
         isVisible ? 'opacity-100' : 'opacity-0'
       }`}
       style={{

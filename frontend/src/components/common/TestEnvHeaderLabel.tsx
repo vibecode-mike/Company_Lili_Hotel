@@ -15,7 +15,7 @@ const TestEnvHeaderLabel = memo(function TestEnvHeaderLabel() {
       </svg>
       {show && (
         <div
-          className="absolute right-0 top-full mt-[6px] bg-[#383838] text-white text-[12px] leading-[1.5] font-['Noto_Sans_TC',sans-serif] font-normal rounded-[8px] p-[8px] w-[260px] whitespace-normal pointer-events-none"
+          className="absolute right-0 top-full mt-[6px] bg-[#383838] text-white text-[12px] leading-[1.5] font-['Noto_Sans_TC',sans-serif] font-normal rounded-md p-[8px] w-[260px] whitespace-normal pointer-events-none"
           style={{ zIndex: 100 }}
         >
           開啟後同步至測試環境。請進行 AI Chatbot 對話測試，確認回覆正確後，再點擊「發佈」按鈕，將同步發佈至前台。
