@@ -4,10 +4,10 @@ import Scrollable from './common/Scrollable';
 
 export interface ChannelAccount {
   id: string;
-  platform: 'line' | 'facebook';
+  platform: 'line' | 'facebook' | 'webchat';
   name: string;
   channelId: string;
-  status: 'connected' | 'expired';
+  status: 'connected' | 'expired' | 'pending';
   lastVerified: string;
 }
 
@@ -64,6 +64,22 @@ const MessengerIcon = memo(function MessengerIcon() {
       />
     </svg>
   );
+});
+
+// Webchat（官網彈窗）Icon Component — 與 channel.ts 一致，用 💬 放進品牌色方框
+const WebchatIcon = memo(function WebchatIcon() {
+  return (
+    <div className="flex items-center justify-center size-[24px] rounded-md bg-[#4A7FFF] text-white text-[14px] leading-none">
+      💬
+    </div>
+  );
+});
+
+// 依平台選圖示
+const PlatformIcon = memo(function PlatformIcon({ platform }: { platform: ChannelAccount['platform'] }) {
+  if (platform === 'line') return <LineIcon />;
+  if (platform === 'facebook') return <MessengerIcon />;
+  return <WebchatIcon />;
 });
 
 // Sort order type
@@ -184,7 +200,7 @@ export const BasicSettingsList = memo(function BasicSettingsList({
                 <div className="basis-0 grow min-h-px min-w-px relative shrink-0">
                   <div className="flex flex-row items-center size-full">
                     <div className="content-stretch flex items-center px-[12px] py-0 relative w-full">
-                      <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[#383838] text-[14px] whitespace-nowrap">Channel ID / Page ID</p>
+                      <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[#383838] text-[14px] whitespace-nowrap">Channel ID / Page ID / 官網代號</p>
                     </div>
                   </div>
                 </div>
@@ -232,7 +248,7 @@ export const BasicSettingsList = memo(function BasicSettingsList({
                       <div className="content-stretch flex items-center gap-[12px] px-[12px] py-0 relative w-full">
                         {/* Icon */}
                         <div className="relative shrink-0">
-                          {account.platform === 'line' ? <LineIcon /> : <MessengerIcon />}
+                          <PlatformIcon platform={account.platform} />
                         </div>
                         {/* Account Info */}
                         <div className="flex flex-col font-['Noto_Sans_TC',sans-serif] font-normal text-[14px]">

@@ -271,6 +271,30 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
       // FB 失敗不阻擋 LINE 顯示
     }
 
+    // 3. 取得官網彈窗（Webchat）站點（獨立 try-catch，失敗不影響 LINE/FB）
+    // 狀態語意：曾收到過 widget 載入回報（is_activated）→ 已開通(connected)，否則待開通(pending)
+    try {
+      const wcRes = await fetch('/api/v1/webchat_sites/list');
+      if (wcRes.ok) {
+        const list = await wcRes.json();
+        if (Array.isArray(list)) {
+          for (const site of list) {
+            if (!site?.site_id) continue;
+            nextAccounts.push({
+              id: `webchat-${site.site_id}`,
+              platform: 'webchat',
+              name: site.site_name || site.site_id,
+              channelId: site.site_id,
+              status: site.is_activated ? 'connected' : 'pending',
+              lastVerified: formatZhDateTime(site.last_seen_at),
+            });
+          }
+        }
+      }
+    } catch (webchatError) {
+      console.error('[BasicSettings] 官網彈窗資料載入失敗:', webchatError);
+    }
+
     console.log('[BasicSettings] 最終帳號數量:', nextAccounts.length, nextAccounts);
     setAccounts(nextAccounts);
     return nextAccounts.length;

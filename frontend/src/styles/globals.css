@@ -345,6 +345,15 @@ html {
   color: #b71c1c;
 }
 
+/* 待開通（灰）：官網彈窗尚未偵測到載入 / 平台尚未設定 */
+.status-badge-pending {
+  background-color: #f0f0f0;
+}
+
+.status-badge-pending p {
+  color: #6e6e6e;
+}
+
 /* 重新授權按鈕 */
 .btn-reauthorize {
   color: #b71c1c;
