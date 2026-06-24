@@ -524,7 +524,7 @@ async def get_tag_trends(
 
     # 生成趨勢資料
     trends = []
-    today = datetime.now().date()
+    today = datetime.now(OPERATING_TZ).date()
 
     for i in range(days - 1, -1, -1):
         date = today - timedelta(days=i)

@@ -1,7 +1,6 @@
 import json
 import logging
 import uuid
-from datetime import datetime
 from typing import Optional, Dict, Any
 
 from sqlalchemy import select, func
@@ -12,7 +11,7 @@ from app.models.member import Member
 from app.models.conversation import ConversationThread, ConversationMessage
 from app.models.message import Message
 from app.models.user import User
-from app.core.timezone import to_utc_iso
+from app.core.timezone import to_utc_iso, now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -41,14 +40,14 @@ class ChatroomService:
             thread.member_id = member.id
             thread.platform = platform
             thread.platform_uid = platform_uid
-            thread.last_message_at = thread.last_message_at or datetime.now()
+            thread.last_message_at = thread.last_message_at or now_utc()
         else:
             thread = ConversationThread(
                 id=thread_id,
                 member_id=member.id,
                 platform=platform,
                 platform_uid=platform_uid,
-                last_message_at=datetime.now(),
+                last_message_at=now_utc(),
             )
             self.db.add(thread)
         await self.db.flush()
@@ -75,7 +74,7 @@ class ChatroomService:
             sent_by=sender_id,
             # status 不能留 NULL：已讀標記的 status != 'read' 條件會漏掉 NULL（SQL 三值邏輯）
             status="sent" if direction == "outgoing" else "received",
-            created_at=datetime.now(),
+            created_at=now_utc(),
         )
         self.db.add(msg)
         thread.last_message_at = msg.created_at

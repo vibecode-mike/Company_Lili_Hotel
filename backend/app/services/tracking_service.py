@@ -3,7 +3,8 @@
 職責：處理追蹤相關的業務邏輯，記錄用戶互動並更新統計數據
 """
 from typing import Dict, Any, Optional
-from datetime import datetime, timezone
+from datetime import datetime
+from app.core.timezone import now_utc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, update
 from sqlalchemy.orm import selectinload
@@ -75,7 +76,7 @@ class TrackingService:
                 interaction_tag_id=interaction_tag_id,
                 interaction_type=interaction_type_enum,
                 interaction_value=interaction_value,
-                triggered_at=datetime.now(),
+                triggered_at=now_utc(),
                 line_event_type=line_event_type,
                 user_agent=user_agent,
                 platform="LINE",
@@ -143,7 +144,7 @@ class TrackingService:
             .values(
                 click_count=total_count,
                 unique_click_count=unique_count,
-                last_clicked_at=datetime.now(),
+                last_clicked_at=now_utc(),
             )
         )
 
@@ -184,7 +185,7 @@ class TrackingService:
             .values(
                 trigger_count=total_count,
                 member_count=unique_members,
-                last_triggered_at=datetime.now(),
+                last_triggered_at=now_utc(),
             )
         )
 
@@ -260,7 +261,7 @@ class TrackingService:
 
         if existing_tag:
             # 同一訊息（instance）內再點擊：不累加 click_count，只更新 last_triggered_at
-            existing_tag.last_triggered_at = datetime.now()
+            existing_tag.last_triggered_at = now_utc()
             logger.debug(
                 f"Duplicate click within same message: member_id={member_id}, tag={tag.tag_name}, "
                 f"message_id={message_id} → click_count stays at {existing_tag.click_count}"
@@ -272,7 +273,7 @@ class TrackingService:
                 tag_name=tag.tag_name,
                 tag_source=tag.tag_source,  # 保留原始來源（訊息模板/問券模板）
                 click_count=1,
-                last_triggered_at=datetime.now(),
+                last_triggered_at=now_utc(),
                 message_id=message_id,
                 platform="LINE",
                 channel_id=member_channel_id,
@@ -415,7 +416,7 @@ class TrackingService:
             "interactions_by_type": interactions_by_type,
             "carousel_stats": carousel_stats,
             "component_stats": component_stats,
-            "generated_at": datetime.now(),
+            "generated_at": now_utc(),
         }
 
     async def get_campaign_interactions(

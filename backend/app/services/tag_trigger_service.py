@@ -3,9 +3,8 @@
 每次會員被貼標 / 既有標籤被重新觸發時呼叫 record_tag_trigger()，
 寫入 tag_trigger_logs 表供時段洞察等統計使用。
 """
-from datetime import datetime
+from app.core.timezone import now_utc
 from typing import Optional
-from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -58,7 +57,7 @@ async def record_tag_trigger(
             message_id=message_id,
             campaign_id=campaign_id,
             trigger_source=source,
-            triggered_at=datetime.now(ZoneInfo("Asia/Taipei")).replace(tzinfo=None),
+            triggered_at=now_utc(),
             platform=platform,
             channel_id=channel_id,
         )

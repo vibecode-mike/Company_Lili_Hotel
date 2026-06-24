@@ -1,15 +1,10 @@
 """
 基礎模型類
 """
-from datetime import datetime, timezone
 from sqlalchemy import Column, BigInteger, DateTime
 from sqlalchemy.ext.declarative import declared_attr
 from app.database import Base as SQLAlchemyBase
-
-
-def _now_utc():
-    """取得目前 UTC 時間，不帶 tzinfo（DB 一律存 UTC naive，與連線 SET time_zone='+00:00' 一致）"""
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+from app.core.timezone import now_utc as _now_utc  # 單一來源，避免兩份同義實作分叉
 
 
 class Base(SQLAlchemyBase):

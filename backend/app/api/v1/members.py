@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 from app.services.chatroom_service import ChatroomService
 from app.api.v1.chat_messages import _extract_fb_template_text
-from app.core.timezone import to_utc_iso
+from app.core.timezone import to_utc_iso, now_utc
 
 from app.websocket_manager import manager
 router = APIRouter()
@@ -672,7 +672,7 @@ async def update_member_interaction_tags(
             tag_name=tag_name,
             tag_source="CRM",  # 手動添加的標籤來源為 CRM
             click_count=1,  # 手動標籤固定為 1
-            tagged_at=datetime.now(),
+            tagged_at=now_utc(),
             platform=platform,
             channel_id=channel_id,
         )
@@ -779,7 +779,7 @@ async def batch_update_member_tags(
                     tag_source="會員資訊表",
                     message_id=None,
                     click_count=1,
-                    tagged_at=datetime.now(),
+                    tagged_at=now_utc(),
                     platform=platform,
                     channel_id=channel_id,
                 )
@@ -854,7 +854,7 @@ async def batch_update_member_tags(
                     tag_source="會員資訊表",
                     message_id=None,
                     click_count=1,
-                    tagged_at=datetime.now(),
+                    tagged_at=now_utc(),
                     platform=platform,
                     channel_id=channel_id,
                 )
@@ -982,7 +982,7 @@ async def add_member_interaction_tag(
         tag_source="CRM",
         message_id=message_id,
         click_count=1,  # 手動標籤固定為 1
-        tagged_at=datetime.now(),
+        tagged_at=now_utc(),
         platform=platform,
         channel_id=channel_id,
     )

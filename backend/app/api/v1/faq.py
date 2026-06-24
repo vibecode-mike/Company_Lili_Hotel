@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.auth import get_current_user, oauth2_scheme
-from app.core.timezone import to_utc_iso
+from app.core.timezone import to_utc_iso, now_utc
 from app.core.security import decode_access_token
 from app.database import get_db
 from app.models.user import User
@@ -803,9 +803,8 @@ async def test_pms_connection(
     # 更新 last_synced_at（依當前 channel 的連線）
     conn = await faq_service.get_pms_connection(db, category_id, line_channel_id)
     if conn:
-        from datetime import datetime
 
-        conn.last_synced_at = datetime.now()
+        conn.last_synced_at = now_utc()
         conn.error_message = None
         await db.flush()
     return {"code": 200, "success": True, "message": message, "room_count": room_count}

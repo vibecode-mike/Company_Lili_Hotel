@@ -4,7 +4,8 @@ FAQ 知識庫管理服務層
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
+from app.core.timezone import now_utc, OPERATING_TZ
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import delete, func, select
@@ -33,7 +34,7 @@ class FaqService:
         result = await db.execute(stmt)
         cat = result.scalar_one_or_none()
         if cat:
-            cat.updated_at = datetime.now()
+            cat.updated_at = now_utc()
 
     # === 大分類 ===
 
@@ -110,7 +111,7 @@ class FaqService:
             return None
 
         category.is_active = is_active
-        category.updated_at = datetime.now()
+        category.updated_at = now_utc()
         await db.flush()
         return category
 
@@ -309,7 +310,7 @@ class FaqService:
         if not rule:
             return None
 
-        now = datetime.now()
+        now = now_utc()
         rule.status = "active"
         rule.published_at = now
         rule.published_by = user_id
@@ -404,7 +405,7 @@ class FaqService:
     ) -> FaqModuleAuth:
         """設定模組授權"""
         auth = await self.get_module_auth(db, client_id)
-        now = datetime.now()
+        now = now_utc()
         if not auth:
             auth = FaqModuleAuth(
                 client_id=client_id,
@@ -654,7 +655,7 @@ class FaqService:
             existing.api_key_encrypted = api_key
             existing.auth_type = auth_type
             existing.status = "enabled"
-            existing.last_synced_at = datetime.now()
+            existing.last_synced_at = now_utc()
             existing.error_message = None
             await self._touch_category(db, category_id)
             await db.flush()
@@ -663,7 +664,7 @@ class FaqService:
                 await self._snapshot_pms_to_faq(db, category_id, existing, channel_id)
             return existing
 
-        now = datetime.now()
+        now = now_utc()
         conn = FaqPmsConnection(
             faq_category_id=category_id,
             channel_id=channel_id,
@@ -706,8 +707,8 @@ class FaqService:
             # 查詢 PMS 取得所有房型（用明天~後天做為查詢區間）
             from datetime import timedelta
 
-            tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
-            day_after = (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d")
+            tomorrow = (datetime.now(OPERATING_TZ) + timedelta(days=1)).strftime("%Y-%m-%d")
+            day_after = (datetime.now(OPERATING_TZ) + timedelta(days=2)).strftime("%Y-%m-%d")
             # 用該 connection 的 hotelcode 打 PMS（per channel）；空時 fallback env
             raw = await asyncio.to_thread(
                 query_pms, tomorrow, day_after, None, 2, conn.hotelcode
@@ -782,7 +783,7 @@ class FaqService:
             return None
         conn.status = status
         if status == "enabled":
-            conn.last_synced_at = datetime.now()
+            conn.last_synced_at = now_utc()
         await self._touch_category(db, category_id)
         await db.flush()
         return conn

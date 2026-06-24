@@ -275,6 +275,7 @@
 - [ ] **C3** 表格橫向+巢狀 ／ **C5** 其餘橫向（tab／輪播／chip）
   - ⚠️ **C3 表格是雙軸**（`AutoReplyTableStyled:443 橫 + :450 縱 max-h-600`、`InteractiveMessageTable:368+380` 同型）：縱向 thumb 落在 1160px 表格最右、只有橫捲到底才看得到 → **單套縱向＝半套、無意義**。縱軸 thumb 收可視右緣 + 表頭對齊要靠 `orientation="both"` + `header` 槽**整批解** → **併入「雙軸表格批」**，不單獨做（2026-06-23 確認）。
 - [ ] **雙軸表格批**：會員表格（雙軸 + 幽靈橫捲軸 + 表頭 4px 對不齊）→ 細節見下方
+  - 🔗 **連帶**：會員表格 `imports/MainContainer-6001-1415` 目前用本地 `CustomScrollbar`（從 `MemberTagEditModal` export）。此批把會員表格遷到 Scrollable 後 → **連同刪掉 `MemberTagEditModal` 內的 `CustomScrollbar` 元件定義**（MemberTagEditModal 本身已於 6/24 改用 Scrollable、不再用它）。
 - [ ] **維持方案 B（不自繪）**：textarea、下拉 popover、shadcn UI 庫元件 —— 不納入 C 計畫
   - ⚠️ 例：`shared/MemberNoteEditor:89` 的捲動元素是 `<textarea>`（不是 div）→ **紅線排除**，Scrollable 包不到原生 textarea 內捲（2026-06-23 確認，別再誤列進低風險）。
 - [ ] **【Windows 跨系統檢查點】** 用 Windows 開 crmpoc 確認 C 捲軸是 **4px 灰圓角**、沒變回 Windows 預設醜樣式（選 C 而非 A 的核心理由，需實測；若不一致→檢討 thumb 繪製，不退回 A）
@@ -296,7 +297,7 @@
 - ~~純橫向 table：`PMSIntegration:1329/1740`、`AIChatbotOverview:631`、`FacilitiesContent:934/1333`~~ ✅ **完成（2026-06-24，未 push）**：5 個容器同模式換 `<Scrollable orientation="horizontal">`（外層 `rounded-2xl overflow-hidden` 圓角裁切層保留、thumb 收圓角內）。crmpoc 3 頁驗收 OK：thumb 底部 4px、hover 才現、拖得動、表頭隨 body 橫捲、不破版。
 
 **🟢 Group 3 — Modal / 面板（有界縱捲）**
-- `MemberTagEditModal:386`（`no-native-scrollbar`＝§2b React 自繪，先評估 macOS modal 可見性再統一）← ⬜ **低風險批剩這一個（評估性）**
+- ~~`MemberTagEditModal:386`~~ ✅ **完成（2026-06-24，未 push）＋§2b 結案**：原本用本檔自定義的 `CustomScrollbar`（手刻 thumb，演算法≈Scrollable）→ scroll 容器換 `<Scrollable ref={scrollRef} vertical>`。§2b「macOS modal 可見性」疑慮不成立（CustomScrollbar/Scrollable 都用 `no-native-scrollbar`+JS thumb 同技術，FilterModal 已證 modal 可行）。保住 wheel handler（scrollRef 改接 Scrollable forwardRef，游標在清單外滾輪仍捲）+ 底部漸層 mask。thumb `#dddddd` 常駐 → `black/30` hover（統一）。⚠️ **`CustomScrollbar` 元件未刪**：`imports/MainContainer-6001-1415`（會員表格）仍 import 用 → **待雙軸表格批遷移會員表格時一起刪**。
 - ~~`FilterModal:435`~~ ✅ **完成（2026-06-24，未 push）＋§2b 結案**：手刻自繪 ≈90 行 → 換 `<Scrollable vertical>`、統一 hover、pr-2 常駐保留。
 - ~~`AIChatbotEditModal:626/927`~~ ✅ **完成（2026-06-24，未 push）** —— 兩彈窗外層換 Scrollable + Scrollable 加 onClick passthrough
 - ~~`shared/MemberNoteEditor:89`~~ ❌ textarea，方案 B 排除

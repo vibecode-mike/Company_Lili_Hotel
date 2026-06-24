@@ -122,7 +122,7 @@ async def app_exception_handler(request: Request, exc: AppException):
         content={
             "code": exc.code,
             "message": exc.message,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         },
     )
 
@@ -145,7 +145,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "code": 422,
             "message": "Invalid request parameters",
             "errors": errors,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         },
     )
 
@@ -159,7 +159,7 @@ async def general_exception_handler(request: Request, exc: Exception):
         content={
             "code": 500,
             "message": "Internal server error",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         },
     )
 

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, cast, String, text
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timezone
+from app.core.timezone import now_utc
 import logging
 import json
 import os
@@ -501,8 +502,7 @@ class MessageService:
                 setattr(message, key, value)
 
         # ✅ 添加：明確更新 updated_at
-        from datetime import datetime, timezone
-        message.updated_at = datetime.now()
+        message.updated_at = now_utc()
 
         await db.commit()
 
@@ -1515,7 +1515,7 @@ class MessageService:
 
         if success:
             message.send_count = target_recipient_count
-            message.send_time = datetime.now()
+            message.send_time = now_utc()
         else:
             # 保留實際失敗原因以便排查
             if result.get("errors"):

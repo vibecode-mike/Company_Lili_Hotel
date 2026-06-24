@@ -169,8 +169,22 @@
     - `members.py` FB 自動回覆比較 `sent_timestamp`（原 (e)/子階段 4）→ 已改 `.replace(tzinfo=timezone.utc)`。**子階段 4 的 (e) 只剩 human_override（寫入 members.py + 比較 line_app member_service.py:317）與 scheduler。**
     - `line_notify.py:115` `created_at` 寫入（原 (h)/子階段 9）→ 已改 `fromtimestamp(..., tz=utc).replace(tzinfo=None)` naive UTC。**子階段 9 的 (h) 只剩 message_service.py:879-880、messages.py:354、auto_responses.py:42。**
 
-## ⚠️ 盤點補遺：散落的 Python `datetime.now()` 寫入點未分配子階段（核心必含）
-子階段拆法 1-7 漏掉「(a) A1 散落 Python 寫入」這一類——它們是**裸 `datetime.now()`（host-local naive）寫入 DB**，UTC 慣例下必須改 `datetime.now(timezone.utc).replace(tzinfo=None)`（或共用 helper）。**屬核心原子發布**（寫入不對，整個翻轉就不正確）。清單（部分已在 (a) A1）：
-- `chatroom_service.py:44/51/78`（append_message/upsert_thread last_message_at/created_at）
-- `auth.py:89`、`tracking_service.py:78/146/187/263/275`、`message_service.py:505/1518`、`chatbot_service.py:1500/2518`、`webchat_sites.py:70`、`linebot_service.py:126`、`faq_service.py` 多處、`tag_trigger_log.py:81`（Python default）
-- 建議新增「**子階段 3.5 / 4 之前：(a) 散落 Python 寫入統一 UTC**」，與核心同批 push。
+- **子階段 3.5（散落 Python `datetime.now()` 寫入）**：✅ 大部分完成（commit 見下）。
+  - 新增單一來源 `app/core/timezone.py:now_utc()`（naive UTC）；`base.py._now_utc` 改 import 它（不再兩份）。
+  - 寫入點 → `now_utc()`：chatroom_service 44/51/78、auth:89、linebot_service:126、message_service 505/1518、faq_service 36/113/312/407/657/666/785、faq.py:808、tracking_service 78/146/187/263/275/418、webchat_sites:255*、members 675/782/857/985、fb_channels 142/177/280、tag_trigger_service:61、booking_callback 291/581*。
+  - (g) 日曆日 → `OPERATING_TZ`：faq_service 709/710、tags:527。
+  - 輸出 → `+00:00` aware：main.py 125/148/162（`datetime.now(timezone.utc).isoformat()`）；tracking_service:418 generated_at 走 `CampaignStatisticsResponse.AwareUtcDatetime` 標記。
+
+## 🔴 原子發布前必須清零的 GATE 清單（push 前逐一勾掉，缺一就 8 小時歪）
+1. **rebase `feat/tz-utc-migration` 到 origin/main**：本分支基於過時 main（b6959ad9），origin/main 已含同事 multi-OA（`4c93ccb5` channel_id、`9510aff3` 綁定組織）。push 前必須 rebase，否則帶半翻轉 + 漏同事工作。
+2. **3 個 dual-touched 檔 now_utc（rebase 後在『已含 multi-OA 版本』上補）**：
+   - `chatbot_service.py` 1491/1500/1516/2511/2525/3574（last_interaction_at/created_at/last_triggered_at）+ **2609 `now_dt`**（同事 tag_trigger 區塊 context 行）
+   - `webchat_sites.py:255` last_seen_at
+   - `booking_callback.py` 291 paid_at（DATETIME 已確認）/ 581 now_tpe（在同事 tag_trigger INSERT 區）
+3. **faq_service.py:483** `now = datetime.now()` 用途待查 → 寫入則 UTC / 比較則配 (e) / 日曆則 OPERATING_TZ。
+4. **(e) 子階段 4**：members 1052/1174 human_override 寫入 + line_app member_service.py:317 比較 + scheduler:197 + admin_retention:64（cutoff 比較）。
+5. **(h) 子階段 9**：message_service 879-880、messages.py:354、auto_responses.py:42/396。
+6. **(g) 子階段 5**：CSV/chatbot 營運時區輸出（conversations_export:158、chatbot.py:152、pms_chatbot_client:37）；chatbot_service 915/1222/2948/3177 ZoneInfo→OPERATING_TZ 常數。
+
+## 📝 另案（不在本遷移範圍，記一筆）
+- `security.py:44` JWT `exp` 用裸 `datetime.now()`（host-tz 依賴的 latent bug）→ 之後單獨確認 token 過期判斷無 host-tz 依賴。

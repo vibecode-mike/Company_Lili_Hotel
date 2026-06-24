@@ -27,6 +27,12 @@ OPERATING_TZ = ZoneInfo("Asia/Taipei")
 OPERATING_TZ_SQL = "+08:00"
 
 
+def now_utc() -> datetime:
+    """目前 UTC 時間，不帶 tzinfo（DB naive = UTC 慣例）。
+    Python 端寫入 DB 的時間一律用這個（與 base model 共用同一份定義，避免分叉）。"""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 def ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
     """正規化成 aware UTC datetime。naive 一律視為 UTC（DB naive = UTC 慣例），aware 則換算到 UTC。"""
     if dt is None:

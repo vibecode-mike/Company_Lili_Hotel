@@ -3,6 +3,7 @@ import svgPaths from '../imports/svg-pen3bccldb';
 import { useToast } from './ToastProvider';
 import { Tag } from './common';
 import { useChannel } from '../contexts/ChannelContext';
+import Scrollable from './common/Scrollable';
 
 /**
  * Custom scrollbar：以 absolute div 自繪 scrollbar，避免依賴瀏覽器/作業系統原生 scrollbar 的可見性。
@@ -207,7 +208,8 @@ export default function MemberTagEditModal({
     return !existsInPool && !alreadySelected;
   }, [searchInput, allMemberTags, selectedMemberTags]);
 
-  // 共用 scroll 容器 ref（Selected + Pool + CTA 合併成單一可滾動區，由 CustomScrollbar 自繪 thumb）
+  // 共用 scroll 容器 ref（Selected + Pool + CTA 合併成單一可滾動區，由 Scrollable 自繪 thumb；
+  // 也供 onWheel 在游標於 scroll 區外時手動轉發 deltaY。CustomScrollbar 元件仍 export 給會員表格用）
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // 背景 scroll lock：modal 開啟時禁用 body 滾動
@@ -381,9 +383,11 @@ export default function MemberTagEditModal({
                 className="relative w-full"
                 style={{ flex: '1 1 0%', minHeight: 0, maxHeight: '320px' }}
               >
-                <div
+                <Scrollable
                   ref={scrollRef}
-                  className="flex flex-col gap-[24px] w-full h-full overflow-y-auto pr-[8px] no-native-scrollbar"
+                  orientation="vertical"
+                  className="w-full h-full"
+                  viewportClassName="flex flex-col gap-[24px] w-full h-full pr-[8px]"
                 >
                   {/* Selected / 單一 section（State A 顯示「選擇或建立標籤」、其餘顯示「已選擇的標籤」） */}
                   <div className="flex flex-col gap-[12px] w-full">
@@ -450,8 +454,7 @@ export default function MemberTagEditModal({
                       )}
                     </div>
                   )}
-                </div>
-                <CustomScrollbar scrollRef={scrollRef} />
+                </Scrollable>
                 {/* 底部 mask 漸層：48px 高，180deg 多 stop 仿 cubic ease-in。
                     線性漸層在 chip 邊界附近會顯現 chip 自己 rounded-rect 的硬邊（橫切感），
                     改成 ease-in：上半幾乎看不出 fade（≤5% solid），主要變化集中在下半，
