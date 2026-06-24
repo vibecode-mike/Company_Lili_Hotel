@@ -12,7 +12,7 @@ import re
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from threading import Lock
 from typing import Any, Dict, List, Literal, Optional, Tuple
 from uuid import uuid4
@@ -1619,20 +1619,15 @@ class ChatbotService:
         #    放在 commit 之後、包 try/except，推播失敗不影響對話保存。
         #    使用者訊息 type=user → 前端會自動把先前 official 標已讀（已讀回執免費對齊）。
         try:
-            from app.services.chatroom_service import format_chat_time
             from app.websocket_manager import manager
+            from app.core.timezone import to_utc_iso
 
-            tpe = timezone(timedelta(hours=8))  # 固定 +08:00，勿用 pytz（會得 LMT +08:06）
-
-            def _iso(dt):
-                return dt.replace(tzinfo=tpe).isoformat() if dt else None
-
+            # 顯示時間由前端依觀看者時區格式化；後端只回 UTC aware ISO（+00:00）的 timestamp。
             await manager.send_new_message(thread.id, {
                 "id": user_msg.id,
                 "type": "user",
                 "text": user_message,
-                "time": format_chat_time(user_msg.created_at),
-                "timestamp": _iso(user_msg.created_at),
+                "timestamp": to_utc_iso(user_msg.created_at),
                 "thread_id": thread.id,
                 "isRead": False,
                 "source": "webhook",
@@ -1643,8 +1638,7 @@ class ChatbotService:
                     "id": bot_msg.id,
                     "type": "official",
                     "text": bot_reply,
-                    "time": format_chat_time(bot_msg.created_at),
-                    "timestamp": _iso(bot_msg.created_at),
+                    "timestamp": to_utc_iso(bot_msg.created_at),
                     "thread_id": thread.id,
                     "isRead": False,
                     "source": "gpt",
@@ -1655,8 +1649,7 @@ class ChatbotService:
                     "id": cards_msg.id,
                     "type": "official",
                     "text": cards_msg.content,
-                    "time": format_chat_time(cards_msg.created_at),
-                    "timestamp": _iso(cards_msg.created_at),
+                    "timestamp": to_utc_iso(cards_msg.created_at),
                     "thread_id": thread.id,
                     "isRead": False,
                     "source": "gpt",
@@ -2614,6 +2607,14 @@ class ChatbotService:
                 conv_db = SessionLocal()
                 try:
                     now_dt = datetime.now()
+                    # 多 OA 隔離：webchat 訪客 register 時已把 site_id 映射回 LINE OA channel_id
+                    # 寫進 members.line_channel_id，這裡取出塞進 tag_trigger_logs，
+                    # trigger 會據此推導 tenant_id（與 platform_channel_resolver 對齊）
+                    _ch_row = conv_db.execute(
+                        _text("SELECT line_channel_id FROM members WHERE id = :mid LIMIT 1"),
+                        {"mid": crm_member_id},
+                    ).first()
+                    member_channel_id = _ch_row.line_channel_id if _ch_row else None
                     for room in selected_rooms:
                         raw_name = (
                             room.get("room_type_name")
@@ -2632,10 +2633,10 @@ class ChatbotService:
                             _text(
                                 """
                                 INSERT INTO tag_trigger_logs
-                                    (member_id, tag_id, tag_type, tag_name,
+                                    (member_id, tag_id, tag_type, tag_name, platform, channel_id,
                                      trigger_source, triggered_at, created_at)
                                 VALUES
-                                    (:mid, NULL, 'interaction', :tag_name,
+                                    (:mid, NULL, 'interaction', :tag_name, 'Webchat', :channel_id,
                                      'CONVERSION', :triggered_at, NOW())
                             """
                             ),
@@ -2643,6 +2644,7 @@ class ChatbotService:
                                 "mid": crm_member_id,
                                 "tag_name": tag_name,
                                 "triggered_at": now_dt,
+                                "channel_id": member_channel_id,
                             },
                         )
 

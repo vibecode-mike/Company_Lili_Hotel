@@ -2172,13 +2172,15 @@ def __track():
                 # ---- 寫入 member_interaction_tags（會員互動標籤）----
                 # 根據 line_uid 查找 member_id
                 member_row = fetchone(f"""
-                    SELECT id FROM `{MYSQL_DB}`.`members`
+                    SELECT id, line_channel_id FROM `{MYSQL_DB}`.`members`
                     WHERE line_uid = :uid
                     LIMIT 1
                 """, {"uid": uid})
 
                 if member_row:
                     member_id = member_row.get("id")
+                    # 多 OA 隔離：寫進 tag_trigger_logs，trigger 會據此推導 tenant_id
+                    member_channel_id = member_row.get("line_channel_id")
                     # 查詢是否已存在該會員的該標籤
                     existing_mit = fetchone(f"""
                         SELECT id, click_count FROM `{MYSQL_DB}`.`member_interaction_tags`
@@ -2214,15 +2216,16 @@ def __track():
                         msg_id_int = None
                     execute(f"""
                         INSERT INTO `{MYSQL_DB}`.`tag_trigger_logs`
-                            (member_id, tag_id, tag_type, tag_name, message_id,
+                            (member_id, tag_id, tag_type, tag_name, message_id, platform, channel_id,
                              trigger_source, triggered_at, created_at)
-                        VALUES (:mid, :tag_id, 'interaction', :tag_name, :msg_id,
+                        VALUES (:mid, :tag_id, 'interaction', :tag_name, :msg_id, 'LINE', :channel_id,
                                 'CLICK', NOW(), NOW())
                     """, {
                         "mid": member_id,
                         "tag_id": tag_id,
                         "tag_name": tag_name[:100],
                         "msg_id": msg_id_int,
+                        "channel_id": member_channel_id,
                     })
 
                 logging.info(f"[TRACK] Updated tag '{tag_name}' (id={tag_id}) for user {uid}")

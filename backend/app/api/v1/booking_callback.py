@@ -293,13 +293,15 @@ async def _persist_paid_booking(data: BookingCallbackRequest) -> bool:
         async with AsyncSessionLocal() as db:
             # 依 line_uid 查 member_id（查不到就 NULL）
             member_id = None
+            member_channel_id = None  # 多 OA 隔離：寫進 tag_trigger_logs，trigger 會據此推導 tenant_id
             if data.line_uid:
                 row = (await db.execute(
-                    _text("SELECT id FROM members WHERE line_uid = :uid LIMIT 1"),
+                    _text("SELECT id, line_channel_id FROM members WHERE line_uid = :uid LIMIT 1"),
                     {"uid": data.line_uid},
                 )).first()
                 if row:
                     member_id = row.id
+                    member_channel_id = row.line_channel_id
 
             # rooms JSON 參數：MySQL 接受 JSON 字串
             import json as _json
@@ -338,16 +340,17 @@ async def _persist_paid_booking(data: BookingCallbackRequest) -> bool:
                         await db.execute(
                             _text("""
                                 INSERT INTO tag_trigger_logs
-                                    (member_id, tag_id, tag_type, tag_name,
+                                    (member_id, tag_id, tag_type, tag_name, platform, channel_id,
                                      trigger_source, triggered_at, created_at)
                                 VALUES
-                                    (:mid, NULL, 'interaction', :tag_name,
+                                    (:mid, NULL, 'interaction', :tag_name, 'LINE', :channel_id,
                                      'CONVERSION', :triggered_at, NOW())
                             """),
                             {
                                 "mid": member_id,
                                 "tag_name": tag_name,
                                 "triggered_at": paid_at,
+                                "channel_id": member_channel_id,
                             },
                         )
 
@@ -579,24 +582,26 @@ async def track_room_click(data: RoomClickTrackRequest):
 
         async with AsyncSessionLocal() as db:
             row = (await db.execute(
-                _text("SELECT id FROM members WHERE line_uid = :uid LIMIT 1"),
+                _text("SELECT id, line_channel_id FROM members WHERE line_uid = :uid LIMIT 1"),
                 {"uid": line_uid},
             )).first()
             if not row:
                 return {"ok": False, "message": "member not found"}
             member_id = row.id
+            member_channel_id = row.line_channel_id  # 多 OA 隔離：寫進 tag_trigger_logs，trigger 會據此推導 tenant_id
 
             # 寫 tag_trigger_logs (CLICK)
             await db.execute(
                 _text("""
                     INSERT INTO tag_trigger_logs
-                        (member_id, tag_id, tag_type, tag_name,
+                        (member_id, tag_id, tag_type, tag_name, platform, channel_id,
                          trigger_source, triggered_at, created_at)
                     VALUES
-                        (:mid, NULL, 'interaction', :tag_name,
+                        (:mid, NULL, 'interaction', :tag_name, 'LINE', :channel_id,
                          'CLICK', :triggered_at, NOW())
                 """),
-                {"mid": member_id, "tag_name": tag_name, "triggered_at": now_tpe},
+                {"mid": member_id, "tag_name": tag_name, "triggered_at": now_tpe,
+                 "channel_id": member_channel_id},
             )
 
             # upsert member_interaction_tags (tag_source='room_card_click')
