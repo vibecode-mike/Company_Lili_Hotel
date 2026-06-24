@@ -299,7 +299,9 @@
 - ~~`shared/MemberNoteEditor:89`~~ ❌ textarea，方案 B 排除
 
 **🔵 Group 4 — 純橫向（C5）**
-- `InsightsPanel:1246/1272`（圖表/tab 橫捲）、`flex-message/PreviewPanel:64`（輪播預覽 snap-x）
+- `InsightsPanel:1272`（heatmap 橫捲，`min-w-[720px]`）→ ⭐ **橫向 Scrollable 首戰（2026-06-24，未驗收/未 commit）**：1272 換 `<Scrollable orientation="horizontal">`，無 ref/snap/onScroll、最乾淨。**待驗：橫向 hThumb 生效（4px 底部）、拖得動、heatmap 不破版**（橫向首次實戰、像 2xs 首用要眼見為憑）。
+- `InsightsPanel:1246`（tab strip 橫捲）→ ⏸ **暫不碰**：有 `tabsContainerRef`、且「橫向 tab strip」＝ CarouselMessageEditor 卡關同型，留待與 Carousel 一起。
+- ~~`flex-message/PreviewPanel:64`（輪播預覽 snap-x）~~ ❌ **死碼（2026-06-24 查證）**：零 importer、無 barrel、無 build chunk；其渲染者 `FlexMessageEditorNew` 已於 `8d152087` 刪除 → 它成孤兒。原訂橫向首戰作廢，改用 `InsightsPanel:1272`。`flex-message/PreviewPanel.tsx`+`types.ts` 併入「dead code 刪除」批清掉。
 
 ### 雙軸表格批細節：會員表格（`src/imports/MainContainer-6001-1415.tsx`）
 

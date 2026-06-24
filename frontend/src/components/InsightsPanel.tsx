@@ -9,6 +9,7 @@ import { ChevronDown, ChevronUp, Check } from "lucide-react";
 import { apiGet } from "../utils/apiClient";
 import { formatUnansweredTime } from "../utils/memberTime";
 import { Odometer } from "./Odometer";
+import Scrollable from "./common/Scrollable";
 import { useInViewOnce } from "../hooks/useInViewOnce";
 import { useReducedMotion } from "../hooks/useReducedMotion";
 
@@ -1269,7 +1270,7 @@ function TimeInsightsSection({ reducedMotion }: { reducedMotion: boolean }) {
 
       {/* B. Heatmap：7 欄 x 6 列 + 時間/日期標籤 + 圖例 */}
       <div ref={heatmapRef} className="bg-white px-[20px] py-[16px] flex flex-col gap-[16px]">
-        <div className="overflow-x-auto scrollbar-transparent">
+        <Scrollable orientation="horizontal" className="w-full">
           <div className="min-w-[720px]">
             <div
               className="grid items-stretch"
@@ -1331,7 +1332,7 @@ function TimeInsightsSection({ reducedMotion }: { reducedMotion: boolean }) {
               ))}
             </div>
           </div>
-        </div>
+        </Scrollable>
 
         {/* 色階圖例：單一連續漸層（黃 → 紅 → 紫紅），2px 圓角 */}
         <div className="flex items-center gap-[4px] pl-[44px]">
