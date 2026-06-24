@@ -9,6 +9,8 @@ export interface ChannelAccount {
   channelId: string;
   status: 'connected' | 'expired' | 'pending';
   lastVerified: string;
+  /** 官網彈窗專用：未綁任何 LINE（獨立官網）→ 顯示「綁定 LINE」操作 */
+  webchatBindable?: boolean;
 }
 
 interface BasicSettingsListProps {
@@ -17,6 +19,8 @@ interface BasicSettingsListProps {
   onReauthorize?: (account: ChannelAccount) => void;
   onEdit?: (account: ChannelAccount) => void;
   onDelete?: (account: ChannelAccount) => void;
+  /** 把獨立官網綁定到某個 LINE */
+  onBindLine?: (account: ChannelAccount) => void;
 }
 
 // LINE Icon Component
@@ -107,6 +111,7 @@ export const BasicSettingsList = memo(function BasicSettingsList({
   onReauthorize,
   onEdit,
   onDelete,
+  onBindLine,
 }: BasicSettingsListProps) {
   // Sort state - default to descending (newest first)
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
@@ -294,6 +299,17 @@ export const BasicSettingsList = memo(function BasicSettingsList({
                       >
                         <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[14px] whitespace-nowrap">
                           重新授權
+                        </p>
+                      </button>
+                    )}
+                    {/* 獨立官網才顯示「綁定 LINE」 */}
+                    {account.platform === 'webchat' && account.webchatBindable && onBindLine && (
+                      <button
+                        onClick={() => onBindLine(account)}
+                        className="content-stretch flex gap-[4px] items-center px-[8px] py-0 relative shrink-0 hover:opacity-80 transition-opacity"
+                      >
+                        <p className="font-['Noto_Sans_TC',sans-serif] font-normal leading-[1.5] text-[14px] text-[#0f6beb] whitespace-nowrap">
+                          綁定 LINE
                         </p>
                       </button>
                     )}

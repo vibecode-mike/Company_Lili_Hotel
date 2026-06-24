@@ -5,6 +5,7 @@ import { BasicSettingsEmpty } from './BasicSettingsEmpty';
 import { BasicSettingsList, ChannelAccount } from './BasicSettingsList';
 import LineApiSettingsContent from './LineApiSettingsContent';
 import { CreateWebchatOrgModal } from './CreateWebchatOrgModal';
+import { BindWebchatToLineModal } from './BindWebchatToLineModal';
 import { PmsConnectModal } from './PmsConnectModal';
 import { useChannel } from '../contexts/ChannelContext';
 import {
@@ -50,6 +51,8 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
   const [viewState, setViewState] = useState<ViewState>('loading');
   const [showWebchatModal, setShowWebchatModal] = useState(false);
   const [showPmsModal, setShowPmsModal] = useState(false);
+  // 要綁定到 LINE 的獨立官網（null = 沒在綁）
+  const [bindAccount, setBindAccount] = useState<ChannelAccount | null>(null);
   const [accounts, setAccounts] = useState<ChannelAccount[]>([]);
   const [facebookAuthorizing, setFacebookAuthorizing] = useState(false);
   const [facebookSdkLoading, setFacebookSdkLoading] = useState(false);
@@ -287,6 +290,7 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
               channelId: site.site_id,
               status: site.is_activated ? 'connected' : 'pending',
               lastVerified: formatZhDateTime(site.last_seen_at),
+              webchatBindable: !site.line_channel_id, // 獨立官網（未綁 LINE）才可綁定
             });
           }
         }
@@ -572,12 +576,26 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
   }
 
   return (
-    <BasicSettingsList
-      accounts={accounts}
-      onAddAccount={handleAddAccount}
-      onReauthorize={handleReauthorize}
-      onEdit={handleLineEdit}
-      onDelete={handleLineDelete}
-    />
+    <>
+      <BasicSettingsList
+        accounts={accounts}
+        onAddAccount={handleAddAccount}
+        onReauthorize={handleReauthorize}
+        onEdit={handleLineEdit}
+        onDelete={handleLineDelete}
+        onBindLine={(account) => setBindAccount(account)}
+      />
+      {bindAccount && (
+        <BindWebchatToLineModal
+          siteId={bindAccount.channelId}
+          siteName={bindAccount.name}
+          onClose={() => setBindAccount(null)}
+          onBound={() => {
+            reloadAccounts();
+            refetchChannels();
+          }}
+        />
+      )}
+    </>
   );
 }
