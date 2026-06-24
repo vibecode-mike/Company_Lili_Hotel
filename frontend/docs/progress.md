@@ -290,7 +290,7 @@
 
 **🟡 Group 2 — 表格類（C3，雙軸 → 併雙軸表格批）**
 - `AutoReplyTableStyled:450(max-h-600)+443(橫)`、`InteractiveMessageTable:380+368`
-- 純橫向 table：`PMSIntegration:1329/1740`、`AIChatbotOverview:631`、`FacilitiesContent:934/1333`
+- ~~純橫向 table：`PMSIntegration:1329/1740`、`AIChatbotOverview:631`、`FacilitiesContent:934/1333`~~ ✅ **完成（2026-06-24，未 push）**：5 個容器同模式換 `<Scrollable orientation="horizontal">`（外層 `rounded-2xl overflow-hidden` 圓角裁切層保留、thumb 收圓角內）。crmpoc 3 頁驗收 OK：thumb 底部 4px、hover 才現、拖得動、表頭隨 body 橫捲、不破版。
 
 **🟢 Group 3 — Modal / 面板（有界縱捲）**
 - `MemberTagEditModal:386`（`no-native-scrollbar`＝§2b React 自繪，先評估 macOS modal 可見性再統一）

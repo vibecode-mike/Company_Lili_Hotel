@@ -1,5 +1,6 @@
 import React, { useState, useRef, memo, useCallback, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
+import Scrollable from "./common/Scrollable";
 import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from "../utils/apiClient";
 import { getAuthToken } from "../utils/token";
 import { useToast } from "./ToastProvider";
@@ -1326,7 +1327,7 @@ const PMSDataTable = memo(function PMSDataTable({
       {/* Table — only shown when current view has data */}
       {!bothEmpty && !pmsViewEmpty && !faqViewEmpty && (
       <div className="w-full rounded-2xl ring-1 ring-[#ddd] bg-white overflow-hidden">
-        <div className="overflow-x-auto scrollbar-transparent">
+        <Scrollable orientation="horizontal" className="w-full">
           <table
             className="min-w-[1486px] w-full"
             style={{ borderCollapse: "separate", borderSpacing: 0 }}
@@ -1482,7 +1483,7 @@ const PMSDataTable = memo(function PMSDataTable({
               )}
             </tbody>
           </table>
-        </div>
+        </Scrollable>
       </div>
       )}
 
@@ -1737,7 +1738,7 @@ const DataSourcesTable = memo(function DataSourcesTable({
         共 {sources.length} 筆，引用順序如下
       </p>
       <div className="w-full rounded-2xl ring-1 ring-[#ddd] bg-white overflow-hidden">
-        <div className="overflow-x-auto scrollbar-transparent">
+        <Scrollable orientation="horizontal" className="w-full">
           <table
             className="w-full"
             style={{
@@ -1890,7 +1891,7 @@ const DataSourcesTable = memo(function DataSourcesTable({
               ))}
             </tbody>
           </table>
-        </div>
+        </Scrollable>
       </div>
     </div>
   );

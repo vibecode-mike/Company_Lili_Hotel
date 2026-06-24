@@ -1,6 +1,7 @@
 
 import { useState, useRef, memo, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
+import Scrollable from "./common/Scrollable";
 import { apiGet, apiPut, apiPatch } from "../utils/apiClient";
 import { useToast } from "./ToastProvider";
 import { useChannel } from "../contexts/ChannelContext";
@@ -628,7 +629,7 @@ export default function AIChatbotOverview({
               </p>
 
               <div className="w-full rounded-2xl ring-1 ring-[#ddd] bg-white overflow-hidden">
-                <div className="overflow-x-auto scrollbar-transparent">
+                <Scrollable orientation="horizontal" className="w-full">
                   <table
                     className="w-full border-separate"
                     style={{ minWidth: 700, borderSpacing: 0 }}
@@ -741,7 +742,7 @@ export default function AIChatbotOverview({
                       )}
                     </tbody>
                   </table>
-                </div>
+                </Scrollable>
               </div>
             </div>
         </div>

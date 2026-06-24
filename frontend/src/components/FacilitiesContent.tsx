@@ -1,5 +1,6 @@
 import React, { useState, useRef, memo, useCallback, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
+import Scrollable from "./common/Scrollable";
 import Sidebar from "./Sidebar";
 import { useToast } from "./ToastProvider";
 import { useChannel } from "../contexts/ChannelContext";
@@ -931,7 +932,7 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
       {/* Table — only shown when data exists */}
       {!isEmpty && (
       <div className="w-full rounded-2xl ring-1 ring-[#ddd] bg-white overflow-hidden">
-        <div className="overflow-x-auto scrollbar-transparent">
+        <Scrollable orientation="horizontal" className="w-full">
           <table
             className="min-w-[1200px] w-full"
             style={{ borderCollapse: "separate", borderSpacing: 0 }}
@@ -1036,7 +1037,7 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
               )}
             </tbody>
           </table>
-        </div>
+        </Scrollable>
       </div>
       )}
 
@@ -1330,7 +1331,7 @@ const DataSourcesTable = memo(function DataSourcesTable({
         共 {rows.length} 筆，引用順序如下
       </p>
       <div className="w-full rounded-2xl ring-1 ring-[#ddd] bg-white overflow-hidden">
-        <div className="overflow-x-auto scrollbar-transparent">
+        <Scrollable orientation="horizontal" className="w-full">
           <table
             className="w-full"
             style={{
@@ -1458,7 +1459,7 @@ const DataSourcesTable = memo(function DataSourcesTable({
               ))}
             </tbody>
           </table>
-        </div>
+        </Scrollable>
       </div>
     </div>
   );
