@@ -3,6 +3,7 @@ import svgPaths from '../imports/svg-er211vihwc';
 import toggleSvgPaths from '../imports/svg-eulbcts4ba';
 import { Tag as TagComponent } from './common';
 import { useChannel } from '../contexts/ChannelContext';
+import Scrollable from './common/Scrollable';
 
 interface Tag {
   id: string;
@@ -33,9 +34,6 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
   const [searchInput, setSearchInput] = useState('');
   const isComposingRef = useRef(false);
   const [isInclude, setIsInclude] = useState(initialIsInclude ?? true);
-  const [scrollTop, setScrollTop] = useState(0);
-  const [isDraggingScrollbar, setIsDraggingScrollbar] = useState(false);
-  const [scrollbarStyles, setScrollbarStyles] = useState({ top: 225, height: 60 });
 
   // 獲取可用標籤 API
   useEffect(() => {
@@ -98,8 +96,6 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
       : conversionTags;
   const availableTags = [...memberTags, ...interactionTags, ...conversionTags];
   
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const scrollbarRef = useRef<HTMLDivElement>(null);
 
   const handleSearchChange = (value: string) => {
     setSearchInput(value);
@@ -187,90 +183,6 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
   };
 
   const isActionState = selectedTags.length > 0 || searchInput.trim().length > 0;
-  const showScrollbar = displayTags.length >= 6;
-
-  // Handle scroll
-  const handleScroll = () => {
-    if (scrollContainerRef.current) {
-      setScrollTop(scrollContainerRef.current.scrollTop);
-      updateScrollbarStyles();
-    }
-  };
-
-  // Calculate scrollbar position and height
-  const updateScrollbarStyles = () => {
-    if (!scrollContainerRef.current) {
-      setScrollbarStyles({ top: 225, height: 60 });
-      return;
-    }
-    
-    const container = scrollContainerRef.current;
-    const scrollHeight = container.scrollHeight;
-    const clientHeight = container.clientHeight;
-    const scrollTop = container.scrollTop;
-    
-    if (scrollHeight <= clientHeight) {
-      setScrollbarStyles({ top: 225, height: 60 });
-      return;
-    }
-    
-    const scrollbarTrackHeight = clientHeight;
-    const scrollbarHeight = Math.max((clientHeight / scrollHeight) * scrollbarTrackHeight, 40);
-    const maxScrollTop = scrollHeight - clientHeight;
-    const scrollPercentage = maxScrollTop > 0 ? scrollTop / maxScrollTop : 0;
-    const scrollbarTop = 225 + scrollPercentage * (scrollbarTrackHeight - scrollbarHeight);
-    
-    setScrollbarStyles({ top: scrollbarTop, height: scrollbarHeight });
-  };
-
-  // Handle scrollbar drag
-  const handleScrollbarMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsDraggingScrollbar(true);
-  };
-
-  // Update scrollbar when tags change
-  useEffect(() => {
-    // Use setTimeout to ensure DOM has updated
-    const timeoutId = setTimeout(() => {
-      updateScrollbarStyles();
-    }, 0);
-    return () => clearTimeout(timeoutId);
-  }, [displayTags.length, scrollTop, activeTab]);
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDraggingScrollbar || !scrollContainerRef.current) return;
-      
-      const container = scrollContainerRef.current;
-      const containerRect = container.getBoundingClientRect();
-      const scrollbarTrackHeight = container.clientHeight;
-      const scrollHeight = container.scrollHeight;
-      const maxScrollTop = scrollHeight - container.clientHeight;
-      
-      // Calculate relative position within the scrollable area
-      const mouseY = e.clientY - containerRect.top;
-      const scrollableRange = scrollbarTrackHeight - scrollbarStyles.height;
-      const scrollPercentage = Math.max(0, Math.min(1, (mouseY - 225) / scrollableRange));
-      const newScrollTop = scrollPercentage * maxScrollTop;
-      
-      container.scrollTop = Math.max(0, Math.min(newScrollTop, maxScrollTop));
-    };
-
-    const handleMouseUp = () => {
-      setIsDraggingScrollbar(false);
-    };
-
-    if (isDraggingScrollbar) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-    }
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDraggingScrollbar, scrollbarStyles.height]);
 
   const IconSearch = () => (
     <div className="relative shrink-0 size-[32px]">
@@ -429,17 +341,11 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
 
           {/* Scrollable Tags Container - fills remaining space, fixed layout */}
           <div className="flex-1 w-full mt-[12px] mb-[20px] overflow-hidden relative min-h-0">
-            <div
-              ref={scrollContainerRef}
-              onScroll={handleScroll}
-              className={`flex gap-[10px] items-start justify-start w-full h-full overflow-y-auto ${showScrollbar ? 'pr-2' : ''}`}
-              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            <Scrollable
+              orientation="vertical"
+              className="w-full h-full"
+              viewportClassName="flex gap-[10px] items-start justify-start w-full h-full pr-2"
             >
-              <style>{`
-                div::-webkit-scrollbar {
-                  display: none;
-                }
-              `}</style>
               {isLoading ? (
                 // Loading state
                 <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#a8a8a8] text-[16px] text-center">
@@ -488,20 +394,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
                   )}
                 </div>
               )}
-            </div>
-            
-            {/* Scrollbar - only show when >= 6 tags */}
-            {showScrollbar && (
-              <div 
-                ref={scrollbarRef}
-                className="absolute bg-[#dddddd] right-0 rounded-xs w-[4px] cursor-pointer hover:bg-[#b8b8b8] transition-colors"
-                style={{ 
-                  top: `${scrollbarStyles.top - 225}px`, 
-                  height: `${scrollbarStyles.height}px` 
-                }}
-                onMouseDown={handleScrollbarMouseDown}
-              />
-            )}
+            </Scrollable>
           </div>
 
           {/* Buttons - Fixed at bottom, never shrinks */}

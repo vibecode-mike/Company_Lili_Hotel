@@ -278,7 +278,7 @@
 - [ ] **維持方案 B（不自繪）**：textarea、下拉 popover、shadcn UI 庫元件 —— 不納入 C 計畫
   - ⚠️ 例：`shared/MemberNoteEditor:89` 的捲動元素是 `<textarea>`（不是 div）→ **紅線排除**，Scrollable 包不到原生 textarea 內捲（2026-06-23 確認，別再誤列進低風險）。
 - [ ] **【Windows 跨系統檢查點】** 用 Windows 開 crmpoc 確認 C 捲軸是 **4px 灰圓角**、沒變回 Windows 預設醜樣式（選 C 而非 A 的核心理由，需實測；若不一致→檢討 thumb 繪製，不退回 A）
-- [ ] **FilterModal 雙捲軸**：單獨小批，**保留 `showScrollbar` 的 `pr-2` 邏輯**
+- [x] **FilterModal** ✅ **完成（2026-06-24，未 push）＋ §2b 結案** —— 它本來就是「手刻 React 自繪捲軸」（≈90 行：`scrollbarStyles`/`handleScroll`/`updateScrollbarStyles`/2 個拖曳 useEffect/`scrollbarRef`/寫死 `225`/`showScrollbar`）→ **全刪、換 `<Scrollable orientation="vertical">`**（−113/+6）。3 個行為改變已採納：`showScrollbar`(≥6) 取消改 Scrollable 自動偵測真溢出、`pr-2` 改**常駐**保留（tag 不被 thumb 蓋）、thumb 從 `#dddddd` 常駐 → `black/30` **hover 才現**（全站統一）。crmpoc 驗收 OK：hover 才現/拖得動/pr-2 讓位/篩選功能沒傷。
 - [x] **字體（`71b92bbd` 全站收斂 Noto）已 push staging（已部署、CI 綠燈）、已告知同事**
 
 ### 真正剩的有界內層容器清單（2026-06-23 盤點，落檔免遺失）
@@ -296,13 +296,13 @@
 - ~~純橫向 table：`PMSIntegration:1329/1740`、`AIChatbotOverview:631`、`FacilitiesContent:934/1333`~~ ✅ **完成（2026-06-24，未 push）**：5 個容器同模式換 `<Scrollable orientation="horizontal">`（外層 `rounded-2xl overflow-hidden` 圓角裁切層保留、thumb 收圓角內）。crmpoc 3 頁驗收 OK：thumb 底部 4px、hover 才現、拖得動、表頭隨 body 橫捲、不破版。
 
 **🟢 Group 3 — Modal / 面板（有界縱捲）**
-- `MemberTagEditModal:386`（`no-native-scrollbar`＝§2b React 自繪，先評估 macOS modal 可見性再統一）
-- `FilterModal:435`（§2c `showScrollbar`/`pr-2` 邏輯要保留）
+- `MemberTagEditModal:386`（`no-native-scrollbar`＝§2b React 自繪，先評估 macOS modal 可見性再統一）← ⬜ **低風險批剩這一個（評估性）**
+- ~~`FilterModal:435`~~ ✅ **完成（2026-06-24，未 push）＋§2b 結案**：手刻自繪 ≈90 行 → 換 `<Scrollable vertical>`、統一 hover、pr-2 常駐保留。
 - ~~`AIChatbotEditModal:626/927`~~ ✅ **完成（2026-06-24，未 push）** —— 兩彈窗外層換 Scrollable + Scrollable 加 onClick passthrough
 - ~~`shared/MemberNoteEditor:89`~~ ❌ textarea，方案 B 排除
 
 **🔵 Group 4 — 純橫向（C5）**
-- `InsightsPanel:1272`（heatmap 橫捲，`min-w-[720px]`）→ ⭐ **橫向 Scrollable 首戰（2026-06-24，未驗收/未 commit）**：1272 換 `<Scrollable orientation="horizontal">`，無 ref/snap/onScroll、最乾淨。**待驗：橫向 hThumb 生效（4px 底部）、拖得動、heatmap 不破版**（橫向首次實戰、像 2xs 首用要眼見為憑）。
+- ~~`InsightsPanel:1272`（heatmap 橫捲，`min-w-[720px]`）~~ ✅ **完成（2026-06-24，`4bde7349`，未 push）＝橫向 Scrollable 首戰**：換 `orientation="horizontal"`，crmpoc 驗收 OK（4px hThumb 底部、hover 才現、拖得動、不破版）。橫向 pattern 確立。
 - `InsightsPanel:1246`（tab strip 橫捲）→ ⏸ **暫不碰**：有 `tabsContainerRef`、且「橫向 tab strip」＝ CarouselMessageEditor 卡關同型，留待與 Carousel 一起。
 - ~~`flex-message/PreviewPanel:64`（輪播預覽 snap-x）~~ ❌ **死碼（2026-06-24 查證）**：零 importer、無 barrel、無 build chunk；其渲染者 `FlexMessageEditorNew` 已於 `8d152087` 刪除 → 它成孤兒。原訂橫向首戰作廢，改用 `InsightsPanel:1272`。`flex-message/PreviewPanel.tsx`+`types.ts` 併入「dead code 刪除」批清掉。
 
