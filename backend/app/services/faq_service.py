@@ -481,7 +481,7 @@ class FaqService:
         - 分類 is_active=True + 規則 is_enabled=True + status=draft → 發佈
         - 分類 is_active=False 的已發佈規則 → 撤回為未發佈
         """
-        now = datetime.now()
+        now = now_utc()
 
         # 1. 取得所有啟用分類的 ID
         active_cat_stmt = select(FaqCategory.id).where(

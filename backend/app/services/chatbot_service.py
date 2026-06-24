@@ -16,7 +16,7 @@ from datetime import date, datetime, timedelta
 from threading import Lock
 from typing import Any, Dict, List, Literal, Optional, Tuple
 from uuid import uuid4
-from app.core.timezone import OPERATING_TZ
+from app.core.timezone import OPERATING_TZ, now_utc
 
 from openai import AsyncOpenAI
 from sqlalchemy import func as sa_func
@@ -1488,7 +1488,7 @@ class ChatbotService:
                 join_source="Webchat",
                 is_guest=True,
                 guest_seq=next_seq,
-                last_interaction_at=datetime.now(),
+                last_interaction_at=now_utc(),
                 webchat_site_id=site_id,
                 webchat_site_name=site_name,
                 line_channel_id=line_channel_id,
@@ -1497,7 +1497,7 @@ class ChatbotService:
             db.add(member)
             await db.flush()  # 取得 member.id
         else:
-            member.last_interaction_at = datetime.now()
+            member.last_interaction_at = now_utc()
             # 既有訪客若沒有 site 資訊就補上（不覆蓋已存在的，避免訪客在不同站之間切換時亂跳）
             if site_id and not member.webchat_site_id:
                 member.webchat_site_id = site_id
@@ -1513,7 +1513,7 @@ class ChatbotService:
             select(ConversationThread).where(ConversationThread.id == browser_key)
         )
         thread = thread_result.scalar_one_or_none()
-        now = datetime.now()
+        now = now_utc()
         if thread is None:
             thread = ConversationThread(
                 id=browser_key,
@@ -2508,7 +2508,7 @@ class ChatbotService:
                         existing_member.name = name
                         existing_member.phone = phone
                         existing_member.email = email
-                        existing_member.last_interaction_at = datetime.now()
+                        existing_member.last_interaction_at = now_utc()
                         # 從訪客升級為正式會員
                         if getattr(existing_member, "is_guest", False):
                             existing_member.is_guest = False
@@ -2522,7 +2522,7 @@ class ChatbotService:
                             join_source="Webchat",
                             gpt_enabled=True,
                             is_guest=False,
-                            last_interaction_at=datetime.now(),
+                            last_interaction_at=now_utc(),
                         )
                         db.add(new_member)
                         db.flush()
@@ -2606,7 +2606,7 @@ class ChatbotService:
 
                 conv_db = SessionLocal()
                 try:
-                    now_dt = datetime.now()
+                    now_dt = now_utc()
                     # 多 OA 隔離：webchat 訪客 register 時已把 site_id 映射回 LINE OA channel_id
                     # 寫進 members.line_channel_id，這裡取出塞進 tag_trigger_logs，
                     # trigger 會據此推導 tenant_id（與 platform_channel_resolver 對齊）
@@ -3580,7 +3580,7 @@ class ChatbotService:
             )
         )
         existing = existing_result.scalar_one_or_none()
-        now = datetime.now()
+        now = now_utc()
         # widget 流程 = Webchat 平台
         # channel_id 用 LINE OA channel_id（webchat 訪客 register 時已映射），
         # 與 resolve_for_member 對齊，讓 analytics / 多 OA 隔離跨平台用同一個 key

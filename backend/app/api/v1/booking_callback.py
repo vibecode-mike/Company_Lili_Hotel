@@ -4,9 +4,9 @@
 閎運付款完成後打此端點 → 查 LINE 會員 → 發送訂房確認 Flex Message
 """
 import logging
-from datetime import datetime, date
+from datetime import date
 from typing import Dict, List, Optional
-from zoneinfo import ZoneInfo
+from app.core.timezone import now_utc
 
 from pathlib import Path
 
@@ -288,7 +288,7 @@ async def _persist_paid_booking(data: BookingCallbackRequest) -> bool:
             {"roomtype": r.roomtype, "quantity": max(1, r.quantity)}
             for r in data.rooms
         ]
-        paid_at = datetime.now(ZoneInfo("Asia/Taipei")).replace(tzinfo=None)
+        paid_at = now_utc()
 
         async with AsyncSessionLocal() as db:
             # 依 line_uid 查 member_id（查不到就 NULL）
@@ -578,7 +578,7 @@ async def track_room_click(data: RoomClickTrackRequest):
         from sqlalchemy import text as _text
 
         tag_name = ROOMTYPE_NAME.get(data.roomtype, data.roomtype)[:20]
-        now_tpe = datetime.now(ZoneInfo("Asia/Taipei")).replace(tzinfo=None)
+        now_tpe = now_utc()
 
         async with AsyncSessionLocal() as db:
             row = (await db.execute(

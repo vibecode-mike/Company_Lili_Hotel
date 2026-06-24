@@ -203,9 +203,10 @@ Timezone Convention 改成「DB = UTC（naive UTC）」：連線 pin `+00:00`、
 
 ## 🎯 核心 7 段全部完成（1✅ 2✅ 3✅ 3.5✅ 4✅ 5✅ 6✅ 7✅）
 **未 push。** 剩最後整合關卡：
-1. **merge origin/main**（清工作區同事 WIP/cruft 後）→ 帶入 multi-OA + 同事 commit。
-2. **GATE #2**：merge 後在含 multi-OA 版本上補 chatbot_service / webchat_sites:255 / booking_callback 291/581 的 `now_utc()`（用內容定位，見 G2），獨立 [3.5b]。
-3. **GUARDRAIL G1~G4**：整合後完整重驗、熱區掃描、MessageList 同事 WIP 協調。
+1. ✅ **merge origin/main 完成**（自動合、零衝突；multi-OA + 同事 commit 已帶入，my tz 保留）。
+2. ✅ **GATE #2 完成 [3.5b]**：chatbot_service 7 處寫入 / webchat_sites:255 / booking_callback 291,581 → `now_utc()`（內容定位）；實證 now_utc() 回 naive UTC。
+3. ✅ **GATE #3 完成**：faq_service:483 `publish_all_draft` 的 `now` → `rule.published_at` = 寫入 → `now_utc()`。
+4. **GUARDRAIL G1~G4**：整合後完整重驗(進行中)、熱區掃描、MessageList 同事 WIP（已 stash，未埋進 commit）。
 4. 後續可獨立：(h) 子階段 9（message_service 879-880 / messages:354 / auto_responses:42,396）、JWT 另案。
 
 ## 📝 另案（不在本遷移範圍，記一筆）

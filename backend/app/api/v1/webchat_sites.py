@@ -5,7 +5,7 @@
 
 狀態語意（一次性）：曾收到過 beacon（last_seen_at 有值）→ 已開通；從未收到 → 待開通。
 """
-from datetime import datetime
+from app.core.timezone import now_utc
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -246,13 +246,13 @@ async def report_widget_seen(
     （搭配前端 navigator.sendBeacon）即可完全略過預檢，不依賴 nginx CORS 設定。
 
     找不到 site_id 一律靜默成功（避免外部探測造成噪音，也不可影響客服開啟）。
-    時間用 datetime.now()（伺服器時區 Asia/Taipei，與 chatbot_service 一致）。
+    時間用 now_utc()（DB naive = UTC，與 chatbot_service 一致）。
     """
     site = await db.get(WebchatSiteChannel, site_id)
     if site is None:
         return SuccessResponse(message="ignored")
 
-    site.last_seen_at = datetime.now()
+    site.last_seen_at = now_utc()
     if url:
         site.last_seen_url = url[:500]
     await db.commit()
