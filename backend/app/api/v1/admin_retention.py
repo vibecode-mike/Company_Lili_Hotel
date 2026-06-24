@@ -24,7 +24,8 @@ POST /admin/retention/run-guest-cleanup
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.core.timezone import now_utc, to_utc_iso
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import delete, func, select, update
@@ -61,7 +62,7 @@ async def run_guest_cleanup(
     """Webchat 訪客 7 天訊息粒度清理（見檔頭 docstring）"""
     _verify_token(x_cron_token)
 
-    cutoff = datetime.now() - timedelta(days=settings.GUEST_RETENTION_DAYS)
+    cutoff = now_utc() - timedelta(days=settings.GUEST_RETENTION_DAYS)
 
     # 1. 找出 webchat 訪客名下的所有 thread
     threads_result = await db.execute(
@@ -79,7 +80,7 @@ async def run_guest_cleanup(
             "updated_threads": 0,
             "deleted_threads": 0,
             "deleted_members": 0,
-            "cutoff": cutoff.isoformat(),
+            "cutoff": to_utc_iso(cutoff),
         }
 
     thread_ids = [r.id for r in thread_rows]

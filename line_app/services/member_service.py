@@ -314,7 +314,10 @@ def get_member_reply_flags(line_uid: str) -> dict:
         if override_until:
             if isinstance(override_until, str):
                 override_until = datetime.datetime.fromisoformat(override_until)
-            human_override = override_until > datetime.datetime.now()
+            # DB human_override_until 是 naive UTC；統一成 naive UTC 與 utcnow() 同基底比較
+            if override_until.tzinfo is not None:
+                override_until = override_until.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+            human_override = override_until > utcnow()
 
         return {"gpt_enabled": gpt_enabled, "human_override": human_override}
     except Exception as e:

@@ -1049,7 +1049,7 @@ async def set_human_override(
         raise HTTPException(status_code=404, detail="會員不存在")
 
     duration = HUMAN_OVERRIDE_DURATION if active else HUMAN_OVERRIDE_BLUR_BUFFER
-    member.human_override_until = datetime.now() + duration
+    member.human_override_until = now_utc() + duration
 
     await db.commit()
 
@@ -1171,7 +1171,7 @@ async def send_member_chat_message(
                 })
 
             # 送訊息 = 人工操作，續期 human override
-            member.human_override_until = datetime.now() + HUMAN_OVERRIDE_DURATION
+            member.human_override_until = now_utc() + HUMAN_OVERRIDE_DURATION
             await db.commit()
 
             return {

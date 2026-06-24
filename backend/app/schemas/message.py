@@ -187,16 +187,11 @@ class MessageCreate(BaseModel):
     @field_validator('scheduled_at')
     @classmethod
     def validate_scheduled_at_future(cls, v):
-        """驗證排程時間必須在未來"""
+        """驗證排程時間必須在未來（統一以 UTC 比較）"""
         if v is not None:
-            # 確保比較基準一致：統一轉換到本地時區
-            local_tz = datetime.now().astimezone().tzinfo or timezone.utc
-            now_local = datetime.now(local_tz)
-            if v.tzinfo is None:
-                scheduled_local = v.replace(tzinfo=local_tz)
-            else:
-                scheduled_local = v.astimezone(local_tz)
-            if scheduled_local <= now_local:
+            # naive 視為 UTC（DB/傳輸慣例），aware 正規化成 UTC，與 now(UTC) 同基底
+            scheduled_utc = v.replace(tzinfo=timezone.utc) if v.tzinfo is None else v.astimezone(timezone.utc)
+            if scheduled_utc <= datetime.now(timezone.utc):
                 raise ValueError('排程發送時間不可早於目前時間')
         return v
 

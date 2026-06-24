@@ -5,6 +5,7 @@
 import logging
 from datetime import datetime, timezone
 from typing import Optional
+from app.core.timezone import now_utc
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.job import Job
@@ -193,8 +194,8 @@ class CampaignScheduler:
                 result = await db.execute(stmt)
                 campaigns = result.scalars().all()
 
-                # 使用本地時間比較（資料庫存的是本地時間）
-                now = datetime.now()
+                # 與 DB 的 scheduled_at（naive UTC）同基底比較
+                now = now_utc()
                 restored_count = 0
                 expired_count = 0
 

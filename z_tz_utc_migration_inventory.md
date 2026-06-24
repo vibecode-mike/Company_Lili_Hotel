@@ -182,7 +182,7 @@
    - `webchat_sites.py:255` last_seen_at
    - `booking_callback.py` 291 paid_at（DATETIME 已確認）/ 581 now_tpe（在同事 tag_trigger INSERT 區）
 3. **faq_service.py:483** `now = datetime.now()` 用途待查 → 寫入則 UTC / 比較則配 (e) / 日曆則 OPERATING_TZ。
-4. **(e) 子階段 4**：members 1052/1174 human_override 寫入 + line_app member_service.py:317 比較 + scheduler:197 + admin_retention:64（cutoff 比較）。
+4. ✅ **(e) 子階段 4 已完成**：members 1052/1174 human_override 寫入 → `now_utc()`；line_app member_service.py:317 比較 → `utcnow()`（成對改、含 aware 正規化）；scheduler:197 → `now_utc()`；admin_retention:64 cutoff → `now_utc()`（輸出 cutoff 走 `to_utc_iso`）；schemas/message.py validate_scheduled_at_future → 改 UTC 基底比較。
 5. **(h) 子階段 9**：message_service 879-880、messages.py:354、auto_responses.py:42/396。
 6. **(g) 子階段 5**：CSV/chatbot 營運時區輸出（conversations_export:158、chatbot.py:152、pms_chatbot_client:37）；chatbot_service 915/1222/2948/3177 ZoneInfo→OPERATING_TZ 常數。
 
