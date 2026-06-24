@@ -2607,6 +2607,14 @@ class ChatbotService:
                 conv_db = SessionLocal()
                 try:
                     now_dt = datetime.now()
+                    # 多 OA 隔離：webchat 訪客 register 時已把 site_id 映射回 LINE OA channel_id
+                    # 寫進 members.line_channel_id，這裡取出塞進 tag_trigger_logs，
+                    # trigger 會據此推導 tenant_id（與 platform_channel_resolver 對齊）
+                    _ch_row = conv_db.execute(
+                        _text("SELECT line_channel_id FROM members WHERE id = :mid LIMIT 1"),
+                        {"mid": crm_member_id},
+                    ).first()
+                    member_channel_id = _ch_row.line_channel_id if _ch_row else None
                     for room in selected_rooms:
                         raw_name = (
                             room.get("room_type_name")
@@ -2625,10 +2633,10 @@ class ChatbotService:
                             _text(
                                 """
                                 INSERT INTO tag_trigger_logs
-                                    (member_id, tag_id, tag_type, tag_name,
+                                    (member_id, tag_id, tag_type, tag_name, platform, channel_id,
                                      trigger_source, triggered_at, created_at)
                                 VALUES
-                                    (:mid, NULL, 'interaction', :tag_name,
+                                    (:mid, NULL, 'interaction', :tag_name, 'Webchat', :channel_id,
                                      'CONVERSION', :triggered_at, NOW())
                             """
                             ),
@@ -2636,6 +2644,7 @@ class ChatbotService:
                                 "mid": crm_member_id,
                                 "tag_name": tag_name,
                                 "triggered_at": now_dt,
+                                "channel_id": member_channel_id,
                             },
                         )
 
