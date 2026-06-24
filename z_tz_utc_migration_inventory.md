@@ -198,5 +198,15 @@ G4. **⚠️ 子階段 6 前**：`MessageList.tsx` 有同事 37 行未提交 WIP
 - **MessageList 待補（你要的記錄）**：correctness **無待補**（它的 `formatDateTime` 已正確）。只有「把 ~11 個 formatter DRY 收斂成單一 util」這個 **cosmetic、非必要** 工作會碰到它；若日後要做,等同事的頻道標頭 WIP commit 後再碰。
 - **DownloadConversationsModal 日期篩選**：用瀏覽器本地（台北營運下=正確）；海外多租戶才需改 OPERATING_TZ → 未做（YAGNI）。
 
+## ✅ 子階段 7 已完成（CLAUDE.md 改寫）
+Timezone Convention 改成「DB = UTC（naive UTC）」：連線 pin `+00:00`、寫入 `now_utc()`、輸出 `AwareUtcDatetime`/`to_utc_iso` +00:00、前端觀看者本地、營運時區用 `OPERATING_TZ`、排程輸入本地→UTC。紅線 #3 反轉：禁止寫主機/台北 naive，`utcnow()`(naive UTC) 可用。
+
+## 🎯 核心 7 段全部完成（1✅ 2✅ 3✅ 3.5✅ 4✅ 5✅ 6✅ 7✅）
+**未 push。** 剩最後整合關卡：
+1. **merge origin/main**（清工作區同事 WIP/cruft 後）→ 帶入 multi-OA + 同事 commit。
+2. **GATE #2**：merge 後在含 multi-OA 版本上補 chatbot_service / webchat_sites:255 / booking_callback 291/581 的 `now_utc()`（用內容定位，見 G2），獨立 [3.5b]。
+3. **GUARDRAIL G1~G4**：整合後完整重驗、熱區掃描、MessageList 同事 WIP 協調。
+4. 後續可獨立：(h) 子階段 9（message_service 879-880 / messages:354 / auto_responses:42,396）、JWT 另案。
+
 ## 📝 另案（不在本遷移範圍，記一筆）
 - `security.py:44` JWT `exp` 用裸 `datetime.now()`（host-tz 依賴的 latent bug）→ 之後單獨確認 token 過期判斷無 host-tz 依賴。

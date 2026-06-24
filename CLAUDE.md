@@ -122,11 +122,15 @@ Frontend:
 
 ## Timezone Convention
 
-- **MySQL server timezone = Asia/Taipei (UTC+8)**，`NOW()` 回傳臺灣時間
-- **DB 中所有 naive datetime 都是臺灣時間**，不是 UTC
-- 讀取 DB datetime 時：`dt.replace(tzinfo=TAIPEI_TZ)`，**不要**當 UTC 再轉換
-- 外部 API 的 epoch timestamp（如 FB API）才是真正的 UTC，需用 `datetime.fromtimestamp(ts, tz=timezone.utc)`
-- Base model 的 `_now_taipei()` 回傳不帶 tzinfo 的臺灣時間，與 MySQL `NOW()` 一致
+**DB 一律存 UTC（naive UTC）。** 連線層 pin `SET time_zone = '+00:00'`（`backend/app/database.py`、`line_app/db.py`），故 `NOW()` / `func.now()` 回傳 UTC，不依賴主機時區。
+
+- **DB 中所有 naive datetime 都是 UTC**，不是臺灣時間。
+- **寫入**：Python 用 `now_utc()`（`app/core/timezone.py` 單一來源，回 naive UTC；base model `_now_utc` 即它）。line_app 用 `utcnow()` 或 `NOW()`（pin 後即 UTC）。
+- **讀取**：naive 視為 UTC。輸出給前端一律 **UTC aware ISO（`+00:00`）**——Pydantic 欄位用 `AwareUtcDatetime`、手動輸出用 `to_utc_iso()`。前端用 `new Date()` + `toLocaleString`（**不指定 timeZone**）依觀看者瀏覽器時區顯示。
+- **營運時區（非 UTC）**：報表日界線、日曆日（今天/明天）、自動回應時段、無觀看者的字串輸出（CSV/chatbot）用 `OPERATING_TZ`（`app/core/timezone.py`，預設 Asia/Taipei）；SQL 用 `OPERATING_TZ_SQL`（`+08:00`）做 `CONVERT_TZ`。
+- **外部 epoch（FB/LINE）**：是真 UTC，用 `datetime.fromtimestamp(ts, tz=timezone.utc)`。
+- **排程輸入**：前端以設定者本地時區組 Date → `toISOString()`（UTC）送後端；比較一律 UTC。
+- ⚠️ DST：`OPERATING_TZ_SQL` 用固定 `+08:00` 僅因台北無夏令時間；未來海外含 DST 的營運時區需改具名時區 + MySQL tz 表。
 
 ## ⛔ 部署規則
 
@@ -145,9 +149,10 @@ Frontend:
 
 2. **修改 `line_app/app.py` 的推播流程前，必須先讀懂 `push_campaign()` 和 `_create_campaign_row()` 的註解**
 
-3. **DB 時間慣例：臺灣時間（Asia/Taipei, UTC+8）**
+3. **DB 時間慣例：UTC（naive UTC）**
    - 詳見「Timezone Convention」章節
-   - `line_app` 中禁止用 `utcnow()` 寫入 messages 表
+   - 寫入一律 UTC：Python 用 `now_utc()`；`NOW()`/`func.now()` 靠連線 pin `+00:00` 即 UTC
+   - 禁止寫入「主機本地 naive」(`datetime.now()`) 或「台北 naive」到 DB；`utcnow()`(naive UTC) 可用
 
 ## Database
 
