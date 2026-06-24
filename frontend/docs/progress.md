@@ -236,7 +236,10 @@
 
 > 全站活的 textarea 11 個（`imports/` 死碼 + 未使用的 shadcn `ui/textarea` 排除）。
 > **主批＝8 個原本無 scrollbar 美化的 → 補 `scrollbar-transparent`**（純追加 class、只染捲軸、零 layout 屬性 → 不可能破版）。
-> 特例不碰：#1 `chat-widget-textarea`（webchat widget 自家 4px #dddddd、隔離、§2b 另議，**留著**）、#2 `MemberNoteEditor`（早已 scrollbar-transparent 且貼緣正常）、#3 `ChatRoomLayout` 聊天室回覆框（白底 + white/60 thumb≈隱形、8px，**另議**，建議改 scrollbar-transparent 修可見性 + 8→4）。
+> 特例：#1 `chat-widget-textarea`（webchat widget 自家 4px #dddddd、隔離、§2b 另議，**留著不碰**）、#2 `MemberNoteEditor`（早已 scrollbar-transparent 且貼緣正常）。
+> #3 `ChatRoomLayout:1387` 聊天室回覆框 ✅ **完成（2026-06-24，未 push）**：原 `white/60` 白 thumb + 8px 在白底上隱形（壞樣式）→ 換 `scrollbar-transparent`（4px 黑灰、白底可見）。crmpoc 驗收：隱形→可見、無 padding 貼右內緣正常。
+>
+> ✅ **textarea 統一全收**：主批 8 個細灰 + #3 修好隱形壞樣式；#1 chat-widget 留著、#2 本就正常。唯「框塞 textarea 自身」的捲軸偏外（7 個）待 Chrome 工具到位 restructure（見下方待優化）。
 
 **主批 8 個（已套，commit `<本批>`）**：#4 `AIChatbotEditModal:308` TextareaSection（房型+設施共用，一改修兩個）、#5 `CarouselMessageEditor:767`、#6/7/8 `CarouselMessageEditor:1007/1198/1374`、#9 `CreateWebchatOrgModal:135`、#10 `CreateAutoReplyInteractive:966`、#11 `FBConfigPanel:1128`。
 
