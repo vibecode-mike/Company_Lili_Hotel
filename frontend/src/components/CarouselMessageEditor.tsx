@@ -764,7 +764,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
                     placeholder="輸入內文文字說明"
                     maxLength={60}
                     aria-invalid={showContentInlineError || Boolean(errors?.content)}
-                    className={`w-full h-[78px] px-[12px] py-[8px] rounded-xl text-[14px] leading-[20px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all resize-none ${
+                    className={`w-full h-[78px] px-[12px] py-[8px] rounded-xl text-[14px] leading-[20px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus-visible:ring-2 transition-all resize-none scrollbar-transparent ${
                       requiredFieldClasses(showContentInlineError || Boolean(errors?.content))
                     }`}
                     style={requiredFieldStyle(showContentInlineError || Boolean(errors?.content))}
@@ -1007,7 +1007,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
                         onChange={(e) => onUpdateCard({ button1TriggerMessage: e.target.value })}
                         placeholder="例如：快來看看吧 http://example.com"
                         maxLength={200}
-                        className="w-full min-h-[72px] px-[12px] py-[8px] rounded-md border border-neutral-200 text-[14px] resize-none focus:outline-none focus-visible:ring-2 transition-all"
+                        className="w-full min-h-[72px] px-[12px] py-[8px] rounded-md border border-neutral-200 text-[14px] resize-none focus:outline-none focus-visible:ring-2 transition-all scrollbar-transparent"
                       />
                       <p className="text-[12px] text-[#6a7282] text-right">
                         {(currentCard.button1TriggerMessage || '').length}/200
@@ -1198,7 +1198,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
                         onChange={(e) => onUpdateCard({ button2TriggerMessage: e.target.value })}
                         placeholder="例如：快來看看吧 http://example.com"
                         maxLength={200}
-                        className="w-full min-h-[72px] px-[12px] py-[8px] rounded-md border border-neutral-200 text-[14px] resize-none focus:outline-none focus-visible:ring-2 transition-all"
+                        className="w-full min-h-[72px] px-[12px] py-[8px] rounded-md border border-neutral-200 text-[14px] resize-none focus:outline-none focus-visible:ring-2 transition-all scrollbar-transparent"
                       />
                       <p className="text-[12px] text-[#6a7282] text-right">
                         {(currentCard.button2TriggerMessage || '').length}/200
@@ -1374,7 +1374,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
                         onChange={(e) => onUpdateCard({ button3TriggerMessage: e.target.value })}
                         placeholder="例如：快來看看吧 http://example.com"
                         maxLength={200}
-                        className="w-full min-h-[72px] px-[12px] py-[8px] rounded-md border border-neutral-200 text-[14px] resize-none focus:outline-none focus-visible:ring-2 transition-all"
+                        className="w-full min-h-[72px] px-[12px] py-[8px] rounded-md border border-neutral-200 text-[14px] resize-none focus:outline-none focus-visible:ring-2 transition-all scrollbar-transparent"
                       />
                       <p className="text-[12px] text-[#6a7282] text-right">
                         {(currentCard.button3TriggerMessage || '').length}/200

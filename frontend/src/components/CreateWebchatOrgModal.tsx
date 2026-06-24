@@ -132,7 +132,7 @@ export function CreateWebchatOrgModal({ onClose, onCreated }: CreateWebchatOrgMo
               readOnly
               value={embedCode}
               onClick={(e) => (e.target as HTMLTextAreaElement).select()}
-              className="w-full h-[64px] border border-[#b6c8f1] rounded-md px-3 py-2 text-[12px] font-mono bg-[#f6f9fd] outline-none resize-none"
+              className="w-full h-[64px] border border-[#b6c8f1] rounded-md px-3 py-2 text-[12px] font-mono bg-[#f6f9fd] outline-none resize-none scrollbar-transparent"
             />
             <p className="text-[12px] text-[#9aa0ab] mt-[6px] leading-[18px]">
               請將此程式碼提供給貴公司的網站維護人員，安裝至官網後即可在網站上顯示客服視窗。

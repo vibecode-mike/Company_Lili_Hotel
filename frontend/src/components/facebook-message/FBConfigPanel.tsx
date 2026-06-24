@@ -1125,7 +1125,7 @@ export function FBConfigPanel({ bubble, onChange, bubbleIndex, allBubbles, onUpd
                 placeholder="輸入內文文字說明"
                 maxLength={80}
                 aria-invalid={isSubtitleInvalid}
-                className={`w-full h-[78px] px-[12px] py-[8px] rounded-xl text-[14px] leading-[20px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 transition-all resize-none ${
+                className={`w-full h-[78px] px-[12px] py-[8px] rounded-xl text-[14px] leading-[20px] text-[#383838] placeholder:text-[#717182] focus:outline-none focus:ring-2 transition-all resize-none scrollbar-transparent ${
                   isSubtitleInvalid ? "border-2 focus:ring-[#f44336]/30" : "border border-neutral-300 focus:ring-[#0f6beb]"
                 }`}
                 style={isSubtitleInvalid ? { borderColor: "#f44336", borderWidth: "2px" as const } : undefined}

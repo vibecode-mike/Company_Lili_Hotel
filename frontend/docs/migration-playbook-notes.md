@@ -78,6 +78,17 @@
   - 想用純 CSS（hover 才顯示 scrollbar）在 Chrome 上行為不穩。需要別的方案（待補：實際採用法）。
 - **雙軸表格幽靈捲軸**
   - 同時可橫向 + 縱向捲動的表格會冒出「幽靈捲軸」。（待補：成因與解法細節）
+- **textarea 捲軸：能 CSS 美化但「框塞自身」會讓捲軸偏外**
+  - 認知修正（2026-06-24）：textarea **不能**套 JS 自繪 Scrollable（replaced element、包不到內捲＝紅線），
+    但**能**用 CSS `::-webkit-scrollbar`（如全站 `.scrollbar-transparent`）染成 4px 細灰，消滅粗原生捲軸。
+    （活證：`chat-widget-textarea`、`MemberNoteEditor` 都是 textarea 卻細灰。）
+  - 但**捲軸位置**受結構影響：把框（`bg`/`rounded`/`padding`）塞在 **textarea 自身**時，
+    Chrome 把 `::-webkit-scrollbar` 畫進內距帶 → 4px thumb 浮在欄位框右側、**不貼內緣**（看起來像掉在框外）。
+    對比正確 pattern（`MemberNoteEditor`）：框放**外層 wrapper**、textarea 本體**裸透明 + 零自身 padding** → 捲軸貼內容右緣。
+  - 修法方向：框搬到 wrapper、textarea 裸透明。**但別憑幾何硬推**——
+    `MemberNoteEditor` wrapper padding(20px) 比偏外的(8px)**還大**卻正常 → 關鍵是「框在誰身上 / textarea 是否裸透明」結構因素、非 padding 數字。
+    確切捲軸繪製位置**需 `claude-in-chrome` 量 computed layout 證實**；**沒工具別硬改 restructure**（會白工/誤修）。
+    先接受「細灰但偏外」（主目標消滅粗原生已達成），位置當獨立優化、工具到位再做。
 - **隔天 / 隔多天回來 → 先確認狀態，不靠記憶**
   - 休息後回來第一件事是用 git 確認真實狀態（工作區 / 同步 / 上次收工點），
     不靠「我印象中應該是…」。記憶會騙人。

@@ -963,7 +963,7 @@ export default function CreateAutoReplyInteractive({
                                             )
                                           }
                                           placeholder="輸入訊息文字"
-                                          className="w-full min-h-[84px] font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] border-none outline-none resize-none bg-transparent placeholder:text-[#a8a8a8]"
+                                          className="w-full min-h-[84px] font-['Noto_Sans_TC:Regular',sans-serif] font-normal leading-[1.5] text-[#383838] text-[16px] border-none outline-none resize-none bg-transparent placeholder:text-[#a8a8a8] scrollbar-transparent"
                                           rows={3}
                                         />
 

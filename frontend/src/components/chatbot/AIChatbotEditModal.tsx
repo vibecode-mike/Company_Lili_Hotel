@@ -308,7 +308,7 @@ const TextareaSection = memo(function TextareaSection({
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
           rows={2}
-          className="bg-[#f6f9fd] rounded-md min-h-[48px] px-[8px] py-[12px] w-full font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#383838] placeholder:text-[#a8a8a8] border-none outline-none focus:outline-none resize-none disabled:opacity-60"
+          className="bg-[#f6f9fd] rounded-md min-h-[48px] px-[8px] py-[12px] w-full font-['Noto_Sans_TC',sans-serif] font-normal text-[16px] leading-[1.5] text-[#383838] placeholder:text-[#a8a8a8] border-none outline-none focus:outline-none resize-none disabled:opacity-60 scrollbar-transparent"
         />
         {hint && (
           <p className="font-['Noto_Sans_TC',sans-serif] font-normal text-[12px] leading-[1.5] text-[#6e6e6e] px-[8px] py-[4px]">

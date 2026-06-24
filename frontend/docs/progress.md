@@ -230,7 +230,26 @@
 - [x] **AIChatbotEditModal**（`RoomEditModal`+`FacilityEditModal` 兩個編輯彈窗外層 overlay）✅ **完成、crmpoc 驗收 OK、未 push（攢著）** ——
   - 外層保留 `fixed inset-0 z-[99999] bg-black/45` backdrop（管定位+暗底，避免 Scrollable 硬加的 `relative` 撞 `fixed`）→ 內包 `Scrollable size-full` 管捲動 → `handleBackdrop` 移到 viewport。
   - **Scrollable 加 `onClick` passthrough**（比照 `onScroll`，forward 到 viewport；現有 5 用法零影響）——overlay backdrop 點空白關閉靠 `e.target===e.currentTarget`，必須掛在 viewport。
-- [ ] **🆕 全站 textarea 細捲軸統一（獨立一批，不混 modal）** —— 驗收時發現「房型特色」textarea(`TextareaSection`)顯示粗原生捲軸。**修正認知**：方案 C(JS 自繪)包不到 textarea 內捲＝紅線成立，但**方案 B(CSS `::-webkit-scrollbar`)textarea 可美化成細灰**（`chat-widget-textarea` 即活證）。→ 全站 textarea 盤點後統一掛 `scrollbar-transparent`，消滅粗原生。**盤點/方案見下方「### 全站 textarea 統一」**。
+- [x] **🆕 全站 textarea 細捲軸統一（獨立一批）** ✅ **主批 8 個完成、未 push（攢著）** —— 驗收時發現「房型特色」textarea 顯示粗原生捲軸。**修正認知**：方案 C(JS 自繪)包不到 textarea 內捲＝紅線成立，但**方案 B(CSS `::-webkit-scrollbar`)textarea 可美化成細灰**（`chat-widget-textarea` 即活證）。→ 8 個粗原生 textarea 統一掛 `scrollbar-transparent` 變 4px 細灰、消滅粗原生。**盤點/分類/偏外待優化見下方「### 全站 textarea 統一」**。
+
+### 全站 textarea 統一（2026-06-24）
+
+> 全站活的 textarea 11 個（`imports/` 死碼 + 未使用的 shadcn `ui/textarea` 排除）。
+> **主批＝8 個原本無 scrollbar 美化的 → 補 `scrollbar-transparent`**（純追加 class、只染捲軸、零 layout 屬性 → 不可能破版）。
+> 特例不碰：#1 `chat-widget-textarea`（webchat widget 自家 4px #dddddd、隔離、§2b 另議，**留著**）、#2 `MemberNoteEditor`（早已 scrollbar-transparent 且貼緣正常）、#3 `ChatRoomLayout` 聊天室回覆框（白底 + white/60 thumb≈隱形、8px，**另議**，建議改 scrollbar-transparent 修可見性 + 8→4）。
+
+**主批 8 個（已套，commit `<本批>`）**：#4 `AIChatbotEditModal:308` TextareaSection（房型+設施共用，一改修兩個）、#5 `CarouselMessageEditor:767`、#6/7/8 `CarouselMessageEditor:1007/1198/1374`、#9 `CreateWebchatOrgModal:135`、#10 `CreateAutoReplyInteractive:966`、#11 `FBConfigPanel:1128`。
+
+**套後分類（驗收）**：
+- 🟢 貼內緣正常（無 padding + `bg-transparent`，同 MemberNoteEditor pattern）：**#10**。
+- 🟡 細灰但**捲軸偏外**（可接受、待優化）：**#4·#5·#6·#7·#8·#9·#11**（框 bg/rounded/padding 塞在 textarea 自身 `px-[8/12px]` → thumb 浮在內距帶、不貼框內緣）。
+- 🔴 破版：**無**。
+
+#### ⏳ 待優化：「框塞 textarea 自身」的捲軸偏外（需 Chrome 量準再做，別硬推）
+
+- 現象：textarea 自帶 `bg+rounded+px padding` 時，Chrome 把 `::-webkit-scrollbar` 畫進內距帶 → 4px thumb 浮在欄位框右側、不貼內緣。對比 `MemberNoteEditor`(#2) 把框（`containerClassName: bg-white rounded-3xl` + `innerClassName: p-[20px]`）放**外層 wrapper**、textarea 本體**裸透明零自身 padding** → 捲軸貼內容右緣＝正常。
+- **修法方向**：把 `bg/rounded/padding` 從 textarea **搬到一層外 wrapper div**、textarea 改 `bg-transparent` + 拿掉自身 padding（複製 MemberNoteEditor pattern）。改 `TextareaSection` 一處修房型+設施；其餘 #5/6/7/8/9/11 同型逐一 restructure。
+- ⚠️ **別硬推**：純幾何推有矛盾（MemberNoteEditor wrapper padding 20px **比**房型特色 8px **還大**卻正常 → 真正關鍵是「框在誰身上 / textarea 是否裸透明」這個結構因素，非 padding 數字）。確切 Chrome 捲軸繪製位置**需 `claude-in-chrome` 工具現場量 computed layout 證實**，本 session 該工具未連線。**待 Chrome 工具到位 → 量準機制 → 改 1 個樣本驗證貼緣 → 再推廣**。屬獨立優化項，不卡主目標（消滅粗原生＝已達成）。
 
 ### 待辦（明天繼續）
 
