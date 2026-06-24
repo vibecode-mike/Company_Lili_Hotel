@@ -148,15 +148,9 @@ function transformFbMessages(
       id: `fb_${idx}_${timestamp}`,
       type: isIncoming ? "user" : "official",
       text,
-      time: dt.toLocaleTimeString("zh-TW", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      // 後端各來源 timestamp 一律台北 +08:00，這裡同步：純字串 localeCompare 排序
-      // 不能混 UTC(Z) 與 +08:00 基底
-      timestamp: new Date(dt.getTime() + 8 * 3600 * 1000)
-        .toISOString()
-        .replace("Z", "+08:00"),
+      // 全系統 timestamp 一律 UTC aware（+00:00）；顯示由 formatChatTime 依觀看者時區格式化。
+      // FB epoch 是真 UTC，dt 即正確瞬間，直接輸出 UTC（移除舊的 +8h hack）。
+      timestamp: dt.toISOString().replace("Z", "+00:00"),
       // FB 無真實已讀回執，不偽稱已讀
       isRead: false,
       source: isIncoming ? undefined : "external",

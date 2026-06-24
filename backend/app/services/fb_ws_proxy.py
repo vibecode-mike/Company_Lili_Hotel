@@ -5,7 +5,7 @@ Facebook WebSocket 代理服務
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Dict, Optional
 
 import websockets
@@ -106,14 +106,14 @@ class FbProxyConnection:
 
         text = self._extract_text(raw.get("message", ""))
 
-        tz = timezone(timedelta(hours=8))
-        dt = datetime.fromtimestamp(timestamp, tz=tz) if timestamp else datetime.now(tz)
+        # FB epoch 是真 UTC；dt 用 UTC aware，timestamp 輸出 +00:00。
+        # 顯示時間由前端依觀看者時區格式化。
+        dt = datetime.fromtimestamp(timestamp, tz=timezone.utc) if timestamp else datetime.now(timezone.utc)
 
         return {
             "id": f"fb_ws_{timestamp}_{id(raw) % 10000}",
             "type": "user" if is_incoming else "official",
             "text": text,
-            "time": dt.strftime("%p %I:%M").replace("AM", "上午").replace("PM", "下午"),
             "timestamp": dt.isoformat(),
             "thread_id": self.thread_id,
             # FB 無真實已讀回執，不偽稱已讀

@@ -35,54 +35,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-from app.services.chatroom_service import ChatroomService, format_chat_time
+from app.services.chatroom_service import ChatroomService
 from app.api.v1.chat_messages import _extract_fb_template_text
+from app.core.timezone import to_utc_iso
 
-# 臺北時區（固定 +08:00；pytz.timezone 直接拿去 replace(tzinfo=) 會得到 LMT +08:06，禁用）
-TAIPEI_TZ = timezone(timedelta(hours=8))
 from app.websocket_manager import manager
 router = APIRouter()
-
-
-def format_taipei_time(dt: datetime) -> str:
-    """
-    將 UTC datetime 轉換為臺北時間格式字串
-
-    Args:
-        dt: UTC datetime (naive 或 aware)
-
-    Returns:
-        格式化的時間字串，例如：「上午 10:30」
-    """
-    # 確保是 UTC aware datetime
-    if dt.tzinfo is None:
-        utc_dt = dt.replace(tzinfo=timezone.utc)
-    else:
-        utc_dt = dt
-
-    # 轉換為臺北時間
-    local_dt = utc_dt.astimezone(TAIPEI_TZ)
-    hour = local_dt.hour
-    minute = local_dt.minute
-
-    # 判斷時段
-    if 0 <= hour < 6:
-        period = "凌晨"
-    elif 6 <= hour < 12:
-        period = "上午"
-    elif 12 <= hour < 14:
-        period = "中午"
-    elif 14 <= hour < 18:
-        period = "下午"
-    else:
-        period = "晚上"
-
-    # 轉換為 12 小時制
-    hour_12 = hour if hour <= 12 else hour - 12
-    if hour_12 == 0:
-        hour_12 = 12
-
-    return f"{period} {hour_12:02d}:{minute:02d}"
 
 
 @router.get("", response_model=SuccessResponse)
@@ -1195,19 +1153,15 @@ async def send_member_chat_message(
                 await db.flush()
 
                 # WebSocket 推送通知前端即時更新（包含 senderName）
-                # 用 aware 台北時間（datetime.now(TAIPEI_TZ)），不依賴主機時區——
-                # 即使在 UTC 主機上即時推送也不會位移 8 小時。
-                # format_chat_time 對 aware 走 astimezone(TAIPEI_TZ) 分支，結果正確。
-                now_local = datetime.now(TAIPEI_TZ)
-                time_str = format_chat_time(now_local)
+                # 用 aware UTC（datetime.now(timezone.utc)），不依賴主機時區；
+                # 顯示時間由前端依觀看者時區格式化。
+                now_local = datetime.now(timezone.utc)
                 sender_name = current_user.username
                 await manager.send_new_message(thread_id, {
                     "id": line_msg_id,
                     "type": "official",
                     "text": text,
-                    "time": time_str,
-                    # 統一推台北 aware ISO（+08:00）：前端用字串排序，naive/UTC 混基底會錯亂
-                    # now_local 已是 aware 台北，直接 isoformat 即帶 +08:00
+                    # 統一推 UTC aware ISO（+00:00）：前端用字串排序，混基底會錯亂
                     "timestamp": now_local.isoformat(),
                     "thread_id": thread_id,
                     # 剛送出 ≠ 已讀，不再寫死 True（避免「送出顯示已讀、重整消失」）
@@ -1224,8 +1178,8 @@ async def send_member_chat_message(
                 "success": True,
                 "message_id": line_msg_id,
                 "thread_id": thread_id,
-                # aware 台北 ISO（+08:00），不依賴主機時區（與 SSE timestamp 一致）
-                "sent_at": datetime.now(TAIPEI_TZ).isoformat()
+                # aware UTC ISO（+00:00），不依賴主機時區（與 SSE timestamp 一致）
+                "sent_at": datetime.now(timezone.utc).isoformat()
             }
 
         except Exception as e:
@@ -1258,16 +1212,12 @@ async def send_member_chat_message(
             msg = await chatroom_service.append_message(member, "Facebook", "outgoing", text, message_source="manual", sender_id=current_user.id)
 
             # WebSocket 推送通知前端即時更新
-            # msg.created_at 是 DB 台北時間(naive)，用 format_chat_time 不要 +8
-            time_str = format_chat_time(msg.created_at) if msg.created_at else ""
-
             await manager.send_new_message(msg.thread_id, {
                 "id": msg.id,
                 "type": "official",
                 "text": text,
-                "time": time_str,
-                # created_at 是 DB 台北時間(naive)，標 +08:00 不是 UTC
-                "timestamp": msg.created_at.replace(tzinfo=TAIPEI_TZ).isoformat() if msg.created_at else None,
+                # created_at 是 DB naive UTC，輸出 UTC aware ISO（+00:00）
+                "timestamp": to_utc_iso(msg.created_at),
                 "thread_id": msg.thread_id,
                 # 剛送出 ≠ 已讀（FB 無真實已讀回執）
                 "isRead": False,
@@ -1277,10 +1227,9 @@ async def send_member_chat_message(
 
         # 重新獲取聊天紀錄，檢查是否有外部 API 回推的新訊息
         try:
-            # created_at 是台北 naive；標 TAIPEI_TZ 才得到正確 epoch。
-            # 之前誤標 UTC → sent_timestamp 比真實送出時間大 8 小時，
-            # 下面 msg_time > sent_timestamp 永遠不成立，FB 自動回覆即時推送從未觸發。
-            sent_timestamp = int(msg.created_at.replace(tzinfo=TAIPEI_TZ).timestamp()) if msg and msg.created_at else 0
+            # created_at 是 DB naive UTC；標 timezone.utc 才得到正確 epoch，
+            # 與 FB API 回傳的真 UTC epoch（msg_time）同基底比較。
+            sent_timestamp = int(msg.created_at.replace(tzinfo=timezone.utc).timestamp()) if msg and msg.created_at else 0
 
             fb_history = await fb_client.get_chat_history(effective_fb_customer_id, page_id, jwt_token)
 
@@ -1301,16 +1250,14 @@ async def send_member_chat_message(
 
                         # 轉換時間
                         fb_dt = datetime.fromtimestamp(msg_time, tz=timezone.utc)
-                        fb_time_str = format_taipei_time(fb_dt)
 
                         # 透過 WebSocket 推送給前端
                         await manager.send_new_message(msg.thread_id, {
                             "id": f"fb_sync_{msg_time}",
                             "type": "user",
                             "text": fb_text,
-                            "time": fb_time_str,
-                            # fb_dt 是真 UTC（FB API epoch），轉台北 +08:00 與其他來源一致
-                            "timestamp": fb_dt.astimezone(TAIPEI_TZ).isoformat(),
+                            # fb_dt 是真 UTC（FB API epoch），輸出 UTC aware ISO（+00:00）
+                            "timestamp": to_utc_iso(fb_dt),
                             "thread_id": msg.thread_id,
                             "isRead": False,
                             "source": None,
@@ -1326,7 +1273,7 @@ async def send_member_chat_message(
             "success": True,
             "message_id": send_result.get("message_id", msg.id if msg else None),
             "thread_id": msg.thread_id if msg else None,
-            "sent_at": msg.created_at.replace(tzinfo=TAIPEI_TZ).isoformat() if msg and msg.created_at else datetime.now(TAIPEI_TZ).isoformat()
+            "sent_at": to_utc_iso(msg.created_at) if msg and msg.created_at else datetime.now(timezone.utc).isoformat()
         }
 
     elif platform_stripped == "Webchat":
@@ -1335,16 +1282,12 @@ async def send_member_chat_message(
             msg = await chatroom_service.append_message(member, platform_stripped, "outgoing", text, message_source="manual", sender_id=current_user.id)
 
             # WebSocket 推送通知前端即時更新
-            # msg.created_at 是 DB 寫入的台北時間(naive)，用 format_chat_time 不要 +8
-            time_str = format_chat_time(msg.created_at) if msg.created_at else ""
-
             await manager.send_new_message(msg.thread_id, {
                 "id": msg.id,
                 "type": "official",
                 "text": text,
-                "time": time_str,
-                # created_at 是 DB 台北時間(naive)，標 +08:00 不是 UTC
-                "timestamp": msg.created_at.replace(tzinfo=TAIPEI_TZ).isoformat() if msg.created_at else None,
+                # created_at 是 DB naive UTC，輸出 UTC aware ISO（+00:00）
+                "timestamp": to_utc_iso(msg.created_at),
                 "thread_id": msg.thread_id,
                 # 剛送出 ≠ 已讀
                 "isRead": False,
@@ -1356,7 +1299,7 @@ async def send_member_chat_message(
                 "success": True,
                 "message_id": msg.id,
                 "thread_id": msg.thread_id,
-                "sent_at": msg.created_at.replace(tzinfo=TAIPEI_TZ).isoformat() if msg.created_at else None
+                "sent_at": to_utc_iso(msg.created_at)
             }
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))

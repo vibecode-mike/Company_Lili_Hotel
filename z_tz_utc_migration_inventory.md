@@ -1,0 +1,176 @@
+# 時區架構翻轉盤點清單（DB 台北 → DB UTC）
+
+> 用途：Stage 2 實作對照表 + dadova fork 參照。
+> 目標架構：**DB 一律存 UTC** / 後端輸出 UTC aware ISO（`+00:00`）/ 前端依「觀看者瀏覽器時區」顯示 / 排程「設定者瀏覽器時區 → UTC」/ 報表與「日曆日」用 **OPERATING_TZ（預設 Asia/Taipei）**。
+> 慣例反轉：舊「DB naive = 台北」→ 新「DB naive = UTC」。
+> 標記：🟢 已親驗行號；⚪ 掃描結果（Stage 2 動手前逐檔再確認）。
+
+---
+
+## 0. 全局：寫入「兩套機制」必須一起翻
+- Python 端：`base.py _now_taipei()`（台北 naive）、各處 `datetime.now()`（host-local）、line_app `utcnow()`（UTC）
+- DB 端：`func.now()` / 原生 `NOW()`（吃連線 session tz；目前 pin `+08`）
+- ⚠️ line_app 今天已是混的：`member_service.py` 用 `utcnow()`(UTC)、`conversation_service.py`/`app.py` 用 `NOW()`(+08)。連線 pin 改 `+00` 後兩者統一成 UTC（順帶修掉既有不一致）。
+
+---
+
+## (a) 寫入點
+
+### A1. Python 端（改成 UTC）
+| 檔案:行號 | 現況 | 動作 |
+|---|---|---|
+| 🟢 models/base.py:12-14 `_now_taipei()` | 台北→naive（被所有 created_at/updated_at 繼承） | →UTC（改名 `_now_utc`） |
+| ⚪ api/v1/auth.py:89 last_login_at | host-local | →UTC |
+| ⚪ services/linebot_service.py:126 send_time | host-local | →UTC |
+| ⚪ services/faq_service.py:36/113/312/407/483/657/785 | host-local | →UTC |
+| ⚪ services/tracking_service.py:78/146/187/263/275 | host-local | →UTC |
+| ⚪ services/message_service.py:505/1518 | host-local | →UTC |
+| ⚪ services/chatbot_service.py:1500/2518 | host-local | →UTC |
+| ⚪ api/v1/webchat_sites.py:70 last_seen_at | host-local | →UTC |
+| 🟢 api/v1/booking_callback.py:291 paid_at | 台北→naive（明寫 Asia/Taipei） | →UTC |
+| 🟢 services/tag_trigger_service.py:61 triggered_at | 台北→naive | →UTC |
+| ⚪ models/tag_trigger_log.py:81 `default=datetime.now` | host-local（Python default 非 func.now） | →UTC |
+| 🟢 api/v1/members.py:1094/1220 human_override_until | host-local | →UTC（見 (e)） |
+
+### A2. DB 端 `func.now()` / `server_default`
+約 46 欄、23 model。**靠連線 pin 改 `+00` 一次覆蓋**，不逐欄改 code。
+
+---
+
+## (b) 輸出給前端（統一成 UTC aware `+00:00`）
+1. **Pydantic schema datetime 欄位（~40，無自訂 serializer → 預設吐 naive 無標記）**：schemas/ 下 message/campaign/member/auth/tenant/pms_integration/line_channel/fb_channel/webchat_site/faq/tracking/common。→ 全域 datetime serializer 統一吐 UTC aware（逐欄 Stage 2 再確認）。
+2. **手動 `.isoformat()`（naive 無標記）**：⚪ campaigns.py:115-119/162-168、faq.py:81/86/96/167/172-173/263/267-268/850/900/1029、tracking.py:63/153、admin_meta_user.py:211-212。（admin_retention.py:82/147/156 已是 `+00:00`。）
+3. **聊天/SSE 雙欄位（高風險，含「後端預格式化字串」要拔）**：
+   | 位置 | `time`（顯示字串，拔） | `timestamp`（ISO→UTC） |
+   |---|---|---|
+   | services/chatroom_service.py:206-207 | format_chat_time | +08 |
+   | api/v1/members.py:1208/1211、1262/1270、1339/1347 | format_chat_time | +08 |
+   | api/v1/line_notify.py:60-80/139 | 自組字串 | epoch→+08 |
+   | services/chatbot_service.py:1634-1659 `_iso()` | format_chat_time | +08 |
+   | services/fb_ws_proxy.py:116-117 | strftime | isoformat |
+
+---
+
+## (c) 讀取假設「naive=台北」（改成 naive=UTC）
+| 檔案:行號 | 現況 |
+|---|---|
+| 🟢 services/chatroom_service.py:184-188 format_chat_time 標 TAIPEI | 改 naive=UTC |
+| 🟢 api/v1/members.py:1270/1313/1329/1347/1359 `.replace(TAIPEI_TZ)` | 改 UTC |
+| 🟢 api/v1/conversations_export.py:136-138 `.replace(TAIPEI_TZ)` | 改 UTC（顯示用 OPERATING_TZ，見 (b')） |
+| 🟢 api/v1/chat_messages.py:29-33/53-57 `_ensure_utc`/`format_iso_taipei`（naive 已當 UTC） | 輸出端不轉 +08 |
+| 🟢 api/v1/members.py:47-85 format_taipei_time（naive 已當 UTC） | 輸出端不轉 +08 |
+
+---
+
+## (b') 營運時區輸出區（無「觀看者」→ 不套 follow-viewer、不丟原始 UTC → 用 OPERATING_TZ）
+| 檔案:行號 | 現況 | 動作 |
+|---|---|---|
+| 🟢 api/v1/conversations_export.py:139 strftime（CSV） | naive 當台北 | UTC→OPERATING_TZ 後 strftime |
+| 🟢 api/v1/chatbot.py:152 strftime | naive 當台北 | UTC→OPERATING_TZ 後 strftime |
+
+---
+
+## (d) 前端 formatter（依觀看者瀏覽器時區；解析 UTC、不指定 timeZone）
+全部 ACTIVE、已驗證 render：
+- utils/memberTime.ts（formatMemberDateTime + formatUnansweredTime）
+- contexts/MembersContext.tsx
+- components/MessageList.tsx
+- components/MessageDetailDrawer.tsx
+- components/BasicSettings.tsx
+- components/AutoReply.tsx
+- chat-room/ChatRoomLayout.tsx（formatDateWithWeekday + transformFbMessages）
+- 🟢 **components/AIChatbotOverview.tsx:74-80**（last_rule_updated_at；補列）
+- 🟢 **components/DownloadConversationsModal.tsx:39-47/101-102/211/225**（todayStr 日期上限 + from/to 過濾；補列。**注意：日期上限是「日曆日」概念，用觀看者本地日，不可當 UTC 瞬間**）
+
+**關鍵點：**
+- 🟢 chat-room/ChatBubble.tsx:484-493：吃後端 `message.time` 字串 → 改自己用 `timestamp` 格式化（與 (b)3 拔字串同批）。
+- 🟢 chat-room/ChatRoomLayout.tsx:157-159：`transformFbMessages` 寫死 `+8*3600*1000`→`+08:00` hack → 移除，改純 UTC。
+
+**排程輸入/編輯：**
+- 🟢 components/MessageCreation.tsx:990-999：送 naive `"YYYY-MM-DD HH:mm:ss"` → 改本地→UTC ISO。
+- 🟢 pages/FlexEditorPage.tsx:145-150：`new Date(scheduled_at).getHours()` 當本地 → 改 UTC→本地填回。
+- DateTimePicker.tsx / TriggerTimeOptions.tsx：本身只管字串，轉換在組裝送出層做。
+
+---
+
+## (e) ★業務邏輯比較/到期（錯了改行為）
+| 點 | 寫入 | 比較 | 風險 |
+|---|---|---|---|
+| 🟢 human_override_until | members.py:1094/1220（host-local） | line_app member_service.py:316-317（host-local `> now()`） | **高**：跨 backend/line_app 兩進程，成對改 UTC |
+| 🟢 **FB 自動回覆時間**（補列） | — | **members.py:1278-1281**：`sent_timestamp=int(created_at.replace(TAIPEI_TZ).timestamp())` 比 FB epoch | **高**：created_at 變 UTC 後 `.replace(TAIPEI_TZ)` 要改 utc |
+| 🟢 排程觸發 | schema MessageCreate | services/scheduler.py:197-214（`scheduled_at > now`, host-local）＋ schemas/message.py:186-200（未來驗證, app tz） | **高** |
+
+**已查證不列（相對值/外部 API/key-based，非營運日界線）：**
+- token 用量：usage_monitor.py:55-88 走 LINE 外部 billing API（`monthly_limit−used`），DB `ai_token_usages` 是 counter，非 SQL 日期視窗。
+- 去重：tracking_service.py:221-265 以 `message_id` 為 key；chatbot_service.py:1582/1610 `+timedelta(ms)` 僅排序。
+
+---
+
+## (f) DB trigger / SP 內 `NOW()`（靠 pin 變 UTC，不改 SQL）
+🟢 4 migration 的 trigger/SP body 用 `NOW()`（line_friends↔members 同步）：`26d892fb5b82`、`6e2d4a0d7d1b`、`1f9c8e7c2c2a`、`fa40436b732e`；line_friends DDL 有 `DEFAULT/ON UPDATE CURRENT_TIMESTAMP`。經 app 連線觸發 → 吃 pin `+00`。`9dc77a2ba1c3`(tenant) 無時間戳。
+⚠️ 邊緣風險：非經 app 連線（手動/其他腳本）觸發則 tz 不保證。
+
+---
+
+## (g) ★排除 UTC 換算（用 OPERATING_TZ / 維持本地）
+**① DATE 型欄位（🟢 全確認 `Column(Date)`）**：consumption_record(stay_date/check_in_date/check_out_date)、chatbot_booking(checkin/checkout ×2)、campaign(campaign_date/start_date/end_date)、booking(checkin_date)、pms_integration(stay_date)、auto_response(date_range_start/end)、member(birthday)。→ 不碰。
+
+**② 日曆日計算 / 時段判斷（用 OPERATING_TZ）**：
+| 檔案:行號 | 現況 | 動作 |
+|---|---|---|
+| 🟢 line_app/app.py:372-376（**從 (e) 移來**）自動回應 date_range/time_range 判斷 | `datetime.now().date()/now()` host-local | 用 OPERATING_TZ（DATE 欄位+時段牆鐘，改 UTC 會錯位日界線/時段） |
+| 🟢 services/faq_service.py:709-710 今天/明天 | `datetime.now()`（host-local）裸 | 改明確 OPERATING_TZ |
+| 🟢 services/chatbot_service.py:915/1222/2955/3184 | 已 `datetime.now(ZoneInfo("Asia/Taipei")).date()` | 改指向 OPERATING_TZ 常數（語意已對） |
+
+---
+
+## (h) 外部 epoch（fromtimestamp）
+| 檔案:行號 | 現況 | 結論 |
+|---|---|---|
+| 🟢 chat_messages.py:218、members.py:1303 | `tz=timezone.utc` | ✅ 維持；輸出端不轉 +08 |
+| 🟢 line_notify.py:60/139、fb_ws_proxy.py:110 | `tz=Asia/Taipei`（瞬間正確） | 輸出改 UTC |
+| 🔴 message_service.py:879-880、messages.py:354、line_notify.py:115 | 無 tz（FB/LINE epoch 是真 UTC，被當 host-local） | **確認為 UTC epoch → 補 `tz=timezone.utc`**（既有 bug，順手修） |
+| ⚠️ auto_responses.py:42 `fromtimestamp(value)` | 無 tz，generic int→datetime coercion | **來源未證實**：Stage 2 查 caller 確認 epoch 來源後再決定 |
+
+---
+
+## 架構要求
+**A. 單一 OPERATING_TZ 常數**（預設 Asia/Taipei / `+08:00`）：analytics CONVERT_TZ、faq 今天/明天、自動回應時段、CSV 匯出 全指向它。建議放 `backend/app/core/`（Python `ZoneInfo` + SQL 用 `'+08:00'` offset 字串；註：CONVERT_TZ 用具名時區需 MySQL tz 表，台北無 DST 故用 offset 安全）。line_app 端對應一份。
+**B. CLAUDE.md**：改寫 Timezone Convention（DB=UTC）+ 更新/反轉「line_app 禁用 utcnow」紅線（新規則：寫入一律 UTC；NOW() 經 pin 即 UTC；Python 用 `datetime.now(timezone.utc)`）。
+
+---
+
+## 部署原子性
+**核心翻轉是一個原子發布，不可分次 deploy 到 staging：** 連線 pin(+00) + Python 寫入 + 讀取解讀 + 輸出標記 + 前端顯示 + 聊天三件套 + line_app。中間態會全部歪 8 小時。
+**可獨立後續：** analytics CONVERT_TZ、(h) epoch 補 tz、auto_responses.py:42 查證。
+→ 分段寫、分段審；核心一次 push staging。
+
+---
+
+## Stage 2 子階段（分段審，核心同批部署）
+1. OPERATING_TZ 常數 + base.py `_now_utc` + 連線 pin `+00`（backend+line_app）
+2. 讀取解讀 (c) naive=UTC + 輸出標記 (b) 統一 `+00:00`
+3. 聊天三件套（後端拔 `time` 字串 + 前端 ChatBubble 改吃 timestamp + 移除 +8h hack）
+4. (e) 業務比較成對改 UTC（human_override 寫入+比較、FB 自動回覆、排程觸發）
+5. (g) OPERATING_TZ：自動回應時段、faq 今天/明天、CSV 匯出 (b')
+6. 前端 formatter 收斂 + 排程輸入/編輯 本地↔UTC
+7. CLAUDE.md 改寫
+— 1~6+line_app = 同一原子 staging 發布 —
+8.（後續）analytics CONVERT_TZ
+9.（後續）(h) epoch 補 tz + auto_responses.py:42 查證
+
+---
+
+## 完成紀錄 / 跨界提前項（避免重做）
+- **子階段 1**：✅ 完成（commit ae92c6a4）
+- **子階段 2**：✅ 完成（commit d16fe298）
+- **子階段 3（聊天三件套）**：✅ 完成。後端拔除所有聊天 `time` 顯示字串 + `format_chat_time` / `format_taipei_time` / `format_iso_taipei` 全刪/改 UTC；前端新增 `chat-room/timeFormat.ts:formatChatTime`（依觀看者時區）、`ChatMessage` 型別移除 `time`、`transformFbMessages` 移除 +8h hack。
+  - **⚠️ 提前處理（已於子階段 3 完成，子階段 4/9 不要再碰）：**
+    - `members.py` FB 自動回覆比較 `sent_timestamp`（原 (e)/子階段 4）→ 已改 `.replace(tzinfo=timezone.utc)`。**子階段 4 的 (e) 只剩 human_override（寫入 members.py + 比較 line_app member_service.py:317）與 scheduler。**
+    - `line_notify.py:115` `created_at` 寫入（原 (h)/子階段 9）→ 已改 `fromtimestamp(..., tz=utc).replace(tzinfo=None)` naive UTC。**子階段 9 的 (h) 只剩 message_service.py:879-880、messages.py:354、auto_responses.py:42。**
+
+## ⚠️ 盤點補遺：散落的 Python `datetime.now()` 寫入點未分配子階段（核心必含）
+子階段拆法 1-7 漏掉「(a) A1 散落 Python 寫入」這一類——它們是**裸 `datetime.now()`（host-local naive）寫入 DB**，UTC 慣例下必須改 `datetime.now(timezone.utc).replace(tzinfo=None)`（或共用 helper）。**屬核心原子發布**（寫入不對，整個翻轉就不正確）。清單（部分已在 (a) A1）：
+- `chatroom_service.py:44/51/78`（append_message/upsert_thread last_message_at/created_at）
+- `auth.py:89`、`tracking_service.py:78/146/187/263/275`、`message_service.py:505/1518`、`chatbot_service.py:1500/2518`、`webchat_sites.py:70`、`linebot_service.py:126`、`faq_service.py` 多處、`tag_trigger_log.py:81`（Python default）
+- 建議新增「**子階段 3.5 / 4 之前：(a) 散落 Python 寫入統一 UTC**」，與核心同批 push。

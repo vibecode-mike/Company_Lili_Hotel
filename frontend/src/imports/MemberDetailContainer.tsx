@@ -132,8 +132,7 @@ const extractMessageTimestamp = (message?: MessageWithTimestamp): string | undef
     message?.sent_at ??
     message?.sentAt ??
     message?.created_at_iso ??
-    message?.createdAtIso ??
-    message?.time;
+    message?.createdAtIso;
   if (!raw) {
     return undefined;
   }

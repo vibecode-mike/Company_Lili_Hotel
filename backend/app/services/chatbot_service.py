@@ -12,7 +12,7 @@ import re
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from threading import Lock
 from typing import Any, Dict, List, Literal, Optional, Tuple
 from uuid import uuid4
@@ -1619,20 +1619,15 @@ class ChatbotService:
         #    放在 commit 之後、包 try/except，推播失敗不影響對話保存。
         #    使用者訊息 type=user → 前端會自動把先前 official 標已讀（已讀回執免費對齊）。
         try:
-            from app.services.chatroom_service import format_chat_time
             from app.websocket_manager import manager
+            from app.core.timezone import to_utc_iso
 
-            tpe = timezone(timedelta(hours=8))  # 固定 +08:00，勿用 pytz（會得 LMT +08:06）
-
-            def _iso(dt):
-                return dt.replace(tzinfo=tpe).isoformat() if dt else None
-
+            # 顯示時間由前端依觀看者時區格式化；後端只回 UTC aware ISO（+00:00）的 timestamp。
             await manager.send_new_message(thread.id, {
                 "id": user_msg.id,
                 "type": "user",
                 "text": user_message,
-                "time": format_chat_time(user_msg.created_at),
-                "timestamp": _iso(user_msg.created_at),
+                "timestamp": to_utc_iso(user_msg.created_at),
                 "thread_id": thread.id,
                 "isRead": False,
                 "source": "webhook",
@@ -1643,8 +1638,7 @@ class ChatbotService:
                     "id": bot_msg.id,
                     "type": "official",
                     "text": bot_reply,
-                    "time": format_chat_time(bot_msg.created_at),
-                    "timestamp": _iso(bot_msg.created_at),
+                    "timestamp": to_utc_iso(bot_msg.created_at),
                     "thread_id": thread.id,
                     "isRead": False,
                     "source": "gpt",
@@ -1655,8 +1649,7 @@ class ChatbotService:
                     "id": cards_msg.id,
                     "type": "official",
                     "text": cards_msg.content,
-                    "time": format_chat_time(cards_msg.created_at),
-                    "timestamp": _iso(cards_msg.created_at),
+                    "timestamp": to_utc_iso(cards_msg.created_at),
                     "thread_id": thread.id,
                     "isRead": False,
                     "source": "gpt",

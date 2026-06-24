@@ -22,6 +22,7 @@
 
 import React from 'react';
 import type { ChatMessage, ChatPlatform } from './types';
+import { formatChatTime } from './timeFormat';
 import type { RoomCard } from '../../utils/chatbotApi';
 import { FlexMessageRenderer } from './FlexMessageRenderer';
 import { PlatformIcon } from '../common/icons/PlatformIcon';
@@ -487,7 +488,7 @@ export function ChatBubble({
               isOfficial ? 'text-right' : 'text-left'
             } text-[#6E6E6E]`}
           >
-            {message.time}
+            {formatChatTime(message.timestamp)}
             {isOfficial && message.isRead ? ' 已讀' : ''}
           </p>
         </div>

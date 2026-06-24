@@ -1,7 +1,7 @@
 import json
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from typing import Optional, Dict, Any
 
 from sqlalchemy import select, func
@@ -12,46 +12,9 @@ from app.models.member import Member
 from app.models.conversation import ConversationThread, ConversationMessage
 from app.models.message import Message
 from app.models.user import User
+from app.core.timezone import to_utc_iso
 
 logger = logging.getLogger(__name__)
-
-# 台北時區（固定 +08:00；pytz.timezone 拿去 replace(tzinfo=) 會得到 LMT +08:06，
-# 造成 isoformat 帶 +08:06 偏移，禁用 pytz）
-TAIPEI_TZ = timezone(timedelta(hours=8))
-
-
-def format_chat_time(dt: Optional[datetime]) -> str:
-    """格式化為 '時段 HH:mm' 格式，例如 '下午 03:30'"""
-    if not dt:
-        return ""
-
-    # MySQL NOW() 已是台灣時間（server timezone = Asia/Taipei）
-    # naive datetime 直接視為台灣時間，不做 UTC 轉換
-    if dt.tzinfo is None:
-        local_dt = dt.replace(tzinfo=TAIPEI_TZ)
-    else:
-        local_dt = dt.astimezone(TAIPEI_TZ)
-    hour = local_dt.hour
-    minute = local_dt.minute
-
-    # 判斷時段 (台灣時間)
-    if 0 <= hour < 6:
-        period = "凌晨"
-        display_hour = hour if hour > 0 else 12
-    elif 6 <= hour < 12:
-        period = "上午"
-        display_hour = hour
-    elif 12 <= hour < 14:
-        period = "中午"
-        display_hour = 12 if hour == 12 else hour - 12
-    elif 14 <= hour < 18:
-        period = "下午"
-        display_hour = hour - 12
-    else:  # 18-23
-        period = "晚上"
-        display_hour = hour - 12
-
-    return f"{period} {display_hour:02d}:{minute:02d}"
 
 
 class ChatroomService:
@@ -180,15 +143,8 @@ class ChatroomService:
         messages = []
         for record in records:
             msg_type = "user" if record.direction == "incoming" else "official"
-            if record.created_at:
-                # MySQL NOW() 已是台灣時間，naive datetime 直接標記為 TAIPEI_TZ
-                if record.created_at.tzinfo is None:
-                    created_at_local = record.created_at.replace(tzinfo=TAIPEI_TZ)
-                else:
-                    created_at_local = record.created_at.astimezone(TAIPEI_TZ)
-                timestamp_str = created_at_local.isoformat()
-            else:
-                timestamp_str = None
+            # created_at 是 DB naive UTC，輸出 UTC aware ISO（+00:00），前端依觀看者時區格式化
+            timestamp_str = to_utc_iso(record.created_at)
 
             # 計算 senderName：manual 訊息顯示發送人員名稱，其他顯示「系統」
             sender_name = None
@@ -203,7 +159,6 @@ class ChatroomService:
                 "id": record.id,
                 "type": msg_type,
                 "text": record.content,
-                "time": format_chat_time(record.created_at),  # 格式化為 "下午 03:30"
                 "timestamp": timestamp_str,
                 "isRead": record.status == "read",
                 "source": record.message_source,

@@ -11,7 +11,7 @@ export interface WebSocketMessage {
     id: number | string;
     type: "user" | "official";
     text: string;
-    time: string;
+    timestamp?: string | null;
     isRead: boolean;
   };
 }

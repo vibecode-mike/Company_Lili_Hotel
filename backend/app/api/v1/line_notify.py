@@ -6,7 +6,6 @@ import logging
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -55,31 +54,7 @@ async def notify_new_message(
             # 不算錯誤,可能是新用戶或尚未同步
             return {"status": "ok", "message": "Member not found, skipped"}
 
-        # 2. 轉換時間格式 (使用中文時段)
-        # notification.timestamp: Unix timestamp (milliseconds) - 直接轉為本地時間
-        message_time = datetime.fromtimestamp(notification.timestamp / 1000, tz=ZoneInfo("Asia/Taipei"))
-        hour = message_time.hour
-        minute = message_time.minute
-
-        # 判斷時段
-        if 0 <= hour < 6:
-            period = "凌晨"
-        elif 6 <= hour < 12:
-            period = "上午"
-        elif 12 <= hour < 14:
-            period = "中午"
-        elif 14 <= hour < 18:
-            period = "下午"
-        else:  # 18-23
-            period = "晚上"
-
-        # 轉換為 12 小時制
-        hour_12 = hour if hour <= 12 else hour - 12
-        if hour_12 == 0:
-            hour_12 = 12
-        time_str = f"{period} {hour_12:02d}:{minute:02d}"
-
-        # 3. 構建前端訊息格式
+        # 2. 構建前端訊息格式（顯示時間由前端依觀看者時區格式化，後端不再算顯示字串）
         # 根據 direction 判斷訊息類型: outgoing=官方回應, incoming=用戶訊息
         msg_type = "official" if notification.direction == "outgoing" else "user"
 
@@ -87,7 +62,6 @@ async def notify_new_message(
             "id": notification.message_id,
             "type": msg_type,
             "text": notification.message_text,
-            "time": time_str,
             "isRead": False,
             "source": notification.source  # 傳遞來源 (gpt/keyword/always)
         }
@@ -111,8 +85,8 @@ async def notify_new_message(
             msg.message_source = notification.source or msg.message_source
             msg.content = notification.message_text
         else:
-            # 直接使用本地時間（不做 UTC 假設）
-            created_at_local = datetime.fromtimestamp(notification.timestamp / 1000)
+            # LINE webhook timestamp(ms) 是真 UTC epoch，存成 naive UTC（DB naive = UTC）
+            created_at_local = datetime.fromtimestamp(notification.timestamp / 1000, tz=timezone.utc).replace(tzinfo=None)
             msg = ConversationMessage(
                 id=notification.message_id,
                 thread_id=thread.id,
@@ -136,7 +110,8 @@ async def notify_new_message(
             await manager.send_new_message(msg.thread_id, {
                 **message_data,
                 "thread_id": msg.thread_id,
-                "timestamp": datetime.fromtimestamp(notification.timestamp / 1000, tz=ZoneInfo("Asia/Taipei")).isoformat()
+                # LINE webhook epoch 是真 UTC，輸出 UTC aware ISO（+00:00）
+                "timestamp": datetime.fromtimestamp(notification.timestamp / 1000, tz=timezone.utc).isoformat()
             })
             logger.info(f"✅ Notified frontend about new message on thread {msg.thread_id}")
         return {

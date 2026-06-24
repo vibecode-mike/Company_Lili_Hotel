@@ -4,6 +4,7 @@
  */
 
 import React, { useRef, useEffect } from 'react';
+import { formatChatTime } from './timeFormat';
 
 // ========== 类型定义 ==========
 
@@ -11,7 +12,7 @@ export interface ChatMessage {
   id: number;
   type: 'user' | 'official';
   text: string;
-  time: string;
+  timestamp?: string | null;  // UTC aware ISO（+00:00）；顯示由 formatChatTime 依觀看者時區格式化
   isRead: boolean;
 }
 
@@ -41,7 +42,7 @@ function UserMessage({ message, avatar }: { message: ChatMessage; avatar?: strin
       {/* 时间 */}
       <div className="flex items-end h-full pt-[24px]">
         <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[14px] leading-[1.5] text-[#717182]">
-          {message.time}
+          {formatChatTime(message.timestamp)}
         </p>
       </div>
 
@@ -90,7 +91,7 @@ function OfficialMessage({ message }: { message: ChatMessage }) {
       {/* 时间 */}
       <div className="flex items-end h-full pt-[24px]">
         <p className="font-['Noto_Sans_TC:Regular',sans-serif] text-[14px] leading-[1.5] text-[#717182]">
-          {message.time}
+          {formatChatTime(message.timestamp)}
         </p>
       </div>
     </div>

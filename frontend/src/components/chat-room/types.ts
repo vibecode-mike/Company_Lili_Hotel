@@ -12,8 +12,7 @@ export interface ChatMessage {
   id: string;  // ✅ 修正：API 返回 UUID string，非 number
   type: 'user' | 'official';
   text: string;
-  time: string;
-  timestamp?: string | null;  // ✅ 新增：ISO 格式完整時間戳，用於日期顯示
+  timestamp?: string | null;  // UTC aware ISO（+00:00）；顯示時間由前端 formatChatTime 依觀看者時區格式化
   isRead: boolean;
   source?: string | null;  // ✅ 新增：message_source 欄位 ('manual' | 'gpt' | 'keyword' | 'welcome' | 'always' | null)
   senderName?: string | null;  // ✅ 新增：發送人員名稱（manual 顯示人員名稱，其他顯示「系統」）

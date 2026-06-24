@@ -6,14 +6,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Any, List, Optional
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import logging
 
 from app.database import get_db
 from app.models.member import Member
 from app.models.fb_channel import FbChannel
 from app.schemas.common import SuccessResponse
-from app.services.chatroom_service import ChatroomService, format_chat_time
+from app.services.chatroom_service import ChatroomService
 from app.clients.fb_message_client import FbMessageClient
 import json
 
@@ -21,9 +21,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# 台北時區（固定 +08:00）。聊天訊息 timestamp 對外一律輸出台北 aware ISO（+08:00），
-# 與 SSE 推送格式一致——前端用字串排序，混 UTC/naive 基底會錯亂。
-TAIPEI_TZ = timezone(timedelta(hours=8))
+# 聊天訊息 timestamp 對外一律輸出 UTC aware ISO（+00:00），與 SSE 推送格式一致——
+# 前端用字串排序、依觀看者時區格式化顯示，混 UTC/+08/naive 基底會錯亂。
 
 
 def _ensure_utc(dt: datetime) -> datetime:
@@ -50,11 +49,12 @@ def parse_iso_datetime(value: str) -> Optional[datetime]:
         return None
 
 
-def format_iso_taipei(dt: Optional[datetime]) -> Optional[str]:
-    """輸出台北 aware ISO（+08:00）。naive 視為 UTC（與 parse_iso_datetime 對稱）。"""
+def format_iso_utc(dt: Optional[datetime]) -> Optional[str]:
+    """輸出 UTC aware ISO（+00:00）。naive 視為 UTC（與 parse_iso_datetime 對稱）。
+    全系統 timestamp 一律 UTC 基底，前端依觀看者時區格式化顯示。"""
     if not dt:
         return None
-    return _ensure_utc(dt).astimezone(TAIPEI_TZ).isoformat()
+    return _ensure_utc(dt).isoformat()
 
 
 def extract_message_text(message_content: str) -> str:
@@ -121,8 +121,7 @@ class ChatMessage(BaseModel):
     id: str  # UUID in conversation_messages
     type: str  # 'user' | 'official'
     text: str
-    time: str  # "上午 03:30"
-    timestamp: Optional[str] = None  # ISO 格式完整時間戳，用於日期顯示
+    timestamp: Optional[str] = None  # UTC aware ISO（+00:00）；顯示時間由前端依觀看者時區格式化
     isRead: bool = False
     source: Optional[str] = None  # 'manual' | 'gpt' | 'keyword' | 'welcome' | 'always'
     senderName: Optional[str] = None  # 發送人員名稱：manual 顯示人員名稱，其他顯示「系統」
@@ -216,14 +215,12 @@ async def get_chat_messages(
 
                 # 轉換時間戳（epoch 秒 -> UTC）
                 dt = datetime.fromtimestamp(timestamp, tz=timezone.utc) if timestamp else None
-                time_str = format_chat_time(dt)
 
                 messages.append(ChatMessage(
                     id=f"fb_{idx}_{timestamp}",
                     type="user" if is_incoming else "official",
                     text=text,
-                    time=time_str,
-                    timestamp=format_iso_taipei(dt),
+                    timestamp=format_iso_utc(dt),
                     # FB 無真實已讀回執，不偽稱已讀
                     isRead=False,
                     source="external" if not is_incoming else None,
@@ -251,15 +248,13 @@ async def get_chat_messages(
         for record in result["messages"]:
             ts_raw = record.get("timestamp")
             created_at = parse_iso_datetime(ts_raw) if ts_raw else None
-            time_str = format_chat_time(created_at)
             text_content = extract_message_text(record.get("text", "")) if record.get("text") else ""
 
             messages.append(ChatMessage(
                 id=record["id"],
                 type=record["type"],
                 text=text_content,
-                time=time_str,
-                timestamp=format_iso_taipei(created_at) if created_at else record.get("timestamp"),
+                timestamp=format_iso_utc(created_at) if created_at else record.get("timestamp"),
                 isRead=record.get("isRead", False),
                 source=record.get("source"),
                 senderName=record.get("senderName"),
