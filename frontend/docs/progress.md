@@ -215,15 +215,22 @@
 - [x] **方案 B 退路存檔點**：commit `28449e13`（常駐淡灰捲軸；C 失敗可整批退回此點）
 - [x] **C0：共用 `<Scrollable>` 元件（支援 `header` 槽避開 sticky 表頭）+ BasicSettingsList**：commit `b831567c`（縱向；六項驗收全過：平常乾淨／進整區出現／離開消失／捲動順／sticky 不震／thumb 不蓋表頭）
 - [x] **C1 第一組：3 個縱向面板**（`StaffUsersManagement` / `SidebarChannelSwitcher` / `MessageDetailDrawer`）：commit `93eab253`
-- [x] **C1 Sidebar：側欄導覽 nav**（填高型 outer `flex-1 min-h-0` + viewport `h-full`；aside 是 `h-screen` 有界→真內捲）：commit `a1a256bb`（未 push）
-- [x] **ErrorBoundary：錯誤堆疊框**（max-h-280 有界縱捲；max-h 放 viewport，rounded+bg+overflow-hidden 放 outer）：commit `aef947ed`（未 push）
+- [x] **C1 Sidebar：側欄導覽 nav**（填高型 outer `flex-1 min-h-0` + viewport `h-full`；aside 是 `h-screen` 有界→真內捲）：commit `a1a256bb`（✅ 已 push origin/main，CI 綠）
+- [x] **ErrorBoundary：錯誤堆疊框**（max-h-280 有界縱捲；max-h 放 viewport，rounded+bg+overflow-hidden 放 outer）：commit `aef947ed`（✅ 已 push origin/main，CI 綠）
 
 ### 🚩 收工狀態（2026-06-23）—— 下次接這裡
 
-> **今天捲軸完成**：Sidebar(`a1a256bb`) + ErrorBoundary(`aef947ed`)，都已 commit、**未 push**（攢著與圓角 dead code 一起，等使用者決定 push 時機）。
+> **6/23 捲軸完成**：Sidebar(`a1a256bb`) + ErrorBoundary(`aef947ed`)，**✅ 已 push origin/main**（範圍 `87b6b73e..b6959ad9`，CI 綠燈，6/24 確認）。
 > **C4 頁殼 main 全排除**（window 捲，見下方 ❌ 與 playbook §2「頁殼 main 是 window 捲」）。
 > **低風險井已見底**：trivial 只過 ErrorBoundary；`MemberNoteEditor:89`=textarea(排除)、C3 表格=雙軸(留雙軸批)。
 > **下次低風險首選**：`AIChatbotEditModal:626/927`（fixed inset-0 單軸 overlay，乾淨）。完整待做見下方「### 真正剩的有界內層容器清單」。
+
+### 🆕 接續（2026-06-24）
+
+- [x] **AIChatbotEditModal**（`RoomEditModal`+`FacilityEditModal` 兩個編輯彈窗外層 overlay）✅ **完成、crmpoc 驗收 OK、未 push（攢著）** ——
+  - 外層保留 `fixed inset-0 z-[99999] bg-black/45` backdrop（管定位+暗底，避免 Scrollable 硬加的 `relative` 撞 `fixed`）→ 內包 `Scrollable size-full` 管捲動 → `handleBackdrop` 移到 viewport。
+  - **Scrollable 加 `onClick` passthrough**（比照 `onScroll`，forward 到 viewport；現有 5 用法零影響）——overlay backdrop 點空白關閉靠 `e.target===e.currentTarget`，必須掛在 viewport。
+- [ ] **🆕 全站 textarea 細捲軸統一（獨立一批，不混 modal）** —— 驗收時發現「房型特色」textarea(`TextareaSection`)顯示粗原生捲軸。**修正認知**：方案 C(JS 自繪)包不到 textarea 內捲＝紅線成立，但**方案 B(CSS `::-webkit-scrollbar`)textarea 可美化成細灰**（`chat-widget-textarea` 即活證）。→ 全站 textarea 盤點後統一掛 `scrollbar-transparent`，消滅粗原生。**盤點/方案見下方「### 全站 textarea 統一」**。
 
 ### 待辦（明天繼續）
 
@@ -240,7 +247,7 @@
   - 💡 **下次優先試的解法方向（使用者 2026-06-23 提）**：Carousel tab strip（輪播按鈕那條）改用 **`flex-wrap` 換行** 取代橫向 scrollbar
     —— 原本卡在「縱向換 Scrollable 後橫向 tab 被切」，若 tab strip 本來就不用橫向捲（改成換行）就**繞開整個雙軸臨界問題**，可能是正解。
     評估要測：① 換行後的視覺（多列 tab 整齊嗎）② 多 tab（輪播 9+ 卡）時換幾列、會不會太高 ③ 跟「新增輪播」鈕的相對位置（換行後鈕還在不在順手的地方）。
-- [x] **C1 Sidebar** ✅ **完成（2026-06-23，`a1a256bb`，未 push）** —— 側欄 nav 換 Scrollable（填高型 outer `flex-1 min-h-0` + viewport `h-full`）。aside 是 `h-screen` 有界 → 真內捲、套得成立。驗收 OK（捲動順 / footer 固定不抖 / 展開收合正常 / thumb 正確）。
+- [x] **C1 Sidebar** ✅ **完成（2026-06-23，`a1a256bb`，已 push origin/main、CI 綠）** —— 側欄 nav 換 Scrollable（填高型 outer `flex-1 min-h-0` + viewport `h-full`）。aside 是 `h-screen` 有界 → 真內捲、套得成立。驗收 OK（捲動順 / footer 固定不抖 / 展開收合正常 / thumb 正確）。
 - [ ] **C2 聊天室**（最高風險：SSE 自動捲到底 + 無限往上捲）：`ChatMessageList` / `ChatRoomLayout`，須保留 ref/onScroll，單獨謹慎做
 - [x] ~~**C4** 各頁 `<main>`（9 個頁殼主捲動）~~ ❌ **排除出 C 計畫（2026-06-23）** —— 驗證發現頁殼是 `min-h-screen` + Sidebar `fixed` → **整頁 window 捲、main 不是有界內捲容器**（`overflow-y-auto scrollbar-transparent` 是 inert 死樣式）。自繪 Scrollable 只給有界內層容器；頁面整頁捲用原生 window 捲軸是正解，不硬改 `h-screen`。詳見 playbook §2「頁殼 main 是 window 捲」。9 頁全排除（含先前盤的乾淨批/雙軸批/min-h-screen 批）。
 - [ ] **C3** 表格橫向+巢狀 ／ **C5** 其餘橫向（tab／輪播／chip）
@@ -269,7 +276,7 @@
 **🟢 Group 3 — Modal / 面板（有界縱捲）**
 - `MemberTagEditModal:386`（`no-native-scrollbar`＝§2b React 自繪，先評估 macOS modal 可見性再統一）
 - `FilterModal:435`（§2c `showScrollbar`/`pr-2` 邏輯要保留）
-- 🆕 `AIChatbotEditModal:626/927`（`fixed inset-0` overlay 單軸，**乾淨·下次低風險首選**）
+- ~~`AIChatbotEditModal:626/927`~~ ✅ **完成（2026-06-24，未 push）** —— 兩彈窗外層換 Scrollable + Scrollable 加 onClick passthrough
 - ~~`shared/MemberNoteEditor:89`~~ ❌ textarea，方案 B 排除
 
 **🔵 Group 4 — 純橫向（C5）**

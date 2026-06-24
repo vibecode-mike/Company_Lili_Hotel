@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { apiPost } from "../../utils/apiClient";
 import { useToast } from "../ToastProvider";
 import ImageUploadField from "../common/ImageUploadField";
+import Scrollable from "../common/Scrollable";
 
 // ─── Icons (inline SVG) ───────────────────────────────────────────────────────
 
@@ -622,11 +623,13 @@ export const RoomEditModal = memo(function RoomEditModal({
   return createPortal(
     <>
       {/* Main modal overlay */}
-      <div
-        className="fixed inset-0 flex items-start justify-center p-[20px] overflow-y-auto scrollbar-transparent"
-        style={{ zIndex: 99999, backgroundColor: "rgba(0,0,0,0.45)" }}
-        onClick={handleBackdrop}
-      >
+      <div className="fixed inset-0 z-[99999] bg-black/45">
+        <Scrollable
+          orientation="vertical"
+          className="size-full"
+          viewportClassName="h-full flex items-start justify-center p-[20px]"
+          onClick={handleBackdrop}
+        >
         <div
           className="bg-white rounded-2xl w-full max-w-[800px] my-auto flex flex-col p-[32px] gap-[60px] shadow-2xl"
           onClick={(e) => e.stopPropagation()}
@@ -821,6 +824,7 @@ export const RoomEditModal = memo(function RoomEditModal({
             </div>
           )}
         </div>
+        </Scrollable>
       </div>
 
       {/* ── Sub-dialogs ── */}
@@ -923,11 +927,13 @@ export const FacilityEditModal = memo(function FacilityEditModal({
 
   return createPortal(
     <>
-      <div
-        className="fixed inset-0 flex items-start justify-center p-[20px] overflow-y-auto scrollbar-transparent"
-        style={{ zIndex: 99999, backgroundColor: "rgba(0,0,0,0.45)" }}
-        onClick={handleBackdrop}
-      >
+      <div className="fixed inset-0 z-[99999] bg-black/45">
+        <Scrollable
+          orientation="vertical"
+          className="size-full"
+          viewportClassName="h-full flex items-start justify-center p-[20px]"
+          onClick={handleBackdrop}
+        >
         <div
           className="bg-white rounded-2xl w-full max-w-[800px] my-auto flex flex-col p-[32px] gap-[60px] shadow-2xl"
           onClick={(e) => e.stopPropagation()}
@@ -1046,6 +1052,7 @@ export const FacilityEditModal = memo(function FacilityEditModal({
             </button>
           </div>
         </div>
+        </Scrollable>
       </div>
 
       {subDialog === "saveFailed" && (

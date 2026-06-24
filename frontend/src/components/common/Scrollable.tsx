@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type MouseEventHandler,
   type ReactNode,
   type UIEventHandler,
 } from 'react';
@@ -22,6 +23,8 @@ interface ScrollableProps {
   viewportClassName?: string;
   /** 直接掛到 viewport 的 onScroll（保留既有事件，如聊天室無限捲動 / SSE 自動捲動） */
   onScroll?: UIEventHandler<HTMLDivElement>;
+  /** 直接掛到 viewport 的 onClick（保留掛在捲動容器上的事件，如 overlay backdrop 點空白關閉） */
+  onClick?: MouseEventHandler<HTMLDivElement>;
   /** viewport 的 inline style（少用） */
   viewportStyle?: CSSProperties;
   /**
@@ -43,7 +46,7 @@ interface ScrollableProps {
  * - forwardRef 對外暴露 viewport DOM（捲動元素），供呼叫端做 scrollTop / scrollIntoView。
  */
 const Scrollable = forwardRef<HTMLDivElement, ScrollableProps>(function Scrollable(
-  { children, orientation = 'vertical', className, viewportClassName, onScroll, viewportStyle, header },
+  { children, orientation = 'vertical', className, viewportClassName, onScroll, onClick, viewportStyle, header },
   ref,
 ) {
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -170,6 +173,7 @@ const Scrollable = forwardRef<HTMLDivElement, ScrollableProps>(function Scrollab
           ...viewportStyle,
         }}
         onScroll={onScroll}
+        onClick={onClick}
       >
         {children}
       </div>
