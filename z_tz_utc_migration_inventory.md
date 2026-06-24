@@ -190,7 +190,13 @@
 G1. **最後 merge 後在「整合後 code」重跑完整驗證**（app.main import + 各子階段功能 + F401 比對），不只信各段在舊基底的檢查——抓 multi-OA × tz 的語意衝突。
 G2. **GATE #2 寫入點用「內容」定位、不用行號**（同事 code 位移後 2609/1491… 會跑掉）：grep `now_dt = datetime.now()` / `last_interaction_at = datetime.now()` / `paid_at = ` / `now_tpe = ` / `last_seen_at = datetime.now()`。
 G3. **push 前掃 migration 熱區檔在 origin/main 的 git log**，確認同事沒改到跟本遷移重疊的區段（非重疊才自動合）。
-G4. **⚠️ 子階段 6 前**：`MessageList.tsx` 有同事 37 行未提交 WIP，而它正是 (d) 要收斂的 formatter 之一 → 做 6 之前請同事先把該 WIP commit 進 main（走最後 merge），避免編輯時碰撞。
+G4. **⚠️ 子階段 6 前**：`MessageList.tsx` 有同事 37 行未提交 WIP（頻道標頭重構，非時區）→ 詳見下方「子階段 6 結論」，correctness 不需動它。
+
+## ✅ 子階段 6 已完成（精簡版，commit 見下）
+**關鍵結論：display formatter 全部不用改。** 後端已送 UTC aware（`+00:00`），既有 `new Date()+toLocaleString(無 timeZone)` / `.getHours()` 就是「觀看者本地時區」、跨時區自動正確。遷移的顯示正確性是「後端送 UTC + 既有本地 formatter」達成的,formatter 本身無需改。
+- **唯一改動 = 排程『送出』**：`MessageCreation.tsx` 2 處 `scheduled_at` 從 local naive 字串 → `new Date(本地).toISOString()`（UTC）。後端 parser 已接 ISO-Z、validator（子4）UTC 基底比較 → round-trip 實測正確（台北選 14:00→送 06:00Z→載回 14:00；東京送 05:00Z→載回 14:00）。排程『載入編輯』(`FlexEditorPage` `new Date().getHours()`) 已是本地 → 不用改。
+- **MessageList 待補（你要的記錄）**：correctness **無待補**（它的 `formatDateTime` 已正確）。只有「把 ~11 個 formatter DRY 收斂成單一 util」這個 **cosmetic、非必要** 工作會碰到它；若日後要做,等同事的頻道標頭 WIP commit 後再碰。
+- **DownloadConversationsModal 日期篩選**：用瀏覽器本地（台北營運下=正確）；海外多租戶才需改 OPERATING_TZ → 未做（YAGNI）。
 
 ## 📝 另案（不在本遷移範圍，記一筆）
 - `security.py:44` JWT `exp` 用裸 `datetime.now()`（host-tz 依賴的 latent bug）→ 之後單獨確認 token 過期判斷無 host-tz 依賴。

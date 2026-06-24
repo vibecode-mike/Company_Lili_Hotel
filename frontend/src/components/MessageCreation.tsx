@@ -988,11 +988,16 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
       // ✅ 添加排程時間邏輯
       if (scheduleType === 'scheduled' && scheduledDate) {
-        const year = scheduledDate.getFullYear();
-        const month = String(scheduledDate.getMonth() + 1).padStart(2, '0');
-        const day = String(scheduledDate.getDate()).padStart(2, '0');
-        const scheduledDateTimeString = `${year}-${month}-${day} ${scheduledTime.hours}:${scheduledTime.minutes}:00`;
-        requestBody.scheduled_at = scheduledDateTimeString;
+        // 排程是真實瞬間：用設定者本地時區組 Date，再轉 UTC 送後端（後端存/比較皆 UTC）
+        const dt = new Date(
+          scheduledDate.getFullYear(),
+          scheduledDate.getMonth(),
+          scheduledDate.getDate(),
+          parseInt(scheduledTime.hours, 10),
+          parseInt(scheduledTime.minutes, 10),
+          0,
+        );
+        requestBody.scheduled_at = dt.toISOString();
       } else if (scheduleType === 'immediate') {
         // 立即發送模式，清空排程時間
         requestBody.scheduled_at = null;
@@ -1819,11 +1824,16 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
       // Add scheduled time if applicable
       if (scheduleType === 'scheduled' && scheduledDate) {
-        const year = scheduledDate.getFullYear();
-        const month = String(scheduledDate.getMonth() + 1).padStart(2, '0');
-        const day = String(scheduledDate.getDate()).padStart(2, '0');
-        const scheduledDateTimeString = `${year}-${month}-${day} ${scheduledTime.hours}:${scheduledTime.minutes}:00`;
-        requestBody.scheduled_at = scheduledDateTimeString;
+        // 排程是真實瞬間：用設定者本地時區組 Date，再轉 UTC 送後端（後端存/比較皆 UTC）
+        const dt = new Date(
+          scheduledDate.getFullYear(),
+          scheduledDate.getMonth(),
+          scheduledDate.getDate(),
+          parseInt(scheduledTime.hours, 10),
+          parseInt(scheduledTime.minutes, 10),
+          0,
+        );
+        requestBody.scheduled_at = dt.toISOString();
       }
 
       // 判斷是否從草稿發布（編輯草稿 + 非草稿模式 = 從草稿發布）
