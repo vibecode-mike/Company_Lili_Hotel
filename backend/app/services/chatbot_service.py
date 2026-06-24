@@ -16,7 +16,7 @@ from datetime import date, datetime, timedelta
 from threading import Lock
 from typing import Any, Dict, List, Literal, Optional, Tuple
 from uuid import uuid4
-from zoneinfo import ZoneInfo
+from app.core.timezone import OPERATING_TZ
 
 from openai import AsyncOpenAI
 from sqlalchemy import func as sa_func
@@ -912,7 +912,7 @@ _prompt_cache: Dict[tuple, str] = {}
 
 
 def _build_system_prompt(channel_id: Optional[str] = None) -> str:
-    today = datetime.now(ZoneInfo("Asia/Taipei")).date()
+    today = datetime.now(OPERATING_TZ).date()
     # 用 (channel_pms_enabled, date) 當 key — 同樣 PMS 狀態的 channel 共用 prompt
     pms_on = is_pms_enabled(channel_id)
     cache_key = (pms_on, today)
@@ -1219,7 +1219,7 @@ class ChatbotService:
         if dates:
             checkin_str, checkout_str = dates
             checkin_obj = date.fromisoformat(checkin_str)
-            today = datetime.now(ZoneInfo("Asia/Taipei")).date()
+            today = datetime.now(OPERATING_TZ).date()
             if checkin_obj < today:
                 past_date_warning = "您輸入的日期已過，請重新提供入住與退房日期。"
             else:
@@ -2945,7 +2945,7 @@ class ChatbotService:
 
     def _extract_dates(self, message: str) -> Optional[Tuple[str, str]]:
         """從使用者訊息中提取入住/退房日期，支援多種常見格式。"""
-        today = datetime.now(ZoneInfo("Asia/Taipei")).date()
+        today = datetime.now(OPERATING_TZ).date()
         current_year = today.year
 
         cn_digits = {
@@ -3174,7 +3174,7 @@ class ChatbotService:
             dates = self._extract_dates(message)
             if dates:
                 checkin_obj = date.fromisoformat(dates[0])
-                today = datetime.now(ZoneInfo("Asia/Taipei")).date()
+                today = datetime.now(OPERATING_TZ).date()
                 if checkin_obj < today:
                     past_date_warning = "您輸入的日期已過，請重新提供入住與退房日期。"
                 else:

@@ -7,7 +7,7 @@ from __future__ import annotations
 import hashlib
 from datetime import datetime
 from urllib.parse import urlencode
-from zoneinfo import ZoneInfo
+from app.core.timezone import OPERATING_TZ
 
 import requests
 
@@ -34,7 +34,7 @@ def _booking_source() -> str:
 
 
 def taipei_timestamp() -> str:
-    now = datetime.now(ZoneInfo("Asia/Taipei"))
+    now = datetime.now(OPERATING_TZ)
     return now.strftime("%Y-%m-%d %H:%M:%S")
 
 

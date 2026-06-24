@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime
+from app.core.timezone import ensure_utc, OPERATING_TZ
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -149,7 +150,7 @@ async def get_pms_status(
         "configured": pms_configured(),
         "hotelcode": conn.hotelcode or "",
         "last_synced_at": (
-            conn.last_synced_at.strftime("%Y-%m-%d %H:%M")
+            ensure_utc(conn.last_synced_at).astimezone(OPERATING_TZ).strftime("%Y-%m-%d %H:%M")
             if conn.last_synced_at
             else None
         ),

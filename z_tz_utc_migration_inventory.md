@@ -184,7 +184,13 @@
 3. **faq_service.py:483** `now = datetime.now()` 用途待查 → 寫入則 UTC / 比較則配 (e) / 日曆則 OPERATING_TZ。
 4. ✅ **(e) 子階段 4 已完成**：members 1052/1174 human_override 寫入 → `now_utc()`；line_app member_service.py:317 比較 → `utcnow()`（成對改、含 aware 正規化）；scheduler:197 → `now_utc()`；admin_retention:64 cutoff → `now_utc()`（輸出 cutoff 走 `to_utc_iso`）；schemas/message.py validate_scheduled_at_future → 改 UTC 基底比較。
 5. **(h) 子階段 9**：message_service 879-880、messages.py:354、auto_responses.py:42/396。
-6. **(g) 子階段 5**：CSV/chatbot 營運時區輸出（conversations_export:158、chatbot.py:152、pms_chatbot_client:37）；chatbot_service 915/1222/2948/3177 ZoneInfo→OPERATING_TZ 常數。
+6. ✅ **(g) 子階段 5 已完成**：chatbot_service 915/1222/2948/3177 + pms_chatbot_client:37 `ZoneInfo("Asia/Taipei")` → `OPERATING_TZ`（DRY、行為不變）；conversations_export:139 CSV + chatbot.py:152 last_synced_at 輸出 → `ensure_utc(dt).astimezone(OPERATING_TZ)`（讀 UTC→營運時區→strftime）；conversations_export:158 檔名 + 移除 TAIPEI_TZ/pytz。
+
+## 🟡 GUARDRAIL（defer 到最後整合的補做項，因每段都在過時基底上驗）
+G1. **最後 merge 後在「整合後 code」重跑完整驗證**（app.main import + 各子階段功能 + F401 比對），不只信各段在舊基底的檢查——抓 multi-OA × tz 的語意衝突。
+G2. **GATE #2 寫入點用「內容」定位、不用行號**（同事 code 位移後 2609/1491… 會跑掉）：grep `now_dt = datetime.now()` / `last_interaction_at = datetime.now()` / `paid_at = ` / `now_tpe = ` / `last_seen_at = datetime.now()`。
+G3. **push 前掃 migration 熱區檔在 origin/main 的 git log**，確認同事沒改到跟本遷移重疊的區段（非重疊才自動合）。
+G4. **⚠️ 子階段 6 前**：`MessageList.tsx` 有同事 37 行未提交 WIP，而它正是 (d) 要收斂的 formatter 之一 → 做 6 之前請同事先把該 WIP commit 進 main（走最後 merge），避免編輯時碰撞。
 
 ## 📝 另案（不在本遷移範圍，記一筆）
 - `security.py:44` JWT `exp` 用裸 `datetime.now()`（host-tz 依賴的 latent bug）→ 之後單獨確認 token 過期判斷無 host-tz 依賴。

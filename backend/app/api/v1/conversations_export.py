@@ -14,7 +14,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-import pytz
+from app.core.timezone import ensure_utc, OPERATING_TZ
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, and_, or_
@@ -26,8 +26,6 @@ from app.models.member import Member
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-TAIPEI_TZ = pytz.timezone("Asia/Taipei")
 
 _VALID_CHANNELS = {"LINE", "Facebook", "Webchat"}
 _VALID_MEMBER_TYPES = {"all", "member", "guest"}
@@ -133,10 +131,8 @@ async def export_conversations(
         for msg, thread, member in rows:
             identity, display_name = _identity_label(member)
             created = msg.created_at
-            if created and created.tzinfo is None:
-                # MySQL NOW() 已是台灣時間 → 直接標記 TAIPEI_TZ
-                created = created.replace(tzinfo=TAIPEI_TZ)
-            time_str = created.strftime("%Y-%m-%d %H:%M:%S") if created else ""
+            # created_at 是 DB naive UTC → 轉營運時區再格式化（CSV 輸出台北牆鐘）
+            time_str = ensure_utc(created).astimezone(OPERATING_TZ).strftime("%Y-%m-%d %H:%M:%S") if created else ""
             role = _format_role(msg.direction, msg.message_source)
             content = msg.content or ""
             # 房卡訊息以 [房型卡片] 標示，避免 JSON 塞爆 Excel 一格
@@ -155,7 +151,7 @@ async def export_conversations(
             buf.seek(0); buf.truncate(0)
 
     # 檔名帶時間戳，避免重複下載互蓋
-    now_str = datetime.now(TAIPEI_TZ).strftime("%Y%m%d_%H%M%S")
+    now_str = datetime.now(OPERATING_TZ).strftime("%Y%m%d_%H%M%S")
     filename = f"conversations_{now_str}.csv"
 
     return StreamingResponse(
