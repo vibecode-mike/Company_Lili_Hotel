@@ -100,6 +100,20 @@
   - 判斷法：套 Scrollable 前先看祖先有沒有**有界高度**（`h-screen` / `max-h-[]` / 固定 `h-[]`）。只有 `min-h-screen` = 整頁捲，沒有可套的有界區。
   - 決策：**自繪 4px Scrollable 只給「有界內層容器」**（清單 / 面板 / 表格 body / 下拉 / 抽屜）；頁面層級的整頁捲，**原生 window 捲軸是正解**，不為了視覺一致硬把頁殼改 `h-screen` 內捲（大 UX 改動、性價比差）。
   - 連帶：9 個頁殼 main（MessageList/PMS/Insights/AIChatbot/Facilities/CreateAutoReply/MessageCreation/LineApiSettings/MainLayout）全部**排除出 C 計畫**。
+- **⭐ 共用機器/帳號：外部自動程序會搶 git → commit 前查索引、push 前 fetch**
+  - 事故（2026-06-24）：有外部自動程序在跑 `git add -A && git commit`（甚至 push），把我**未 commit 的工作**（MemberTagEditModal+progress）**掃進它的 commit**（`75a8b94e`，訊息掛 timezone），且**branch 跟 origin 分歧**（雙方各自在同一 base 上長新 commit）。
+  - 後果：**程式碼不丟**（已被 commit、grep 驗 Scrollable 都在），但**commit 訊息掛錯主題**、**push 被 non-fast-forward 擋**、**我的 commit 跟同事的交錯無法乾淨拆**。
+  - 教訓：① **commit 前先 `git status` / `git diff --cached --name-only` 看索引被誰 stage 了**（我曾以為只 stage 2 個檔，實際索引早被掃進一堆別人的後端檔）。② 共用機器/帳號上工先確認**有沒有自動 commit 程序在跑**。③ 被掃走時別慌——程式碼在 commit 裡沒丟，先 `git cat-file -e`/`git grep token HEAD` 逐一驗在不在。④ **push 前一定 `git fetch` 看分歧**（`git rev-list --left-right --count origin/main...HEAD`）。⑤ 動 git 修歷史前，先確認自動程序**停了**，否則邊修邊被攪。⑥ 真出狀況時「接受現狀（程式碼沒事）」往往比「硬拆歷史」省事且安全。
+- **⭐ 橫向 Scrollable 首戰：先驗 render（死碼）+ 先驗「真會捲」（真溢出）**
+  - 原訂橫向首戰 `flex-message/PreviewPanel:64` → 查證是**死碼**（零 importer、無 barrel、無 build chunk；渲染者 `FlexMessageEditorNew` 已刪 → 孤兒）→ 改用 `InsightsPanel:1272`（heatmap）。教訓重申：**列容器清單前先驗 render**，§2c 清單會因死碼清除而過時。
+  - 「有 `overflow-x` class」≠「真的會橫捲」：要驗**內容真的會溢出**（如 heatmap `min-w-[720px]` → 窄視窗才溢出）。使用者**縮窄視窗截圖**確認 tab strip + heatmap 都真橫捲，才確定不是 inert 死樣式。
+  - `Scrollable orientation="horizontal"` 首次實戰要像「2xs 首用」眼見為憑：hThumb 在**底部**、4px、hover 才現、拖得動、不破版。確立後同模式可批次套純橫向 table（5 個一次）。
+- **⭐ React 自繪捲軸（hand-rolled）能全量遷移換 Scrollable，§2b macOS 疑慮已解**
+  - FilterModal（≈90 行手刻：state/effect/拖曳/寫死偏移）、MemberTagEditModal（本地 `CustomScrollbar` 元件）都**全量刪掉自繪 → 換 `<Scrollable vertical>`**，大清理（FilterModal −113/+6）。
+  - §2b 原疑慮「macOS modal 內捲軸看不見」**不成立**：那些自繪本就為「不依賴原生捲軸可見性」而生，**Scrollable 用一模一樣技術**（`no-native-scrollbar`+JS thumb）→ FilterModal 換上後 modal 內 hover 才現正常 = 已證。
+  - 保留要點：①有 wheel handler/onScroll 的，靠 **Scrollable forwardRef 暴露 viewport**（`<Scrollable ref={scrollRef}>` → `scrollRef.current`=viewport）接回，原 handler 不動。②`pr-2`/`pr-[8px]` 讓位改**常駐**保留（thumb 不蓋內容）。③行為改變：常駐 thumb → hover 才現（全站統一、可接受）。
+- **共用元件刪除前先查 import（import≠唯一使用者）**
+  - `CustomScrollbar`（定義在 MemberTagEditModal、`export`）→ 遷移 MemberTagEditModal 時**不能順手刪**，因 `imports/MainContainer-6001-1415`（會員表格）也 import 用。**待雙軸表格批遷移會員表格時一起刪**。教訓：刪 export 的東西前 `grep -rn` 全 repo 找 importer。
 
 ---
 

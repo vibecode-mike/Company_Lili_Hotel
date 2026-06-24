@@ -218,12 +218,40 @@
 - [x] **C1 Sidebar：側欄導覽 nav**（填高型 outer `flex-1 min-h-0` + viewport `h-full`；aside 是 `h-screen` 有界→真內捲）：commit `a1a256bb`（✅ 已 push origin/main，CI 綠）
 - [x] **ErrorBoundary：錯誤堆疊框**（max-h-280 有界縱捲；max-h 放 viewport，rounded+bg+overflow-hidden 放 outer）：commit `aef947ed`（✅ 已 push origin/main，CI 綠）
 
-### 🚩 收工狀態（2026-06-23）—— 下次接這裡
+### 🚩🚩 收工狀態（2026-06-24）—— 下次上工先看這裡
 
-> **6/23 捲軸完成**：Sidebar(`a1a256bb`) + ErrorBoundary(`aef947ed`)，**✅ 已 push origin/main**（範圍 `87b6b73e..b6959ad9`，CI 綠燈，6/24 確認）。
+> **✅ 低風險批全完結（7 項）+ textarea 統一全收 + 橫向 Scrollable 確立。今天 7 個捲軸 commit、程式碼全安全在本地。**
+>
+> **今天完成（commit）**：
+> 1. `9d0317bf` AIChatbotEditModal 兩彈窗外層 Scrollable（+ Scrollable 加 `onClick` passthrough）
+> 2. `8630aed1` 全站 textarea×8 補 `scrollbar-transparent`（消滅粗原生）
+> 3. `4bde7349` InsightsPanel heatmap 橫向 Scrollable（**橫向 orientation 首戰、pattern 確立**）
+> 4. `9b094da6` 3 頁純橫向 table×5（PMS/AIChatbot/設施）換 horizontal
+> 5. `e46d3e69` 聊天室手動回覆框捲軸從隱形修成可見細灰
+> 6. `015e018f` FilterModal 手刻自繪→Scrollable（§2b 結案，−113/+6）
+> 7. **`75a8b94e`（⚠️ 混在 timezone commit 裡）** MemberTagEditModal 自繪→Scrollable（§2b 結案）
+>
+> **⚠️⚠️ 明天上工「第一件事」＝確認 push**（push 交給同事一併處理，已協調）：
+> 1. `git fetch` →看 **origin 有沒有我的 6 捲軸 commit + MemberTagEditModal（`75a8b94e`）**。
+> 2. **未 push 成功** → 先 push 好（或再跟同事確認）再繼續上工。
+> 3. **push 成功** → 直接開高風險三塊。
+>
+> **⚠️ git 狀況存證（6/24）**：有外部自動程序跑 `git add -A && commit`，把我的 MemberTagEditModal+progress **掃進 timezone commit `75a8b94e`**（程式碼正確、已驗收，只是訊息掛 tz）。本地 vs origin **分歧**（origin 領先 2：`9510aff3 feat基本設定`+`4c93ccb5 fix時段洞察`；我領先 10＝6 捲軸+4 tz 交錯）。**選 A：接受現狀、不整理歷史**。push 被 non-fast-forward 擋著，需先整合 origin → 同事會一併 push。
+>
+> **🔴 剩高風險三塊**（各別專攻、一 session 一塊、git 環境穩定再開）：
+> - **C2 聊天室**（最高風險：SSE 自動捲到底 + 無限往上捲，須保留 ref/onScroll）：`ChatMessageList:111`、`ChatRoomLayout:1298`、`ChatRoom:67/85`
+> - **雙軸表格**（會員表 `MainContainer-6001-1415` + C3 `AutoReplyTableStyled`/`InteractiveMessageTable`；需 `orientation="both"`+`header` 槽；**連帶刪 `CustomScrollbar`**——MemberTagEditModal 已不用它、僅會員表格還在用）
+> - **Carousel/FB editor**（卡關：縱向換 Scrollable 後橫向 tab 被切；💡 待試 **tab strip 改 `flex-wrap` 換行** 繞開雙軸臨界）
+>
+> **🟡 雜項待辦**：textarea「框塞自身」偏外×7（待 Chrome 量準再 restructure）· dead code 刪除（含死掉的 `flex-message/PreviewPanel`+`types.ts`）· `InsightsPanel:1246` tab strip（Carousel 同型、留）· Windows 跨系統檢查（4px 灰圓角）。
+
+---
+
+### 🚩 收工狀態（2026-06-23）—— 歷史
+
+> **6/23 捲軸完成**：Sidebar(`a1a256bb`) + ErrorBoundary(`aef947ed`)，**✅ 已 push origin/main**（範圍 `87b6b73e..b6959ad9`，CI 綠燈）。
 > **C4 頁殼 main 全排除**（window 捲，見下方 ❌ 與 playbook §2「頁殼 main 是 window 捲」）。
 > **低風險井已見底**：trivial 只過 ErrorBoundary；`MemberNoteEditor:89`=textarea(排除)、C3 表格=雙軸(留雙軸批)。
-> **下次低風險首選**：`AIChatbotEditModal:626/927`（fixed inset-0 單軸 overlay，乾淨）。完整待做見下方「### 真正剩的有界內層容器清單」。
 
 ### 🆕 接續（2026-06-24）
 
