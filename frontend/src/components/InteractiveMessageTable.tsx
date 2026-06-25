@@ -4,6 +4,7 @@ import { ArrowRightIcon } from './common/icons/ArrowIcon';
 import ButtonEdit from '../imports/ButtonEdit';
 import IcInfo from '../imports/IcInfo';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import Scrollable from './common/Scrollable';
 import { MemberSourceIcon } from './common/icons/MemberSourceIcon';
 import type { MemberSourceType } from '../types/channel';
 
@@ -362,38 +363,42 @@ export default function InteractiveMessageTable({ messages, onEdit, onViewDetail
 
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-name="MessageTable">
-      {/* 圓角裁切層 - 讓水平捲軸收在圓角內、不凸出 */}
+      {/* 圓角裁切層 - 讓自繪捲軸 thumb 收在圓角內、不凸出 */}
       <div className="bg-white rounded-2xl w-full overflow-hidden">
-        {/* 外層容器 - 水平滾動 */}
-        <div className="w-full overflow-x-auto scrollbar-transparent">
-          {/* 內層容器 - 最小寬度確保欄位對齊 */}
-          <div className="min-w-[1060px]">
-            {/* 表頭 - 固定在滾動區域外 */}
-            <TableHeader
-              sortConfig={sortConfig}
-              onSortChange={handleSort}
-              statusFilter={statusFilter}
-              channelHeaderSlot={channelHeaderSlot}
-            />
-
-            {/* 垂直滾動容器 - 只有資料列滾動 */}
-            <div className="max-h-[600px] overflow-y-auto scrollbar-transparent">
-              {sortedMessages.length === 0 ? (
-                <EmptyStateRow />
-              ) : (
-                sortedMessages.map((message, index) => (
-                  <MessageRow
-                    key={message.id}
-                    message={message}
-                    isLast={index === sortedMessages.length - 1}
-                    onEdit={onEdit}
-                    onViewDetails={onViewDetails}
-                  />
-                ))
-              )}
+        {/* 雙軸 Scrollable：表頭進 header 槽（縱固定 + 橫跟捲）、資料列在 viewport 縱+橫捲。
+            no-native-scrollbar 隱原生捲軸 → 解幽靈橫捲軸 + 表頭/資料列對齊（不被縱捲軸吃 4px）。
+            channelHeaderSlot（平台欄 OA 名稱表頭）原封不動傳給 TableHeader，搬位置不影響功能。 */}
+        <Scrollable
+          orientation="both"
+          className="w-full"
+          viewportClassName="max-h-[600px]"
+          header={
+            <div className="min-w-[1060px]">
+              <TableHeader
+                sortConfig={sortConfig}
+                onSortChange={handleSort}
+                statusFilter={statusFilter}
+                channelHeaderSlot={channelHeaderSlot}
+              />
             </div>
+          }
+        >
+          <div className="min-w-[1060px]">
+            {sortedMessages.length === 0 ? (
+              <EmptyStateRow />
+            ) : (
+              sortedMessages.map((message, index) => (
+                <MessageRow
+                  key={message.id}
+                  message={message}
+                  isLast={index === sortedMessages.length - 1}
+                  onEdit={onEdit}
+                  onViewDetails={onViewDetails}
+                />
+              ))
+            )}
           </div>
-        </div>
+        </Scrollable>
       </div>
     </div>
   );
