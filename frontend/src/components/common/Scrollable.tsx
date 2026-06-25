@@ -52,6 +52,7 @@ const Scrollable = forwardRef<HTMLDivElement, ScrollableProps>(function Scrollab
   const viewportRef = useRef<HTMLDivElement>(null);
   const vThumbRef = useRef<HTMLDivElement>(null);
   const hThumbRef = useRef<HTMLDivElement>(null);
+  const headerInnerRef = useRef<HTMLDivElement>(null); // 橫向同步表頭的內層（隨 scrollLeft 反向位移）
   const [active, setActive] = useState(false); // hover 整個容器 或 拖曳中
 
   useImperativeHandle(ref, () => viewportRef.current as HTMLDivElement, []);
@@ -95,6 +96,13 @@ const Scrollable = forwardRef<HTMLDivElement, ScrollableProps>(function Scrollab
           thumb.style.transform = `translateX(${thumbLeft}px)`;
           thumb.style.width = `${thumbW}px`;
         }
+      }
+
+      // 橫向同步表頭：內層隨 viewport 的 scrollLeft 反向位移 → 表頭跟著 body 橫捲。
+      // headerInnerRef 只在「showH + 有 header」分支渲染，故此 ref 非 null 本身即 gate；
+      // 縱向 / 無 header 用法不渲染它 → 完全不進此路徑。
+      if (showH && headerInnerRef.current) {
+        headerInnerRef.current.style.transform = `translateX(${-scrollLeft}px)`;
       }
     };
 
@@ -211,9 +219,21 @@ const Scrollable = forwardRef<HTMLDivElement, ScrollableProps>(function Scrollab
       {header == null ? (
         // 無 header：維持原行為，thumb 以最外層 relative 為基準（涵蓋整個 viewport）
         scrollRegion
+      ) : showH ? (
+        <>
+          {/* 雙軸/橫向 + header：表頭縱向固定（在 viewport 外、不隨縱捲）+ 橫向跟著 body 捲。
+              外層 overflow-hidden 裁掉超出可視寬的部分，內層由 apply() 套 translateX(-scrollLeft) 同步。 */}
+          <div className="overflow-hidden">
+            <div ref={headerInnerRef} style={{ willChange: 'transform' }}>
+              {header}
+            </div>
+          </div>
+          {/* 內層 relative 只包住 viewport → thumb 範圍僅在表頭以下的捲動區 */}
+          <div className="relative">{scrollRegion}</div>
+        </>
       ) : (
         <>
-          {/* header 渲染在 viewport 之外 → 不被捲動、不抖動 */}
+          {/* 縱向 + header：表頭渲染在 viewport 之外 → 不被捲動、不抖動（原行為，逐字保留） */}
           {header}
           {/* 內層 relative 只包住 viewport → thumb 範圍僅在表頭以下的捲動區 */}
           <div className="relative">{scrollRegion}</div>

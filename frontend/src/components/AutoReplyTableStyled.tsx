@@ -4,6 +4,7 @@ import svgPaths from "../imports/svg-wbwsye31ry";
 import ButtonEdit from '../imports/ButtonEdit';
 import { MemberSourceIcon } from './common/icons/MemberSourceIcon';
 import type { MemberSourceType } from '../types/channel';
+import Scrollable from './common/Scrollable';
 
 // 關鍵字對象（包含重複標記）
 export interface KeywordObject {
@@ -437,30 +438,33 @@ export default function AutoReplyTableStyled({ data, onRowClick, onToggleStatus,
 
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-name="AutoReplyTable">
-      {/* 圓角裁切層 - 讓水平捲軸收在圓角內、不凸出 */}
+      {/* 圓角裁切層 - 讓自繪捲軸 thumb 收在圓角內、不凸出 */}
       <div className="bg-white rounded-2xl w-full overflow-hidden">
-        {/* 外層容器 - 水平滾動 */}
-        <div className="w-full overflow-x-auto scrollbar-transparent">
-          {/* 內層容器 - 最小寬度確保欄位對齊 */}
-          <div className="min-w-[1160px]">
-            {/* 表頭 - 固定在滾動區域外 */}
-            <TableHeader sortConfig={sortConfig} onSortChange={handleSort} />
-
-            {/* 垂直滾動容器 - 只有資料列滾動 */}
-            <div className="max-h-[600px] overflow-y-auto scrollbar-transparent">
-              {sortedData.map((row, index) => (
-                <AutoReplyRow
-                  key={row.id}
-                  row={row}
-                  isLast={index === sortedData.length - 1}
-                  onRowClick={handleRowClick}
-                  onToggleStatus={handleToggleStatus}
-                  onDuplicateKeywordClick={onDuplicateKeywordClick}
-                />
-              ))}
+        {/* 雙軸 Scrollable：表頭進 header 槽（縱固定 + 橫跟捲）、資料列在 viewport 縱+橫捲。
+            no-native-scrollbar 隱原生捲軸 → 解幽靈橫捲軸 + 表頭/資料列對齊（不被縱捲軸吃 4px）。 */}
+        <Scrollable
+          orientation="both"
+          className="w-full"
+          viewportClassName="max-h-[600px]"
+          header={
+            <div className="min-w-[1160px]">
+              <TableHeader sortConfig={sortConfig} onSortChange={handleSort} />
             </div>
+          }
+        >
+          <div className="min-w-[1160px]">
+            {sortedData.map((row, index) => (
+              <AutoReplyRow
+                key={row.id}
+                row={row}
+                isLast={index === sortedData.length - 1}
+                onRowClick={handleRowClick}
+                onToggleStatus={handleToggleStatus}
+                onDuplicateKeywordClick={onDuplicateKeywordClick}
+              />
+            ))}
           </div>
-        </div>
+        </Scrollable>
       </div>
     </div>
   );
