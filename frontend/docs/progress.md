@@ -242,10 +242,10 @@
 > **🔴 高風險三塊（攻下第一塊，剩兩塊）**：
 > - ~~**Carousel/FB editor**~~ ✅ **完成（2026-06-25，commit `1a0dd581`）** —— 卡關解了：tab strip 改 **`flex-wrap` 換行**繞開 `min-width:0` 撐爆雙軸臨界 + line 534 縱向換 `<Scrollable>`。`CarouselMessageEditor` crmpoc 步驟 2 驗收 OK（最右 tab 不被切、縱向捲動正常、沒破版）。`FacebookMessageEditor` 同改、**待粉專驗、信 diff**。
 > - **C2 聊天室**（最高風險：SSE 自動捲到底 + 無限往上捲，須保留 ref/onScroll）：`ChatMessageList:111`、`ChatRoomLayout:1298`、`ChatRoom:67/85`
-> - **雙軸表格**（🚧 進行中，2026-06-25）：地基 + C3 兩表已上 staging，剩會員表 + popover：
+> - **雙軸表格**（🚧 進行中，2026-06-25）：**三個表全完成上 staging**，剩步驟 5 popover + 刪 CustomScrollbar：
 >   - ✅ **步驟 1 地基**：`Scrollable` header 槽加**橫向同步**（gated `showH && header`，純加法、18 呼叫點零交集；commit `419b2f28`，已 push CI 綠）。
 >   - ✅ **步驟 2 canary `AutoReplyTableStyled`** + **步驟 3 `InteractiveMessageTable`** 換 `orientation="both"` + `header` 槽（commit `419b2f28`/`734a24b5`，crmpoc 驗收 OK：both 能用、表頭縱固定+橫跟捲、三老問題全解、空狀態正常；已 push CI 綠）。
->   - ⬜ **步驟 4 會員表 `MainContainer-6001-1415`**（1025/1041）：套同 pattern，**額外補 `overflow-hidden` 裁切層**（解橫捲軸掉圓角外）。
+>   - ✅ **步驟 4 會員表 `MainContainer-6001-1415`**（1025/1041）：套同 pattern + **補 `overflow-hidden` 圓角裁切層**（解老問題③橫捲軸掉圓角外）+ **移除 `overflow-x-hidden` 止血**（both 結構性解幽靈，不需止血）。commit `9784b328`，crmpoc 驗收 OK：both 能用、表頭縱固定+橫跟捲+篩選排序照常、三老問題全解、⭐幽靈真消失（不靠止血）、沒破版。
 >   - ⬜ **步驟 5 標籤 popover（`MainContainer:509`，縱向）遷 `<Scrollable vertical>` → 然後刪 `MemberTagEditModal` 的 `CustomScrollbar`**。⚠️ 修正：CustomScrollbar 真正使用點是這個 popover（非主表格，主表格用 `scrollbar-transparent`）；遷它才能刪 CustomScrollbar。
 >
 > **🟡 雜項待辦**：textarea「框塞自身」偏外×7（待 Chrome 量準再 restructure）· dead code 刪除（含死掉的 `flex-message/PreviewPanel`+`types.ts`）· `InsightsPanel:1246` tab strip（Carousel 同型、留）· Windows 跨系統檢查（4px 灰圓角）。
