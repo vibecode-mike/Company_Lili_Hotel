@@ -1,5 +1,6 @@
 import { useState, useRef, memo, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { Plus, Upload, Copy, Trash2 } from 'lucide-react';
+import Scrollable from './common/Scrollable';
 import { Checkbox } from './ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
@@ -531,7 +532,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
       : undefined;
 
   return (
-    <div className="w-full h-full bg-[#F8FAFC] overflow-y-auto scrollbar-transparent">
+    <Scrollable orientation="vertical" className="w-full h-full" viewportClassName="h-full bg-[#F8FAFC]">
       <div className="flex gap-[32px] items-start p-[40px] w-full">
         {/* Left: Preview Card */}
         <div className="shrink-0">
@@ -566,9 +567,9 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
           </div>
 
           {/* Carousel Tabs */}
-          <div className="relative h-[40px] w-full">
-            <div className="flex items-center gap-[8px] flex-nowrap overflow-x-auto scrollbar-transparent">
-              <div className="bg-neutral-100 rounded-xl p-[4px] flex items-center gap-[4px] flex-nowrap shrink-0">
+          <div className="w-full">
+            <div className="flex items-start gap-[8px] flex-wrap">
+              <div className="bg-neutral-100 rounded-xl p-[4px] flex items-center gap-[4px] flex-wrap">
                 {cards.map((card) => (
                   <button
                     key={card.id}
@@ -1413,7 +1414,7 @@ const CarouselMessageEditor = forwardRef<CarouselEditorHandle, CarouselMessageEd
           </div>
         </div>
       </div>
-    </div>
+    </Scrollable>
   );
 });
 

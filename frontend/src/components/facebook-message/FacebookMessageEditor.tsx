@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
+import Scrollable from "../common/Scrollable";
 import { FBConfigPanel } from "./FBConfigPanel";
 import { FBPreviewPanel } from "./FBPreviewPanel";
 import { FlexBubble, FlexMessage } from "./fb-types";
@@ -82,7 +83,6 @@ export function FacebookMessageEditor({ onJsonChange, initialJson }: FacebookMes
     return [createDefaultBubble()];
   });
   const [activeBubbleIndex, setActiveBubbleIndex] = useState(0);
-  const tabScrollRef = useRef<HTMLDivElement>(null);
 
   // Convert internal format to Flex Message format (same as LINE)
   const convertToFlexFormat = useCallback((): FlexMessage => {
@@ -200,16 +200,6 @@ export function FacebookMessageEditor({ onJsonChange, initialJson }: FacebookMes
 
     setBubbles([...bubbles, newBubble]);
     setActiveBubbleIndex(bubbles.length);
-
-    // Scroll to the newly added tab
-    setTimeout(() => {
-      if (tabScrollRef.current) {
-        tabScrollRef.current.scrollTo({
-          left: tabScrollRef.current.scrollWidth,
-          behavior: 'smooth'
-        });
-      }
-    }, 100);
   };
 
   const updateBubble = (index: number, bubble: FlexBubble) => {
@@ -329,7 +319,7 @@ export function FacebookMessageEditor({ onJsonChange, initialJson }: FacebookMes
   };
 
   return (
-    <div className="w-full h-full bg-[#F8FAFC] overflow-y-auto scrollbar-transparent">
+    <Scrollable orientation="vertical" className="w-full h-full" viewportClassName="h-full bg-[#F8FAFC]">
       <div className="flex gap-[32px] items-start p-[40px] w-full">
         {/* Left: Preview Card */}
         <div className="shrink-0">
@@ -368,9 +358,9 @@ export function FacebookMessageEditor({ onJsonChange, initialJson }: FacebookMes
           </div>
 
           {/* Carousel Tabs */}
-          <div className="relative h-[40px] w-full">
-            <div className="flex items-center gap-[8px] flex-nowrap overflow-x-auto scrollbar-transparent">
-              <div ref={tabScrollRef} className="bg-neutral-100 rounded-xl p-[4px] flex items-center gap-[4px] flex-nowrap shrink-0">
+          <div className="w-full">
+            <div className="flex items-start gap-[8px] flex-wrap">
+              <div className="bg-neutral-100 rounded-xl p-[4px] flex items-center gap-[4px] flex-wrap">
                 {bubbles.map((_, index) => (
                   <button
                     key={index}
@@ -416,6 +406,6 @@ export function FacebookMessageEditor({ onJsonChange, initialJson }: FacebookMes
           )}
         </div>
       </div>
-    </div>
+    </Scrollable>
   );
 }
