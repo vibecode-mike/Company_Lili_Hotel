@@ -1,116 +1,9 @@
-import { useState, useEffect, useMemo, useRef, useLayoutEffect, KeyboardEvent, RefObject } from 'react';
+import { useState, useEffect, useMemo, useRef, KeyboardEvent } from 'react';
 import svgPaths from '../imports/svg-pen3bccldb';
 import { useToast } from './ToastProvider';
 import { Tag } from './common';
 import { useChannel } from '../contexts/ChannelContext';
 import Scrollable from './common/Scrollable';
-
-/**
- * Custom scrollbar：以 absolute div 自繪 scrollbar，避免依賴瀏覽器/作業系統原生 scrollbar 的可見性。
- * thumb 位置走 ref + 直接寫 style + requestAnimationFrame，避免 React 每幀 reconciliation
- * 造成的 thumb 跟不上 native scroll，視覺上能 1:1 同步 60fps。
- * 純視覺呈現（track 為 pointer-events-none，thumb 接管 mouseDown 才能拖）。
- */
-export function CustomScrollbar({ scrollRef }: { scrollRef: RefObject<HTMLDivElement | null> }) {
-  const thumbRef = useRef<HTMLDivElement>(null);
-
-  useLayoutEffect(() => {
-    const el = scrollRef.current;
-    const thumb = thumbRef.current;
-    if (!el || !thumb) return;
-
-    let rafId = 0;
-
-    const apply = () => {
-      const { scrollTop, scrollHeight, clientHeight } = el;
-      if (clientHeight === 0) return;
-      const maxScroll = Math.max(0, scrollHeight - clientHeight);
-      // 內容未溢出（無可捲動空間）時隱藏 thumb；溢出時才顯示
-      if (maxScroll <= 0) {
-        thumb.style.display = 'none';
-        return;
-      }
-      thumb.style.display = '';
-      const trackH = clientHeight;
-      const thumbH = trackH / 3;
-      const thumbTop = (scrollTop / maxScroll) * (trackH - thumbH);
-      // 直接寫 DOM style 跳過 React reconciliation
-      thumb.style.transform = `translateY(${thumbTop}px)`;
-      thumb.style.height = `${thumbH}px`;
-    };
-
-    const schedule = () => {
-      if (rafId) return; // 同一幀內多次 scroll event 合併成一次寫
-      rafId = requestAnimationFrame(() => {
-        rafId = 0;
-        apply();
-      });
-    };
-
-    apply();
-    el.addEventListener('scroll', schedule, { passive: true });
-    const ro = new ResizeObserver(apply);
-    ro.observe(el);
-    const mo = new MutationObserver(apply);
-    mo.observe(el, { childList: true, subtree: true, characterData: true });
-
-    return () => {
-      el.removeEventListener('scroll', schedule);
-      ro.disconnect();
-      mo.disconnect();
-      if (rafId) cancelAnimationFrame(rafId);
-    };
-  }, [scrollRef]);
-
-  // Drag thumb：mouseDown 起算 delta，mouseMove 即時改 scrollTop，scroll 事件再驅動 thumb 視覺更新
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const el = scrollRef.current;
-    if (!el) return;
-    const startY = e.clientY;
-    const startScrollTop = el.scrollTop;
-    const trackH = el.clientHeight;
-    const thumbH = trackH / 3;
-    const maxScroll = el.scrollHeight - el.clientHeight;
-    if (maxScroll <= 0) return; // 無 overflow 不可拖
-    const ratio = maxScroll / (trackH - thumbH);
-
-    const onMove = (ev: MouseEvent) => {
-      const delta = ev.clientY - startY;
-      el.scrollTop = startScrollTop + delta * ratio;
-    };
-    const onUp = () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-      document.body.style.userSelect = '';
-    };
-    document.body.style.userSelect = 'none';
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-  };
-
-  return (
-    // track 不接管事件（避免擋到底層 chip 點擊），thumb 自己 pointer-events-auto 才能拖
-    <div
-      className="absolute top-0 right-0 bottom-0"
-      style={{ width: '4px', zIndex: 10, pointerEvents: 'none' }}
-    >
-      <div
-        ref={thumbRef}
-        className="absolute right-0 top-0 rounded-xs cursor-grab active:cursor-grabbing"
-        style={{
-          height: '100%',
-          width: '4px',
-          background: '#dddddd',
-          pointerEvents: 'auto',
-          willChange: 'transform',
-        }}
-        onMouseDown={handleMouseDown}
-      />
-    </div>
-  );
-}
 
 interface MemberTagEditModalProps {
   isOpen: boolean;
@@ -209,7 +102,7 @@ export default function MemberTagEditModal({
   }, [searchInput, allMemberTags, selectedMemberTags]);
 
   // 共用 scroll 容器 ref（Selected + Pool + CTA 合併成單一可滾動區，由 Scrollable 自繪 thumb；
-  // 也供 onWheel 在游標於 scroll 區外時手動轉發 deltaY。CustomScrollbar 元件仍 export 給會員表格用）
+  // 也供 onWheel 在游標於 scroll 區外時手動轉發 deltaY）
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // 背景 scroll lock：modal 開啟時禁用 body 滾動

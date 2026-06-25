@@ -9,7 +9,6 @@ import TooltipComponent from "./Tooltip";
 import { PageHeaderWithBreadcrumb } from "../components/common/Breadcrumb";
 import { TextIconButton, ArrowRightIcon, Tag } from "../components/common";
 import { MemberSourceIconLarge, ChannelIcon as CommonChannelIcon } from "../components/common/icons";
-import { CustomScrollbar } from "../components/MemberTagEditModal";
 import Scrollable from "../components/common/Scrollable";
 import { useMembers } from "../contexts/MembersContext";
 import { useChannel } from "../contexts/ChannelContext";
@@ -461,12 +460,14 @@ export function TagFilterDropdown({
           {/* 分隔線 */}
           <div className="h-px bg-[#eef0f3]" />
 
-          {/* 3. 標籤列表：scroll wrapper + CustomScrollbar + 底部漸層 mask 全部復用「編輯會員標籤」modal 同款 */}
+          {/* 3. 標籤列表：Scrollable(vertical) + 底部漸層 mask 全部復用「編輯會員標籤」modal 同款 */}
           <div className="relative w-full">
-            <div
+            <Scrollable
               ref={scrollRef}
-              className="w-full overflow-y-auto pr-[8px] no-native-scrollbar"
-              style={{
+              orientation="vertical"
+              className="w-full"
+              viewportClassName="w-full pr-[8px]"
+              viewportStyle={{
                 // 上限 280px；同時確保 popover 底部與瀏覽器底部至少保留 60px：
                 // popover 從 dropdownPos.top 起算，list 上方還有 search bar / 已選 chip / 分隔線 / paddings / gaps（約 120px）
                 maxHeight: `min(280px, calc(100vh - ${dropdownPos.top}px - 120px - 60px))`,
@@ -506,8 +507,7 @@ export function TagFilterDropdown({
                   })
                 )}
               </ul>
-            </div>
-            <CustomScrollbar scrollRef={scrollRef} />
+            </Scrollable>
             {/* 底部漸層 mask：跟 MemberTagEditModal 完全相同的 48px ease-in 多 stop 漸層 */}
             <div
               className="pointer-events-none absolute bottom-0 left-0 right-0"
