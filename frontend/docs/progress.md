@@ -174,6 +174,7 @@
   - ⬜ **「卡片貼滿框（pad→4）」評估**（2026-06-22 從圓角批 A 移交）：A 做共用卡片圓角時，曾有舊定案「編輯器預覽框 `p-[24px]`→4 / 詳情抽屜 `p-[12px]`→4」，原假設「卡片貼框需同心」。實讀結構發現三處卡片**置中浮著、無同心約束**，前提不成立 → 砍 padding 純屬「要不要讓卡片貼滿框」的間距/視覺決策，移到此批評估。位置：`CarouselMessageEditor.tsx:538`（預覽框 `p-[24px]`）、`MessageDetailDrawer.tsx:121`（抽屜 `p-[12px]`）。**目前維持原樣**。
 - [ ] **E. 表格 UI 統一**：AI Chatbot 頁表格的灰色外框 + 表頭 hover 變色，是切廚房後恢復的樣式；連同其他頁表格一起在這批統一處理（目前刻意先不碰）。
   - ⬜ 待修小 bug（2026-06-19 做 B2a 時順手發現，與圓角無關）：`/messages`「已排程(0)」分頁的**空狀態（「尚無此資料」）外圍有奇怪的灰框、框線不對**。屬表格 UI 問題，留待本批一起修，**先不動**。
+  - ⬜ **表頭文字「平台」待改（2026-06-25 雙軸批時記下，與捲軸無關、另一件事）**：活動訊息推播表（`InteractiveMessageTable`）平台欄表頭目前透過 `channelHeaderSlot` 顯示 **OA 名稱**，應改回欄位標題「**平台**」。⚠️ 改前先評估：① `channelHeaderSlot` 的**來源**（誰傳、傳什麼）② 改了的**副作用** ③ **別誤傷別頁**（OA 名稱表頭那件事是別頁 `MessageList`、已結束，勿混淆）。**目前先不動**。
 - [ ] **F. 寫 `docs/design.md`**：把最終定案的 design system（字體 / 字級 / 行高 / 圓角 / 間距 / 顏色 token）整理成單一說明文件。
 - [ ] **G. 更新 `CLAUDE.md`**：現有專案說明＋記憶 `project_frontend_precompiled_tailwind`（「build 不跑 Tailwind / 用靜態 index.css」）**已過時** —— 切廚房後是 live Tailwind。需更新成新事實，避免日後誤導。
 
@@ -241,7 +242,11 @@
 > **🔴 高風險三塊（攻下第一塊，剩兩塊）**：
 > - ~~**Carousel/FB editor**~~ ✅ **完成（2026-06-25，commit `1a0dd581`）** —— 卡關解了：tab strip 改 **`flex-wrap` 換行**繞開 `min-width:0` 撐爆雙軸臨界 + line 534 縱向換 `<Scrollable>`。`CarouselMessageEditor` crmpoc 步驟 2 驗收 OK（最右 tab 不被切、縱向捲動正常、沒破版）。`FacebookMessageEditor` 同改、**待粉專驗、信 diff**。
 > - **C2 聊天室**（最高風險：SSE 自動捲到底 + 無限往上捲，須保留 ref/onScroll）：`ChatMessageList:111`、`ChatRoomLayout:1298`、`ChatRoom:67/85`
-> - **雙軸表格**（會員表 `MainContainer-6001-1415` + C3 `AutoReplyTableStyled`/`InteractiveMessageTable`；需 `orientation="both"`+`header` 槽；**連帶刪 `CustomScrollbar`**——MemberTagEditModal 已不用它、僅會員表格還在用）
+> - **雙軸表格**（🚧 進行中，2026-06-25）：地基 + C3 兩表已上 staging，剩會員表 + popover：
+>   - ✅ **步驟 1 地基**：`Scrollable` header 槽加**橫向同步**（gated `showH && header`，純加法、18 呼叫點零交集；commit `419b2f28`，已 push CI 綠）。
+>   - ✅ **步驟 2 canary `AutoReplyTableStyled`** + **步驟 3 `InteractiveMessageTable`** 換 `orientation="both"` + `header` 槽（commit `419b2f28`/`734a24b5`，crmpoc 驗收 OK：both 能用、表頭縱固定+橫跟捲、三老問題全解、空狀態正常；已 push CI 綠）。
+>   - ⬜ **步驟 4 會員表 `MainContainer-6001-1415`**（1025/1041）：套同 pattern，**額外補 `overflow-hidden` 裁切層**（解橫捲軸掉圓角外）。
+>   - ⬜ **步驟 5 標籤 popover（`MainContainer:509`，縱向）遷 `<Scrollable vertical>` → 然後刪 `MemberTagEditModal` 的 `CustomScrollbar`**。⚠️ 修正：CustomScrollbar 真正使用點是這個 popover（非主表格，主表格用 `scrollbar-transparent`）；遷它才能刪 CustomScrollbar。
 >
 > **🟡 雜項待辦**：textarea「框塞自身」偏外×7（待 Chrome 量準再 restructure）· dead code 刪除（含死掉的 `flex-message/PreviewPanel`+`types.ts`）· `InsightsPanel:1246` tab strip（Carousel 同型、留）· Windows 跨系統檢查（4px 灰圓角）。
 
