@@ -151,6 +151,7 @@ const TableHeader = memo(function TableHeader({
           {/* 平台：訊息推播頁傳入 channelHeaderSlot 取代為 LINE OA 切換器；其他情境保留原欄位 */}
           {channelHeaderSlot ? (
             <div className={`${CELL_BASE} ${COL_PLATFORM} gap-[4px]`}>
+              <span className={`${CELL_TEXT} whitespace-nowrap`}>平台</span>
               {channelHeaderSlot}
             </div>
           ) : (

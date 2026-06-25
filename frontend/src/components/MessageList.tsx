@@ -1,7 +1,6 @@
 import { useState, useMemo, memo, useCallback, useEffect, type ReactNode } from "react";
 import svgPaths from "../imports/svg-icons-common";
 import { useChannel } from "../contexts/ChannelContext";
-import { ChannelIcon as CommonChannelIcon } from "./common/icons";
 import { BlankStateCard, BlankStateContainer } from "./common/BlankStateCard";
 import {
   imgGroup,
@@ -15,7 +14,10 @@ import {
 import InteractiveMessageTable, {
   type Message,
 } from "./InteractiveMessageTable";
-import MemberMainContainer from "../imports/MemberListContainer";
+import MemberMainContainer, {
+  PlatformFilterDropdown,
+  type BoundChannel,
+} from "../imports/MainContainer-6001-1415";
 import AddMemberContainer from "../imports/MemberDetailContainer";
 import ChatRoom from "./ChatRoom";
 import Sidebar from "./Sidebar";
@@ -601,6 +603,8 @@ export default function MessageList({
   >("list");
   const [selectedMember, setSelectedMember] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState("已發送");
+  // 平台篩選：'all' = 所有平台（抓全部 OA）；其餘為某 OA 的 channel_id（比照會員管理平台欄）
+  const [platformFilter, setPlatformFilter] = useState("all");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(
     null,
@@ -625,13 +629,14 @@ export default function MessageList({
     loading: channelsLoading,
   } = useChannel();
   const selectedChannelId = selectedChannel?.channel_id ?? "";
-  const selectedChannelName = selectedChannel?.channel_name ?? "";
 
   useEffect(() => {
     if (currentPage !== "messages") return;
     if (channelsLoading) return;
     // 還沒解析出 selectedChannelId 時，先不拉（避免拉到全部後再被切換到某 channel 又拉一次）
     if (lineChannels.length > 0 && !selectedChannelId) return;
+    // 一律只看「當前組織」的 OA——絕不傳 undefined（那會跨組織抓全部 OA 的訊息）。
+    // 比照會員管理：平台篩選只在當前 OA 範圍內，組織切換走 sidebar 切換器。
     fetchMessages(selectedChannelId || undefined);
     fetchQuota(selectedChannelId || undefined);
   }, [currentPage, channelsLoading, lineChannels.length, selectedChannelId, fetchMessages, fetchQuota]);
@@ -701,6 +706,14 @@ export default function MessageList({
 
     return messages;
   }, [transformedMessages, searchValue, statusFilter]);
+
+  // 平台篩選器選項：只放「當前組織」的 LINE OA（比照會員管理——絕不跨組織）。
+  // 組織切換由 sidebar 切換器負責；這裡單純呈現當前 OA。
+  const boundChannels = useMemo<BoundChannel[]>(() => {
+    if (!selectedChannelId || selectedChannelId.startsWith("tenant:")) return [];
+    const name = selectedChannel?.channel_name || "LINE 官方帳號";
+    return [{ key: selectedChannelId, channel: "LINE", channelName: name, label: name }];
+  }, [selectedChannelId, selectedChannel?.channel_name]);
 
   const handleClearAll = () => {
     setSearchValue("");
@@ -795,13 +808,12 @@ export default function MessageList({
               noChannelsConfigured={!channelsLoading && lineChannels.length === 0}
               onNavigateToSettings={onNavigateToSettings}
               channelHeaderSlot={
-                lineChannels.length > 0 ? (
-                  <div className="inline-flex items-center gap-[4px]">
-                    <CommonChannelIcon channel="LINE" size={20} />
-                    <span className="text-[#383838] text-[14px] leading-[1.5] truncate max-w-[140px]">
-                      {selectedChannelName || "LINE 官方帳號"}
-                    </span>
-                  </div>
+                boundChannels.length > 0 ? (
+                  <PlatformFilterDropdown
+                    selected={platformFilter}
+                    onChange={setPlatformFilter}
+                    boundChannels={boundChannels}
+                  />
                 ) : undefined
               }
             />
