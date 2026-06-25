@@ -76,8 +76,12 @@
   - 教訓：結構搬移會改變「值該掛在哪」，搬完要更新自己對「改哪層」的認知。
 - **純 CSS hover 捲軸 → Chrome 不可靠**
   - 想用純 CSS（hover 才顯示 scrollbar）在 Chrome 上行為不穩。需要別的方案（待補：實際採用法）。
-- **雙軸表格幽靈捲軸**
-  - 同時可橫向 + 縱向捲動的表格會冒出「幽靈捲軸」。（待補：成因與解法細節）
+- **⭐ 雙軸表格：`orientation="both"`+`header` 槽 結構性解三老問題（2026-06-25 全攻下）**
+  - 結構：外層橫捲 + `min-w-[N]` 撐架 + 表頭（縱捲區外）+ 內層 `max-h-[600px]` 縱捲。三表同型（會員表 `MainContainer`、`AutoReplyTableStyled`、`InteractiveMessageTable`）。
+  - **三老問題成因**：① **幽靈橫捲軸**＝內層 `overflow-y:auto` 把 `overflow-x` 自動升級成 auto，縱捲軸吃 ~4px + 欄位 min-w 合計略溢出 → 多冒一條橫捲軸。② **表頭差 4px**＝表頭在縱捲區外滿寬、資料列在縱捲區內被原生縱捲軸吃 4px。③ **橫捲軸掉圓角外**＝外層 `rounded` 缺 `overflow-hidden`，原生橫捲軸畫過下圓角。
+  - **`both` 一次全解（結構性）**：viewport 用 `no-native-scrollbar` **隱原生捲軸（吃 0 寬）** + JS thumb（absolute overlay、0 版位）→ ①沒原生捲軸可升級＝無幽靈 ②表頭/資料列同寬對齊 ③thumb 是圓角容器內 overlay＝天生收圓角內。縱 thumb 釘**可視右緣**（非內容最右）。表頭進 `header` 槽（縱固定）+ **Scrollable 橫向同步**（本批為 header 槽新加：`apply()` 套 `translateX(-scrollLeft)`，gated `showH && header`）→ 橫跟捲不錯位。
+  - **「結構性 > 止血」實證**：會員表原用 `overflow-x-hidden` **止血**幽靈，換 both 後**拿掉止血、幽靈也沒回來** → 確認是結構性解、不再依賴止血。
+  - **首次實戰流程（both 早已實作但零現有用法＝首戰）**：先擴地基（header 橫向同步，純加法、18 呼叫點零交集、build+靜態抽查零回歸）→ **canary 單表先驗 pattern 成立**（眼見為憑：縱橫 thumb / 表頭縱固定+橫跟捲 / 三老問題）→ 確認後才批量套另兩表。教訓：**未實戰的元件能力，先 canary 驗一個再批量**，別一次全改。
 - **textarea 捲軸：能 CSS 美化但「框塞自身」會讓捲軸偏外**
   - 認知修正（2026-06-24）：textarea **不能**套 JS 自繪 Scrollable（replaced element、包不到內捲＝紅線），
     但**能**用 CSS `::-webkit-scrollbar`（如全站 `.scrollbar-transparent`）染成 4px 細灰，消滅粗原生捲軸。
@@ -104,6 +108,11 @@
   - 事故（2026-06-24）：有外部自動程序在跑 `git add -A && git commit`（甚至 push），把我**未 commit 的工作**（MemberTagEditModal+progress）**掃進它的 commit**（`75a8b94e`，訊息掛 timezone），且**branch 跟 origin 分歧**（雙方各自在同一 base 上長新 commit）。
   - 後果：**程式碼不丟**（已被 commit、grep 驗 Scrollable 都在），但**commit 訊息掛錯主題**、**push 被 non-fast-forward 擋**、**我的 commit 跟同事的交錯無法乾淨拆**。
   - 教訓：① **commit 前先 `git status` / `git diff --cached --name-only` 看索引被誰 stage 了**（我曾以為只 stage 2 個檔，實際索引早被掃進一堆別人的後端檔）。② 共用機器/帳號上工先確認**有沒有自動 commit 程序在跑**。③ 被掃走時別慌——程式碼在 commit 裡沒丟，先 `git cat-file -e`/`git grep token HEAD` 逐一驗在不在。④ **push 前一定 `git fetch` 看分歧**（`git rev-list --left-right --count origin/main...HEAD`）。⑤ 動 git 修歷史前，先確認自動程序**停了**，否則邊修邊被攪。⑥ 真出狀況時「接受現狀（程式碼沒事）」往往比「硬拆歷史」省事且安全。
+- **⭐ push 被同事插隊（non-fast-forward）→ worktree 隔離 cherry-pick；工作區乾淨後可連續乾淨 FF**
+  - 事故（2026-06-25，Carousel）：`git fetch` 看是乾淨 FF，但 `push origin HEAD:main` 之間**同事插了一個 commit** → 被 non-fast-forward 擋。**不 force**。
+  - 解法＝**worktree 隔離 cherry-pick**：`git worktree add --detach <tmp> origin/main` → `git -C <tmp> cherry-pick <我的commit>`（兩 commit 零檔案重疊＝乾淨）→ `git -C <tmp> push origin HEAD:main`（變 FF）→ `git worktree remove`。**全程不碰主工作區的髒檔**（serena noise / 別人 WIP）。注意 cherry-pick **換新 SHA**（parent 變了），內容不變要跟使用者講清楚。
+  - 對比：工作區清乾淨（`reset --hard origin/main` 對齊；過時 WIP 全是已被 origin 涵蓋的 0-diff，刪前用 `git diff origin/main -- <檔>` 逐一驗 0 行差異；未追蹤雜物在 frontend/ 外、不碰）後，後續每次推都先 `git fetch` 查 `rev-list --left-right` + `HEAD~N==origin/main`，**乾淨 FF 就直接 `push origin HEAD:main`**（本批雙軸 5 個 commit + 數個 docs 全乾淨 FF、沒再撞插隊）。
+  - 教訓：① push 前 fetch 查地形，**但仍可能在 fetch→push 空檔被插隊**，被擋是常態、退 worktree cherry-pick 即可。② 髒工作區照樣能乾淨推——push 只送 commit、不送工作區；worktree 更是徹底隔離。③ **只 stage 自己的檔**（`git add <具體檔>`，不用 `git add -A`），commit 後 `git show --stat` 驗只含自己的。
 - **⭐ 橫向 Scrollable 首戰：先驗 render（死碼）+ 先驗「真會捲」（真溢出）**
   - 原訂橫向首戰 `flex-message/PreviewPanel:64` → 查證是**死碼**（零 importer、無 barrel、無 build chunk；渲染者 `FlexMessageEditorNew` 已刪 → 孤兒）→ 改用 `InsightsPanel:1272`（heatmap）。教訓重申：**列容器清單前先驗 render**，§2c 清單會因死碼清除而過時。
   - 「有 `overflow-x` class」≠「真的會橫捲」：要驗**內容真的會溢出**（如 heatmap `min-w-[720px]` → 窄視窗才溢出）。使用者**縮窄視窗截圖**確認 tab strip + heatmap 都真橫捲，才確定不是 inert 死樣式。
@@ -112,8 +121,13 @@
   - FilterModal（≈90 行手刻：state/effect/拖曳/寫死偏移）、MemberTagEditModal（本地 `CustomScrollbar` 元件）都**全量刪掉自繪 → 換 `<Scrollable vertical>`**，大清理（FilterModal −113/+6）。
   - §2b 原疑慮「macOS modal 內捲軸看不見」**不成立**：那些自繪本就為「不依賴原生捲軸可見性」而生，**Scrollable 用一模一樣技術**（`no-native-scrollbar`+JS thumb）→ FilterModal 換上後 modal 內 hover 才現正常 = 已證。
   - 保留要點：①有 wheel handler/onScroll 的，靠 **Scrollable forwardRef 暴露 viewport**（`<Scrollable ref={scrollRef}>` → `scrollRef.current`=viewport）接回，原 handler 不動。②`pr-2`/`pr-[8px]` 讓位改**常駐**保留（thumb 不蓋內容）。③行為改變：常駐 thumb → hover 才現（全站統一、可接受）。
-- **共用元件刪除前先查 import（import≠唯一使用者）**
-  - `CustomScrollbar`（定義在 MemberTagEditModal、`export`）→ 遷移 MemberTagEditModal 時**不能順手刪**，因 `imports/MainContainer-6001-1415`（會員表格）也 import 用。**待雙軸表格批遷移會員表格時一起刪**。教訓：刪 export 的東西前 `grep -rn` 全 repo 找 importer。
+- **⭐ 刪共用元件：grep 三層確認（遷前找使用點 / 遷後驗零殘留 / 清孤兒 import）**
+  - `CustomScrollbar`（定義在 MemberTagEditModal、`export`）已於 2026-06-25 **刪除**（−109 行），手刻自繪捲軸全退場。流程：
+    1. **遷前 grep 找全部使用點**：`grep -rn CustomScrollbar src` → 唯一使用點是會員表的**標籤篩選 popover**（`MainContainer:510`）。⚠️ **修正一個記憶錯誤**：progress 曾記「會員表（主表格）用 CustomScrollbar」是錯的——主表格用 `scrollbar-transparent`（原生），CustomScrollbar 只服務那個 popover。**刪前一定 grep 重驗，別信舊記憶/舊註解**。
+    2. **遷使用點**：popover 換 `<Scrollable vertical>`（maxHeight 動態 inline → 走 `viewportStyle` prop；漸層 mask / scrollRef 保留）。
+    3. **遷後 grep 驗零殘留**：`grep -rn CustomScrollbar src` → 空。
+    4. **清孤兒 import**：刪函式後它獨用的 import（`RefObject` / `useLayoutEffect`）變孤兒 → 一起從 import 移除（grep 確認檔內他處沒用）+ 修過時註解。
+  - 一句話：刪 export 元件 = 遷前 grep 找使用者、遷後 grep 驗零殘留、清孤兒 import，三層都要做。
 
 ---
 
@@ -143,7 +157,7 @@
 ## 待補 / TODO（之後每批回來填）
 
 - [ ] 純 CSS hover 捲軸在 Chrome 的具體不可靠表現 + 最終採用方案
-- [ ] 雙軸表格幽靈捲軸的成因與解法
+- [x] 雙軸表格幽靈捲軸的成因與解法（已填入第 2 節「雙軸表格：both+header 結構性解三老問題」，2026-06-25）
 - [ ] 捲軸批：開工後補經驗
 - [ ] 間距批：開工後補經驗
 - [ ] 顏色批：開工後補經驗

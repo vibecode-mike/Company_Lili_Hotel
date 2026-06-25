@@ -219,36 +219,27 @@
 - [x] **C1 Sidebar：側欄導覽 nav**（填高型 outer `flex-1 min-h-0` + viewport `h-full`；aside 是 `h-screen` 有界→真內捲）：commit `a1a256bb`（✅ 已 push origin/main，CI 綠）
 - [x] **ErrorBoundary：錯誤堆疊框**（max-h-280 有界縱捲；max-h 放 viewport，rounded+bg+overflow-hidden 放 outer）：commit `aef947ed`（✅ 已 push origin/main，CI 綠）
 
-### 🚩🚩 收工狀態（2026-06-24）—— 下次上工先看這裡
+### 🚩🚩 收工狀態（2026-06-25）—— 下次上工先看這裡
 
-> **✅ 低風險批全完結（7 項）+ textarea 統一全收 + 橫向 Scrollable 確立。今天 7 個捲軸 commit、程式碼全安全在本地。**
+> **✅ 今天大豐收：高風險第一塊（Carousel/FB）+ 第二塊（雙軸表格批）全攻下並上 staging。所有 commit 已乾淨 push origin/main、CI 全綠、prod 沒碰。工作區乾淨（只剩 serena 工具 noise，無我的未 push 內容）。**
 >
-> **今天完成（commit）**：
-> 1. `9d0317bf` AIChatbotEditModal 兩彈窗外層 Scrollable（+ Scrollable 加 `onClick` passthrough）
-> 2. `8630aed1` 全站 textarea×8 補 `scrollbar-transparent`（消滅粗原生）
-> 3. `4bde7349` InsightsPanel heatmap 橫向 Scrollable（**橫向 orientation 首戰、pattern 確立**）
-> 4. `9b094da6` 3 頁純橫向 table×5（PMS/AIChatbot/設施）換 horizontal
-> 5. `e46d3e69` 聊天室手動回覆框捲軸從隱形修成可見細灰
-> 6. `015e018f` FilterModal 手刻自繪→Scrollable（§2b 結案，−113/+6）
-> 7. **`75a8b94e`（⚠️ 混在 timezone commit 裡）** MemberTagEditModal 自繪→Scrollable（§2b 結案）
+> **今天完成（已 push origin/main，CI 全綠、staging 部署成功）**：
+> 1. `65e372bd` **Carousel/FB**：tab strip 改 `flex-wrap` 解卡關（繞開 `min-width:0` 撐爆雙軸臨界）+ 縱向換 Scrollable（高風險第一塊；FB 同改待粉專）
+> 2. `419b2f28` **雙軸步驟1 地基**：Scrollable header 槽加橫向同步（gated `showH && header`、純加法、18 呼叫點零交集）+ **步驟2 canary** `AutoReplyTableStyled` 雙軸 both
+> 3. `734a24b5` **雙軸步驟3** `InteractiveMessageTable` 雙軸 both（同 pattern）
+> 4. `9784b328` **雙軸步驟4** 會員表 `MainContainer` 雙軸 both（+補 `overflow-hidden` 圓角裁切 +移除 `overflow-x-hidden` 止血）
+> 5. `ee61efa9` **雙軸步驟5** 標籤 popover 遷 Scrollable + **刪 `CustomScrollbar`**（手刻自繪元件全退場，−116/+9）
+> + 數個 `docs(progress)` commit（進度落檔）。
 >
-> **⚠️⚠️ 明天上工「第一件事」＝確認 push**（push 交給同事一併處理，已協調）：
-> 1. `git fetch` →看 **origin 有沒有我的 6 捲軸 commit + MemberTagEditModal（`75a8b94e`）**。
-> 2. **未 push 成功** → 先 push 好（或再跟同事確認）再繼續上工。
-> 3. **push 成功** → 直接開高風險三塊。
+> **🔴 高風險三塊（攻下兩塊，剩聊天室一塊）**：
+> - ✅ **第一塊 Carousel/FB editor**（`65e372bd`）：flex-wrap 繞開雙軸臨界 + 縱向 Scrollable；crmpoc 步驟2 驗收 OK。**FB 同改、待粉專驗、信 diff。**
+> - ✅ **第二塊 雙軸表格批 實質完成**（步驟1-5 全上 staging）：地基 + canary + 3 表（AutoReply/Interactive/會員表）+ popover 遷移 + 刪 CustomScrollbar。**三老問題（幽靈橫捲軸/表頭4px/橫捲軸圓角）三表全結構性解**，crmpoc 全驗收 OK。
+> - 🔴 **第三塊（最後）C2 聊天室**（最高風險：SSE 自動捲到底 + 無限往上捲，須保留 ref/onScroll）：`ChatMessageList:111`、`ChatRoomLayout:1298`、`ChatRoom:67/85`。Scrollable 已預留 **`forwardRef`（暴露 viewport DOM 供 scrollTop/scrollIntoView）+ `onScroll` 槽**，足以接管現有捲動控制。**精神好時做、不催。**
 >
-> **⚠️ git 狀況存證（6/24）**：有外部自動程序跑 `git add -A && commit`，把我的 MemberTagEditModal+progress **掃進 timezone commit `75a8b94e`**（程式碼正確、已驗收，只是訊息掛 tz）。本地 vs origin **分歧**（origin 領先 2：`9510aff3 feat基本設定`+`4c93ccb5 fix時段洞察`；我領先 10＝6 捲軸+4 tz 交錯）。**選 A：接受現狀、不整理歷史**。push 被 non-fast-forward 擋著，需先整合 origin → 同事會一併 push。
->
-> **🔴 高風險三塊（攻下第一塊，剩兩塊）**：
-> - ~~**Carousel/FB editor**~~ ✅ **完成（2026-06-25，commit `1a0dd581`）** —— 卡關解了：tab strip 改 **`flex-wrap` 換行**繞開 `min-width:0` 撐爆雙軸臨界 + line 534 縱向換 `<Scrollable>`。`CarouselMessageEditor` crmpoc 步驟 2 驗收 OK（最右 tab 不被切、縱向捲動正常、沒破版）。`FacebookMessageEditor` 同改、**待粉專驗、信 diff**。
-> - **C2 聊天室**（最高風險：SSE 自動捲到底 + 無限往上捲，須保留 ref/onScroll）：`ChatMessageList:111`、`ChatRoomLayout:1298`、`ChatRoom:67/85`
-> - **雙軸表格**（🚧 進行中，2026-06-25）：**三個表全完成上 staging**，剩步驟 5 popover + 刪 CustomScrollbar：
->   - ✅ **步驟 1 地基**：`Scrollable` header 槽加**橫向同步**（gated `showH && header`，純加法、18 呼叫點零交集；commit `419b2f28`，已 push CI 綠）。
->   - ✅ **步驟 2 canary `AutoReplyTableStyled`** + **步驟 3 `InteractiveMessageTable`** 換 `orientation="both"` + `header` 槽（commit `419b2f28`/`734a24b5`，crmpoc 驗收 OK：both 能用、表頭縱固定+橫跟捲、三老問題全解、空狀態正常；已 push CI 綠）。
->   - ✅ **步驟 4 會員表 `MainContainer-6001-1415`**（1025/1041）：套同 pattern + **補 `overflow-hidden` 圓角裁切層**（解老問題③橫捲軸掉圓角外）+ **移除 `overflow-x-hidden` 止血**（both 結構性解幽靈，不需止血）。commit `9784b328`，crmpoc 驗收 OK：both 能用、表頭縱固定+橫跟捲+篩選排序照常、三老問題全解、⭐幽靈真消失（不靠止血）、沒破版。
->   - ⬜ **步驟 5 標籤 popover（`MainContainer:509`，縱向）遷 `<Scrollable vertical>` → 然後刪 `MemberTagEditModal` 的 `CustomScrollbar`**。⚠️ 修正：CustomScrollbar 真正使用點是這個 popover（非主表格，主表格用 `scrollbar-transparent`）；遷它才能刪 CustomScrollbar。
->
-> **🟡 雜項待辦**：textarea「框塞自身」偏外×7（待 Chrome 量準再 restructure）· dead code 刪除（含死掉的 `flex-message/PreviewPanel`+`types.ts`）· `InsightsPanel:1246` tab strip（Carousel 同型、留）· Windows 跨系統檢查（4px 灰圓角）。
+> **⬜ 明天「下次接這裡」（按建議順序）**：
+> 1. 🔴 **C2 聊天室**（高風險最後一塊，見上；單獨一 session、git 環境穩定再開）。
+> 2. ⬜ **步驟 6 Windows 跨系統檢查**：用 Windows 開 crmpoc 確認 Scrollable thumb 是 4px 灰圓角、沒變回 Windows 預設醜捲軸（選方案 C 而非純 CSS A 的核心理由，需實機驗；**可後補、不卡主線**）。
+> 3. 📝 **雜項**：① 表頭「平台」文字改（`InteractiveMessageTable` 平台欄 `channelHeaderSlot` 顯示 OA 名稱→應改回「平台」，評估來源+副作用+別誤傷別頁，詳見 §E 上方 TODO）② textarea「框塞自身」偏外×7（待 Chrome 量準 restructure）③ dead code 刪除（`flex-message/PreviewPanel`+`types.ts` 等）④ FB 待粉專（Carousel/FB 5 處圓角 + FB editor 雙軸驗收）⑤ `InsightsPanel:1246` tab strip（Carousel 同型、留）。
 
 ---
 
