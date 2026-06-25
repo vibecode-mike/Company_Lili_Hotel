@@ -10,6 +10,7 @@ import { PageHeaderWithBreadcrumb } from "../components/common/Breadcrumb";
 import { TextIconButton, ArrowRightIcon, Tag } from "../components/common";
 import { MemberSourceIconLarge, ChannelIcon as CommonChannelIcon } from "../components/common/icons";
 import { CustomScrollbar } from "../components/MemberTagEditModal";
+import Scrollable from "../components/common/Scrollable";
 import { useMembers } from "../contexts/MembersContext";
 import { useChannel } from "../contexts/ChannelContext";
 import { formatMemberDateTime, getLatestMemberChatTimestamp, formatUnansweredTime } from "../utils/memberTime";
@@ -1021,24 +1022,30 @@ function Table8Columns3Actions({
 }) {
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-name="Table/8 Columns+3 Actions">
-      {/* 外層容器 - 水平滾動 */}
-      <div className="bg-white rounded-[16px] w-full overflow-x-auto scrollbar-transparent">
-        {/* 內層容器 - 最小寬度確保欄位對齊 */}
-        <div className="min-w-[1160px]">
-          {/* 表頭 - 固定在滾動區域外 */}
-          <Container6
-            sortConfig={sortConfig}
-            onSortChange={onSortChange}
-            platformFilter={platformFilter}
-            onPlatformFilterChange={onPlatformFilterChange}
-            boundChannels={boundChannels}
-            tagFilter={tagFilter}
-            onTagFilterChange={onTagFilterChange}
-            tagPool={tagPool}
-          />
-
-          {/* 垂直滾動容器 - 只有資料列滾動；overflow-x-hidden 擋掉 overflow-y:auto 自動升級出的幽靈橫捲軸（雙軸完整修留待雙軸表格批） */}
-          <div className="max-h-[600px] overflow-y-auto overflow-x-hidden scrollbar-transparent">
+      {/* 圓角裁切層 - 補 overflow-hidden 讓自繪 thumb 收圓角內（老問題③：原本只有 rounded 缺 overflow-hidden，橫捲軸畫過下圓角） */}
+      <div className="bg-white rounded-[16px] w-full overflow-hidden">
+        {/* 雙軸 Scrollable：表頭進 header 槽（縱固定 + 橫跟捲）、資料列在 viewport 縱+橫捲。
+            no-native-scrollbar 隱原生捲軸 → 結構性解幽靈橫捲軸（不再需 overflow-x-hidden 止血）+ 表頭/資料列對齊（不被縱捲軸吃 4px）。 */}
+        <Scrollable
+          orientation="both"
+          className="w-full"
+          viewportClassName="max-h-[600px]"
+          header={
+            <div className="min-w-[1160px]">
+              <Container6
+                sortConfig={sortConfig}
+                onSortChange={onSortChange}
+                platformFilter={platformFilter}
+                onPlatformFilterChange={onPlatformFilterChange}
+                boundChannels={boundChannels}
+                tagFilter={tagFilter}
+                onTagFilterChange={onTagFilterChange}
+                tagPool={tagPool}
+              />
+            </div>
+          }
+        >
+          <div className="min-w-[1160px]">
             {members.map((member, index) => (
               <MemberRow
                 key={member.id}
@@ -1049,7 +1056,7 @@ function Table8Columns3Actions({
               />
             ))}
           </div>
-        </div>
+        </Scrollable>
       </div>
     </div>
   );
