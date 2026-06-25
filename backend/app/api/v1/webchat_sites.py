@@ -189,6 +189,8 @@ async def bind_webchat_site_to_line(
         {"lcid": line_channel_id, "tid": new_tenant_id, "sid": site_id},
     )
 
+    await db.flush()  # session autoflush=False，下面的 count 要先把改綁沖到 DB 才看得到
+
     # 3) 舊組織若變空就清掉
     if old_tenant_id is not None and old_tenant_id != new_tenant_id:
         line_cnt = (
@@ -229,6 +231,51 @@ async def bind_webchat_site_to_line(
         tenant_id=new_tenant_id,
         embed_code=embed_code,
     )
+
+
+@router.delete("/{site_id}", response_model=SuccessResponse)
+async def delete_webchat_site(site_id: str, db: AsyncSession = Depends(get_db)):
+    """
+    刪除官網彈窗站點。
+
+    - 解除既有訪客會員的站點指向（members.webchat_site_id → NULL），避免懸空指標。
+    - 若該站點所屬組織因此變空（無 LINE、無其他官網站點），順手刪除空組織
+      （members.tenant_id FK = ON DELETE SET NULL，安全）。
+    """
+    site = await db.get(WebchatSiteChannel, site_id)
+    if site is None:
+        raise HTTPException(status_code=404, detail=f"找不到官網站點 '{site_id}'")
+
+    tenant_id = site.tenant_id
+    await db.delete(site)
+    await db.execute(
+        text("UPDATE members SET webchat_site_id = NULL WHERE webchat_site_id = :sid"),
+        {"sid": site_id},
+    )
+    await db.flush()  # session autoflush=False，下面的 count 要先把這筆刪除沖到 DB 才看得到
+
+    # 舊組織若變空就清掉（與 bind 收尾一致）
+    if tenant_id is not None:
+        line_cnt = (
+            await db.execute(
+                select(func.count()).select_from(LineChannel).where(LineChannel.tenant_id == tenant_id)
+            )
+        ).scalar() or 0
+        site_cnt = (
+            await db.execute(
+                select(func.count())
+                .select_from(WebchatSiteChannel)
+                .where(WebchatSiteChannel.tenant_id == tenant_id)
+            )
+        ).scalar() or 0
+        if line_cnt == 0 and site_cnt == 0:
+            old_tenant = await db.get(Tenant, tenant_id)
+            if old_tenant is not None:
+                await db.delete(old_tenant)
+
+    await db.commit()
+    logger.info(f"刪除官網彈窗站點 site_id={site_id}（原組織 {tenant_id}）")
+    return SuccessResponse(message="ok")
 
 
 @router.post("/{site_id}/seen", response_model=SuccessResponse)

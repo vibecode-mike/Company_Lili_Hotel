@@ -324,7 +324,7 @@ export const BasicSettingsList = memo(function BasicSettingsList({
                         </p>
                       </button>
                     )}
-                    {account.platform === 'line' && onDelete && (
+                    {(account.platform === 'line' || account.platform === 'webchat') && onDelete && (
                       <button
                         onClick={() => onDelete(account)}
                         className="content-stretch flex gap-[4px] items-center px-[8px] py-0 relative shrink-0 hover:opacity-80 transition-opacity"

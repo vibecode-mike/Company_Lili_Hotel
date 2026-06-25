@@ -8,6 +8,7 @@ import { CreateWebchatOrgModal } from './CreateWebchatOrgModal';
 import { BindWebchatToLineModal } from './BindWebchatToLineModal';
 import { PmsConnectModal } from './PmsConnectModal';
 import { useChannel } from '../contexts/ChannelContext';
+import { useAuth } from './auth/AuthContext';
 import {
   ensureFacebookSdkLoaded,
   fbGetManagedPages,
@@ -47,7 +48,9 @@ type FacebookSdkConfigDto = {
 export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
   const { isConfigured, refreshStatus } = useLineChannelStatus();
   const { showToast } = useToast();
-  const { refetch: refetchChannels } = useChannel();
+  const { refetch: refetchChannels, availableChannels } = useChannel();
+  const { user } = useAuth();
+  const isAdmin = (user?.role || '').toLowerCase() === 'admin';
   const [viewState, setViewState] = useState<ViewState>('loading');
   const [showWebchatModal, setShowWebchatModal] = useState(false);
   const [showPmsModal, setShowPmsModal] = useState(false);
@@ -187,6 +190,15 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     console.log('[BasicSettings] reloadAccounts 開始執行');
     const nextAccounts: ChannelAccount[] = [];
 
+    // 權限範圍（比照帳號管理 / 組織切換器）：availableChannels 已是後端依 user_channels 過濾過的清單
+    // （admin = 全部 + 無 LINE 組織哨符）。非 admin 只看得到被指派 LINE 的組織。
+    // 排除 `tenant:<id>` 哨符，取出真正的 LINE channel_id 白名單。
+    const permittedLineIds = new Set(
+      availableChannels
+        .map((c) => c.channel_id)
+        .filter((id): id is string => !!id && !id.startsWith('tenant:'))
+    );
+
     // 1. 取得 LINE 資料（獨立 try-catch）
     // 改用 /list 支援多 OA；每筆只要 channel_id 齊全就列出（單筆完整性由 LineApiSettingsContent 自己判斷）
     try {
@@ -196,6 +208,8 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
         if (Array.isArray(list)) {
           for (const data of list) {
             if (data?.channel_id) {
+              // 非 admin：只顯示被指派的 LINE
+              if (!isAdmin && !permittedLineIds.has(data.channel_id)) continue;
               nextAccounts.push({
                 id: data.id?.toString() ?? `line-${data.channel_id}`,
                 platform: 'line',
@@ -215,6 +229,8 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     console.log('[BasicSettings] LINE 處理完成，開始處理 FB...');
 
     // 2. 取得 FB 資料（獨立 try-catch，失敗不影響 LINE）
+    // ponytail: FB 暫不做組織權限過濾（fb_channels 無 tenant_id，全部可見）。
+    //   未來 FB 加 tenant_id 後，比照上面 LINE/官網，用 permittedLineIds 對應的組織過濾即可。
     try {
       const jwtToken = await ensureJwtToken();
       console.log('[BasicSettings] jwtToken:', jwtToken ? 'exists' : 'missing');
@@ -283,6 +299,8 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
         if (Array.isArray(list)) {
           for (const site of list) {
             if (!site?.site_id) continue;
+            // 非 admin：只顯示綁在「看得到的 LINE」上的官網；獨立官網（無 LINE）屬無-LINE 組織，僅 admin 可見
+            if (!isAdmin && !(site.line_channel_id && permittedLineIds.has(site.line_channel_id))) continue;
             nextAccounts.push({
               id: `webchat-${site.site_id}`,
               platform: 'webchat',
@@ -302,7 +320,7 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     console.log('[BasicSettings] 最終帳號數量:', nextAccounts.length, nextAccounts);
     setAccounts(nextAccounts);
     return nextAccounts.length;
-  }, [ensureJwtToken, fetchFbLoginStatus, formatZhDateTime, isConfigured]);
+  }, [ensureJwtToken, fetchFbLoginStatus, formatZhDateTime, isConfigured, availableChannels, isAdmin]);
 
   // 初始化：載入帳號並決定初始視圖
   useEffect(() => {
@@ -351,12 +369,19 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
     }
   }, []);
 
+  // 刪除前要求輸入「刪除」或「delete」二次確認（防誤刪）
+  const confirmTypedDelete = useCallback((name: string) => {
+    const input = window.prompt(
+      `刪除「${name}」不可復原。\n請輸入「刪除」或「delete」以確認：`,
+    );
+    return input != null && ['刪除', 'delete'].includes(input.trim().toLowerCase());
+  }, []);
+
   // 刪除 LINE OA
   const handleLineDelete = useCallback(async (account: ChannelAccount) => {
     const dbId = Number(account.id);
     if (!Number.isFinite(dbId)) return;
-    const ok = window.confirm(`確定要刪除「${account.name}」嗎？此操作不可復原。`);
-    if (!ok) return;
+    if (!confirmTypedDelete(account.name)) return;
     try {
       const res = await fetch(`/api/v1/line_channels/${dbId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -367,7 +392,30 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
       console.error('[BasicSettings] 刪除 LINE 帳號失敗:', err);
       showToast('刪除失敗，請稍後再試', 'error');
     }
-  }, [refreshStatus, reloadAccounts, showToast]);
+  }, [refreshStatus, reloadAccounts, showToast, confirmTypedDelete]);
+
+  // 刪除官網彈窗站點
+  const handleWebchatDelete = useCallback(async (account: ChannelAccount) => {
+    if (!confirmTypedDelete(account.name)) return;
+    try {
+      const res = await fetch(`/api/v1/webchat_sites/${encodeURIComponent(account.channelId)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await reloadAccounts();
+      refetchChannels();
+      showToast(`已刪除「${account.name}」`, 'success');
+    } catch (err) {
+      console.error('[BasicSettings] 刪除官網彈窗失敗:', err);
+      showToast('刪除失敗，請稍後再試', 'error');
+    }
+  }, [reloadAccounts, refetchChannels, showToast, confirmTypedDelete]);
+
+  // 依平台分派刪除
+  const handleDelete = useCallback((account: ChannelAccount) => {
+    if (account.platform === 'webchat') return handleWebchatDelete(account);
+    return handleLineDelete(account);
+  }, [handleWebchatDelete, handleLineDelete]);
 
   // 呼叫 meta_login 綁定 FB token 並處理 401 重試
   const requestMetaLogin = useCallback(async (facebookAccessToken: string): Promise<string> => {
@@ -582,7 +630,7 @@ export default function BasicSettings({ onSetupComplete }: BasicSettingsProps) {
         onAddAccount={handleAddAccount}
         onReauthorize={handleReauthorize}
         onEdit={handleLineEdit}
-        onDelete={handleLineDelete}
+        onDelete={handleDelete}
         onBindLine={(account) => setBindAccount(account)}
       />
       {bindAccount && (
