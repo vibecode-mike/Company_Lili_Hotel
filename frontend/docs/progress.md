@@ -238,10 +238,10 @@
 >
 > **⚠️ git 狀況存證（6/24）**：有外部自動程序跑 `git add -A && commit`，把我的 MemberTagEditModal+progress **掃進 timezone commit `75a8b94e`**（程式碼正確、已驗收，只是訊息掛 tz）。本地 vs origin **分歧**（origin 領先 2：`9510aff3 feat基本設定`+`4c93ccb5 fix時段洞察`；我領先 10＝6 捲軸+4 tz 交錯）。**選 A：接受現狀、不整理歷史**。push 被 non-fast-forward 擋著，需先整合 origin → 同事會一併 push。
 >
-> **🔴 剩高風險三塊**（各別專攻、一 session 一塊、git 環境穩定再開）：
+> **🔴 高風險三塊（攻下第一塊，剩兩塊）**：
+> - ~~**Carousel/FB editor**~~ ✅ **完成（2026-06-25，commit `1a0dd581`）** —— 卡關解了：tab strip 改 **`flex-wrap` 換行**繞開 `min-width:0` 撐爆雙軸臨界 + line 534 縱向換 `<Scrollable>`。`CarouselMessageEditor` crmpoc 步驟 2 驗收 OK（最右 tab 不被切、縱向捲動正常、沒破版）。`FacebookMessageEditor` 同改、**待粉專驗、信 diff**。
 > - **C2 聊天室**（最高風險：SSE 自動捲到底 + 無限往上捲，須保留 ref/onScroll）：`ChatMessageList:111`、`ChatRoomLayout:1298`、`ChatRoom:67/85`
 > - **雙軸表格**（會員表 `MainContainer-6001-1415` + C3 `AutoReplyTableStyled`/`InteractiveMessageTable`；需 `orientation="both"`+`header` 槽；**連帶刪 `CustomScrollbar`**——MemberTagEditModal 已不用它、僅會員表格還在用）
-> - **Carousel/FB editor**（卡關：縱向換 Scrollable 後橫向 tab 被切；💡 待試 **tab strip 改 `flex-wrap` 換行** 繞開雙軸臨界）
 >
 > **🟡 雜項待辦**：textarea「框塞自身」偏外×7（待 Chrome 量準再 restructure）· dead code 刪除（含死掉的 `flex-message/PreviewPanel`+`types.ts`）· `InsightsPanel:1246` tab strip（Carousel 同型、留）· Windows 跨系統檢查（4px 灰圓角）。
 
@@ -284,7 +284,7 @@
 
 ### 待辦（明天繼續）
 
-- [ ] **C1 第二組**（⏸ **待處理（非跳過）—— 暫維持方案 B，2026-06-19 擱置**）：
+- [x] **C1 第二組** ✅ **完成（2026-06-25，commit `1a0dd581`）** —— 卡關解法＝tab strip 改 `flex-wrap` 換行（繞開 `min-width:0` 撐爆雙軸臨界），縱向 line 534 換 `<Scrollable>`。Carousel crmpoc 步驟 2 驗收 OK（最右 tab 不被切、縱向捲動正常、沒破版）；FB 同改、待粉專驗、信 diff。原擱置紀錄保留於下供對照：
   - 兩個雙軸容器（縱向自繪 + 同層橫向 tab 並存）：
     - `CarouselMessageEditor.tsx`（line 534 縱向 / line 570 橫向 tab strip）
     - `FacebookMessageEditor.tsx`（line 332 縱向 / line 372 橫向；⚠️ 需 crmpoc 有 **FB 粉專**才切得到、測得到）
