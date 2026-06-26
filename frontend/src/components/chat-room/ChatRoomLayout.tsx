@@ -1397,6 +1397,7 @@ export default function ChatRoomLayout({
                           {/* 回覆模式指示 (左側) - 保留原有 GPT 計時器邏輯 */}
                           <ResponseModeIndicator
                             mode={isHumanOverrideActive ? "manual" : "ai_auto"}
+                            className="self-end"
                           />
 
                           {/* 傳送按鈕 (右側) */}
