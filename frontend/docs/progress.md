@@ -219,7 +219,22 @@
 - [x] **C1 Sidebar：側欄導覽 nav**（填高型 outer `flex-1 min-h-0` + viewport `h-full`；aside 是 `h-screen` 有界→真內捲）：commit `a1a256bb`（✅ 已 push origin/main，CI 綠）
 - [x] **ErrorBoundary：錯誤堆疊框**（max-h-280 有界縱捲；max-h 放 viewport，rounded+bg+overflow-hidden 放 outer）：commit `aef947ed`（✅ 已 push origin/main，CI 綠）
 
-### 🎉🚩🚩 收工狀態（2026-06-26）—— 下次上工先看這裡
+### 🎀 收工狀態（2026-06-27）—— 下次上工先看這裡 · 聊天室輸入區收尾 4 連發
+
+> **C2 聊天室遷移後的版面/視覺收尾，4 commit 一次 push origin/main（`375e68d0`→`af75363c`，CI 綠、prod 沒碰）。皆單檔 `ChatRoomLayout.tsx`、不碰捲動鏈、4 個捲動行為全程未受影響。**
+>
+> 1. `375e68d0` **輸入框下方藍底改 flex 填滿**：外包 div `height: calc(100% - 180px)` → `flex:1 1 0 + minHeight:0`。**根因**（對照 `ffd5fca9` diff 確認）：寫死 180px 硬扣給輸入框兄弟，輸入框實高 ≠ 180 時下方藍底＝flex 剩餘 `(180−實高)`，與左右不一致（脆弱魔術數字，遷移前後同此機制 = pre-existing）。flex 填滿後下方藍底只剩輸入框自身 `pb`＝左右 `px`，恆等。⚠️ **使用者原以為是遷移 regression、且以為「輸入框該包在 calc div 內」——兩者都不對**：輸入框本來就是 scroll 區的兄弟（calc 的 180 就是替它預留），遷移只多包一層 wrapper，巢狀沒變。
+> 2. `5840c79f` **輸入框圓角/padding 對齊 ladder 同心規則**：依 `outer − padding = inner` 收斂——藍底 `rounded-b-3xl`(20) − 露藍邊 `px/pb-8` = 白框 `rounded-xl`(12)；白框 12 − 內距 `p-12` = 內容 0。白框 `rounded-3xl→rounded-xl`、露藍邊 `24→8`、白框內 `p-20→p-12`。（使用者抉擇：嚴守規則犧牲寬露藍邊，而非保留 24px 寬邊。）
+> 3. `50717f9d` **AI 回覆指示器垂直置下**：底部列 `items-center` 讓矮指示器浮在中線 → 加 `self-end`（`ResponseModeIndicator` 已轉發 className 到根 flex 子層）對齊傳送鈕底緣；傳送鈕/tooltip 不動。
+> 4. `af75363c` **輸入框上方藍色漸層遮罩（捲動 affordance）**：沿用會員標籤遮罩（`MemberTagEditModal:356`）的 180deg ease-in 曲線、換色為聊天背景 `#CDEAFD`、72px 高、`absolute bottom-full` 錨在輸入框 wrapper 上方。**捲到底自動淡出**：`handleScroll` 算 `distanceFromBottom > 8` 切 `showScrollMask`；既有「程式自動捲到底」(`scrollTop=scrollHeight`) 會觸發 onScroll → 自動隱藏，免額外掛鉤。`pointer-events-none` + 純 opacity 切換 → 不進捲動鏈。
+>
+> **方法論（已抽進 playbook §3／§2c）**：①「使用者說是某遷移弄壞的」→ **先 git-diff 那個 migration commit 確認機制真的變了再修**，別照歸因盲改（本批 Bug1/Bug2 對照後皆證實非遷移引入）。②同心圓角 ladder `outer−padding=inner` 的實戰套法（相鄰框才套；隔大間距的浮動框不套，見 §3 2026-06-22 註）。③漸層遮罩當捲動 affordance 的可重用範式。
+>
+> **⬜ 仍未動的雜項**：textarea「框塞自身」偏外×7（待 Chrome 量準 restructure）、SSE 貼底捲競態（見 6-26 另案）、步驟 6 Windows 捲軸實機驗、FB 待粉專。
+
+---
+
+### 🎉🚩🚩 收工狀態（2026-06-26）—— 歷史
 
 > **🎉 高風險三塊全清、捲軸核心完成！** C2 聊天室（最後一塊、最高風險）今天攻下並 push origin/main（`ffd5fca9`，CI 綠、prod 沒碰）。手刻/原生捲軸全面退場，全站統一 `<Scrollable>` 方案 C。
 >

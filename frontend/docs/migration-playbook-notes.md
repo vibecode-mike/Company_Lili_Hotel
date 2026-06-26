@@ -128,6 +128,10 @@
     3. **遷後 grep 驗零殘留**：`grep -rn CustomScrollbar src` → 空。
     4. **清孤兒 import**：刪函式後它獨用的 import（`RefObject` / `useLayoutEffect`）變孤兒 → 一起從 import 移除（grep 確認檔內他處沒用）+ 修過時註解。
   - 一句話：刪 export 元件 = 遷前 grep 找使用者、遷後 grep 驗零殘留、清孤兒 import，三層都要做。
+- **⭐ 遷移後版面/視覺收尾三範式（2026-06-27 聊天室輸入區）**
+  - **(a) flex 填滿取代寫死高度**：容器「寫死 `height: calc(100% - Npx)` 替兄弟元素預留空間」是脆弱魔術數字——兄弟實高 ≠ N 時，剩餘空間會以非預期間距外露。改 `flex:1 1 0 + minHeight:0` 讓它精準填滿，間距改由兄弟自身 padding 決定 → 恆等、免猜 N。（捲動容器這樣改不影響捲動：viewport 仍 `overflow-auto`、runtime 仍明確像素高度。）
+  - **(b) 同心圓角 ladder `outer − padding = inner` 的實戰套法**：相鄰巢狀框逐層套（藍底20 − 露藍邊8 = 白框12；白框12 − 內距12 = 內容0）。值全落 globals.css ladder（`rounded-3xl`=20/`2xl`=16/`xl`=12/`md`=8…）。⚠️ 規則只對**相鄰**的框成立；隔大間距的**浮動**框不套（見 §3 2026-06-22 註）。寬露藍邊 vs 嚴守同心常有衝突（露邊 = 外圓角 − 內圓角，外圓角受 ladder 上限 20 卡住）→ 這是設計取捨，**讓使用者抉擇、別自己硬選**。
+  - **(c) 漸層遮罩當捲動 affordance（可全站重用）**：沿用會員標籤遮罩（`MemberTagEditModal:356`）的 `linear-gradient(180deg, …)` ease-in 多停點曲線，**只換顏色**為該區背景色（聊天=`#CDEAFD`）。`absolute bottom-full`（或 `bottom-0`）+ `pointer-events-none` + `zIndex`。「捲到底自動隱藏」：`handleScroll` 算 `scrollHeight − scrollTop − clientHeight > 8` 切 state；**程式自動捲到底也會觸發 onScroll → 遮罩自動隱藏，免另外掛鉤**。純 opacity + `transition-opacity` 切換 → 不進捲動鏈、不影響既有捲動行為。
 
 ---
 
@@ -137,6 +141,10 @@
 
 - **不確定 / 牽涉別人 → 先查證（用 git，不靠記憶）**
   - 任何牽涉協作或自己沒把握的點，用工具查事實（git status/log/fetch），不用記憶下判斷。
+- **症狀歸因 ≠ 根因：使用者說「某遷移弄壞的」→ 先 diff 那個 migration commit 確認機制真的變了，再修**
+  - 使用者用 DevTools 看到問題、合理推測是某次遷移引入時，**先 `git show <migration-commit> -- <file>` 看那次到底改了什麼**，比對「症狀涉及的 DOM/CSS 機制」在那次有沒有真的變。常見結果：機制逐字未變、問題是 **pre-existing 的脆弱設計**剛好這次浮現。
+  - 實例（2026-06-27 聊天室）：使用者報「輸入框下方間距是捲軸遷移後冒出來的」+ 推測「輸入框該包在 calc div 內、現在被放錯層」。對照遷移 diff → 該遷移只把 scroll 容器多包一層 wrapper，**輸入框的巢狀關係、`pb`、`calc(100%−180)` 全逐字未動**；下方間距一直是 flex 剩餘（脆弱魔術數字），非遷移引入。**兩個歸因都不對**。據此誠實回報 + 做根因修（flex 填滿），而非照歸因盲改巢狀。
+  - 一句話：**歸因是線索不是結論**。照使用者的歸因直接改，容易改錯層、留下沒修到的真根因；diff 一下成本極低。
 - **執行舊定案前，先驗證它的「前提」還成立**
   - 隔了時間（甚至只是隔一個 session）做的定案，常綁著當時的某個假設。執行前先回去讀**現在的結構**，確認那個假設今天仍然成立，別把定案的「結論」照搬而跳過它的「前提」。
   - 實例（2026-06-22，圓角批 A）：舊定案「卡片預覽框 padding 砍到 4」，**前提是「卡片貼著框角、要維持同心，所以 `外圓角 = 內圓角 + padding`」**。實際讀三處 render 結構發現卡片全是 `justify-center/items-center` **置中浮在框內**、卡片角與框角根本不相鄰 → **同心前提不成立** → 砍 padding 沒有圓角上的必要性，那是另一回事（間距/視覺決策）。若照舊定案盲做，會在圓角批裡硬塞一個無關且大幅的間距變動。
