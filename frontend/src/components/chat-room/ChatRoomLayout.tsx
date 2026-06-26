@@ -1353,10 +1353,10 @@ export default function ChatRoomLayout({
             </div>
 
             {/* Input Area (Fixed at Bottom) */}
-            <div className="relative rounded-3xl shrink-0 w-full px-[24px] pb-[24px]">
-              <div className="bg-white relative rounded-3xl shrink-0">
+            <div className="relative rounded-xl shrink-0 w-full px-[8px] pb-[8px]">
+              <div className="bg-white relative rounded-xl shrink-0">
                 <div className="flex flex-row justify-end min-h-inherit size-full">
-                  <div className="box-border content-stretch flex gap-[4px] items-start justify-end min-h-inherit p-[20px] relative w-full">
+                  <div className="box-border content-stretch flex gap-[4px] items-start justify-end min-h-inherit p-[12px] relative w-full">
                     <div className="basis-0 content-stretch flex flex-col gap-[12px] grow items-start min-h-[96px] min-w-px relative shrink-0">
                       {/* Text Input */}
                       <div className="basis-0 content-stretch flex flex-wrap gap-[10px] grow items-center justify-center min-h-[108px] min-w-px relative shrink-0 w-full">
