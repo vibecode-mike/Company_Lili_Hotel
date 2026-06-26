@@ -38,19 +38,11 @@ export interface MemberAvatarProps {
   member: Member;
 }
 
-export interface MemberInfoPanelProps {
-  member: Member;
-}
-
 export interface MemberTagSectionProps {
   tags: string[];
   emptyMessage?: string;
   onEdit?: () => void;
   showEditButton?: boolean;
-}
-
-export interface ChatMessageListProps {
-  messages: ChatMessage[];
 }
 
 export interface ChatInputProps {

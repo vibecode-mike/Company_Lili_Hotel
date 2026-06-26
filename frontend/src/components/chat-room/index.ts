@@ -12,7 +12,6 @@ export type * from './types';
 export { default as MemberAvatar } from './MemberAvatar';
 export { default as MemberInfoPanelComplete } from './MemberInfoPanelComplete';
 export { default as MemberTagSection } from './MemberTagSection';
-export { default as ChatMessageList } from './ChatMessageList';
 export { default as ChatInput } from './ChatInput';
 export { default as ChatRoomLayout } from './ChatRoomLayout';
 
