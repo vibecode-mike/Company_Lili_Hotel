@@ -25,6 +25,7 @@ import { getJwtToken } from "../../utils/token";
 import { ChatBubble } from "./ChatBubble";
 import { ResponseModeIndicator } from "./ResponseModeIndicator";
 import { PlatformSwitcher } from "./PlatformSwitcher";
+import Scrollable from "../common/Scrollable";
 
 // Chat messages constants
 const PAGE_SIZE = 6; // 每次載入 6 條訊息（3 對問答）
@@ -1286,12 +1287,15 @@ export default function ChatRoomLayout({
             }}
           >
             {/* Messages Scroll Container - 可滾動區域 */}
-            <div
-              ref={chatContainerRef}
-              onScroll={handleScroll}
-              className="box-border content-stretch flex flex-col gap-[12px] items-start overflow-y-auto p-[16px] relative w-full scrollbar-transparent"
-              style={{ height: "calc(100% - 180px)" }}
-            >
+            {/* 高度寫死 calc 必須留 inline style（Tailwind 預編譯靜態 css，h-[calc] arbitrary class 無效）→
+                外包一層帶高度的 div，h-full/w-full 一路傳到 Scrollable viewport（避開高度鏈崩在多插的 relative wrapper） */}
+            <div className="w-full" style={{ height: "calc(100% - 180px)" }}>
+              <Scrollable
+                ref={chatContainerRef}
+                onScroll={handleScroll}
+                className="h-full w-full"
+                viewportClassName="box-border content-stretch flex flex-col gap-[12px] items-start p-[16px] relative h-full w-full"
+              >
               {/* Loading more messages indicator (top) */}
               {isLoading && page > 1 && (
                 <div className="w-full text-center py-2 text-gray-400 text-sm">
@@ -1342,6 +1346,7 @@ export default function ChatRoomLayout({
                 </div>
               ))}
 
+              </Scrollable>
             </div>
 
             {/* Input Area (Fixed at Bottom) */}
