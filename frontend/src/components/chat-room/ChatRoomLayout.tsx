@@ -1287,9 +1287,12 @@ export default function ChatRoomLayout({
             }}
           >
             {/* Messages Scroll Container - 可滾動區域 */}
-            {/* 高度寫死 calc 必須留 inline style（Tailwind 預編譯靜態 css，h-[calc] arbitrary class 無效）→
-                外包一層帶高度的 div，h-full/w-full 一路傳到 Scrollable viewport（避開高度鏈崩在多插的 relative wrapper） */}
-            <div className="w-full" style={{ height: "calc(100% - 180px)" }}>
+            {/* 外包 div：flex:1 填滿「輸入框以上」的空間（取代寫死 calc(100%-180px)）。
+                舊寫法硬扣 180px 給輸入框兄弟，但輸入框實高 ≠ 180 → 下方多/少一塊藍底（露底跟左右不一致）。
+                改 flex:1 + minHeight:0 → 捲動區精準填到輸入框上緣，下方藍底只剩輸入框自己的 pb-[24px]＝左右 px-[24px]。
+                inline style 而非 Tailwind class：避開預編譯靜態 css 沒有該 class 的風險；
+                flex 給定明確計算高度，h-full/w-full 一路傳到 Scrollable viewport（高度鏈不變）。 */}
+            <div className="w-full" style={{ flex: "1 1 0", minHeight: 0 }}>
               <Scrollable
                 ref={chatContainerRef}
                 onScroll={handleScroll}
