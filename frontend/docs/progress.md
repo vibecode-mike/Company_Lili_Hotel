@@ -237,6 +237,7 @@
 > - **正解**：把 SSE 捲底搬進 `useEffect`（依 messages 變動、commit 後再捲），或 double-rAF / `flushSync`。順帶可加「查看新訊息」按鈕（不貼底時提示）。**獨立小修、另案。**
 >
 > **📌 順手記**：`chat-room/ChatMessageList.tsx` 是**死碼**（全 repo 零 import，真正列表 inline 在 ChatRoomLayout）→ 可列入 dead code 批清掉。
+> ✅ **已清（2026-06-26，`44ec2faf`，push main、CI 綠 staging success / prod 未碰）**：6/23 Group A 之後浮出的兩個漏網死碼收尾——`chat-room/ChatMessageList.tsx`（6/26 隨 C2 證實零 import）+ `flex-message/PreviewPanel.tsx`（6/24 查出 FlexMessageEditorNew 刪後成孤兒）。連帶 `chat-room/index.ts` barrel 那行、`types.ts` 兩個只被死碼用的殘留介面（`ChatMessageListProps`/`MemberInfoPanelProps`）。−339 行、build 綠、零行為變化。**注意 `flex-message/types.ts` 仍被 `fb-types` 引用＝活的，保留**；`chat-room/MemberNoteEditor.tsx` 6/23 Group A 已刪（今查證不存在）。**dead code 組件批至此全清；剩 `imports/` Group B 141 檔 Figma 死碼為獨立批（見上 §item 5 Group B）。**
 >
 > **⬜ 剩餘（非高風險、可後補）**：
 > 1. ⬜ **步驟 6 Windows 跨系統檢查**：Windows 開 crmpoc 確認 Scrollable thumb 是 4px 灰圓角、沒變回 Windows 預設醜捲軸（選方案 C 的核心理由，需實機驗；可後補、不卡主線）。
