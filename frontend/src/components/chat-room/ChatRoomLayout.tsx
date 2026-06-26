@@ -184,6 +184,7 @@ export default function ChatRoomLayout({
   const [isComposing, setIsComposing] = useState(false); // IME composition state
   const [isSending, setIsSending] = useState(false); // Sending message state
   const [visibleDate, setVisibleDate] = useState<string>(""); // 當前可見訊息的日期
+  const [showScrollMask, setShowScrollMask] = useState(false); // 捲動提示遮罩：未捲到底時顯示
   const [isTagModalOpen, setIsTagModalOpen] = useState(false);
   const [memberTags, setMemberTags] = useState<string[]>(
     member?.memberTags || [],
@@ -733,6 +734,11 @@ export default function ChatRoomLayout({
   const handleScroll = useCallback(
     (e: React.UIEvent<HTMLDivElement>) => {
       const container = e.currentTarget;
+
+      // 捲動提示遮罩：離底 > 8px（還有下方內容）才顯示；程式自動捲到底也會觸發 onScroll → 自動隱藏
+      const distanceFromBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight;
+      setShowScrollMask(distanceFromBottom > 8);
 
       // 更新當前可見訊息的日期（找最後一個可見訊息）
       const messageElements = container.querySelectorAll("[data-timestamp]");
@@ -1354,6 +1360,17 @@ export default function ChatRoomLayout({
 
             {/* Input Area (Fixed at Bottom) */}
             <div className="relative rounded-xl shrink-0 w-full px-[8px] pb-[8px]">
+              {/* 漸層遮罩：捲動聊天內容時提示下方還有對話；捲到底淡出。色＝聊天背景 #CDEAFD，曲線同會員標籤遮罩 */}
+              <div
+                className="pointer-events-none absolute bottom-full left-0 right-0 transition-opacity duration-200"
+                style={{
+                  height: "72px",
+                  opacity: showScrollMask ? 1 : 0,
+                  background:
+                    "linear-gradient(180deg, rgba(205,234,253,0) 0%, rgba(205,234,253,0.02) 30%, rgba(205,234,253,0.10) 50%, rgba(205,234,253,0.35) 70%, rgba(205,234,253,0.75) 85%, #CDEAFD 100%)",
+                  zIndex: 5,
+                }}
+              />
               <div className="bg-white relative rounded-xl shrink-0">
                 <div className="flex flex-row justify-end min-h-inherit size-full">
                   <div className="box-border content-stretch flex gap-[4px] items-start justify-end min-h-inherit p-[12px] relative w-full">
