@@ -219,7 +219,32 @@
 - [x] **C1 Sidebar：側欄導覽 nav**（填高型 outer `flex-1 min-h-0` + viewport `h-full`；aside 是 `h-screen` 有界→真內捲）：commit `a1a256bb`（✅ 已 push origin/main，CI 綠）
 - [x] **ErrorBoundary：錯誤堆疊框**（max-h-280 有界縱捲；max-h 放 viewport，rounded+bg+overflow-hidden 放 outer）：commit `aef947ed`（✅ 已 push origin/main，CI 綠）
 
-### 🚩🚩 收工狀態（2026-06-25）—— 下次上工先看這裡
+### 🎉🚩🚩 收工狀態（2026-06-26）—— 下次上工先看這裡
+
+> **🎉 高風險三塊全清、捲軸核心完成！** C2 聊天室（最後一塊、最高風險）今天攻下並 push origin/main（`ffd5fca9`，CI 綠、prod 沒碰）。手刻/原生捲軸全面退場，全站統一 `<Scrollable>` 方案 C。
+>
+> **今天完成（已 push origin/main）**：
+> - `ffd5fca9` **C2 聊天室**：`ChatRoomLayout:1290` 容器換 `<Scrollable>`（縱向）。最小改動——外包一層帶 inline `height: calc(100% - 180px)` 的 div（Tailwind 預編譯靜態 css，`h-[calc]` arbitrary class 無效，calc 必須留 inline style）→ `h-full/w-full` 一路傳到 viewport（避開高度鏈崩在 Scrollable 多插的 relative wrapper）。`chatContainerRef` 接 forwardRef（=viewport DOM）、`handleScroll` 接 onScroll 槽。**4 個捲動行為的程式碼一行沒動**（全靠 ref 操作 viewport，語意一致）。不動共用 Scrollable。
+>
+> **🔴→✅ 高風險三塊全清**：①Carousel/FB（`65e372bd`）②雙軸表格批（步驟1-5）③**聊天室 C2（`ffd5fca9`）← 今天**。
+>
+> **crmpoc 驗收 4 行為全過**：①初次載入自動捲底 ✅ ②SSE 新訊息貼底捲（貼底捲下/讀舊不打斷）—— 見下方另案 ⚠️ ③無限往上捲+位置保持 ✅ ④撐不滿自動補載 ✅；4px 灰圓角 thumb 在、捲動順、沒破版。
+>
+> **⚠️ 另案待辦（pre-existing，非本次遷移引入）——「SSE 貼底自動捲」時序競態**：
+> - 現象：貼底時新訊息來，偶爾沒自動捲下。
+> - 根因：`handleNewMessage`（`ChatRoomLayout:472-498`）在 `setMessages` 後**立刻** rAF 捲底，rAF 可能早於 React 把新氣泡 commit 進 DOM → 讀到**舊 `scrollHeight`** → 捲到舊底。
+> - **非遷移引入**：該段與 origin/main 逐字相同、量測值在 viewport 上等價（初次捲底 ✅ 已證高度鏈正常）；origin/main 同樣存在此競態。對比「初次捲底」在 `useEffect`（commit 後）跑 → 穩。
+> - **正解**：把 SSE 捲底搬進 `useEffect`（依 messages 變動、commit 後再捲），或 double-rAF / `flushSync`。順帶可加「查看新訊息」按鈕（不貼底時提示）。**獨立小修、另案。**
+>
+> **📌 順手記**：`chat-room/ChatMessageList.tsx` 是**死碼**（全 repo 零 import，真正列表 inline 在 ChatRoomLayout）→ 可列入 dead code 批清掉。
+>
+> **⬜ 剩餘（非高風險、可後補）**：
+> 1. ⬜ **步驟 6 Windows 跨系統檢查**：Windows 開 crmpoc 確認 Scrollable thumb 是 4px 灰圓角、沒變回 Windows 預設醜捲軸（選方案 C 的核心理由，需實機驗；可後補、不卡主線）。
+> 2. 📝 **雜項**（見 2026-06-25 §雜項）：textarea「框塞自身」偏外×7（待 Chrome 量準 restructure）、dead code 刪除（`flex-message/PreviewPanel`+`types.ts`+`ChatMessageList`）、FB 待粉專（Carousel/FB 圓角 + FB editor 雙軸驗收）、`InsightsPanel:1246` tab strip（Carousel 同型、留）、SSE 貼底捲競態（上方另案）。
+
+---
+
+### 🚩🚩 收工狀態（2026-06-25）—— 歷史
 
 > **✅ 今天大豐收：高風險第一塊（Carousel/FB）+ 第二塊（雙軸表格批）全攻下並上 staging。所有 commit 已乾淨 push origin/main、CI 全綠、prod 沒碰。工作區乾淨（只剩 serena 工具 noise，無我的未 push 內容）。**
 >
@@ -294,7 +319,7 @@
     —— 原本卡在「縱向換 Scrollable 後橫向 tab 被切」，若 tab strip 本來就不用橫向捲（改成換行）就**繞開整個雙軸臨界問題**，可能是正解。
     評估要測：① 換行後的視覺（多列 tab 整齊嗎）② 多 tab（輪播 9+ 卡）時換幾列、會不會太高 ③ 跟「新增輪播」鈕的相對位置（換行後鈕還在不在順手的地方）。
 - [x] **C1 Sidebar** ✅ **完成（2026-06-23，`a1a256bb`，已 push origin/main、CI 綠）** —— 側欄 nav 換 Scrollable（填高型 outer `flex-1 min-h-0` + viewport `h-full`）。aside 是 `h-screen` 有界 → 真內捲、套得成立。驗收 OK（捲動順 / footer 固定不抖 / 展開收合正常 / thumb 正確）。
-- [ ] **C2 聊天室**（最高風險：SSE 自動捲到底 + 無限往上捲）：`ChatMessageList` / `ChatRoomLayout`，須保留 ref/onScroll，單獨謹慎做
+- [x] **C2 聊天室** ✅ **完成（2026-06-26，`ffd5fca9`，已 push origin/main、CI 綠）** —— `ChatRoomLayout:1290` 容器換 `<Scrollable>`（縱向）；外包 div 帶 inline calc 高度、ref/onScroll 接回；4 行為 crmpoc 驗收 OK。`ChatMessageList` 證實為死碼（零 import，併 dead code 批）。⚠️ SSE 貼底捲 pre-existing 競態另案（見 6/26 收工狀態）。**高風險三塊全清！**
 - [x] ~~**C4** 各頁 `<main>`（9 個頁殼主捲動）~~ ❌ **排除出 C 計畫（2026-06-23）** —— 驗證發現頁殼是 `min-h-screen` + Sidebar `fixed` → **整頁 window 捲、main 不是有界內捲容器**（`overflow-y-auto scrollbar-transparent` 是 inert 死樣式）。自繪 Scrollable 只給有界內層容器；頁面整頁捲用原生 window 捲軸是正解，不硬改 `h-screen`。詳見 playbook §2「頁殼 main 是 window 捲」。9 頁全排除（含先前盤的乾淨批/雙軸批/min-h-screen 批）。
 - [ ] **C3** 表格橫向+巢狀 ／ **C5** 其餘橫向（tab／輪播／chip）
   - ⚠️ **C3 表格是雙軸**（`AutoReplyTableStyled:443 橫 + :450 縱 max-h-600`、`InteractiveMessageTable:368+380` 同型）：縱向 thumb 落在 1160px 表格最右、只有橫捲到底才看得到 → **單套縱向＝半套、無意義**。縱軸 thumb 收可視右緣 + 表頭對齊要靠 `orientation="both"` + `header` 槽**整批解** → **併入「雙軸表格批」**，不單獨做（2026-06-23 確認）。
@@ -312,7 +337,7 @@
 > 排除：9 頁殼 main(window 捲) + shadcn 紅線(`ui/*` / textarea / popover)。
 
 **🔴 Group 1 — 已知敏感（留最後 / 卡關，先別碰）**
-- C2 聊天室（最高風險，SSE 自動捲）：`chat-room/ChatMessageList:111`、`ChatRoomLayout:1298`、`ChatRoom:67/85`
+- ~~C2 聊天室（最高風險，SSE 自動捲）：`ChatRoomLayout:1290`~~ ✅ **完成（2026-06-26，`ffd5fca9`）**。`ChatMessageList:111` 死碼（零 import）、`ChatRoom:67/85` 是頁殼 window 捲（不在這批）。
 - 雙軸表格 會員表：`imports/MainContainer-6001-1415:467(縱·自繪)/1025(橫)/1041(max-h-600)`
 - C1第二組卡關：`CarouselMessageEditor:534/570`、`FacebookMessageEditor:332/372`（FB待粉專）
 
