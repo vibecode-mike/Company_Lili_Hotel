@@ -350,8 +350,8 @@ async def get_fb_message_detail(
         send_time = None
         if create_time:
             try:
-                from datetime import datetime
-                send_time = datetime.fromtimestamp(create_time).isoformat()
+                from datetime import datetime, timezone
+                send_time = datetime.fromtimestamp(create_time, tz=timezone.utc).isoformat()
             except (ValueError, TypeError):
                 send_time = None
 

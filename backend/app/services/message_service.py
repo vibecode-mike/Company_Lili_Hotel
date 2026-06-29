@@ -876,8 +876,8 @@ class MessageService:
                         send_status="已發送",
                         send_count=item.get("amount", 0),
                         click_count=item.get("click_amount", 0),
-                        created_at=datetime.fromtimestamp(item.get("create_time", 0)) if item.get("create_time") else datetime.now(),
-                        send_time=datetime.fromtimestamp(item.get("create_time", 0)) if item.get("create_time") else None,
+                        created_at=datetime.fromtimestamp(item.get("create_time", 0), tz=timezone.utc).replace(tzinfo=None) if item.get("create_time") else now_utc(),
+                        send_time=datetime.fromtimestamp(item.get("create_time", 0), tz=timezone.utc).replace(tzinfo=None) if item.get("create_time") else None,
                         # 其他欄位使用默認值
                         scheduled_datetime_utc=None,
                         channel_id=None,

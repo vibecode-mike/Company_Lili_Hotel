@@ -3,6 +3,7 @@
 """
 import logging
 from datetime import date, time, datetime, timezone
+from app.core.timezone import now_utc
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
@@ -39,7 +40,7 @@ def _parse_datetime(value: Union[int, float, str, datetime, None]) -> Optional[d
 
     if isinstance(value, (int, float)):
         try:
-            return datetime.fromtimestamp(value)
+            return datetime.fromtimestamp(value, tz=timezone.utc).replace(tzinfo=None)
         except (ValueError, OSError):
             return None
 
@@ -393,7 +394,7 @@ async def _get_fb_auto_responses_from_api(jwt_token: str, db: AsyncSession) -> L
             ]
 
             # Parse create_time with fallback to current time
-            created_at_dt = _parse_datetime(item.get("create_time")) or datetime.now()
+            created_at_dt = _parse_datetime(item.get("create_time")) or now_utc()
 
             # 粉專名稱
             channel_name = item.get("channel_name") or f"FB 自動回應 #{item.get('id')}"
