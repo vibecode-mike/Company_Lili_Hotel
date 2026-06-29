@@ -41,7 +41,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
     # 使用 timezone-aware datetime (Python 3.12+ 推薦)
     # datetime.utcnow() 已在 Python 3.12 中棄用
-    now = datetime.now()
+    # ⚠️ 必須 aware UTC：PyJWT 用 utctimetuple() 算 exp，naive 會被當成 UTC
+    #    → 非 UTC 主機 token 壽命會多出主機 offset（台北 +8h）
+    now = datetime.now(timezone.utc)
 
     if expires_delta:
         expire = now + expires_delta
