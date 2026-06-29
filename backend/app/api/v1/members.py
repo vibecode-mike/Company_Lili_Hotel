@@ -287,7 +287,7 @@ async def get_members(
             seen.add(key)
             tags.append(tag_info)
 
-        member_dict = MemberListItem.model_validate(member).model_dump()
+        member_dict = MemberListItem.model_validate(member).model_dump(mode="json")
         member_dict["tags"] = tags
 
         # 添加 channel_id
@@ -297,12 +297,12 @@ async def get_members(
         # 優先用 line_uid，沒有就用 webchat_uid（訪客 / 已加入會員的 webchat 使用者）
         lookup_uid = member.line_uid or member.webchat_uid
         if lookup_uid and lookup_uid in last_chat_times:
-            member_dict["last_interaction_at"] = last_chat_times[lookup_uid]
+            member_dict["last_interaction_at"] = to_utc_iso(last_chat_times[lookup_uid])
 
         # 添加未回覆狀態
         if lookup_uid and lookup_uid in unanswered_members:
             member_dict["is_unanswered"] = True
-            member_dict["unanswered_since"] = unanswered_members[lookup_uid]
+            member_dict["unanswered_since"] = to_utc_iso(unanswered_members[lookup_uid])
         else:
             member_dict["is_unanswered"] = False
             member_dict["unanswered_since"] = None
@@ -506,8 +506,8 @@ async def get_member(
         "join_source": "Webchat" if is_guest else member.join_source,
         "receive_notification": member.receive_notification if member.receive_notification is not None else True,
         "internal_note": member.internal_note,
-        "created_at": member.created_at,
-        "last_interaction_at": last_chat_time,
+        "created_at": to_utc_iso(member.created_at),
+        "last_interaction_at": to_utc_iso(last_chat_time),
         "tags": tags,
         "is_guest": is_guest,
         "guest_seq": member.guest_seq if is_guest else None,
@@ -536,7 +536,7 @@ async def create_member(
     await db.commit()
     await db.refresh(member)
 
-    return SuccessResponse(data=MemberDetail.model_validate(member).model_dump())
+    return SuccessResponse(data=MemberDetail.model_validate(member).model_dump(mode="json"))
 
 
 @router.put("/{member_id}", response_model=SuccessResponse)
@@ -568,7 +568,7 @@ async def update_member(
 
     logger.debug(f"[Update Member] Successfully updated member {member_id}, gpt_enabled={member.gpt_enabled}")
 
-    return SuccessResponse(data=MemberDetail.model_validate(member).model_dump())
+    return SuccessResponse(data=MemberDetail.model_validate(member).model_dump(mode="json"))
 
 
 @router.delete("/{member_id}", response_model=SuccessResponse)

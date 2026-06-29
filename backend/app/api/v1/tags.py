@@ -10,6 +10,7 @@ from app.models.tag_trigger_log import TagTriggerLog
 from app.models.user import User
 from app.schemas.common import SuccessResponse
 from app.core.pagination import PageParams, PageResponse, paginate_query
+from app.core.timezone import to_utc_iso
 from app.api.v1.auth import get_current_user
 from app.utils.validators import InputValidator
 from pydantic import BaseModel
@@ -100,8 +101,8 @@ async def get_tags(
                 "type": "member",
                 "tag_source": t.tag_source,
                 "trigger_member_count": t.trigger_member_count or 0,
-                "last_triggered_at": t.last_triggered_at.isoformat() if t.last_triggered_at else None,
-                "created_at": t.created_at.isoformat() if t.created_at else None,
+                "last_triggered_at": to_utc_iso(t.last_triggered_at),
+                "created_at": to_utc_iso(t.created_at),
             }
             for t in tags
         ]
@@ -147,8 +148,8 @@ async def get_tags(
                 "type": "interaction",
                 "trigger_count": t.trigger_count or 0,
                 "trigger_member_count": t.trigger_member_count or 0,
-                "last_triggered_at": t.last_triggered_at.isoformat() if t.last_triggered_at else None,
-                "created_at": t.created_at.isoformat() if t.created_at else None,
+                "last_triggered_at": to_utc_iso(t.last_triggered_at),
+                "created_at": to_utc_iso(t.created_at),
             }
             for t in tags
         ]
@@ -463,7 +464,7 @@ async def get_tag_history(
                 "member_id": log.member_id,
                 "campaign_id": log.campaign_id,
                 "trigger_source": log.trigger_source,
-                "triggered_at": log.triggered_at.isoformat() if log.triggered_at else None,
+                "triggered_at": to_utc_iso(log.triggered_at),
             }
             for log in logs
         ]
