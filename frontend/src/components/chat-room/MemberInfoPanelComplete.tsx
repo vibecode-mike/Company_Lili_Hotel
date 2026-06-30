@@ -231,10 +231,8 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
       newErrors.email = 'Email 格式錯誤，格式如：starbit@gmail.com';
     }
 
-    // 居住地驗證（必填）
-    if (!location || !location.trim()) {
-      newErrors.location = '居住地為必填';
-    } else if (!validateNoSpecialChars(location)) {
+    // 居住地驗證（非必填，只檢查格式）
+    if (location && location.trim() && !validateNoSpecialChars(location)) {
       newErrors.location = '居住地格式錯誤，請避免使用特殊符號';
     }
 
@@ -495,9 +493,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
                       onChange={(e) => {
                         const value = e.target.value;
                         setLocation(value);
-                        if (!value || !value.trim()) {
-                          setErrors(prev => ({ ...prev, location: '居住地為必填' }));
-                        } else if (!validateNoSpecialChars(value)) {
+                        if (value && value.trim() && !validateNoSpecialChars(value)) {
                           setErrors(prev => ({ ...prev, location: '居住地格式錯誤，請避免使用特殊符號' }));
                         } else {
                           setErrors(prev => ({ ...prev, location: undefined }));
