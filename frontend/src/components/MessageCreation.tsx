@@ -1948,6 +1948,11 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
 
 
   const handleFilterConfirm = (tags: Array<{ id: string; name: string }>, isInclude: boolean) => {
+    // 此處僅供篩選既有標籤；沒選任何標籤就確認 = 空條件，不設定（避免跳出「包含 」空訊息）
+    if (tags.length === 0) {
+      toast.error('請至少選擇一個既有標籤作為篩選條件');
+      return;
+    }
     setSelectedFilterTags(tags);
     setFilterCondition(isInclude ? 'include' : 'exclude');
     setTargetType('filtered');
@@ -2547,11 +2552,11 @@ export default function MessageCreation({ onBack, onNavigate, onNavigateToSettin
                               }}
                               className="box-border content-stretch flex gap-[2px] items-center justify-center min-w-[32px] p-[4px] rounded-md shrink-0 hover:bg-neutral-50 transition-colors"
                             >
-                              <p className="basis-0 font-normal grow leading-[1.5] min-h-px min-w-px shrink-0 text-[#a8a8a8] text-[16px] text-center">＋ 新增標籤</p>
+                              <p className="basis-0 font-normal grow leading-[1.5] min-h-px min-w-px shrink-0 text-[#a8a8a8] text-[16px] text-center">＋ 篩選標籤</p>
                             </button>
                             <DialogContentNoClose className="p-0 bg-transparent border-0 !w-auto !max-w-none !h-auto">
                               <DialogTitle className="sr-only">篩選目標對象</DialogTitle>
-                              <DialogDescription className="sr-only">選擇或建立標籤來篩選目標對象</DialogDescription>
+                              <DialogDescription className="sr-only">選擇標籤來篩選目標對象</DialogDescription>
                               <FilterModal
                                 onClose={() => setModalOpen(false)}
                                 onConfirm={handleFilterConfirm}

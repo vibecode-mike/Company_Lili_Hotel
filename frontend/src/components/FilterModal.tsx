@@ -21,7 +21,6 @@ interface FilterModalProps {
 }
 
 const MAX_TAGS = 20; // 标签数量上限
-const MAX_TAG_LENGTH = 20; // 标签名称字符数上限
 
 export default function FilterModal({ onClose, onConfirm, initialSelectedTags, initialIsInclude, channelId }: FilterModalProps) {
   const { selectedChannel } = useChannel();
@@ -119,31 +118,14 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
           return;
         }
 
-        // Check tag name length
-        if (searchInput.trim().length > MAX_TAG_LENGTH) {
-          alert(`標籤名稱不得超過 ${MAX_TAG_LENGTH} 個字元`);
-          return;
-        }
-
-        // Check if tag already exists in all available tags
+        // 此處只能「篩選」既有標籤，不可建立新標籤。
+        // 只有當輸入完全符合既有標籤時，Enter 才把它加入篩選條件；
+        // 輸入沒建立過的標籤名稱 → 不動作（下方清單會顯示「找不到符合的標籤」）。
         const existingTag = availableTags.find(t => t.name === searchInput.trim());
         if (existingTag && !selectedTags.find(st => st.id === existingTag.id)) {
           setSelectedTags([...selectedTags, existingTag]);
-        } else if (!existingTag) {
-          // 只有「會員標籤」可以人工建立；互動 / 轉單不允許新增（系統自動產生）
-          if (activeTab !== 'member') {
-            alert('互動標籤與轉單標籤無法在此處新增');
-            return;
-          }
-          const newTag: Tag = {
-            id: `member-${Date.now()}`,
-            name: searchInput.trim(),
-            type: 'member'
-          };
-          setSelectedTags([...selectedTags, newTag]);
-          setMemberTags([...memberTags, newTag]);
+          setSearchInput('');
         }
-        setSearchInput('');
       } else {
         // If input is empty, confirm the selection
         onConfirm?.(selectedTags, isInclude);
@@ -207,10 +189,6 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
     </div>
   );
 
-  // 「建立新標籤」提示只在會員標籤 tab 顯示（互動 / 轉單不允許人工新建）
-  const showNewTagCreation = activeTab === 'member'
-    && searchInput.trim()
-    && !displayTags.find(t => t.name.toLowerCase() === searchInput.toLowerCase());
 
   return (
     <div
@@ -260,7 +238,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
                     onCompositionEnd={() => {
                       isComposingRef.current = false;
                     }}
-                    placeholder={selectedTags.length === 0 ? "輸入或按 Enter 新增標籤" : ""}
+                    placeholder={selectedTags.length === 0 ? "輸入篩選標籤" : ""}
                     maxLength={20}
                     className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] flex-1 min-w-[120px] outline-none text-[#383838] text-[16px] placeholder:text-[#a8a8a8] bg-transparent"
                   />
@@ -298,10 +276,10 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
 
             {/* Tags List Label */}
             <div className="flex flex-col font-['Noto_Sans_TC:Regular',_sans-serif] font-normal justify-center leading-[0] relative shrink-0 text-[#6e6e6e] text-[14px] w-full">
-              <p className="leading-[1.5]">選擇或建立標籤</p>
+              <p className="leading-[1.5]">選擇篩選標籤</p>
             </div>
 
-            {/* Tab 切換 — 三種標籤都能挑選，但只有「會員標籤」可以人工新建 */}
+            {/* Tab 切換 — 三種標籤都能挑選（此處僅供篩選，不可新建；建立標籤請至會員管理／個人資料） */}
             <div className="flex gap-[24px] border-b border-[#e1ebf9] w-full">
               <button
                 type="button"
@@ -355,7 +333,7 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
                 // Blank state
                 <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#a8a8a8] text-[16px] text-center">
                   {activeTab === 'member'
-                    ? '尚無會員標籤，於上方輸入並開始建立'
+                    ? '尚無會員標籤'
                     : activeTab === 'interaction'
                       ? '尚無互動標籤（系統會在使用者點擊房卡 / 圖片時自動產生）'
                       : '尚無轉單標籤（訂單完成時系統自動產生）'}
@@ -374,20 +352,9 @@ export default function FilterModal({ onClose, onConfirm, initialSelectedTags, i
                       </div>
                     ))}
                   </div>
-                  {/* Show create new tag option */}
-                  {showNewTagCreation && (
-                    <div className="bg-slate-50 relative rounded-xs shrink-0 w-full mt-[4px]">
-                      <div className="flex flex-row items-center size-full">
-                        <div className="box-border content-stretch flex gap-[10px] items-center px-[8px] py-[6px] relative w-full">
-                          <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[14px] text-center text-nowrap whitespace-pre">建立</p>
-                          <TagComponent variant="blue">{searchInput}</TagComponent>
-                          <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] relative shrink-0 text-[#383838] text-[14px] text-center text-nowrap whitespace-pre">的會員標籤</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  {/* 此處僅供篩選既有標籤，不提供「建立新標籤」選項 */}
                   {/* Show message when no matches found */}
-                  {filteredTags.length === 0 && searchInput.trim() && !showNewTagCreation && (
+                  {filteredTags.length === 0 && searchInput.trim() && (
                     <p className="font-['Noto_Sans_TC:Regular',_sans-serif] font-normal leading-[1.5] text-[#a8a8a8] text-[14px] text-center py-[16px]">
                       找不到符合的標籤
                     </p>
