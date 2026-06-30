@@ -251,13 +251,62 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
       return;
     }
 
+    if (!(member as any)?.id) {
+      showToast('找不到會員資料，無法儲存', 'error');
+      return;
+    }
+
+    const sanitize = (value: string) => {
+      const trimmed = (value || '').trim();
+      return trimmed === '' ? null : trimmed;
+    };
+    const mapGenderToPayload = (value: string | null): string | undefined => {
+      if (value === 'male') return '1';
+      if (value === 'female') return '2';
+      if (value === 'undisclosed') return '0';
+      return undefined;
+    };
+
+    const payload: Record<string, any> = {
+      name: sanitize(realName),
+      phone: sanitize(phone),
+      email: sanitize(email),
+      id_number: sanitize(idNumber),
+      residence: sanitize(location),
+      passport_number: sanitize(passportNumber),
+      birthday: birthday || null,
+      gender: mapGenderToPayload(gender),
+    };
+
     try {
+      const token = localStorage.getItem('auth_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      const response = await fetch(`/api/v1/members/${(member as any).id}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        let errorMessage = '儲存失敗';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorData.message || errorMessage;
+        } catch {
+          // ignore
+        }
+        throw new Error(errorMessage);
+      }
+
       setIsEditing(false);
       setBirthdayPopoverOpen(false);
       setErrors({});
       showToast('儲存成功', 'success');
     } catch (error) {
-      showToast('儲存失敗', 'error');
+      const message = error instanceof Error ? error.message : '儲存失敗';
+      showToast(message, 'error');
     }
   };
 
