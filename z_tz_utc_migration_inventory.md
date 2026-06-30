@@ -156,8 +156,8 @@
 6. 前端 formatter 收斂 + 排程輸入/編輯 本地↔UTC
 7. CLAUDE.md 改寫
 — 1~6+line_app = 同一原子 staging 發布 —
-8.（後續）analytics CONVERT_TZ
-9.（後續）(h) epoch 補 tz + auto_responses.py:42 查證
+8. ✅ analytics CONVERT_TZ 已完成（commit f69de83b + c66fc86f，已 push main）
+9. ✅（後續）(h) epoch 補 tz + auto_responses.py:42 查證（見下方完成紀錄）
 
 ---
 
@@ -183,7 +183,7 @@
    - `booking_callback.py` 291 paid_at（DATETIME 已確認）/ 581 now_tpe（在同事 tag_trigger INSERT 區）
 3. **faq_service.py:483** `now = datetime.now()` 用途待查 → 寫入則 UTC / 比較則配 (e) / 日曆則 OPERATING_TZ。
 4. ✅ **(e) 子階段 4 已完成**：members 1052/1174 human_override 寫入 → `now_utc()`；line_app member_service.py:317 比較 → `utcnow()`（成對改、含 aware 正規化）；scheduler:197 → `now_utc()`；admin_retention:64 cutoff → `now_utc()`（輸出 cutoff 走 `to_utc_iso`）；schemas/message.py validate_scheduled_at_future → 改 UTC 基底比較。
-5. **(h) 子階段 9**：message_service 879-880、messages.py:354、auto_responses.py:42/396。
+5. ✅ **(h) 子階段 9 已完成**（commit 836c535b）：message_service 879-880、messages.py:354、auto_responses.py:42/396 → 補 `tz=timezone.utc` / fallback `now_utc()`。
 6. ✅ **(g) 子階段 5 已完成**：chatbot_service 915/1222/2948/3177 + pms_chatbot_client:37 `ZoneInfo("Asia/Taipei")` → `OPERATING_TZ`（DRY、行為不變）；conversations_export:139 CSV + chatbot.py:152 last_synced_at 輸出 → `ensure_utc(dt).astimezone(OPERATING_TZ)`（讀 UTC→營運時區→strftime）；conversations_export:158 檔名 + 移除 TAIPEI_TZ/pytz。
 
 ## 🟡 GUARDRAIL（defer 到最後整合的補做項，因每段都在過時基底上驗）
@@ -207,7 +207,20 @@ Timezone Convention 改成「DB = UTC（naive UTC）」：連線 pin `+00:00`、
 2. ✅ **GATE #2 完成 [3.5b]**：chatbot_service 7 處寫入 / webchat_sites:255 / booking_callback 291,581 → `now_utc()`（內容定位）；實證 now_utc() 回 naive UTC。
 3. ✅ **GATE #3 完成**：faq_service:483 `publish_all_draft` 的 `now` → `rule.published_at` = 寫入 → `now_utc()`。
 4. **GUARDRAIL G1~G4**：整合後完整重驗(進行中)、熱區掃描、MessageList 同事 WIP（已 stash，未埋進 commit）。
-4. 後續可獨立：(h) 子階段 9（message_service 879-880 / messages:354 / auto_responses:42,396）、JWT 另案。
+4. ✅ **(h) 子階段 9 已完成**（commit 836c535b，已 push main + staging 部署成功）：
+   - `message_service.py:879-880` created_at/send_time → `fromtimestamp(x, tz=timezone.utc).replace(tzinfo=None)`，fallback `datetime.now()` → `now_utc()`
+   - `auto_responses.py:42` epoch 分支 → `fromtimestamp(value, tz=timezone.utc).replace(tzinfo=None)`（查證：caller :396 傳 FB `create_time` = 真 UTC epoch，補 tz 正確）；`:396` fallback → `now_utc()`（補 import now_utc）
+   - `messages.py:354` 輸出 → `fromtimestamp(create_time, tz=timezone.utc).isoformat()`（帶 `+00:00`）
+   - 驗證：epoch 0 → `1970-01-01 00:00:00` naive UTC、輸出帶 `+00:00`，皆不看主機時區。
 
-## 📝 另案（不在本遷移範圍，記一筆）
-- `security.py:44` JWT `exp` 用裸 `datetime.now()`（host-tz 依賴的 latent bug）→ 之後單獨確認 token 過期判斷無 host-tz 依賴。
+## ✅ 子階段 8 已完成（analytics CONVERT_TZ，commit f69de83b + c66fc86f，已 push main）
+**緣由**：使用者回報「數據洞察互動時間用到 UTC」——點擊互動標籤後熱圖時段偏 8 小時（15:44 台北的點擊落到 04:00-08:00 格）。
+**根因**：analytics 各日界線/時段查詢直接對 UTC 欄位用 `DATE()`/`HOUR()`，未換營運時區。
+**改法**（架構要求 A：單一 `OPERATING_TZ_SQL` 常數 + `'+08:00'` offset 字串）：
+- `time-slot-insights` / `time-slot-detail`：`DATE()`/`FLOOR(HOUR()/4)` 切格 + 範圍比對 + cell 4hr 視窗 → `CONVERT_TZ(triggered_at,'+00:00','+08:00')`；明細 `last_triggered_at` → `to_utc_iso()`（+00:00）。
+- 每日趨勢同類一併補（避免半套）：`ai-coverage`(conversation_messages.created_at)、`completed-orders`(bookings.paid_at, DATETIME)、`new-members`(members.created_at)、「未解 top N」視窗 → 同 `CONVERT_TZ`。
+- 驗證：live 端點 06-30 點擊正確落 block 3（12-16h）；cell 查詢回該 tag；`last_triggered_at` 帶 `+00:00`。
+- ⚠️ 殘留（未做，YAGNI）：5 支預設視窗 `today = date.today()` 仍依主機時區；本機/staging 主機 `+08:00`=營運時區故正確，前端多帶明確 `end_date`。若部署 UTC 主機需做 operating-tz today helper。
+
+## 📝 另案（不在本遷移範圍，已順手收）
+- ✅ **`security.py:44` JWT `exp` 已修**（commit 74f5df60，已 push main + staging 部署成功）：`datetime.now()`（naive 主機本地）→ `datetime.now(timezone.utc)`。PyJWT 以 `utctimetuple()` 算 exp，naive 會被當 UTC → 非 UTC 主機 token 壽命多出主機 offset（台北 +8h，設定 60 分實測活 540 分）。改 aware UTC 後實測回 60 分。僅校正絕對基準、相對時長不變、已簽發 token 不受影響。
