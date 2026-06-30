@@ -170,7 +170,7 @@ export default function ChatRoomLayout({
   onPlatformChange,
   initialPlatform,
 }: ChatRoomLayoutProps) {
-  const { fetchMemberById, getDisplayMemberById } = useMembers();
+  const { fetchMemberById, getDisplayMemberById, updateMember } = useMembers();
   const [member, setMember] = useState<Member | undefined>(initialMember);
   const [isLoadingMember, setIsLoadingMember] = useState(false);
 
@@ -336,6 +336,12 @@ export default function ChatRoomLayout({
     }
     return { ...displayMember, lastChatTime: latestChatTimestamp };
   }, [displayMember, latestChatTimestamp]);
+
+  // 面板儲存成功後：同步 local member state 與 MembersContext（讓會員列表/其他頁即時反映）
+  const handlePanelMemberUpdate = useCallback((updated: Member) => {
+    setMember((prev) => (prev ? { ...prev, ...updated } : updated));
+    if (updated?.id) updateMember(updated.id.toString(), updated);
+  }, [updateMember]);
 
   // 獲取渠道名稱（粉專名/頻道名）- 根據會員的 join_source 決定
   const panelChannelName = useMemo(() => {
@@ -1144,6 +1150,7 @@ export default function ChatRoomLayout({
                     conversionTags={conversionTags}
                     onEditTags={handleEditTags}
                     channelName={panelChannelName}
+                    onMemberUpdate={handlePanelMemberUpdate}
                   />
                 ) : (
                   <div className="w-full text-center text-[#6e6e6e] text-[16px]">

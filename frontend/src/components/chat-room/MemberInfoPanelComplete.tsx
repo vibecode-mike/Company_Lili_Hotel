@@ -11,6 +11,7 @@ import { RadioOption } from '../common/RadioOption';
 import { format } from 'date-fns';
 import svgPathsInfo from '../../imports/svg-k0rlkn3s4y';
 import { useToast } from '../ToastProvider';
+import { useAuth } from '../auth/AuthContext';
 import { MemberSourceIconSmall } from '../common/icons';
 import { CancelButton } from '../common/buttons';
 import { TagList } from '../common/TagList';
@@ -25,6 +26,8 @@ export interface MemberInfoPanelCompleteProps {
   onEditTags?: () => void;
   /** 渠道名稱（粉專名/頻道名），優先使用此值 */
   channelName?: string | null;
+  /** 儲存成功後回傳更新後的會員，供外層同步 local state 與會員列表 */
+  onMemberUpdate?: (member: Member) => void;
 }
 
 const normalizeGender = (value?: string | null): 'male' | 'female' | 'undisclosed' => {
@@ -47,8 +50,9 @@ const getMemberString = (member?: Member, keys: string[] = [], fallback = ''): s
   return fallback;
 };
 
-export default function MemberInfoPanelComplete({ member, memberTags, interactionTags, conversionTags, onEditTags, channelName: propChannelName }: MemberInfoPanelCompleteProps) {
+export default function MemberInfoPanelComplete({ member, memberTags, interactionTags, conversionTags, onEditTags, channelName: propChannelName, onMemberUpdate }: MemberInfoPanelCompleteProps) {
   const [isEditing, setIsEditing] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false);
   const [birthdayPopoverOpen, setBirthdayPopoverOpen] = React.useState(false);
   const [realName, setRealName] = React.useState(
     member?.realName || (member as any)?.name || ''
@@ -69,6 +73,7 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
     getMemberString(member, ['passportNumber', 'passport_number'], '')
   );
   const { showToast } = useToast();
+  const { logout } = useAuth();
 
   const hasMemberTags = Boolean(memberTags && memberTags.length > 0);
   const hasInteractionTags = Boolean(interactionTags && interactionTags.length > 0);
@@ -267,6 +272,8 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
       return undefined;
     };
 
+    const birthdayPayload = birthday ? format(birthday, 'yyyy-MM-dd') : null;
+
     const payload: Record<string, any> = {
       name: sanitize(realName),
       phone: sanitize(phone),
@@ -274,10 +281,11 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
       id_number: sanitize(idNumber),
       residence: sanitize(location),
       passport_number: sanitize(passportNumber),
-      birthday: birthday || null,
+      birthday: birthdayPayload,
       gender: mapGenderToPayload(gender),
     };
 
+    setIsSaving(true);
     try {
       const token = localStorage.getItem('auth_token');
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -288,6 +296,12 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
         headers,
         body: JSON.stringify(payload),
       });
+
+      if (response.status === 401) {
+        showToast('登入已過期，請重新登入', 'error');
+        logout();
+        return;
+      }
 
       if (!response.ok) {
         let errorMessage = '儲存失敗';
@@ -300,6 +314,21 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
         throw new Error(errorMessage);
       }
 
+      // 以本地狀態組更新後會員，回傳外層同步 local state 與會員列表
+      const updatedMember = {
+        ...member,
+        name: sanitize(realName),
+        realName: sanitize(realName),
+        phone: sanitize(phone),
+        email: sanitize(email),
+        id_number: sanitize(idNumber),
+        residence: sanitize(location),
+        passport_number: sanitize(passportNumber),
+        birthday: birthdayPayload,
+        gender: mapGenderToPayload(gender) || member.gender,
+      } as Member;
+      onMemberUpdate?.(updatedMember);
+
       setIsEditing(false);
       setBirthdayPopoverOpen(false);
       setErrors({});
@@ -307,6 +336,8 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
     } catch (error) {
       const message = error instanceof Error ? error.message : '儲存失敗';
       showToast(message, 'error');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -812,15 +843,16 @@ export default function MemberInfoPanelComplete({ member, memberTags, interactio
               handleCancel();
             }}
           />
-          <div 
-            className="bg-[#242424] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-2xl shrink-0 cursor-pointer hover:opacity-80 transition-opacity" 
+          <div
+            className={`bg-[#242424] box-border content-stretch flex items-center justify-center min-h-[48px] min-w-[72px] px-[12px] py-[8px] relative rounded-2xl shrink-0 transition-opacity ${isSaving ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer hover:opacity-80'}`}
             data-name="Modal Button"
             onClick={(e) => {
               e.stopPropagation();
+              if (isSaving) return;
               handleSave();
             }}
           >
-            <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center text-white">儲存變更</p>
+            <p className="basis-0 font-['Noto_Sans_TC:Regular',sans-serif] font-normal grow leading-[1.5] min-h-px min-w-px relative shrink-0 text-[16px] text-center text-white">{isSaving ? '儲存中…' : '儲存變更'}</p>
           </div>
         </div>
       )}
