@@ -19,6 +19,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.core.timezone import OPERATING_TZ_SQL, to_utc_iso
 
 router = APIRouter()
 
@@ -611,17 +612,20 @@ async def get_time_slot_insights(
     # 每個（日期、4hr 時段）算 COUNT(DISTINCT member_id）
     # 只算「用戶端真實互動」：對話 (INTERACTION) / 點擊 (CLICK) / 轉單 (CONVERSION)
     # 管理員手動加標籤 (MANUAL) 排除，避免熱圖跟互動旅程明細數字對不起來
+    # triggered_at 存 UTC；時段熱圖是營運時區視圖，日界線/時段一律換到 OPERATING_TZ 再切。
+    # 直接用 UTC 的 DATE()/HOUR() 會讓格子偏 8 小時（落到錯的日/時段）。
+    lt = f"CONVERT_TZ(t.triggered_at, '+00:00', '{OPERATING_TZ_SQL}')"
     sql = text(f"""
-        SELECT DATE(t.triggered_at) AS d,
-               FLOOR(HOUR(t.triggered_at) / 4) AS block,
+        SELECT DATE({lt}) AS d,
+               FLOOR(HOUR({lt}) / 4) AS block,
                COUNT(DISTINCT t.member_id) AS n
         FROM tag_trigger_logs t
         JOIN members m ON m.id = t.member_id
-        WHERE t.triggered_at >= :start_dt AND t.triggered_at < :end_dt
+        WHERE {lt} >= :start_dt AND {lt} < :end_dt
           AND t.trigger_source IN ('INTERACTION', 'CLICK', 'CONVERSION')
           AND ({where_clause})
           {channel_id_filter}
-        GROUP BY DATE(t.triggered_at), FLOOR(HOUR(t.triggered_at) / 4)
+        GROUP BY DATE({lt}), FLOOR(HOUR({lt}) / 4)
     """)
     rows = (await db.execute(sql, base_params)).all()
 
@@ -643,7 +647,7 @@ async def get_time_slot_insights(
         SELECT COUNT(DISTINCT t.member_id) AS n
         FROM tag_trigger_logs t
         JOIN members m ON m.id = t.member_id
-        WHERE t.triggered_at >= :start_dt AND t.triggered_at < :end_dt
+        WHERE {lt} >= :start_dt AND {lt} < :end_dt
           AND t.trigger_source IN ('INTERACTION', 'CLICK', 'CONVERSION')
           AND ({where_clause})
           {channel_id_filter}
@@ -743,6 +747,9 @@ async def get_time_slot_detail(
     channel_id_filter, scope_params = _scope_filter("t", "channel_id", line_channel_id, tenant_id)
     base_params = {"start_dt": scope_start, "end_dt": scope_end, **scope_params}
 
+    # triggered_at 存 UTC；scope（單格 4hr / 全 7 天）的日界線是營運時區，
+    # 故比對前把 triggered_at 換到 OPERATING_TZ，與 heatmap 切格邏輯一致（否則偏 8 小時）。
+    lt = f"CONVERT_TZ(t.triggered_at, '+00:00', '{OPERATING_TZ_SQL}')"
     # 一次撈出三類 source 的 (tag_name, trigger_source, event_count, last_triggered_at)
     # 用 COUNT(*) 不去重 member，讓「同會員同房型訂 3 間 → conversion=3」符合規格
     sql = text(f"""
@@ -752,7 +759,7 @@ async def get_time_slot_detail(
                MAX(t.triggered_at) AS last_at
         FROM tag_trigger_logs t
         JOIN members m ON m.id = t.member_id
-        WHERE t.triggered_at >= :start_dt AND t.triggered_at < :end_dt
+        WHERE {lt} >= :start_dt AND {lt} < :end_dt
           AND t.trigger_source IN ('INTERACTION', 'CLICK', 'CONVERSION')
           AND t.tag_name <> ''
           AND ({where_clause})
@@ -796,7 +803,7 @@ async def get_time_slot_detail(
             interaction=e["interaction"],
             conversion=e["conversion"],
             total=total,
-            last_triggered_at=last_at.isoformat(),
+            last_triggered_at=to_utc_iso(last_at) or "",
         )
         for tag, e, total, last_at in raw_tags
     ]
@@ -806,7 +813,7 @@ async def get_time_slot_detail(
         SELECT COUNT(DISTINCT t.member_id) AS n
         FROM tag_trigger_logs t
         JOIN members m ON m.id = t.member_id
-        WHERE t.triggered_at >= :start_dt AND t.triggered_at < :end_dt
+        WHERE {lt} >= :start_dt AND {lt} < :end_dt
           AND t.trigger_source IN ('INTERACTION', 'CLICK', 'CONVERSION')
           AND ({where_clause})
           {channel_id_filter}
