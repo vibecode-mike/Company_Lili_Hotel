@@ -1020,10 +1020,7 @@ function Container6({ member, onMemberUpdate }: { member?: MemberData; onMemberU
 
   const handleResidenceChange = (value: string) => {
     setResidence(value);
-    if (!value || !value.trim()) {
-      // 必填欄位為空，即時顯示錯誤
-      setErrors(prev => ({ ...prev, residence: '居住地為必填' }));
-    } else if (!validateNoSpecialChars(value)) {
+    if (value && value.trim() && !validateNoSpecialChars(value)) {
       setErrors(prev => ({ ...prev, residence: '居住地格式錯誤，請避免使用特殊符號' }));
     } else {
       setErrors(prev => ({ ...prev, residence: undefined }));
@@ -1147,9 +1144,7 @@ function Container6({ member, onMemberUpdate }: { member?: MemberData; onMemberU
     }
 
     // 居住地驗證（必填）
-    if (!residence || !residence.trim()) {
-      newErrors.residence = '居住地為必填';
-    } else if (!validateNoSpecialChars(residence)) {
+    if (residence && residence.trim() && !validateNoSpecialChars(residence)) {
       newErrors.residence = '居住地格式錯誤，請避免使用特殊符號';
     }
 
