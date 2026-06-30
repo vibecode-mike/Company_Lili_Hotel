@@ -464,6 +464,16 @@ server {
         access_log off;
     }
 
+    # 點擊追蹤：群發圖片/按鈕 URL = {PUBLIC_BASE}/__track?...&to=<真實網址>，
+    # line_app(:3001) 記點擊後 302 導去真實網址。必須在 location / 之前，
+    # 否則落到 SPA fallback（try_files → index.html）會被前端 router 導回首頁。
+    location /__track {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     # 前端（靜態 build，SPA fallback 到 index.html）
     location / {
         root /home/Company_Lili_Hotel/frontend/build;

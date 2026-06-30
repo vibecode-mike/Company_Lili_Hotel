@@ -148,6 +148,16 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
     }
 
+    # 點擊追蹤：群發圖片/按鈕的 URL 走 {PUBLIC_BASE}/__track?...&to=<真實網址>，
+    # 由 line_app(:3001) 寫點擊統計後 302 導去真實網址。必須在 location / 之前，
+    # 否則落到 SPA catch-all（try_files → index.html）會被前端 router 導回首頁。
+    location /__track {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     # 前端靜態檔（nginx 直接 serve build/）
     location / {
         root /home/Company_Lili_Hotel/frontend/build;

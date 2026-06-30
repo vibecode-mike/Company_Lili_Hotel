@@ -139,6 +139,8 @@ class ClickTrackingDemo(Base):
         Integer, nullable=False, default=0, comment="總點擊次數"
     )
     last_clicked_at = Column(DateTime, nullable=True, comment="最後點擊時間")
+    # 無 comment：與 migration 8d3ee2588544 / 9fff2f41b7e8 一致，避免 alembic check 多 drift
+    last_click_tag = Column(Text, nullable=True)
     created_at = Column(
         DateTime, default=datetime.now, nullable=False, comment="建立時間"
     )

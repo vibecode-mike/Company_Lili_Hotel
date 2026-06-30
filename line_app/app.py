@@ -2079,9 +2079,12 @@ def __track():
         insert_display_expr = f"COALESCE(:dname, {member_display_subq})"
         update_display_expr = f"COALESCE(:dname, {member_display_subq}, line_display_name)"
 
+        # created_at/updated_at 在 DB 沒有 server default（model 的 Python default 只在 ORM 生效），
+        # raw SQL 必須明確帶值，否則 1364 Field 'created_at' doesn't have a default value。
         execute(f"""
             INSERT INTO `{MYSQL_DB}`.`click_tracking_demo`
-                (line_id, source_campaign_id, line_display_name, total_clicks, last_clicked_at, last_click_tag)
+                (line_id, source_campaign_id, line_display_name, total_clicks, last_clicked_at, last_click_tag,
+                 created_at, updated_at)
             VALUES
                 (
                     :uid,
@@ -2089,13 +2092,16 @@ def __track():
                     {insert_display_expr},
                     1,
                     NOW(),
-                    :merged
+                    :merged,
+                    NOW(),
+                    NOW()
                 )
             ON DUPLICATE KEY UPDATE
-                total_clicks = 1,
+                total_clicks = total_clicks + 1,
                 line_display_name = {update_display_expr},
                 last_click_tag = :merged,
-                last_clicked_at = NOW();
+                last_clicked_at = NOW(),
+                updated_at = NOW();
         """, {"uid": uid, "src": src, "dname": display_name, "merged": merged_str})
     except Exception as e:
         logging.exception(e)
