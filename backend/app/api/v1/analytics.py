@@ -142,19 +142,22 @@ async def get_ai_coverage(
     daily_params = {"start_dt": start_dt, "end_dt": end_dt, **daily_scope}
 
     # 1. 每日統計
+    # created_at 存 UTC；每日趨勢的日界線是營運時區，故換到 OPERATING_TZ 再切 DATE，
+    # 否則台北凌晨(=前一日 UTC)的訊息會被算到前一天。
+    lt = f"CONVERT_TZ(cm.created_at, '+00:00', '{OPERATING_TZ_SQL}')"
     daily_sql = text(f"""
-        SELECT DATE(cm.created_at) AS d,
+        SELECT DATE({lt}) AS d,
                COUNT(*) AS total,
                SUM(CASE WHEN cm.unanswered = 1 THEN 1 ELSE 0 END) AS unanswered
         FROM conversation_messages cm
         {daily_join}
         WHERE cm.message_source = 'gpt'
           AND cm.direction = 'outgoing'
-          AND cm.created_at >= :start_dt
-          AND cm.created_at < :end_dt
+          AND {lt} >= :start_dt
+          AND {lt} < :end_dt
           {daily_filter}
-        GROUP BY DATE(cm.created_at)
-        ORDER BY DATE(cm.created_at)
+        GROUP BY DATE({lt})
+        ORDER BY DATE({lt})
     """)
     daily_rows = (await db.execute(daily_sql, daily_params)).all()
 
@@ -203,8 +206,8 @@ async def get_ai_coverage(
         WHERE m.message_source = 'gpt'
           AND m.direction = 'outgoing'
           AND m.unanswered = 1
-          AND m.created_at >= :start_dt
-          AND m.created_at < :end_dt
+          AND CONVERT_TZ(m.created_at, '+00:00', '{OPERATING_TZ_SQL}') >= :start_dt
+          AND CONVERT_TZ(m.created_at, '+00:00', '{OPERATING_TZ_SQL}') < :end_dt
           {top_filter}
         ORDER BY m.created_at DESC
         LIMIT :top_n
@@ -280,14 +283,16 @@ async def get_completed_orders(
     member_filter, scope_params = _scope_filter("mem", "line_channel_id", line_channel_id, tenant_id)
     params = {"start_dt": start_dt, "end_dt": end_dt, **scope_params}
 
+    # paid_at 存 UTC（DATETIME）；每日訂單趨勢日界線用營運時區，否則跨午夜歸錯日。
+    lt = f"CONVERT_TZ(b.paid_at, '+00:00', '{OPERATING_TZ_SQL}')"
     daily_sql = text(f"""
-        SELECT DATE(b.paid_at) AS d, COUNT(*) AS n
+        SELECT DATE({lt}) AS d, COUNT(*) AS n
         FROM bookings b
         {member_join}
-        WHERE b.paid_at >= :start_dt AND b.paid_at < :end_dt
+        WHERE {lt} >= :start_dt AND {lt} < :end_dt
           {member_filter}
-        GROUP BY DATE(b.paid_at)
-        ORDER BY DATE(b.paid_at)
+        GROUP BY DATE({lt})
+        ORDER BY DATE({lt})
     """)
     rows = (await db.execute(daily_sql, params)).all()
 
@@ -525,14 +530,16 @@ async def get_new_members(
     else:
         channel_id_filter = ""
 
+    # created_at 存 UTC；每日新增會員趨勢日界線用營運時區，否則跨午夜歸錯日。
+    lt = f"CONVERT_TZ(created_at, '+00:00', '{OPERATING_TZ_SQL}')"
     daily_sql = text(f"""
-        SELECT DATE(created_at) AS d, COUNT(*) AS n
+        SELECT DATE({lt}) AS d, COUNT(*) AS n
         FROM members
         WHERE ({where})
-          AND created_at >= :start_dt AND created_at < :end_dt
+          AND {lt} >= :start_dt AND {lt} < :end_dt
           {channel_id_filter}
-        GROUP BY DATE(created_at)
-        ORDER BY DATE(created_at)
+        GROUP BY DATE({lt})
+        ORDER BY DATE({lt})
     """)
     rows = (await db.execute(daily_sql, params)).all()
 
