@@ -3,7 +3,7 @@
 """
 import logging
 from datetime import date, time, datetime, timezone
-from app.core.timezone import now_utc
+from app.core.timezone import now_utc, to_utc_iso
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
@@ -98,7 +98,7 @@ def _serialize_keywords(keyword_relations: Sequence[AutoResponseKeyword]) -> Lis
             "is_enabled": kw.is_enabled,
             "is_duplicate": kw.is_duplicate or False,
             "match_count": kw.match_count,
-            "last_triggered_at": kw.last_triggered_at.isoformat() if kw.last_triggered_at else None,
+            "last_triggered_at": to_utc_iso(kw.last_triggered_at),
         }
         for kw in keyword_relations
     ]
@@ -408,7 +408,7 @@ async def _get_fb_auto_responses_from_api(jwt_token: str, db: AsyncSession) -> L
                 "is_active": item.get("enabled", False),
                 "trigger_count": item.get("count", 0),
                 "success_rate": 0,
-                "created_at": created_at_dt,  # 已轉換為 datetime 對象
+                "created_at": to_utc_iso(created_at_dt),  # 已轉換為 datetime 對象
                 "updated_at": None,
                 "keywords": keywords_list,
                 "messages": messages_list,
@@ -519,8 +519,8 @@ async def get_auto_responses(
                 "is_active": ar.is_active,
                 "trigger_count": ar.trigger_count,
                 "success_rate": float(ar.success_rate) if ar.success_rate else 0,
-                "created_at": ar.created_at,
-                "updated_at": ar.updated_at,
+                "created_at": to_utc_iso(ar.created_at),
+                "updated_at": to_utc_iso(ar.updated_at),
                 "keywords": _serialize_keywords(ar.keyword_relations),
                 "messages": _serialize_messages(ar.response_messages),
                 "trigger_time_start": ar.trigger_time_start.isoformat() if ar.trigger_time_start else None,
@@ -684,8 +684,8 @@ async def get_auto_response(
             "is_active": auto_response.is_active,
             "trigger_count": auto_response.trigger_count,
             "success_rate": float(auto_response.success_rate) if auto_response.success_rate else 0,
-            "created_at": auto_response.created_at,
-            "updated_at": auto_response.updated_at,
+            "created_at": to_utc_iso(auto_response.created_at),
+            "updated_at": to_utc_iso(auto_response.updated_at),
             "keywords": _serialize_keywords(auto_response.keyword_relations),
             "messages": _serialize_messages(auto_response.response_messages),
             "trigger_time_start": auto_response.trigger_time_start.isoformat() if auto_response.trigger_time_start else None,

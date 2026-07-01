@@ -221,7 +221,7 @@ async def get_ai_coverage(
             question=(r.question or "")[:500],
             ai_reply=(r.ai_reply or "")[:500],
             platform=r.platform,
-            created_at=r.created_at.isoformat() if r.created_at else "",
+            created_at=to_utc_iso(r.created_at) or "",
         )
         for r in top_rows
     ]
@@ -419,7 +419,7 @@ async def get_pending_conversations(
             display_name=display_name,
             avatar_url=r.line_avatar,
             question=question[:300],
-            question_at=r.question_at.isoformat() if r.question_at else "",
+            question_at=to_utc_iso(r.question_at) or "",
             reason=reason,
         ))
 

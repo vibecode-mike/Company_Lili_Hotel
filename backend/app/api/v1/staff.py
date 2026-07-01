@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func
 from typing import List, Optional
 from pydantic import BaseModel, Field, EmailStr
-from datetime import datetime
+from app.core.timezone import AwareUtcDatetime
 import logging
 
 from app.database import get_db
@@ -43,7 +43,7 @@ class StaffUserResponse(BaseModel):
     full_name: Optional[str] = None
     role: UserRole
     is_active: bool
-    last_login_at: Optional[datetime] = None
+    last_login_at: Optional[AwareUtcDatetime] = None
     channels: List[StaffChannelBrief] = []
 
     class Config:

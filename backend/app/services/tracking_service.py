@@ -4,7 +4,7 @@
 """
 from typing import Dict, Any, Optional
 from datetime import datetime
-from app.core.timezone import now_utc
+from app.core.timezone import now_utc, to_utc_iso
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, update
 from sqlalchemy.orm import selectinload
@@ -371,7 +371,7 @@ class TrackingService:
                     "title": item.title,
                     "click_count": item.click_count or 0,
                     "unique_click_count": item.unique_click_count or 0,
-                    "last_clicked_at": item.last_clicked_at,
+                    "last_clicked_at": to_utc_iso(item.last_clicked_at),
                 }
                 for item in campaign.template.carousel_items
             ]
@@ -416,7 +416,7 @@ class TrackingService:
             "interactions_by_type": interactions_by_type,
             "carousel_stats": carousel_stats,
             "component_stats": component_stats,
-            "generated_at": now_utc(),
+            "generated_at": to_utc_iso(now_utc()),
         }
 
     async def get_campaign_interactions(

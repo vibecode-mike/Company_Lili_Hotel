@@ -154,5 +154,5 @@ async def run_guest_cleanup(
         "updated_threads": updated_threads,
         "deleted_threads": deleted_threads,
         "deleted_members": deleted_members,
-        "cutoff": cutoff.isoformat(),
+        "cutoff": to_utc_iso(cutoff),
     }

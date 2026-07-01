@@ -5,6 +5,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from app.core.timezone import to_utc_iso
 from app.database import get_db
 from app.models.consumption_record import ConsumptionRecord
 from app.schemas.consumption_record import (
@@ -115,7 +116,7 @@ async def list_consumption_records(
                         "stay_date": r.stay_date.isoformat() if r.stay_date else None,
                         "checkout_date": r.checkout_date.isoformat() if r.checkout_date else None,
                         "notes": r.notes,
-                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                        "created_at": to_utc_iso(r.created_at),
                     }
                     for r in records
                 ],
@@ -163,8 +164,8 @@ async def get_consumption_record(
             "stay_date": record.stay_date.isoformat() if record.stay_date else None,
             "checkout_date": record.checkout_date.isoformat() if record.checkout_date else None,
             "notes": record.notes,
-            "created_at": record.created_at.isoformat() if record.created_at else None,
-            "updated_at": record.updated_at.isoformat() if record.updated_at else None,
+            "created_at": to_utc_iso(record.created_at),
+            "updated_at": to_utc_iso(record.updated_at),
         }
     }
 

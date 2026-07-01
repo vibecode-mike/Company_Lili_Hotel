@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.timezone import to_utc_iso
 from app.database import get_db
 from app.models.member import Member
 from app.models.pms_integration import PMSIntegration
@@ -119,9 +120,7 @@ async def list_pms_integrations(
                         "member_id": r.member_id,
                         "match_status": r.match_status,
                         "match_rate": float(r.match_rate) if r.match_rate else None,
-                        "created_at": (
-                            r.created_at.isoformat() if r.created_at else None
-                        ),
+                        "created_at": to_utc_iso(r.created_at),
                     }
                     for r in records
                 ],
@@ -171,8 +170,8 @@ async def get_pms_integration(
             "match_status": record.match_status,
             "match_rate": float(record.match_rate) if record.match_rate else None,
             "error_message": record.error_message,
-            "created_at": record.created_at.isoformat() if record.created_at else None,
-            "updated_at": record.updated_at.isoformat() if record.updated_at else None,
+            "created_at": to_utc_iso(record.created_at),
+            "updated_at": to_utc_iso(record.updated_at),
         },
     }
 
