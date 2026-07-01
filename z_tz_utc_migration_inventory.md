@@ -240,3 +240,19 @@ Timezone Convention 改成「DB = UTC（naive UTC）」：連線 pin `+00:00`、
 - ✅ 群發列表止血（commit 7ef43824）：`message_service.py:1065` `page_response.model_dump()`→`mode="json"`（發送/排程/建立/更新時間一次修好）。
 - ✅ **全 api/v1 + services sweep（commit 17f783fe）**：4 個 triage agent 掃完，18 BROKEN 全修——auto_responses(6)、analytics(2)、admin_retention(1 cutoff)、pms_integrations(3)、consumption_records(3)、tracking_service(2)、staff `last_login_at` 型別。SUSPECT `chatbot.py:153 last_synced_at` 經查前端逐字顯示（非 `new Date`）→ 刻意台北 label，保留。
 - 💡 **為何不做全域 encoder**：18 處裡 11 處已 `.isoformat()`/`strftime` 成字串（encoder 攔不到）、staff 是 typed 欄位（Pydantic 自己序列化，FastAPI encoder 也攔不到）→ 只換得 7 處卻要動全域序列化，不划算。定向修 + 這份「不算 bug」清單當日後 review 準則。
+
+## 🔴 前端顯示層 tz bug（後端全對後才浮現的另一層，sweep 已收）
+**緣由**：使用者回報 AI Chatbot → 訂房/設施 → 動作符號 → FAQ 規則「最後更新時間」仍慢 8h。**後端 faq.py 規則 `updated_at` 明明已走 `to_utc_iso`（+00:00）**——漏在前端：拿到正確 ISO 卻用**字串切割**丟掉時區。
+**根因（整類，前端）**：後端送對 `+00:00` 後，前端若不用 `new Date()` 轉觀看者時區，而是：
+1. 對 ISO 做 `.slice(0,16)/.slice(0,19)/.split("T")[0]/.replace("T"," ")` 拿去**顯示** → 丟掉 `+00:00`、直接印 UTC。
+2. `new Date().toISOString()`（UTC）當**顯示值**（樂觀更新常見）。
+3. JSX 直接插原始 ISO 字串沒過 `new Date()`。
+4. `toLocaleString` 硬編 `timeZone:"Asia/Taipei"`（慣例是不指定、跟隨觀看者）。
+**不算 bug**：date-only 切 `YYYY-MM-DD` 給 `<input type=date>`/比較/keys、陣列分頁 `.slice(0,N)`、`new Date(x)+toLocaleString`（無 timeZone）、`new Date(x).getHours()` 等 local getters、排程 INPUT 的 `new Date(local).toISOString()` 送後端。
+
+**修法**：改用 `new Date(iso)+toLocaleString`（不帶 timeZone）或現成 helper `formatMemberDateTime`（utils/memberTime.ts）/ `formatChatTime`。
+
+**sweep 結果（3 個 triage agent 掃 39 components + 9 chat-room + 12 pages + 27 utils/hooks/contexts）**：**全前端只有 PMSIntegration.tsx / FacilitiesContent.tsx 兩檔中招**，其餘全正確、無任何硬編 timeZone。
+- ✅ commit de54aebe：兩檔 FAQ 規則 `rule.updated_at.slice(0,16)` → `formatMemberDateTime`。
+- ✅ commit 4ea397c7：兩檔樂觀更新 `new Date().toISOString().slice(0,16)`（PMSIntegration:884、FacilitiesContent:1086/1108）→ `formatMemberDateTime`。
+- 📌 **教訓**：後端 sweep 保證 API 帶 `+00:00`，但**照不到前端怎麼格式化**；顯示層要另掃「切 ISO 字串 / toISOString 當顯示 / 裸插值 / 硬編 timeZone」四種紅旗。
