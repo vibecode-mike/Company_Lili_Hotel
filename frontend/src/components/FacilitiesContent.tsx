@@ -1083,7 +1083,7 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
               const json = await res.json();
               const newId = String(json.data?.id ?? editingFacility.id);
               savedRuleIdRef.current = newId;
-              const now = new Date().toISOString().slice(0, 16).replace("T", " ");
+              const now = formatMemberDateTime(new Date().toISOString());
               setFacilities((prev) => [
                 {
                   id: newId,
@@ -1105,7 +1105,7 @@ const FacilitiesDataTable = memo(function FacilitiesDataTable({
                 content_json,
                 tag_names: draft.memberTags,
               });
-              const now = new Date().toISOString().slice(0, 16).replace("T", " ");
+              const now = formatMemberDateTime(new Date().toISOString());
               setFacilities((prev) =>
                 prev.map((r) =>
                   r.id === editingFacility.id

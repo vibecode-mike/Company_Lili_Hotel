@@ -881,7 +881,7 @@ const PMSDataTable = memo(function PMSDataTable({
         url: draft.bookingUrl,
         image_url: draft.customImageUrl,
       };
-      const now = new Date().toISOString().slice(0, 16).replace("T", " ");
+      const now = formatMemberDateTime(new Date().toISOString());
       const updatedRoom: Partial<RoomRecord> = {
         roomType: draft.customRoomName || room?.roomType || "",
         customImageUrl: draft.customImageUrl,
