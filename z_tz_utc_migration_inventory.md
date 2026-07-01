@@ -224,3 +224,19 @@ Timezone Convention 改成「DB = UTC（naive UTC）」：連線 pin `+00:00`、
 
 ## 📝 另案（不在本遷移範圍，已順手收）
 - ✅ **`security.py:44` JWT `exp` 已修**（commit 74f5df60，已 push main + staging 部署成功）：`datetime.now()`（naive 主機本地）→ `datetime.now(timezone.utc)`。PyJWT 以 `utctimetuple()` 算 exp，naive 會被當 UTC → 非 UTC 主機 token 壽命多出主機 offset（台北 +8h，設定 60 分實測活 540 分）。改 aware UTC 後實測回 60 分。僅校正絕對基準、相對時長不變、已簽發 token 不受影響。
+
+## 🔴 新發現的一整類 bug：`AwareUtcDatetime` 序列化器被「繞過」（sweep 已收）
+**緣由**：使用者逐頁檢查，先後回報會員管理「最近聊天時間」、活動與訊息推播「發送時間」仍慢 8h。
+**根因（整類）**：`AwareUtcDatetime` 的 `PlainSerializer(to_utc_iso, when_used="json")` **只有在「JSON 序列化該 typed 欄位」那刻才開火**。以下三種寫法會在那之前就把時間定型，繞過它 → 輸出裸 naive（無 `+00:00`）→ 前端 `new Date()` 當本地 → 慢 8h：
+1. `.model_dump()`（python mode，非 `mode="json"`）後塞進 `SuccessResponse.data`（型別 `Any`，不會再序列化）。
+2. 手組 dict 直接塞 raw datetime，或 `dt.isoformat()`／`str(dt)` 打在 naive datetime 上。
+3. schema 欄位型別寫成裸 `datetime`（非 `AwareUtcDatetime`）——即使有 `response_model` 也照樣吐無標記。
+**不算 bug（排除）**：端點 `response_model=<欄位是 AwareUtcDatetime 的 schema>`、回傳 Pydantic 實例（未先 dump）、`.isoformat()` 打在已 aware 的時間、date-only/time-only 欄位、只在內部用、OPERATING_TZ 給人看的字串（CSV/chatbot/verbatim label）。
+
+**修法**：`.model_dump()` → `.model_dump(mode="json")`；raw datetime / 裸 isoformat → `to_utc_iso()`；schema 欄位 → `AwareUtcDatetime`。
+
+**已修紀錄**：
+- ✅ 會員/標籤（commit 32e3eb32）：members 列表/明細/建立/更新（`mode="json"` + `to_utc_iso`）、tags 列表/歷史（裸 isoformat→`to_utc_iso`）。
+- ✅ 群發列表止血（commit 7ef43824）：`message_service.py:1065` `page_response.model_dump()`→`mode="json"`（發送/排程/建立/更新時間一次修好）。
+- ✅ **全 api/v1 + services sweep（commit 17f783fe）**：4 個 triage agent 掃完，18 BROKEN 全修——auto_responses(6)、analytics(2)、admin_retention(1 cutoff)、pms_integrations(3)、consumption_records(3)、tracking_service(2)、staff `last_login_at` 型別。SUSPECT `chatbot.py:153 last_synced_at` 經查前端逐字顯示（非 `new Date`）→ 刻意台北 label，保留。
+- 💡 **為何不做全域 encoder**：18 處裡 11 處已 `.isoformat()`/`strftime` 成字串（encoder 攔不到）、staff 是 typed 欄位（Pydantic 自己序列化，FastAPI encoder 也攔不到）→ 只換得 7 處卻要動全域序列化，不划算。定向修 + 這份「不算 bug」清單當日後 review 準則。
