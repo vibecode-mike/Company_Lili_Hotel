@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import Scrollable from "./common/Scrollable";
 import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from "../utils/apiClient";
 import { getAuthToken } from "../utils/token";
+import { formatMemberDateTime } from "../utils/memberTime";
 import { useToast } from "./ToastProvider";
 import { useChannel } from "../contexts/ChannelContext";
 import Sidebar from "./Sidebar";
@@ -72,9 +73,7 @@ function mapRuleToRoom(rule: FaqRuleRaw): RoomRecord {
     features: c["房型特色"] ?? "",
     memberTags: (rule.tags ?? []).map((t) => t.tag_name),
     url: c["url"] ?? "",
-    lastUpdated: rule.updated_at
-      ? rule.updated_at.slice(0, 16).replace("T", " ")
-      : "—",
+    lastUpdated: rule.updated_at ? formatMemberDateTime(rule.updated_at) : "—",
     enabled: rule.is_enabled !== false,
     published: !!rule.published_at,
     pmsRoomCode: "",

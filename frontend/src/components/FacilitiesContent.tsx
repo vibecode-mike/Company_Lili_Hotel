@@ -18,6 +18,7 @@ import {
 } from "./chatbot/AIChatbotEditModal";
 import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from "../utils/apiClient";
 import { getAuthToken } from "../utils/token";
+import { formatMemberDateTime } from "../utils/memberTime";
 
 
 interface FacilitiesContentProps {
@@ -66,9 +67,7 @@ function mapRuleToFacility(rule: FaqRuleRaw): FacilityRecord {
     fee: c["費用"] ?? "",
     description: c["說明"] ?? "",
     memberTags: (rule.tags ?? []).map((t) => t.tag_name),
-    lastUpdated: rule.updated_at
-      ? rule.updated_at.slice(0, 16).replace("T", " ")
-      : "—",
+    lastUpdated: rule.updated_at ? formatMemberDateTime(rule.updated_at) : "—",
     enabled: rule.is_enabled !== false,
     published: !!rule.published_at,
   };
