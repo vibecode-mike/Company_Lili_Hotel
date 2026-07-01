@@ -1062,7 +1062,7 @@ class MessageService:
             page_size=page_size,
         )
 
-        data = page_response.model_dump()
+        data = page_response.model_dump(mode="json")
         data["status_counts"] = status_counts
         return data
 
